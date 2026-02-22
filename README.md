@@ -9,6 +9,15 @@ Standalone Australian home loan rates project hosted on Cloudflare.
 - Site: `https://www.australianrates.com` and `https://australianrates.com`
 - API base: `https://www.australianrates.com/api/home-loan-rates` and `https://australianrates.com/api/home-loan-rates`
 
+## Verified Production Status (2026-02-23)
+
+- GitHub integration: Pages project `australianrates` is connected to `yanniedog/AustralianRates` (`Git Provider: Yes`).
+- Custom domains: `www.australianrates.com` and `australianrates.com` are attached and verified in Pages.
+- Routing split:
+  - Pages serves frontend at `/` on apex + www.
+  - Worker serves `/api/home-loan-rates/*` on apex + www.
+- Public API checks: `/health`, `/latest` (daily + historical), `/timeseries`, and `/export.csv` return successful responses.
+
 ## Repository Layout
 
 - `workers/api`: Cloudflare Worker API (Hono, D1, R2, Queue, Durable Object)
