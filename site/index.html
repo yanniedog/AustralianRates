@@ -19,9 +19,9 @@
     <main class="shell">
         <header class="hero panel">
             <p class="eyebrow">AU Home Loan Historical Rate Recorder</p>
-            <h1>Cloudflare-native bootstrap dashboard</h1>
+            <h1>Live mortgage rate archive</h1>
             <p class="subtitle">
-                Phase 1 runtime checks for health, latest snapshots, and admin run reports.
+                Daily CDR updates with RBA cash rate tracking, plus historical archive snapshots.
             </p>
             <p class="api-line">
                 API Base: <code id="api-base-text">loading...</code>
@@ -31,37 +31,88 @@
             </div>
         </header>
 
-        <section class="grid">
-            <article class="panel">
-                <div class="panel-head">
-                    <h2>API Health</h2>
-                    <button id="refresh-health" type="button" class="small">Refresh</button>
-                </div>
-                <pre id="health-output" class="output">Loading...</pre>
-            </article>
+        <section class="tabs panel">
+            <div class="tab-buttons">
+                <button id="tab-daily" class="small active" type="button">Daily Rates</button>
+                <button id="tab-historical" class="small" type="button">Historical Backfill</button>
+            </div>
 
-            <article class="panel">
+            <div class="filters">
+                <label>Bank
+                    <select id="filter-bank"><option value="">All</option></select>
+                </label>
+                <label>Purpose
+                    <select id="filter-security"><option value="">All</option></select>
+                </label>
+                <label>Repayment
+                    <select id="filter-repayment"><option value="">All</option></select>
+                </label>
+                <label>Structure
+                    <select id="filter-structure"><option value="">All</option></select>
+                </label>
+                <label>LVR
+                    <select id="filter-lvr"><option value="">All</option></select>
+                </label>
+                <label>Feature
+                    <select id="filter-feature"><option value="">All</option></select>
+                </label>
+                <label>Limit
+                    <input id="filter-limit" type="number" min="10" max="1000" value="200">
+                </label>
+                <div class="filter-actions">
+                    <button id="apply-filters" class="small" type="button">Apply Filters</button>
+                    <button id="download-csv" class="small" type="button">Export CSV</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid">
+            <article class="panel panel-wide">
                 <div class="panel-head">
-                    <h2>Latest Rates (Top 20)</h2>
+                    <h2 id="table-title">Daily Rates</h2>
                     <button id="refresh-latest" type="button" class="small">Refresh</button>
                 </div>
                 <div class="table-wrap">
                     <table>
                         <thead>
                             <tr>
+                                <th>Date</th>
+                                <th>RBA Cash Rate</th>
                                 <th>Bank</th>
                                 <th>Product</th>
+                                <th>Purpose</th>
+                                <th>Repayment</th>
                                 <th>LVR</th>
                                 <th>Structure</th>
+                                <th>Feature</th>
                                 <th>Rate</th>
-                                <th>Date</th>
+                                <th>Comparison</th>
+                                <th>Annual Fee</th>
+                                <th>Quality</th>
                             </tr>
                         </thead>
                         <tbody id="latest-body">
-                            <tr><td colspan="6">Loading...</td></tr>
+                            <tr><td colspan="13">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
+            </article>
+
+            <article class="panel panel-wide">
+                <div class="panel-head">
+                    <h2>Timeseries (selected product)</h2>
+                    <button id="refresh-series" type="button" class="small">Refresh</button>
+                </div>
+                <p class="hint" id="series-hint">Click a row in the rates table to draw a series.</p>
+                <canvas id="series-canvas" width="960" height="280"></canvas>
+            </article>
+
+            <article class="panel">
+                <div class="panel-head">
+                    <h2>API Health</h2>
+                    <button id="refresh-health" type="button" class="small">Refresh</button>
+                </div>
+                <pre id="health-output" class="output">Loading...</pre>
             </article>
 
             <article class="panel panel-wide">

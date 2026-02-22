@@ -13,6 +13,7 @@ type LatestFilters = {
   rateStructure?: string
   lvrTier?: string
   featureSet?: string
+  mode?: 'all' | 'daily' | 'historical'
   limit?: number
 }
 
@@ -77,28 +78,33 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   const binds: Array<string | number> = []
 
   if (filters.bank) {
-    where.push('bank_name = ?')
+    where.push('v.bank_name = ?')
     binds.push(filters.bank)
   }
   if (filters.securityPurpose) {
-    where.push('security_purpose = ?')
+    where.push('v.security_purpose = ?')
     binds.push(filters.securityPurpose)
   }
   if (filters.repaymentType) {
-    where.push('repayment_type = ?')
+    where.push('v.repayment_type = ?')
     binds.push(filters.repaymentType)
   }
   if (filters.rateStructure) {
-    where.push('rate_structure = ?')
+    where.push('v.rate_structure = ?')
     binds.push(filters.rateStructure)
   }
   if (filters.lvrTier) {
-    where.push('lvr_tier = ?')
+    where.push('v.lvr_tier = ?')
     binds.push(filters.lvrTier)
   }
   if (filters.featureSet) {
-    where.push('feature_set = ?')
+    where.push('v.feature_set = ?')
     binds.push(filters.featureSet)
+  }
+  if (filters.mode === 'daily') {
+    where.push("v.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+  } else if (filters.mode === 'historical') {
+    where.push("v.data_quality_flag LIKE 'parsed_from_wayback%'")
   }
 
   const limit = safeLimit(filters.limit, 200, 1000)
@@ -106,26 +112,29 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
 
   const sql = `
     SELECT
-      bank_name,
-      collection_date,
-      product_id,
-      product_name,
-      security_purpose,
-      repayment_type,
-      rate_structure,
-      lvr_tier,
-      feature_set,
-      interest_rate,
-      comparison_rate,
-      annual_fee,
-      source_url,
-      data_quality_flag,
-      confidence_score,
-      parsed_at,
-      product_key
-    FROM vw_latest_rates
+      v.bank_name,
+      v.collection_date,
+      v.product_id,
+      v.product_name,
+      v.security_purpose,
+      v.repayment_type,
+      v.rate_structure,
+      v.lvr_tier,
+      v.feature_set,
+      v.interest_rate,
+      v.comparison_rate,
+      v.annual_fee,
+      v.source_url,
+      v.data_quality_flag,
+      v.confidence_score,
+      v.parsed_at,
+      v.product_key,
+      r.cash_rate AS rba_cash_rate
+    FROM vw_latest_rates v
+    LEFT JOIN rba_cash_rates r
+      ON r.collection_date = v.collection_date
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY bank_name ASC, product_name ASC, lvr_tier ASC, rate_structure ASC
+    ORDER BY v.collection_date DESC, v.bank_name ASC, v.product_name ASC, v.lvr_tier ASC, v.rate_structure ASC
     LIMIT ?
   `
 
@@ -138,6 +147,7 @@ export async function queryTimeseries(
   input: {
     bank?: string
     productKey?: string
+    mode?: 'all' | 'daily' | 'historical'
     startDate?: string
     endDate?: string
     limit?: number
@@ -147,20 +157,25 @@ export async function queryTimeseries(
   const binds: Array<string | number> = []
 
   if (input.bank) {
-    where.push('bank_name = ?')
+    where.push('t.bank_name = ?')
     binds.push(input.bank)
   }
   if (input.productKey) {
-    where.push('product_key = ?')
+    where.push('t.product_key = ?')
     binds.push(input.productKey)
   }
   if (input.startDate) {
-    where.push('collection_date >= ?')
+    where.push('t.collection_date >= ?')
     binds.push(input.startDate)
   }
   if (input.endDate) {
-    where.push('collection_date <= ?')
+    where.push('t.collection_date <= ?')
     binds.push(input.endDate)
+  }
+  if (input.mode === 'daily') {
+    where.push("t.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+  } else if (input.mode === 'historical') {
+    where.push("t.data_quality_flag LIKE 'parsed_from_wayback%'")
   }
 
   const limit = safeLimit(input.limit, 500, 5000)
@@ -168,20 +183,23 @@ export async function queryTimeseries(
 
   const sql = `
     SELECT
-      collection_date,
-      bank_name,
-      product_id,
-      product_name,
-      lvr_tier,
-      rate_structure,
-      interest_rate,
-      comparison_rate,
-      annual_fee,
-      data_quality_flag,
-      confidence_score,
-      source_url,
-      product_key
-    FROM vw_rate_timeseries
+      t.collection_date,
+      t.bank_name,
+      t.product_id,
+      t.product_name,
+      t.lvr_tier,
+      t.rate_structure,
+      t.interest_rate,
+      t.comparison_rate,
+      t.annual_fee,
+      t.data_quality_flag,
+      t.confidence_score,
+      t.source_url,
+      t.product_key,
+      r.cash_rate AS rba_cash_rate
+    FROM vw_rate_timeseries t
+    LEFT JOIN rba_cash_rates r
+      ON r.collection_date = t.collection_date
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY collection_date ASC
     LIMIT ?

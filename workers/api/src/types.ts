@@ -58,6 +58,7 @@ export type LenderConfig = {
   canonical_bank_name: string
   register_brand_name: string
   seed_rate_urls: string[]
+  products_endpoint?: string
 }
 
 export type LenderConfigFile = {

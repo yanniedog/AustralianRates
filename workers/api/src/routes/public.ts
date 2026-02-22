@@ -50,6 +50,8 @@ publicRoutes.get('/filters', async (c) => {
 publicRoutes.get('/latest', async (c) => {
   const query = c.req.query()
   const limit = Number(query.limit || 200)
+  const modeRaw = String(query.mode || 'all').toLowerCase()
+  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
 
   const rows = await queryLatestRates(c.env.DB, {
     bank: query.bank,
@@ -58,6 +60,7 @@ publicRoutes.get('/latest', async (c) => {
     rateStructure: query.rate_structure,
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
+    mode,
     limit,
   })
 
@@ -71,6 +74,8 @@ publicRoutes.get('/latest', async (c) => {
 publicRoutes.get('/timeseries', async (c) => {
   const query = c.req.query()
   const productKey = query.product_key || query.productKey
+  const modeRaw = String(query.mode || 'all').toLowerCase()
+  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
 
   if (!productKey) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
@@ -79,6 +84,7 @@ publicRoutes.get('/timeseries', async (c) => {
   const rows = await queryTimeseries(c.env.DB, {
     bank: query.bank,
     productKey,
+    mode,
     startDate: query.start_date,
     endDate: query.end_date,
     limit: Number(query.limit || 1000),
@@ -89,4 +95,65 @@ publicRoutes.get('/timeseries', async (c) => {
     count: rows.length,
     rows,
   })
+})
+
+function csvEscape(value: unknown): string {
+  if (value == null) return ''
+  const raw = String(value)
+  if (/[",\n\r]/.test(raw)) {
+    return `"${raw.replace(/"/g, '""')}"`
+  }
+  return raw
+}
+
+function toCsv(rows: Array<Record<string, unknown>>): string {
+  if (rows.length === 0) {
+    return ''
+  }
+  const headers = Object.keys(rows[0])
+  const lines = [headers.join(',')]
+  for (const row of rows) {
+    lines.push(headers.map((h) => csvEscape(row[h])).join(','))
+  }
+  return lines.join('\n')
+}
+
+publicRoutes.get('/export.csv', async (c) => {
+  const query = c.req.query()
+  const dataset = String(query.dataset || 'latest').toLowerCase()
+  const modeRaw = String(query.mode || 'all').toLowerCase()
+  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+
+  if (dataset === 'timeseries') {
+    const productKey = query.product_key || query.productKey
+    if (!productKey) {
+      return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries CSV export.')
+    }
+    const rows = await queryTimeseries(c.env.DB, {
+      bank: query.bank,
+      productKey,
+      mode,
+      startDate: query.start_date,
+      endDate: query.end_date,
+      limit: Number(query.limit || 5000),
+    })
+    c.header('Content-Type', 'text/csv; charset=utf-8')
+    c.header('Content-Disposition', `attachment; filename="timeseries-${mode}.csv"`)
+    return c.body(toCsv(rows as Array<Record<string, unknown>>))
+  }
+
+  const rows = await queryLatestRates(c.env.DB, {
+    bank: query.bank,
+    securityPurpose: query.security_purpose,
+    repaymentType: query.repayment_type,
+    rateStructure: query.rate_structure,
+    lvrTier: query.lvr_tier,
+    featureSet: query.feature_set,
+    mode,
+    limit: Number(query.limit || 1000),
+  })
+
+  c.header('Content-Type', 'text/csv; charset=utf-8')
+  c.header('Content-Disposition', `attachment; filename="latest-${mode}.csv"`)
+  return c.body(toCsv(rows as Array<Record<string, unknown>>))
 })

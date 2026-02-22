@@ -1,4 +1,5 @@
 import { CDR_REGISTER_DISCOVERY_URL } from '../constants'
+import { discoverProductsEndpoint } from '../ingest/cdr'
 import type { LenderConfig } from '../types'
 import { nowIso } from '../utils/time'
 
@@ -73,24 +74,32 @@ export async function upsertEndpointCache(
     .run()
 }
 
-export async function refreshEndpointCacheStub(
+export async function refreshEndpointCache(
   db: D1Database,
   lenders: LenderConfig[],
   ttlHours = 24,
-): Promise<{ refreshed: number }> {
+): Promise<{ refreshed: number; failed: string[] }> {
   const now = Date.now()
   const expiresAt = new Date(now + ttlHours * 3600 * 1000).toISOString()
+  const failed: string[] = []
+  let refreshed = 0
 
   for (const lender of lenders) {
+    const discovered = await discoverProductsEndpoint(lender)
+    if (!discovered) {
+      failed.push(lender.code)
+      continue
+    }
     await upsertEndpointCache(db, {
       lenderCode: lender.code,
-      endpointUrl: `pending://cdr-register/${lender.code}`,
+      endpointUrl: discovered.endpointUrl,
       expiresAt,
-      sourceUrl: CDR_REGISTER_DISCOVERY_URL,
-      httpStatus: 200,
-      notes: 'Phase 1 stub: runtime CDR register discovery deferred to Phase 2.',
+      sourceUrl: discovered.sourceUrl || CDR_REGISTER_DISCOVERY_URL,
+      httpStatus: discovered.status,
+      notes: discovered.notes,
     })
+    refreshed += 1
   }
 
-  return { refreshed: lenders.length }
+  return { refreshed, failed }
 }

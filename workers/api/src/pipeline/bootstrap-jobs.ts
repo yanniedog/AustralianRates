@@ -3,13 +3,14 @@ import {
   MELBOURNE_TIMEZONE,
   TARGET_LENDERS,
 } from '../constants'
-import { refreshEndpointCacheStub } from '../db/endpoint-cache'
+import { refreshEndpointCache } from '../db/endpoint-cache'
 import {
   buildInitialPerLenderSummary,
   createRunReport,
   markRunFailed,
   setRunEnqueuedSummary,
 } from '../db/run-reports'
+import { collectRbaCashRateForDate } from '../ingest/rba'
 import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
 import { enqueueBackfillJobs, enqueueDailyLenderJobs } from '../queue/producer'
 import type { EnvBindings, LenderConfig } from '../types'
@@ -99,7 +100,8 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
   }
 
   try {
-    await refreshEndpointCacheStub(env.DB, TARGET_LENDERS)
+    const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate)
+    const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS)
 
     const enqueue = await enqueueDailyLenderJobs(env, {
       runId,
@@ -116,6 +118,8 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       runId,
       collectionDate,
       enqueued: enqueue.enqueued,
+      endpoint_refresh: endpointRefresh,
+      rba_collection: rbaCollection,
       source: options.source,
     }
   } catch (error) {
