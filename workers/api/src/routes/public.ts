@@ -20,7 +20,7 @@ publicRoutes.get('/health', async (c) => {
 
   return c.json({
     ok: true,
-    service: 'au-home-loan-rates-api',
+    service: 'australianrates-api',
     phase: 'phase1',
     version: c.env.WORKER_VERSION || 'dev',
     api_base_path: c.env.PUBLIC_API_BASE_PATH || API_BASE_PATH,

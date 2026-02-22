@@ -1,6 +1,6 @@
 # Discovery verification (Phase 1)
 
-Verification run after deploy to `home-loan-archive-dev` (2026-02-22).
+Verification run after deploy to `australianrates-archive-dev` (2026-02-22).
 
 ## Commands run
 
@@ -16,7 +16,7 @@ Verification run after deploy to `home-loan-archive-dev` (2026-02-22).
 
 ### GET /api/debug/version
 - **Status**: 200
-- **Body**: `{"ok":true,"version":"2026-02-22-phase1-discovery","workerName":"home-loan-archive-dev","hasBindings":{"DB":true,"RAW_BUCKET":true,"COLLECT_QUEUE":true}}`
+- **Body**: `{"ok":true,"version":"2026-02-22-phase1-discovery","workerName":"australianrates-archive-dev","hasBindings":{"DB":true,"RAW_BUCKET":true,"COLLECT_QUEUE":true}}`
 
 ### POST /api/admin/cdr/discover
 - **Status**: 200

@@ -4,7 +4,7 @@
 
 The worker implements a `scheduled()` handler that acquires a daily run lock and enqueues CDR register discovery. To run it on a schedule:
 
-1. In the Cloudflare dashboard, go to **Workers & Pages** and select the worker (e.g. `home-loan-archive-dev`).
+1. In the Cloudflare dashboard, go to **Workers & Pages** and select the worker (e.g. `australianrates-archive-dev`).
 2. Open **Settings** (or **Triggers** / **Cron Triggers** depending on UI).
 3. Add a **Cron Trigger**:
    - **Cron expression**: `0 20 * * *` (UTC)
@@ -17,8 +17,8 @@ The worker implements a `scheduled()` handler that acquires a daily run lock and
 
 The worker is already configured with:
 
-- **Producer**: `COLLECT_QUEUE` binding to queue `loan-collector-queue` (sends discovery and ping messages).
-- **Consumer**: same queue `loan-collector-queue` with `max_batch_size: 5` and `max_retries: 3`.
+- **Producer**: `COLLECT_QUEUE` binding to queue `australianrates-collector-queue-dev` (sends discovery and ping messages).
+- **Consumer**: same queue `australianrates-collector-queue-dev` with `max_batch_size: 5` and `max_retries: 3`.
 
 No extra dashboard steps are required for the queue; the consumer is attached via `wrangler.jsonc` and is active once the worker is deployed.
 

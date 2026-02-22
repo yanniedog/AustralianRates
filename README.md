@@ -1,6 +1,6 @@
 # AustralianRates
 
-Standalone Australian home loan rates project migrated from `orderskew`, hosted on Cloudflare.
+Standalone Australian home loan rates project hosted on Cloudflare.
 
 - GitHub repository: `https://github.com/yanniedog/AustralianRates`
 

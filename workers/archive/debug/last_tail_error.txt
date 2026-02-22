@@ -1,7 +1,7 @@
-Tail session: 2026-02-22 (wrangler tail home-loan-archive-dev)
+Tail session: 2026-02-22 (wrangler tail australianrates-archive-dev)
 
 Reproduction attempt:
-- Hit GET https://home-loan-archive-dev.jkokavec.workers.dev/api/queue-test/result twice while tail was connected.
+- Hit GET https://australianrates-archive-dev.jkokavec.workers.dev/api/queue-test/result twice while tail was connected.
 
 Observed:
 - No exception or 1101 was captured. Both requests returned HTTP 200 with valid JSON:

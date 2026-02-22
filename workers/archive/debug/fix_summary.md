@@ -2,7 +2,7 @@
 
 ## Tail error
 
-No exception was captured during `wrangler tail home-loan-archive-dev` while hitting `/api/queue-test/result`. Both requests returned HTTP 200. The previously reported 1101 was not reproducible. See `debug/last_tail_error.txt` for the tail session notes.
+No exception was captured during `wrangler tail australianrates-archive-dev` while hitting `/api/queue-test/result`. Both requests returned HTTP 200. The previously reported 1101 was not reproducible. See `debug/last_tail_error.txt` for the tail session notes.
 
 ## Root cause (inferred)
 

@@ -4,7 +4,7 @@ import worker from '../src/index';
 
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
 
-describe('home-loan-archive worker', () => {
+describe('australianrates-archive worker', () => {
 	it('returns 404 for unknown path (unit style)', async () => {
 		const request = new IncomingRequest('http://example.com/');
 		const ctx = createExecutionContext();
