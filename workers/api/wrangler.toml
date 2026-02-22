@@ -1,0 +1,56 @@
+name = "australianrates-api"
+main = "src/index.ts"
+compatibility_date = "2026-02-20"
+
+[[routes]]
+pattern = "www.australianrates.com/api/home-loan-rates/*"
+zone_name = "australianrates.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "australianrates_api"
+database_id = "de6d4315-686b-4022-b080-956ca3819976"
+
+[[r2_buckets]]
+binding = "RAW_BUCKET"
+bucket_name = "australianrates-raw"
+
+[[queues.producers]]
+binding = "INGEST_QUEUE"
+queue = "australianrates-ingest"
+
+[[queues.consumers]]
+queue = "australianrates-ingest"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 6
+dead_letter_queue = "australianrates-ingest-dlq"
+
+[[durable_objects.bindings]]
+name = "RUN_LOCK_DO"
+class_name = "RunLockDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RunLockDO"]
+
+[triggers]
+# 06:00 Australia/Melbourne mapped to UTC across DST:
+# AEDT (UTC+11) => 19:00 UTC previous day
+# AEST (UTC+10) => 20:00 UTC previous day
+crons = ["0 19 * * *", "0 20 * * *"]
+
+[vars]
+WORKER_VERSION = "phase1"
+PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
+MELBOURNE_TIMEZONE = "Australia/Melbourne"
+MELBOURNE_TARGET_HOUR = "6"
+LOCK_TTL_SECONDS = "7200"
+MAX_QUEUE_ATTEMPTS = "6"
+FEATURE_PROSPECTIVE_ENABLED = "true"
+FEATURE_BACKFILL_ENABLED = "true"
+CF_ACCESS_TEAM_DOMAIN = ""
+CF_ACCESS_AUD = ""
+
+# Set secrets via Wrangler:
+# wrangler secret put ADMIN_API_TOKEN

@@ -1,0 +1,19 @@
+{
+  "name": "australianrates",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "workers/api",
+    "workers/archive"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces",
+    "dev:api": "npm run dev -w workers/api",
+    "dev:archive": "npm run dev -w workers/archive",
+    "test:api": "npm run test -w workers/api",
+    "test:archive": "npm run test -w workers/archive",
+    "typecheck:api": "npm run typecheck -w workers/api",
+    "deploy:api": "npm run deploy -w workers/api",
+    "deploy:archive": "npm run deploy -w workers/archive"
+  }
+}

@@ -1,0 +1,82 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "australianrates-archive",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-02-19",
+	"observability": {
+	  "enabled": true
+	},
+	"compatibility_flags": ["nodejs_compat"],
+  
+	"env": {
+	  "dev": {
+		"name": "australianrates-archive-dev",
+  
+		"d1_databases": [
+		  {
+			"binding": "DB",
+			"database_name": "australianrates-archive-dev",
+			"database_id": "382c02e2-7657-44ab-9242-77a07552b8e6"
+		  }
+		],
+  
+		"r2_buckets": [
+		  {
+			"binding": "RAW_BUCKET",
+			"bucket_name": "australianrates-archive-raw-dev"
+		  }
+		],
+  
+		"queues": {
+		  "producers": [
+			{
+			  "binding": "COLLECT_QUEUE",
+			  "queue": "australianrates-collector-queue-dev"
+			}
+		  ],
+		  "consumers": [
+			{
+			  "queue": "australianrates-collector-queue-dev",
+			  "max_batch_size": 5,
+			  "max_retries": 3
+			}
+		  ]
+		}
+	  },
+  
+	  "prod": {
+		"name": "australianrates-archive-prod",
+  
+		"d1_databases": [
+		  {
+			"binding": "DB",
+			"database_name": "australianrates-archive-prod",
+			"database_id": "1c736331-7e9d-453e-bb90-4a6113485b8e"
+		  }
+		],
+  
+		"r2_buckets": [
+		  {
+			"binding": "RAW_BUCKET",
+			"bucket_name": "australianrates-archive-raw-prod"
+		  }
+		],
+  
+		"queues": {
+		  "producers": [
+			{
+			  "binding": "COLLECT_QUEUE",
+			  "queue": "australianrates-collector-queue-prod"
+			}
+		  ],
+		  "consumers": [
+			{
+			  "queue": "australianrates-collector-queue-prod",
+			  "max_batch_size": 5,
+			  "max_retries": 3
+			}
+		  ]
+		}
+	  }
+	}
+  }
