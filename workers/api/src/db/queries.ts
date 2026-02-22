@@ -201,7 +201,7 @@ export async function queryTimeseries(
     LEFT JOIN rba_cash_rates r
       ON r.collection_date = t.collection_date
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY collection_date ASC
+    ORDER BY t.collection_date ASC
     LIMIT ?
   `
 
