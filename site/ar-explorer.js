@@ -116,9 +116,22 @@
                     q.set('sort', params.sorters[0].field);
                     q.set('dir', params.sorters[0].dir);
                 }
-                return fetch(url + '?' + q.toString())
-                    .then(function (r) { return r.json(); })
+                var fetchUrl = url + '?' + q.toString();
+                // #region agent log
+                console.log('[AR-DEBUG-eb90c6] ajaxRequestFunc fetching:', fetchUrl);
+                // #endregion
+                return fetch(fetchUrl, { cache: 'no-store' })
+                    .then(function (r) {
+                        // #region agent log
+                        console.log('[AR-DEBUG-eb90c6] fetch response status:', r.status, 'cf-cache-status:', r.headers.get('cf-cache-status'));
+                        // #endregion
+                        return r.json();
+                    })
                     .then(function (data) {
+                        // #region agent log
+                        var firstDate = (data.data && data.data.length > 0) ? data.data[0].collection_date : 'no-data';
+                        console.log('[AR-DEBUG-eb90c6] fetched data: total=' + data.total + ', rows=' + (data.data ? data.data.length : 0) + ', first_date=' + firstDate);
+                        // #endregion
                         return { last_page: data.last_page || 1, data: data.data || [] };
                     });
             },
@@ -132,7 +145,19 @@
     }
 
     function reloadExplorer() {
-        if (rateTable) rateTable.setData();
+        // #region agent log
+        console.log('[AR-DEBUG-eb90c6] reloadExplorer called, rateTable exists:', !!rateTable, ', rateTable type:', typeof rateTable);
+        // #endregion
+        if (rateTable) {
+            // #region agent log
+            console.log('[AR-DEBUG-eb90c6] Calling rateTable.setData() now');
+            // #endregion
+            rateTable.setData();
+        } else {
+            // #region agent log
+            console.log('[AR-DEBUG-eb90c6] rateTable is null/falsy, skipping setData');
+            // #endregion
+        }
     }
 
     window.AR.explorer = {
