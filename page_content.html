@@ -197,7 +197,8 @@
                     <label>Group By
                         <select id="chart-group">
                             <option value="">None</option>
-                            <option value="bank_name" selected>Bank</option>
+                            <option value="product_key" selected>Product</option>
+                            <option value="bank_name">Bank</option>
                             <option value="security_purpose">Purpose</option>
                             <option value="rate_structure">Structure</option>
                             <option value="lvr_tier">LVR</option>
@@ -218,6 +219,7 @@
                 </div>
                 <div id="chart-output" aria-label="Interactive chart"></div>
                 <p id="chart-status" class="hint">Configure axes and click Draw Chart.</p>
+                <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank. Filter by one bank to compare specific products at that bank.</p>
             </div>
         </section>
 

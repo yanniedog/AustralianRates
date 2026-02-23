@@ -64,6 +64,10 @@ These rules are mandatory and override any conflicting preference.
 - **API**: `npm run deploy:api` from root.
 - **Archive**: `npm run deploy:archive` from root.
 
+## Longitudinal product identity
+
+- **product_key** is the canonical identity for linking rates over time for the same product. It is defined as `bank_name|product_id|security_purpose|repayment_type|lvr_tier|rate_structure`. Any chart or export that shows rate over time must group or filter by `product_key` so each series is one specific product tracked longitudinally.
+
 ## Code Quality Standards
 
 - **Max file size**: 300 lines (flag for review), 500+ lines (trigger refactor).

@@ -351,6 +351,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   const size = Math.min(500, Math.max(1, Math.floor(Number(filters.size) || 50)))
   const offset = (page - 1) * size
 
+  // product_key is the canonical longitudinal identity for the same product across collection dates
   const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
   const dataSql = `
     SELECT

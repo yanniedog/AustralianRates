@@ -38,13 +38,34 @@
         var groups = {};
         data.forEach(function (row) {
             var key = String(row[groupField] || 'Unknown');
-            if (!groups[key]) groups[key] = { x: [], y: [] };
+            if (!groups[key]) {
+                groups[key] = { x: [], y: [], firstRow: null };
+            }
             groups[key].x.push(row[xField]);
             groups[key].y.push(Number(row[yField]));
+            if (!groups[key].firstRow) groups[key].firstRow = row;
         });
         var traces = [];
         Object.keys(groups).sort().forEach(function (key) {
-            var trace = { x: groups[key].x, y: groups[key].y, name: key, type: chartType };
+            var g = groups[key];
+            var x = g.x;
+            var y = g.y;
+            var pairs = x.map(function (xv, i) { return [xv, y[i]]; });
+            pairs.sort(function (a, b) {
+                var ax = a[0];
+                var bx = b[0];
+                if (ax === bx) return 0;
+                if (typeof ax === 'number' && typeof bx === 'number') return ax - bx;
+                return String(ax).localeCompare(String(bx));
+            });
+            x = pairs.map(function (p) { return p[0]; });
+            y = pairs.map(function (p) { return p[1]; });
+            var traceName = key;
+            if (groupField === 'product_key' && g.firstRow) {
+                var r = g.firstRow;
+                traceName = [r.bank_name, r.product_name, r.lvr_tier, r.rate_structure].filter(Boolean).join(' | ');
+            }
+            var trace = { x: x, y: y, name: traceName, type: chartType };
             if (chartType === 'scatter') {
                 trace.mode = 'lines+markers';
                 trace.marker = { size: 4 };
