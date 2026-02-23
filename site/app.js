@@ -1,10 +1,9 @@
 (function () {
-    function normalizeApiBase(input) {
-        if (!input) return '';
-        return String(input).replace(/\/+$/, '');
-    }
+    'use strict';
 
-    function currency(value) {
+    /* ── Utilities ─────────────────────────────────────── */
+
+    function pct(value) {
         var n = Number(value);
         if (!Number.isFinite(n)) return '-';
         return n.toFixed(3) + '%';
@@ -16,137 +15,172 @@
         return '$' + n.toFixed(2);
     }
 
-    function esc(value) {
+    window._arEsc = function esc(value) {
         return String(value == null ? '' : value)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
-    }
+    };
+
+    /* ── API base ──────────────────────────────────────── */
 
     var params = new URLSearchParams(window.location.search);
     var apiOverride = params.get('apiBase');
-    var apiBase = normalizeApiBase(apiOverride) || (window.location.origin + '/api/home-loan-rates');
-    var state = {
-        mode: params.get('mode') || 'daily',
-        selectedProductKey: '',
-        latestRows: [],
-        sortColumn: params.get('sort') || '',
-        sortDirection: params.get('dir') || 'asc'
-    };
+    var apiBase = (apiOverride ? String(apiOverride).replace(/\/+$/, '') : '') ||
+                  (window.location.origin + '/api/home-loan-rates');
+    var isAdmin = params.get('admin') === 'true';
 
-    var SORT_FIELDS = {
-        'Date': 'collection_date',
-        'RBA Cash Rate': 'rba_cash_rate',
-        'Bank': 'bank_name',
-        'Product': 'product_name',
-        'Purpose': 'security_purpose',
-        'Repayment': 'repayment_type',
-        'LVR': 'lvr_tier',
-        'Structure': 'rate_structure',
-        'Feature': 'feature_set',
-        'Rate': 'interest_rate',
-        'Comparison': 'comparison_rate',
-        'Annual Fee': 'annual_fee',
-        'Quality': 'data_quality_flag'
-    };
+    /* ── DOM references ────────────────────────────────── */
 
     var els = {
-        apiBaseText: document.getElementById('api-base-text'),
-        refreshAll: document.getElementById('refresh-all'),
-        tabDaily: document.getElementById('tab-daily'),
-        tabHistorical: document.getElementById('tab-historical'),
-        tableTitle: document.getElementById('table-title'),
-        filterBank: document.getElementById('filter-bank'),
-        filterSecurity: document.getElementById('filter-security'),
+        tabExplorer:   document.getElementById('tab-explorer'),
+        tabPivot:      document.getElementById('tab-pivot'),
+        tabCharts:     document.getElementById('tab-charts'),
+        panelExplorer: document.getElementById('panel-explorer'),
+        panelPivot:    document.getElementById('panel-pivot'),
+        panelCharts:   document.getElementById('panel-charts'),
+        panelAdmin:    document.getElementById('panel-admin'),
+        filterBank:      document.getElementById('filter-bank'),
+        filterSecurity:  document.getElementById('filter-security'),
         filterRepayment: document.getElementById('filter-repayment'),
         filterStructure: document.getElementById('filter-structure'),
-        filterLvr: document.getElementById('filter-lvr'),
-        filterFeature: document.getElementById('filter-feature'),
-        filterLimit: document.getElementById('filter-limit'),
-        applyFilters: document.getElementById('apply-filters'),
-        downloadCsv: document.getElementById('download-csv'),
-        refreshHealth: document.getElementById('refresh-health'),
-        refreshLatest: document.getElementById('refresh-latest'),
-        refreshSeries: document.getElementById('refresh-series'),
-        refreshRuns: document.getElementById('refresh-runs'),
-        healthOutput: document.getElementById('health-output'),
-        latestBody: document.getElementById('latest-body'),
-        latestHead: (function () {
-            var body = document.querySelector('#latest-body');
-            var table = body && body.closest('table');
-            return table ? table.querySelector('thead tr') : null;
-        })(),
-        seriesHint: document.getElementById('series-hint'),
-        seriesCanvas: document.getElementById('series-canvas'),
-        runsOutput: document.getElementById('runs-output'),
-        adminToken: document.getElementById('admin-token')
+        filterLvr:       document.getElementById('filter-lvr'),
+        filterFeature:   document.getElementById('filter-feature'),
+        filterStartDate: document.getElementById('filter-start-date'),
+        filterEndDate:   document.getElementById('filter-end-date'),
+        applyFilters:  document.getElementById('apply-filters'),
+        downloadCsv:   document.getElementById('download-csv'),
+        loadPivot:     document.getElementById('load-pivot'),
+        pivotStatus:   document.getElementById('pivot-status'),
+        pivotOutput:   document.getElementById('pivot-output'),
+        chartX:        document.getElementById('chart-x'),
+        chartY:        document.getElementById('chart-y'),
+        chartGroup:    document.getElementById('chart-group'),
+        chartType:     document.getElementById('chart-type'),
+        drawChart:     document.getElementById('draw-chart'),
+        chartOutput:   document.getElementById('chart-output'),
+        chartStatus:   document.getElementById('chart-status'),
+        statUpdated:   document.getElementById('stat-updated'),
+        statCashRate:  document.getElementById('stat-cash-rate'),
+        statRecords:   document.getElementById('stat-records'),
+        refreshRuns:   document.getElementById('refresh-runs'),
+        runsOutput:    document.getElementById('runs-output'),
+        adminToken:    document.getElementById('admin-token'),
     };
 
-    if (els.apiBaseText) {
-        els.apiBaseText.textContent = apiBase;
+    /* ── State ─────────────────────────────────────────── */
+
+    var state = {
+        activeTab: params.get('tab') || 'explorer',
+        pivotLoaded: false,
+        chartDrawn: false,
+    };
+
+    /* ── Show admin panel if ?admin=true ───────────────── */
+
+    if (isAdmin && els.panelAdmin) {
+        els.panelAdmin.hidden = false;
     }
 
-    function syncUrlState() {
-        var q = new URLSearchParams();
-        q.set('mode', state.mode);
-        if (els.filterBank && els.filterBank.value) q.set('bank', els.filterBank.value);
-        if (els.filterSecurity && els.filterSecurity.value) q.set('purpose', els.filterSecurity.value);
-        if (els.filterRepayment && els.filterRepayment.value) q.set('repayment', els.filterRepayment.value);
-        if (els.filterStructure && els.filterStructure.value) q.set('structure', els.filterStructure.value);
-        if (els.filterLvr && els.filterLvr.value) q.set('lvr', els.filterLvr.value);
-        if (els.filterFeature && els.filterFeature.value) q.set('feature', els.filterFeature.value);
-        var limit = els.filterLimit && els.filterLimit.value;
-        if (limit && Number(limit) !== 200) q.set('limit', String(limit));
-        if (state.sortColumn) q.set('sort', state.sortColumn);
-        if (state.sortColumn && state.sortDirection !== 'asc') q.set('dir', state.sortDirection);
-        if (apiOverride) q.set('apiBase', apiOverride);
-        var url = window.location.pathname + '?' + q.toString();
-        window.history.replaceState(null, '', url);
+    /* ── Tab switching ─────────────────────────────────── */
+
+    var tabBtns = [els.tabExplorer, els.tabPivot, els.tabCharts];
+    var tabPanels = [els.panelExplorer, els.panelPivot, els.panelCharts];
+
+    function activateTab(tabId) {
+        state.activeTab = tabId;
+        tabBtns.forEach(function (btn) {
+            if (!btn) return;
+            var active = btn.id === 'tab-' + tabId;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-selected', String(active));
+        });
+        tabPanels.forEach(function (panel) {
+            if (!panel) return;
+            var active = panel.id === 'panel-' + tabId;
+            panel.hidden = !active;
+            panel.classList.toggle('active', active);
+        });
+        syncUrlState();
     }
 
-    function restoreUrlState() {
-        var p = new URLSearchParams(window.location.search);
-        if (p.get('mode')) state.mode = p.get('mode') === 'historical' ? 'historical' : 'daily';
-        if (p.get('bank') && els.filterBank) els.filterBank.value = p.get('bank');
-        if (p.get('purpose') && els.filterSecurity) els.filterSecurity.value = p.get('purpose');
-        if (p.get('repayment') && els.filterRepayment) els.filterRepayment.value = p.get('repayment');
-        if (p.get('structure') && els.filterStructure) els.filterStructure.value = p.get('structure');
-        if (p.get('lvr') && els.filterLvr) els.filterLvr.value = p.get('lvr');
-        if (p.get('feature') && els.filterFeature) els.filterFeature.value = p.get('feature');
-        if (p.get('limit') && els.filterLimit) els.filterLimit.value = p.get('limit');
-        if (p.get('sort')) state.sortColumn = p.get('sort');
-        if (p.get('dir')) state.sortDirection = p.get('dir');
-    }
+    tabBtns.forEach(function (btn) {
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            activateTab(btn.id.replace('tab-', ''));
+        });
+        btn.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                activateTab(btn.id.replace('tab-', ''));
+            }
+        });
+    });
 
-    async function fetchJson(url, options) {
-        var response = await fetch(url, options || {});
-        var text = await response.text();
-        var data = null;
-        try {
-            data = JSON.parse(text);
-        } catch (err) {
-            data = { ok: false, raw: text };
-        }
-        return { response: response, data: data };
-    }
+    /* ── Filter helpers ────────────────────────────────── */
 
     function fillSelect(el, values) {
         if (!el) return;
         var current = el.value;
-        el.innerHTML = '<option value="">All</option>' + values.map(function (value) {
-            return '<option value="' + esc(value) + '">' + esc(value) + '</option>';
+        el.innerHTML = '<option value="">All</option>' + values.map(function (v) {
+            return '<option value="' + window._arEsc(v) + '">' + window._arEsc(v) + '</option>';
         }).join('');
         if (current && values.indexOf(current) >= 0) {
             el.value = current;
         }
     }
 
+    function buildFilterParams() {
+        var p = {};
+        if (els.filterBank && els.filterBank.value) p.bank = els.filterBank.value;
+        if (els.filterSecurity && els.filterSecurity.value) p.security_purpose = els.filterSecurity.value;
+        if (els.filterRepayment && els.filterRepayment.value) p.repayment_type = els.filterRepayment.value;
+        if (els.filterStructure && els.filterStructure.value) p.rate_structure = els.filterStructure.value;
+        if (els.filterLvr && els.filterLvr.value) p.lvr_tier = els.filterLvr.value;
+        if (els.filterFeature && els.filterFeature.value) p.feature_set = els.filterFeature.value;
+        if (els.filterStartDate && els.filterStartDate.value) p.start_date = els.filterStartDate.value;
+        if (els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
+        return p;
+    }
+
+    function syncUrlState() {
+        var q = new URLSearchParams();
+        q.set('tab', state.activeTab);
+        if (els.filterBank && els.filterBank.value) q.set('bank', els.filterBank.value);
+        if (els.filterSecurity && els.filterSecurity.value) q.set('purpose', els.filterSecurity.value);
+        if (els.filterRepayment && els.filterRepayment.value) q.set('repayment', els.filterRepayment.value);
+        if (els.filterStructure && els.filterStructure.value) q.set('structure', els.filterStructure.value);
+        if (els.filterLvr && els.filterLvr.value) q.set('lvr', els.filterLvr.value);
+        if (els.filterFeature && els.filterFeature.value) q.set('feature', els.filterFeature.value);
+        if (els.filterStartDate && els.filterStartDate.value) q.set('start_date', els.filterStartDate.value);
+        if (els.filterEndDate && els.filterEndDate.value) q.set('end_date', els.filterEndDate.value);
+        if (apiOverride) q.set('apiBase', apiOverride);
+        if (isAdmin) q.set('admin', 'true');
+        window.history.replaceState(null, '', window.location.pathname + '?' + q.toString());
+    }
+
+    function restoreUrlState() {
+        var p = new URLSearchParams(window.location.search);
+        if (p.get('tab')) state.activeTab = p.get('tab');
+        if (p.get('bank') && els.filterBank) els.filterBank.value = p.get('bank');
+        if (p.get('purpose') && els.filterSecurity) els.filterSecurity.value = p.get('purpose');
+        if (p.get('repayment') && els.filterRepayment) els.filterRepayment.value = p.get('repayment');
+        if (p.get('structure') && els.filterStructure) els.filterStructure.value = p.get('structure');
+        if (p.get('lvr') && els.filterLvr) els.filterLvr.value = p.get('lvr');
+        if (p.get('feature') && els.filterFeature) els.filterFeature.value = p.get('feature');
+        if (p.get('start_date') && els.filterStartDate) els.filterStartDate.value = p.get('start_date');
+        if (p.get('end_date') && els.filterEndDate) els.filterEndDate.value = p.get('end_date');
+    }
+
+    /* ── Load filter options ───────────────────────────── */
+
     async function loadFilters() {
         try {
-            var result = await fetchJson(apiBase + '/filters');
-            if (!result.response.ok || !result.data || !result.data.filters) return;
-            var f = result.data.filters;
+            var r = await fetch(apiBase + '/filters');
+            var data = await r.json();
+            if (!data || !data.filters) return;
+            var f = data.filters;
             fillSelect(els.filterBank, f.banks || []);
             fillSelect(els.filterSecurity, f.security_purposes || []);
             fillSelect(els.filterRepayment, f.repayment_types || []);
@@ -154,320 +188,352 @@
             fillSelect(els.filterLvr, f.lvr_tiers || []);
             fillSelect(els.filterFeature, f.feature_sets || []);
             restoreUrlState();
-        } catch (err) {
-            // filters are non-critical
-        }
+        } catch (_) { /* non-critical */ }
     }
 
-    function currentFilterQuery() {
-        var q = new URLSearchParams();
-        q.set('mode', state.mode);
-        q.set('limit', String(Math.max(10, Math.min(1000, Number(els.filterLimit && els.filterLimit.value || 200) || 200))));
-        if (els.filterBank && els.filterBank.value) q.set('bank', els.filterBank.value);
-        if (els.filterSecurity && els.filterSecurity.value) q.set('security_purpose', els.filterSecurity.value);
-        if (els.filterRepayment && els.filterRepayment.value) q.set('repayment_type', els.filterRepayment.value);
-        if (els.filterStructure && els.filterStructure.value) q.set('rate_structure', els.filterStructure.value);
-        if (els.filterLvr && els.filterLvr.value) q.set('lvr_tier', els.filterLvr.value);
-        if (els.filterFeature && els.filterFeature.value) q.set('feature_set', els.filterFeature.value);
-        return q;
-    }
+    /* ── Hero stats ────────────────────────────────────── */
 
-    function setMode(mode) {
-        state.mode = mode === 'historical' ? 'historical' : 'daily';
-        if (els.tabDaily) els.tabDaily.classList.toggle('active', state.mode === 'daily');
-        if (els.tabHistorical) els.tabHistorical.classList.toggle('active', state.mode === 'historical');
-        if (els.tableTitle) {
-            els.tableTitle.textContent = state.mode === 'daily' ? 'Daily Rates' : 'Historical Backfill';
-        }
-    }
-
-    async function loadHealth() {
-        if (!els.healthOutput) return;
-        els.healthOutput.textContent = 'Loading health...';
+    async function loadHeroStats() {
         try {
-            var result = await fetchJson(apiBase + '/health');
-            els.healthOutput.textContent = JSON.stringify(result.data, null, 2);
-        } catch (err) {
-            els.healthOutput.textContent = JSON.stringify({ ok: false, error: String(err && err.message || err) }, null, 2);
-        }
+            var ratesRes = await fetch(apiBase + '/rates?' + new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' }));
+            var ratesData = await ratesRes.json();
+            if (ratesData && ratesData.total != null) {
+                if (els.statRecords) els.statRecords.innerHTML = 'Records: <strong>' + Number(ratesData.total).toLocaleString() + '</strong>';
+                if (ratesData.data && ratesData.data.length > 0) {
+                    var latest = ratesData.data[0];
+                    if (els.statUpdated && latest.collection_date) {
+                        els.statUpdated.innerHTML = 'Last updated: <strong>' + window._arEsc(latest.collection_date) + '</strong>';
+                    }
+                    if (els.statCashRate && latest.rba_cash_rate != null) {
+                        els.statCashRate.innerHTML = 'RBA Cash Rate: <strong>' + pct(latest.rba_cash_rate) + '</strong>';
+                    }
+                }
+            }
+        } catch (_) { /* non-critical */ }
     }
 
-    function sortRows(rows, column, direction) {
-        if (!column) return rows;
-        var sorted = rows.slice();
-        sorted.sort(function (a, b) {
-            var va = a[column];
-            var vb = b[column];
-            if (va == null && vb == null) return 0;
-            if (va == null) return 1;
-            if (vb == null) return -1;
-            if (typeof va === 'number' && typeof vb === 'number') {
-                return direction === 'asc' ? va - vb : vb - va;
-            }
-            var sa = String(va).toLowerCase();
-            var sb = String(vb).toLowerCase();
-            if (sa < sb) return direction === 'asc' ? -1 : 1;
-            if (sa > sb) return direction === 'asc' ? 1 : -1;
-            return 0;
+    /* ── Tabulator Rate Explorer ───────────────────────── */
+
+    function pctFormatter(cell) {
+        return pct(cell.getValue());
+    }
+
+    function moneyFormatter(cell) {
+        return money(cell.getValue());
+    }
+
+    var rateTable = null;
+
+    function initRateTable() {
+        rateTable = new Tabulator('#rate-table', {
+            ajaxURL: apiBase + '/rates',
+            ajaxConfig: 'GET',
+            ajaxContentType: 'json',
+            ajaxParams: function () {
+                var fp = buildFilterParams();
+                fp.size = '50';
+                return fp;
+            },
+            ajaxURLGenerator: function (url, _config, params) {
+                var q = new URLSearchParams();
+                Object.keys(params).forEach(function (k) {
+                    if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+                        q.set(k, String(params[k]));
+                    }
+                });
+                return url + '?' + q.toString();
+            },
+            ajaxResponse: function (_url, _params, response) {
+                return {
+                    last_page: response.last_page || 1,
+                    data: response.data || [],
+                };
+            },
+            pagination: true,
+            paginationMode: 'remote',
+            paginationSize: 50,
+            paginationCounter: function (pageSize, currentRow, currentPage, totalRows, totalPages) {
+                return 'Page ' + currentPage + ' of ' + totalPages + ' (' + totalRows.toLocaleString() + ' records)';
+            },
+            sortMode: 'remote',
+            ajaxSorting: true,
+            dataSendParams: {
+                page: 'page',
+                size: 'size',
+                sort: 'sort',
+                sorters: 'sorters',
+            },
+            ajaxRequestFunc: function (url, _config, params) {
+                var q = new URLSearchParams();
+                var fp = buildFilterParams();
+                Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
+
+                q.set('page', String(params.page || 1));
+                q.set('size', '50');
+
+                if (params.sorters && params.sorters.length > 0) {
+                    q.set('sort', params.sorters[0].field);
+                    q.set('dir', params.sorters[0].dir);
+                }
+
+                return fetch(url + '?' + q.toString())
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        return {
+                            last_page: data.last_page || 1,
+                            data: data.data || [],
+                        };
+                    });
+            },
+            movableColumns: true,
+            resizableColumns: true,
+            layout: 'fitDataFill',
+            placeholder: 'No rate data found. Try adjusting your filters or date range.',
+            columns: [
+                { title: 'Date', field: 'collection_date', headerSort: true, width: 110 },
+                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100 },
+                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 100 },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
+                { title: 'Purpose', field: 'security_purpose', headerSort: true, width: 130 },
+                { title: 'Repayment', field: 'repayment_type', headerSort: true, width: 150 },
+                { title: 'LVR', field: 'lvr_tier', headerSort: true, width: 110 },
+                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100 },
+                { title: 'Feature', field: 'feature_set', headerSort: true, width: 90 },
+                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90,
+                    cellClick: function () {} },
+                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110, visible: false },
+                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100, visible: false },
+                { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false,
+                    formatter: function (cell) {
+                        var v = String(cell.getValue() || '');
+                        if (v === 'ok') return 'CDR Live';
+                        if (v.indexOf('parsed_from_wayback') === 0) return 'Historical';
+                        return v;
+                    }
+                },
+            ],
+            initialSort: [{ column: 'collection_date', dir: 'desc' }],
         });
-        return sorted;
     }
 
-    function findBestRate(rows) {
-        var best = Infinity;
-        for (var i = 0; i < rows.length; i++) {
-            var r = Number(rows[i].interest_rate);
-            if (Number.isFinite(r) && r < best) best = r;
-        }
-        return best;
-    }
-
-    function updateSortHeaders() {
-        if (!els.latestHead) return;
-        var ths = els.latestHead.querySelectorAll('th');
-        ths.forEach(function (th) {
-            var field = th.getAttribute('data-sort');
-            var isSorted = field && field === state.sortColumn;
-            th.classList.toggle('sorted', isSorted);
-            var arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                arrow.textContent = isSorted ? (state.sortDirection === 'asc' ? '\u25B2' : '\u25BC') : '\u25B2';
-            }
-        });
-    }
-
-    function renderLatestRows(rows) {
-        if (!els.latestBody) return;
-        if (!Array.isArray(rows) || rows.length === 0) {
-            els.latestBody.innerHTML = '<tr><td colspan="13">No rate rows found for this selection.</td></tr>';
-            return;
-        }
-
-        state.latestRows = rows;
-        var displayed = sortRows(rows, state.sortColumn, state.sortDirection);
-        var bestRate = findBestRate(displayed);
-
-        els.latestBody.innerHTML = displayed.map(function (row) {
-            var isBest = Number(row.interest_rate) === bestRate;
-            return '<tr class="' + (isBest ? 'best-rate ' : '') + 'clickable-row" data-product-key="' + esc(row.product_key || '') + '">' +
-                '<td>' + esc(row.collection_date || '-') + '</td>' +
-                '<td>' + currency(row.rba_cash_rate) + '</td>' +
-                '<td>' + esc(row.bank_name || '-') + '</td>' +
-                '<td>' + esc(row.product_name || row.product_id || '-') + '</td>' +
-                '<td>' + esc(row.security_purpose || '-') + '</td>' +
-                '<td>' + esc(row.repayment_type || '-') + '</td>' +
-                '<td>' + esc(row.lvr_tier || '-') + '</td>' +
-                '<td>' + esc(row.rate_structure || '-') + '</td>' +
-                '<td>' + esc(row.feature_set || '-') + '</td>' +
-                '<td>' + currency(row.interest_rate) + '</td>' +
-                '<td>' + currency(row.comparison_rate) + '</td>' +
-                '<td>' + money(row.annual_fee) + '</td>' +
-                '<td>' + esc(row.data_quality_flag || '-') + '</td>' +
-                '</tr>';
-        }).join('');
-
-        updateSortHeaders();
-    }
-
-    async function loadLatest() {
-        if (!els.latestBody) return;
-        els.latestBody.innerHTML = '<tr><td colspan="13">Loading rates...</td></tr>';
-        try {
-            var query = currentFilterQuery();
-            var result = await fetchJson(apiBase + '/latest?' + query.toString());
-            if (!result.response.ok) {
-                els.latestBody.innerHTML = '<tr><td colspan="13">Failed to load rates (' + result.response.status + ').</td></tr>';
-                return;
-            }
-            renderLatestRows(result.data && result.data.rows || []);
-        } catch (err) {
-            els.latestBody.innerHTML = '<tr><td colspan="13">Error loading rates: ' + esc(String(err && err.message || err)) + '</td></tr>';
+    function reloadExplorer() {
+        if (rateTable) {
+            rateTable.setData();
         }
     }
 
-    function drawSeries(rows) {
-        var canvas = els.seriesCanvas;
-        if (!canvas) return;
-        var ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    /* ── Pivot Table ───────────────────────────────────── */
 
-        var width = canvas.width;
-        var height = canvas.height;
-        ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = '#f6f9fc';
-        ctx.fillRect(0, 0, width, height);
+    function loadPivotData() {
+        if (!els.pivotOutput) return;
+        if (els.pivotStatus) els.pivotStatus.textContent = 'Loading data for pivot...';
 
-        if (!rows || rows.length === 0) {
-            ctx.fillStyle = '#4a5a70';
-            ctx.font = '14px sans-serif';
-            ctx.fillText('No timeseries data for selected product.', 20, 32);
-            return;
-        }
+        var fp = buildFilterParams();
+        fp.size = '10000';
+        fp.page = '1';
 
-        var values = rows.map(function (r) { return Number(r.interest_rate); }).filter(Number.isFinite);
-        if (values.length === 0) {
-            ctx.fillStyle = '#4a5a70';
-            ctx.font = '14px sans-serif';
-            ctx.fillText('No numeric rate values.', 20, 32);
-            return;
-        }
+        var q = new URLSearchParams(fp);
 
-        var min = Math.min.apply(null, values);
-        var max = Math.max.apply(null, values);
-        if (min === max) max = min + 0.1;
+        fetch(apiBase + '/rates?' + q.toString())
+            .then(function (r) { return r.json(); })
+            .then(function (response) {
+                var data = response.data || [];
+                if (data.length === 0) {
+                    if (els.pivotStatus) els.pivotStatus.textContent = 'No data returned. Try broadening your filters or date range.';
+                    return;
+                }
+                var total = response.total || data.length;
+                var warning = total > 10000
+                    ? ' (showing first 10,000 of ' + total.toLocaleString() + ' rows)'
+                    : '';
 
-        var left = 56;
-        var right = width - 20;
-        var top = 16;
-        var bottom = height - 34;
+                if (els.pivotStatus) {
+                    els.pivotStatus.textContent = 'Loaded ' + data.length.toLocaleString() + ' rows' + warning + '. Drag fields to configure the pivot.';
+                }
 
-        ctx.strokeStyle = '#d5deea';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(left, top);
-        ctx.lineTo(left, bottom);
-        ctx.lineTo(right, bottom);
-        ctx.stroke();
+                var renderers = $.extend(
+                    $.pivotUtilities.renderers,
+                    $.pivotUtilities.plotly_renderers
+                );
 
-        ctx.strokeStyle = '#0a4aa3';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        rows.forEach(function (row, i) {
-            var v = Number(row.interest_rate);
-            if (!Number.isFinite(v)) return;
-            var x = left + (i * (right - left) / Math.max(1, rows.length - 1));
-            var y = bottom - ((v - min) / (max - min)) * (bottom - top);
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-
-        ctx.fillStyle = '#23354f';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(max.toFixed(3) + '%', 6, top + 6);
-        ctx.fillText(min.toFixed(3) + '%', 6, bottom + 4);
-        ctx.fillText(String(rows[0].collection_date || ''), left, height - 12);
-        ctx.fillText(String(rows[rows.length - 1].collection_date || ''), right - 90, height - 12);
+                $(els.pivotOutput).empty().pivotUI(data, {
+                    rows: ['bank_name'],
+                    cols: ['rate_structure'],
+                    vals: ['interest_rate'],
+                    aggregatorName: 'Average',
+                    renderers: renderers,
+                    rendererName: 'Table',
+                    rendererOptions: {
+                        plotly: {
+                            width: Math.min(1100, window.innerWidth - 80),
+                            height: 500,
+                        },
+                    },
+                }, true);
+                state.pivotLoaded = true;
+            })
+            .catch(function (err) {
+                if (els.pivotStatus) els.pivotStatus.textContent = 'Error loading pivot data: ' + String(err.message || err);
+            });
     }
 
-    async function loadSeries() {
-        if (!state.selectedProductKey) {
-            drawSeries([]);
-            return;
-        }
-        if (els.seriesHint) {
-            els.seriesHint.textContent = 'Loading timeseries for ' + state.selectedProductKey + '...';
-        }
-        try {
-            var q = currentFilterQuery();
-            q.set('product_key', state.selectedProductKey);
-            q.set('limit', '5000');
-            var result = await fetchJson(apiBase + '/timeseries?' + q.toString());
-            if (!result.response.ok) {
-                if (els.seriesHint) els.seriesHint.textContent = 'Failed to load timeseries (' + result.response.status + ').';
-                drawSeries([]);
-                return;
-            }
-            var rows = result.data && result.data.rows || [];
-            if (els.seriesHint) {
-                els.seriesHint.textContent = rows.length > 0
-                    ? ('Series points: ' + rows.length)
-                    : 'No points for selected product and filter set.';
-            }
-            drawSeries(rows);
-        } catch (err) {
-            if (els.seriesHint) els.seriesHint.textContent = 'Error loading timeseries.';
-            drawSeries([]);
-        }
+    /* ── Chart Builder ─────────────────────────────────── */
+
+    function drawChart() {
+        if (!els.chartOutput) return;
+        if (els.chartStatus) els.chartStatus.textContent = 'Loading chart data...';
+
+        var fp = buildFilterParams();
+        fp.size = '10000';
+        fp.page = '1';
+        fp.sort = els.chartX ? els.chartX.value : 'collection_date';
+        fp.dir = 'asc';
+
+        var q = new URLSearchParams(fp);
+
+        fetch(apiBase + '/rates?' + q.toString())
+            .then(function (r) { return r.json(); })
+            .then(function (response) {
+                var data = response.data || [];
+                if (data.length === 0) {
+                    if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
+                    Plotly.purge(els.chartOutput);
+                    return;
+                }
+
+                var xField = els.chartX ? els.chartX.value : 'collection_date';
+                var yField = els.chartY ? els.chartY.value : 'interest_rate';
+                var groupField = els.chartGroup ? els.chartGroup.value : '';
+                var chartType = els.chartType ? els.chartType.value : 'scatter';
+
+                var traces = [];
+
+                if (groupField) {
+                    var groups = {};
+                    data.forEach(function (row) {
+                        var key = String(row[groupField] || 'Unknown');
+                        if (!groups[key]) groups[key] = { x: [], y: [] };
+                        groups[key].x.push(row[xField]);
+                        groups[key].y.push(Number(row[yField]));
+                    });
+                    Object.keys(groups).sort().forEach(function (key) {
+                        var trace = {
+                            x: groups[key].x,
+                            y: groups[key].y,
+                            name: key,
+                            type: chartType,
+                        };
+                        if (chartType === 'scatter') {
+                            trace.mode = 'lines+markers';
+                            trace.marker = { size: 4 };
+                        }
+                        traces.push(trace);
+                    });
+                } else {
+                    var trace = {
+                        x: data.map(function (r) { return r[xField]; }),
+                        y: data.map(function (r) { return Number(r[yField]); }),
+                        type: chartType,
+                        name: yField,
+                    };
+                    if (chartType === 'scatter') {
+                        trace.mode = 'lines+markers';
+                        trace.marker = { size: 4 };
+                    }
+                    traces.push(trace);
+                }
+
+                var yLabel = {
+                    interest_rate: 'Interest Rate (%)',
+                    comparison_rate: 'Comparison Rate (%)',
+                    annual_fee: 'Annual Fee ($)',
+                    rba_cash_rate: 'RBA Cash Rate (%)',
+                }[yField] || yField;
+
+                var xLabel = {
+                    collection_date: 'Date',
+                    bank_name: 'Bank',
+                    rate_structure: 'Structure',
+                    lvr_tier: 'LVR',
+                    feature_set: 'Feature',
+                }[xField] || xField;
+
+                var layout = {
+                    title: yLabel + ' by ' + xLabel,
+                    xaxis: { title: xLabel },
+                    yaxis: { title: yLabel },
+                    hovermode: 'closest',
+                    legend: { orientation: 'h', y: -0.2 },
+                    margin: { t: 50, l: 60, r: 20, b: 80 },
+                    height: 500,
+                };
+
+                Plotly.newPlot(els.chartOutput, traces, layout, { responsive: true });
+                state.chartDrawn = true;
+
+                var total = response.total || data.length;
+                var suffix = total > 10000
+                    ? ' (charted first 10,000 of ' + total.toLocaleString() + ')'
+                    : ' (' + data.length.toLocaleString() + ' data points)';
+                if (els.chartStatus) els.chartStatus.textContent = 'Chart rendered' + suffix;
+            })
+            .catch(function (err) {
+                if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);
+            });
     }
+
+    /* ── CSV Export ─────────────────────────────────────── */
 
     function downloadCsv() {
-        var q = currentFilterQuery();
-        q.set('dataset', 'latest');
-        var url = apiBase + '/export.csv?' + q.toString();
-        window.open(url, '_blank', 'noopener');
+        var fp = buildFilterParams();
+        fp.dataset = 'latest';
+        var q = new URLSearchParams(fp);
+        window.open(apiBase + '/export.csv?' + q.toString(), '_blank', 'noopener');
     }
+
+    /* ── Admin ─────────────────────────────────────────── */
 
     async function loadRuns() {
         if (!els.runsOutput) return;
         els.runsOutput.textContent = 'Loading runs...';
-
         var token = els.adminToken && els.adminToken.value ? String(els.adminToken.value).trim() : '';
         var headers = {};
         if (token) headers.Authorization = 'Bearer ' + token;
-
         try {
-            var result = await fetchJson(apiBase + '/admin/runs?limit=10', { headers: headers });
-            if (!result.response.ok) {
-                els.runsOutput.textContent = JSON.stringify({
-                    ok: false,
-                    status: result.response.status,
-                    message: token ? 'Admin request failed.' : 'Admin token required for run status.',
-                    body: result.data
-                }, null, 2);
-                return;
-            }
-            els.runsOutput.textContent = JSON.stringify(result.data, null, 2);
+            var r = await fetch(apiBase + '/admin/runs?limit=10', { headers: headers });
+            var data = await r.json();
+            els.runsOutput.textContent = JSON.stringify(data, null, 2);
         } catch (err) {
-            els.runsOutput.textContent = JSON.stringify({ ok: false, error: String(err && err.message || err) }, null, 2);
+            els.runsOutput.textContent = JSON.stringify({ ok: false, error: String(err.message || err) }, null, 2);
         }
     }
 
-    async function refreshAll() {
-        syncUrlState();
-        await Promise.all([loadFilters(), loadHealth(), loadLatest(), loadRuns()]);
-        await loadSeries();
-    }
+    /* ── Apply filters ─────────────────────────────────── */
 
-    function handleHeaderClick(event) {
-        var th = event.target.closest('th');
-        if (!th) return;
-        var field = th.getAttribute('data-sort');
-        if (!field) return;
-        if (state.sortColumn === field) {
-            state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            state.sortColumn = field;
-            state.sortDirection = 'asc';
+    function applyFilters() {
+        syncUrlState();
+        reloadExplorer();
+        if (state.pivotLoaded && els.pivotStatus) {
+            els.pivotStatus.textContent = 'Filters changed -- click "Load Data for Pivot" to refresh.';
         }
-        renderLatestRows(state.latestRows);
-        syncUrlState();
+        if (state.chartDrawn && els.chartStatus) {
+            els.chartStatus.textContent = 'Filters changed -- click "Draw Chart" to refresh.';
+        }
     }
 
-    if (els.latestHead) {
-        var headers = els.latestHead.querySelectorAll('th');
-        var headerLabels = Object.keys(SORT_FIELDS);
-        headers.forEach(function (th, idx) {
-            var label = headerLabels[idx];
-            if (label && SORT_FIELDS[label]) {
-                th.setAttribute('data-sort', SORT_FIELDS[label]);
-                th.innerHTML = esc(label) + ' <span class="sort-arrow">\u25B2</span>';
-            }
-        });
-        els.latestHead.addEventListener('click', handleHeaderClick);
-    }
+    /* ── Event bindings ────────────────────────────────── */
 
-    if (els.refreshAll) els.refreshAll.addEventListener('click', refreshAll);
-    if (els.tabDaily) els.tabDaily.addEventListener('click', function () { setMode('daily'); refreshAll(); });
-    if (els.tabHistorical) els.tabHistorical.addEventListener('click', function () { setMode('historical'); refreshAll(); });
-    if (els.applyFilters) els.applyFilters.addEventListener('click', refreshAll);
+    if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
     if (els.downloadCsv) els.downloadCsv.addEventListener('click', downloadCsv);
-    if (els.refreshHealth) els.refreshHealth.addEventListener('click', loadHealth);
-    if (els.refreshLatest) els.refreshLatest.addEventListener('click', loadLatest);
-    if (els.refreshSeries) els.refreshSeries.addEventListener('click', loadSeries);
+    if (els.loadPivot) els.loadPivot.addEventListener('click', loadPivotData);
+    if (els.drawChart) els.drawChart.addEventListener('click', drawChart);
     if (els.refreshRuns) els.refreshRuns.addEventListener('click', loadRuns);
-    if (els.latestBody) {
-        els.latestBody.addEventListener('click', function (event) {
-            var target = event.target;
-            if (!target) return;
-            var tr = target.closest('tr');
-            if (!tr) return;
-            var key = tr.getAttribute('data-product-key');
-            if (!key) return;
-            state.selectedProductKey = key;
-            loadSeries();
-        });
-    }
 
-    setMode(state.mode);
-    refreshAll();
+    /* ── Init ──────────────────────────────────────────── */
+
+    loadFilters().then(function () {
+        activateTab(state.activeTab);
+    });
+    loadHeroStats();
+    initRateTable();
 })();

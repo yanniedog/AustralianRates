@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap");
-
 :root {
     --bg-a: #ecf4ef;
     --bg-b: #f7fbff;
@@ -23,6 +21,28 @@ body {
     background: linear-gradient(155deg, var(--bg-a), var(--bg-b));
 }
 
+/* ── Skip link (a11y) ──────────────────────────── */
+
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 8px;
+    background: var(--brand);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 0 0 8px 8px;
+    font-weight: 600;
+    z-index: 200;
+    text-decoration: none;
+    transition: top 0.2s;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* ── Background layer ──────────────────────────── */
+
 .bg-layer {
     position: fixed;
     inset: 0;
@@ -34,13 +54,17 @@ body {
         linear-gradient(to bottom, rgba(20, 58, 102, 0.04) 1px, transparent 1px) 0 0 / 36px 36px;
 }
 
+/* ── Shell ─────────────────────────────────────── */
+
 .shell {
-    max-width: 1180px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 28px 16px 36px;
     position: relative;
     z-index: 1;
 }
+
+/* ── Panels ────────────────────────────────────── */
 
 .panel {
     background: var(--card);
@@ -48,11 +72,30 @@ body {
     border-radius: 18px;
     box-shadow: 0 18px 44px rgba(10, 24, 52, 0.1);
     backdrop-filter: blur(6px);
+    padding: 16px;
+    margin-bottom: 12px;
 }
+
+.panel > * {
+    margin: 0;
+}
+
+.panel-wide {
+    width: 100%;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+/* ── Hero ──────────────────────────────────────── */
 
 .hero {
     padding: 24px;
-    margin-bottom: 14px;
 }
 
 .eyebrow {
@@ -61,12 +104,11 @@ body {
     letter-spacing: 0.08em;
     font-size: 0.72rem;
     font-family: "Sora", "Segoe UI", sans-serif;
-    color: var(--brand);
+    color: #0b5e58;
     font-weight: 700;
 }
 
-h1,
-h2 {
+h1, h2 {
     margin: 0;
     font-family: "Sora", "Segoe UI", sans-serif;
     letter-spacing: -0.02em;
@@ -87,11 +129,20 @@ h2 {
     color: var(--muted);
 }
 
-.api-line {
-    margin: 12px 0 0;
-    font-size: 0.94rem;
+.hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 16px;
+    font-size: 0.9rem;
     color: var(--muted);
 }
+
+.hero-stat strong {
+    color: var(--text);
+}
+
+/* ── Code ──────────────────────────────────────── */
 
 code {
     font-family: "JetBrains Mono", Consolas, monospace;
@@ -101,9 +152,7 @@ code {
     padding: 2px 6px;
 }
 
-.hero-actions {
-    margin-top: 14px;
-}
+/* ── Buttons ───────────────────────────────────── */
 
 button {
     border: 1px solid rgba(15, 118, 110, 0.45);
@@ -114,6 +163,7 @@ button {
     font: inherit;
     font-weight: 700;
     cursor: pointer;
+    transition: filter 0.15s;
 }
 
 button.small {
@@ -121,51 +171,94 @@ button.small {
     padding: 8px 10px;
 }
 
+button.secondary {
+    background: transparent;
+    color: var(--brand);
+    border-color: var(--brand);
+}
+
+button.secondary:hover {
+    background: rgba(15, 118, 110, 0.08);
+}
+
 button:hover {
     filter: brightness(1.06);
 }
 
-.grid {
-    display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+button:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
 }
+
+/* ── Tabs ──────────────────────────────────────── */
 
 .tabs {
-    padding: 16px;
-    margin-bottom: 12px;
-}
-
-.tab-buttons {
     display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: 6px;
+    padding: 10px 16px;
 }
 
-.tab-buttons .active {
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45) inset;
+.tab-btn {
+    font-size: 0.88rem;
+    padding: 8px 16px;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    font-weight: 600;
+    transition: background 0.15s, color 0.15s;
 }
+
+.tab-btn.active {
+    background: linear-gradient(140deg, var(--brand), var(--brand-2));
+    color: #fff;
+    border-color: transparent;
+}
+
+.tab-btn:not(.active):hover {
+    background: rgba(15, 118, 110, 0.06);
+    color: var(--text);
+}
+
+/* ── Tab panels ────────────────────────────────── */
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* ── Filters ───────────────────────────────────── */
 
 .filters {
+    padding: 16px;
+}
+
+.filters-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
     align-items: end;
 }
 
-.filters label {
+.filters-grid label {
     display: grid;
-    gap: 6px;
+    gap: 4px;
     font-size: 0.82rem;
     color: var(--muted);
     font-weight: 600;
 }
 
-.filters select {
+.filters-grid select,
+.filters-grid input[type="date"],
+.filters-grid input[type="number"] {
     border: 1px solid var(--line);
     border-radius: 10px;
     padding: 8px;
     font: inherit;
+    font-size: 0.85rem;
     background: rgba(255, 255, 255, 0.95);
 }
 
@@ -173,44 +266,10 @@ button:hover {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    align-items: end;
 }
 
-.panel-wide {
-    grid-column: 1 / -1;
-}
-
-.panel > * {
-    margin: 0;
-}
-
-.panel {
-    padding: 16px;
-}
-
-.panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-
-.hint {
-    color: var(--muted);
-    font-size: 0.88rem;
-}
-
-.token-row {
-    display: grid;
-    gap: 6px;
-    margin: 10px 0;
-}
-
-.token-row span {
-    color: var(--muted);
-    font-size: 0.86rem;
-    font-weight: 600;
-}
+/* ── Inputs ────────────────────────────────────── */
 
 input {
     border: 1px solid var(--line);
@@ -219,6 +278,14 @@ input {
     font: inherit;
     background: rgba(255, 255, 255, 0.92);
 }
+
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+}
+
+/* ── Output / pre ──────────────────────────────── */
 
 .output {
     margin: 0;
@@ -234,78 +301,157 @@ input {
     min-height: 160px;
 }
 
-.table-wrap {
-    overflow: auto;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: #fff;
+.hint {
+    color: #3d5068;
+    font-size: 0.88rem;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 640px;
+.token-row {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0;
 }
 
-th,
-td {
-    text-align: left;
-    padding: 9px 10px;
-    border-bottom: 1px solid rgba(36, 64, 99, 0.12);
-    font-size: 0.83rem;
-}
-
-tr.clickable-row {
-    cursor: pointer;
-}
-
-tr.clickable-row:hover td {
-    background: rgba(15, 118, 110, 0.08);
-}
-
-#series-canvas {
-    width: 100%;
-    max-width: 100%;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: #f6f9fc;
-}
-
-thead th {
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 0.68rem;
+.token-row span {
     color: var(--muted);
-    background: #eef4fa;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
+    font-size: 0.86rem;
+    font-weight: 600;
 }
 
-thead th:hover {
-    color: var(--brand-2);
+/* ── Tabulator overrides ───────────────────────── */
+
+#rate-table {
+    border-radius: 12px;
+    overflow: hidden;
 }
 
-thead th .sort-arrow {
-    display: inline-block;
-    margin-left: 3px;
-    font-size: 0.62rem;
-    opacity: 0.35;
+.tabulator {
+    border: 1px solid var(--line) !important;
+    border-radius: 12px !important;
+    font-family: "Space Grotesk", "Segoe UI", sans-serif !important;
+    font-size: 0.84rem !important;
 }
 
-thead th.sorted .sort-arrow {
-    opacity: 1;
-    color: var(--brand);
+.tabulator .tabulator-footer {
+    border-radius: 0 0 12px 12px !important;
 }
 
-tr.best-rate td {
-    background: rgba(15, 118, 110, 0.06);
+.tabulator .tabulator-header {
+    border-radius: 12px 12px 0 0 !important;
 }
 
-tr.best-rate td:nth-child(10) {
-    font-weight: 700;
-    color: var(--brand);
+.tabulator .tabulator-page.active {
+    background: var(--brand) !important;
+    color: #fff !important;
 }
+
+/* ── Pivot Table overrides ─────────────────────── */
+
+#pivot-output {
+    margin-top: 12px;
+    overflow: auto;
+}
+
+.pivot-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.pvtUi {
+    font-family: "Space Grotesk", "Segoe UI", sans-serif !important;
+    font-size: 0.84rem !important;
+}
+
+.pvtTable {
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.pvtTable td, .pvtTable th {
+    padding: 4px 8px;
+}
+
+/* ── Chart Builder ─────────────────────────────── */
+
+.chart-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
+}
+
+.chart-controls label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.chart-controls select {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px;
+    font: inherit;
+    font-size: 0.85rem;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+#chart-output {
+    min-height: 200px;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* ── SEO summary ───────────────────────────────── */
+
+.seo-summary {
+    max-width: 1240px;
+    margin: 0 0 12px;
+    font-size: 0.84rem;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.seo-summary p {
+    margin: 0;
+}
+
+/* ── Disclaimer ────────────────────────────────── */
+
+.disclaimer {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 16px 18px 8px;
+    font-size: 0.74rem;
+    color: var(--muted);
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Focus visible ─────────────────────────────── */
+
+:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+/* ── Reduced motion ────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ── Responsive ────────────────────────────────── */
 
 @media (max-width: 760px) {
     .hero {
@@ -317,7 +463,20 @@ tr.best-rate td:nth-child(10) {
         padding: 12px;
     }
 
-    .grid {
-        grid-template-columns: 1fr;
+    .tabs {
+        flex-wrap: wrap;
+    }
+
+    .hero-stats {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .filters-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .chart-controls {
+        grid-template-columns: 1fr 1fr;
     }
 }

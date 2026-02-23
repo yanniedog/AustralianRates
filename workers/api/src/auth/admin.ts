@@ -20,7 +20,20 @@ export function isBearerTokenAuthorized(providedToken: string | null, expectedTo
   if (!providedToken || !expected) {
     return false
   }
-  return providedToken === expected
+  if (providedToken.length !== expected.length) {
+    return false
+  }
+  const encoder = new TextEncoder()
+  const a = encoder.encode(providedToken)
+  const b = encoder.encode(expected)
+  if (a.byteLength !== b.byteLength) {
+    return false
+  }
+  let mismatch = 0
+  for (let i = 0; i < a.byteLength; i++) {
+    mismatch |= a[i] ^ b[i]
+  }
+  return mismatch === 0
 }
 
 export async function evaluateAdminAuth(c: Parameters<MiddlewareHandler<AppContext>>[0]): Promise<AdminAuthState> {

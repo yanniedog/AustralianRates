@@ -90,7 +90,8 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   const where: string[] = []
   const binds: Array<string | number> = []
 
-  where.push(`v.interest_rate BETWEEN ${MIN_PUBLIC_RATE} AND ${MAX_PUBLIC_RATE}`)
+  where.push('v.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
   if (filters.bank) {
     where.push('v.bank_name = ?')
@@ -181,7 +182,8 @@ export async function queryTimeseries(
   const where: string[] = []
   const binds: Array<string | number> = []
 
-  where.push(`t.interest_rate BETWEEN ${MIN_PUBLIC_RATE} AND ${MAX_PUBLIC_RATE}`)
+  where.push('t.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
   if (input.bank) {
     where.push('t.bank_name = ?')
@@ -258,16 +260,176 @@ export async function queryTimeseries(
   return rows(result)
 }
 
+type RatesPaginatedFilters = {
+  page?: number
+  size?: number
+  startDate?: string
+  endDate?: string
+  bank?: string
+  securityPurpose?: string
+  repaymentType?: string
+  rateStructure?: string
+  lvrTier?: string
+  featureSet?: string
+  sort?: string
+  dir?: 'asc' | 'desc'
+}
+
+const PAGINATED_SORT_COLUMNS: Record<string, string> = {
+  collection_date: 'h.collection_date',
+  bank_name: 'h.bank_name',
+  product_name: 'h.product_name',
+  security_purpose: 'h.security_purpose',
+  repayment_type: 'h.repayment_type',
+  rate_structure: 'h.rate_structure',
+  lvr_tier: 'h.lvr_tier',
+  feature_set: 'h.feature_set',
+  interest_rate: 'h.interest_rate',
+  comparison_rate: 'h.comparison_rate',
+  annual_fee: 'h.annual_fee',
+  rba_cash_rate: 'rba_cash_rate',
+}
+
+export async function queryRatesPaginated(db: D1Database, filters: RatesPaginatedFilters) {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('h.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+
+  where.push('h.confidence_score >= ?')
+  binds.push(MIN_CONFIDENCE_ALL)
+
+  if (filters.bank) {
+    where.push('h.bank_name = ?')
+    binds.push(filters.bank)
+  }
+  if (filters.securityPurpose) {
+    where.push('h.security_purpose = ?')
+    binds.push(filters.securityPurpose)
+  }
+  if (filters.repaymentType) {
+    where.push('h.repayment_type = ?')
+    binds.push(filters.repaymentType)
+  }
+  if (filters.rateStructure) {
+    where.push('h.rate_structure = ?')
+    binds.push(filters.rateStructure)
+  }
+  if (filters.lvrTier) {
+    where.push('h.lvr_tier = ?')
+    binds.push(filters.lvrTier)
+  }
+  if (filters.featureSet) {
+    where.push('h.feature_set = ?')
+    binds.push(filters.featureSet)
+  }
+  if (filters.startDate) {
+    where.push('h.collection_date >= ?')
+    binds.push(filters.startDate)
+  }
+  if (filters.endDate) {
+    where.push('h.collection_date <= ?')
+    binds.push(filters.endDate)
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+  const sortCol = PAGINATED_SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
+  const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
+  const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
+
+  const page = Math.max(1, Math.floor(Number(filters.page) || 1))
+  const size = Math.min(500, Math.max(1, Math.floor(Number(filters.size) || 50)))
+  const offset = (page - 1) * size
+
+  const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
+  const dataSql = `
+    SELECT
+      h.bank_name,
+      h.collection_date,
+      h.product_id,
+      h.product_name,
+      h.security_purpose,
+      h.repayment_type,
+      h.rate_structure,
+      h.lvr_tier,
+      h.feature_set,
+      h.interest_rate,
+      h.comparison_rate,
+      h.annual_fee,
+      h.source_url,
+      h.data_quality_flag,
+      h.confidence_score,
+      h.parsed_at,
+      h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
+      r.cash_rate AS rba_cash_rate
+    FROM historical_loan_rates h
+    LEFT JOIN rba_cash_rates r
+      ON r.collection_date = h.collection_date
+    ${whereClause}
+    ${orderClause}
+    LIMIT ? OFFSET ?
+  `
+
+  const dataBinds = [...binds, size, offset]
+
+  const [countResult, dataResult] = await Promise.all([
+    db.prepare(countSql).bind(...binds).first<{ total: number }>(),
+    db.prepare(dataSql).bind(...dataBinds).all<Record<string, unknown>>(),
+  ])
+
+  const total = Number(countResult?.total ?? 0)
+  const lastPage = Math.max(1, Math.ceil(total / size))
+
+  return {
+    last_page: lastPage,
+    total,
+    data: rows(dataResult),
+  }
+}
+
+export async function getLenderStaleness(db: D1Database, staleHours = 48) {
+  const result = await db
+    .prepare(
+      `SELECT
+        bank_name,
+        MAX(collection_date) AS latest_date,
+        MAX(parsed_at) AS latest_parsed_at,
+        COUNT(*) AS total_rows
+       FROM historical_loan_rates
+       GROUP BY bank_name
+       ORDER BY bank_name ASC`,
+    )
+    .all<{ bank_name: string; latest_date: string; latest_parsed_at: string; total_rows: number }>()
+
+  const now = Date.now()
+  return rows(result).map((r) => {
+    const parsedAt = new Date(r.latest_parsed_at).getTime()
+    const ageMs = now - parsedAt
+    const ageHours = Math.round(ageMs / (1000 * 60 * 60))
+    return {
+      bank_name: r.bank_name,
+      latest_date: r.latest_date,
+      latest_parsed_at: r.latest_parsed_at,
+      total_rows: Number(r.total_rows),
+      age_hours: ageHours,
+      stale: ageHours > staleHours,
+    }
+  })
+}
+
 export async function getQualityDiagnostics(db: D1Database) {
   const [totals, byFlag] = await Promise.all([
     db
       .prepare(
         `SELECT
           COUNT(*) AS total_rows,
-          SUM(CASE WHEN interest_rate BETWEEN ${MIN_PUBLIC_RATE} AND ${MAX_PUBLIC_RATE} THEN 1 ELSE 0 END) AS in_range_rows,
-          SUM(CASE WHEN confidence_score >= ${MIN_CONFIDENCE_ALL} THEN 1 ELSE 0 END) AS confidence_ok_rows
+          SUM(CASE WHEN interest_rate BETWEEN ? AND ? THEN 1 ELSE 0 END) AS in_range_rows,
+          SUM(CASE WHEN confidence_score >= ? THEN 1 ELSE 0 END) AS confidence_ok_rows
          FROM historical_loan_rates`,
       )
+      .bind(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE, MIN_CONFIDENCE_ALL)
       .first<{ total_rows: number; in_range_rows: number; confidence_ok_rows: number }>(),
     db
       .prepare(

@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "generated_at": "2026-02-20T00:00:00Z",
+  "version": 2,
+  "generated_at": "2026-02-23T00:00:00Z",
   "lenders": [
     {
       "code": "cba",
@@ -100,6 +100,64 @@
       "products_endpoint": "https://pub.cdr-sme.amp.com.au/api/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.amp.com.au/home-loans/rates-and-fees"
+      ]
+    },
+    {
+      "code": "hsbc",
+      "name": "HSBC",
+      "canonical_bank_name": "HSBC Australia",
+      "register_brand_name": "HSBC Bank Australia Limited",
+      "products_endpoint": "https://public.ob.hsbc.com.au/cds-au/v1/banking/products",
+      "seed_rate_urls": [
+        "https://www.hsbc.com.au/home-loans/products/rates/"
+      ]
+    },
+    {
+      "code": "ubank",
+      "name": "UBank",
+      "canonical_bank_name": "UBank",
+      "register_brand_name": "ubank",
+      "products_endpoint": "https://public.cdr-api.86400.com.au/cds-au/v1/banking/products",
+      "seed_rate_urls": [
+        "https://www.ubank.com.au/home-loans/interest-rates-and-fees"
+      ]
+    },
+    {
+      "code": "stgeorge",
+      "name": "St. George",
+      "canonical_bank_name": "St. George Bank",
+      "register_brand_name": "St.George Bank",
+      "products_endpoint": "https://digital-api.stgeorge.com.au/cds-au/v1/banking/products",
+      "seed_rate_urls": [
+        "https://www.stgeorge.com.au/personal/home-loans/our-home-loans/rates"
+      ]
+    },
+    {
+      "code": "bankofmelbourne",
+      "name": "Bank of Melbourne",
+      "canonical_bank_name": "Bank of Melbourne",
+      "register_brand_name": "Bank of Melbourne",
+      "products_endpoint": "https://digital-api.bankofmelbourne.com.au/cds-au/v1/banking/products",
+      "seed_rate_urls": [
+        "https://www.bankofmelbourne.com.au/personal/home-loans/our-home-loans/rates"
+      ]
+    },
+    {
+      "code": "boq",
+      "name": "BOQ",
+      "canonical_bank_name": "Bank of Queensland",
+      "register_brand_name": "Bank of Queensland",
+      "seed_rate_urls": [
+        "https://www.boq.com.au/personal/home-loans/home-loan-interest-rates"
+      ]
+    },
+    {
+      "code": "great_southern",
+      "name": "Great Southern Bank",
+      "canonical_bank_name": "Great Southern Bank",
+      "register_brand_name": "Great Southern Bank",
+      "seed_rate_urls": [
+        "https://www.greatsouthernbank.com.au/home-loans/rates"
       ]
     }
   ]

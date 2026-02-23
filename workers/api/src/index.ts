@@ -21,11 +21,28 @@ app.use('*', async (c, next) => {
 })
 
 app.use('*', logger())
-app.use('*', secureHeaders())
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://cdn.jsdelivr.net', 'https://cdn.plot.ly'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://api.github.com'],
+    },
+  }),
+)
 app.use(
   '*',
   cors({
-    origin: '*',
+    origin: (origin) => {
+      if (!origin) return '*'
+      if (origin.endsWith('.australianrates.com') || origin === 'https://australianrates.com') return origin
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) return origin
+      return 'https://www.australianrates.com'
+    },
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'Cf-Access-Jwt-Assertion'],
   }),

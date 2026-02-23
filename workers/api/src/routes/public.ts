@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
-import { getFilters, getQualityDiagnostics, queryLatestRates, queryTimeseries } from '../db/queries'
+import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestRates, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
@@ -41,6 +41,17 @@ publicRoutes.get('/health', async (c) => {
   })
 })
 
+publicRoutes.get('/staleness', async (c) => {
+  withPublicCache(c, 60)
+  const staleness = await getLenderStaleness(c.env.DB)
+  const staleLenders = staleness.filter((l) => l.stale)
+  return c.json({
+    ok: true,
+    stale_count: staleLenders.length,
+    lenders: staleness,
+  })
+})
+
 publicRoutes.get('/filters', async (c) => {
   const filters = await getFilters(c.env.DB)
   return c.json({
@@ -55,6 +66,28 @@ publicRoutes.get('/quality/diagnostics', async (c) => {
     ok: true,
     diagnostics,
   })
+})
+
+publicRoutes.get('/rates', async (c) => {
+  const query = c.req.query()
+  const dir = String(query.dir || 'desc').toLowerCase()
+
+  const result = await queryRatesPaginated(c.env.DB, {
+    page: Number(query.page || 1),
+    size: Number(query.size || 50),
+    startDate: query.start_date,
+    endDate: query.end_date,
+    bank: query.bank,
+    securityPurpose: query.security_purpose,
+    repaymentType: query.repayment_type,
+    rateStructure: query.rate_structure,
+    lvrTier: query.lvr_tier,
+    featureSet: query.feature_set,
+    sort: query.sort,
+    dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+  })
+
+  return c.json(result)
 })
 
 publicRoutes.get('/latest', async (c) => {
