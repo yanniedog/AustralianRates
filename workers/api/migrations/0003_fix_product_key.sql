@@ -2,6 +2,10 @@
 -- The old constraint allowed silent overwrites when the same product had
 -- different rate variants (e.g. owner-occupied P&I vs investment IO).
 
+-- Drop views first since they reference the table we're about to recreate
+DROP VIEW IF EXISTS vw_latest_rates;
+DROP VIEW IF EXISTS vw_rate_timeseries;
+
 -- SQLite cannot ALTER a constraint, so we recreate the table.
 -- The old autoindex is dropped implicitly when the old table is dropped.
 
@@ -41,8 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_historical_loan_rates_bank_date
 CREATE INDEX IF NOT EXISTS idx_historical_loan_rates_product
   ON historical_loan_rates(product_id, rate_structure, lvr_tier);
 
--- Step 2: Rebuild vw_latest_rates with 6-part product_key and corrected PARTITION BY
-DROP VIEW IF EXISTS vw_latest_rates;
+-- Rebuild vw_latest_rates with 6-part product_key and corrected PARTITION BY
 CREATE VIEW vw_latest_rates AS
 WITH ranked AS (
   SELECT
@@ -90,8 +93,7 @@ SELECT
 FROM ranked
 WHERE row_num = 1;
 
--- Step 3: Rebuild vw_rate_timeseries with all fields and 6-part product_key
-DROP VIEW IF EXISTS vw_rate_timeseries;
+-- Rebuild vw_rate_timeseries with all fields and 6-part product_key
 CREATE VIEW vw_rate_timeseries AS
 SELECT
   collection_date,
