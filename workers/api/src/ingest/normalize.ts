@@ -1,4 +1,4 @@
-import type { FeatureSet, LvrTier, RateStructure, RepaymentType, SecurityPurpose } from '../types'
+import type { FeatureSet, LvrTier, RateStructure, RepaymentType, RunSource, SecurityPurpose } from '../types'
 
 export type NormalizedRateRow = {
   bankName: string
@@ -16,6 +16,8 @@ export type NormalizedRateRow = {
   sourceUrl: string
   dataQualityFlag: string
   confidenceScore: number
+  runId?: string
+  runSource?: RunSource
 }
 
 export const MIN_RATE_PERCENT = 0.5

@@ -175,6 +175,10 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   }
 
   const { accepted, dropped } = splitValidatedRows(collectedRows)
+  for (const row of accepted) {
+    row.runId = job.runId
+    row.runSource = job.runSource ?? 'scheduled'
+  }
   if (accepted.length === 0) {
     await persistRawPayload(env, {
       sourceType: 'cdr_products',
@@ -247,6 +251,10 @@ async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): 
     notes: `direct_product_detail lender=${job.lenderCode} product=${job.productId}`,
   })
   const { accepted } = splitValidatedRows(details.rows)
+  for (const row of accepted) {
+    row.runId = job.runId
+    row.runSource = job.runSource ?? 'scheduled'
+  }
   if (accepted.length > 0) {
     await upsertHistoricalRateRows(env.DB, accepted)
   }
@@ -319,6 +327,10 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
     inspectedTotal += parsed.inspected
     droppedTotal += parsed.dropped
     const { accepted, dropped } = splitValidatedRows(parsed.rows)
+    for (const row of accepted) {
+      row.runId = job.runId
+      row.runSource = job.runSource ?? 'scheduled'
+    }
     droppedTotal += dropped.length
     if (accepted.length > 0) {
       writtenRows += await upsertHistoricalRateRows(env.DB, accepted)

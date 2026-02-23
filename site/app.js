@@ -67,6 +67,11 @@
         refreshRuns:   document.getElementById('refresh-runs'),
         runsOutput:    document.getElementById('runs-output'),
         adminToken:    document.getElementById('admin-token'),
+        triggerRun:    document.getElementById('trigger-run'),
+        triggerStatus: document.getElementById('trigger-status'),
+        filterIncludeManual: document.getElementById('filter-include-manual'),
+        refreshInterval: document.getElementById('refresh-interval'),
+        lastRefreshed: document.getElementById('last-refreshed'),
     };
 
     /* ── State ─────────────────────────────────────────── */
@@ -75,6 +80,8 @@
         activeTab: params.get('tab') || 'explorer',
         pivotLoaded: false,
         chartDrawn: false,
+        refreshTimerId: null,
+        lastRefreshedAt: null,
     };
 
     /* ── Show admin panel if ?admin=true ───────────────── */
@@ -141,6 +148,7 @@
         if (els.filterFeature && els.filterFeature.value) p.feature_set = els.filterFeature.value;
         if (els.filterStartDate && els.filterStartDate.value) p.start_date = els.filterStartDate.value;
         if (els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
+        if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
         return p;
     }
 
@@ -155,6 +163,8 @@
         if (els.filterFeature && els.filterFeature.value) q.set('feature', els.filterFeature.value);
         if (els.filterStartDate && els.filterStartDate.value) q.set('start_date', els.filterStartDate.value);
         if (els.filterEndDate && els.filterEndDate.value) q.set('end_date', els.filterEndDate.value);
+        if (els.filterIncludeManual && els.filterIncludeManual.checked) q.set('include_manual', 'true');
+        if (els.refreshInterval && els.refreshInterval.value !== '60') q.set('refresh_interval', els.refreshInterval.value);
         if (apiOverride) q.set('apiBase', apiOverride);
         if (isAdmin) q.set('admin', 'true');
         window.history.replaceState(null, '', window.location.pathname + '?' + q.toString());
@@ -171,6 +181,8 @@
         if (p.get('feature') && els.filterFeature) els.filterFeature.value = p.get('feature');
         if (p.get('start_date') && els.filterStartDate) els.filterStartDate.value = p.get('start_date');
         if (p.get('end_date') && els.filterEndDate) els.filterEndDate.value = p.get('end_date');
+        if (p.get('include_manual') === 'true' && els.filterIncludeManual) els.filterIncludeManual.checked = true;
+        if (p.get('refresh_interval') && els.refreshInterval) els.refreshInterval.value = p.get('refresh_interval');
     }
 
     /* ── Load filter options ───────────────────────────── */
@@ -303,6 +315,20 @@
                     cellClick: function () {} },
                 { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110, visible: false },
                 { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100, visible: false },
+                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160,
+                    formatter: function (cell) {
+                        var v = cell.getValue();
+                        if (!v) return '-';
+                        try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
+                    }
+                },
+                { title: 'Source', field: 'run_source', headerSort: true, width: 90,
+                    formatter: function (cell) {
+                        var v = String(cell.getValue() || '');
+                        if (v === 'manual') return 'Manual';
+                        return 'Auto';
+                    }
+                },
                 { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false,
                     formatter: function (cell) {
                         var v = String(cell.getValue() || '');
@@ -482,6 +508,86 @@
             });
     }
 
+    /* ── Trigger Manual Run ─────────────────────────────── */
+
+    var triggerInFlight = false;
+
+    function triggerManualRun() {
+        if (triggerInFlight) return;
+        if (!els.triggerRun) return;
+        triggerInFlight = true;
+        els.triggerRun.disabled = true;
+        if (els.triggerStatus) els.triggerStatus.textContent = 'Starting run...';
+
+        fetch(apiBase + '/trigger-run', { method: 'POST' })
+            .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }); })
+            .then(function (res) {
+                if (res.status === 429) {
+                    var secs = res.body.retry_after_seconds || 0;
+                    var mins = Math.ceil(secs / 60);
+                    if (els.triggerStatus) els.triggerStatus.textContent = 'Rate limited -- try again in ~' + mins + ' min.';
+                } else if (res.body && res.body.ok) {
+                    if (els.triggerStatus) els.triggerStatus.textContent = 'Run started. Data will refresh shortly.';
+                    setTimeout(function () {
+                        reloadExplorer();
+                        loadHeroStats();
+                        if (els.triggerStatus) els.triggerStatus.textContent = '';
+                    }, 15000);
+                } else {
+                    if (els.triggerStatus) els.triggerStatus.textContent = 'Run could not be started.';
+                }
+            })
+            .catch(function (err) {
+                if (els.triggerStatus) els.triggerStatus.textContent = 'Error: ' + String(err.message || err);
+            })
+            .finally(function () {
+                triggerInFlight = false;
+                setTimeout(function () {
+                    if (els.triggerRun) els.triggerRun.disabled = false;
+                }, 5000);
+            });
+    }
+
+    /* ── Auto-Refresh ─────────────────────────────────── */
+
+    function updateLastRefreshed() {
+        if (!els.lastRefreshed) return;
+        if (!state.lastRefreshedAt) {
+            els.lastRefreshed.textContent = '';
+            return;
+        }
+        var ago = Math.round((Date.now() - state.lastRefreshedAt) / 60000);
+        if (ago < 1) {
+            els.lastRefreshed.textContent = 'Refreshed just now';
+        } else {
+            els.lastRefreshed.textContent = 'Refreshed ' + ago + ' min ago';
+        }
+    }
+
+    function doAutoRefresh() {
+        reloadExplorer();
+        loadHeroStats();
+        state.lastRefreshedAt = Date.now();
+        updateLastRefreshed();
+    }
+
+    function setupAutoRefresh() {
+        if (state.refreshTimerId) {
+            clearInterval(state.refreshTimerId);
+            state.refreshTimerId = null;
+        }
+        var minutes = parseInt(els.refreshInterval ? els.refreshInterval.value : '60', 10);
+        if (isNaN(minutes) || minutes <= 0) {
+            if (els.lastRefreshed) els.lastRefreshed.textContent = 'Auto-refresh off';
+            return;
+        }
+        state.lastRefreshedAt = Date.now();
+        updateLastRefreshed();
+        state.refreshTimerId = setInterval(doAutoRefresh, minutes * 60 * 1000);
+    }
+
+    setInterval(updateLastRefreshed, 30000);
+
     /* ── CSV Export ─────────────────────────────────────── */
 
     function downloadCsv() {
@@ -528,6 +634,12 @@
     if (els.loadPivot) els.loadPivot.addEventListener('click', loadPivotData);
     if (els.drawChart) els.drawChart.addEventListener('click', drawChart);
     if (els.refreshRuns) els.refreshRuns.addEventListener('click', loadRuns);
+    if (els.triggerRun) els.triggerRun.addEventListener('click', triggerManualRun);
+    if (els.filterIncludeManual) els.filterIncludeManual.addEventListener('change', applyFilters);
+    if (els.refreshInterval) els.refreshInterval.addEventListener('change', function () {
+        syncUrlState();
+        setupAutoRefresh();
+    });
 
     /* ── Init ──────────────────────────────────────────── */
 
@@ -536,4 +648,5 @@
     });
     loadHeroStats();
     initRateTable();
+    setupAutoRefresh();
 })();

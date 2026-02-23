@@ -1,8 +1,11 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
 import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestRates, queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { getLastManualRunStartedAt } from '../db/run-reports'
+import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
+import { log } from '../utils/logger'
 import type { LogLevel } from '../utils/logger'
 import { getLogStats, queryLogs } from '../utils/logger'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -52,6 +55,28 @@ publicRoutes.get('/staleness', async (c) => {
   })
 })
 
+publicRoutes.post('/trigger-run', async (c) => {
+  const DEFAULT_COOLDOWN_SECONDS = 3600
+  const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
+  const cooldownMs = cooldownSeconds * 1000
+
+  const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
+  if (lastStartedAt) {
+    const elapsed = Date.now() - Date.parse(lastStartedAt)
+    if (elapsed < cooldownMs) {
+      const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
+      return c.json(
+        { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
+        429,
+      )
+    }
+  }
+
+  log.info('api', 'Public manual run triggered')
+  const result = await triggerDailyRun(c.env, { source: 'manual', force: true })
+  return c.json({ ok: true, result })
+})
+
 publicRoutes.get('/filters', async (c) => {
   const filters = await getFilters(c.env.DB)
   return c.json({
@@ -71,6 +96,7 @@ publicRoutes.get('/quality/diagnostics', async (c) => {
 publicRoutes.get('/rates', async (c) => {
   const query = c.req.query()
   const dir = String(query.dir || 'desc').toLowerCase()
+  const includeManual = query.include_manual === 'true' || query.include_manual === '1'
 
   const result = await queryRatesPaginated(c.env.DB, {
     page: Number(query.page || 1),
@@ -85,6 +111,7 @@ publicRoutes.get('/rates', async (c) => {
     featureSet: query.feature_set,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+    includeManual,
   })
 
   return c.json(result)

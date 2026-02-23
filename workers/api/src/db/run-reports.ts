@@ -1,4 +1,4 @@
-import type { RunReportRow, RunStatus, RunType } from '../types'
+import type { RunReportRow, RunSource, RunStatus, RunType } from '../types'
 import { nowIso } from '../utils/time'
 
 type LenderProgress = {
@@ -104,7 +104,7 @@ export function buildInitialPerLenderSummary(perLenderEnqueued: Record<string, n
 export async function getRunReport(db: D1Database, runId: string): Promise<RunReportRow | null> {
   const row = await db
     .prepare(
-      `SELECT run_id, run_type, started_at, finished_at, status, per_lender_json, errors_json
+      `SELECT run_id, run_type, run_source, started_at, finished_at, status, per_lender_json, errors_json
        FROM run_reports
        WHERE run_id = ?1`,
     )
@@ -118,7 +118,7 @@ export async function listRunReports(db: D1Database, limit = 25): Promise<RunRep
   const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)))
   const rows = await db
     .prepare(
-      `SELECT run_id, run_type, started_at, finished_at, status, per_lender_json, errors_json
+      `SELECT run_id, run_type, run_source, started_at, finished_at, status, per_lender_json, errors_json
        FROM run_reports
        ORDER BY started_at DESC
        LIMIT ?1`,
@@ -134,11 +134,13 @@ export async function createRunReport(
   input: {
     runId: string
     runType: RunType
+    runSource?: RunSource
     startedAt?: string
     perLenderSummary?: Record<string, unknown>
   },
 ): Promise<{ created: boolean; row: RunReportRow }> {
   const startedAt = input.startedAt || nowIso()
+  const runSource = input.runSource ?? 'scheduled'
   const perLenderJson = JSON.stringify(
     asPerLenderSummary(input.perLenderSummary || {
       _meta: {
@@ -152,11 +154,11 @@ export async function createRunReport(
 
   const insert = await db
     .prepare(
-      `INSERT INTO run_reports (run_id, run_type, started_at, status, per_lender_json, errors_json)
-       VALUES (?1, ?2, ?3, 'running', ?4, '[]')
+      `INSERT INTO run_reports (run_id, run_type, run_source, started_at, status, per_lender_json, errors_json)
+       VALUES (?1, ?2, ?3, ?4, 'running', ?5, '[]')
        ON CONFLICT(run_id) DO NOTHING`,
     )
-    .bind(input.runId, input.runType, startedAt, perLenderJson)
+    .bind(input.runId, input.runType, runSource, startedAt, perLenderJson)
     .run()
 
   const row = await getRunReport(db, input.runId)
@@ -273,4 +275,17 @@ export async function recordRunQueueOutcome(
     .run()
 
   return getRunReport(db, input.runId)
+}
+
+export async function getLastManualRunStartedAt(db: D1Database): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT started_at FROM run_reports
+       WHERE run_source = 'manual'
+       ORDER BY started_at DESC
+       LIMIT 1`,
+    )
+    .first<{ started_at: string }>()
+
+  return row?.started_at ?? null
 }

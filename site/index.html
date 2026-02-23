@@ -91,6 +91,8 @@
                 <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
                 <span class="hero-stat" id="stat-cash-rate" title="Current RBA official cash rate">RBA Cash Rate: <strong>...</strong></span>
                 <span class="hero-stat" id="stat-records" title="Total rate records in database">Records: <strong>...</strong></span>
+                <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
+                <span id="trigger-status" class="hint"></span>
             </div>
         </header>
 
@@ -136,9 +138,22 @@
                 <label>To
                     <input id="filter-end-date" type="date">
                 </label>
+                <label class="toggle-label" title="Show data from manually triggered runs">
+                    <input id="filter-include-manual" type="checkbox"> Include manual runs
+                </label>
+                <label title="How often to auto-refresh data (minutes, 0 = off)">Auto-refresh
+                    <select id="refresh-interval">
+                        <option value="0">Off</option>
+                        <option value="15">15 min</option>
+                        <option value="30">30 min</option>
+                        <option value="60" selected>1 hour</option>
+                        <option value="120">2 hours</option>
+                    </select>
+                </label>
                 <div class="filter-actions">
                     <button id="apply-filters" class="small" type="button">Apply Filters</button>
                     <button id="download-csv" class="small secondary" type="button">Export CSV</button>
+                    <span id="last-refreshed" class="hint"></span>
                 </div>
             </div>
         </section>

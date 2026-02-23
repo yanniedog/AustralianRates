@@ -21,9 +21,12 @@ export type AdminAuthState = {
   jwtPayload?: JWTPayload
 }
 
+export type RunSource = 'scheduled' | 'manual'
+
 export type DailyLenderJob = {
   kind: 'daily_lender_fetch'
   runId: string
+  runSource: RunSource
   lenderCode: string
   collectionDate: string
   attempt: number
@@ -33,6 +36,7 @@ export type DailyLenderJob = {
 export type ProductDetailJob = {
   kind: 'product_detail_fetch'
   runId: string
+  runSource: RunSource
   lenderCode: string
   productId: string
   collectionDate: string
@@ -43,6 +47,7 @@ export type ProductDetailJob = {
 export type BackfillSnapshotJob = {
   kind: 'backfill_snapshot_fetch'
   runId: string
+  runSource: RunSource
   lenderCode: string
   seedUrl: string
   monthCursor: string
@@ -70,6 +75,7 @@ export type LenderConfigFile = {
 export type RunReportRow = {
   run_id: string
   run_type: RunType
+  run_source: RunSource
   started_at: string
   finished_at: string | null
   status: RunStatus
@@ -93,6 +99,7 @@ export type EnvBindings = {
   MAX_QUEUE_ATTEMPTS?: string
   FEATURE_PROSPECTIVE_ENABLED?: string
   FEATURE_BACKFILL_ENABLED?: string
+  MANUAL_RUN_COOLDOWN_SECONDS?: string
 }
 
 export type AppContext = {

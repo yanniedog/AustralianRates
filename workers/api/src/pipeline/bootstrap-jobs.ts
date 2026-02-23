@@ -84,6 +84,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
   const created = await createRunReport(env.DB, {
     runId,
     runType: 'daily',
+    runSource: options.source,
   })
 
   if (!created.created && !options.force) {
@@ -107,6 +108,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
 
     const enqueue = await enqueueDailyLenderJobs(env, {
       runId,
+      runSource: options.source,
       collectionDate,
       lenders: TARGET_LENDERS,
     })
@@ -143,6 +145,7 @@ export async function triggerBackfillRun(env: EnvBindings, input: BackfillRunReq
   await createRunReport(env.DB, {
     runId,
     runType: 'backfill',
+    runSource: 'manual',
   })
 
   const jobs: Array<{ lenderCode: string; seedUrl: string; monthCursor: string }> = []
@@ -160,6 +163,7 @@ export async function triggerBackfillRun(env: EnvBindings, input: BackfillRunReq
     log.info('pipeline', `Backfill run ${runId} starting for month=${monthCursor} lenders=${lenders.length}`, { runId })
     const enqueue = await enqueueBackfillJobs(env, {
       runId,
+      runSource: 'manual',
       jobs,
     })
 

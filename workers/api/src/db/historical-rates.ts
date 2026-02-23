@@ -25,12 +25,12 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url,
         data_quality_flag,
         confidence_score,
-        parsed_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, CURRENT_TIMESTAMP)
-      ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure, security_purpose, repayment_type) DO UPDATE SET
+        parsed_at,
+        run_id,
+        run_source
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, CURRENT_TIMESTAMP, ?16, ?17)
+      ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure, security_purpose, repayment_type, run_source) DO UPDATE SET
         product_name = excluded.product_name,
-        security_purpose = excluded.security_purpose,
-        repayment_type = excluded.repayment_type,
         feature_set = excluded.feature_set,
         interest_rate = excluded.interest_rate,
         comparison_rate = excluded.comparison_rate,
@@ -38,7 +38,8 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url = excluded.source_url,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
-        parsed_at = CURRENT_TIMESTAMP`,
+        parsed_at = CURRENT_TIMESTAMP,
+        run_id = excluded.run_id`,
     )
     .bind(
       row.bankName,
@@ -56,6 +57,8 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
       row.sourceUrl,
       row.dataQualityFlag,
       row.confidenceScore,
+      row.runId ?? null,
+      row.runSource ?? 'scheduled',
     )
     .run()
 }

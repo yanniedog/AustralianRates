@@ -273,6 +273,7 @@ type RatesPaginatedFilters = {
   featureSet?: string
   sort?: string
   dir?: 'asc' | 'desc'
+  includeManual?: boolean
 }
 
 const PAGINATED_SORT_COLUMNS: Record<string, string> = {
@@ -288,6 +289,8 @@ const PAGINATED_SORT_COLUMNS: Record<string, string> = {
   comparison_rate: 'h.comparison_rate',
   annual_fee: 'h.annual_fee',
   rba_cash_rate: 'rba_cash_rate',
+  parsed_at: 'h.parsed_at',
+  run_source: 'h.run_source',
 }
 
 export async function queryRatesPaginated(db: D1Database, filters: RatesPaginatedFilters) {
@@ -299,6 +302,10 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
 
   where.push('h.confidence_score >= ?')
   binds.push(MIN_CONFIDENCE_ALL)
+
+  if (!filters.includeManual) {
+    where.push("(h.run_source IS NULL OR h.run_source != 'manual')")
+  }
 
   if (filters.bank) {
     where.push('h.bank_name = ?')
@@ -362,6 +369,8 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
       h.data_quality_flag,
       h.confidence_score,
       h.parsed_at,
+      h.run_id,
+      h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
       r.cash_rate AS rba_cash_rate
     FROM historical_loan_rates h
