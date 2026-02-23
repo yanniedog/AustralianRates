@@ -123,6 +123,10 @@
     flex: 1;
 }
 
+.footer-log-wrap {
+    position: relative;
+}
+
 .footer-log-badge {
     display: inline-flex;
     align-items: center;
@@ -131,6 +135,39 @@
     padding: 3px 8px;
     border-radius: 4px;
     font-size: 0.74rem;
+}
+
+.footer-log-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 6px;
+    min-width: 180px;
+    background: rgba(15, 18, 28, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    padding: 6px 0;
+    z-index: 100;
+}
+
+.footer-log-popup-item {
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.8rem;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.footer-log-popup-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
 }
 
 .footer-log-count {

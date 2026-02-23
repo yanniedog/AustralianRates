@@ -56,7 +56,7 @@ publicRoutes.get('/staleness', async (c) => {
 })
 
 publicRoutes.post('/trigger-run', async (c) => {
-  const DEFAULT_COOLDOWN_SECONDS = 60
+  const DEFAULT_COOLDOWN_SECONDS = 60 // 1 minute lockout between manual runs
   const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
   const cooldownMs = cooldownSeconds * 1000
 

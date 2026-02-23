@@ -75,7 +75,10 @@ export async function getFilters(db: D1Database) {
       rows(rateStructures).map((x) => x.value),
       RATE_STRUCTURES,
     ),
-    lvr_tiers: LVR_TIERS,
+    lvr_tiers: fallbackIfEmpty(
+      rows(lvrTiers).map((x) => x.value),
+      LVR_TIERS,
+    ),
     feature_sets: fallbackIfEmpty(
       rows(featureSets).map((x) => x.value),
       FEATURE_SETS,

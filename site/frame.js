@@ -6,6 +6,7 @@
     /* ── Session log (client-side buffer for this tab) ─── */
     var SESSION_LOG_MAX = 500;
     var _sessionLog = [];
+    var _systemLogCount = null;
 
     function addSessionLog(level, message, detail) {
         _sessionLog.push({
@@ -26,8 +27,15 @@
     window.getSessionLogEntries = getSessionLogEntries;
 
     function updateClientLogCount() {
-        var el = document.getElementById('footer-client-log-count');
-        if (el) el.textContent = _sessionLog.length.toLocaleString();
+        updateLogLinkText();
+    }
+
+    function updateLogLinkText() {
+        var el = document.getElementById('footer-log-link-text');
+        if (!el) return;
+        var xx = _systemLogCount != null ? _systemLogCount.toLocaleString() : '...';
+        var yy = _sessionLog.length.toLocaleString();
+        el.textContent = 'log ' + xx + '/' + yy;
     }
 
     function downloadClientLog() {
@@ -87,23 +95,52 @@
             '<div class="site-footer-inner">' +
                 '<span id="footer-commit">Loading commit info...</span>' +
                 '<span class="footer-sep">|</span>' +
-                '<span id="footer-log-info">' +
-                    '<a href="' + esc(API_BASE + '/logs') + '" class="footer-log-badge" title="Download system log">System log <span id="footer-log-count">...</span> entries</a>' +
-                    ' <span class="footer-sep">|</span> ' +
-                    '<a href="#" id="footer-client-log-link" class="footer-log-badge" title="Download client log for this tab">Client log <span id="footer-client-log-count">0</span> entries</a>' +
+                '<span id="footer-log-info" class="footer-log-wrap">' +
+                    '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log .../0</span></a>' +
+                    '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
+                        '<a href="' + esc(API_BASE + '/logs') + '" id="footer-log-download-system" class="footer-log-popup-item" download>Download system log</a>' +
+                        '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
+                    '</div>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
                 '<span>&copy; ' + new Date().getFullYear() + ' AustralianRates</span>' +
             '</div>';
         document.body.appendChild(footer);
 
-        var clientLogLink = document.getElementById('footer-client-log-link');
-        if (clientLogLink) {
-            clientLogLink.addEventListener('click', function (e) {
+        var logLink = document.getElementById('footer-log-link');
+        var popup = document.getElementById('footer-log-popup');
+        var downloadSystem = document.getElementById('footer-log-download-system');
+        var downloadClient = document.getElementById('footer-log-download-client');
+
+        if (logLink && popup) {
+            logLink.addEventListener('click', function (e) {
                 e.preventDefault();
-                downloadClientLog();
+                var isOpen = !popup.hidden;
+                popup.hidden = isOpen;
+                if (!isOpen) {
+                    downloadSystem.focus();
+                }
             });
         }
+        if (downloadClient) {
+            downloadClient.addEventListener('click', function () {
+                downloadClientLog();
+                if (popup) popup.hidden = true;
+            });
+        }
+        if (downloadSystem && popup) {
+            downloadSystem.addEventListener('click', function () {
+                popup.hidden = true;
+            });
+        }
+        document.addEventListener('click', function (e) {
+            if (!popup || popup.hidden) return;
+            var wrap = document.getElementById('footer-log-info');
+            if (wrap && !wrap.contains(e.target)) {
+                popup.hidden = true;
+            }
+        });
+        updateLogLinkText();
     }
 
     function formatDate(iso) {
@@ -153,20 +190,19 @@
     }
 
     function loadLogStats() {
-        var countEl = document.getElementById('footer-log-count');
-        if (!countEl) return;
-
         fetch(API_BASE + '/logs/stats')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data && typeof data.count === 'number') {
-                    countEl.textContent = data.count.toLocaleString();
+                    _systemLogCount = data.count;
                 } else {
-                    countEl.textContent = '0';
+                    _systemLogCount = 0;
                 }
+                updateLogLinkText();
             })
             .catch(function () {
-                countEl.textContent = '?';
+                _systemLogCount = 0;
+                updateLogLinkText();
             });
     }
 

@@ -408,44 +408,26 @@
                     $.pivotUtilities.plotly_renderers
                 );
 
-                // #region agent log
-                try {
-                    fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91c342'},body:JSON.stringify({sessionId:'91c342',location:'site/app.js:loadPivotData',message:'Before pivotUI',data:{hasPivotUtilities:!!(typeof $ !== 'undefined' && $.pivotUtilities),hasSortable:!!(typeof $ !== 'undefined' && $.fn && typeof $.fn.sortable === 'function'),rowCount:data.length,firstRowKeys:data[0]?Object.keys(data[0]):[]},timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
-                } catch (_) {}
-                // #endregion
-
-                try {
-                    state.pivotData = data;
-                    $(els.pivotOutput).empty().pivotUI(data, {
-                        rows: ['bank_name'],
-                        cols: ['rate_structure'],
-                        vals: ['interest_rate'],
-                        aggregatorName: 'Average',
-                        renderers: renderers,
-                        rendererName: 'Table',
-                        rendererOptions: {
-                            plotly: {
-                                width: Math.min(1100, window.innerWidth - 80),
-                                height: 500,
-                            },
+                state.pivotData = data;
+                $(els.pivotOutput).empty().pivotUI(data, {
+                    rows: ['bank_name'],
+                    cols: ['rate_structure'],
+                    vals: ['interest_rate'],
+                    aggregatorName: 'Average',
+                    renderers: renderers,
+                    rendererName: 'Table',
+                    rendererOptions: {
+                        plotly: {
+                            width: Math.min(1100, window.innerWidth - 80),
+                            height: 500,
                         },
-                        onRefresh: function (config) {
-                            state.pivotConfig = config;
-                        },
-                    }, true);
-                    state.pivotLoaded = true;
-                    updateDownloadControlState();
-                    // #region agent log
-                    var pivotHtml = (els.pivotOutput && els.pivotOutput.innerHTML) || '';
-                    var uiErrorShown = pivotHtml.indexOf('An error occurred rendering the PivotTable UI') !== -1;
-                    fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91c342'},body:JSON.stringify({sessionId:'91c342',location:'site/app.js:loadPivotData',message:'After pivotUI',data:{uiErrorShown:uiErrorShown},timestamp:Date.now(),hypothesisId:'H4'})}).catch(function(){});
-                    // #endregion
-                } catch (pivotErr) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91c342'},body:JSON.stringify({sessionId:'91c342',location:'site/app.js:loadPivotData',message:'pivotUI throw',data:{errMessage:String(pivotErr && pivotErr.message),errName:String(pivotErr && pivotErr.name),errStack:(pivotErr && pivotErr.stack)||''},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-                    // #endregion
-                    if (els.pivotStatus) els.pivotStatus.textContent = 'Error rendering pivot: ' + (pivotErr && pivotErr.message);
-                }
+                    },
+                    onRefresh: function (config) {
+                        state.pivotConfig = config;
+                    },
+                }, true);
+                state.pivotLoaded = true;
+                updateDownloadControlState();
             })
             .catch(function (err) {
                 if (window.addSessionLog) window.addSessionLog('error', 'Load pivot data failed', { url: apiBase + '/rates', message: String(err && err.message) });
