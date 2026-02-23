@@ -29,6 +29,8 @@
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Rate limited -- try again in ~' + mins + ' min.';
                 } else if (res.body && res.body.ok) {
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Run started. Data will refresh shortly.';
+                    reloadExplorer();
+                    loadHeroStats();
                     setTimeout(function () {
                         reloadExplorer();
                         loadHeroStats();
