@@ -132,9 +132,6 @@
     }
 
     function reloadExplorer() {
-        // #region agent log
-        fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'79669b'},body:JSON.stringify({sessionId:'79669b',location:'ar-explorer.js:reloadExplorer',message:'reloadExplorer called',data:{hasRateTable:!!rateTable},timestamp:Date.now(),hypothesisId:'H4'})}).catch(function(){});
-        // #endregion
         if (rateTable) rateTable.setData();
     }
 
