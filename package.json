@@ -12,8 +12,13 @@
     "dev:archive": "npm run dev -w workers/archive",
     "test:api": "npm run test -w workers/api",
     "test:archive": "npm run test -w workers/archive",
+    "test:homepage": "node test-homepage.js",
+    "diagnose:api": "node diagnose-api.js",
     "typecheck:api": "npm run typecheck -w workers/api",
     "deploy:api": "npm run deploy -w workers/api",
     "deploy:archive": "npm run deploy -w workers/archive"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
   }
 }
