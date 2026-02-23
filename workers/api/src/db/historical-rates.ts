@@ -1,4 +1,5 @@
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
+import { log } from '../utils/logger'
 
 export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRateRow): Promise<void> {
   const verdict = validateNormalizedRow(row)
@@ -66,9 +67,10 @@ export async function upsertHistoricalRateRows(db: D1Database, rows: NormalizedR
       await upsertHistoricalRateRow(db, row)
       written += 1
     } catch (error) {
-      console.error(
-        `upsert_failed product=${row.productId} bank=${row.bankName} date=${row.collectionDate} error=${(error as Error)?.message || String(error)}`,
-      )
+      log.error('db', `upsert_failed product=${row.productId} bank=${row.bankName} date=${row.collectionDate}`, {
+        context: (error as Error)?.message || String(error),
+        lenderCode: row.bankName,
+      })
     }
   }
   return written

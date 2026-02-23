@@ -14,6 +14,7 @@ import { extractLenderRatesFromHtml } from '../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../ingest/lender-playbooks'
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
 import type { BackfillSnapshotJob, DailyLenderJob, EnvBindings, IngestMessage, ProductDetailJob } from '../types'
+import { log } from '../utils/logger'
 import { nowIso, parseIntegerEnv } from '../utils/time'
 
 export function calculateRetryDelaySeconds(attempts: number): number {
@@ -90,6 +91,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   if (!lender) {
     throw new Error(`unknown_lender_code:${job.lenderCode}`)
   }
+  log.info('consumer', `daily_lender_fetch started`, { runId: job.runId, lenderCode: job.lenderCode })
 
   const playbook = getLenderPlaybook(lender)
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
@@ -190,10 +192,16 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       httpStatus: 422,
       notes: `daily_quality_rejected lender=${job.lenderCode}`,
     })
+    log.warn('consumer', `daily_ingest_no_valid_rows`, { runId: job.runId, lenderCode: job.lenderCode })
     throw new Error(`daily_ingest_no_valid_rows:${job.lenderCode}`)
   }
 
-  await upsertHistoricalRateRows(env.DB, accepted)
+  const written = await upsertHistoricalRateRows(env.DB, accepted)
+  log.info('consumer', `daily_lender_fetch completed: ${written} written, ${dropped.length} dropped`, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    context: `collected=${collectedRows.length} accepted=${accepted.length} dropped=${dropped.length}`,
+  })
 
   await persistRawPayload(env, {
     sourceType: 'cdr_products',
@@ -218,8 +226,10 @@ async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): 
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!endpoint || !lender) {
+    log.warn('consumer', `product_detail_fetch skipped: missing endpoint or lender`, { runId: job.runId, lenderCode: job.lenderCode })
     return
   }
+  log.info('consumer', `product_detail_fetch started for ${job.productId}`, { runId: job.runId, lenderCode: job.lenderCode })
 
   const details = await fetchProductDetailRows({
     lender,
@@ -247,6 +257,7 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
   if (!lender) {
     throw new Error(`unknown_lender_code:${job.lenderCode}`)
   }
+  log.info('consumer', `backfill_snapshot_fetch started month=${job.monthCursor}`, { runId: job.runId, lenderCode: job.lenderCode })
 
   const [year, month] = job.monthCursor.split('-')
   const from = `${year}${month}01`
@@ -381,6 +392,7 @@ async function processMessage(env: EnvBindings, message: IngestMessage): Promise
 
 export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env: EnvBindings): Promise<void> {
   const maxAttempts = parseIntegerEnv(env.MAX_QUEUE_ATTEMPTS, DEFAULT_MAX_QUEUE_ATTEMPTS)
+  log.info('consumer', `queue_batch received ${batch.messages.length} messages`)
 
   for (const msg of batch.messages) {
     const attempts = Number(msg.attempts || 1)
@@ -389,6 +401,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
 
     try {
       if (!isIngestMessage(body)) {
+        log.error('consumer', 'invalid_queue_message_shape', { context: JSON.stringify(body) })
         throw new Error('invalid_queue_message_shape')
       }
 
@@ -405,8 +418,17 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       msg.ack()
     } catch (error) {
       const errorMessage = (error as Error)?.message || String(error)
+      log.error('consumer', `queue_message_failed attempt=${attempts}/${maxAttempts}: ${errorMessage}`, {
+        runId: context.runId ?? undefined,
+        lenderCode: context.lenderCode ?? undefined,
+      })
 
       if (attempts >= maxAttempts) {
+        log.error('consumer', `queue_message_exhausted max_attempts=${maxAttempts}`, {
+          runId: context.runId ?? undefined,
+          lenderCode: context.lenderCode ?? undefined,
+          context: errorMessage,
+        })
         if (context.runId && context.lenderCode) {
           await recordRunQueueOutcome(env.DB, {
             runId: context.runId,

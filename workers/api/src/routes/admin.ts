@@ -4,6 +4,7 @@ import { getRunReport, listRunReports } from '../db/run-reports'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
+import { log } from '../utils/logger'
 
 export const adminRoutes = new Hono<AppContext>()
 
@@ -42,6 +43,7 @@ adminRoutes.get('/runs/:runId', async (c) => {
 })
 
 adminRoutes.post('/runs/daily', async (c) => {
+  log.info('admin', 'Manual daily run triggered')
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const force = Boolean(body.force)
 
@@ -58,6 +60,7 @@ adminRoutes.post('/runs/daily', async (c) => {
 })
 
 adminRoutes.post('/runs/backfill', async (c) => {
+  log.info('admin', 'Manual backfill run triggered')
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
 
   const rawLenderCodes = body.lenderCodes

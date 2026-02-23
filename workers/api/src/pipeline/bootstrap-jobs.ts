@@ -15,6 +15,7 @@ import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
 import { enqueueBackfillJobs, enqueueDailyLenderJobs } from '../queue/producer'
 import type { EnvBindings, LenderConfig } from '../types'
 import { buildBackfillRunId, buildDailyRunId, buildRunLockKey } from '../utils/idempotency'
+import { log } from '../utils/logger'
 import { currentMonthCursor, getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 
 type DailyRunOptions = {
@@ -100,6 +101,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
   }
 
   try {
+    log.info('pipeline', `Daily run ${runId} starting: collecting RBA rate and refreshing endpoints`, { runId })
     const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate)
     const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS)
 
@@ -111,6 +113,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
 
     const summary = buildInitialPerLenderSummary(enqueue.perLender)
     await setRunEnqueuedSummary(env.DB, runId, summary)
+    log.info('pipeline', `Daily run ${runId} enqueued ${enqueue.enqueued} jobs for ${collectionDate}`, { runId })
 
     return {
       ok: true,
@@ -123,6 +126,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       source: options.source,
     }
   } catch (error) {
+    log.error('pipeline', `Daily run ${runId} failed: ${(error as Error)?.message || String(error)}`, { runId })
     await markRunFailed(env.DB, runId, `daily_run_enqueue_failed: ${(error as Error)?.message || String(error)}`)
     throw error
   }
@@ -153,12 +157,14 @@ export async function triggerBackfillRun(env: EnvBindings, input: BackfillRunReq
   }
 
   try {
+    log.info('pipeline', `Backfill run ${runId} starting for month=${monthCursor} lenders=${lenders.length}`, { runId })
     const enqueue = await enqueueBackfillJobs(env, {
       runId,
       jobs,
     })
 
     await setRunEnqueuedSummary(env.DB, runId, buildInitialPerLenderSummary(enqueue.perLender))
+    log.info('pipeline', `Backfill run ${runId} enqueued ${enqueue.enqueued} jobs`, { runId })
 
     return {
       ok: true,
@@ -169,6 +175,7 @@ export async function triggerBackfillRun(env: EnvBindings, input: BackfillRunReq
       enqueued: enqueue.enqueued,
     }
   } catch (error) {
+    log.error('pipeline', `Backfill run ${runId} failed: ${(error as Error)?.message || String(error)}`, { runId })
     await markRunFailed(env.DB, runId, `backfill_enqueue_failed: ${(error as Error)?.message || String(error)}`)
     throw error
   }
