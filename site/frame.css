@@ -194,13 +194,24 @@
         width: 100%;
     }
 
+    .site-nav a {
+        white-space: normal;
+    }
+
     .site-footer-inner {
         flex-direction: column;
         align-items: flex-start;
         gap: 8px;
+        padding: 12px 14px;
+        font-size: 0.74rem;
     }
 
     .footer-spacer {
         display: none;
+    }
+
+    .footer-log-popup {
+        left: auto;
+        right: 0;
     }
 }

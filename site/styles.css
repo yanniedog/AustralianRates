@@ -509,6 +509,12 @@ select:focus-visible {
         flex-wrap: wrap;
     }
 
+    .tab-btn {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+    }
+
     .hero-stats {
         flex-direction: column;
         gap: 8px;
@@ -518,7 +524,92 @@ select:focus-visible {
         grid-template-columns: 1fr 1fr;
     }
 
+    .filter-actions {
+        width: 100%;
+        grid-column: 1 / -1;
+    }
+
+    .toggle-label {
+        white-space: normal;
+    }
+
+    #last-refreshed {
+        white-space: normal;
+    }
+
     .chart-controls {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .seo-summary {
+        padding: 0 12px;
+    }
+
+    .disclaimer {
+        padding: 16px 12px 8px;
+    }
+
+    #chart-output {
+        min-height: 150px;
+    }
+
+    #pivot-output {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tabulator .tabulator-footer .tabulator-paginator .tabulator-page {
+        min-width: 36px;
+        min-height: 36px;
+    }
+
+    select,
+    input[type="date"],
+    button.small {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        padding: 14px;
+    }
+
+    .panel {
+        border-radius: 10px;
+        padding: 10px;
+    }
+
+    .tabs {
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 10px;
+    }
+
+    .tab-btn {
+        width: 100%;
+    }
+
+    .filters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-controls {
+        grid-template-columns: 1fr;
+    }
+
+    h1 {
+        font-size: clamp(1.3rem, 5vw, 1.8rem);
+    }
+
+    .subtitle {
+        font-size: 0.88rem;
+    }
+
+    .hero-stats {
+        font-size: 0.84rem;
+    }
+
+    .shell {
+        padding: 16px 8px 24px;
     }
 }

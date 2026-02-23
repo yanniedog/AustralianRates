@@ -97,6 +97,11 @@
                 var renderers = $.extend($.pivotUtilities.renderers, $.pivotUtilities.plotly_renderers);
                 var rateAggregator = ($.pivotUtilities.aggregators && $.pivotUtilities.aggregators['Average (as %)']) ? 'Average (as %)' : 'Average';
 
+                var narrow = window.innerWidth <= 760;
+                var pivotMargin = narrow ? 30 : 80;
+                var pivotWidth = Math.min(1100, window.innerWidth - pivotMargin);
+                var pivotHeight = Math.max(280, Math.min(500, window.innerHeight - 200));
+
                 $(els.pivotOutput).empty().pivotUI(pivotData, {
                     rows: ['Bank'],
                     cols: ['Structure'],
@@ -105,7 +110,7 @@
                     renderers: renderers,
                     rendererName: 'Table',
                     rendererOptions: {
-                        plotly: { width: Math.min(1100, window.innerWidth - 80), height: 500 },
+                        plotly: { width: pivotWidth, height: pivotHeight },
                     },
                 }, true);
                 tabState.pivotLoaded = true;

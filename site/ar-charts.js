@@ -78,14 +78,20 @@
     function buildLayout(xField, yField) {
         var yLabel = yLabels[yField] || yField;
         var xLabel = xLabels[xField] || xField;
+        var narrow = window.innerWidth <= 760;
+        var chartHeight = Math.max(280, Math.min(500, window.innerHeight - 200));
         return {
-            title: yLabel + ' by ' + xLabel,
-            xaxis: { title: xLabel },
-            yaxis: { title: yLabel },
+            title: narrow ? '' : (yLabel + ' by ' + xLabel),
+            xaxis: { title: narrow ? '' : xLabel },
+            yaxis: { title: narrow ? '' : yLabel },
             hovermode: 'closest',
-            legend: { orientation: 'h', y: -0.2 },
-            margin: { t: 50, l: 60, r: 20, b: 80 },
-            height: 500,
+            legend: narrow
+                ? { orientation: 'h', y: -0.25, font: { size: 10 } }
+                : { orientation: 'h', y: -0.2 },
+            margin: narrow
+                ? { t: 20, l: 40, r: 10, b: 60 }
+                : { t: 50, l: 60, r: 20, b: 80 },
+            height: chartHeight,
         };
     }
 
