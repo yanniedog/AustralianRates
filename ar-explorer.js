@@ -145,19 +145,14 @@
     }
 
     function reloadExplorer() {
-        // #region agent log
-        console.log('[AR-DEBUG-eb90c6] reloadExplorer called, rateTable exists:', !!rateTable, ', rateTable type:', typeof rateTable);
-        // #endregion
-        if (rateTable) {
-            // #region agent log
-            console.log('[AR-DEBUG-eb90c6] Calling rateTable.setData() now');
-            // #endregion
-            rateTable.setData();
-        } else {
-            // #region agent log
-            console.log('[AR-DEBUG-eb90c6] rateTable is null/falsy, skipping setData');
-            // #endregion
-        }
+        if (!rateTable) return;
+        var fp = buildFilterParams();
+        fp.page = '1';
+        fp.size = '50';
+        fp.sort = 'collection_date';
+        fp.dir = 'desc';
+        var q = Object.keys(fp).filter(function (k) { var v = fp[k]; return v !== undefined && v !== null && v !== ''; }).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(String(fp[k])); }).join('&');
+        rateTable.setData(apiBase + '/rates?' + q);
     }
 
     window.AR.explorer = {
