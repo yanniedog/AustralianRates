@@ -277,6 +277,34 @@ thead th {
     font-size: 0.68rem;
     color: var(--muted);
     background: #eef4fa;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+thead th:hover {
+    color: var(--brand-2);
+}
+
+thead th .sort-arrow {
+    display: inline-block;
+    margin-left: 3px;
+    font-size: 0.62rem;
+    opacity: 0.35;
+}
+
+thead th.sorted .sort-arrow {
+    opacity: 1;
+    color: var(--brand);
+}
+
+tr.best-rate td {
+    background: rgba(15, 118, 110, 0.06);
+}
+
+tr.best-rate td:nth-child(10) {
+    font-weight: 700;
+    color: var(--brand);
 }
 
 @media (max-width: 760px) {

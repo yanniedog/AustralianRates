@@ -26,7 +26,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         confidence_score,
         parsed_at
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, CURRENT_TIMESTAMP)
-      ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure) DO UPDATE SET
+      ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure, security_purpose, repayment_type) DO UPDATE SET
         product_name = excluded.product_name,
         security_purpose = excluded.security_purpose,
         repayment_type = excluded.repayment_type,
@@ -65,8 +65,10 @@ export async function upsertHistoricalRateRows(db: D1Database, rows: NormalizedR
     try {
       await upsertHistoricalRateRow(db, row)
       written += 1
-    } catch {
-      // strict-drop: invalid rows are discarded by design
+    } catch (error) {
+      console.error(
+        `upsert_failed product=${row.productId} bank=${row.bankName} date=${row.collectionDate} error=${(error as Error)?.message || String(error)}`,
+      )
     }
   }
   return written

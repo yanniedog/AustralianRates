@@ -60,6 +60,8 @@ publicRoutes.get('/latest', async (c) => {
   const limit = Number(query.limit || 200)
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const orderByRaw = String(query.order_by || query.orderBy || 'default').toLowerCase()
+  const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
 
   const rows = await queryLatestRates(c.env.DB, {
     bank: query.bank,
@@ -70,6 +72,7 @@ publicRoutes.get('/latest', async (c) => {
     featureSet: query.feature_set,
     mode,
     limit,
+    orderBy,
   })
 
   return c.json({
@@ -92,6 +95,9 @@ publicRoutes.get('/timeseries', async (c) => {
   const rows = await queryTimeseries(c.env.DB, {
     bank: query.bank,
     productKey,
+    securityPurpose: query.security_purpose,
+    repaymentType: query.repayment_type,
+    featureSet: query.feature_set,
     mode,
     startDate: query.start_date,
     endDate: query.end_date,
@@ -140,6 +146,9 @@ publicRoutes.get('/export.csv', async (c) => {
     const rows = await queryTimeseries(c.env.DB, {
       bank: query.bank,
       productKey,
+      securityPurpose: query.security_purpose,
+      repaymentType: query.repayment_type,
+      featureSet: query.feature_set,
       mode,
       startDate: query.start_date,
       endDate: query.end_date,

@@ -296,17 +296,69 @@ function collectConstraintText(rate: JsonRecord, detail: JsonRecord): string {
   return [...fromRate, ...detailHints].filter(Boolean).join(' | ')
 }
 
+function parseLvrFromText(text: string): { min: number | null; max: number | null } | null {
+  const t = text.toLowerCase()
+  if (!t.includes('lvr') && !t.includes('loan to value') && !t.includes('ltv')) return null
+
+  const range = t.match(/(\d{1,3}(?:\.\d+)?)\s*(?:%\s*)?(?:-|to)\s*(\d{1,3}(?:\.\d+)?)\s*%?/)
+  if (range) {
+    const lo = Number(range[1])
+    const hi = Number(range[2])
+    if (Number.isFinite(lo) && Number.isFinite(hi)) return { min: lo, max: hi }
+  }
+
+  const le = t.match(/(?:<=|≤|under|up to|maximum|max|below)\s*(\d{1,3}(?:\.\d+)?)\s*%?/)
+  if (le) {
+    const hi = Number(le[1])
+    if (Number.isFinite(hi)) return { min: null, max: hi }
+  }
+
+  const ge = t.match(/(?:>=|≥|over|above|from|greater than)\s*(\d{1,3}(?:\.\d+)?)\s*%?/)
+  if (ge) {
+    const lo = Number(ge[1])
+    if (Number.isFinite(lo)) return { min: lo, max: null }
+  }
+
+  const single = t.match(/(\d{1,3}(?:\.\d+)?)\s*%/)
+  if (single) {
+    const n = Number(single[1])
+    if (Number.isFinite(n) && n <= 100) return { min: null, max: n }
+  }
+
+  return null
+}
+
 function parseLvrBounds(rate: JsonRecord): { min: number | null; max: number | null } {
   const constraints = asArray(rate.constraints).filter(isRecord)
   for (const c of constraints) {
     const t = pickText(c, ['constraintType']).toLowerCase()
-    if (!t.includes('lvr')) {
-      continue
-    }
+    if (!t.includes('lvr')) continue
     const min = Number.isFinite(Number(c.minValue)) ? Number(c.minValue) : null
     const max = Number.isFinite(Number(c.maxValue)) ? Number(c.maxValue) : null
-    return { min, max }
+    if (min != null || max != null) return { min, max }
   }
+
+  const tiers = asArray(rate.tiers).filter(isRecord)
+  for (const tier of tiers) {
+    const tierName = pickText(tier, ['name', 'unitOfMeasure', 'rateApplicationMethod']).toLowerCase()
+    if (!tierName.includes('lvr') && !tierName.includes('loan to value')) continue
+    const min = Number.isFinite(Number(tier.minimumValue)) ? Number(tier.minimumValue) : null
+    const max = Number.isFinite(Number(tier.maximumValue)) ? Number(tier.maximumValue) : null
+    if (min != null || max != null) return { min, max }
+  }
+
+  const additionalValue = getText(rate.additionalValue)
+  if (additionalValue) {
+    const fromAdditional = parseLvrFromText(additionalValue)
+    if (fromAdditional) return fromAdditional
+  }
+
+  const additionalInfo = getText(rate.additionalInfo)
+  if (additionalInfo) {
+    const fromInfo = parseLvrFromText(additionalInfo)
+    if (fromInfo) return fromInfo
+  }
+
   return { min: null, max: null }
 }
 
@@ -363,35 +415,43 @@ function parseRatesFromDetail(input: {
       continue
     }
 
+    const lvrResult = normalizeLvrTier(contextText, lvr.min, lvr.max)
+
     let confidence = 0.95
     if (!comparisonRate) confidence -= 0.04
-    if (!(Number.isFinite(lvr.min as number) || Number.isFinite(lvr.max as number))) confidence -= 0.03
+    if (lvrResult.wasDefault) confidence -= 0.05
     if (!contextLower.includes('loan')) confidence -= 0.02
 
-    const row: NormalizedRateRow = {
-      bankName: normalizeBankName(input.lender.canonical_bank_name, input.lender.name),
-      collectionDate: input.collectionDate,
-      productId,
-      productName,
-      securityPurpose: normalizeSecurityPurpose(
-        `${pickText(rate, ['loanPurpose'])} ${pickText(detail, ['loanPurpose'])} ${contextText}`,
-      ),
-      repaymentType: normalizeRepaymentType(
-        `${pickText(rate, ['repaymentType'])} ${pickText(detail, ['repaymentType'])} ${contextText}`,
-      ),
-      rateStructure: normalizeRateStructure(
-        `${pickText(rate, ['lendingRateType', 'name'])} ${pickText(detail, ['name'])} ${contextText}`,
-      ),
-      lvrTier: normalizeLvrTier(contextText, lvr.min, lvr.max),
-      featureSet: normalizeFeatureSet(`${productName} ${contextText}`, annualFee),
-      interestRate,
-      comparisonRate,
-      annualFee,
-      sourceUrl: input.sourceUrl,
-      dataQualityFlag: 'cdr_live',
-      confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
+    const lendingRateType = pickText(rate, ['lendingRateType'])
+    const repaymentText = `${lendingRateType} ${pickText(rate, ['repaymentType'])} ${pickText(detail, ['repaymentType'])} ${contextText}`
+    const rateStructureText = `${lendingRateType} ${pickText(rate, ['name'])} ${pickText(detail, ['name'])} ${contextText}`
+
+    const rawPurpose = `${pickText(rate, ['loanPurpose'])} ${pickText(detail, ['loanPurpose'])}`.toLowerCase()
+    const isBothPurpose = rawPurpose.includes('both')
+    const purposes: Array<'owner_occupied' | 'investment'> = isBothPurpose
+      ? ['owner_occupied', 'investment']
+      : [normalizeSecurityPurpose(`${rawPurpose} ${contextText}`)]
+
+    for (const securityPurpose of purposes) {
+      const row: NormalizedRateRow = {
+        bankName: normalizeBankName(input.lender.canonical_bank_name, input.lender.name),
+        collectionDate: input.collectionDate,
+        productId,
+        productName,
+        securityPurpose,
+        repaymentType: normalizeRepaymentType(repaymentText),
+        rateStructure: normalizeRateStructure(rateStructureText),
+        lvrTier: lvrResult.tier,
+        featureSet: normalizeFeatureSet(`${productName} ${contextText}`, annualFee),
+        interestRate,
+        comparisonRate,
+        annualFee,
+        sourceUrl: input.sourceUrl,
+        dataQualityFlag: 'cdr_live',
+        confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
+      }
+      result.push(row)
     }
-    result.push(row)
   }
 
   return result

@@ -15,6 +15,13 @@ type LatestFilters = {
   featureSet?: string
   mode?: 'all' | 'daily' | 'historical'
   limit?: number
+  orderBy?: 'default' | 'rate_asc' | 'rate_desc'
+}
+
+const VALID_ORDER_BY: Record<string, string> = {
+  default: 'v.collection_date DESC, v.bank_name ASC, v.product_name ASC, v.lvr_tier ASC, v.rate_structure ASC',
+  rate_asc: 'v.interest_rate ASC, v.bank_name ASC, v.product_name ASC',
+  rate_desc: 'v.interest_rate DESC, v.bank_name ASC, v.product_name ASC',
 }
 
 const MIN_PUBLIC_RATE = 0.5
@@ -149,7 +156,7 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
     LEFT JOIN rba_cash_rates r
       ON r.collection_date = v.collection_date
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY v.collection_date DESC, v.bank_name ASC, v.product_name ASC, v.lvr_tier ASC, v.rate_structure ASC
+    ORDER BY ${VALID_ORDER_BY[filters.orderBy ?? 'default'] ?? VALID_ORDER_BY.default}
     LIMIT ?
   `
 
@@ -162,6 +169,9 @@ export async function queryTimeseries(
   input: {
     bank?: string
     productKey?: string
+    securityPurpose?: string
+    repaymentType?: string
+    featureSet?: string
     mode?: 'all' | 'daily' | 'historical'
     startDate?: string
     endDate?: string
@@ -180,6 +190,18 @@ export async function queryTimeseries(
   if (input.productKey) {
     where.push('t.product_key = ?')
     binds.push(input.productKey)
+  }
+  if (input.securityPurpose) {
+    where.push('t.security_purpose = ?')
+    binds.push(input.securityPurpose)
+  }
+  if (input.repaymentType) {
+    where.push('t.repayment_type = ?')
+    binds.push(input.repaymentType)
+  }
+  if (input.featureSet) {
+    where.push('t.feature_set = ?')
+    binds.push(input.featureSet)
   }
   if (input.startDate) {
     where.push('t.collection_date >= ?')
@@ -211,8 +233,11 @@ export async function queryTimeseries(
       t.bank_name,
       t.product_id,
       t.product_name,
+      t.security_purpose,
+      t.repayment_type,
       t.lvr_tier,
       t.rate_structure,
+      t.feature_set,
       t.interest_rate,
       t.comparison_rate,
       t.annual_fee,

@@ -94,7 +94,12 @@ export function normalizeSecurityPurpose(text: string): SecurityPurpose {
 
 export function normalizeRepaymentType(text: string): RepaymentType {
   const t = lower(text)
-  if (t.includes('interest only') || t.includes('interest_only')) {
+  if (
+    t.includes('interest only') ||
+    t.includes('interest_only') ||
+    t.includes('interestonly') ||
+    /\binterest[_\s]*only[_\s]*(?:fixed|variable)?\b/.test(t)
+  ) {
     return 'interest_only'
   }
   return 'principal_and_interest'
@@ -126,10 +131,12 @@ function tierForBoundary(percent: number): LvrTier {
   return 'lvr_90-95%'
 }
 
-export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: number | null): LvrTier {
+export type LvrTierResult = { tier: LvrTier; wasDefault: boolean }
+
+export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: number | null): LvrTierResult {
   if (Number.isFinite(minLvr as number) || Number.isFinite(maxLvr as number)) {
     const hi = Number.isFinite(maxLvr as number) ? (maxLvr as number) : (minLvr as number)
-    return tierForBoundary(hi)
+    return { tier: tierForBoundary(hi), wasDefault: false }
   }
 
   const t = lower(text)
@@ -137,7 +144,7 @@ export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: 
   if (range) {
     const hi = Number(range[2])
     if (Number.isFinite(hi)) {
-      return tierForBoundary(hi)
+      return { tier: tierForBoundary(hi), wasDefault: false }
     }
   }
 
@@ -145,7 +152,7 @@ export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: 
   if (le) {
     const hi = Number(le[1])
     if (Number.isFinite(hi)) {
-      return tierForBoundary(hi)
+      return { tier: tierForBoundary(hi), wasDefault: false }
     }
   }
 
@@ -153,11 +160,11 @@ export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: 
   if (anyPercent) {
     const hi = Number(anyPercent[1])
     if (Number.isFinite(hi)) {
-      return tierForBoundary(hi)
+      return { tier: tierForBoundary(hi), wasDefault: false }
     }
   }
 
-  return 'lvr_80-85%'
+  return { tier: 'lvr_80-85%', wasDefault: true }
 }
 
 export function normalizeFeatureSet(text: string, annualFee: number | null): FeatureSet {

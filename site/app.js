@@ -28,9 +28,27 @@
     var apiOverride = params.get('apiBase');
     var apiBase = normalizeApiBase(apiOverride) || (window.location.origin + '/api/home-loan-rates');
     var state = {
-        mode: 'daily',
+        mode: params.get('mode') || 'daily',
         selectedProductKey: '',
-        latestRows: []
+        latestRows: [],
+        sortColumn: params.get('sort') || '',
+        sortDirection: params.get('dir') || 'asc'
+    };
+
+    var SORT_FIELDS = {
+        'Date': 'collection_date',
+        'RBA Cash Rate': 'rba_cash_rate',
+        'Bank': 'bank_name',
+        'Product': 'product_name',
+        'Purpose': 'security_purpose',
+        'Repayment': 'repayment_type',
+        'LVR': 'lvr_tier',
+        'Structure': 'rate_structure',
+        'Feature': 'feature_set',
+        'Rate': 'interest_rate',
+        'Comparison': 'comparison_rate',
+        'Annual Fee': 'annual_fee',
+        'Quality': 'data_quality_flag'
     };
 
     var els = {
@@ -54,6 +72,11 @@
         refreshRuns: document.getElementById('refresh-runs'),
         healthOutput: document.getElementById('health-output'),
         latestBody: document.getElementById('latest-body'),
+        latestHead: (function () {
+            var body = document.querySelector('#latest-body');
+            var table = body && body.closest('table');
+            return table ? table.querySelector('thead tr') : null;
+        })(),
         seriesHint: document.getElementById('series-hint'),
         seriesCanvas: document.getElementById('series-canvas'),
         runsOutput: document.getElementById('runs-output'),
@@ -62,6 +85,38 @@
 
     if (els.apiBaseText) {
         els.apiBaseText.textContent = apiBase;
+    }
+
+    function syncUrlState() {
+        var q = new URLSearchParams();
+        q.set('mode', state.mode);
+        if (els.filterBank && els.filterBank.value) q.set('bank', els.filterBank.value);
+        if (els.filterSecurity && els.filterSecurity.value) q.set('purpose', els.filterSecurity.value);
+        if (els.filterRepayment && els.filterRepayment.value) q.set('repayment', els.filterRepayment.value);
+        if (els.filterStructure && els.filterStructure.value) q.set('structure', els.filterStructure.value);
+        if (els.filterLvr && els.filterLvr.value) q.set('lvr', els.filterLvr.value);
+        if (els.filterFeature && els.filterFeature.value) q.set('feature', els.filterFeature.value);
+        var limit = els.filterLimit && els.filterLimit.value;
+        if (limit && Number(limit) !== 200) q.set('limit', String(limit));
+        if (state.sortColumn) q.set('sort', state.sortColumn);
+        if (state.sortColumn && state.sortDirection !== 'asc') q.set('dir', state.sortDirection);
+        if (apiOverride) q.set('apiBase', apiOverride);
+        var url = window.location.pathname + '?' + q.toString();
+        window.history.replaceState(null, '', url);
+    }
+
+    function restoreUrlState() {
+        var p = new URLSearchParams(window.location.search);
+        if (p.get('mode')) state.mode = p.get('mode') === 'historical' ? 'historical' : 'daily';
+        if (p.get('bank') && els.filterBank) els.filterBank.value = p.get('bank');
+        if (p.get('purpose') && els.filterSecurity) els.filterSecurity.value = p.get('purpose');
+        if (p.get('repayment') && els.filterRepayment) els.filterRepayment.value = p.get('repayment');
+        if (p.get('structure') && els.filterStructure) els.filterStructure.value = p.get('structure');
+        if (p.get('lvr') && els.filterLvr) els.filterLvr.value = p.get('lvr');
+        if (p.get('feature') && els.filterFeature) els.filterFeature.value = p.get('feature');
+        if (p.get('limit') && els.filterLimit) els.filterLimit.value = p.get('limit');
+        if (p.get('sort')) state.sortColumn = p.get('sort');
+        if (p.get('dir')) state.sortDirection = p.get('dir');
     }
 
     async function fetchJson(url, options) {
@@ -98,8 +153,9 @@
             fillSelect(els.filterStructure, f.rate_structures || []);
             fillSelect(els.filterLvr, f.lvr_tiers || []);
             fillSelect(els.filterFeature, f.feature_sets || []);
+            restoreUrlState();
         } catch (err) {
-            // no-op; table can still load without dynamic filters
+            // filters are non-critical
         }
     }
 
@@ -136,6 +192,50 @@
         }
     }
 
+    function sortRows(rows, column, direction) {
+        if (!column) return rows;
+        var sorted = rows.slice();
+        sorted.sort(function (a, b) {
+            var va = a[column];
+            var vb = b[column];
+            if (va == null && vb == null) return 0;
+            if (va == null) return 1;
+            if (vb == null) return -1;
+            if (typeof va === 'number' && typeof vb === 'number') {
+                return direction === 'asc' ? va - vb : vb - va;
+            }
+            var sa = String(va).toLowerCase();
+            var sb = String(vb).toLowerCase();
+            if (sa < sb) return direction === 'asc' ? -1 : 1;
+            if (sa > sb) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sorted;
+    }
+
+    function findBestRate(rows) {
+        var best = Infinity;
+        for (var i = 0; i < rows.length; i++) {
+            var r = Number(rows[i].interest_rate);
+            if (Number.isFinite(r) && r < best) best = r;
+        }
+        return best;
+    }
+
+    function updateSortHeaders() {
+        if (!els.latestHead) return;
+        var ths = els.latestHead.querySelectorAll('th');
+        ths.forEach(function (th) {
+            var field = th.getAttribute('data-sort');
+            var isSorted = field && field === state.sortColumn;
+            th.classList.toggle('sorted', isSorted);
+            var arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                arrow.textContent = isSorted ? (state.sortDirection === 'asc' ? '\u25B2' : '\u25BC') : '\u25B2';
+            }
+        });
+    }
+
     function renderLatestRows(rows) {
         if (!els.latestBody) return;
         if (!Array.isArray(rows) || rows.length === 0) {
@@ -144,16 +244,20 @@
         }
 
         state.latestRows = rows;
-        els.latestBody.innerHTML = rows.map(function (row) {
-            return '<tr>' +
+        var displayed = sortRows(rows, state.sortColumn, state.sortDirection);
+        var bestRate = findBestRate(displayed);
+
+        els.latestBody.innerHTML = displayed.map(function (row) {
+            var isBest = Number(row.interest_rate) === bestRate;
+            return '<tr class="' + (isBest ? 'best-rate ' : '') + 'clickable-row" data-product-key="' + esc(row.product_key || '') + '">' +
                 '<td>' + esc(row.collection_date || '-') + '</td>' +
                 '<td>' + currency(row.rba_cash_rate) + '</td>' +
-                '<td>' + String(row.bank_name || '-') + '</td>' +
-                '<td>' + String(row.product_name || row.product_id || '-') + '</td>' +
+                '<td>' + esc(row.bank_name || '-') + '</td>' +
+                '<td>' + esc(row.product_name || row.product_id || '-') + '</td>' +
                 '<td>' + esc(row.security_purpose || '-') + '</td>' +
                 '<td>' + esc(row.repayment_type || '-') + '</td>' +
-                '<td>' + String(row.lvr_tier || '-') + '</td>' +
-                '<td>' + String(row.rate_structure || '-') + '</td>' +
+                '<td>' + esc(row.lvr_tier || '-') + '</td>' +
+                '<td>' + esc(row.rate_structure || '-') + '</td>' +
                 '<td>' + esc(row.feature_set || '-') + '</td>' +
                 '<td>' + currency(row.interest_rate) + '</td>' +
                 '<td>' + currency(row.comparison_rate) + '</td>' +
@@ -162,12 +266,7 @@
                 '</tr>';
         }).join('');
 
-        var trs = els.latestBody.querySelectorAll('tr');
-        rows.forEach(function (row, idx) {
-            if (!row.product_key || !trs[idx]) return;
-            trs[idx].setAttribute('data-product-key', String(row.product_key));
-            trs[idx].classList.add('clickable-row');
-        });
+        updateSortHeaders();
     }
 
     async function loadLatest() {
@@ -182,7 +281,7 @@
             }
             renderLatestRows(result.data && result.data.rows || []);
         } catch (err) {
-            els.latestBody.innerHTML = '<tr><td colspan="13">Error loading rates: ' + String(err && err.message || err) + '</td></tr>';
+            els.latestBody.innerHTML = '<tr><td colspan="13">Error loading rates: ' + esc(String(err && err.message || err)) + '</td></tr>';
         }
     }
 
@@ -314,8 +413,37 @@
     }
 
     async function refreshAll() {
+        syncUrlState();
         await Promise.all([loadFilters(), loadHealth(), loadLatest(), loadRuns()]);
         await loadSeries();
+    }
+
+    function handleHeaderClick(event) {
+        var th = event.target.closest('th');
+        if (!th) return;
+        var field = th.getAttribute('data-sort');
+        if (!field) return;
+        if (state.sortColumn === field) {
+            state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.sortColumn = field;
+            state.sortDirection = 'asc';
+        }
+        renderLatestRows(state.latestRows);
+        syncUrlState();
+    }
+
+    if (els.latestHead) {
+        var headers = els.latestHead.querySelectorAll('th');
+        var headerLabels = Object.keys(SORT_FIELDS);
+        headers.forEach(function (th, idx) {
+            var label = headerLabels[idx];
+            if (label && SORT_FIELDS[label]) {
+                th.setAttribute('data-sort', SORT_FIELDS[label]);
+                th.innerHTML = esc(label) + ' <span class="sort-arrow">\u25B2</span>';
+            }
+        });
+        els.latestHead.addEventListener('click', handleHeaderClick);
     }
 
     if (els.refreshAll) els.refreshAll.addEventListener('click', refreshAll);
@@ -340,6 +468,6 @@
         });
     }
 
-    setMode('daily');
+    setMode(state.mode);
     refreshAll();
 })();

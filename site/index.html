@@ -3,7 +3,37 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Australian Home Loan Rates | AustralianRates</title>
+    <title>Compare Australian Home Loan Rates - Daily CDR Data | AustralianRates</title>
+    <meta name="description" content="Compare home loan interest rates from Australia's major banks updated daily from official CDR data. Track variable and fixed rates across CBA, Westpac, NAB, ANZ, Macquarie, Bendigo, Suncorp, Bankwest, ING and AMP.">
+    <link rel="canonical" href="https://www.australianrates.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Compare Australian Home Loan Rates | AustralianRates">
+    <meta property="og:description" content="Daily home loan rates from 10 major Australian lenders via the Consumer Data Right API. Variable, fixed, owner-occupied and investment rates compared.">
+    <meta property="og:url" content="https://www.australianrates.com/">
+    <meta property="og:site_name" content="AustralianRates">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Compare Australian Home Loan Rates | AustralianRates">
+    <meta name="twitter:description" content="Daily home loan rates from 10 major Australian lenders via the Consumer Data Right API.">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "AustralianRates",
+        "url": "https://www.australianrates.com",
+        "description": "Compare Australian home loan interest rates from major banks, updated daily from official Consumer Data Right (CDR) feeds.",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "AUD"
+        },
+        "author": {
+            "@type": "Organization",
+            "name": "AustralianRates"
+        }
+    }
+    </script>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="frame.css">
 </head>
@@ -76,19 +106,19 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>RBA Cash Rate</th>
-                                <th>Bank</th>
-                                <th>Product</th>
-                                <th>Purpose</th>
-                                <th>Repayment</th>
-                                <th>LVR</th>
-                                <th>Structure</th>
-                                <th>Feature</th>
-                                <th>Rate</th>
-                                <th>Comparison</th>
-                                <th>Annual Fee</th>
-                                <th>Quality</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">RBA Cash Rate</th>
+                                <th scope="col">Bank</th>
+                                <th scope="col">Product</th>
+                                <th scope="col">Purpose</th>
+                                <th scope="col">Repayment</th>
+                                <th scope="col">LVR</th>
+                                <th scope="col">Structure</th>
+                                <th scope="col">Feature</th>
+                                <th scope="col">Rate</th>
+                                <th scope="col">Comparison</th>
+                                <th scope="col">Annual Fee</th>
+                                <th scope="col">Quality</th>
                             </tr>
                         </thead>
                         <tbody id="latest-body">

@@ -145,9 +145,10 @@ export function extractLenderRatesFromHtml(input: {
     const securityPurpose = normalizeSecurityPurpose(context)
     const repaymentType = normalizeRepaymentType(context)
     const rateStructure = normalizeRateStructure(context)
-    const lvrTier = normalizeLvrTier(context)
+    const lvrResult = normalizeLvrTier(context)
+    if (lvrResult.wasDefault) confidence -= 0.03
     const featureSet = normalizeFeatureSet(productName, null)
-    const productId = `${input.lender.code}-html-${Math.abs(hashString(`${productName}|${rateStructure}|${lvrTier}`))}`
+    const productId = `${input.lender.code}-html-${Math.abs(hashString(`${productName}|${rateStructure}|${lvrResult.tier}`))}`
     const rowKey = `${productId}|${input.collectionDate}|${interestRate}`
     if (seen.has(rowKey)) continue
     seen.add(rowKey)
@@ -160,7 +161,7 @@ export function extractLenderRatesFromHtml(input: {
       securityPurpose,
       repaymentType,
       rateStructure,
-      lvrTier,
+      lvrTier: lvrResult.tier,
       featureSet,
       interestRate,
       comparisonRate: parsed.comparisonRate,
