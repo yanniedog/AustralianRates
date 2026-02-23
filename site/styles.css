@@ -301,6 +301,11 @@ button:focus-visible {
     align-items: center;
 }
 
+.download-label {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
 #last-refreshed {
     font-size: 0.78rem;
     white-space: nowrap;

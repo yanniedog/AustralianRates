@@ -50,7 +50,7 @@
         filterStartDate: document.getElementById('filter-start-date'),
         filterEndDate:   document.getElementById('filter-end-date'),
         applyFilters:  document.getElementById('apply-filters'),
-        downloadCsv:   document.getElementById('download-csv'),
+        downloadFormat: document.getElementById('download-format'),
         loadPivot:     document.getElementById('load-pivot'),
         pivotStatus:   document.getElementById('pivot-status'),
         pivotOutput:   document.getElementById('pivot-output'),
@@ -79,6 +79,8 @@
     var state = {
         activeTab: params.get('tab') || 'explorer',
         pivotLoaded: false,
+        pivotData: null,
+        pivotConfig: null,
         chartDrawn: false,
         refreshTimerId: null,
         lastRefreshedAt: null,
@@ -109,6 +111,7 @@
             panel.hidden = !active;
             panel.classList.toggle('active', active);
         });
+        updateDownloadControlState();
         syncUrlState();
     }
 
@@ -200,7 +203,9 @@
             fillSelect(els.filterLvr, f.lvr_tiers || []);
             fillSelect(els.filterFeature, f.feature_sets || []);
             restoreUrlState();
-        } catch (_) { /* non-critical */ }
+        } catch (e) {
+            if (window.addSessionLog) window.addSessionLog('error', 'loadFilters failed', { url: apiBase + '/filters', message: String(e && e.message) });
+        }
     }
 
     /* ── Hero stats ────────────────────────────────────── */
@@ -221,7 +226,9 @@
                     }
                 }
             }
-        } catch (_) { /* non-critical */ }
+        } catch (e) {
+            if (window.addSessionLog) window.addSessionLog('error', 'loadHeroStats failed', { url: apiBase + '/rates', message: String(e && e.message) });
+        }
     }
 
     /* ── Tabulator Rate Explorer ───────────────────────── */
@@ -295,6 +302,10 @@
                             last_page: data.last_page || 1,
                             data: data.data || [],
                         };
+                    })
+                    .catch(function (err) {
+                        if (window.addSessionLog) window.addSessionLog('error', 'Rate Explorer fetch failed', { url: url, message: String(err && err.message) });
+                        throw err;
                     });
             },
             movableColumns: true,
@@ -302,33 +313,48 @@
             layout: 'fitDataFill',
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
             columns: [
-                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 120 },
-                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90 },
-                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110 },
-                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100 },
-                { title: 'Purpose', field: 'security_purpose', headerSort: true, width: 130 },
-                { title: 'Repayment', field: 'repayment_type', headerSort: true, width: 150 },
-                { title: 'LVR', field: 'lvr_tier', headerSort: true, width: 110 },
-                { title: 'Feature', field: 'feature_set', headerSort: true, width: 90 },
-                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
-                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100 },
-                { title: 'Date', field: 'collection_date', headerSort: true, width: 110 },
-                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100 },
-                { title: 'Source', field: 'run_source', headerSort: true, width: 90,
+                { title: 'Date', field: 'collection_date', headerSort: true, width: 110, tooltip: 'Date the rate was collected / discovered.' },
+                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 120, tooltip: 'Lender or bank name.' },
+                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90, tooltip: 'Advertised interest rate (%).' },
+                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110, tooltip: 'Comparison rate (%), includes fees.' },
+                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100, tooltip: 'Variable or fixed term (e.g. 1–5 years).' },
+                { title: 'Purpose', field: 'security_purpose', headerSort: true, width: 130, tooltip: 'Owner-occupied or investment.' },
+                { title: 'Repayment', field: 'repayment_type', headerSort: true, width: 150, tooltip: 'Principal and interest or interest only.' },
+                { title: 'LVR', field: 'lvr_tier', headerSort: true, width: 110, tooltip: 'Loan-to-value ratio tier.' },
+                { title: 'Feature', field: 'feature_set', headerSort: true, width: 90, tooltip: 'Basic (no offset/redraw) or Premium (with offset/redraw).' },
+                { title: 'Offset', field: 'feature_set', headerSort: true, width: 70, tooltip: 'Whether the account has an offset arrangement (Yes/No).',
+                    formatter: function (cell) { return (cell.getValue() === 'premium') ? 'Yes' : 'No'; }
+                },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140, tooltip: 'Product or rate name.' },
+                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100, tooltip: 'Annual fee ($).' },
+                { title: 'Source URL', field: 'source_url', headerSort: true, width: 120, tooltip: 'URL the rate was scraped or sourced from.',
+                    formatter: function (cell) {
+                        var url = cell.getValue();
+                        if (!url) return '—';
+                        var u = String(url);
+                        var label = u.length > 40 ? u.slice(0, 37) + '…' : u;
+                        var esc = window._arEsc || function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+                        var href = u.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        cell.getElement().innerHTML = '<a href="' + href + '" target="_blank" rel="noopener noreferrer" title="' + esc(u) + '">' + esc(label) + '</a>';
+                        return '';
+                    }
+                },
+                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100, tooltip: 'RBA cash rate on that date.' },
+                { title: 'Source', field: 'run_source', headerSort: true, width: 90, tooltip: 'Auto (scheduled) or Manual run.',
                     formatter: function (cell) {
                         var v = String(cell.getValue() || '');
                         if (v === 'manual') return 'Manual';
                         return 'Auto';
                     }
                 },
-                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160,
+                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160, tooltip: 'When the rate was parsed.',
                     formatter: function (cell) {
                         var v = cell.getValue();
                         if (!v) return '-';
                         try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
                     }
                 },
-                { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false,
+                { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false, tooltip: 'Data quality flag (e.g. CDR Live, Historical).',
                     formatter: function (cell) {
                         var v = String(cell.getValue() || '');
                         if (v === 'ok') return 'CDR Live';
@@ -351,6 +377,7 @@
 
     function loadPivotData() {
         if (!els.pivotOutput) return;
+        if (window.addSessionLog) window.addSessionLog('info', 'Load Data for Pivot');
         if (els.pivotStatus) els.pivotStatus.textContent = 'Loading data for pivot...';
 
         var fp = buildFilterParams();
@@ -388,6 +415,7 @@
                 // #endregion
 
                 try {
+                    state.pivotData = data;
                     $(els.pivotOutput).empty().pivotUI(data, {
                         rows: ['bank_name'],
                         cols: ['rate_structure'],
@@ -401,8 +429,12 @@
                                 height: 500,
                             },
                         },
+                        onRefresh: function (config) {
+                            state.pivotConfig = config;
+                        },
                     }, true);
                     state.pivotLoaded = true;
+                    updateDownloadControlState();
                     // #region agent log
                     var pivotHtml = (els.pivotOutput && els.pivotOutput.innerHTML) || '';
                     var uiErrorShown = pivotHtml.indexOf('An error occurred rendering the PivotTable UI') !== -1;
@@ -416,6 +448,7 @@
                 }
             })
             .catch(function (err) {
+                if (window.addSessionLog) window.addSessionLog('error', 'Load pivot data failed', { url: apiBase + '/rates', message: String(err && err.message) });
                 if (els.pivotStatus) els.pivotStatus.textContent = 'Error loading pivot data: ' + String(err.message || err);
             });
     }
@@ -424,6 +457,7 @@
 
     function drawChart() {
         if (!els.chartOutput) return;
+        if (window.addSessionLog) window.addSessionLog('info', 'Draw Chart');
         if (els.chartStatus) els.chartStatus.textContent = 'Loading chart data...';
 
         var fp = buildFilterParams();
@@ -521,6 +555,7 @@
                 if (els.chartStatus) els.chartStatus.textContent = 'Chart rendered' + suffix;
             })
             .catch(function (err) {
+                if (window.addSessionLog) window.addSessionLog('error', 'Draw chart failed', { url: apiBase + '/rates', message: String(err && err.message) });
                 if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);
             });
     }
@@ -532,6 +567,7 @@
     function triggerManualRun() {
         if (triggerInFlight) return;
         if (!els.triggerRun) return;
+        if (window.addSessionLog) window.addSessionLog('info', 'Check Rates Now clicked');
         triggerInFlight = true;
         els.triggerRun.disabled = true;
         if (els.triggerStatus) els.triggerStatus.textContent = 'Starting run...';
@@ -555,6 +591,7 @@
                 }
             })
             .catch(function (err) {
+                if (window.addSessionLog) window.addSessionLog('error', 'Trigger run failed', { url: apiBase + '/trigger-run', message: String(err && err.message) });
                 if (els.triggerStatus) els.triggerStatus.textContent = 'Error: ' + String(err.message || err);
             })
             .finally(function () {
@@ -605,14 +642,169 @@
 
     setInterval(updateLastRefreshed, 30000);
 
-    /* ── CSV Export ─────────────────────────────────────── */
+    /* ── Download (CSV, XLS, JSON) ───────────────────────── */
 
-    function downloadCsv() {
-        var fp = buildFilterParams();
-        fp.dataset = 'latest';
-        var q = new URLSearchParams(fp);
-        window.open(apiBase + '/export.csv?' + q.toString(), '_blank', 'noopener');
+    function downloadBlob(blob, filename, mimeType) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
+
+    function updateDownloadControlState() {
+        if (!els.downloadFormat) return;
+        var disable = state.activeTab === 'pivot' && !state.pivotLoaded;
+        els.downloadFormat.disabled = disable;
+        els.downloadFormat.title = disable
+            ? 'Load Data for Pivot first to download'
+            : 'Download current table as CSV, XLS or JSON';
+    }
+
+    function csvEscapeCell(value) {
+        var s = String(value == null ? '' : value);
+        if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    }
+
+    function arrayToCsv(rows) {
+        if (!rows || rows.length === 0) return '';
+        return rows.map(function (row) {
+            return row.map(csvEscapeCell).join(',');
+        }).join('\n');
+    }
+
+    function getPivotTableData() {
+        if (!els.pivotOutput) return null;
+        var table = els.pivotOutput.querySelector('table.pvtTable') || els.pivotOutput.querySelector('table');
+        if (!table) return null;
+        var rows = [];
+        var trs = table.querySelectorAll('tr');
+        for (var i = 0; i < trs.length; i++) {
+            var cells = trs[i].querySelectorAll('th, td');
+            var row = [];
+            for (var j = 0; j < cells.length; j++) {
+                row.push((cells[j].textContent || '').trim());
+            }
+            if (row.length) rows.push(row);
+        }
+        return rows.length ? rows : null;
+    }
+
+    function pivotTableToArrayOfObjects(rows) {
+        if (!rows || rows.length < 2) return [];
+        var headers = rows[0];
+        var out = [];
+        for (var i = 1; i < rows.length; i++) {
+            var obj = {};
+            for (var j = 0; j < headers.length; j++) {
+                obj[headers[j] || 'col' + j] = rows[i][j] != null ? rows[i][j] : '';
+            }
+            out.push(obj);
+        }
+        return out;
+    }
+
+    function handleDownload(format) {
+        if (!format || !els.downloadFormat) return;
+        if (state.activeTab === 'pivot' && !state.pivotLoaded) {
+            if (els.pivotStatus) els.pivotStatus.textContent = 'Load Data for Pivot first, then download.';
+            els.downloadFormat.value = '';
+            return;
+        }
+
+        if (state.activeTab === 'explorer') {
+            var fp = buildFilterParams();
+            fp.format = format;
+            var q = new URLSearchParams(fp);
+            var url = apiBase + '/export?' + q.toString();
+
+            if (format === 'csv') {
+                if (window.addSessionLog) window.addSessionLog('info', 'Download table CSV');
+                fetch(url).then(function (r) { return r.text(); }).then(function (text) {
+                    var blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+                    downloadBlob(blob, 'rates-export.csv', 'text/csv;charset=utf-8');
+                }).catch(function (err) {
+                    if (window.addSessionLog) window.addSessionLog('error', 'Download CSV failed', { message: String(err && err.message) });
+                });
+                els.downloadFormat.value = '';
+                return;
+            }
+            if (format === 'json') {
+                if (window.addSessionLog) window.addSessionLog('info', 'Download table JSON');
+                fetch(url).then(function (r) { return r.json(); }).then(function (body) {
+                    var data = body.data || [];
+                    var blob = new Blob([JSON.stringify({ data: data, total: body.total }, null, 2)], { type: 'application/json' });
+                    downloadBlob(blob, 'rates-export.json', 'application/json');
+                }).catch(function (err) {
+                    if (window.addSessionLog) window.addSessionLog('error', 'Download JSON failed', { message: String(err && err.message) });
+                });
+                els.downloadFormat.value = '';
+                return;
+            }
+            if (format === 'xls') {
+                if (window.addSessionLog) window.addSessionLog('info', 'Download table XLS');
+                var fpXls = buildFilterParams();
+                fpXls.format = 'json';
+                fetch(apiBase + '/export?' + new URLSearchParams(fpXls).toString())
+                    .then(function (r) { return r.json(); })
+                    .then(function (body) {
+                        var data = body.data || [];
+                        if (typeof XLSX === 'undefined') {
+                            if (window.addSessionLog) window.addSessionLog('error', 'XLSX library not loaded');
+                            els.downloadFormat.value = '';
+                            return;
+                        }
+                        var ws = XLSX.utils.json_to_sheet(data);
+                        var wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, 'Rates');
+                        XLSX.writeFile(wb, 'rates-export.xlsx');
+                    })
+                    .catch(function (err) {
+                        if (window.addSessionLog) window.addSessionLog('error', 'Download XLS failed', { message: String(err && err.message) });
+                    });
+                els.downloadFormat.value = '';
+                return;
+            }
+        }
+
+        if (state.activeTab === 'pivot') {
+            var pivotRows = getPivotTableData();
+            if (!pivotRows || pivotRows.length === 0) {
+                if (els.pivotStatus) els.pivotStatus.textContent = 'No pivot table to export.';
+                els.downloadFormat.value = '';
+                return;
+            }
+            if (format === 'csv') {
+                var csvContent = arrayToCsv(pivotRows);
+                var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+                downloadBlob(blob, 'pivot-export.csv', 'text/csv;charset=utf-8');
+            } else if (format === 'json') {
+                var arr = pivotTableToArrayOfObjects(pivotRows);
+                var blob = new Blob([JSON.stringify(arr, null, 2)], { type: 'application/json' });
+                downloadBlob(blob, 'pivot-export.json', 'application/json');
+            } else if (format === 'xls') {
+                if (typeof XLSX === 'undefined') {
+                    if (window.addSessionLog) window.addSessionLog('error', 'XLSX library not loaded');
+                    els.downloadFormat.value = '';
+                    return;
+                }
+                var arr = pivotTableToArrayOfObjects(pivotRows);
+                var ws = XLSX.utils.json_to_sheet(arr);
+                var wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Pivot');
+                XLSX.writeFile(wb, 'pivot-export.xlsx');
+            }
+            if (window.addSessionLog) window.addSessionLog('info', 'Download pivot ' + format);
+        }
+
+        els.downloadFormat.value = '';
+    }
+
 
     /* ── Admin ─────────────────────────────────────────── */
 
@@ -627,6 +819,7 @@
             var data = await r.json();
             els.runsOutput.textContent = JSON.stringify(data, null, 2);
         } catch (err) {
+            if (window.addSessionLog) window.addSessionLog('error', 'loadRuns failed', { url: apiBase + '/admin/runs', message: String(err && err.message) });
             els.runsOutput.textContent = JSON.stringify({ ok: false, error: String(err.message || err) }, null, 2);
         }
     }
@@ -634,6 +827,7 @@
     /* ── Apply filters ─────────────────────────────────── */
 
     function applyFilters() {
+        if (window.addSessionLog) window.addSessionLog('info', 'Applied filters', { bank: els.filterBank ? els.filterBank.value : '', purpose: els.filterSecurity ? els.filterSecurity.value : '' });
         syncUrlState();
         reloadExplorer();
         if (state.pivotLoaded && els.pivotStatus) {
@@ -647,7 +841,13 @@
     /* ── Event bindings ────────────────────────────────── */
 
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
-    if (els.downloadCsv) els.downloadCsv.addEventListener('click', downloadCsv);
+    if (els.downloadFormat) {
+        els.downloadFormat.addEventListener('change', function () {
+            var format = els.downloadFormat.value;
+            if (format) handleDownload(format);
+        });
+        updateDownloadControlState();
+    }
     if (els.loadPivot) els.loadPivot.addEventListener('click', loadPivotData);
     if (els.drawChart) els.drawChart.addEventListener('click', drawChart);
     if (els.refreshRuns) els.refreshRuns.addEventListener('click', loadRuns);

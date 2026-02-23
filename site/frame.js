@@ -3,6 +3,50 @@
     var GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/commits?per_page=1';
     var API_BASE = window.location.origin + '/api/home-loan-rates';
 
+    /* ── Session log (client-side buffer for this tab) ─── */
+    var SESSION_LOG_MAX = 500;
+    var _sessionLog = [];
+
+    function addSessionLog(level, message, detail) {
+        _sessionLog.push({
+            ts: new Date().toISOString(),
+            level: level || 'info',
+            message: String(message || ''),
+            detail: detail
+        });
+        if (_sessionLog.length > SESSION_LOG_MAX) _sessionLog.shift();
+        updateClientLogCount();
+    }
+
+    function getSessionLogEntries() {
+        return _sessionLog.slice();
+    }
+
+    window.addSessionLog = addSessionLog;
+    window.getSessionLogEntries = getSessionLogEntries;
+
+    function updateClientLogCount() {
+        var el = document.getElementById('footer-client-log-count');
+        if (el) el.textContent = _sessionLog.length.toLocaleString();
+    }
+
+    function downloadClientLog() {
+        var entries = getSessionLogEntries();
+        var lines = entries.map(function (e) {
+            var parts = [e.ts, '[' + (e.level || 'info').toUpperCase() + ']', e.message];
+            if (e.detail && typeof e.detail === 'object') parts.push(JSON.stringify(e.detail));
+            else if (e.detail != null) parts.push(String(e.detail));
+            return parts.join(' ');
+        });
+        var text = '# AustralianRates Client Log (' + entries.length + ' entries)\n# Downloaded at ' + new Date().toISOString() + '\n\n' + lines.join('\n') + '\n';
+        var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'australianrates-client-log.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
     function esc(s) {
         if (window._arEsc) return window._arEsc(s);
         return String(s == null ? '' : s)
@@ -44,14 +88,22 @@
                 '<span id="footer-commit">Loading commit info...</span>' +
                 '<span class="footer-sep">|</span>' +
                 '<span id="footer-log-info">' +
-                    '<a href="' + esc(API_BASE + '/logs') + '" class="footer-log-badge" title="Download full log file">' +
-                        'Log: <span id="footer-log-count">...</span> entries' +
-                    '</a>' +
+                    '<a href="' + esc(API_BASE + '/logs') + '" class="footer-log-badge" title="Download system log">System log <span id="footer-log-count">...</span> entries</a>' +
+                    ' <span class="footer-sep">|</span> ' +
+                    '<a href="#" id="footer-client-log-link" class="footer-log-badge" title="Download client log for this tab">Client log <span id="footer-client-log-count">0</span> entries</a>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
                 '<span>&copy; ' + new Date().getFullYear() + ' AustralianRates</span>' +
             '</div>';
         document.body.appendChild(footer);
+
+        var clientLogLink = document.getElementById('footer-client-log-link');
+        if (clientLogLink) {
+            clientLogLink.addEventListener('click', function (e) {
+                e.preventDefault();
+                downloadClientLog();
+            });
+        }
     }
 
     function formatDate(iso) {

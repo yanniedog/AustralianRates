@@ -152,7 +152,13 @@
                 </label>
                 <div class="filter-actions">
                     <button id="apply-filters" class="small" type="button">Apply Filters</button>
-                    <button id="download-csv" class="small secondary" type="button">Export CSV</button>
+                    <label for="download-format" class="download-label">Download</label>
+                    <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
+                        <option value="">Download as...</option>
+                        <option value="csv">CSV</option>
+                        <option value="xls">XLS</option>
+                        <option value="json">JSON</option>
+                    </select>
                     <span id="last-refreshed" class="hint"></span>
                 </div>
             </div>
@@ -244,9 +250,11 @@
 
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/plotly_renderers.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script src="app.js"></script>
     <script src="frame.js"></script>
 </body>

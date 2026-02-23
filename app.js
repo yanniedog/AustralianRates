@@ -302,33 +302,48 @@
             layout: 'fitDataFill',
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
             columns: [
-                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 120 },
-                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90 },
-                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110 },
-                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100 },
-                { title: 'Purpose', field: 'security_purpose', headerSort: true, width: 130 },
-                { title: 'Repayment', field: 'repayment_type', headerSort: true, width: 150 },
-                { title: 'LVR', field: 'lvr_tier', headerSort: true, width: 110 },
-                { title: 'Feature', field: 'feature_set', headerSort: true, width: 90 },
-                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
-                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100 },
-                { title: 'Date', field: 'collection_date', headerSort: true, width: 110 },
-                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100 },
-                { title: 'Source', field: 'run_source', headerSort: true, width: 90,
+                { title: 'Date', field: 'collection_date', headerSort: true, width: 110, tooltip: 'Date the rate was collected / discovered.' },
+                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 120, tooltip: 'Lender or bank name.' },
+                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90, tooltip: 'Advertised interest rate (%).' },
+                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110, tooltip: 'Comparison rate (%), includes fees.' },
+                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100, tooltip: 'Variable or fixed term (e.g. 1–5 years).' },
+                { title: 'Purpose', field: 'security_purpose', headerSort: true, width: 130, tooltip: 'Owner-occupied or investment.' },
+                { title: 'Repayment', field: 'repayment_type', headerSort: true, width: 150, tooltip: 'Principal and interest or interest only.' },
+                { title: 'LVR', field: 'lvr_tier', headerSort: true, width: 110, tooltip: 'Loan-to-value ratio tier.' },
+                { title: 'Feature', field: 'feature_set', headerSort: true, width: 90, tooltip: 'Basic (no offset/redraw) or Premium (with offset/redraw).' },
+                { title: 'Offset', field: 'feature_set', headerSort: true, width: 70, tooltip: 'Whether the account has an offset arrangement (Yes/No).',
+                    formatter: function (cell) { return (cell.getValue() === 'premium') ? 'Yes' : 'No'; }
+                },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140, tooltip: 'Product or rate name.' },
+                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100, tooltip: 'Annual fee ($).' },
+                { title: 'Source URL', field: 'source_url', headerSort: true, width: 120, tooltip: 'URL the rate was scraped or sourced from.',
+                    formatter: function (cell) {
+                        var url = cell.getValue();
+                        if (!url) return '—';
+                        var u = String(url);
+                        var label = u.length > 40 ? u.slice(0, 37) + '…' : u;
+                        var esc = window._arEsc || function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+                        var href = u.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        cell.getElement().innerHTML = '<a href="' + href + '" target="_blank" rel="noopener noreferrer" title="' + esc(u) + '">' + esc(label) + '</a>';
+                        return '';
+                    }
+                },
+                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100, tooltip: 'RBA cash rate on that date.' },
+                { title: 'Source', field: 'run_source', headerSort: true, width: 90, tooltip: 'Auto (scheduled) or Manual run.',
                     formatter: function (cell) {
                         var v = String(cell.getValue() || '');
                         if (v === 'manual') return 'Manual';
                         return 'Auto';
                     }
                 },
-                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160,
+                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160, tooltip: 'When the rate was parsed.',
                     formatter: function (cell) {
                         var v = cell.getValue();
                         if (!v) return '-';
                         try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
                     }
                 },
-                { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false,
+                { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false, tooltip: 'Data quality flag (e.g. CDR Live, Historical).',
                     formatter: function (cell) {
                         var v = String(cell.getValue() || '');
                         if (v === 'ok') return 'CDR Live';

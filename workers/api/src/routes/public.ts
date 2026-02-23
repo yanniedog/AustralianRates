@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
-import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestRates, queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestRates, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { getLastManualRunStartedAt } from '../db/run-reports'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import type { AppContext } from '../types'
@@ -56,7 +56,7 @@ publicRoutes.get('/staleness', async (c) => {
 })
 
 publicRoutes.post('/trigger-run', async (c) => {
-  const DEFAULT_COOLDOWN_SECONDS = 3600
+  const DEFAULT_COOLDOWN_SECONDS = 60
   const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
   const cooldownMs = cooldownSeconds * 1000
 
@@ -115,6 +115,41 @@ publicRoutes.get('/rates', async (c) => {
   })
 
   return c.json(result)
+})
+
+publicRoutes.get('/export', async (c) => {
+  const query = c.req.query()
+  const format = String(query.format || 'json').toLowerCase()
+  if (format !== 'csv' && format !== 'json') {
+    return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
+  }
+  const dir = String(query.dir || 'desc').toLowerCase()
+  const includeManual = query.include_manual === 'true' || query.include_manual === '1'
+
+  const { data, total } = await queryRatesForExport(c.env.DB, {
+    startDate: query.start_date,
+    endDate: query.end_date,
+    bank: query.bank,
+    securityPurpose: query.security_purpose,
+    repaymentType: query.repayment_type,
+    rateStructure: query.rate_structure,
+    lvrTier: query.lvr_tier,
+    featureSet: query.feature_set,
+    sort: query.sort,
+    dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+    includeManual,
+    limit: 10000,
+  })
+
+  if (format === 'csv') {
+    c.header('Content-Type', 'text/csv; charset=utf-8')
+    c.header('Content-Disposition', 'attachment; filename="rates-export.csv"')
+    return c.body(toCsv(data as Array<Record<string, unknown>>))
+  }
+
+  c.header('Content-Type', 'application/json; charset=utf-8')
+  c.header('Content-Disposition', 'attachment; filename="rates-export.json"')
+  return c.json({ data, total, last_page: 1 })
 })
 
 publicRoutes.get('/latest', async (c) => {

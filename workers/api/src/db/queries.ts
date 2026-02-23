@@ -75,10 +75,7 @@ export async function getFilters(db: D1Database) {
       rows(rateStructures).map((x) => x.value),
       RATE_STRUCTURES,
     ),
-    lvr_tiers: fallbackIfEmpty(
-      rows(lvrTiers).map((x) => x.value),
-      LVR_TIERS,
-    ),
+    lvr_tiers: LVR_TIERS,
     feature_sets: fallbackIfEmpty(
       rows(featureSets).map((x) => x.value),
       FEATURE_SETS,
@@ -291,6 +288,7 @@ const PAGINATED_SORT_COLUMNS: Record<string, string> = {
   rba_cash_rate: 'rba_cash_rate',
   parsed_at: 'h.parsed_at',
   run_source: 'h.run_source',
+  source_url: 'h.source_url',
 }
 
 export async function queryRatesPaginated(db: D1Database, filters: RatesPaginatedFilters) {
@@ -395,6 +393,110 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     last_page: lastPage,
     total,
     data: rows(dataResult),
+  }
+}
+
+const EXPORT_MAX_ROWS = 10000
+
+export type RatesExportFilters = Omit<RatesPaginatedFilters, 'page' | 'size'> & { limit?: number }
+
+export async function queryRatesForExport(
+  db: D1Database,
+  filters: RatesExportFilters,
+  maxRows: number = EXPORT_MAX_ROWS,
+): Promise<{ data: Array<Record<string, unknown>>; total: number }> {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('h.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+
+  where.push('h.confidence_score >= ?')
+  binds.push(MIN_CONFIDENCE_ALL)
+
+  if (!filters.includeManual) {
+    where.push("(h.run_source IS NULL OR h.run_source != 'manual')")
+  }
+
+  if (filters.bank) {
+    where.push('h.bank_name = ?')
+    binds.push(filters.bank)
+  }
+  if (filters.securityPurpose) {
+    where.push('h.security_purpose = ?')
+    binds.push(filters.securityPurpose)
+  }
+  if (filters.repaymentType) {
+    where.push('h.repayment_type = ?')
+    binds.push(filters.repaymentType)
+  }
+  if (filters.rateStructure) {
+    where.push('h.rate_structure = ?')
+    binds.push(filters.rateStructure)
+  }
+  if (filters.lvrTier) {
+    where.push('h.lvr_tier = ?')
+    binds.push(filters.lvrTier)
+  }
+  if (filters.featureSet) {
+    where.push('h.feature_set = ?')
+    binds.push(filters.featureSet)
+  }
+  if (filters.startDate) {
+    where.push('h.collection_date >= ?')
+    binds.push(filters.startDate)
+  }
+  if (filters.endDate) {
+    where.push('h.collection_date <= ?')
+    binds.push(filters.endDate)
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const sortCol = PAGINATED_SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
+  const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
+  const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
+  const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(filters.limit) || maxRows)))
+
+  const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
+  const dataSql = `
+    SELECT
+      h.bank_name,
+      h.collection_date,
+      h.product_id,
+      h.product_name,
+      h.security_purpose,
+      h.repayment_type,
+      h.rate_structure,
+      h.lvr_tier,
+      h.feature_set,
+      h.interest_rate,
+      h.comparison_rate,
+      h.annual_fee,
+      h.source_url,
+      h.data_quality_flag,
+      h.confidence_score,
+      h.parsed_at,
+      h.run_id,
+      h.run_source,
+      h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
+      r.cash_rate AS rba_cash_rate
+    FROM historical_loan_rates h
+    LEFT JOIN rba_cash_rates r
+      ON r.collection_date = h.collection_date
+    ${whereClause}
+    ${orderClause}
+    LIMIT ?
+  `
+
+  const [countResult, dataResult] = await Promise.all([
+    db.prepare(countSql).bind(...binds).first<{ total: number }>(),
+    db.prepare(dataSql).bind(...binds, limit).all<Record<string, unknown>>(),
+  ])
+
+  const total = Number(countResult?.total ?? 0)
+  return {
+    data: rows(dataResult),
+    total,
   }
 }
 
