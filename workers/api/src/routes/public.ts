@@ -62,8 +62,11 @@ publicRoutes.post('/trigger-run', async (c) => {
 
   const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
   if (lastStartedAt) {
-    const elapsed = Date.now() - Date.parse(lastStartedAt)
-    if (elapsed < cooldownMs) {
+    // Parse as UTC (we store via toISOString()). If DB returns without "Z", treat as UTC.
+    const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : lastStartedAt.trim() + 'Z').getTime()
+    const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
+    // If elapsed is negative (clock skew or bad parse), treat cooldown as expired
+    if (elapsed >= 0 && elapsed < cooldownMs) {
       const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
       return c.json(
         { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
