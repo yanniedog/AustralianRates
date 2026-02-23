@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     /* ââ Utilities âââââââââââââââââââââââââââââââââââââââ */
@@ -302,31 +302,30 @@
             layout: 'fitDataFill',
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
             columns: [
-                { title: 'Date', field: 'collection_date', headerSort: true, width: 110 },
-                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100 },
-                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 100 },
-                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
+                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 120 },
+                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90 },
+                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110 },
+                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100 },
                 { title: 'Purpose', field: 'security_purpose', headerSort: true, width: 130 },
                 { title: 'Repayment', field: 'repayment_type', headerSort: true, width: 150 },
                 { title: 'LVR', field: 'lvr_tier', headerSort: true, width: 110 },
-                { title: 'Structure', field: 'rate_structure', headerSort: true, width: 100 },
                 { title: 'Feature', field: 'feature_set', headerSort: true, width: 90 },
-                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, width: 90,
-                    cellClick: function () {} },
-                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, width: 110, visible: false },
-                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100, visible: false },
-                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160,
-                    formatter: function (cell) {
-                        var v = cell.getValue();
-                        if (!v) return '-';
-                        try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
-                    }
-                },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
+                { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, width: 100 },
+                { title: 'Date', field: 'collection_date', headerSort: true, width: 110 },
+                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, width: 100 },
                 { title: 'Source', field: 'run_source', headerSort: true, width: 90,
                     formatter: function (cell) {
                         var v = String(cell.getValue() || '');
                         if (v === 'manual') return 'Manual';
                         return 'Auto';
+                    }
+                },
+                { title: 'Checked At', field: 'parsed_at', headerSort: true, width: 160,
+                    formatter: function (cell) {
+                        var v = cell.getValue();
+                        if (!v) return '-';
+                        try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
                     }
                 },
                 { title: 'Quality', field: 'data_quality_flag', headerSort: false, width: 120, visible: false,
@@ -382,21 +381,39 @@
                     $.pivotUtilities.plotly_renderers
                 );
 
-                $(els.pivotOutput).empty().pivotUI(data, {
-                    rows: ['bank_name'],
-                    cols: ['rate_structure'],
-                    vals: ['interest_rate'],
-                    aggregatorName: 'Average',
-                    renderers: renderers,
-                    rendererName: 'Table',
-                    rendererOptions: {
-                        plotly: {
-                            width: Math.min(1100, window.innerWidth - 80),
-                            height: 500,
+                // #region agent log
+                try {
+                    fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91c342'},body:JSON.stringify({sessionId:'91c342',location:'app.js:loadPivotData',message:'Before pivotUI',data:{hasPivotUtilities:!!(typeof $ !== 'undefined' && $.pivotUtilities),hasSortable:!!(typeof $ !== 'undefined' && $.fn && typeof $.fn.sortable === 'function'),rowCount:data.length,firstRowKeys:data[0]?Object.keys(data[0]):[]},timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+                } catch (_) {}
+                // #endregion
+
+                try {
+                    $(els.pivotOutput).empty().pivotUI(data, {
+                        rows: ['bank_name'],
+                        cols: ['rate_structure'],
+                        vals: ['interest_rate'],
+                        aggregatorName: 'Average',
+                        renderers: renderers,
+                        rendererName: 'Table',
+                        rendererOptions: {
+                            plotly: {
+                                width: Math.min(1100, window.innerWidth - 80),
+                                height: 500,
+                            },
                         },
-                    },
-                }, true);
-                state.pivotLoaded = true;
+                    }, true);
+                    state.pivotLoaded = true;
+                    // #region agent log
+                    var pivotHtml = (els.pivotOutput && els.pivotOutput.innerHTML) || '';
+                    var uiErrorShown = pivotHtml.indexOf('An error occurred rendering the PivotTable UI') !== -1;
+                    fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91c342'},body:JSON.stringify({sessionId:'91c342',location:'app.js:loadPivotData',message:'After pivotUI',data:{uiErrorShown:uiErrorShown},timestamp:Date.now(),hypothesisId:'H4'})}).catch(function(){});
+                    // #endregion
+                } catch (pivotErr) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91c342'},body:JSON.stringify({sessionId:'91c342',location:'app.js:loadPivotData',message:'pivotUI throw',data:{errMessage:String(pivotErr && pivotErr.message),errName:String(pivotErr && pivotErr.name),errStack:(pivotErr && pivotErr.stack)||''},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
+                    // #endregion
+                    if (els.pivotStatus) els.pivotStatus.textContent = 'Error rendering pivot: ' + (pivotErr && pivotErr.message);
+                }
             })
             .catch(function (err) {
                 if (els.pivotStatus) els.pivotStatus.textContent = 'Error loading pivot data: ' + String(err.message || err);
