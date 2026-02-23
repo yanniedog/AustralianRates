@@ -14,6 +14,9 @@
     var triggerInFlight = false;
 
     function triggerManualRun() {
+        // #region agent log
+        fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'79669b'},body:JSON.stringify({sessionId:'79669b',location:'ar-admin.js:triggerManualRun',message:'Check Rates Now clicked',data:{triggerInFlight:!!triggerInFlight,hasTriggerRun:!!els.triggerRun},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
+        // #endregion
         if (triggerInFlight) return;
         if (!els.triggerRun) return;
         triggerInFlight = true;
@@ -21,8 +24,11 @@
         if (els.triggerStatus) els.triggerStatus.textContent = 'Starting run...';
 
         fetch(apiBase + '/trigger-run', { method: 'POST' })
-            .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }); })
+            .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }).catch(function (e) { return { status: r.status, body: null, parseError: String(e && e.message) }; }); })
             .then(function (res) {
+                // #region agent log
+                fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'79669b'},body:JSON.stringify({sessionId:'79669b',location:'ar-admin.js:triggerRun-response',message:'trigger-run response',data:{status:res.status,bodyOk:!!(res.body&&res.body.ok),bodyReason:res.body&&res.body.reason,parseError:res.parseError},timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+                // #endregion
                 if (res.status === 429) {
                     var secs = res.body.retry_after_seconds || 0;
                     var mins = Math.ceil(secs / 60);
@@ -30,6 +36,9 @@
                 } else if (res.body && res.body.ok) {
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Run started. Data will refresh shortly.';
                     setTimeout(function () {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'79669b'},body:JSON.stringify({sessionId:'79669b',location:'ar-admin.js:setTimeout-callback',message:'15s timeout fired',data:{hasReloadExplorer:typeof reloadExplorer==='function'},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
+                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = '';
@@ -39,6 +48,9 @@
                 }
             })
             .catch(function (err) {
+                // #region agent log
+                fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'79669b'},body:JSON.stringify({sessionId:'79669b',location:'ar-admin.js:triggerRun-catch',message:'trigger-run fetch failed',data:{errMsg:String(err&&err.message)},timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){});
+                // #endregion
                 if (els.triggerStatus) els.triggerStatus.textContent = 'Error: ' + String(err.message || err);
             })
             .finally(function () {
