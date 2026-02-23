@@ -2,14 +2,17 @@ import {
   normalizeBankName,
   normalizeFeatureSet,
   normalizeLvrTier,
+  normalizeProductName,
   normalizeRateStructure,
   normalizeRepaymentType,
   normalizeSecurityPurpose,
   parseAnnualFee,
   parseComparisonRate,
   parseInterestRate,
+  isProductNameLikelyRateProduct,
   type NormalizedRateRow,
 } from './normalize'
+import { getLenderPlaybook } from './lender-playbooks'
 import type { LenderConfig } from '../types'
 import { nowIso } from '../utils/time'
 
@@ -49,13 +52,17 @@ function safeUrl(value: string): string {
   return value.replace(/\/+$/, '')
 }
 
-async function fetchTextWithRetries(url: string, retries = 2): Promise<{ ok: boolean; status: number; text: string }> {
+async function fetchTextWithRetries(
+  url: string,
+  retries = 2,
+  headers: Record<string, string> = { accept: 'application/json' },
+): Promise<{ ok: boolean; status: number; text: string }> {
   let lastStatus = 0
   let lastText = ''
   for (let i = 0; i <= retries; i += 1) {
     try {
       const res = await fetch(url, {
-        headers: { accept: 'application/json' },
+        headers,
       })
       const text = await res.text()
       lastStatus = res.status
@@ -79,7 +86,7 @@ function parseJsonSafe(text: string): unknown {
 }
 
 export async function fetchJson(url: string): Promise<FetchJsonResult> {
-  const response = await fetchTextWithRetries(url, 2)
+  const response = await fetchTextWithRetries(url, 2, { accept: 'application/json' })
   const data = parseJsonSafe(response.text)
   return {
     ok: response.ok && data != null,
@@ -88,6 +95,82 @@ export async function fetchJson(url: string): Promise<FetchJsonResult> {
     data,
     text: response.text,
   }
+}
+
+function parseSupportedVersions(body: string): number[] {
+  const m = body.match(/Versions available:\s*([0-9,\s]+)/i)
+  if (!m) return []
+  return m[1]
+    .split(',')
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isFinite(x))
+}
+
+async function fetchCdrJson(url: string, versions: number[]): Promise<FetchJsonResult> {
+  const tried = new Set<number>()
+  const queue = [...versions]
+  while (queue.length > 0) {
+    const version = Number(queue.shift())
+    if (!Number.isFinite(version) || tried.has(version)) continue
+    tried.add(version)
+
+    try {
+      const res = await fetch(url, {
+        headers: {
+          accept: 'application/json',
+          'x-v': String(version),
+          'x-min-v': '1',
+        },
+      })
+      const text = await res.text()
+      const data = parseJsonSafe(text)
+      if (res.ok && data != null) {
+        return {
+          ok: true,
+          status: res.status,
+          url,
+          data,
+          text,
+        }
+      }
+      if (res.status === 406) {
+        const advertised = parseSupportedVersions(text)
+        for (const x of advertised) {
+          if (!tried.has(x)) queue.push(x)
+        }
+      }
+    } catch {
+      // keep trying alternate versions
+    }
+  }
+
+  for (const fallbackVersion of [1, 2, 3, 4, 5, 6]) {
+    if (tried.has(fallbackVersion)) continue
+    try {
+      const res = await fetch(url, {
+        headers: {
+          accept: 'application/json',
+          'x-v': String(fallbackVersion),
+          'x-min-v': '1',
+        },
+      })
+      const text = await res.text()
+      const data = parseJsonSafe(text)
+      if (res.ok && data != null) {
+        return {
+          ok: true,
+          status: res.status,
+          url,
+          data,
+          text,
+        }
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  return fetchJson(url)
 }
 
 type RegisterBrand = {
@@ -107,7 +190,9 @@ function extractBrands(payload: unknown): RegisterBrand[] {
     const endpointUrlRaw =
       pickText(endpointDetail, ['productReferenceDataApi']) ||
       pickText(endpointDetail, ['publicBaseUri']) ||
-      pickText(endpointDetail, ['resourceBaseUri'])
+      pickText(endpointDetail, ['resourceBaseUri']) ||
+      pickText(item, ['publicBaseUri']) ||
+      pickText(item, ['resourceBaseUri'])
     if (!endpointUrlRaw) continue
     const endpointUrl = endpointUrlRaw.includes('/cds-au/v1/banking/products')
       ? endpointUrlRaw
@@ -137,12 +222,15 @@ export async function discoverProductsEndpoint(
   lender: LenderConfig,
 ): Promise<{ endpointUrl: string; sourceUrl: string; status: number; notes: string } | null> {
   const registerUrls = [
+    'https://api.cdr.gov.au/cdr-register/v1/all/data-holders/brands/summary',
     'https://api.cdr.gov.au/cdr-register/v1/banking/data-holders/brands',
     'https://api.cdr.gov.au/cdr-register/v1/banking/register',
   ]
 
   for (const registerUrl of registerUrls) {
-    const fetched = await fetchJson(registerUrl)
+    const fetched = registerUrl.includes('/all/data-holders/brands/summary')
+      ? await fetchCdrJson(registerUrl, [1, 2, 3, 4, 5, 6])
+      : await fetchJson(registerUrl)
     if (!fetched.ok) {
       continue
     }
@@ -229,7 +317,11 @@ function parseAnnualFeeFromDetail(detail: JsonRecord): number | null {
     if (!feeType.includes('annual') && !feeType.includes('package')) {
       continue
     }
-    const amount = parseAnnualFee(fee.amount)
+    const fixedAmount = isRecord(fee.fixedAmount) ? fee.fixedAmount : null
+    const amount =
+      parseAnnualFee(fee.amount) ??
+      parseAnnualFee(fee.additionalValue) ??
+      parseAnnualFee(fixedAmount ? fixedAmount.amount : null)
     if (amount != null) {
       return amount
     }
@@ -244,20 +336,38 @@ function parseRatesFromDetail(input: {
   collectionDate: string
 }): NormalizedRateRow[] {
   const detail = input.detail
-  const productId = pickText(detail, ['productId', 'id']) || `product-${crypto.randomUUID()}`
-  const productName = pickText(detail, ['name', 'productName']) || productId
+  const productId = pickText(detail, ['productId', 'id'])
+  const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
+  if (!productId || !productName || !isProductNameLikelyRateProduct(productName)) {
+    return []
+  }
   const rates = extractRatesArray(detail)
   const annualFee = parseAnnualFeeFromDetail(detail)
   const result: NormalizedRateRow[] = []
+  const playbook = getLenderPlaybook(input.lender)
 
   for (const rate of rates) {
-    const interestRate = parseInterestRate(rate.rate)
+    const rawInterestValue = rate.rate ?? rate.interestRate ?? rate.value
+    const interestRate = parseInterestRate(rawInterestValue)
     if (interestRate == null) {
       continue
     }
-    const comparisonRate = parseComparisonRate(rate.comparisonRate)
+    if (interestRate < playbook.minRatePercent || interestRate > playbook.maxRatePercent) {
+      continue
+    }
+    const comparisonRate = parseComparisonRate(rate.comparisonRate ?? rate.comparison ?? rate.comparison_value)
     const contextText = collectConstraintText(rate, detail)
     const lvr = parseLvrBounds(rate)
+    const contextLower = contextText.toLowerCase()
+    if (playbook.excludeKeywords.some((x) => contextLower.includes(x))) {
+      continue
+    }
+
+    let confidence = 0.95
+    if (!comparisonRate) confidence -= 0.04
+    if (!(Number.isFinite(lvr.min as number) || Number.isFinite(lvr.max as number))) confidence -= 0.03
+    if (!contextLower.includes('loan')) confidence -= 0.02
+
     const row: NormalizedRateRow = {
       bankName: normalizeBankName(input.lender.canonical_bank_name, input.lender.name),
       collectionDate: input.collectionDate,
@@ -279,7 +389,7 @@ function parseRatesFromDetail(input: {
       annualFee,
       sourceUrl: input.sourceUrl,
       dataQualityFlag: 'cdr_live',
-      confidenceScore: 0.95,
+      confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
     }
     result.push(row)
   }
@@ -292,15 +402,20 @@ type ProductListFetchResult = {
   rawPayloads: Array<{ sourceUrl: string; status: number; body: string }>
 }
 
-export async function fetchResidentialMortgageProductIds(endpointUrl: string, pageLimit = 20): Promise<ProductListFetchResult> {
+export async function fetchResidentialMortgageProductIds(
+  endpointUrl: string,
+  pageLimit = 20,
+  options?: { cdrVersions?: number[] },
+): Promise<ProductListFetchResult> {
   const ids = new Set<string>()
   const payloads: Array<{ sourceUrl: string; status: number; body: string }> = []
   let url: string | null = endpointUrl
   let pages = 0
+  const versions = options?.cdrVersions && options.cdrVersions.length > 0 ? options.cdrVersions : [6, 5, 4, 3]
 
   while (url && pages < pageLimit) {
     pages += 1
-    const response = await fetchJson(url)
+    const response = await fetchCdrJson(url, versions)
     payloads.push({
       sourceUrl: url,
       status: response.status,
@@ -330,9 +445,11 @@ export async function fetchProductDetailRows(input: {
   endpointUrl: string
   productId: string
   collectionDate: string
+  cdrVersions?: number[]
 }): Promise<{ rows: NormalizedRateRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${safeUrl(input.endpointUrl)}/${encodeURIComponent(input.productId)}`
-  const fetched = await fetchJson(detailUrl)
+  const versions = input.cdrVersions && input.cdrVersions.length > 0 ? input.cdrVersions : [6, 5, 4, 3]
+  const fetched = await fetchCdrJson(detailUrl, versions)
   const rawPayload = {
     sourceUrl: detailUrl,
     status: fetched.status,

@@ -4,12 +4,15 @@ import { getCachedEndpoint } from '../db/endpoint-cache'
 import { persistRawPayload } from '../db/raw-payloads'
 import { recordRunQueueOutcome } from '../db/run-reports'
 import {
-  backfillSeedProductRows,
   buildBackfillCursorKey,
   cdrCollectionNotes,
+  discoverProductsEndpoint,
   fetchProductDetailRows,
   fetchResidentialMortgageProductIds,
 } from '../ingest/cdr'
+import { extractLenderRatesFromHtml } from '../ingest/html-rate-parser'
+import { getLenderPlaybook } from '../ingest/lender-playbooks'
+import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
 import type { BackfillSnapshotJob, DailyLenderJob, EnvBindings, IngestMessage, ProductDetailJob } from '../types'
 import { nowIso, parseIntegerEnv } from '../utils/time'
 
@@ -62,18 +65,48 @@ function extractRunContext(body: unknown): { runId: string | null; lenderCode: s
   return { runId, lenderCode }
 }
 
+function splitValidatedRows(rows: NormalizedRateRow[]): {
+  accepted: NormalizedRateRow[]
+  dropped: Array<{ reason: string; productId: string }>
+} {
+  const accepted: NormalizedRateRow[] = []
+  const dropped: Array<{ reason: string; productId: string }> = []
+  for (const row of rows) {
+    const verdict = validateNormalizedRow(row)
+    if (verdict.ok) {
+      accepted.push(row)
+    } else {
+      dropped.push({
+        reason: verdict.reason,
+        productId: row.productId,
+      })
+    }
+  }
+  return { accepted, dropped }
+}
+
 async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!lender) {
     throw new Error(`unknown_lender_code:${job.lenderCode}`)
   }
 
+  const playbook = getLenderPlaybook(lender)
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
-  const sourceUrl = endpoint?.endpointUrl || ''
-  const collectedRows = []
+  let sourceUrl = ''
+  const endpointCandidates: string[] = []
+  if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
+  if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
+  const discovered = await discoverProductsEndpoint(lender)
+  if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
+  const uniqueCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
 
-  if (sourceUrl) {
-    const products = await fetchResidentialMortgageProductIds(sourceUrl)
+  const collectedRows: NormalizedRateRow[] = []
+  let inspectedHtml = 0
+  let droppedByParser = 0
+
+  for (const candidateEndpoint of uniqueCandidates) {
+    const products = await fetchResidentialMortgageProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions })
     for (const payload of products.rawPayloads) {
       await persistRawPayload(env, {
         sourceType: 'cdr_products',
@@ -88,9 +121,10 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
     for (const productId of productIds) {
       const details = await fetchProductDetailRows({
         lender,
-        endpointUrl: sourceUrl,
+        endpointUrl: candidateEndpoint,
         productId,
         collectionDate: job.collectionDate,
+        cdrVersions: playbook.cdrVersions,
       })
 
       await persistRawPayload(env, {
@@ -105,6 +139,10 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         collectedRows.push(row)
       }
     }
+    if (collectedRows.length > 0) {
+      sourceUrl = candidateEndpoint
+      break
+    }
   }
 
   if (collectedRows.length === 0) {
@@ -118,14 +156,44 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         httpStatus: response.status,
         notes: `fallback_scrape lender=${job.lenderCode}`,
       })
-      const rates = extractRatesFromHtml(seedUrl, html, lender, job.collectionDate, 'scraped_fallback')
-      for (const row of rates) {
+      const parsed = extractLenderRatesFromHtml({
+        lender,
+        html,
+        sourceUrl: seedUrl,
+        collectionDate: job.collectionDate,
+        mode: 'daily',
+        qualityFlag: 'scraped_fallback_strict',
+      })
+      inspectedHtml += parsed.inspected
+      droppedByParser += parsed.dropped
+      for (const row of parsed.rows) {
         collectedRows.push(row)
       }
     }
   }
 
-  await upsertHistoricalRateRows(env.DB, collectedRows)
+  const { accepted, dropped } = splitValidatedRows(collectedRows)
+  if (accepted.length === 0) {
+    await persistRawPayload(env, {
+      sourceType: 'cdr_products',
+      sourceUrl: sourceUrl || `fallback://${job.lenderCode}`,
+      payload: {
+        lenderCode: job.lenderCode,
+        runId: job.runId,
+        collectionDate: job.collectionDate,
+        fetchedAt: nowIso(),
+        acceptedRows: 0,
+        rejectedRows: dropped.length,
+        inspectedHtml,
+        droppedByParser,
+      },
+      httpStatus: 422,
+      notes: `daily_quality_rejected lender=${job.lenderCode}`,
+    })
+    throw new Error(`daily_ingest_no_valid_rows:${job.lenderCode}`)
+  }
+
+  await upsertHistoricalRateRows(env.DB, accepted)
 
   await persistRawPayload(env, {
     sourceType: 'cdr_products',
@@ -136,9 +204,13 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       collectionDate: job.collectionDate,
       fetchedAt: nowIso(),
       productsRows: collectedRows.length,
+      acceptedRows: accepted.length,
+      rejectedRows: dropped.length,
+      inspectedHtml,
+      droppedByParser,
     },
     httpStatus: 200,
-    notes: cdrCollectionNotes(collectedRows.length, collectedRows.length),
+    notes: cdrCollectionNotes(collectedRows.length, accepted.length),
   })
 }
 
@@ -154,6 +226,7 @@ async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): 
     endpointUrl: endpoint.endpointUrl,
     productId: job.productId,
     collectionDate: job.collectionDate,
+    cdrVersions: getLenderPlaybook(lender).cdrVersions,
   })
 
   await persistRawPayload(env, {
@@ -163,7 +236,10 @@ async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): 
     httpStatus: details.rawPayload.status,
     notes: `direct_product_detail lender=${job.lenderCode} product=${job.productId}`,
   })
-  await upsertHistoricalRateRows(env.DB, details.rows)
+  const { accepted } = splitValidatedRows(details.rows)
+  if (accepted.length > 0) {
+    await upsertHistoricalRateRows(env.DB, accepted)
+  }
 }
 
 async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshotJob): Promise<void> {
@@ -202,6 +278,8 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
   }
 
   let writtenRows = 0
+  let inspectedTotal = 0
+  let droppedTotal = 0
   for (const entry of rows.slice(0, 5)) {
     const timestamp = entry[0]
     const original = entry[1] || job.seedUrl
@@ -219,9 +297,38 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
     })
 
     const collectionDate = `${timestamp.slice(0, 4)}-${timestamp.slice(4, 6)}-${timestamp.slice(6, 8)}`
-    const rateRows = extractRatesFromHtml(snapshotUrl, html, lender, collectionDate, 'parsed_from_wayback')
-    writtenRows += await upsertHistoricalRateRows(env.DB, rateRows)
+    const parsed = extractLenderRatesFromHtml({
+      lender,
+      html,
+      sourceUrl: snapshotUrl,
+      collectionDate,
+      mode: 'historical',
+      qualityFlag: 'parsed_from_wayback_strict',
+    })
+    inspectedTotal += parsed.inspected
+    droppedTotal += parsed.dropped
+    const { accepted, dropped } = splitValidatedRows(parsed.rows)
+    droppedTotal += dropped.length
+    if (accepted.length > 0) {
+      writtenRows += await upsertHistoricalRateRows(env.DB, accepted)
+    }
   }
+
+  await persistRawPayload(env, {
+    sourceType: 'wayback_html',
+    sourceUrl: job.seedUrl,
+    payload: {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      monthCursor: job.monthCursor,
+      writtenRows,
+      inspectedTotal,
+      droppedTotal,
+      capturedAt: nowIso(),
+    },
+    httpStatus: 200,
+    notes: `wayback_backfill_summary lender=${job.lenderCode} month=${job.monthCursor}`,
+  })
 
   const cursorKey = buildBackfillCursorKey(job.lenderCode, job.monthCursor, job.seedUrl)
   await env.DB.prepare(
@@ -252,7 +359,7 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
       job.monthCursor,
       nowIso(),
       nowIso(),
-      writtenRows > 0 ? 'completed' : 'empty',
+      writtenRows > 0 ? 'completed' : inspectedTotal > 0 ? 'quality_rejected' : 'empty',
     )
     .run()
 }
@@ -317,43 +424,4 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       })
     }
   }
-}
-
-function extractRatesFromHtml(
-  sourceUrl: string,
-  html: string,
-  lender: (typeof TARGET_LENDERS)[number],
-  collectionDate: string,
-  qualityFlag: string,
-) {
-  const cleaned = html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-
-  const regex = /([A-Za-z0-9&()\-\/ ,]{4,120})\s+([0-9]{1,2}(?:\.[0-9]{1,3})?)\s*%/g
-  const rows: Array<ReturnType<typeof backfillSeedProductRows>> = []
-  const seen = new Set<string>()
-  let match: RegExpExecArray | null
-
-  while ((match = regex.exec(cleaned)) !== null && rows.length < 30) {
-    const name = String(match[1] || '').trim().slice(-80)
-    const rate = Number(match[2])
-    if (!name || !Number.isFinite(rate)) continue
-    const key = `${name}|${rate}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const row = backfillSeedProductRows({
-      lender,
-      collectionDate,
-      sourceUrl,
-      productName: name,
-      rate,
-    })
-    row.dataQualityFlag = qualityFlag
-    rows.push(row)
-  }
-
-  return rows
 }

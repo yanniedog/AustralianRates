@@ -7,6 +7,7 @@
       "name": "CBA",
       "canonical_bank_name": "Commonwealth Bank of Australia",
       "register_brand_name": "Commonwealth Bank of Australia",
+      "products_endpoint": "https://api.commbank.com.au/public/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.commbank.com.au/home-loans/rates-and-fees.html"
       ]
@@ -16,6 +17,7 @@
       "name": "Westpac",
       "canonical_bank_name": "Westpac Banking Corporation",
       "register_brand_name": "Westpac",
+      "products_endpoint": "https://digital-api.westpac.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.westpac.com.au/personal-banking/home-loans/interest-rates/"
       ]
@@ -25,6 +27,7 @@
       "name": "NAB",
       "canonical_bank_name": "National Australia Bank",
       "register_brand_name": "NAB",
+      "products_endpoint": "https://openbank.api.nab.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.nab.com.au/personal/home-loans/interest-rates"
       ]
@@ -34,6 +37,7 @@
       "name": "ANZ",
       "canonical_bank_name": "ANZ",
       "register_brand_name": "ANZ",
+      "products_endpoint": "https://api.anz/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.anz.com.au/personal/home-loans/interest-rates/"
       ]
@@ -43,6 +47,7 @@
       "name": "Macquarie",
       "canonical_bank_name": "Macquarie Bank",
       "register_brand_name": "Macquarie Bank",
+      "products_endpoint": "https://api.macquariebank.io/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.macquarie.com.au/home-loans/interest-rates.html"
       ]
@@ -52,6 +57,7 @@
       "name": "Bendigo & Adelaide",
       "canonical_bank_name": "Bendigo and Adelaide Bank",
       "register_brand_name": "Bendigo and Adelaide Bank",
+      "products_endpoint": "https://api.cdr.bendigobank.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.bendigobank.com.au/personal/home-loans/interest-rates/"
       ]
@@ -61,6 +67,7 @@
       "name": "Suncorp",
       "canonical_bank_name": "Suncorp Bank",
       "register_brand_name": "Suncorp Bank",
+      "products_endpoint": "https://id-ob.suncorpbank.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.suncorpbank.com.au/home-loans/rates"
       ]
@@ -70,6 +77,7 @@
       "name": "Bankwest",
       "canonical_bank_name": "Bankwest",
       "register_brand_name": "Bankwest",
+      "products_endpoint": "https://open-api.bankwest.com.au/bwpublic/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.bankwest.com.au/personal/home-buying/home-loan-rates"
       ]
@@ -79,6 +87,7 @@
       "name": "ING",
       "canonical_bank_name": "ING",
       "register_brand_name": "ING",
+      "products_endpoint": "https://id.ob.ing.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.ing.com.au/home-loans/rates-and-fees.html"
       ]
@@ -88,6 +97,7 @@
       "name": "AMP",
       "canonical_bank_name": "AMP Bank",
       "register_brand_name": "AMP Bank",
+      "products_endpoint": "https://pub.cdr-sme.amp.com.au/api/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.amp.com.au/home-loans/rates-and-fees"
       ]

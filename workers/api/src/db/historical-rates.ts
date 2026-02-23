@@ -1,6 +1,11 @@
-import type { NormalizedRateRow } from '../ingest/normalize'
+import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
 
 export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRateRow): Promise<void> {
+  const verdict = validateNormalizedRow(row)
+  if (!verdict.ok) {
+    throw new Error(`invalid_normalized_rate_row:${verdict.reason}`)
+  }
+
   await db
     .prepare(
       `INSERT INTO historical_loan_rates (
@@ -57,8 +62,12 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
 export async function upsertHistoricalRateRows(db: D1Database, rows: NormalizedRateRow[]): Promise<number> {
   let written = 0
   for (const row of rows) {
-    await upsertHistoricalRateRow(db, row)
-    written += 1
+    try {
+      await upsertHistoricalRateRow(db, row)
+      written += 1
+    } catch {
+      // strict-drop: invalid rows are discarded by design
+    }
   }
   return written
 }

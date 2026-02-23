@@ -18,6 +18,12 @@ export type NormalizedRateRow = {
   confidenceScore: number
 }
 
+export const MIN_RATE_PERCENT = 0.5
+export const MAX_RATE_PERCENT = 25
+export const MIN_COMPARISON_RATE_PERCENT = 0.5
+export const MAX_COMPARISON_RATE_PERCENT = 30
+export const MAX_ANNUAL_FEE = 10000
+
 function asText(value: unknown): string {
   if (value == null) {
     return ''
@@ -29,16 +35,35 @@ function lower(value: unknown): string {
   return asText(value).toLowerCase()
 }
 
-function parseNumber(value: unknown): number | null {
+function parseSingleNumberToken(value: unknown): number | null {
   if (value == null || value === '') {
     return null
   }
-  const raw = String(value).replace(/[^0-9.\-]/g, '')
-  if (!raw) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  const text = String(value)
+  const matches = text.match(/-?\d+(?:\.\d+)?/g) ?? []
+  if (matches.length !== 1) {
     return null
   }
-  const n = Number(raw)
+  const n = Number(matches[0])
   return Number.isFinite(n) ? n : null
+}
+
+function normalizePercentValue(value: unknown): number | null {
+  const n = parseSingleNumberToken(value)
+  if (n == null) return null
+
+  const text = String(value ?? '')
+  const hasPercent = text.includes('%')
+
+  // CDR commonly uses decimal fractions such as 0.0594 for 5.94%.
+  if (!hasPercent && n > 0 && n < 1) {
+    return Number((n * 100).toFixed(4))
+  }
+
+  return n
 }
 
 function parseYears(text: string): number | null {
@@ -53,6 +78,10 @@ function parseYears(text: string): number | null {
 export function normalizeBankName(input: string, fallback: string): string {
   const v = asText(input)
   return v || fallback
+}
+
+export function normalizeProductName(input: string): string {
+  return asText(input).replace(/\s+/g, ' ').trim()
 }
 
 export function normalizeSecurityPurpose(text: string): SecurityPurpose {
@@ -146,13 +175,98 @@ export function normalizeFeatureSet(text: string, annualFee: number | null): Fea
 }
 
 export function parseInterestRate(value: unknown): number | null {
-  return parseNumber(value)
+  const text = lower(value)
+  if (text.includes('lvr') || text.includes('loan to value') || text.includes('ltv')) {
+    return null
+  }
+  const rate = normalizePercentValue(value)
+  if (rate == null) return null
+  if (rate < MIN_RATE_PERCENT || rate > MAX_RATE_PERCENT) return null
+  return rate
 }
 
 export function parseComparisonRate(value: unknown): number | null {
-  return parseNumber(value)
+  const text = lower(value)
+  if (text.includes('lvr') || text.includes('loan to value') || text.includes('ltv')) {
+    return null
+  }
+  const rate = normalizePercentValue(value)
+  if (rate == null) return null
+  if (rate < MIN_COMPARISON_RATE_PERCENT || rate > MAX_COMPARISON_RATE_PERCENT) return null
+  return rate
 }
 
 export function parseAnnualFee(value: unknown): number | null {
-  return parseNumber(value)
+  const n = parseSingleNumberToken(value)
+  if (n == null) return null
+  if (n < 0 || n > MAX_ANNUAL_FEE) return null
+  return n
+}
+
+export function minConfidenceForFlag(flag: string): number {
+  const f = lower(flag)
+  if (f.startsWith('cdr_')) return 0.9
+  if (f.startsWith('parsed_from_wayback')) return 0.82
+  if (f.startsWith('scraped_fallback')) return 0.95
+  return 0.85
+}
+
+export function isProductNameLikelyRateProduct(name: string): boolean {
+  const normalized = lower(name)
+  if (normalized.length < 6) return false
+  const blocked = [
+    'disclaimer',
+    'warning',
+    'example',
+    'cashback',
+    'copyright',
+    'privacy',
+    'terms and conditions',
+    'loan to value ratio',
+    'lvr ',
+    'tooltip',
+  ]
+  if (blocked.some((x) => normalized.includes(x))) return false
+
+  const helpfulTokens = ['home', 'loan', 'variable', 'fixed', 'owner', 'invest', 'rate', 'offset', 'package']
+  return helpfulTokens.some((x) => normalized.includes(x))
+}
+
+export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { ok: false; reason: string } {
+  const productName = normalizeProductName(row.productName)
+  if (!productName) {
+    return { ok: false, reason: 'missing_product_name' }
+  }
+  if (!isProductNameLikelyRateProduct(productName)) {
+    return { ok: false, reason: 'product_name_not_rate_like' }
+  }
+  if (!row.productId || !row.productId.trim()) {
+    return { ok: false, reason: 'missing_product_id' }
+  }
+  if (!row.sourceUrl || !row.sourceUrl.trim()) {
+    return { ok: false, reason: 'missing_source_url' }
+  }
+  if (!Number.isFinite(row.interestRate) || row.interestRate < MIN_RATE_PERCENT || row.interestRate > MAX_RATE_PERCENT) {
+    return { ok: false, reason: 'interest_rate_out_of_bounds' }
+  }
+  if (
+    row.comparisonRate != null &&
+    (!Number.isFinite(row.comparisonRate) ||
+      row.comparisonRate < MIN_COMPARISON_RATE_PERCENT ||
+      row.comparisonRate > MAX_COMPARISON_RATE_PERCENT)
+  ) {
+    return { ok: false, reason: 'comparison_rate_out_of_bounds' }
+  }
+  if (row.comparisonRate != null && row.comparisonRate + 0.01 < row.interestRate) {
+    return { ok: false, reason: 'comparison_rate_below_interest_rate' }
+  }
+  if (row.annualFee != null && (!Number.isFinite(row.annualFee) || row.annualFee < 0 || row.annualFee > MAX_ANNUAL_FEE)) {
+    return { ok: false, reason: 'annual_fee_out_of_bounds' }
+  }
+  const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
+  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < minConfidence || row.confidenceScore > 1) {
+    return { ok: false, reason: 'confidence_out_of_bounds' }
+  }
+
+  return { ok: true }
 }

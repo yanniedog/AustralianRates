@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
-import { getFilters, queryLatestRates, queryTimeseries } from '../db/queries'
+import { getFilters, getQualityDiagnostics, queryLatestRates, queryTimeseries } from '../db/queries'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -44,6 +44,14 @@ publicRoutes.get('/filters', async (c) => {
   return c.json({
     ok: true,
     filters,
+  })
+})
+
+publicRoutes.get('/quality/diagnostics', async (c) => {
+  const diagnostics = await getQualityDiagnostics(c.env.DB)
+  return c.json({
+    ok: true,
+    diagnostics,
   })
 })
 
