@@ -145,19 +145,14 @@
     }
 
     function reloadExplorer() {
-        // #region agent log
-        console.log('[AR-DEBUG-eb90c6] reloadExplorer called, rateTable exists:', !!rateTable, ', rateTable type:', typeof rateTable);
-        // #endregion
-        if (rateTable) {
-            // #region agent log
-            console.log('[AR-DEBUG-eb90c6] Calling rateTable.setData() now');
-            // #endregion
-            rateTable.setData();
-        } else {
-            // #region agent log
-            console.log('[AR-DEBUG-eb90c6] rateTable is null/falsy, skipping setData');
-            // #endregion
-        }
+        if (!rateTable) return;
+        var params = buildFilterParams();
+        params.page = '1';
+        params.size = '50';
+        params.sort = 'collection_date';
+        params.dir = 'desc';
+        var url = apiBase + '/rates?' + Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+        rateTable.setData(url);
     }
 
     window.AR.explorer = {
