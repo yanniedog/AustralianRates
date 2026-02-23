@@ -2,11 +2,8 @@
 -- The old constraint allowed silent overwrites when the same product had
 -- different rate variants (e.g. owner-occupied P&I vs investment IO).
 
--- Step 1: Drop the old narrow unique index
-DROP INDEX IF EXISTS sqlite_autoindex_historical_loan_rates_1;
-
 -- SQLite cannot ALTER a constraint, so we recreate the table.
--- Preserve all data via a temp copy.
+-- The old autoindex is dropped implicitly when the old table is dropped.
 
 CREATE TABLE historical_loan_rates_new (
   bank_name TEXT NOT NULL,
