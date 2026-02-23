@@ -84,6 +84,18 @@ Update IDs/names in:
   - `wrangler d1 migrations apply australianrates-archive-dev --env dev --remote`
   - `wrangler d1 migrations apply australianrates-archive-prod --env prod --remote`
 
+## Test protocol
+
+Comprehensive tests for the site and API:
+
+- **Homepage (Playwright):** `npm run test:homepage` — page load, hero, tabs, filters, table, download (`#download-format`), Apply Filters, Pivot load, Chart draw, Check Rates Now, URL state, viewports, accessibility (skip link, tab roles). Screenshots in `test-screenshots/`.
+- **API diagnostics:** `npm run diagnose:api` — health, filters, rates, latest, timeseries, export.csv, homepage.
+- **Full site:** `npm run test:site` — runs test:homepage then diagnose:api; exits with failure if either fails.
+
+**Configuration:** `TEST_URL` (e.g. `TEST_URL=http://localhost:8788/`) for frontend and API base; `API_BASE` to override API only; `HEADLESS=0` to show browser.
+
+See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (rendering, interaction, content, a11y, API) and manual checklist.
+
 ## Deploy
 
 - API worker:

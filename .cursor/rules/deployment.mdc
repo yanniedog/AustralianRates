@@ -1,0 +1,67 @@
+---
+description: "Deployment configuration and verification standards for Australian Rates"
+alwaysApply: true
+---
+
+# Australian Rates Project Configuration
+
+Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two Workers (API, archive).
+
+## Production and Hosting
+
+- **Production URL**: https://www.australianrates.com
+- **Hosting model**: Cloudflare Pages (frontend at root/site), Cloudflare Workers for API and archive.
+- **Workers**: `workers/api` (australianrates-api: Hono, D1, R2, Queue, Durable Object), `workers/archive` (australianrates-archive-dev / australianrates-archive-prod).
+
+## Repo-Level Commands
+
+| Purpose | Command | Notes |
+|--------|---------|------|
+| Test homepage (production URL) | `npm run test:homepage` | From repo root. Uses Playwright. |
+| Test API worker | `npm run test:api` | From repo root (vitest in workers/api). |
+| Test archive worker | `npm run test:archive` | From repo root (vitest in workers/archive). |
+| Typecheck API | `npm run typecheck:api` | From repo root. |
+| Diagnose API (production) | `node diagnose-api.js` | From repo root. Optional base URL. |
+| Deploy API | `npm run deploy:api` | Wrangler deploy for workers/api. |
+| Deploy archive | `npm run deploy:archive` | Wrangler deploy for workers/archive. |
+
+## Subproject: workers/api
+
+- **Typecheck**: `npm run typecheck` (from workers/api) or `npm run typecheck:api` from root.
+- **Test**: `npm run test:api` from root (vitest run).
+- **Deploy**: `npm run deploy:api` from root (wrangler deploy). Requires D1, R2, Queues, Durable Object configured; migrations applied; secrets set.
+
+## Subproject: workers/archive
+
+- **Test**: `npm run test:archive` from root.
+- **Deploy**: `npm run deploy:archive` from root (wrangler deploy). Dev and prod workers; ensure correct wrangler project for target.
+
+## Deployment Verification Checklist
+
+- All relevant tests pass before deploy:
+  - `npm run test:api` and `npm run test:archive` pass.
+  - `npm run test:homepage` passes (production URL).
+- No console errors on production (www.australianrates.com).
+- Critical flows: homepage loads, API health/endpoints respond, archive workers (if used) respond.
+- D1 migrations applied when changing API or archive schema.
+
+## Fix-Redeploy-Retry
+
+- If any check fails, fix the cause, redeploy the affected part, then re-run the relevant test(s).
+- **Pages (frontend)**: Deploy via Cloudflare Pages (e.g. git push or direct upload). No script in repo.
+- **API**: `npm run deploy:api` from root.
+- **Archive**: `npm run deploy:archive` from root (select dev vs prod per wrangler config).
+
+## Code Quality Standards
+
+- **Max file size**: 300 lines (flag for review), 500+ lines (trigger refactor).
+- **Max function size**: 50 lines.
+- **DRY**: No duplicate code across 3+ locations.
+- **Modularity**: Single responsibility per file/function.
+
+## Files and Directories That Should NOT Be Refactored
+
+- Build/config: `vite.config.*`, `tsconfig.json`, `wrangler.toml`, `vitest.config.*`.
+- Generated: Database migrations, `node_modules`, build output.
+- Config: `.env`, `.env.local`, `package.json`.
+- Single-purpose entry points: `main.ts`, `index.ts` when they only bootstrap or re-export.
