@@ -281,7 +281,7 @@ export async function getLastManualRunStartedAt(db: D1Database): Promise<string 
   const row = await db
     .prepare(
       `SELECT started_at FROM run_reports
-       WHERE run_source = 'manual'
+       WHERE run_source = 'manual' AND run_type = 'daily'
        ORDER BY started_at DESC
        LIMIT 1`,
     )
