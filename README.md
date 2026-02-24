@@ -8,6 +8,7 @@ Standalone Australian home loan rates project hosted on Cloudflare.
 
 - Site: `https://www.australianrates.com` and `https://australianrates.com`
 - API base: `https://www.australianrates.com/api/home-loan-rates` and `https://australianrates.com/api/home-loan-rates`
+- Admin portal: `https://www.australianrates.com/admin/` (login with your admin API token; see [Admin portal](#admin-portal) below).
 
 ## Verified Production Status (2026-02-23)
 
@@ -40,6 +41,17 @@ Standalone Australian home loan rates project hosted on Cloudflare.
   - `GET /api/home-loan-rates/latest`
   - `GET /api/home-loan-rates/timeseries`
   - `GET /api/home-loan-rates/export.csv`
+
+## Admin portal
+
+The admin portal is a separate UI for managing database, configuration, and ingest runs.
+
+- **URL (production):** [https://www.australianrates.com/admin/](https://www.australianrates.com/admin/)
+- **Login:** There is no username/password. You log in with the **admin API token** (the same value as the API worker secret `ADMIN_API_TOKEN`).
+  1. Open the admin URL above (or use the "Admin" link in the site header).
+  2. On the login page, paste your admin API token into the "API token" field and submit.
+  3. The token is validated against the API; if it matches, you are redirected to the dashboard (Database, Configuration, Runs).
+- **Getting the token:** For production it is the secret you set with `wrangler secret put ADMIN_API_TOKEN` when deploying the API worker. For local dev it is the value in `workers/api/.dev.vars` (see `workers/api/.dev.vars.example`). Only people with access to that secret (or `.dev.vars`) can log in.
 
 ## Local Setup
 

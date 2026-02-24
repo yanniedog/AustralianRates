@@ -33,6 +33,20 @@
     text-decoration: none;
 }
 
+.site-header-inner .admin-link {
+    margin-left: auto;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+.site-header-inner .admin-link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
 .site-nav {
     display: flex;
     align-items: center;
