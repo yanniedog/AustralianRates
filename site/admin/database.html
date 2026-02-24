@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Admin Database | AustralianRates</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css">
+    <style>
+        .admin-db { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .admin-db h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
+        .admin-db .back { margin-bottom: 1rem; }
+        .admin-db .back a { color: var(--brand); text-decoration: none; }
+        .admin-db .toolbar { margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+        .admin-db .toolbar select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 200px; }
+        .admin-db .toolbar button { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-weight: 500; }
+        .admin-db .toolbar button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+        .admin-db .toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .admin-db .pagination { margin: 0.75rem 0; font-size: 0.9rem; color: var(--muted); }
+        .admin-db .pagination button { margin: 0 4px; padding: 4px 10px; cursor: pointer; border-radius: 4px; border: 1px solid var(--line); background: #fff; }
+        .admin-db #db-grid { min-height: 300px; }
+        .admin-db .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+        .admin-db .modal.visible { display: flex; }
+        .admin-db .modal-inner { background: var(--card, #fff); border-radius: 12px; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; padding: 1.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        .admin-db .modal-inner h3 { margin: 0 0 1rem; }
+        .admin-db .modal-inner label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--muted); }
+        .admin-db .modal-inner input, .admin-db .modal-inner textarea { width: 100%; padding: 8px 10px; margin-bottom: 0.75rem; border: 1px solid var(--line); border-radius: 6px; box-sizing: border-box; }
+        .admin-db .modal-inner input[readonly] { background: #f1f5f9; color: var(--muted); }
+        .admin-db .modal-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
+        .admin-db .modal-actions button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; }
+        .admin-db .modal-actions .save { background: var(--brand); color: #fff; }
+        .admin-db .modal-actions .cancel { background: #e2e8f0; color: var(--text); }
+        .admin-db .message { padding: 10px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; display: none; }
+        .admin-db .message.visible { display: block; }
+        .admin-db .message.error { background: #fef2f2; color: #b91c1c; }
+        .admin-db .message.success { background: #f0fdf4; color: #166534; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-db" id="main-content">
+        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
+        <h1>Database</h1>
+        <div class="message" id="msg"></div>
+        <div class="toolbar">
+            <select id="table-select">
+                <option value="">Select table</option>
+            </select>
+            <button type="button" class="primary" id="add-btn" disabled>Add row</button>
+            <button type="button" id="edit-btn" disabled>Edit selected</button>
+            <button type="button" id="delete-btn" disabled>Delete selected</button>
+            <button type="button" id="refresh-btn" disabled>Refresh</button>
+        </div>
+        <div class="pagination" id="pagination" style="display:none;"></div>
+        <div id="db-grid"></div>
+        <div class="modal" id="row-modal">
+            <div class="modal-inner">
+                <h3 id="modal-title">Row</h3>
+                <div id="modal-fields"></div>
+                <div class="modal-actions">
+                    <button type="button" class="save" id="modal-save">Save</button>
+                    <button type="button" class="cancel" id="modal-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <script src="admin-portal.js"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var tableSelect = document.getElementById('table-select');
+            var addBtn = document.getElementById('add-btn');
+            var editBtn = document.getElementById('edit-btn');
+            var deleteBtn = document.getElementById('delete-btn');
+            var refreshBtn = document.getElementById('refresh-btn');
+            var paginationEl = document.getElementById('pagination');
+            var msgEl = document.getElementById('msg');
+            var modal = document.getElementById('row-modal');
+            var modalTitle = document.getElementById('modal-title');
+            var modalFields = document.getElementById('modal-fields');
+            var modalSave = document.getElementById('modal-save');
+            var modalCancel = document.getElementById('modal-cancel');
+
+            var currentTable = '';
+            var schema = null;
+            var keyColumns = [];
+            var totalRows = 0;
+            var limit = 50;
+            var offset = 0;
+            var tabulator = null;
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
+            }
+
+            function escapeHtml(s) {
+                if (s == null) return '';
+                var div = document.createElement('div');
+                div.textContent = s;
+                return div.innerHTML;
+            }
+
+            function loadTables() {
+                portal.fetchAdmin('/db/tables?counts=true').then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok || !d.tables) return;
+                    tableSelect.innerHTML = '<option value="">Select table</option>';
+                    d.tables.forEach(function (t) {
+                        var opt = document.createElement('option');
+                        opt.value = t.name;
+                        opt.textContent = t.name + (t.count !== undefined ? ' (' + t.count + ')' : '');
+                        tableSelect.appendChild(opt);
+                    });
+                }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load tables', true); });
+            }
+
+            function loadSchema(tableName) {
+                return portal.fetchAdmin('/db/tables/' + encodeURIComponent(tableName) + '/schema').then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Schema failed');
+                    schema = d;
+                    keyColumns = d.key_columns || [];
+                    return d;
+                });
+            }
+
+            function loadRows(tableName, off, lim) {
+                var url = '/db/tables/' + encodeURIComponent(tableName) + '/rows?limit=' + lim + '&offset=' + off;
+                return portal.fetchAdmin(url).then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Rows failed');
+                    totalRows = d.total || 0;
+                    return d.rows || [];
+                });
+            }
+
+            function buildColumns() {
+                if (!schema || !schema.columns) return [];
+                return schema.columns.map(function (col) {
+                    return { title: col.name, field: col.name, headerSort: true, minWidth: 90 };
+                });
+            }
+
+            function renderPagination() {
+                var pages = Math.ceil(totalRows / limit) || 1;
+                var page = Math.floor(offset / limit) + 1;
+                var html = 'Total: ' + totalRows + ' rows. ';
+                if (pages > 1) {
+                    html += '<button type="button" data-offset="0"' + (offset === 0 ? ' disabled' : '') + '>First</button>';
+                    html += '<button type="button" data-offset="' + Math.max(0, offset - limit) + '"' + (offset === 0 ? ' disabled' : '') + '>Prev</button>';
+                    html += ' Page ' + page + ' of ' + pages + ' ';
+                    html += '<button type="button" data-offset="' + (offset + limit) + '"' + (offset + limit >= totalRows ? ' disabled' : '') + '>Next</button>';
+                    html += '<button type="button" data-offset="' + (Math.max(0, totalRows - limit)) + '"' + (offset + limit >= totalRows ? ' disabled' : '') + '>Last</button>';
+                }
+                paginationEl.innerHTML = html;
+                paginationEl.style.display = 'block';
+                paginationEl.querySelectorAll('button').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        offset = parseInt(btn.getAttribute('data-offset'), 10);
+                        selectTable(currentTable);
+                    });
+                });
+            }
+
+            function selectTable(tableName) {
+                currentTable = tableName;
+                if (!tableName) {
+                    addBtn.disabled = editBtn.disabled = deleteBtn.disabled = refreshBtn.disabled = true;
+                    if (tabulator) { tabulator.destroy(); tabulator = null; }
+                    paginationEl.style.display = 'none';
+                    return;
+                }
+                offset = 0;
+                loadSchema(tableName).then(function () {
+                    return loadRows(tableName, 0, limit);
+                }).then(function (rows) {
+                    addBtn.disabled = false;
+                    refreshBtn.disabled = false;
+                    editBtn.disabled = true;
+                    deleteBtn.disabled = true;
+                    if (tabulator) tabulator.destroy();
+                    tabulator = new Tabulator('#db-grid', {
+                        data: rows,
+                        columns: buildColumns(),
+                        layout: 'fitColumns',
+                        selectable: 1,
+                        rowSelected: function () { editBtn.disabled = false; deleteBtn.disabled = false; },
+                        rowDeselected: function () {
+                            if (!tabulator.getSelectedRows().length) { editBtn.disabled = true; deleteBtn.disabled = true; }
+                        },
+                    });
+                    renderPagination();
+                }).catch(function (e) { showMsg(e && e.message ? e.message : 'Load failed', true); });
+            }
+
+            function openModal(mode, row) {
+                modalTitle.textContent = mode === 'add' ? 'Add row' : 'Edit row';
+                modalFields.innerHTML = '';
+                var cols = schema && schema.columns ? schema.columns : [];
+                var keySet = {};
+                keyColumns.forEach(function (k) { keySet[k] = true; });
+                cols.forEach(function (col) {
+                    var label = document.createElement('label');
+                    label.textContent = col.name + (col.notnull ? ' *' : '');
+                    var input = document.createElement('input');
+                    input.name = col.name;
+                    input.placeholder = col.type || 'text';
+                    if (row && row[col.name] !== undefined && row[col.name] !== null) {
+                        input.value = String(row[col.name]);
+                    }
+                    if (mode === 'edit' && keySet[col.name]) {
+                        input.readOnly = true;
+                        input.title = 'Key column (read-only)';
+                    }
+                    modalFields.appendChild(label);
+                    modalFields.appendChild(input);
+                });
+                modal.classList.add('visible');
+                modal.dataset.mode = mode;
+            }
+
+            function closeModal() {
+                modal.classList.remove('visible');
+            }
+
+            function getFormData() {
+                var obj = {};
+                modalFields.querySelectorAll('input').forEach(function (input) {
+                    var v = input.value;
+                    if (input.placeholder && input.placeholder.toLowerCase().indexOf('int') !== -1) {
+                        var n = parseInt(v, 10);
+                        if (!isNaN(n)) v = n;
+                    }
+                    obj[input.name] = v;
+                });
+                return obj;
+            }
+
+            tableSelect.addEventListener('change', function () {
+                selectTable((tableSelect.value || '').trim() || '');
+            });
+
+            addBtn.addEventListener('click', function () {
+                openModal('add', null);
+            });
+
+            editBtn.addEventListener('click', function () {
+                var rows = tabulator ? tabulator.getSelectedRows() : [];
+                if (rows.length === 0) return;
+                openModal('edit', rows[0].getData());
+            });
+
+            deleteBtn.addEventListener('click', function () {
+                var rows = tabulator ? tabulator.getSelectedRows() : [];
+                if (rows.length === 0) return;
+                var row = rows[0].getData();
+                var keyBody = {};
+                keyColumns.forEach(function (k) { keyBody[k] = row[k]; });
+                if (!confirm('Delete this row?')) return;
+                portal.fetchAdmin('/db/tables/' + encodeURIComponent(currentTable) + '/rows', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(keyBody),
+                }).then(function (r) { return r.json(); }).then(function (d) {
+                    if (d.ok) { showMsg('Deleted.'); selectTable(currentTable); } else { showMsg(d.error && d.error.message ? d.error.message : 'Delete failed', true); }
+                }).catch(function (e) { showMsg(e && e.message ? e.message : 'Delete failed', true); });
+            });
+
+            refreshBtn.addEventListener('click', function () { selectTable(currentTable); });
+
+            modalSave.addEventListener('click', function () {
+                var mode = modal.dataset.mode;
+                var body = getFormData();
+                var url = '/db/tables/' + encodeURIComponent(currentTable) + '/rows';
+                var method = mode === 'add' ? 'POST' : 'PUT';
+                portal.fetchAdmin(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.ok) { closeModal(); showMsg('Saved.'); selectTable(currentTable); } else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); }
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            });
+
+            modalCancel.addEventListener('click', closeModal);
+            modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+
+            loadTables();
+        })();
+    </script>
+</body>
+</html>

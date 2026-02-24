@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Admin Runs | AustralianRates</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+    <style>
+        .admin-runs { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        .admin-runs h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
+        .admin-runs .back { margin-bottom: 1rem; }
+        .admin-runs .back a { color: var(--brand); text-decoration: none; }
+        .admin-runs .actions { margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+        .admin-runs .actions button { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
+        .admin-runs .actions button.primary { background: var(--brand); color: #fff; }
+        .admin-runs .actions button.secondary { background: #e2e8f0; color: var(--text); }
+        .admin-runs .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .admin-runs .status { margin-left: 0.5rem; font-size: 0.9rem; color: var(--muted); }
+        .admin-runs pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow: auto; max-height: 400px; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-runs" id="main-content">
+        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
+        <h1>Runs</h1>
+        <div class="actions">
+            <button type="button" class="primary" id="trigger-daily">Trigger daily run</button>
+            <button type="button" class="secondary" id="trigger-backfill">Trigger backfill</button>
+            <span class="status" id="run-status"></span>
+        </div>
+        <p style="color: var(--muted); margin-bottom: 1rem;">Recent runs (from API):</p>
+        <pre id="runs-output">Loading…</pre>
+    </main>
+    <script src="admin-portal.js"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var runsOutput = document.getElementById('runs-output');
+            var runStatus = document.getElementById('run-status');
+            var dailyBtn = document.getElementById('trigger-daily');
+            var backfillBtn = document.getElementById('trigger-backfill');
+
+            function loadRuns() {
+                portal.fetchAdmin('/runs?limit=15').then(function (r) { return r.json(); }).then(function (d) {
+                    runsOutput.textContent = JSON.stringify(d, null, 2);
+                }).catch(function (e) {
+                    runsOutput.textContent = (e && e.message ? e.message : 'Failed to load runs');
+                });
+            }
+
+            dailyBtn.addEventListener('click', function () {
+                dailyBtn.disabled = true;
+                runStatus.textContent = 'Starting daily run…';
+                portal.fetchAdmin('/runs/daily', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        runStatus.textContent = d.ok ? 'Daily run started.' : (d.error && d.error.message ? d.error.message : 'Failed');
+                        loadRuns();
+                    })
+                    .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
+                    .finally(function () { dailyBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
+            });
+
+            backfillBtn.addEventListener('click', function () {
+                backfillBtn.disabled = true;
+                runStatus.textContent = 'Starting backfill…';
+                portal.fetchAdmin('/runs/backfill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        runStatus.textContent = d.ok ? 'Backfill started.' : (d.error && d.error.message ? d.error.message : 'Failed');
+                        loadRuns();
+                    })
+                    .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
+                    .finally(function () { backfillBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
+            });
+
+            loadRuns();
+        })();
+    </script>
+</body>
+</html>

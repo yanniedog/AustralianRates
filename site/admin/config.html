@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Admin Config | AustralianRates</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+    <style>
+        .admin-config { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        .admin-config h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
+        .admin-config .back { margin-bottom: 1rem; }
+        .admin-config .back a { color: var(--brand); text-decoration: none; }
+        .admin-config section { margin-bottom: 2rem; }
+        .admin-config h2 { font-size: 1.1rem; margin: 0 0 0.75rem; color: var(--muted); }
+        .admin-config table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .admin-config th, .admin-config td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+        .admin-config th { background: rgba(0,0,0,0.04); font-weight: 600; }
+        .admin-config .actions { white-space: nowrap; }
+        .admin-config .actions button { margin-right: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 0.85rem; }
+        .admin-config .actions button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+        .admin-config .add-row { margin-top: 1rem; }
+        .admin-config .add-row input { padding: 8px 12px; margin-right: 8px; border: 1px solid var(--line); border-radius: 6px; width: 180px; }
+        .admin-config .add-row button { padding: 8px 16px; background: var(--brand); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+        .admin-config .env-table .value { font-family: monospace; font-size: 0.9rem; }
+        .admin-config .message { padding: 10px; border-radius: 8px; margin-bottom: 1rem; display: none; }
+        .admin-config .message.visible { display: block; }
+        .admin-config .message.error { background: #fef2f2; color: #b91c1c; }
+        .admin-config .message.success { background: #f0fdf4; color: #166534; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-config" id="main-content">
+        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
+        <h1>Configuration</h1>
+        <div class="message" id="msg"></div>
+        <section>
+            <h2>App config (key-value overrides)</h2>
+            <table id="config-table">
+                <thead><tr><th>Key</th><th>Value</th><th class="actions">Actions</th></tr></thead>
+                <tbody id="config-tbody"></tbody>
+            </table>
+            <div class="add-row">
+                <input type="text" id="new-key" placeholder="Key">
+                <input type="text" id="new-value" placeholder="Value">
+                <button type="button" id="add-config-btn">Add</button>
+            </div>
+        </section>
+        <section>
+            <h2>Worker env (read-only)</h2>
+            <table class="env-table" id="env-table">
+                <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                <tbody id="env-tbody"></tbody>
+            </table>
+        </section>
+    </main>
+    <script src="admin-portal.js"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var msgEl = document.getElementById('msg');
+            var configTbody = document.getElementById('config-tbody');
+            var envTbody = document.getElementById('env-tbody');
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
+            }
+
+            function loadConfig() {
+                portal.fetchAdmin('/config').then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok || !Array.isArray(d.config)) return;
+                    configTbody.innerHTML = '';
+                    d.config.forEach(function (row) {
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = '<td>' + escapeHtml(row.key) + '</td><td><input type="text" data-key="' + escapeHtml(row.key) + '" value="' + escapeHtml(row.value || '') + '" style="width:100%;padding:6px;border:1px solid var(--line);border-radius:4px;"></td><td class="actions"><button class="primary save-btn">Save</button><button class="del-btn">Delete</button></td>';
+                        configTbody.appendChild(tr);
+                        tr.querySelector('.save-btn').addEventListener('click', function () { saveConfig(row.key, tr.querySelector('input').value); });
+                        tr.querySelector('.del-btn').addEventListener('click', function () { deleteConfig(row.key); });
+                    });
+                }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load config', true); });
+            }
+
+            function saveConfig(key, value) {
+                portal.fetchAdmin('/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key, value: value }) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) { if (d.ok) { showMsg('Saved.'); loadConfig(); } else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); } })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            }
+
+            function deleteConfig(key) {
+                if (!confirm('Remove key "' + key + '"?')) return;
+                portal.fetchAdmin('/config', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key }) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) { if (d.ok) { showMsg('Deleted.'); loadConfig(); } else { showMsg('Delete failed', true); } })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Delete failed', true); });
+            }
+
+            function loadEnv() {
+                portal.fetchAdmin('/env').then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok || !d.env) return;
+                    envTbody.innerHTML = '';
+                    Object.keys(d.env).sort().forEach(function (k) {
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = '<td>' + escapeHtml(k) + '</td><td class="value">' + escapeHtml(String(d.env[k])) + '</td>';
+                        envTbody.appendChild(tr);
+                    });
+                }).catch(function () {});
+            }
+
+            function escapeHtml(s) {
+                if (s == null) return '';
+                var div = document.createElement('div');
+                div.textContent = s;
+                return div.innerHTML;
+            }
+
+            document.getElementById('add-config-btn').addEventListener('click', function () {
+                var key = (document.getElementById('new-key').value || '').trim();
+                var value = (document.getElementById('new-value').value || '').trim();
+                if (!key) { showMsg('Enter a key.', true); return; }
+                saveConfig(key, value);
+                document.getElementById('new-key').value = '';
+                document.getElementById('new-value').value = '';
+            });
+
+            loadConfig();
+            loadEnv();
+        })();
+    </script>
+</body>
+</html>

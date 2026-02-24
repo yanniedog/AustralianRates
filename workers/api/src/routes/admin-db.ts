@@ -173,7 +173,7 @@ adminDbRoutes.post('/db/tables/:tableName/rows/by-key', async (c) => {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
 
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const keyCols = TABLE_KEY_COLUMNS[tableName]
   const whereParts: string[] = []
   const values: unknown[] = []
@@ -205,7 +205,7 @@ adminDbRoutes.post('/db/tables/:tableName/rows', async (c) => {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
 
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const db = c.env.DB
   const pragma = await db.prepare(`PRAGMA table_info(${tableName})`).all()
   const colInfos = (pragma.results ?? []) as Array<{ name: string; pk: number }>
@@ -245,7 +245,7 @@ adminDbRoutes.put('/db/tables/:tableName/rows', async (c) => {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
 
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const keyCols = TABLE_KEY_COLUMNS[tableName]
   const db = c.env.DB
   const pragma = await db.prepare(`PRAGMA table_info(${tableName})`).all()
@@ -300,7 +300,7 @@ adminDbRoutes.delete('/db/tables/:tableName/rows', async (c) => {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
 
-  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const keyCols = TABLE_KEY_COLUMNS[tableName]
   const whereParts: string[] = []
   const values: unknown[] = []
