@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { requireAdmin } from '../auth/admin'
 import { getRunReport, listRunReports } from '../db/run-reports'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
 import type { AppContext } from '../types'
@@ -19,6 +20,7 @@ adminRoutes.use('*', requireAdmin())
 
 adminRoutes.route('/', adminConfigRoutes)
 adminRoutes.route('/', adminDbRoutes)
+adminRoutes.route('/', adminClearRoutes)
 
 adminRoutes.get('/runs', async (c) => {
   const limit = Number(c.req.query('limit') || 25)

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Clear data | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+    <style>
+        .admin-clear { max-width: 640px; margin: 0 auto; padding: 2rem; }
+        .admin-clear h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
+        .admin-clear .back { margin-bottom: 1rem; }
+        .admin-clear .back a { color: var(--brand); text-decoration: none; }
+        .admin-clear label { display: block; margin-top: 1rem; margin-bottom: 0.25rem; font-weight: 500; color: var(--muted); }
+        .admin-clear select, .admin-clear input[type="text"], .admin-clear input[type="number"], .admin-clear textarea {
+            width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; font-size: 1rem;
+        }
+        .admin-clear textarea { min-height: 120px; font-family: monospace; }
+        .admin-clear .panel { margin-top: 1rem; padding: 1rem; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 8px; display: none; }
+        .admin-clear .panel.visible { display: block; }
+        .admin-clear .key-row { margin-bottom: 0.5rem; }
+        .admin-clear button.primary { margin-top: 1rem; padding: 10px 20px; background: var(--brand); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .admin-clear button.primary:hover { opacity: 0.9; }
+        .admin-clear button.primary.danger { background: #b91c1c; }
+        .admin-clear .message { margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
+        .admin-clear .message.visible { display: block; }
+        .admin-clear .message.error { background: #fef2f2; color: #b91c1c; }
+        .admin-clear .message.success { background: #f0fdf4; color: #166534; }
+        .admin-clear .hint { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-clear" id="main-content" tabindex="-1">
+        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
+        <h1>Clear data</h1>
+        <p style="color: var(--muted);">Delete rate data by scope and product type. Use with care.</p>
+        <div class="message" id="msg"></div>
+
+        <label for="product-type">Product type</label>
+        <select id="product-type">
+            <option value="mortgages">Mortgages (home loans)</option>
+            <option value="savings">Savings</option>
+            <option value="term_deposits">Term deposits</option>
+            <option value="all">All (mortgages, savings, term deposits)</option>
+        </select>
+
+        <label for="scope">Scope</label>
+        <select id="scope">
+            <option value="individual">Individual row (by full key)</option>
+            <option value="group">Group (by date, bank, product, or run source)</option>
+            <option value="multiselect">Multiple rows (array of keys)</option>
+            <option value="entire">Entire table(s)</option>
+        </select>
+
+        <div id="panel-individual" class="panel">
+            <h3>Key (one row)</h3>
+            <p class="hint">Fill every key field for the selected product type.</p>
+            <div id="key-fields"></div>
+        </div>
+
+        <div id="panel-group" class="panel">
+            <h3>Group by</h3>
+            <label for="group-by">Column</label>
+            <select id="group-by">
+                <option value="collection_date">collection_date</option>
+                <option value="bank_name">bank_name</option>
+                <option value="product_id">product_id</option>
+                <option value="run_source">run_source</option>
+            </select>
+            <label for="group-value">Value (delete all rows where this column equals)</label>
+            <input type="text" id="group-value" placeholder="e.g. 2026-02-24 or scheduled">
+        </div>
+
+        <div id="panel-multiselect" class="panel">
+            <h3>Keys (JSON array)</h3>
+            <p class="hint">Paste a JSON array of key objects. Each object must include all key columns for the selected product type.</p>
+            <textarea id="multiselect-keys" placeholder='[{"bank_name":"ANZ","collection_date":"2026-02-24",...}, ...]'></textarea>
+        </div>
+
+        <div id="panel-entire" class="panel">
+            <p>This will delete <strong>all</strong> rows in the selected table(s). Cannot be undone.</p>
+        </div>
+
+        <button type="button" class="primary" id="submit-btn">Clear data</button>
+    </main>
+    <script src="admin-portal.js"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var productType = document.getElementById('product-type');
+            var scopeSelect = document.getElementById('scope');
+            var keyFields = document.getElementById('key-fields');
+            var groupBy = document.getElementById('group-by');
+            var groupValue = document.getElementById('group-value');
+            var multiselectKeys = document.getElementById('multiselect-keys');
+            var submitBtn = document.getElementById('submit-btn');
+            var msgEl = document.getElementById('msg');
+            var keyColumnsByTable = {};
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+            }
+
+            function getScope() { return (scopeSelect.value || 'individual').trim(); }
+            function getProductType() { return (productType.value || 'mortgages').trim(); }
+
+            function updateScopeOptions() {
+                var all = getProductType() === 'all';
+                var opts = scopeSelect.querySelectorAll('option');
+                opts.forEach(function (o) {
+                    var v = o.value;
+                    o.disabled = all && (v === 'individual' || v === 'multiselect');
+                    if (all && (v === 'individual' || v === 'multiselect')) o.style.display = 'none';
+                    else o.style.display = '';
+                });
+                if (all && (getScope() === 'individual' || getScope() === 'multiselect')) scopeSelect.value = 'group';
+                showPanel();
+            }
+
+            function tableForProductType(pt) {
+                if (pt === 'mortgages') return 'historical_loan_rates';
+                if (pt === 'savings') return 'historical_savings_rates';
+                if (pt === 'term_deposits') return 'historical_term_deposit_rates';
+                return null;
+            }
+
+            function buildKeyFields() {
+                var pt = getProductType();
+                var table = tableForProductType(pt);
+                var cols = table && keyColumnsByTable[table] ? keyColumnsByTable[table] : [];
+                keyFields.innerHTML = '';
+                cols.forEach(function (col) {
+                    var label = document.createElement('label');
+                    label.textContent = col;
+                    label.style.marginTop = '0.5rem';
+                    var input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = 'key-' + col;
+                    input.name = col;
+                    input.placeholder = col;
+                    keyFields.appendChild(label);
+                    keyFields.appendChild(input);
+                });
+            }
+
+            function showPanel() {
+                var scope = getScope();
+                ['individual', 'group', 'multiselect', 'entire'].forEach(function (s) {
+                    var el = document.getElementById('panel-' + s);
+                    if (el) el.classList.toggle('visible', s === scope);
+                });
+                if (scope === 'individual') buildKeyFields();
+            }
+
+            function getKeyFromForm() {
+                var pt = getProductType();
+                var table = tableForProductType(pt);
+                var cols = table && keyColumnsByTable[table] ? keyColumnsByTable[table] : [];
+                var key = {};
+                cols.forEach(function (col) {
+                    var input = document.getElementById('key-' + col);
+                    if (input) key[col] = input.value.trim();
+                });
+                return key;
+            }
+
+            function getKeysFromMultiselect() {
+                var raw = (multiselectKeys.value || '').trim();
+                if (!raw) return null;
+                try {
+                    var arr = JSON.parse(raw);
+                    return Array.isArray(arr) ? arr : null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function confirmMessage() {
+                var scope = getScope();
+                var pt = getProductType();
+                if (scope === 'entire') return 'Delete ALL rows in ' + (pt === 'all' ? 'all three rate tables' : pt) + '? This cannot be undone.';
+                if (scope === 'group') return 'Delete all rows where ' + groupBy.value + ' = "' + (groupValue.value || '') + '" in ' + pt + '?';
+                if (scope === 'individual') return 'Delete this one row?';
+                if (scope === 'multiselect') return 'Delete ' + (getKeysFromMultiselect() || []).length + ' row(s)?';
+                return 'Proceed?';
+            }
+
+            function submit() {
+                var scope = getScope();
+                var pt = getProductType();
+                var body = { product_type: pt, scope: scope };
+
+                if (scope === 'individual') {
+                    body.key = getKeyFromForm();
+                    var cols = keyColumnsByTable[tableForProductType(pt)];
+                    if (cols && cols.some(function (c) { return !body.key[c]; })) {
+                        showMsg('Fill all key fields for individual row.', true);
+                        return;
+                    }
+                } else if (scope === 'group') {
+                    body.group_by = groupBy.value;
+                    body.value = groupValue.value.trim();
+                    if (!body.value) {
+                        showMsg('Enter a value for group delete.', true);
+                        return;
+                    }
+                } else if (scope === 'multiselect') {
+                    var keys = getKeysFromMultiselect();
+                    if (!keys || keys.length === 0) {
+                        showMsg('Enter a valid JSON array of key objects.', true);
+                        return;
+                    }
+                    body.keys = keys;
+                }
+
+                submitBtn.disabled = true;
+                portal.fetchAdmin('/db/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.ok) {
+                            var res = d.results || [];
+                            var sum = res.reduce(function (a, x) { return a + (x.deleted || 0); }, 0);
+                            showMsg('Done. Deleted ' + sum + ' row(s) across ' + res.length + ' table(s).', false);
+                            if (scope === 'individual' || scope === 'multiselect') { keyFields.innerHTML = ''; buildKeyFields(); }
+                            if (scope === 'group') groupValue.value = '';
+                            if (scope === 'multiselect') multiselectKeys.value = '';
+                        } else {
+                            showMsg((d.error && d.error.message) || 'Clear failed', true);
+                        }
+                    })
+                    .catch(function (e) {
+                        showMsg(e && e.message ? e.message : 'Request failed', true);
+                    })
+                    .finally(function () { submitBtn.disabled = false; });
+            }
+
+            productType.addEventListener('change', function () {
+                updateScopeOptions();
+                buildKeyFields();
+            });
+            scopeSelect.addEventListener('change', showPanel);
+            submitBtn.addEventListener('click', function () {
+                if (!confirm(confirmMessage())) return;
+                submit();
+            });
+
+            portal.fetchAdmin('/db/clear/options')
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.ok && d.key_columns) keyColumnsByTable = d.key_columns;
+                    buildKeyFields();
+                    updateScopeOptions();
+                })
+                .catch(function () { buildKeyFields(); updateScopeOptions(); });
+        })();
+    </script>
+</body>
+</html>

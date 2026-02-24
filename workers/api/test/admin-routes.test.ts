@@ -116,3 +116,64 @@ describe('admin db routes', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('admin clear routes', () => {
+  it('returns 401 for GET /admin/db/clear/options without auth', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/clear/options`, { method: 'GET' })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 200 and options for GET /admin/db/clear/options with auth', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/clear/options`, {
+      method: 'GET',
+      headers: { Authorization: 'Bearer test-admin-token' },
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(200)
+    const data = await res.json() as { ok: boolean; product_types: unknown[]; scopes: unknown[] }
+    expect(data.ok).toBe(true)
+    expect(Array.isArray(data.product_types)).toBe(true)
+    expect(Array.isArray(data.scopes)).toBe(true)
+  })
+
+  it('returns 401 for POST /admin/db/clear without auth', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_type: 'mortgages', scope: 'entire' }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 200 and results for POST /admin/db/clear scope entire with auth', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/clear`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_type: 'mortgages', scope: 'entire' }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(200)
+    const data = await res.json() as { ok: boolean; scope: string; results: { table: string; deleted: number }[] }
+    expect(data.ok).toBe(true)
+    expect(data.scope).toBe('entire')
+    expect(data.results).toHaveLength(1)
+    expect(data.results[0].table).toBe('historical_loan_rates')
+  })
+
+  it('returns 400 for POST /admin/db/clear product_type all scope individual', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/clear`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_type: 'all', scope: 'individual', key: {} }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(400)
+  })
+})
