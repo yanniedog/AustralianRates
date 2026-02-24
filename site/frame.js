@@ -178,6 +178,7 @@
             var message = commit && commit.commit && commit.commit.message ? commit.commit.message.split('\n')[0].slice(0, 60) : '';
             var url = commit && commit.html_url ? commit.html_url : 'https://github.com/' + GITHUB_REPO + '/commits';
 
+            addSessionLog('info', 'Commit info loaded', { hasDeployVersion: !!deployVersion, hasGithub: Array.isArray(githubData) && githubData.length > 0 });
             if (deployVersion && deployVersion.commit && latestSha) {
                 var same = deployVersion.commit === latestSha;
                 var shortDeploy = deployVersion.shortCommit || deployVersion.commit.slice(0, 7);
@@ -199,6 +200,7 @@
             }
 
             if (!Array.isArray(githubData) || githubData.length === 0) {
+                addSessionLog('warn', 'Commit info unavailable', { githubDataLength: Array.isArray(githubData) ? githubData.length : 0 });
                 el.textContent = 'Commit info unavailable';
                 return;
             }
@@ -209,7 +211,8 @@
                 '</a>' +
                 ' &middot; ' + esc(formatDate(date)) +
                 (deployVersion && deployVersion.commit ? ' (deploy version unknown)' : '');
-        }).catch(function () {
+        }).catch(function (err) {
+            addSessionLog('error', 'Commit info fetch failed', { message: err && err.message });
             el.textContent = 'Commit info unavailable';
         });
     }
@@ -220,17 +223,21 @@
             .then(function (data) {
                 if (data && typeof data.count === 'number') {
                     _systemLogCount = data.count;
+                    addSessionLog('info', 'System log stats loaded', { count: data.count });
                 } else {
                     _systemLogCount = 0;
+                    addSessionLog('info', 'System log stats (no count)', { data: !!data });
                 }
                 updateLogLinkText();
             })
-            .catch(function () {
+            .catch(function (err) {
                 _systemLogCount = 0;
+                addSessionLog('warn', 'System log stats fetch failed', { message: err && err.message });
                 updateLogLinkText();
             });
     }
 
+    addSessionLog('info', 'Frame loaded', { apiBase: API_BASE });
     buildNav();
     buildFooter();
     loadCommitInfo();
