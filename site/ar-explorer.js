@@ -12,17 +12,53 @@
     var money = utils && utils.money ? utils.money : function (v) { var n = Number(v); return Number.isFinite(n) ? '$' + n.toFixed(2) : '-'; };
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
     var esc = window._arEsc;
+    var WAYBACK_PREFIX = 'https://web.archive.org/web/*/';
 
     function pctFormatter(cell) { return pct(cell.getValue()); }
     function moneyFormatter(cell) { return money(cell.getValue()); }
 
-    function sourceUrlFormatter(cell) {
-        var url = cell.getValue();
-        if (!url) return '\u2014';
-        var u = String(url);
-        var label = u.length > 40 ? u.slice(0, 37) + '\u2026' : u;
-        var href = u.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        cell.getElement().innerHTML = '<a href="' + href + '" target="_blank" rel="noopener noreferrer" title="' + esc(u) + '">' + esc(label) + '</a>';
+    function safeEsc(value) {
+        return typeof esc === 'function' ? esc(value) : String(value || '');
+    }
+
+    function safeHref(value) {
+        return String(value || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function isWaybackUrl(url) {
+        return /(^|\.)web\.archive\.org\/web\//i.test(String(url || ''));
+    }
+
+    function extractWaybackOriginalUrl(url) {
+        var raw = String(url || '');
+        var m = raw.match(/\/web\/\d+(?:id_)?\/(https?:\/\/.+)$/i);
+        return m && m[1] ? m[1] : '';
+    }
+
+    function linkHtml(href, label, title) {
+        return '<a href="' + safeHref(href) + '" target="_blank" rel="noopener noreferrer" title="' + safeEsc(title) + '">' + safeEsc(label) + '</a>';
+    }
+
+    function offerLinksFormatter(cell) {
+        var raw = String(cell.getValue() || '').trim();
+        if (!raw) return '\u2014';
+
+        var currentUrl = isWaybackUrl(raw) ? extractWaybackOriginalUrl(raw) : raw;
+        var waybackUrl = isWaybackUrl(raw) ? raw : (WAYBACK_PREFIX + raw);
+        var links = [];
+
+        if (/^https?:\/\//i.test(currentUrl)) {
+            links.push(linkHtml(currentUrl, 'Current', currentUrl));
+        }
+        if (/^https?:\/\//i.test(waybackUrl)) {
+            links.push(linkHtml(waybackUrl, 'Wayback', waybackUrl));
+        }
+
+        if (links.length === 0) {
+            return '\u2014';
+        }
+
+        cell.getElement().innerHTML = links.join(' &middot; ');
         return '';
     }
 
@@ -62,7 +98,7 @@
             { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
-            { title: 'Source URL', field: 'source_url', headerSort: true, minWidth: 100, visible: !narrow, formatter: sourceUrlFormatter },
+            { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, visible: !narrow, formatter: offerLinksFormatter },
             { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
             { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
@@ -83,7 +119,7 @@
             { title: 'Monthly Fee', field: 'monthly_fee', formatter: moneyFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
-            { title: 'Source URL', field: 'source_url', headerSort: true, minWidth: 100, visible: false, formatter: sourceUrlFormatter },
+            { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, visible: !narrow, formatter: offerLinksFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
             { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
         ];
@@ -103,7 +139,7 @@
             { title: 'Max Deposit', field: 'max_deposit', formatter: moneyFormatter, headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
-            { title: 'Source URL', field: 'source_url', headerSort: true, minWidth: 100, visible: false, formatter: sourceUrlFormatter },
+            { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, visible: !narrow, formatter: offerLinksFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
             { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
         ];

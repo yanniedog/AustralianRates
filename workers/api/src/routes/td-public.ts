@@ -14,6 +14,7 @@ import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { parseSourceMode } from '../utils/source-mode'
+import { handlePublicRunStatus } from './public-run-status'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -43,6 +44,8 @@ tdPublicRoutes.post('/trigger-run', async (c) => {
   const result = await handlePublicTriggerRun(c.env, 'term-deposits')
   return c.json(result.body, result.status)
 })
+
+tdPublicRoutes.get('/run-status/:runId', handlePublicRunStatus)
 
 tdPublicRoutes.get('/filters', async (c) => {
   const filters = await getTdFilters(c.env.DB)

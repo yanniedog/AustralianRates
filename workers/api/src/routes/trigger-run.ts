@@ -1,4 +1,5 @@
 import { getLastManualRunStartedAt, hasRunningManualRun } from '../db/run-reports'
+import { runAutoBackfillTick } from '../pipeline/auto-backfill'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -25,10 +26,22 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
   const cooldownMs = cooldownSeconds * 1000
 
   if (await hasRunningManualRun(env.DB)) {
+    const MIN_POLL_RETRY_SECONDS = 5
+    let retryAfter = Math.max(MIN_POLL_RETRY_SECONDS, Math.min(30, cooldownSeconds))
+    if (cooldownMs > 0) {
+      const lastStartedAt = await getLastManualRunStartedAt(env.DB)
+      if (lastStartedAt) {
+        const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : `${lastStartedAt.trim()}Z`).getTime()
+        const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
+        if (elapsed >= 0 && elapsed < cooldownMs) {
+          retryAfter = toRetryAfterSeconds(cooldownMs, elapsed)
+        }
+      }
+    }
     return {
       ok: false,
       status: 429,
-      body: { ok: false, reason: 'manual_run_in_progress', retry_after_seconds: Math.max(30, cooldownSeconds) },
+      body: { ok: false, reason: 'manual_run_in_progress', retry_after_seconds: retryAfter },
     }
   }
 
@@ -54,7 +67,28 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
   log.info('api', `Public manual run triggered (${logLabel})`)
   try {
     const result = await triggerDailyRun(env, { source: 'manual', force: true })
-    return { ok: true, status: 200, body: { ok: true, result } }
+    let autoBackfill: Awaited<ReturnType<typeof runAutoBackfillTick>> | null = null
+    const runId = (result as { runId?: unknown }).runId
+    const collectionDate = (result as { collectionDate?: unknown }).collectionDate
+    if (typeof runId === 'string' && typeof collectionDate === 'string') {
+      autoBackfill = await runAutoBackfillTick(env, {
+        runId,
+        collectionDate,
+        runSource: 'manual',
+      })
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        ok: true,
+        result: {
+          ...result,
+          auto_backfill: autoBackfill,
+        },
+      },
+    }
   } catch (error) {
     if (isQueueThrottleError(error)) {
       return {

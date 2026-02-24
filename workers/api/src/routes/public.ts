@@ -9,6 +9,7 @@ import { getLogStats, queryLogs } from '../utils/logger'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { parseSourceMode } from '../utils/source-mode'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
+import { handlePublicRunStatus } from './public-run-status'
 
 export const publicRoutes = new Hono<AppContext>()
 
@@ -59,6 +60,8 @@ publicRoutes.post('/trigger-run', async (c) => {
   const result = await handlePublicTriggerRun(c.env, 'home-loans')
   return c.json(result.body, result.status)
 })
+
+publicRoutes.get('/run-status/:runId', handlePublicRunStatus)
 
 publicRoutes.get('/filters', async (c) => {
   const filters = await getFilters(c.env.DB)

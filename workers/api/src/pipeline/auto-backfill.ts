@@ -5,6 +5,7 @@ import {
   listAutoBackfillProgress,
   type AutoBackfillProgressRow,
 } from '../db/auto-backfill-progress'
+import { addRunEnqueuedCounts } from '../db/run-progress'
 import { enqueueBackfillDayJobs } from '../queue/producer'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -42,7 +43,7 @@ function byCoveragePriority(a: BackfillCandidate, b: BackfillCandidate): number 
 
 export async function runAutoBackfillTick(
   env: EnvBindings,
-  input: { runId: string; collectionDate: string },
+  input: { runId: string; collectionDate: string; runSource?: 'scheduled' | 'manual' },
 ): Promise<{ ok: boolean; enqueued: number; cap: number; considered: number }> {
   const enabled = String(env.FEATURE_BACKFILL_ENABLED || 'true').toLowerCase() !== 'false'
   if (!enabled) return { ok: true, enqueued: 0, cap: 0, considered: 0 }
@@ -82,9 +83,10 @@ export async function runAutoBackfillTick(
 
   const enqueue = await enqueueBackfillDayJobs(env, {
     runId: input.runId,
-    runSource: 'scheduled',
+    runSource: input.runSource ?? 'scheduled',
     jobs,
   })
+  await addRunEnqueuedCounts(env.DB, input.runId, enqueue.perLender)
 
   log.info('pipeline', `Auto backfill enqueued ${enqueue.enqueued} day jobs (cap=${cap})`, {
     runId: input.runId,

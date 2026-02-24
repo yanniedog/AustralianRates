@@ -77,6 +77,7 @@ export async function handleScheduledDaily(_event: ScheduledController, env: Env
       autoBackfill = await runAutoBackfillTick(env, {
         runId,
         collectionDate: runCollectionDate,
+        runSource: 'scheduled',
       })
     } catch (error) {
       log.error('scheduler', 'Auto backfill tick failed', {

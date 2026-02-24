@@ -14,6 +14,7 @@ import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { parseSourceMode } from '../utils/source-mode'
+import { handlePublicRunStatus } from './public-run-status'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -43,6 +44,8 @@ savingsPublicRoutes.post('/trigger-run', async (c) => {
   const result = await handlePublicTriggerRun(c.env, 'savings')
   return c.json(result.body, result.status)
 })
+
+savingsPublicRoutes.get('/run-status/:runId', handlePublicRunStatus)
 
 savingsPublicRoutes.get('/filters', async (c) => {
   const filters = await getSavingsFilters(c.env.DB)
