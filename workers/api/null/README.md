@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "australianrates-api" generated at 2026-02-24T12:07:37.802Z.
