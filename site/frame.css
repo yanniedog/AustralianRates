@@ -47,6 +47,23 @@
     background: rgba(255, 255, 255, 0.1);
 }
 
+/* Cryptic admin entry on main page: single dot, very low contrast */
+.admin-entry-wrap {
+    display: inline-block;
+    margin-left: 0.35em;
+    vertical-align: 0.05em;
+}
+.admin-entry {
+    font-size: 0.5em;
+    color: var(--muted, #64748b);
+    opacity: 0.35;
+    text-decoration: none;
+    cursor: pointer;
+}
+.admin-entry:hover {
+    opacity: 0.6;
+}
+
 .site-nav {
     display: flex;
     align-items: center;
