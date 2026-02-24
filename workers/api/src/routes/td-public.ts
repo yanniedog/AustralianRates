@@ -7,8 +7,12 @@ import {
   queryTdRatesPaginated,
   queryTdTimeseries,
 } from '../db/td-queries'
+import { getLastManualRunStartedAt } from '../db/run-reports'
+import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
+import { log } from '../utils/logger'
+import { parseIntegerEnv } from '../utils/time'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -20,6 +24,31 @@ tdPublicRoutes.use('*', async (c, next) => {
 tdPublicRoutes.get('/health', (c) => {
   withPublicCache(c, 30)
   return c.json({ ok: true, service: 'australianrates-term-deposits' })
+})
+
+tdPublicRoutes.post('/trigger-run', async (c) => {
+  const DEFAULT_COOLDOWN_SECONDS = 0
+  const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
+  const cooldownMs = cooldownSeconds * 1000
+
+  if (cooldownMs > 0) {
+    const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
+    if (lastStartedAt) {
+      const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : lastStartedAt.trim() + 'Z').getTime()
+      const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
+      if (elapsed >= 0 && elapsed < cooldownMs) {
+        const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
+        return c.json(
+          { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
+          429,
+        )
+      }
+    }
+  }
+
+  log.info('api', 'Public manual run triggered (term-deposits)')
+  const result = await triggerDailyRun(c.env, { source: 'manual', force: true })
+  return c.json({ ok: true, result })
 })
 
 tdPublicRoutes.get('/filters', async (c) => {
