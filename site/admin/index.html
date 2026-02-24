@@ -64,12 +64,10 @@
                             return;
                         }
                         return r.json().then(function (d) {
-                            // #region agent log
-                            var reason = (d && d.error && d.error.details && d.error.details.reason) ? d.error.details.reason : 'unknown';
-                            fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6652b9'},body:JSON.stringify({sessionId:'6652b9',location:'admin/index.html:login',message:'admin login failed',data:{status:r.status,reason:reason,origin:window.location.origin},timestamp:Date.now(),hypothesisId:'auth-fail'})}).catch(function(){});
-                            // #endregion
+                            var reason = (d && d.error && d.error.details && d.error.details.reason) ? d.error.details.reason : '';
                             var msg = (d && d.error && d.error.message) ? d.error.message : 'Login failed. Check your token.';
-                            if (reason && reason !== 'unknown') msg += ' (' + reason + ')';
+                            if (reason) msg += ' (' + reason + ').';
+                            if (reason === 'admin_token_or_access_jwt_required' || reason === 'invalid_bearer_token') msg += ' On production, set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
                             errEl.textContent = msg;
                             errEl.classList.add('visible');
                         }).catch(function () {
