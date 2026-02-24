@@ -1,4 +1,5 @@
 import { ensureAppConfigTable, getAppConfig, setAppConfig } from '../db/app-config'
+import { runAutoBackfillTick } from './auto-backfill'
 import { triggerDailyRun } from './bootstrap-jobs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -6,10 +7,13 @@ import { getMelbourneNowParts } from '../utils/time'
 
 const RATE_CHECK_INTERVAL_KEY = 'rate_check_interval_minutes'
 const RATE_CHECK_LAST_RUN_KEY = 'rate_check_last_run_iso'
-const DEFAULT_INTERVAL_MINUTES = 1440
+const DEFAULT_INTERVAL_MINUTES = 360
+const SCHEDULE_STEP_HOURS = 6
 
 export function shouldRunScheduledAtTargetHour(hour: number, targetHour: number): boolean {
-  return hour === targetHour
+  const normalizedHour = ((hour % 24) + 24) % 24
+  const normalizedTargetHour = ((targetHour % 24) + 24) % 24
+  return normalizedHour % SCHEDULE_STEP_HOURS === normalizedTargetHour % SCHEDULE_STEP_HOURS
 }
 
 export async function handleScheduledDaily(_event: ScheduledController, env: EnvBindings) {
@@ -65,12 +69,29 @@ export async function handleScheduledDaily(_event: ScheduledController, env: Env
   })
   log.info('scheduler', `Rate check run result`, { context: JSON.stringify(result) })
 
+  let autoBackfill: { ok: boolean; enqueued: number; cap: number; considered: number } | null = null
+  const runId = (result as { runId?: unknown }).runId
+  const runCollectionDate = (result as { collectionDate?: unknown }).collectionDate
+  if (result.ok && typeof runId === 'string' && typeof runCollectionDate === 'string') {
+    try {
+      autoBackfill = await runAutoBackfillTick(env, {
+        runId,
+        collectionDate: runCollectionDate,
+      })
+    } catch (error) {
+      log.error('scheduler', 'Auto backfill tick failed', {
+        context: (error as Error)?.message || String(error),
+      })
+    }
+  }
+
   if (result.ok) {
     await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_KEY, new Date().toISOString())
   }
 
   return {
     ...result,
+    auto_backfill: autoBackfill,
     melbourne: melbourneParts,
     intervalMinutes,
   }

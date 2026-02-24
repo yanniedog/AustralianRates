@@ -169,6 +169,7 @@ export function extractLenderRatesFromHtml(input: {
       sourceUrl: input.sourceUrl,
       dataQualityFlag: input.qualityFlag,
       confidenceScore: Number(confidence.toFixed(3)),
+      retrievalType: input.mode === 'historical' ? 'historical_scrape' : 'present_scrape_same_date',
     })
   }
 

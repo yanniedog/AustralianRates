@@ -19,6 +19,12 @@ const { chromium } = require('playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const SCREENSHOT_DIR = './test-screenshots';
+// On production we fail if Retrieval column is missing; on localhost/dev we only warn. Env overrides.
+const STRICT_RETRIEVAL_COLUMN =
+    process.env.STRICT_RETRIEVAL_COLUMN === '1' ||
+    (process.env.STRICT_RETRIEVAL_COLUMN !== '0' &&
+        !TEST_URL.includes('localhost') &&
+        !TEST_URL.includes('127.0.0.1'));
 
 async function runTests() {
     console.log('Starting Australian Rates Homepage Tests...');
@@ -483,6 +489,15 @@ async function runTests() {
         } else {
             results.failed.push('✗ Rate Explorer table has no data rows');
         }
+
+        const explorerHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
+        const hasRetrievalHeader = explorerHeaders.some(h => String(h).trim() === 'Retrieval');
+        if (hasRetrievalHeader) {
+            results.passed.push('✓ Rate Explorer table includes Retrieval column');
+        } else {
+            if (STRICT_RETRIEVAL_COLUMN) results.failed.push('✗ Rate Explorer table missing Retrieval column');
+            else results.warnings.push('⚠ Rate Explorer table missing Retrieval column on this environment');
+        }
         
         await page.screenshot({ 
             path: `${SCREENSHOT_DIR}/05-rate-explorer-table.png`,
@@ -684,6 +699,14 @@ async function runTests() {
             await page.waitForTimeout(1500);
             await verifyFooterDeployStatus(name);
             await verifyFooterLogControls(name);
+            const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
+            const sectionHasRetrieval = sectionHeaders.some(h => String(h).trim() === 'Retrieval');
+            if (sectionHasRetrieval) {
+                results.passed.push('✓ ' + name + ' table includes Retrieval column');
+            } else {
+                if (STRICT_RETRIEVAL_COLUMN) results.failed.push('✗ ' + name + ' table missing Retrieval column');
+                else results.warnings.push('⚠ ' + name + ' table missing Retrieval column on this environment');
+            }
             await page.click('#trigger-run');
             await page.waitForTimeout(4000);
             const sectionStatus = await page.textContent('#trigger-status').catch(() => '');

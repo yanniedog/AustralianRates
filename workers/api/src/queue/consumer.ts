@@ -1,4 +1,5 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS, TARGET_LENDERS } from '../constants'
+import { advanceAutoBackfillAfterDay, releaseAutoBackfillClaim } from '../db/auto-backfill-progress'
 import { upsertHistoricalRateRows } from '../db/historical-rates'
 import { upsertSavingsRateRows } from '../db/savings-rates'
 import { upsertTdRateRows } from '../db/td-rates'
@@ -7,23 +8,37 @@ import { persistRawPayload } from '../db/raw-payloads'
 import { recordRunQueueOutcome } from '../db/run-reports'
 import {
   buildBackfillCursorKey,
+  extractProducts,
   cdrCollectionNotes,
   discoverProductsEndpoint,
   fetchProductDetailRows,
   fetchResidentialMortgageProductIds,
+  isRecord,
 } from '../ingest/cdr'
 import {
   fetchSavingsProductIds,
   fetchSavingsProductDetailRows,
   fetchTermDepositProductIds,
   fetchTdProductDetailRows,
+  isSavingsAccount,
+  isTermDeposit,
+  parseSavingsRatesFromDetail,
+  parseTermDepositRatesFromDetail,
 } from '../ingest/cdr-savings'
 import { validateNormalizedSavingsRow, type NormalizedSavingsRow } from '../ingest/normalize-savings'
 import { validateNormalizedTdRow, type NormalizedTdRow } from '../ingest/normalize-savings'
 import { extractLenderRatesFromHtml } from '../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../ingest/lender-playbooks'
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
-import type { BackfillSnapshotJob, DailyLenderJob, DailySavingsLenderJob, EnvBindings, IngestMessage, ProductDetailJob } from '../types'
+import type {
+  BackfillDayJob,
+  BackfillSnapshotJob,
+  DailyLenderJob,
+  DailySavingsLenderJob,
+  EnvBindings,
+  IngestMessage,
+  ProductDetailJob,
+} from '../types'
 import { log } from '../utils/logger'
 import { nowIso, parseIntegerEnv } from '../utils/time'
 
@@ -97,6 +112,14 @@ function isIngestMessage(value: unknown): value is IngestMessage {
     )
   }
 
+  if (value.kind === 'backfill_day_fetch') {
+    return (
+      typeof value.runId === 'string' &&
+      typeof value.lenderCode === 'string' &&
+      typeof value.collectionDate === 'string'
+    )
+  }
+
   if (value.kind === 'daily_savings_lender_fetch') {
     return typeof value.runId === 'string' && typeof value.lenderCode === 'string' && typeof value.collectionDate === 'string'
   }
@@ -162,6 +185,61 @@ function summarizeDropReasons(items: Array<{ reason: string }>): Record<string, 
     out[item.reason] = (out[item.reason] || 0) + 1
   }
   return out
+}
+
+function dayCursor(date: string): string {
+  return String(date || '').replace(/-/g, '')
+}
+
+type CdxRow = { timestamp: string; original: string }
+
+function parseCdxRows(cdxBody: string): CdxRow[] {
+  const out: CdxRow[] = []
+  try {
+    const parsed = JSON.parse(cdxBody)
+    if (!Array.isArray(parsed)) return out
+    for (let i = 1; i < parsed.length; i += 1) {
+      const row = parsed[i]
+      if (!Array.isArray(row) || row.length < 2) continue
+      const timestamp = String(row[0] || '')
+      const original = String(row[1] || '')
+      if (!timestamp || !original) continue
+      out.push({ timestamp, original })
+    }
+  } catch {
+    return out
+  }
+  return out
+}
+
+async function fetchWaybackCdxDay(url: string, collectionDate: string, limit = 8): Promise<{ cdxUrl: string; cdxBody: string; rows: CdxRow[]; status: number }> {
+  const day = dayCursor(collectionDate)
+  const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(
+    url,
+  )}&from=${day}&to=${day}&output=json&fl=timestamp,original,statuscode,mimetype,digest&filter=statuscode:200&collapse=digest&limit=${Math.max(1, Math.floor(limit))}`
+  const response = await fetch(cdxUrl)
+  const cdxBody = await response.text()
+  return {
+    cdxUrl,
+    cdxBody,
+    rows: parseCdxRows(cdxBody),
+    status: response.status,
+  }
+}
+
+async function fetchWaybackSnapshot(timestamp: string, original: string): Promise<{ snapshotUrl: string; status: number; body: string }> {
+  const snapshotUrl = `https://web.archive.org/web/${timestamp}id_/${original}`
+  const response = await fetch(snapshotUrl)
+  const body = await response.text()
+  return { snapshotUrl, status: response.status, body }
+}
+
+function parseJsonSafe(text: string): unknown | null {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
 }
 
 async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
@@ -466,6 +544,215 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
     .run()
 }
 
+function toDetailRecord(payload: unknown): Record<string, unknown> | null {
+  if (!isRecord(payload)) return null
+  if (isRecord(payload.data)) return payload.data as Record<string, unknown>
+  return payload
+}
+
+async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob): Promise<void> {
+  const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
+  if (!lender) throw new Error(`unknown_lender_code:${job.lenderCode}`)
+  log.info('consumer', `backfill_day_fetch started date=${job.collectionDate}`, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+  })
+
+  let hadSignals = false
+  try {
+    const mortgageRows: NormalizedRateRow[] = []
+    const savingsRows: NormalizedSavingsRow[] = []
+    const tdRows: NormalizedTdRow[] = []
+    const productCap = maxProductsPerLender(env)
+
+    for (const seedUrl of lender.seed_rate_urls.slice(0, 2)) {
+      const cdx = await fetchWaybackCdxDay(seedUrl, job.collectionDate, 6)
+      await persistRawPayload(env, {
+        sourceType: 'wayback_html',
+        sourceUrl: cdx.cdxUrl,
+        payload: cdx.cdxBody,
+        httpStatus: cdx.status,
+        notes: `wayback_cdx_day lender=${job.lenderCode} date=${job.collectionDate}`,
+      })
+      if (cdx.rows.length > 0) hadSignals = true
+      for (const row of cdx.rows.slice(0, 3)) {
+        const snapshot = await fetchWaybackSnapshot(row.timestamp, row.original)
+        await persistRawPayload(env, {
+          sourceType: 'wayback_html',
+          sourceUrl: snapshot.snapshotUrl,
+          payload: snapshot.body,
+          httpStatus: snapshot.status,
+          notes: `wayback_day_snapshot lender=${job.lenderCode} date=${job.collectionDate}`,
+        })
+        const parsed = extractLenderRatesFromHtml({
+          lender,
+          html: snapshot.body,
+          sourceUrl: snapshot.snapshotUrl,
+          collectionDate: job.collectionDate,
+          mode: 'historical',
+          qualityFlag: 'parsed_from_wayback_strict',
+        })
+        if (parsed.inspected > 0 || parsed.rows.length > 0) hadSignals = true
+        for (const item of parsed.rows) {
+          item.runId = job.runId
+          item.runSource = job.runSource ?? 'scheduled'
+          item.retrievalType = 'historical_scrape'
+          mortgageRows.push(item)
+        }
+      }
+    }
+
+    const endpointCandidates: string[] = []
+    const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
+    if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
+    if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
+    const discovered = await discoverProductsEndpoint(lender)
+    if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
+
+    const uniqueEndpoints = Array.from(new Set(endpointCandidates.filter(Boolean)))
+    for (const endpointUrl of uniqueEndpoints.slice(0, 2)) {
+      const productsDay = await fetchWaybackCdxDay(endpointUrl, job.collectionDate, 4)
+      await persistRawPayload(env, {
+        sourceType: 'wayback_html',
+        sourceUrl: productsDay.cdxUrl,
+        payload: productsDay.cdxBody,
+        httpStatus: productsDay.status,
+        notes: `wayback_cdr_products_cdx lender=${job.lenderCode} date=${job.collectionDate}`,
+      })
+      if (productsDay.rows.length === 0) continue
+      hadSignals = true
+      const productIdsSavings = new Set<string>()
+      const productIdsTd = new Set<string>()
+
+      for (const row of productsDay.rows.slice(0, 2)) {
+        const snapshot = await fetchWaybackSnapshot(row.timestamp, row.original)
+        await persistRawPayload(env, {
+          sourceType: 'wayback_html',
+          sourceUrl: snapshot.snapshotUrl,
+          payload: snapshot.body,
+          httpStatus: snapshot.status,
+          notes: `wayback_cdr_products_snapshot lender=${job.lenderCode} date=${job.collectionDate}`,
+        })
+        const payload = parseJsonSafe(snapshot.body)
+        const products = extractProducts(payload)
+        for (const product of products) {
+          const productId = String(product.productId || product.id || '').trim()
+          if (!productId) continue
+          if (isSavingsAccount(product)) productIdsSavings.add(productId)
+          if (isTermDeposit(product)) productIdsTd.add(productId)
+        }
+
+        for (const productId of Array.from(productIdsSavings).slice(0, productCap)) {
+          const detailUrl = `${endpointUrl.replace(/\/+$/, '')}/${encodeURIComponent(productId)}`
+          const detailSnapshot = await fetchWaybackSnapshot(row.timestamp, detailUrl)
+          await persistRawPayload(env, {
+            sourceType: 'wayback_html',
+            sourceUrl: detailSnapshot.snapshotUrl,
+            payload: detailSnapshot.body,
+            httpStatus: detailSnapshot.status,
+            notes: `wayback_cdr_savings_detail lender=${job.lenderCode} product=${productId}`,
+          })
+          const parsedDetail = toDetailRecord(parseJsonSafe(detailSnapshot.body))
+          if (!parsedDetail) continue
+          const parsedRows = parseSavingsRatesFromDetail({
+            lender,
+            detail: parsedDetail,
+            sourceUrl: detailSnapshot.snapshotUrl,
+            collectionDate: job.collectionDate,
+          })
+          if (parsedRows.length > 0) hadSignals = true
+          for (const parsedRow of parsedRows) {
+            parsedRow.dataQualityFlag = 'parsed_from_wayback_cdr'
+            parsedRow.retrievalType = 'historical_scrape'
+            parsedRow.runId = job.runId
+            parsedRow.runSource = job.runSource ?? 'scheduled'
+            savingsRows.push(parsedRow)
+          }
+        }
+
+        for (const productId of Array.from(productIdsTd).slice(0, productCap)) {
+          const detailUrl = `${endpointUrl.replace(/\/+$/, '')}/${encodeURIComponent(productId)}`
+          const detailSnapshot = await fetchWaybackSnapshot(row.timestamp, detailUrl)
+          await persistRawPayload(env, {
+            sourceType: 'wayback_html',
+            sourceUrl: detailSnapshot.snapshotUrl,
+            payload: detailSnapshot.body,
+            httpStatus: detailSnapshot.status,
+            notes: `wayback_cdr_td_detail lender=${job.lenderCode} product=${productId}`,
+          })
+          const parsedDetail = toDetailRecord(parseJsonSafe(detailSnapshot.body))
+          if (!parsedDetail) continue
+          const parsedRows = parseTermDepositRatesFromDetail({
+            lender,
+            detail: parsedDetail,
+            sourceUrl: detailSnapshot.snapshotUrl,
+            collectionDate: job.collectionDate,
+          })
+          if (parsedRows.length > 0) hadSignals = true
+          for (const parsedRow of parsedRows) {
+            parsedRow.dataQualityFlag = 'parsed_from_wayback_cdr'
+            parsedRow.retrievalType = 'historical_scrape'
+            parsedRow.runId = job.runId
+            parsedRow.runSource = job.runSource ?? 'scheduled'
+            tdRows.push(parsedRow)
+          }
+        }
+      }
+      if (savingsRows.length > 0 || tdRows.length > 0) break
+    }
+
+    const { accepted: mortgageAccepted } = splitValidatedRows(mortgageRows)
+    if (mortgageAccepted.length > 0) {
+      await upsertHistoricalRateRows(env.DB, mortgageAccepted)
+    }
+    const { accepted: savingsAccepted } = splitValidatedSavingsRows(savingsRows)
+    if (savingsAccepted.length > 0) {
+      await upsertSavingsRateRows(env.DB, savingsAccepted)
+    }
+    const { accepted: tdAccepted } = splitValidatedTdRows(tdRows)
+    if (tdAccepted.length > 0) {
+      await upsertTdRateRows(env.DB, tdAccepted)
+    }
+
+    await persistRawPayload(env, {
+      sourceType: 'wayback_html',
+      sourceUrl: `summary://${job.lenderCode}/backfill-day/${job.collectionDate}`,
+      payload: {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        collectionDate: job.collectionDate,
+        mortgage_rows: mortgageAccepted.length,
+        savings_rows: savingsAccepted.length,
+        td_rows: tdAccepted.length,
+        had_signals: hadSignals,
+        capturedAt: nowIso(),
+      },
+      httpStatus: 200,
+      notes: `wayback_day_summary lender=${job.lenderCode} date=${job.collectionDate}`,
+    })
+
+    await advanceAutoBackfillAfterDay(env.DB, {
+      lenderCode: job.lenderCode,
+      runId: job.runId,
+      collectionDate: job.collectionDate,
+      hadSignals: hadSignals || mortgageAccepted.length > 0 || savingsAccepted.length > 0 || tdAccepted.length > 0,
+    })
+
+    log.info('consumer', `backfill_day_fetch completed`, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context: `date=${job.collectionDate} mortgage=${mortgageAccepted.length} savings=${savingsAccepted.length} td=${tdAccepted.length}`,
+    })
+  } catch (error) {
+    await releaseAutoBackfillClaim(env.DB, {
+      lenderCode: job.lenderCode,
+      runId: job.runId,
+      collectionDate: job.collectionDate,
+    })
+    throw error
+  }
+}
+
 async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLenderJob): Promise<void> {
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!lender) throw new Error(`unknown_lender_code:${job.lenderCode}`)
@@ -609,6 +896,9 @@ async function processMessage(env: EnvBindings, message: IngestMessage): Promise
   }
   if (message.kind === 'backfill_snapshot_fetch') {
     return handleBackfillSnapshotJob(env, message)
+  }
+  if (message.kind === 'backfill_day_fetch') {
+    return handleBackfillDayJob(env, message)
   }
   if (message.kind === 'daily_savings_lender_fetch') {
     return handleDailySavingsLenderJob(env, message)

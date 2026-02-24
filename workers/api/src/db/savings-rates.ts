@@ -1,5 +1,6 @@
 import { type NormalizedSavingsRow, validateNormalizedSavingsRow } from '../ingest/normalize-savings'
 import { log } from '../utils/logger'
+import { deriveRetrievalType } from '../utils/retrieval-type'
 
 export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSavingsRow): Promise<void> {
   const verdict = validateNormalizedSavingsRow(row)
@@ -14,8 +15,9 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
         account_type, rate_type, interest_rate, deposit_tier,
         min_balance, max_balance, conditions, monthly_fee,
         source_url, data_quality_flag, confidence_score,
+        retrieval_type,
         parsed_at, run_id, run_source
-      ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,CURRENT_TIMESTAMP,?16,?17)
+      ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,CURRENT_TIMESTAMP,?17,?18)
       ON CONFLICT(bank_name, collection_date, product_id, rate_type, deposit_tier, run_source) DO UPDATE SET
         product_name = excluded.product_name,
         account_type = excluded.account_type,
@@ -27,6 +29,7 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
         source_url = excluded.source_url,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
+        retrieval_type = excluded.retrieval_type,
         parsed_at = CURRENT_TIMESTAMP,
         run_id = excluded.run_id`,
     )
@@ -46,6 +49,7 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
       row.sourceUrl,
       row.dataQualityFlag,
       row.confidenceScore,
+      row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl),
       row.runId ?? null,
       row.runSource ?? 'scheduled',
     )

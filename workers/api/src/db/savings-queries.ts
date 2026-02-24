@@ -57,6 +57,7 @@ const SORT_COLUMNS: Record<string, string> = {
   monthly_fee: 'h.monthly_fee',
   parsed_at: 'h.parsed_at',
   run_source: 'h.run_source',
+  retrieval_type: 'h.retrieval_type',
 }
 
 function buildWhere(filters: SavingsPaginatedFilters): { clause: string; binds: Array<string | number> } {
@@ -102,6 +103,7 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
       h.account_type, h.rate_type, h.interest_rate, h.deposit_tier,
       h.min_balance, h.max_balance, h.conditions, h.monthly_fee,
       h.source_url, h.data_quality_flag, h.confidence_score,
+      h.retrieval_type,
       h.parsed_at, h.run_id, h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key
     FROM historical_savings_rates h
@@ -222,6 +224,7 @@ export async function querySavingsForExport(db: D1Database, filters: SavingsPagi
       h.account_type, h.rate_type, h.interest_rate, h.deposit_tier,
       h.min_balance, h.max_balance, h.conditions, h.monthly_fee,
       h.source_url, h.data_quality_flag, h.confidence_score,
+      h.retrieval_type,
       h.parsed_at, h.run_id, h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key
     FROM historical_savings_rates h

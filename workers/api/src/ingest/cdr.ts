@@ -449,6 +449,7 @@ function parseRatesFromDetail(input: {
         sourceUrl: input.sourceUrl,
         dataQualityFlag: 'cdr_live',
         confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
+        retrievalType: 'present_scrape_same_date',
       }
       result.push(row)
     }
@@ -559,6 +560,7 @@ export function backfillSeedProductRows(input: {
     sourceUrl: input.sourceUrl,
     dataQualityFlag: 'parsed_from_wayback',
     confidenceScore: 0.6,
+    retrievalType: 'historical_scrape',
   }
 }
 

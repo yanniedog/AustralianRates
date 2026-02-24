@@ -1,4 +1,4 @@
-import type { InterestPayment, RunSource, SavingsAccountType, SavingsRateType } from '../types'
+import type { InterestPayment, RetrievalType, RunSource, SavingsAccountType, SavingsRateType } from '../types'
 
 export type NormalizedSavingsRow = {
   bankName: string
@@ -16,6 +16,7 @@ export type NormalizedSavingsRow = {
   sourceUrl: string
   dataQualityFlag: string
   confidenceScore: number
+  retrievalType?: RetrievalType
   runId?: string
   runSource?: RunSource
 }
@@ -34,6 +35,7 @@ export type NormalizedTdRow = {
   sourceUrl: string
   dataQualityFlag: string
   confidenceScore: number
+  retrievalType?: RetrievalType
   runId?: string
   runSource?: RunSource
 }

@@ -56,6 +56,7 @@ const SORT_COLUMNS: Record<string, string> = {
   interest_payment: 'h.interest_payment',
   parsed_at: 'h.parsed_at',
   run_source: 'h.run_source',
+  retrieval_type: 'h.retrieval_type',
 }
 
 function buildWhere(filters: TdPaginatedFilters): { clause: string; binds: Array<string | number> } {
@@ -95,6 +96,7 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
       h.source_url, h.data_quality_flag, h.confidence_score,
+      h.retrieval_type,
       h.parsed_at, h.run_id, h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
     FROM historical_term_deposit_rates h
@@ -207,6 +209,7 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
       h.source_url, h.data_quality_flag, h.confidence_score,
+      h.retrieval_type,
       h.parsed_at, h.run_id, h.run_source,
 h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
 FROM historical_term_deposit_rates h

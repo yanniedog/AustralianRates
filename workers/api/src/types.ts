@@ -26,6 +26,7 @@ export type AdminAuthState = {
 }
 
 export type RunSource = 'scheduled' | 'manual'
+export type RetrievalType = 'historical_scrape' | 'present_scrape_same_date'
 
 export type DailyLenderJob = {
   kind: 'daily_lender_fetch'
@@ -59,6 +60,16 @@ export type BackfillSnapshotJob = {
   idempotencyKey: string
 }
 
+export type BackfillDayJob = {
+  kind: 'backfill_day_fetch'
+  runId: string
+  runSource: RunSource
+  lenderCode: string
+  collectionDate: string
+  attempt: number
+  idempotencyKey: string
+}
+
 export type DailySavingsLenderJob = {
   kind: 'daily_savings_lender_fetch'
   runId: string
@@ -69,7 +80,7 @@ export type DailySavingsLenderJob = {
   idempotencyKey: string
 }
 
-export type IngestMessage = DailyLenderJob | ProductDetailJob | BackfillSnapshotJob | DailySavingsLenderJob
+export type IngestMessage = DailyLenderJob | ProductDetailJob | BackfillSnapshotJob | BackfillDayJob | DailySavingsLenderJob
 
 export type LenderConfig = {
   code: string
@@ -116,6 +127,7 @@ export type EnvBindings = {
   FEATURE_PROSPECTIVE_ENABLED?: string
   FEATURE_BACKFILL_ENABLED?: string
   MANUAL_RUN_COOLDOWN_SECONDS?: string
+  AUTO_BACKFILL_DAILY_QUEUE_CAP?: string
 }
 
 export type AppContext = {

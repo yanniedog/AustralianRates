@@ -1,4 +1,4 @@
-import type { FeatureSet, LvrTier, RateStructure, RepaymentType, RunSource, SecurityPurpose } from '../types'
+import type { FeatureSet, LvrTier, RateStructure, RepaymentType, RetrievalType, RunSource, SecurityPurpose } from '../types'
 
 export type NormalizedRateRow = {
   bankName: string
@@ -16,6 +16,7 @@ export type NormalizedRateRow = {
   sourceUrl: string
   dataQualityFlag: string
   confidenceScore: number
+  retrievalType?: RetrievalType
   runId?: string
   runSource?: RunSource
 }

@@ -34,7 +34,8 @@
                 comparison_rate: 'Comparison Rate (%)', rate_structure: 'Structure', security_purpose: 'Purpose',
                 repayment_type: 'Repayment', lvr_tier: 'LVR', feature_set: 'Feature', product_name: 'Product',
                 annual_fee: 'Annual Fee ($)', rba_cash_rate: 'Cash Rate (%)', run_source: 'Source',
-                parsed_at: 'Checked At', source_url: 'Source URL', data_quality_flag: 'Quality'
+                parsed_at: 'Checked At', source_url: 'Source URL', data_quality_flag: 'Quality',
+                retrieval_type: 'Retrieval'
             },
             chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
         },
@@ -61,7 +62,7 @@
                 account_type: 'Account Type', rate_type: 'Rate Type', deposit_tier: 'Deposit Tier',
                 product_name: 'Product', conditions: 'Conditions', monthly_fee: 'Monthly Fee ($)',
                 run_source: 'Source', parsed_at: 'Checked At', source_url: 'Source URL',
-                data_quality_flag: 'Quality'
+                data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
             chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
         },
@@ -88,7 +89,7 @@
                 term_months: 'Term (months)', deposit_tier: 'Deposit Tier', interest_payment: 'Payment Frequency',
                 product_name: 'Product', min_deposit: 'Min Deposit ($)', max_deposit: 'Max Deposit ($)',
                 run_source: 'Source', parsed_at: 'Checked At', source_url: 'Source URL',
-                data_quality_flag: 'Quality'
+                data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
             chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
         }

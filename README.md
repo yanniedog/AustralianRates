@@ -144,8 +144,8 @@ should resolve to Pages, and `/api/home-loan-rates/*` should be served by the AP
 
 ## Daily operations runbook
 
-1. Automated daily runs are triggered by API worker cron schedules in `workers/api/wrangler.toml`.
-2. Daily run workflow:
+1. Automated scheduled runs are triggered by API worker cron schedules in `workers/api/wrangler.toml` (every 6 hours).
+2. Scheduled run workflow:
    - refresh CDR endpoint cache
    - ingest lender product data
    - normalize and upsert rows

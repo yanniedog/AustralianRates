@@ -127,6 +127,7 @@ export function parseSavingsRatesFromDetail(input: {
       sourceUrl,
       dataQualityFlag: 'cdr_live',
       confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
+      retrievalType: 'present_scrape_same_date',
     })
   }
 
@@ -179,6 +180,7 @@ export function parseTermDepositRatesFromDetail(input: {
       sourceUrl,
       dataQualityFlag: 'cdr_live',
       confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
+      retrievalType: 'present_scrape_same_date',
     })
   }
 

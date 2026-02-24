@@ -1,6 +1,17 @@
-import type { BackfillSnapshotJob, DailyLenderJob, DailySavingsLenderJob, EnvBindings, IngestMessage, LenderConfig, ProductDetailJob, RunSource } from '../types'
+import type {
+  BackfillDayJob,
+  BackfillSnapshotJob,
+  DailyLenderJob,
+  DailySavingsLenderJob,
+  EnvBindings,
+  IngestMessage,
+  LenderConfig,
+  ProductDetailJob,
+  RunSource,
+} from '../types'
 import {
   buildBackfillIdempotencyKey,
+  buildBackfillDayIdempotencyKey,
   buildDailyLenderIdempotencyKey,
   buildProductDetailIdempotencyKey,
 } from '../utils/idempotency'
@@ -136,4 +147,35 @@ export async function enqueueBackfillJobs(
     enqueued: jobs.length,
     perLender,
   }
+}
+
+export async function enqueueBackfillDayJobs(
+  env: QueueEnv,
+  input: {
+    runId: string
+    runSource?: RunSource
+    jobs: Array<{ lenderCode: string; collectionDate: string }>
+  },
+): Promise<{ enqueued: number; perLender: Record<string, number> }> {
+  const runSource = input.runSource ?? 'scheduled'
+  const jobs: BackfillDayJob[] = input.jobs.map((job) => ({
+    kind: 'backfill_day_fetch',
+    runId: input.runId,
+    runSource,
+    lenderCode: job.lenderCode,
+    collectionDate: job.collectionDate,
+    attempt: 0,
+    idempotencyKey: buildBackfillDayIdempotencyKey(input.runId, job.lenderCode, job.collectionDate),
+  }))
+
+  if (jobs.length > 0) {
+    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
+  }
+
+  const perLender: Record<string, number> = {}
+  for (const job of jobs) {
+    perLender[job.lenderCode] = (perLender[job.lenderCode] || 0) + 1
+  }
+
+  return { enqueued: jobs.length, perLender }
 }

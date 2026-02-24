@@ -44,6 +44,15 @@ export function buildBackfillIdempotencyKey(runId: string, lenderCode: string, s
   ].join(':')
 }
 
+export function buildBackfillDayIdempotencyKey(runId: string, lenderCode: string, collectionDate: string): string {
+  return [
+    'backfill-day',
+    normalizeKeyPart(runId),
+    normalizeKeyPart(lenderCode),
+    normalizeKeyPart(collectionDate),
+  ].join(':')
+}
+
 function extensionForSource(sourceType: SourceType): string {
   return sourceType === 'wayback_html' ? 'html' : 'json'
 }

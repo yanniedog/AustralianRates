@@ -1,5 +1,6 @@
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
 import { log } from '../utils/logger'
+import { deriveRetrievalType } from '../utils/retrieval-type'
 
 export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRateRow): Promise<void> {
   const verdict = validateNormalizedRow(row)
@@ -25,10 +26,11 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url,
         data_quality_flag,
         confidence_score,
+        retrieval_type,
         parsed_at,
         run_id,
         run_source
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, CURRENT_TIMESTAMP, ?16, ?17)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, CURRENT_TIMESTAMP, ?17, ?18)
       ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure, security_purpose, repayment_type, run_source) DO UPDATE SET
         product_name = excluded.product_name,
         feature_set = excluded.feature_set,
@@ -38,6 +40,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url = excluded.source_url,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
+        retrieval_type = excluded.retrieval_type,
         parsed_at = CURRENT_TIMESTAMP,
         run_id = excluded.run_id`,
     )
@@ -57,6 +60,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
       row.sourceUrl,
       row.dataQualityFlag,
       row.confidenceScore,
+      row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl),
       row.runId ?? null,
       row.runSource ?? 'scheduled',
     )

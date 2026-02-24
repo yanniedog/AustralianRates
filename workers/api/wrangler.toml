@@ -62,7 +62,7 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Hourly; actual run gated by target-hour and rate_check_interval_minutes checks.
+# Hourly; scheduler runs every 6 hours (anchored by target-hour) and interval checks.
 crons = ["0 * * * *"]
 
 [vars]
@@ -77,6 +77,7 @@ MAX_PRODUCTS_PER_LENDER = "80"
 PERSIST_SUCCESSFUL_PRODUCT_DETAILS = "false"
 FEATURE_PROSPECTIVE_ENABLED = "true"
 FEATURE_BACKFILL_ENABLED = "true"
+AUTO_BACKFILL_DAILY_QUEUE_CAP = "16"
 CF_ACCESS_TEAM_DOMAIN = ""
 CF_ACCESS_AUD = ""
 

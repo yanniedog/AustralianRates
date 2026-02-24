@@ -49,6 +49,12 @@
         return v;
     }
 
+    function retrievalTypeFormatter(cell) {
+        var v = String(cell.getValue() || '');
+        if (v === 'historical_scrape') return 'Historical scrape';
+        return 'Present scrape (same date)';
+    }
+
     var MOBILE_BREAKPOINT = 760;
 
     var mobileHiddenFields = [
@@ -83,6 +89,7 @@
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, width: narrow ? undefined : 90, visible: !narrow, tooltip: 'Auto (scheduled) or Manual run.', formatter: runSourceFormatter },
             { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, width: narrow ? undefined : 160, visible: !narrow, tooltip: 'When the rate was parsed.', formatter: parsedAtFormatter },
             { title: 'Quality', field: 'data_quality_flag', headerSort: false, minWidth: 80, width: narrow ? undefined : 120, visible: false, tooltip: 'Data quality flag (e.g. CDR Live, Historical).', formatter: qualityFormatter },
+            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 130, width: narrow ? undefined : 170, visible: !narrow, tooltip: 'How this row was retrieved.', formatter: retrievalTypeFormatter },
         ];
     }
 

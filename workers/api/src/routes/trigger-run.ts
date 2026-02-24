@@ -53,7 +53,7 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
 
   log.info('api', `Public manual run triggered (${logLabel})`)
   try {
-    const result = await triggerDailyRun(env, { source: 'manual' })
+    const result = await triggerDailyRun(env, { source: 'manual', force: true })
     return { ok: true, status: 200, body: { ok: true, result } }
   } catch (error) {
     if (isQueueThrottleError(error)) {

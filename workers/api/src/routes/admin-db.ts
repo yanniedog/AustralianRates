@@ -16,6 +16,7 @@ const ADMIN_DB_TABLES = [
   'lender_endpoint_cache',
   'brand_normalization_map',
   'backfill_cursors',
+  'auto_backfill_progress',
   'rba_cash_rates',
   'global_log',
 ] as const
@@ -59,6 +60,7 @@ const TABLE_KEY_COLUMNS: Record<TableName, string[]> = {
   lender_endpoint_cache: ['lender_code'],
   brand_normalization_map: ['id'],
   backfill_cursors: ['cursor_key'],
+  auto_backfill_progress: ['lender_code'],
   rba_cash_rates: ['collection_date'],
   global_log: ['id'],
 }

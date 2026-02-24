@@ -37,6 +37,12 @@
         try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
     }
 
+    function retrievalTypeFormatter(cell) {
+        var v = String(cell.getValue() || '');
+        if (v === 'historical_scrape') return 'Historical scrape';
+        return 'Present scrape (same date)';
+    }
+
     var MOBILE_BREAKPOINT = 760;
     function isMobile() { return window.innerWidth <= MOBILE_BREAKPOINT; }
 
@@ -55,6 +61,7 @@
             { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120, visible: !narrow },
             { title: 'Annual Fee', field: 'annual_fee', formatter: moneyFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow },
+            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
             { title: 'Source URL', field: 'source_url', headerSort: true, minWidth: 100, visible: !narrow, formatter: sourceUrlFormatter },
             { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
@@ -75,6 +82,7 @@
             { title: 'Conditions', field: 'conditions', headerSort: false, minWidth: 150, visible: !narrow },
             { title: 'Monthly Fee', field: 'monthly_fee', formatter: moneyFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow },
+            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
             { title: 'Source URL', field: 'source_url', headerSort: true, minWidth: 100, visible: false, formatter: sourceUrlFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
             { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
@@ -94,6 +102,7 @@
             { title: 'Min Deposit', field: 'min_deposit', formatter: moneyFormatter, headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Max Deposit', field: 'max_deposit', formatter: moneyFormatter, headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow },
+            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
             { title: 'Source URL', field: 'source_url', headerSort: true, minWidth: 100, visible: false, formatter: sourceUrlFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
             { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
