@@ -150,9 +150,13 @@
                 Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
                 q.set('page', String(params.page || 1));
                 q.set('size', '50');
-                if (params.sorters && params.sorters.length > 0) {
-                    q.set('sort', params.sorters[0].field);
-                    q.set('dir', params.sorters[0].dir);
+                var sorters = (params.sorters && params.sorters.length > 0) ? params.sorters : (rateTable && rateTable.getSorters ? rateTable.getSorters() : []);
+                if (sorters.length > 0) {
+                    q.set('sort', sorters[0].field);
+                    q.set('dir', sorters[0].dir);
+                } else {
+                    q.set('sort', 'collection_date');
+                    q.set('dir', 'desc');
                 }
                 var fetchUrl = url + '?' + q.toString();
                 return fetch(fetchUrl, { cache: 'no-store' })
