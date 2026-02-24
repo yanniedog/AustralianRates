@@ -183,20 +183,17 @@
                 var shortDeploy = deployVersion.shortCommit || deployVersion.commit.slice(0, 7);
                 if (same) {
                     el.innerHTML =
-                        '<span class="footer-version-ok" title="This page is built from the latest commit on GitHub">' +
-                        'Up to date with main ' +
-                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(message) + '">' + esc(shortDeploy) + '</a>' +
+                        '<span class="footer-version-ok">Current ' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(shortDeploy) + '</a>' +
                         ' &middot; ' + esc(formatDate(date)) +
                         '</span>';
                 } else {
                     el.innerHTML =
-                        '<span class="footer-version-stale" title="A newer commit is on GitHub; refresh or redeploy to get it">' +
-                        'Deployed ' +
+                        '<span class="footer-version-stale">Stale ' +
                         '<a href="https://github.com/' + GITHUB_REPO + '/commit/' + esc(deployVersion.commit) + '" target="_blank" rel="noopener">' + esc(shortDeploy) + '</a>' +
-                        '; latest on main ' +
-                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(message) + '">' + esc(latestShort) + '</a>' +
-                        '. Refresh to update.' +
-                        '</span>';
+                        '; latest ' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(latestShort) + '</a>' +
+                        '. Refresh to update.</span>';
                 }
                 return;
             }

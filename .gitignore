@@ -14,3 +14,5 @@ Thumbs.db
 tmp/
 test-screenshots/
 docs/CLOUDFLARE_USAGE.md
+*.log
+
