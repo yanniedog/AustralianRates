@@ -119,6 +119,18 @@
     opacity: 0.25;
 }
 
+.footer-version-ok {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.footer-version-stale {
+    color: rgba(255, 200, 100, 0.95);
+}
+
+.footer-version-stale a {
+    color: rgba(255, 220, 140, 0.95);
+}
+
 .footer-spacer {
     flex: 1;
 }

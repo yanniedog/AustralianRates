@@ -160,30 +160,61 @@
         var el = document.getElementById('footer-commit');
         if (!el) return;
 
-        fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!Array.isArray(data) || data.length === 0) {
-                    el.textContent = 'Commit info unavailable';
-                    return;
-                }
-                var commit = data[0];
-                var sha = commit.sha.slice(0, 7);
-                var date = commit.commit && commit.commit.committer && commit.commit.committer.date;
-                var message = commit.commit && commit.commit.message;
-                var shortMessage = message ? message.split('\n')[0].slice(0, 60) : '';
-                var url = commit.html_url;
+        var base = document.querySelector('base') && document.querySelector('base').href
+            ? new URL(document.querySelector('base').href).origin
+            : window.location.origin;
+        var versionUrl = base + '/version.json';
 
-                el.innerHTML =
-                    'Latest commit: ' +
-                    '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(shortMessage) + '">' +
-                        esc(sha) +
-                    '</a>' +
-                    ' &middot; ' + esc(formatDate(date));
-            })
-            .catch(function () {
+        Promise.all([
+            fetch(versionUrl).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+            fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } }).then(function (r) { return r.json(); })
+        ]).then(function (results) {
+            var deployVersion = results[0];
+            var githubData = results[1];
+            var latestSha = Array.isArray(githubData) && githubData.length > 0 ? githubData[0].sha : null;
+            var latestShort = latestSha ? latestSha.slice(0, 7) : '';
+            var commit = Array.isArray(githubData) && githubData.length > 0 ? githubData[0] : null;
+            var date = commit && commit.commit && commit.commit.committer && commit.commit.committer.date ? commit.commit.committer.date : '';
+            var message = commit && commit.commit && commit.commit.message ? commit.commit.message.split('\n')[0].slice(0, 60) : '';
+            var url = commit && commit.html_url ? commit.html_url : 'https://github.com/' + GITHUB_REPO + '/commits';
+
+            if (deployVersion && deployVersion.commit && latestSha) {
+                var same = deployVersion.commit === latestSha;
+                var shortDeploy = deployVersion.shortCommit || deployVersion.commit.slice(0, 7);
+                if (same) {
+                    el.innerHTML =
+                        '<span class="footer-version-ok" title="This page is built from the latest commit on GitHub">' +
+                        'Up to date with main ' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(message) + '">' + esc(shortDeploy) + '</a>' +
+                        ' &middot; ' + esc(formatDate(date)) +
+                        '</span>';
+                } else {
+                    el.innerHTML =
+                        '<span class="footer-version-stale" title="A newer commit is on GitHub; refresh or redeploy to get it">' +
+                        'Deployed ' +
+                        '<a href="https://github.com/' + GITHUB_REPO + '/commit/' + esc(deployVersion.commit) + '" target="_blank" rel="noopener">' + esc(shortDeploy) + '</a>' +
+                        '; latest on main ' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(message) + '">' + esc(latestShort) + '</a>' +
+                        '. Refresh to update.' +
+                        '</span>';
+                }
+                return;
+            }
+
+            if (!Array.isArray(githubData) || githubData.length === 0) {
                 el.textContent = 'Commit info unavailable';
-            });
+                return;
+            }
+            el.innerHTML =
+                'Latest commit: ' +
+                '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(message) + '">' +
+                    esc(latestShort) +
+                '</a>' +
+                ' &middot; ' + esc(formatDate(date)) +
+                (deployVersion && deployVersion.commit ? ' (deploy version unknown)' : '');
+        }).catch(function () {
+            el.textContent = 'Commit info unavailable';
+        });
     }
 
     function loadLogStats() {
