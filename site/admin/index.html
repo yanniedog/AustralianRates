@@ -25,7 +25,7 @@
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
         </div>
     </header>
-    <main class="admin-login" id="main-content">
+    <main class="admin-login" id="main-content" tabindex="-1">
         <h1>Admin login</h1>
         <p style="color: var(--muted); margin-bottom: 1.5rem;">Enter your admin API token to continue.</p>
         <form id="login-form" action="#" method="post">
@@ -68,6 +68,7 @@
                             var msg = (d && d.error && d.error.message) ? d.error.message : 'Login failed. Check your token.';
                             if (reason) msg += ' (' + reason + ').';
                             if (reason === 'admin_token_or_access_jwt_required' || reason === 'invalid_bearer_token') msg += ' On production, set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
+                            if (reason === 'admin_token_not_configured') msg = 'Admin token is not configured on the server. Set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
                             errEl.textContent = msg;
                             errEl.classList.add('visible');
                         }).catch(function () {
