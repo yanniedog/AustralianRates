@@ -89,6 +89,19 @@
             '</nav>';
     }
 
+    function getAdminPortalHref() {
+        var path = (typeof window !== 'undefined' && window.location && window.location.pathname)
+            ? window.location.pathname
+            : '/';
+        var markers = ['/savings/', '/term-deposits/'];
+        for (var i = 0; i < markers.length; i++) {
+            var idx = path.indexOf(markers[i]);
+            if (idx >= 0) return path.substring(0, idx) + '/admin/';
+        }
+        if (path.endsWith('/')) return path + 'admin/';
+        return path.replace(/\/[^/]*$/, '/') + 'admin/';
+    }
+
     function buildFooter() {
         var existing = document.querySelector('.site-footer');
         if (existing) existing.remove();
@@ -107,7 +120,7 @@
                     '</div>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
-                '<span>&copy; ' + new Date().getFullYear() + ' <a href="/admin/" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +
+                '<span>&copy; ' + new Date().getFullYear() + ' <a href="' + esc(getAdminPortalHref()) + '" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +
             '</div>';
         document.body.appendChild(footer);
 
@@ -115,6 +128,7 @@
         var popup = document.getElementById('footer-log-popup');
         var downloadSystem = document.getElementById('footer-log-download-system');
         var downloadClient = document.getElementById('footer-log-download-client');
+        var adminLink = footer.querySelector('.footer-admin-at');
 
         if (logLink && popup) {
             logLink.addEventListener('click', function (e) {
@@ -135,6 +149,13 @@
         if (downloadSystem && popup) {
             downloadSystem.addEventListener('click', function () {
                 popup.hidden = true;
+            });
+        }
+        if (adminLink) {
+            adminLink.addEventListener('click', function (e) {
+                e.preventDefault();
+                var href = adminLink.getAttribute('href') || '/admin/';
+                window.location.assign(href);
             });
         }
         document.addEventListener('click', function (e) {
