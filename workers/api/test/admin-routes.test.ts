@@ -57,6 +57,18 @@ describe('admin config routes', () => {
     expect(Array.isArray(data.config)).toBe(true)
   })
 
+  it('returns 401 with admin_token_not_configured when ADMIN_API_TOKEN is missing and Bearer sent', async () => {
+    const env = makeEnv({ ADMIN_API_TOKEN: undefined })
+    const req = new Request(`https://x${API_BASE}/admin/config`, {
+      method: 'GET',
+      headers: { Authorization: 'Bearer any-token' },
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(401)
+    const data = await res.json() as { error?: { details?: { reason?: string } } }
+    expect(data.error?.details?.reason).toBe('admin_token_not_configured')
+  })
+
   it('returns 200 for GET /admin/env with Bearer token', async () => {
     const env = makeEnv()
     const req = new Request(`https://x${API_BASE}/admin/env`, {

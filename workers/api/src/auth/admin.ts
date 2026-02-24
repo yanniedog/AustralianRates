@@ -71,11 +71,21 @@ export async function evaluateAdminAuth(c: Parameters<MiddlewareHandler<AppConte
     }
   }
 
-  if (bearerToken && !isBearerTokenAuthorized(bearerToken, expectedToken)) {
-    return {
-      ok: false,
-      mode: null,
-      reason: 'invalid_bearer_token',
+  if (bearerToken) {
+    const expected = String(expectedToken ?? '').trim()
+    if (!expected) {
+      return {
+        ok: false,
+        mode: null,
+        reason: 'admin_token_not_configured',
+      }
+    }
+    if (!isBearerTokenAuthorized(bearerToken, expectedToken)) {
+      return {
+        ok: false,
+        mode: null,
+        reason: 'invalid_bearer_token',
+      }
     }
   }
 
