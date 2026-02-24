@@ -67,7 +67,8 @@
                             var reason = (d && d.error && d.error.details && d.error.details.reason) ? d.error.details.reason : '';
                             var msg = (d && d.error && d.error.message) ? d.error.message : 'Login failed. Check your token.';
                             if (reason) msg += ' (' + reason + ').';
-                            if (reason === 'admin_token_or_access_jwt_required' || reason === 'invalid_bearer_token') msg += ' On production, set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
+                            if (reason === 'admin_token_or_access_jwt_required') msg += ' On production, set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
+                            if (reason === 'invalid_bearer_token') msg = 'The token does not match ADMIN_API_TOKEN on the server. Update it with: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
                             if (reason === 'admin_token_not_configured') msg = 'Admin token is not configured on the server. Set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
                             errEl.textContent = msg;
                             errEl.classList.add('visible');
