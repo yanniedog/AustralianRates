@@ -56,22 +56,22 @@ publicRoutes.get('/staleness', async (c) => {
 })
 
 publicRoutes.post('/trigger-run', async (c) => {
-  const DEFAULT_COOLDOWN_SECONDS = 60 // 1 minute lockout between manual runs
+  const DEFAULT_COOLDOWN_SECONDS = 0 // 0 = no cooldown for manual runs
   const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
   const cooldownMs = cooldownSeconds * 1000
 
-  const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
-  if (lastStartedAt) {
-    // Parse as UTC (we store via toISOString()). If DB returns without "Z", treat as UTC.
-    const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : lastStartedAt.trim() + 'Z').getTime()
-    const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
-    // If elapsed is negative (clock skew or bad parse), treat cooldown as expired
-    if (elapsed >= 0 && elapsed < cooldownMs) {
-      const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
-      return c.json(
-        { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
-        429,
-      )
+  if (cooldownMs > 0) {
+    const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
+    if (lastStartedAt) {
+      const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : lastStartedAt.trim() + 'Z').getTime()
+      const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
+      if (elapsed >= 0 && elapsed < cooldownMs) {
+        const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
+        return c.json(
+          { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
+          429,
+        )
+      }
     }
   }
 
