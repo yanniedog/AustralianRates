@@ -112,6 +112,7 @@
                     rendererOptions: {
                         plotly: { width: Math.min(1100, window.innerWidth - 80), height: 500 },
                     },
+                    localeStrings: { totals: 'Averages' },
                 }, true);
                 tabState.pivotLoaded = true;
             })

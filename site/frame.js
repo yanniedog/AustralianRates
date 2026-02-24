@@ -107,7 +107,7 @@
                     '</div>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
-                '<span>&copy; ' + new Date().getFullYear() + ' AustralianRates</span>' +
+                '<span>&copy; ' + new Date().getFullYear() + ' <a href="/admin/" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +
             '</div>';
         document.body.appendChild(footer);
 

@@ -8,6 +8,8 @@ import { getMelbourneNowParts } from '../utils/time'
 const RATE_CHECK_INTERVAL_KEY = 'rate_check_interval_minutes'
 const RATE_CHECK_LAST_RUN_KEY = 'rate_check_last_run_iso'
 const DEFAULT_INTERVAL_MINUTES = 360
+/** Minimum minutes between scheduled runs; cron fires every 6 hours. */
+const SCHEDULED_INTERVAL_MIN_MINUTES = 360
 const SCHEDULE_STEP_HOURS = 6
 
 export function shouldRunScheduledAtTargetHour(hour: number, targetHour: number): boolean {
@@ -32,20 +34,10 @@ export async function handleScheduledDaily(_event: ScheduledController, env: Env
 
   const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
   const collectionDate = melbourneParts.date
-  const targetHour = Math.max(0, Math.min(23, parseInt(env.MELBOURNE_TARGET_HOUR || '6', 10) || 6))
-
-  if (!shouldRunScheduledAtTargetHour(melbourneParts.hour, targetHour)) {
-    log.info('scheduler', `Skipping: hour=${melbourneParts.hour} target=${targetHour}`)
-    return {
-      ok: true,
-      skipped: true,
-      reason: 'outside_target_hour',
-      melbourne: melbourneParts,
-    }
-  }
 
   const intervalRaw = await getAppConfig(env.DB, RATE_CHECK_INTERVAL_KEY)
-  const intervalMinutes = Math.max(1, parseInt(intervalRaw ?? String(DEFAULT_INTERVAL_MINUTES), 10) || DEFAULT_INTERVAL_MINUTES)
+  const configuredMinutes = Math.max(1, parseInt(intervalRaw ?? String(DEFAULT_INTERVAL_MINUTES), 10) || DEFAULT_INTERVAL_MINUTES)
+  const intervalMinutes = Math.max(SCHEDULED_INTERVAL_MIN_MINUTES, configuredMinutes)
 
   const lastRunIso = await getAppConfig(env.DB, RATE_CHECK_LAST_RUN_KEY)
   const now = Date.now()

@@ -146,6 +146,16 @@
     text-decoration: underline;
 }
 
+.site-footer .footer-admin-at,
+.site-footer .footer-admin-at:hover,
+.site-footer .footer-admin-at:focus,
+.site-footer .footer-admin-at:focus-visible {
+    color: inherit;
+    text-decoration: none;
+    background: none;
+    outline: none;
+}
+
 .footer-sep {
     opacity: 0.25;
 }

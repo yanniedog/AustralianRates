@@ -62,8 +62,8 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Hourly; scheduler runs every 6 hours (anchored by target-hour) and interval checks.
-crons = ["0 * * * *"]
+# Every 6 hours: full rate check at 00:00, 06:00, 12:00, 18:00 UTC.
+crons = ["0 */6 * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
