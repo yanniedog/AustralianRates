@@ -64,7 +64,13 @@
                             return;
                         }
                         return r.json().then(function (d) {
-                            errEl.textContent = (d && d.error && d.error.message) ? d.error.message : 'Login failed. Check your token.';
+                            // #region agent log
+                            var reason = (d && d.error && d.error.details && d.error.details.reason) ? d.error.details.reason : 'unknown';
+                            fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6652b9'},body:JSON.stringify({sessionId:'6652b9',location:'admin/index.html:login',message:'admin login failed',data:{status:r.status,reason:reason,origin:window.location.origin},timestamp:Date.now(),hypothesisId:'auth-fail'})}).catch(function(){});
+                            // #endregion
+                            var msg = (d && d.error && d.error.message) ? d.error.message : 'Login failed. Check your token.';
+                            if (reason && reason !== 'unknown') msg += ' (' + reason + ')';
+                            errEl.textContent = msg;
                             errEl.classList.add('visible');
                         }).catch(function () {
                             errEl.textContent = 'Login failed. Check your token.';
