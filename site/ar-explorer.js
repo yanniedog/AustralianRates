@@ -6,9 +6,7 @@
     var config = window.AR.config;
     var filters = window.AR.filters;
     var utils = window.AR.utils;
-    var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
-    var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var money = utils && utils.money ? utils.money : function (v) { var n = Number(v); return Number.isFinite(n) ? '$' + n.toFixed(2) : '-'; };
@@ -99,6 +97,7 @@
     }
 
     function getRateTableColumns() {
+        var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
         if (section === 'savings') return getSavingsColumns();
         if (section === 'term-deposits') return getTdColumns();
         return getLoanColumns();
@@ -112,6 +111,7 @@
     function initRateTable() {
         lastMobileState = isMobile();
 
+        var apiBase = (config && config.apiBase) ? config.apiBase : (window.location.origin + (window.AR.sectionConfig && window.AR.sectionConfig.apiPath ? window.AR.sectionConfig.apiPath : '/api/home-loan-rates'));
         rateTable = new Tabulator('#rate-table', {
             ajaxURL: apiBase + '/rates',
             ajaxConfig: 'GET',

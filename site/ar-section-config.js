@@ -2,7 +2,9 @@
     'use strict';
     window.AR = window.AR || {};
 
-    var section = window.AR_SECTION || 'home-loans';
+    var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+    var sectionFromPath = (path.indexOf('/savings') !== -1) ? 'savings' : (path.indexOf('/term-deposits') !== -1) ? 'term-deposits' : null;
+    var section = window.AR_SECTION || sectionFromPath || 'home-loans';
 
     var sections = {
         'home-loans': {
