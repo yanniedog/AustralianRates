@@ -1,235 +1,222 @@
 /**
- * API Endpoint Diagnostic Script
+ * Multi-section API diagnostics and lightweight benchmark.
  *
- * Tests the Australian Rates API endpoints to identify connectivity issues.
- * Run with: node diagnose-api.js
- * Optional: API_BASE or TEST_URL env (e.g. TEST_URL=https://www.example.com/ => API_BASE=https://www.example.com/api/home-loan-rates)
+ * Usage:
+ *   node diagnose-api.js
+ *
+ * Optional env:
+ *   TEST_URL=https://www.australianrates.com/
+ *   DIAG_BENCH_N=10
+ *   DIAG_P95_TARGET_MS=500
  */
 
-const https = require('https');
+const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/'
+const ORIGIN = new URL(DEFAULT_TEST_URL).origin
+const BENCH_N = Math.max(1, Math.floor(Number(process.env.DIAG_BENCH_N || 10)))
+const P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_P95_TARGET_MS || 500)))
 
-function getApiBase() {
-    if (process.env.API_BASE) return process.env.API_BASE.replace(/\/+$/, '');
-    const testUrl = process.env.TEST_URL || 'https://www.australianrates.com/';
-    const origin = new URL(testUrl).origin;
-    return origin + '/api/home-loan-rates';
+const DATASETS = [
+  { key: 'home-loans', base: '/api/home-loan-rates' },
+  { key: 'savings', base: '/api/savings-rates' },
+  { key: 'term-deposits', base: '/api/term-deposit-rates' },
+]
+
+function percentile(values, p) {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const idx = Math.max(0, Math.ceil(p * sorted.length) - 1)
+  return sorted[idx]
 }
 
-function getHomepageUrl() {
-    if (process.env.TEST_URL) return new URL(process.env.TEST_URL).origin + '/';
-    return 'https://www.australianrates.com/';
+function asNumber(value, fallback = 0) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
 }
 
-const API_BASE = getApiBase();
-
-function testEndpoint(urlStr, description, options = {}) {
-    const expectCsv = options.expectCsv === true;
-    const expectHtml = options.expectHtml === true;
-    return new Promise((resolve) => {
-        console.log(`\nTesting: ${description}`);
-        console.log(`URL: ${urlStr}`);
-        
-        const startTime = Date.now();
-        
-        https.get(urlStr, (res) => {
-            const duration = Date.now() - startTime;
-            let data = '';
-            
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-            
-            res.on('end', () => {
-                console.log(`  Status: ${res.statusCode}`);
-                console.log(`  Duration: ${duration}ms`);
-                console.log(`  Content-Length: ${data.length} bytes`);
-                
-                if (res.statusCode !== 200) {
-                    if (res.statusCode === 400 && description.toLowerCase().includes('timeseries')) {
-                        console.log(`  ✓ Timeseries endpoint reachable (400: requires product_key)`);
-                        resolve({ success: true, status: res.statusCode, duration, data: data });
-                        return;
-                    }
-                    console.log(`  ✗ Non-200 status code`);
-                    console.log(`  Response: ${data.substring(0, 200)}`);
-                    resolve({ success: false, status: res.statusCode, duration, data: data });
-                    return;
-                }
-                
-                if (expectHtml) {
-                    const isHtml = data.toLowerCase().includes('<!doctype') || data.toLowerCase().includes('<html');
-                    if (res.statusCode === 200 && isHtml) {
-                        console.log(`  ✓ HTML response (${data.length} bytes)`);
-                        resolve({ success: true, status: res.statusCode, duration, data: data });
-                    } else {
-                        resolve({ success: false, status: res.statusCode, duration, error: 'Expected HTML' });
-                    }
-                    return;
-                }
-                
-                if (expectCsv) {
-                    const firstLine = data.split('\n')[0] || '';
-                    const hasHeader = firstLine.includes('collection_date') || firstLine.includes('bank_name') || firstLine.includes('interest_rate');
-                    if (hasHeader || data.length > 100) {
-                        console.log(`  ✓ CSV response (first line length: ${firstLine.length})`);
-                        resolve({ success: true, status: res.statusCode, duration, data: data });
-                    } else {
-                        console.log(`  ✗ CSV header not found. First line: ${firstLine.substring(0, 120)}`);
-                        resolve({ success: false, status: res.statusCode, duration, error: 'Invalid CSV structure' });
-                    }
-                    return;
-                }
-                
-                try {
-                    const json = JSON.parse(data);
-                    console.log(`  ✓ Valid JSON response`);
-                    
-                    if (description.includes('health')) {
-                        const ok = json.ok === true || json.status === 'ok' || (typeof json.healthy !== 'undefined');
-                        if (ok) console.log(`  Health: ok`);
-                        else console.log(`  Health payload: ${JSON.stringify(json).substring(0, 100)}`);
-                    } else if (description.includes('filters')) {
-                        console.log(`  Banks count: ${json.filters?.banks?.length ?? json.banks?.length ?? 0}`);
-                    } else if (description.includes('rates')) {
-                        console.log(`  Total records: ${json.total || 0}`);
-                        console.log(`  Data rows: ${json.data?.length || 0}`);
-                        if (json.data && json.data.length > 0) {
-                            console.log(`  First row sample:`, {
-                                date: json.data[0].collection_date,
-                                bank: json.data[0].bank_name,
-                                rate: json.data[0].interest_rate,
-                                cash_rate: json.data[0].rba_cash_rate
-                            });
-                        }
-                    } else if (description.includes('latest')) {
-                        const hasData = Array.isArray(json.data) || (json.data && typeof json.data === 'object');
-                        console.log(`  Latest data: ${hasData ? 'present' : 'missing'}`);
-                    } else if (description.includes('timeseries')) {
-                        const hasSeries = Array.isArray(json.data) || Array.isArray(json.series);
-                        console.log(`  Timeseries: ${hasSeries ? 'present' : 'missing'}`);
-                    }
-                    
-                    resolve({ success: true, status: res.statusCode, duration, data: json });
-                } catch (e) {
-                    console.log(`  ✗ Invalid JSON: ${e.message}`);
-                    console.log(`  First 200 chars: ${data.substring(0, 200)}`);
-                    resolve({ success: false, status: res.statusCode, duration, error: 'Invalid JSON' });
-                }
-            });
-        }).on('error', (err) => {
-            const duration = Date.now() - startTime;
-            console.log(`  ✗ Request failed: ${err.message}`);
-            resolve({ success: false, duration, error: err.message });
-        });
-    });
+function inferRowsAndTotal(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { rows: [], total: 0 }
+  }
+  const rows = Array.isArray(payload.rows)
+    ? payload.rows
+    : Array.isArray(payload.data)
+      ? payload.data
+      : []
+  const total = payload.total != null
+    ? asNumber(payload.total, rows.length)
+    : payload.count != null
+      ? asNumber(payload.count, rows.length)
+      : rows.length
+  return { rows, total }
 }
 
-async function runDiagnostics() {
-    console.log('========================================');
-    console.log('Australian Rates API Diagnostics');
-    console.log('========================================');
-    console.log(`Base URL: ${API_BASE}`);
-    console.log(`Test Time: ${new Date().toISOString()}`);
-    
-    const homepageUrl = getHomepageUrl();
-    
-    const tests = [
-        { url: `${API_BASE}/health`, description: 'Health endpoint' },
-        { url: `${API_BASE}/filters`, description: 'Filters endpoint (bank names, etc.)' },
-        { url: `${API_BASE}/rates?page=1&size=1&sort=collection_date&dir=desc`, description: 'Latest rate (for hero stats)' },
-        { url: `${API_BASE}/rates?page=1&size=50`, description: 'Rate Explorer table data (50 rows)' },
-        { url: `${API_BASE}/latest`, description: 'Latest rates endpoint' },
-        { url: `${API_BASE}/timeseries`, description: 'Timeseries endpoint' },
-        { url: `${API_BASE}/export.csv`, description: 'Export CSV endpoint', expectCsv: true },
-        { url: homepageUrl, description: 'Homepage HTML', expectHtml: true }
-    ];
-    
-    const results = [];
-    
-    for (const test of tests) {
-        const result = await testEndpoint(test.url, test.description, { expectCsv: test.expectCsv, expectHtml: test.expectHtml });
-        results.push({ ...test, ...result });
-        await new Promise(resolve => setTimeout(resolve, 500));
+async function requestJson(path) {
+  const url = `${ORIGIN}${path}`
+  const start = Date.now()
+  const res = await fetch(url)
+  const durationMs = Date.now() - start
+  const text = await res.text()
+  let json = null
+  try {
+    json = JSON.parse(text)
+  } catch {
+    json = null
+  }
+  return {
+    url,
+    status: res.status,
+    durationMs,
+    textLength: text.length,
+    json,
+    text,
+  }
+}
+
+async function benchmark(path, n) {
+  const durations = []
+  let non200 = 0
+  for (let i = 0; i < n; i += 1) {
+    const start = Date.now()
+    const res = await fetch(`${ORIGIN}${path}`)
+    const end = Date.now()
+    durations.push(end - start)
+    if (res.status !== 200) non200 += 1
+    await res.arrayBuffer()
+  }
+  const avg = durations.reduce((sum, x) => sum + x, 0) / durations.length
+  return {
+    avgMs: Number(avg.toFixed(1)),
+    p50Ms: Number(percentile(durations, 0.5).toFixed(1)),
+    p95Ms: Number(percentile(durations, 0.95).toFixed(1)),
+    non200,
+  }
+}
+
+async function runDatasetDiagnostics(dataset) {
+  const base = dataset.base
+  const out = {
+    dataset: dataset.key,
+    failures: [],
+    checks: [],
+    benchmark: [],
+  }
+
+  const health = await requestJson(`${base}/health`)
+  out.checks.push({ name: 'health', status: health.status, ms: health.durationMs })
+  if (health.status !== 200) out.failures.push(`health status ${health.status}`)
+
+  const filters = await requestJson(`${base}/filters`)
+  out.checks.push({ name: 'filters', status: filters.status, ms: filters.durationMs })
+  if (filters.status !== 200) out.failures.push(`filters status ${filters.status}`)
+
+  const rates = await requestJson(`${base}/rates?page=1&size=1&source_mode=all`)
+  out.checks.push({ name: 'rates', status: rates.status, ms: rates.durationMs })
+  if (rates.status !== 200 || !rates.json) {
+    out.failures.push(`rates status ${rates.status}`)
+  }
+  const ratesShape = inferRowsAndTotal(rates.json)
+
+  const latest = await requestJson(`${base}/latest?limit=5&source_mode=all`)
+  out.checks.push({ name: 'latest', status: latest.status, ms: latest.durationMs })
+  if (latest.status !== 200 || !latest.json) {
+    out.failures.push(`latest status ${latest.status}`)
+  }
+  const latestShape = inferRowsAndTotal(latest.json)
+
+  let timeseries = null
+  const productKey = (latestShape.rows[0] && latestShape.rows[0].product_key) || null
+  if (productKey) {
+    const encoded = encodeURIComponent(String(productKey))
+    timeseries = await requestJson(`${base}/timeseries?product_key=${encoded}&limit=5&source_mode=all`)
+    out.checks.push({ name: 'timeseries', status: timeseries.status, ms: timeseries.durationMs })
+    if (timeseries.status !== 200) out.failures.push(`timeseries status ${timeseries.status}`)
+  }
+
+  const exportJson = await requestJson(`${base}/export?format=json&source_mode=all`)
+  out.checks.push({ name: 'export(json)', status: exportJson.status, ms: exportJson.durationMs })
+  if (exportJson.status !== 200 || !exportJson.json) {
+    out.failures.push(`export(json) status ${exportJson.status}`)
+  }
+  const exportShape = inferRowsAndTotal(exportJson.json)
+
+  // Contradiction check: list endpoint empty while export has rows.
+  if (ratesShape.total === 0 && exportShape.total > 0) {
+    out.failures.push(`contradiction: rates total=0 but export total=${exportShape.total}`)
+  }
+
+  // Parse-shape check for rows/count support.
+  if (!Array.isArray(latestShape.rows)) {
+    out.failures.push('latest response shape invalid')
+  }
+
+  const benchTargets = [
+    `${base}/rates?page=1&size=50&source_mode=all`,
+    `${base}/latest?limit=200&source_mode=all`,
+    `${base}/filters`,
+  ]
+  for (const path of benchTargets) {
+    const stats = await benchmark(path, BENCH_N)
+    const pass = stats.non200 === 0 && stats.p95Ms <= P95_TARGET_MS
+    out.benchmark.push({
+      path,
+      ...stats,
+      pass,
+    })
+    if (!pass) {
+      out.failures.push(`benchmark failed for ${path} (p95=${stats.p95Ms}ms, non200=${stats.non200})`)
     }
-    
-    // Summary
-    console.log('\n========================================');
-    console.log('SUMMARY');
-    console.log('========================================');
-    
-    const successful = results.filter(r => r.success);
-    const failed = results.filter(r => !r.success);
-    
-    console.log(`\nSuccessful: ${successful.length}/${results.length}`);
-    if (successful.length > 0) {
-        successful.forEach(r => {
-            console.log(`  ✓ ${r.description} (${r.status}, ${r.duration}ms)`);
-        });
+  }
+
+  return out
+}
+
+async function main() {
+  console.log('========================================')
+  console.log('AustralianRates API Diagnostics')
+  console.log('========================================')
+  console.log(`Origin: ${ORIGIN}`)
+  console.log(`Bench repetitions: ${BENCH_N}`)
+  console.log(`P95 target: ${P95_TARGET_MS}ms`)
+  console.log(`Time: ${new Date().toISOString()}`)
+
+  const results = []
+  for (const dataset of DATASETS) {
+    console.log(`\n--- ${dataset.key} ---`)
+    const result = await runDatasetDiagnostics(dataset)
+    results.push(result)
+    for (const check of result.checks) {
+      console.log(`${check.name.padEnd(12)} status=${check.status} ms=${check.ms}`)
     }
-    
-    if (failed.length > 0) {
-        console.log(`\nFailed: ${failed.length}/${results.length}`);
-        failed.forEach(r => {
-            console.log(`  ✗ ${r.description}`);
-            if (r.status) console.log(`    Status: ${r.status}`);
-            if (r.error) console.log(`    Error: ${r.error}`);
-        });
+    for (const bench of result.benchmark) {
+      console.log(`bench ${bench.path} avg=${bench.avgMs} p50=${bench.p50Ms} p95=${bench.p95Ms} pass=${bench.pass}`)
     }
-    
-    // Recommendations
-    console.log('\n========================================');
-    console.log('RECOMMENDATIONS');
-    console.log('========================================\n');
-    
-    if (failed.length === 0) {
-        console.log('✓ All API endpoints are working correctly!');
-        console.log('  The homepage test failures may be due to timing issues.');
-        console.log('  Try increasing wait times in test-homepage.js');
+    if (result.failures.length) {
+      console.log('failures:')
+      for (const failure of result.failures) {
+        console.log(`  - ${failure}`)
+      }
     } else {
-        const apiEndpointsFailed = failed.some(r => r.url.includes('/api/'));
-        const homepageFailed = failed.some(r => r.description === 'Homepage HTML');
-        
-        if (homepageFailed) {
-            console.log('✗ Homepage not accessible');
-            console.log('  - Check DNS resolution');
-            console.log('  - Verify website is deployed');
-            console.log('  - Check Cloudflare Pages status');
-        }
-        
-        if (apiEndpointsFailed) {
-            console.log('✗ API endpoints not working');
-            console.log('  - Check Cloudflare Workers deployment');
-            console.log('  - Verify API routes are configured');
-            console.log('  - Check database connectivity');
-            console.log('  - Review Cloudflare Workers logs');
-            console.log('  - Verify environment variables');
-        }
-        
-        const notFoundErrors = failed.filter(r => r.status === 404);
-        if (notFoundErrors.length > 0) {
-            console.log('\n✗ 404 Not Found errors detected');
-            console.log('  - Check routing configuration');
-            console.log('  - Verify URL paths are correct');
-            console.log('  - Confirm workers are bound to routes');
-        }
-        
-        const serverErrors = failed.filter(r => r.status >= 500);
-        if (serverErrors.length > 0) {
-            console.log('\n✗ Server errors (5xx) detected');
-            console.log('  - Check Cloudflare Workers logs');
-            console.log('  - Verify database is running');
-            console.log('  - Check for runtime errors in worker code');
-        }
+      console.log('no failures')
     }
-    
-    console.log('\n========================================\n');
-    
-    // Exit code
-    process.exit(failed.length > 0 ? 1 : 0);
+  }
+
+  const allFailures = results.flatMap((r) => r.failures.map((f) => `[${r.dataset}] ${f}`))
+
+  console.log('\n========================================')
+  if (allFailures.length === 0) {
+    console.log('PASS: all diagnostics checks succeeded')
+    console.log('========================================')
+    process.exit(0)
+  }
+  console.log('FAIL: diagnostics detected issues')
+  for (const failure of allFailures) {
+    console.log(`- ${failure}`)
+  }
+  console.log('========================================')
+  process.exit(1)
 }
 
-// Run diagnostics
-runDiagnostics().catch(err => {
-    console.error('Fatal error:', err);
-    process.exit(1);
-});
+main().catch((error) => {
+  console.error('Fatal diagnostic error:', error)
+  process.exit(1)
+})

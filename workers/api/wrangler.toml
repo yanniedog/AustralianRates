@@ -41,9 +41,9 @@ queue = "australianrates-ingest"
 
 [[queues.consumers]]
 queue = "australianrates-ingest"
-max_batch_size = 10
+max_batch_size = 50
 max_batch_timeout = 5
-max_retries = 6
+max_retries = 3
 dead_letter_queue = "australianrates-ingest-dlq"
 
 [[durable_objects.bindings]]
@@ -62,17 +62,19 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Every minute; actual run gated by rate_check_interval_minutes in app_config (default 1).
-crons = ["* * * * *"]
+# Hourly; actual run gated by target-hour and rate_check_interval_minutes checks.
+crons = ["0 * * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
 PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
 MELBOURNE_TARGET_HOUR = "6"
-MANUAL_RUN_COOLDOWN_SECONDS = "0"
+MANUAL_RUN_COOLDOWN_SECONDS = "60"
 LOCK_TTL_SECONDS = "7200"
-MAX_QUEUE_ATTEMPTS = "6"
+MAX_QUEUE_ATTEMPTS = "3"
+MAX_PRODUCTS_PER_LENDER = "80"
+PERSIST_SUCCESSFUL_PRODUCT_DETAILS = "false"
 FEATURE_PROSPECTIVE_ENABLED = "true"
 FEATURE_BACKFILL_ENABLED = "true"
 CF_ACCESS_TEAM_DOMAIN = ""

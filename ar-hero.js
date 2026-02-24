@@ -15,7 +15,16 @@
             var ratesRes = await fetch(apiBase + '/rates?' + new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' }));
             var ratesData = await ratesRes.json();
             if (ratesData && ratesData.total != null) {
-                if (els.statRecords) els.statRecords.innerHTML = 'Records: <strong>' + Number(ratesData.total).toLocaleString() + '</strong>';
+                if (els.statRecords) {
+                    var total = Number(ratesData.total || 0);
+                    var meta = ratesData.meta || {};
+                    var mix = meta.source_mix || {};
+                    var scheduled = Number(mix.scheduled || 0);
+                    var manual = Number(mix.manual || 0);
+                    var mode = meta.source_mode || 'all';
+                    var mixText = ' (mode: ' + esc(mode) + ', scheduled ' + scheduled.toLocaleString() + ', manual ' + manual.toLocaleString() + ')';
+                    els.statRecords.innerHTML = 'Records: <strong>' + total.toLocaleString() + '</strong><span class="hint">' + mixText + '</span>';
+                }
                 if (ratesData.data && ratesData.data.length > 0) {
                     var latest = ratesData.data[0];
                     if (els.statUpdated && latest.collection_date) {

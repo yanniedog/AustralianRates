@@ -31,12 +31,87 @@ type BackfillRunRequest = {
   maxSnapshotsPerMonth?: number
 }
 
+function sourceWhere(runSource: 'scheduled' | 'manual'): string {
+  if (runSource === 'manual') return `run_source = 'manual'`
+  return `(run_source IS NULL OR run_source = 'scheduled')`
+}
+
+function lenderCodeByBankName(lenders: LenderConfig[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const lender of lenders) {
+    map.set(lender.canonical_bank_name, lender.code)
+    map.set(lender.name, lender.code)
+  }
+  return map
+}
+
+async function getCompletedMortgageLenders(
+  db: D1Database,
+  lenders: LenderConfig[],
+  collectionDate: string,
+  runSource: 'scheduled' | 'manual',
+): Promise<Set<string>> {
+  const where = sourceWhere(runSource)
+  const result = await db
+    .prepare(
+      `SELECT DISTINCT bank_name
+       FROM historical_loan_rates
+       WHERE collection_date = ?1 AND ${where}`,
+    )
+    .bind(collectionDate)
+    .all<{ bank_name: string }>()
+
+  const bankToCode = lenderCodeByBankName(lenders)
+  const completed = new Set<string>()
+  for (const row of result.results ?? []) {
+    const code = bankToCode.get(row.bank_name)
+    if (code) completed.add(code)
+  }
+  return completed
+}
+
+async function getCompletedSavingsTdLenders(
+  db: D1Database,
+  lenders: LenderConfig[],
+  collectionDate: string,
+  runSource: 'scheduled' | 'manual',
+): Promise<Set<string>> {
+  const where = sourceWhere(runSource)
+  const result = await db
+    .prepare(
+      `SELECT bank_name FROM historical_savings_rates WHERE collection_date = ?1 AND ${where}
+       UNION
+       SELECT bank_name FROM historical_term_deposit_rates WHERE collection_date = ?1 AND ${where}`,
+    )
+    .bind(collectionDate)
+    .all<{ bank_name: string }>()
+
+  const bankToCode = lenderCodeByBankName(lenders)
+  const completed = new Set<string>()
+  for (const row of result.results ?? []) {
+    const code = bankToCode.get(row.bank_name)
+    if (code) completed.add(code)
+  }
+  return completed
+}
+
 function filterLenders(codes?: string[]): LenderConfig[] {
   if (!codes || codes.length === 0) {
     return TARGET_LENDERS
   }
   const selected = new Set(codes.map((code) => code.toLowerCase().trim()))
   return TARGET_LENDERS.filter((lender) => selected.has(lender.code.toLowerCase()))
+}
+
+function mergePerLenderCounts(
+  primary: Record<string, number>,
+  secondary: Record<string, number>,
+): Record<string, number> {
+  const merged: Record<string, number> = { ...primary }
+  for (const [code, count] of Object.entries(secondary)) {
+    merged[code] = (merged[code] || 0) + count
+  }
+  return merged
 }
 
 function isMonthCursor(value: string | undefined): value is string {
@@ -85,6 +160,27 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
     lockAcquired = true
   }
 
+  const [doneLoans, doneSavingsTd] = await Promise.all([
+    getCompletedMortgageLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+    getCompletedSavingsTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+  ])
+  const pendingLoanLenders = TARGET_LENDERS.filter((x) => !doneLoans.has(x.code))
+  const pendingSavingsLenders = TARGET_LENDERS.filter((x) => !doneSavingsTd.has(x.code))
+
+  if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
+    if (lockAcquired) {
+      await releaseRunLock(env, { key: lockKey, owner: runId })
+    }
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'already_fresh_for_date',
+      runId,
+      collectionDate,
+      pending: { loans: 0, savings_td: 0 },
+    }
+  }
+
   const created = await createRunReport(env.DB, {
     runId,
     runType: 'daily',
@@ -114,17 +210,17 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       runId,
       runSource: options.source,
       collectionDate,
-      lenders: TARGET_LENDERS,
+      lenders: pendingLoanLenders,
     })
 
     const savingsEnqueue = await enqueueDailySavingsLenderJobs(env, {
       runId,
       runSource: options.source,
       collectionDate,
-      lenders: TARGET_LENDERS,
+      lenders: pendingSavingsLenders,
     })
 
-    const summary = buildInitialPerLenderSummary(enqueue.perLender)
+    const summary = buildInitialPerLenderSummary(mergePerLenderCounts(enqueue.perLender, savingsEnqueue.perLender))
     await setRunEnqueuedSummary(env.DB, runId, summary)
     const totalEnqueued = enqueue.enqueued + savingsEnqueue.enqueued
     log.info('pipeline', `Daily run ${runId} enqueued ${totalEnqueued} jobs (${enqueue.enqueued} loan + ${savingsEnqueue.enqueued} savings/td) for ${collectionDate}`, { runId })

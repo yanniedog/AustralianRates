@@ -32,6 +32,40 @@ export function calculateRetryDelaySeconds(attempts: number): number {
   return Math.min(900, 15 * Math.pow(2, safeAttempt - 1))
 }
 
+function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = value.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
+  return fallback
+}
+
+function maxProductsPerLender(env: EnvBindings): number {
+  return Math.max(10, Math.min(250, parseIntegerEnv(env.MAX_PRODUCTS_PER_LENDER, 80)))
+}
+
+async function persistProductDetailPayload(
+  env: EnvBindings,
+  runSource: 'scheduled' | 'manual' | undefined,
+  input: Parameters<typeof persistRawPayload>[1],
+): Promise<void> {
+  const persistSuccessful = parseBooleanEnv(env.PERSIST_SUCCESSFUL_PRODUCT_DETAILS, false)
+  const isScheduled = (runSource ?? 'scheduled') === 'scheduled'
+  const isSuccess = (input.httpStatus ?? 200) < 400
+  if (isScheduled && isSuccess && !persistSuccessful) {
+    return
+  }
+  await persistRawPayload(env, input)
+}
+
+function isNonRetryableErrorMessage(message: string): boolean {
+  return (
+    message === 'invalid_queue_message_shape' ||
+    message.startsWith('unknown_lender_code:') ||
+    message.startsWith('daily_ingest_no_valid_rows:')
+  )
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
@@ -122,6 +156,14 @@ function splitValidatedTdRows(rows: NormalizedTdRow[]) {
   return { accepted, dropped }
 }
 
+function summarizeDropReasons(items: Array<{ reason: string }>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const item of items) {
+    out[item.reason] = (out[item.reason] || 0) + 1
+  }
+  return out
+}
+
 async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!lender) {
@@ -142,6 +184,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   const collectedRows: NormalizedRateRow[] = []
   let inspectedHtml = 0
   let droppedByParser = 0
+  const productCap = maxProductsPerLender(env)
 
   for (const candidateEndpoint of uniqueCandidates) {
     const products = await fetchResidentialMortgageProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions })
@@ -155,7 +198,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       })
     }
 
-    const productIds = products.productIds.slice(0, 250)
+    const productIds = products.productIds.slice(0, productCap)
     for (const productId of productIds) {
       const details = await fetchProductDetailRows({
         lender,
@@ -165,7 +208,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         cdrVersions: playbook.cdrVersions,
       })
 
-      await persistRawPayload(env, {
+      await persistProductDetailPayload(env, job.runSource, {
         sourceType: 'cdr_product_detail',
         sourceUrl: details.rawPayload.sourceUrl,
         payload: details.rawPayload.body,
@@ -279,7 +322,7 @@ async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): 
     cdrVersions: getLenderPlaybook(lender).cdrVersions,
   })
 
-  await persistRawPayload(env, {
+  await persistProductDetailPayload(env, job.runSource, {
     sourceType: 'cdr_product_detail',
     sourceUrl: details.rawPayload.sourceUrl,
     payload: details.rawPayload.body,
@@ -439,6 +482,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
 
   const savingsRows: NormalizedSavingsRow[] = []
   const tdRows: NormalizedTdRow[] = []
+  const productCap = maxProductsPerLender(env)
 
   for (const candidateEndpoint of uniqueCandidates) {
     const [savingsProducts, tdProducts] = await Promise.all([
@@ -456,7 +500,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
       })
     }
 
-    for (const productId of savingsProducts.productIds.slice(0, 250)) {
+    for (const productId of savingsProducts.productIds.slice(0, productCap)) {
       const details = await fetchSavingsProductDetailRows({
         lender,
         endpointUrl: candidateEndpoint,
@@ -464,7 +508,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
         collectionDate: job.collectionDate,
         cdrVersions: playbook.cdrVersions,
       })
-      await persistRawPayload(env, {
+      await persistProductDetailPayload(env, job.runSource, {
         sourceType: 'cdr_product_detail',
         sourceUrl: details.rawPayload.sourceUrl,
         payload: details.rawPayload.body,
@@ -474,7 +518,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
       for (const row of details.savingsRows) savingsRows.push(row)
     }
 
-    for (const productId of tdProducts.productIds.slice(0, 250)) {
+    for (const productId of tdProducts.productIds.slice(0, productCap)) {
       const details = await fetchTdProductDetailRows({
         lender,
         endpointUrl: candidateEndpoint,
@@ -482,7 +526,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
         collectionDate: job.collectionDate,
         cdrVersions: playbook.cdrVersions,
       })
-      await persistRawPayload(env, {
+      await persistProductDetailPayload(env, job.runSource, {
         sourceType: 'cdr_product_detail',
         sourceUrl: details.rawPayload.sourceUrl,
         payload: details.rawPayload.body,
@@ -495,7 +539,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     if (savingsRows.length > 0 || tdRows.length > 0) break
   }
 
-  const { accepted: savingsAccepted } = splitValidatedSavingsRows(savingsRows)
+  const { accepted: savingsAccepted, dropped: savingsDropped } = splitValidatedSavingsRows(savingsRows)
   for (const row of savingsAccepted) {
     row.runId = job.runId
     row.runSource = job.runSource ?? 'scheduled'
@@ -508,7 +552,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     })
   }
 
-  const { accepted: tdAccepted } = splitValidatedTdRows(tdRows)
+  const { accepted: tdAccepted, dropped: tdDropped } = splitValidatedTdRows(tdRows)
   for (const row of tdAccepted) {
     row.runId = job.runId
     row.runSource = job.runSource ?? 'scheduled'
@@ -521,10 +565,38 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     })
   }
 
+  await persistRawPayload(env, {
+    sourceType: 'cdr_products',
+    sourceUrl: `summary://${job.lenderCode}/savings-td`,
+    payload: {
+      lenderCode: job.lenderCode,
+      runId: job.runId,
+      collectionDate: job.collectionDate,
+      fetchedAt: nowIso(),
+      savings: {
+        inspected: savingsRows.length,
+        accepted: savingsAccepted.length,
+        dropped: savingsDropped.length,
+        reasons: summarizeDropReasons(savingsDropped),
+      },
+      term_deposits: {
+        inspected: tdRows.length,
+        accepted: tdAccepted.length,
+        dropped: tdDropped.length,
+        reasons: summarizeDropReasons(tdDropped),
+      },
+      source_mix: {
+        [job.runSource ?? 'scheduled']: savingsAccepted.length + tdAccepted.length,
+      },
+    },
+    httpStatus: 200,
+    notes: `savings_td_quality_summary lender=${job.lenderCode}`,
+  })
+
   log.info('consumer', `daily_savings_lender_fetch completed`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
-    context: `savings=${savingsAccepted.length} td=${tdAccepted.length}`,
+    context: `savings=${savingsAccepted.length}/${savingsRows.length} td=${tdAccepted.length}/${tdRows.length}`,
   })
 }
 
@@ -577,6 +649,24 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
         runId: context.runId ?? undefined,
         lenderCode: context.lenderCode ?? undefined,
       })
+
+      if (isNonRetryableErrorMessage(errorMessage)) {
+        log.warn('consumer', 'queue_message_non_retryable', {
+          runId: context.runId ?? undefined,
+          lenderCode: context.lenderCode ?? undefined,
+          context: errorMessage,
+        })
+        if (context.runId && context.lenderCode) {
+          await recordRunQueueOutcome(env.DB, {
+            runId: context.runId,
+            lenderCode: context.lenderCode,
+            success: false,
+            errorMessage,
+          })
+        }
+        msg.ack()
+        continue
+      }
 
       if (attempts >= maxAttempts) {
         log.error('consumer', `queue_message_exhausted max_attempts=${maxAttempts}`, {

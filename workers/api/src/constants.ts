@@ -18,7 +18,7 @@ export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
 export const DEFAULT_PUBLIC_CACHE_SECONDS = 120
 export const DEFAULT_LOCK_TTL_SECONDS = 7200
-export const DEFAULT_MAX_QUEUE_ATTEMPTS = 6
+export const DEFAULT_MAX_QUEUE_ATTEMPTS = 3
 
 export const SECURITY_PURPOSES: SecurityPurpose[] = ['owner_occupied', 'investment']
 export const REPAYMENT_TYPES: RepaymentType[] = ['principal_and_interest', 'interest_only']

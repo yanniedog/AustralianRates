@@ -41,6 +41,8 @@ export type NormalizedTdRow = {
 export const MIN_SAVINGS_RATE = 0
 export const MAX_SAVINGS_RATE = 15
 export const MAX_MONTHLY_FEE = 50
+const MAX_BALANCE_VALUE = 100000000
+const MAX_DEPOSIT_VALUE = 100000000
 
 function asText(value: unknown): string {
   if (value == null) return ''
@@ -49,6 +51,44 @@ function asText(value: unknown): string {
 
 function lower(value: unknown): string {
   return asText(value).toLowerCase()
+}
+
+function hasBlockedProductText(name: string): boolean {
+  const normalized = lower(name)
+  const blocked = [
+    'disclaimer',
+    'warning',
+    'example',
+    'privacy',
+    'terms and conditions',
+    'copyright',
+    'tooltip',
+  ]
+  return blocked.some((x) => normalized.includes(x))
+}
+
+function isLikelySavingsProductName(name: string): boolean {
+  const normalized = lower(name)
+  if (!normalized || normalized.length < 4) return false
+  if (hasBlockedProductText(normalized)) return false
+  const tokens = ['savings', 'account', 'bonus', 'intro', 'transaction', 'everyday', 'at call', 'deposit']
+  return tokens.some((x) => normalized.includes(x))
+}
+
+function isLikelyTdProductName(name: string): boolean {
+  const normalized = lower(name)
+  if (!normalized || normalized.length < 4) return false
+  if (hasBlockedProductText(normalized)) return false
+  const tokens = ['term', 'deposit', 'fixed', 'maturity']
+  return tokens.some((x) => normalized.includes(x))
+}
+
+function minConfidenceForFlag(flag: string): number {
+  const normalized = lower(flag)
+  if (normalized.startsWith('cdr_')) return 0.7
+  if (normalized.startsWith('scraped_fallback')) return 0.75
+  if (normalized.startsWith('parsed_from_wayback')) return 0.65
+  return 0.6
 }
 
 export function normalizeAccountType(text: string): SavingsAccountType {
@@ -134,11 +174,25 @@ export function validateNormalizedSavingsRow(
 ): { ok: true } | { ok: false; reason: string } {
   if (!row.productId?.trim()) return { ok: false, reason: 'missing_product_id' }
   if (!row.productName?.trim()) return { ok: false, reason: 'missing_product_name' }
+  if (!isLikelySavingsProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
   if (!row.sourceUrl?.trim()) return { ok: false, reason: 'missing_source_url' }
   if (!Number.isFinite(row.interestRate) || row.interestRate < MIN_SAVINGS_RATE || row.interestRate > MAX_SAVINGS_RATE) {
     return { ok: false, reason: 'interest_rate_out_of_bounds' }
   }
-  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < 0 || row.confidenceScore > 1) {
+  if (row.minBalance != null && (!Number.isFinite(row.minBalance) || row.minBalance < 0 || row.minBalance > MAX_BALANCE_VALUE)) {
+    return { ok: false, reason: 'min_balance_out_of_bounds' }
+  }
+  if (row.maxBalance != null && (!Number.isFinite(row.maxBalance) || row.maxBalance < 0 || row.maxBalance > MAX_BALANCE_VALUE)) {
+    return { ok: false, reason: 'max_balance_out_of_bounds' }
+  }
+  if (row.minBalance != null && row.maxBalance != null && row.minBalance > row.maxBalance) {
+    return { ok: false, reason: 'balance_bounds_invalid' }
+  }
+  if (row.monthlyFee != null && (!Number.isFinite(row.monthlyFee) || row.monthlyFee < 0 || row.monthlyFee > MAX_MONTHLY_FEE)) {
+    return { ok: false, reason: 'monthly_fee_out_of_bounds' }
+  }
+  const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
+  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < minConfidence || row.confidenceScore > 1) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
   }
   return { ok: true }
@@ -149,6 +203,7 @@ export function validateNormalizedTdRow(
 ): { ok: true } | { ok: false; reason: string } {
   if (!row.productId?.trim()) return { ok: false, reason: 'missing_product_id' }
   if (!row.productName?.trim()) return { ok: false, reason: 'missing_product_name' }
+  if (!isLikelyTdProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
   if (!row.sourceUrl?.trim()) return { ok: false, reason: 'missing_source_url' }
   if (!Number.isFinite(row.interestRate) || row.interestRate < MIN_SAVINGS_RATE || row.interestRate > MAX_SAVINGS_RATE) {
     return { ok: false, reason: 'interest_rate_out_of_bounds' }
@@ -156,7 +211,17 @@ export function validateNormalizedTdRow(
   if (!Number.isFinite(row.termMonths) || row.termMonths < 1 || row.termMonths > 120) {
     return { ok: false, reason: 'term_months_out_of_bounds' }
   }
-  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < 0 || row.confidenceScore > 1) {
+  if (row.minDeposit != null && (!Number.isFinite(row.minDeposit) || row.minDeposit < 0 || row.minDeposit > MAX_DEPOSIT_VALUE)) {
+    return { ok: false, reason: 'min_deposit_out_of_bounds' }
+  }
+  if (row.maxDeposit != null && (!Number.isFinite(row.maxDeposit) || row.maxDeposit < 0 || row.maxDeposit > MAX_DEPOSIT_VALUE)) {
+    return { ok: false, reason: 'max_deposit_out_of_bounds' }
+  }
+  if (row.minDeposit != null && row.maxDeposit != null && row.minDeposit > row.maxDeposit) {
+    return { ok: false, reason: 'deposit_bounds_invalid' }
+  }
+  const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
+  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < minConfidence || row.confidenceScore > 1) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
   }
   return { ok: true }

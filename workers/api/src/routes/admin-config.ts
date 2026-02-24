@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { ensureAppConfigTable } from '../db/app-config'
 import type { AppContext, EnvBindings } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -13,6 +14,8 @@ const SAFE_ENV_KEYS = [
   'MANUAL_RUN_COOLDOWN_SECONDS',
   'LOCK_TTL_SECONDS',
   'MAX_QUEUE_ATTEMPTS',
+  'MAX_PRODUCTS_PER_LENDER',
+  'PERSIST_SUCCESSFUL_PRODUCT_DETAILS',
   'FEATURE_PROSPECTIVE_ENABLED',
   'FEATURE_BACKFILL_ENABLED',
   'CF_ACCESS_TEAM_DOMAIN',
@@ -24,6 +27,7 @@ export const adminConfigRoutes = new Hono<AppContext>()
 /** GET /admin/config - return all app_config rows */
 adminConfigRoutes.get('/config', async (c) => {
   const db = c.env.DB
+  await ensureAppConfigTable(db)
   const stmt = db.prepare(`SELECT key, value, updated_at FROM ${APP_CONFIG_TABLE} ORDER BY key`)
   const result = await stmt.all<{ key: string; value: string; updated_at: string }>()
   const rows = result.results || []
@@ -44,6 +48,7 @@ adminConfigRoutes.put('/config', async (c) => {
   const value = typeof body.value === 'string' ? body.value : String(body.value ?? '')
 
   const db = c.env.DB
+  await ensureAppConfigTable(db)
   const now = new Date().toISOString()
   await db
     .prepare(
@@ -73,6 +78,7 @@ adminConfigRoutes.delete('/config', async (c) => {
   }
   const key = String(body.key).trim()
   const db = c.env.DB
+  await ensureAppConfigTable(db)
   const result = await db.prepare(`DELETE FROM ${APP_CONFIG_TABLE} WHERE key = ?`).bind(key).run()
   return c.json({
     ok: true,

@@ -289,3 +289,16 @@ export async function getLastManualRunStartedAt(db: D1Database): Promise<string 
 
   return row?.started_at ?? null
 }
+
+export async function hasRunningManualRun(db: D1Database): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT run_id FROM run_reports
+       WHERE run_source = 'manual' AND run_type = 'daily' AND status = 'running'
+       ORDER BY started_at DESC
+       LIMIT 1`,
+    )
+    .first<{ run_id: string }>()
+
+  return Boolean(row?.run_id)
+}

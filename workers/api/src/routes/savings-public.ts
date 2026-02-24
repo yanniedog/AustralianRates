@@ -2,17 +2,18 @@ import { Hono } from 'hono'
 import { DEFAULT_PUBLIC_CACHE_SECONDS } from '../constants'
 import {
   getSavingsFilters,
+  getSavingsQualityDiagnostics,
+  getSavingsStaleness,
   queryLatestSavingsRates,
   querySavingsForExport,
   querySavingsRatesPaginated,
   querySavingsTimeseries,
 } from '../db/savings-queries'
-import { getLastManualRunStartedAt } from '../db/run-reports'
-import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
-import { log } from '../utils/logger'
-import { parseIntegerEnv } from '../utils/time'
+import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
+import { parseSourceMode } from '../utils/source-mode'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -26,29 +27,21 @@ savingsPublicRoutes.get('/health', (c) => {
   return c.json({ ok: true, service: 'australianrates-savings' })
 })
 
+savingsPublicRoutes.get('/staleness', async (c) => {
+  withPublicCache(c, 60)
+  const staleness = await getSavingsStaleness(c.env.DB)
+  const staleLenders = staleness.filter((l) => l.stale)
+  return c.json({ ok: true, stale_count: staleLenders.length, lenders: staleness })
+})
+
+savingsPublicRoutes.get('/quality/diagnostics', async (c) => {
+  const diagnostics = await getSavingsQualityDiagnostics(c.env.DB)
+  return c.json({ ok: true, diagnostics })
+})
+
 savingsPublicRoutes.post('/trigger-run', async (c) => {
-  const DEFAULT_COOLDOWN_SECONDS = 0
-  const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
-  const cooldownMs = cooldownSeconds * 1000
-
-  if (cooldownMs > 0) {
-    const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
-    if (lastStartedAt) {
-      const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : lastStartedAt.trim() + 'Z').getTime()
-      const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
-      if (elapsed >= 0 && elapsed < cooldownMs) {
-        const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
-        return c.json(
-          { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
-          429,
-        )
-      }
-    }
-  }
-
-  log.info('api', 'Public manual run triggered (savings)')
-  const result = await triggerDailyRun(c.env, { source: 'manual', force: true })
-  return c.json({ ok: true, result })
+  const result = await handlePublicTriggerRun(c.env, 'savings')
+  return c.json(result.body, result.status)
 })
 
 savingsPublicRoutes.get('/filters', async (c) => {
@@ -59,7 +52,7 @@ savingsPublicRoutes.get('/filters', async (c) => {
 savingsPublicRoutes.get('/rates', async (c) => {
   const q = c.req.query()
   const dir = String(q.dir || 'desc').toLowerCase()
-  const includeManual = q.include_manual === 'true' || q.include_manual === '1'
+  const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
 
   const result = await querySavingsRatesPaginated(c.env.DB, {
     page: Number(q.page || 1),
@@ -72,30 +65,49 @@ savingsPublicRoutes.get('/rates', async (c) => {
     depositTier: q.deposit_tier,
     sort: q.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
-    includeManual,
+    sourceMode,
   })
-  return c.json(result)
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: result.total,
+    returnedRows: result.data.length,
+    sourceMix: result.source_mix,
+    limited: result.total > result.data.length,
+  })
+  return c.json({ ...result, meta })
 })
 
 savingsPublicRoutes.get('/latest', async (c) => {
   const q = c.req.query()
   const orderByRaw = String(q.order_by || q.orderBy || 'default').toLowerCase()
   const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
+  const limit = Number(q.limit || 200)
 
   const rows = await queryLatestSavingsRates(c.env.DB, {
     bank: q.bank,
     accountType: q.account_type,
     rateType: q.rate_type,
     depositTier: q.deposit_tier,
-    limit: Number(q.limit || 200),
+    sourceMode,
+    limit,
     orderBy,
   })
-  return c.json({ ok: true, count: rows.length, rows })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: rows.length,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: rows.length >= Math.max(1, Math.floor(limit)),
+  })
+  return c.json({ ok: true, count: rows.length, rows, meta })
 })
 
 savingsPublicRoutes.get('/timeseries', async (c) => {
   const q = c.req.query()
   const productKey = q.product_key || q.productKey
+  const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
+  const limit = Number(q.limit || 1000)
   if (!productKey) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
   }
@@ -105,11 +117,19 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
     productKey,
     accountType: q.account_type,
     rateType: q.rate_type,
+    sourceMode,
     startDate: q.start_date,
     endDate: q.end_date,
-    limit: Number(q.limit || 1000),
+    limit,
   })
-  return c.json({ ok: true, count: rows.length, rows })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: rows.length,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: rows.length >= Math.max(1, Math.floor(limit)),
+  })
+  return c.json({ ok: true, count: rows.length, rows, meta })
 })
 
 savingsPublicRoutes.get('/export', async (c) => {
@@ -119,9 +139,9 @@ savingsPublicRoutes.get('/export', async (c) => {
     return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
   }
   const dir = String(q.dir || 'desc').toLowerCase()
-  const includeManual = q.include_manual === 'true' || q.include_manual === '1'
+  const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
 
-  const { data, total } = await querySavingsForExport(c.env.DB, {
+  const { data, total, source_mix } = await querySavingsForExport(c.env.DB, {
     startDate: q.start_date,
     endDate: q.end_date,
     bank: q.bank,
@@ -130,22 +150,31 @@ savingsPublicRoutes.get('/export', async (c) => {
     depositTier: q.deposit_tier,
     sort: q.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
-    includeManual,
+    sourceMode,
+  })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: total,
+    returnedRows: data.length,
+    sourceMix: source_mix,
+    limited: total > data.length,
   })
 
   if (format === 'csv') {
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', 'attachment; filename="savings-export.csv"')
+    setCsvMetaHeaders(c, meta)
     return c.body(toCsv(data as Array<Record<string, unknown>>))
   }
   c.header('Content-Type', 'application/json; charset=utf-8')
   c.header('Content-Disposition', 'attachment; filename="savings-export.json"')
-  return c.json({ data, total, last_page: 1 })
+  return c.json({ data, total, last_page: 1, meta })
 })
 
 savingsPublicRoutes.get('/export.csv', async (c) => {
   const q = c.req.query()
   const dataset = String(q.dataset || 'latest').toLowerCase()
+  const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
 
   if (dataset === 'timeseries') {
     const productKey = q.product_key || q.productKey
@@ -157,12 +186,21 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
       productKey,
       accountType: q.account_type,
       rateType: q.rate_type,
+      sourceMode,
       startDate: q.start_date,
       endDate: q.end_date,
       limit: Number(q.limit || 5000),
     })
+    const meta = buildListMeta({
+      sourceMode,
+      totalRows: rows.length,
+      returnedRows: rows.length,
+      sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+      limited: false,
+    })
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', 'attachment; filename="savings-timeseries.csv"')
+    setCsvMetaHeaders(c, meta)
     return c.body(toCsv(rows as Array<Record<string, unknown>>))
   }
 
@@ -171,10 +209,19 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
     accountType: q.account_type,
     rateType: q.rate_type,
     depositTier: q.deposit_tier,
+    sourceMode,
     limit: Number(q.limit || 1000),
+  })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: rows.length,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: false,
   })
   c.header('Content-Type', 'text/csv; charset=utf-8')
   c.header('Content-Disposition', 'attachment; filename="savings-latest.csv"')
+  setCsvMetaHeaders(c, meta)
   return c.body(toCsv(rows as Array<Record<string, unknown>>))
 })
 

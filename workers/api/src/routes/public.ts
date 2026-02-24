@@ -1,13 +1,13 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
 import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestRates, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
-import { getLastManualRunStartedAt } from '../db/run-reports'
-import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
-import { log } from '../utils/logger'
 import type { LogLevel } from '../utils/logger'
 import { getLogStats, queryLogs } from '../utils/logger'
+import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
+import { parseSourceMode } from '../utils/source-mode'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 
 export const publicRoutes = new Hono<AppContext>()
@@ -56,28 +56,8 @@ publicRoutes.get('/staleness', async (c) => {
 })
 
 publicRoutes.post('/trigger-run', async (c) => {
-  const DEFAULT_COOLDOWN_SECONDS = 0 // 0 = no cooldown for manual runs
-  const cooldownSeconds = parseIntegerEnv(c.env.MANUAL_RUN_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
-  const cooldownMs = cooldownSeconds * 1000
-
-  if (cooldownMs > 0) {
-    const lastStartedAt = await getLastManualRunStartedAt(c.env.DB)
-    if (lastStartedAt) {
-      const lastMs = new Date(lastStartedAt.endsWith('Z') ? lastStartedAt : lastStartedAt.trim() + 'Z').getTime()
-      const elapsed = Number.isNaN(lastMs) ? cooldownMs : Date.now() - lastMs
-      if (elapsed >= 0 && elapsed < cooldownMs) {
-        const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000)
-        return c.json(
-          { ok: false, reason: 'rate_limited', retry_after_seconds: retryAfter },
-          429,
-        )
-      }
-    }
-  }
-
-  log.info('api', 'Public manual run triggered')
-  const result = await triggerDailyRun(c.env, { source: 'manual', force: true })
-  return c.json({ ok: true, result })
+  const result = await handlePublicTriggerRun(c.env, 'home-loans')
+  return c.json(result.body, result.status)
 })
 
 publicRoutes.get('/filters', async (c) => {
@@ -99,7 +79,7 @@ publicRoutes.get('/quality/diagnostics', async (c) => {
 publicRoutes.get('/rates', async (c) => {
   const query = c.req.query()
   const dir = String(query.dir || 'desc').toLowerCase()
-  const includeManual = query.include_manual === 'true' || query.include_manual === '1'
+  const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
 
   const result = await queryRatesPaginated(c.env.DB, {
     page: Number(query.page || 1),
@@ -114,10 +94,18 @@ publicRoutes.get('/rates', async (c) => {
     featureSet: query.feature_set,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
-    includeManual,
+    sourceMode,
   })
 
-  return c.json(result)
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: result.total,
+    returnedRows: result.data.length,
+    sourceMix: result.source_mix,
+    limited: result.total > result.data.length,
+  })
+
+  return c.json({ ...result, meta })
 })
 
 publicRoutes.get('/export', async (c) => {
@@ -127,9 +115,9 @@ publicRoutes.get('/export', async (c) => {
     return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
   }
   const dir = String(query.dir || 'desc').toLowerCase()
-  const includeManual = query.include_manual === 'true' || query.include_manual === '1'
+  const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
 
-  const { data, total } = await queryRatesForExport(c.env.DB, {
+  const { data, total, source_mix } = await queryRatesForExport(c.env.DB, {
     startDate: query.start_date,
     endDate: query.end_date,
     bank: query.bank,
@@ -140,19 +128,27 @@ publicRoutes.get('/export', async (c) => {
     featureSet: query.feature_set,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
-    includeManual,
+    sourceMode,
     limit: 10000,
+  })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: total,
+    returnedRows: data.length,
+    sourceMix: source_mix,
+    limited: total > data.length,
   })
 
   if (format === 'csv') {
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', 'attachment; filename="rates-export.csv"')
+    setCsvMetaHeaders(c, meta)
     return c.body(toCsv(data as Array<Record<string, unknown>>))
   }
 
   c.header('Content-Type', 'application/json; charset=utf-8')
   c.header('Content-Disposition', 'attachment; filename="rates-export.json"')
-  return c.json({ data, total, last_page: 1 })
+  return c.json({ data, total, last_page: 1, meta })
 })
 
 publicRoutes.get('/latest', async (c) => {
@@ -162,6 +158,7 @@ publicRoutes.get('/latest', async (c) => {
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const orderByRaw = String(query.order_by || query.orderBy || 'default').toLowerCase()
   const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
 
   const rows = await queryLatestRates(c.env.DB, {
     bank: query.bank,
@@ -171,14 +168,23 @@ publicRoutes.get('/latest', async (c) => {
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
     mode,
+    sourceMode,
     limit,
     orderBy,
+  })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: rows.length,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: rows.length >= Math.max(1, Math.floor(limit)),
   })
 
   return c.json({
     ok: true,
     count: rows.length,
     rows,
+    meta,
   })
 })
 
@@ -187,6 +193,8 @@ publicRoutes.get('/timeseries', async (c) => {
   const productKey = query.product_key || query.productKey
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
+  const limit = Number(query.limit || 1000)
 
   if (!productKey) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
@@ -199,15 +207,24 @@ publicRoutes.get('/timeseries', async (c) => {
     repaymentType: query.repayment_type,
     featureSet: query.feature_set,
     mode,
+    sourceMode,
     startDate: query.start_date,
     endDate: query.end_date,
-    limit: Number(query.limit || 1000),
+    limit,
+  })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: rows.length,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: rows.length >= Math.max(1, Math.floor(limit)),
   })
 
   return c.json({
     ok: true,
     count: rows.length,
     rows,
+    meta,
   })
 })
 
@@ -276,6 +293,7 @@ publicRoutes.get('/export.csv', async (c) => {
   const dataset = String(query.dataset || 'latest').toLowerCase()
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
 
   if (dataset === 'timeseries') {
     const productKey = query.product_key || query.productKey
@@ -289,12 +307,21 @@ publicRoutes.get('/export.csv', async (c) => {
       repaymentType: query.repayment_type,
       featureSet: query.feature_set,
       mode,
+      sourceMode,
       startDate: query.start_date,
       endDate: query.end_date,
       limit: Number(query.limit || 5000),
     })
+    const meta = buildListMeta({
+      sourceMode,
+      totalRows: rows.length,
+      returnedRows: rows.length,
+      sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+      limited: false,
+    })
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', `attachment; filename="timeseries-${mode}.csv"`)
+    setCsvMetaHeaders(c, meta)
     return c.body(toCsv(rows as Array<Record<string, unknown>>))
   }
 
@@ -306,10 +333,19 @@ publicRoutes.get('/export.csv', async (c) => {
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
     mode,
+    sourceMode,
     limit: Number(query.limit || 1000),
+  })
+  const meta = buildListMeta({
+    sourceMode,
+    totalRows: rows.length,
+    returnedRows: rows.length,
+    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
+    limited: false,
   })
 
   c.header('Content-Type', 'text/csv; charset=utf-8')
   c.header('Content-Disposition', `attachment; filename="latest-${mode}.csv"`)
+  setCsvMetaHeaders(c, meta)
   return c.body(toCsv(rows as Array<Record<string, unknown>>))
 })

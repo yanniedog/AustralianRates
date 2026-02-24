@@ -143,7 +143,12 @@
                 tabState.chartDrawn = true;
                 var total = response.total || data.length;
                 var suffix = total > 10000 ? ' (charted first 10,000 of ' + total.toLocaleString() + ')' : ' (' + data.length.toLocaleString() + ' data points)';
-                if (els.chartStatus) els.chartStatus.textContent = 'Chart rendered' + suffix;
+                var meta = response.meta || {};
+                var mix = meta.source_mix || {};
+                var scheduled = Number(mix.scheduled || 0).toLocaleString();
+                var manual = Number(mix.manual || 0).toLocaleString();
+                var mode = String(meta.source_mode || 'all');
+                if (els.chartStatus) els.chartStatus.textContent = 'Chart rendered' + suffix + ' [mode=' + mode + ', scheduled=' + scheduled + ', manual=' + manual + ']';
             })
             .catch(function (err) {
                 if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);

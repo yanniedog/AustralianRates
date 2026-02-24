@@ -5,6 +5,7 @@ import {
   REPAYMENT_TYPES,
   SECURITY_PURPOSES,
 } from '../constants'
+import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
 
 type LatestFilters = {
   bank?: string
@@ -14,6 +15,7 @@ type LatestFilters = {
   lvrTier?: string
   featureSet?: string
   mode?: 'all' | 'daily' | 'historical'
+  sourceMode?: SourceMode
   limit?: number
   orderBy?: 'default' | 'rate_asc' | 'rate_desc'
 }
@@ -117,6 +119,7 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
     where.push('v.feature_set = ?')
     binds.push(filters.featureSet)
   }
+  where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
   if (filters.mode === 'daily') {
     where.push("v.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
     where.push('v.confidence_score >= ?')
@@ -151,6 +154,7 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
       v.data_quality_flag,
       v.confidence_score,
       v.parsed_at,
+      v.run_source,
       v.product_key,
       r.cash_rate AS rba_cash_rate
     FROM vw_latest_rates v
@@ -174,6 +178,7 @@ export async function queryTimeseries(
     repaymentType?: string
     featureSet?: string
     mode?: 'all' | 'daily' | 'historical'
+    sourceMode?: SourceMode
     startDate?: string
     endDate?: string
     limit?: number
@@ -205,6 +210,7 @@ export async function queryTimeseries(
     where.push('t.feature_set = ?')
     binds.push(input.featureSet)
   }
+  where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) {
     where.push('t.collection_date >= ?')
     binds.push(input.startDate)
@@ -246,6 +252,8 @@ export async function queryTimeseries(
       t.data_quality_flag,
       t.confidence_score,
       t.source_url,
+      t.parsed_at,
+      t.run_source,
       t.product_key,
       r.cash_rate AS rba_cash_rate
     FROM vw_rate_timeseries t
@@ -273,7 +281,7 @@ type RatesPaginatedFilters = {
   featureSet?: string
   sort?: string
   dir?: 'asc' | 'desc'
-  includeManual?: boolean
+  sourceMode?: SourceMode
 }
 
 const PAGINATED_SORT_COLUMNS: Record<string, string> = {
@@ -304,9 +312,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   where.push('h.confidence_score >= ?')
   binds.push(MIN_CONFIDENCE_ALL)
 
-  if (!filters.includeManual) {
-    where.push("(h.run_source IS NULL OR h.run_source != 'manual')")
-  }
+  where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
 
   if (filters.bank) {
     where.push('h.bank_name = ?')
@@ -353,6 +359,12 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
 
   // product_key is the canonical longitudinal identity for the same product across collection dates
   const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
+  const sourceSql = `
+    SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
+    FROM historical_loan_rates h
+    ${whereClause}
+    GROUP BY COALESCE(h.run_source, 'scheduled')
+  `
   const dataSql = `
     SELECT
       h.bank_name,
@@ -385,18 +397,26 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
 
   const dataBinds = [...binds, size, offset]
 
-  const [countResult, dataResult] = await Promise.all([
+  const [countResult, sourceResult, dataResult] = await Promise.all([
     db.prepare(countSql).bind(...binds).first<{ total: number }>(),
+    db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
     db.prepare(dataSql).bind(...dataBinds).all<Record<string, unknown>>(),
   ])
 
   const total = Number(countResult?.total ?? 0)
   const lastPage = Math.max(1, Math.ceil(total / size))
+  let scheduled = 0
+  let manual = 0
+  for (const row of rows(sourceResult)) {
+    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    else scheduled += Number(row.n)
+  }
 
   return {
     last_page: lastPage,
     total,
     data: rows(dataResult),
+    source_mix: { scheduled, manual },
   }
 }
 
@@ -408,7 +428,7 @@ export async function queryRatesForExport(
   db: D1Database,
   filters: RatesExportFilters,
   maxRows: number = EXPORT_MAX_ROWS,
-): Promise<{ data: Array<Record<string, unknown>>; total: number }> {
+): Promise<{ data: Array<Record<string, unknown>>; total: number; source_mix: { scheduled: number; manual: number } }> {
   const where: string[] = []
   const binds: Array<string | number> = []
 
@@ -418,9 +438,7 @@ export async function queryRatesForExport(
   where.push('h.confidence_score >= ?')
   binds.push(MIN_CONFIDENCE_ALL)
 
-  if (!filters.includeManual) {
-    where.push("(h.run_source IS NULL OR h.run_source != 'manual')")
-  }
+  where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
 
   if (filters.bank) {
     where.push('h.bank_name = ?')
@@ -462,6 +480,12 @@ export async function queryRatesForExport(
   const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(filters.limit) || maxRows)))
 
   const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
+  const sourceSql = `
+    SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
+    FROM historical_loan_rates h
+    ${whereClause}
+    GROUP BY COALESCE(h.run_source, 'scheduled')
+  `
   const dataSql = `
     SELECT
       h.bank_name,
@@ -492,15 +516,23 @@ export async function queryRatesForExport(
     LIMIT ?
   `
 
-  const [countResult, dataResult] = await Promise.all([
+  const [countResult, sourceResult, dataResult] = await Promise.all([
     db.prepare(countSql).bind(...binds).first<{ total: number }>(),
+    db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
     db.prepare(dataSql).bind(...binds, limit).all<Record<string, unknown>>(),
   ])
 
   const total = Number(countResult?.total ?? 0)
+  let scheduled = 0
+  let manual = 0
+  for (const row of rows(sourceResult)) {
+    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    else scheduled += Number(row.n)
+  }
   return {
     data: rows(dataResult),
     total,
+    source_mix: { scheduled, manual },
   }
 }
 
