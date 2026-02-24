@@ -45,7 +45,7 @@ app.use(
       if (origin.includes('localhost') || origin.includes('127.0.0.1')) return origin
       return 'https://www.australianrates.com'
     },
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'Cf-Access-Jwt-Assertion'],
   }),
 )
