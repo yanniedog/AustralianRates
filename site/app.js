@@ -13,15 +13,27 @@
     var refresh = window.AR.refresh;
     var exportModule = window.AR.export;
     var hero = window.AR.hero;
+    var utils = window.AR.utils;
+    var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
 
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
 
+    clientLog('info', 'App init start', {
+        section: window.AR.section || 'home-loans',
+        activeTab: tabState.activeTab || 'explorer',
+    });
+
     if (config && config.isAdmin && els.panelAdmin) {
         els.panelAdmin.hidden = false;
+        clientLog('info', 'Admin panel enabled from query string');
     }
 
     function applyFilters() {
+        clientLog('info', 'Apply filters requested', {
+            activeTab: tabState.activeTab || 'explorer',
+            includeManual: !!(els.filterIncludeManual && els.filterIncludeManual.checked),
+        });
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
         if (tabState.pivotLoaded && els.pivotStatus) {
@@ -59,9 +71,16 @@
     if (filters && filters.loadFilters) {
         filters.loadFilters().then(function () {
             if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab);
+            clientLog('info', 'App init complete', { activeTab: tabState.activeTab || 'explorer' });
+        }).catch(function (err) {
+            clientLog('error', 'App init failed while loading filters', {
+                message: err && err.message ? err.message : String(err),
+            });
+            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab);
         });
     } else if (tabs && tabs.activateTab) {
         tabs.activateTab(tabState.activeTab);
+        clientLog('info', 'App init complete (no filter preload)', { activeTab: tabState.activeTab || 'explorer' });
     }
     if (hero && hero.loadHeroStats) hero.loadHeroStats();
     if (explorer && explorer.initRateTable) explorer.initRateTable();

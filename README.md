@@ -117,12 +117,16 @@ See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (r
 
 ## Cloudflare Hosting
 
-1. Create a Cloudflare Pages project from this repository and set publish directory to `site`.
-2. Add custom domains `www.australianrates.com` and `australianrates.com` to the Pages project.
-3. Deploy API worker and set route:
+1. Create a Cloudflare Pages project from this repository.
+2. Configure Pages build settings (mandatory):
+   - Build command: `npm run build:site-version`
+   - Build output directory: `site`
+   - This generates `site/version.json` from `CF_PAGES_COMMIT_SHA` so the footer can show `In sync` or `Behind`. Without it, footer status becomes `Unknown`.
+3. Add custom domains `www.australianrates.com` and `australianrates.com` to the Pages project.
+4. Deploy API worker and set route:
    - `www.australianrates.com/api/home-loan-rates/*`
    - `australianrates.com/api/home-loan-rates/*`
-4. If needed, deploy archive worker and add a route for archive admin endpoints.
+5. If needed, deploy archive worker and add a route for archive admin endpoints.
 
 ### DNS requirements for apex + www
 

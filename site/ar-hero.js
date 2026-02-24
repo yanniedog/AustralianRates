@@ -10,14 +10,17 @@
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils && utils.esc ? utils.esc : window._arEsc;
+    var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
 
     async function loadHeroStats() {
+        clientLog('info', 'Hero stats load started', { section: section });
         try {
             var ratesRes = await fetch(apiBase + '/rates?' + new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' }));
+            if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
             var ratesData = await ratesRes.json();
             if (ratesData && ratesData.total != null) {
+                var total = Number(ratesData.total || 0);
                 if (els.statRecords) {
-                    var total = Number(ratesData.total || 0);
                     var meta = ratesData.meta || {};
                     var mix = meta.source_mix || {};
                     var scheduled = Number(mix.scheduled || 0);
@@ -34,9 +37,19 @@
                     if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
                         els.statCashRate.innerHTML = 'RBA Cash Rate: <strong>' + pct(latest.rba_cash_rate) + '</strong>';
                     }
+                    clientLog('info', 'Hero stats loaded', {
+                        total: total,
+                        latestDate: latest.collection_date || null,
+                    });
                 }
+            } else {
+                clientLog('warn', 'Hero stats response missing total');
             }
-        } catch (_) { /* non-critical */ }
+        } catch (err) {
+            clientLog('error', 'Hero stats load failed', {
+                message: err && err.message ? err.message : String(err),
+            });
+        }
     }
 
     window.AR.hero = { loadHeroStats: loadHeroStats };

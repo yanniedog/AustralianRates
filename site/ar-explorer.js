@@ -10,6 +10,7 @@
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var money = utils && utils.money ? utils.money : function (v) { var n = Number(v); return Number.isFinite(n) ? '$' + n.toFixed(2) : '-'; };
+    var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
     var esc = window._arEsc;
 
     function pctFormatter(cell) { return pct(cell.getValue()); }
@@ -113,6 +114,9 @@
 
     function initRateTable() {
         lastMobileState = isMobile();
+        clientLog('info', 'Explorer table init start', {
+            section: window.AR.section || 'home-loans',
+        });
 
         var apiBase = (config && config.apiBase) ? config.apiBase : (window.location.origin + (window.AR.sectionConfig && window.AR.sectionConfig.apiPath ? window.AR.sectionConfig.apiPath : '/api/home-loan-rates'));
         rateTable = new Tabulator('#rate-table', {
@@ -141,7 +145,18 @@
                 return url + '?' + q.toString();
             },
             ajaxResponse: function (_url, _params, response) {
+                clientLog('info', 'Explorer data loaded', {
+                    rows: response && response.data ? response.data.length : 0,
+                    total: response && response.total != null ? Number(response.total) : 0,
+                });
                 return { last_page: response.last_page || 1, data: response.data || [] };
+            },
+            ajaxError: function (xhr, textStatus, errorThrown) {
+                clientLog('error', 'Explorer data load failed', {
+                    status: xhr && xhr.status ? xhr.status : null,
+                    textStatus: textStatus || null,
+                    message: errorThrown ? String(errorThrown) : null,
+                });
             },
             pagination: true,
             paginationMode: 'remote',
@@ -159,6 +174,7 @@
             columns: getRateTableColumns(),
             initialSort: [{ column: 'collection_date', dir: 'desc' }],
         });
+        clientLog('info', 'Explorer table init complete');
 
         var resizeTimer;
         window.addEventListener('resize', function () {
@@ -173,7 +189,10 @@
     }
 
     function reloadExplorer() {
-        if (rateTable) rateTable.setData();
+        if (rateTable) {
+            clientLog('info', 'Explorer reload requested');
+            rateTable.setData();
+        }
     }
 
     window.AR.explorer = {

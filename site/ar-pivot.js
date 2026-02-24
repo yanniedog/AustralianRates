@@ -7,10 +7,12 @@
     var filters = window.AR.filters;
     var state = window.AR.state;
     var sc = window.AR.sectionConfig || {};
+    var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
+    var clientLog = utils.clientLog || function () {};
 
     var pivotFieldLabels = sc.pivotFieldLabels || {};
 
@@ -57,6 +59,7 @@
     function loadPivotData() {
         if (!els.pivotOutput) return;
         if (els.pivotStatus) els.pivotStatus.textContent = 'Loading data for pivot...';
+        clientLog('info', 'Pivot load started');
 
         var fp = buildFilterParams();
         fp.size = '10000';
@@ -64,11 +67,15 @@
         var q = new URLSearchParams(fp);
 
         fetch(apiBase + '/rates?' + q.toString())
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /rates');
+                return r.json();
+            })
             .then(function (response) {
                 var data = response.data || [];
                 if (data.length === 0) {
                     if (els.pivotStatus) els.pivotStatus.textContent = 'No data returned. Try broadening your filters or date range.';
+                    clientLog('warn', 'Pivot load returned no data');
                     return;
                 }
                 var total = response.total || data.length;
@@ -79,6 +86,11 @@
                 var manual = Number(mix.manual || 0).toLocaleString();
                 var mode = String(meta.source_mode || 'all');
                 if (els.pivotStatus) els.pivotStatus.textContent = 'Loaded ' + data.length.toLocaleString() + ' rows' + warning + ' [mode=' + mode + ', scheduled=' + scheduled + ', manual=' + manual + ']. Drag fields to configure the pivot.';
+                clientLog('info', 'Pivot load completed', {
+                    rows: data.length,
+                    total: Number(total),
+                    sourceMode: mode,
+                });
 
                 var pivotData = data.map(pivotRowFromApi);
                 registerPivotFormatters();
@@ -107,6 +119,9 @@
             })
             .catch(function (err) {
                 if (els.pivotStatus) els.pivotStatus.textContent = 'Error loading pivot data: ' + String(err.message || err);
+                clientLog('error', 'Pivot load failed', {
+                    message: err && err.message ? err.message : String(err),
+                });
             });
     }
 

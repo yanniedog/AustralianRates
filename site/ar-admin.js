@@ -6,10 +6,12 @@
     var config = window.AR.config;
     var explorer = window.AR.explorer;
     var hero = window.AR.hero;
+    var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var reloadExplorer = explorer && explorer.reloadExplorer ? explorer.reloadExplorer : function () {};
     var loadHeroStats = hero && hero.loadHeroStats ? hero.loadHeroStats : function () {};
+    var clientLog = utils.clientLog || function () {};
 
     var triggerInFlight = false;
 
@@ -25,6 +27,9 @@
         triggerInFlight = true;
         els.triggerRun.disabled = true;
         if (els.triggerStatus) els.triggerStatus.textContent = 'Starting run...';
+        clientLog('info', 'Manual run trigger requested', {
+            section: window.AR.section || 'home-loans',
+        });
 
         fetch(apiBase + '/trigger-run', { method: 'POST' })
             .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }).catch(function (e) { return { status: r.status, body: null, parseError: String(e && e.message) }; }); })
@@ -33,9 +38,13 @@
                     var secs = (res.body && res.body.retry_after_seconds) || 0;
                     var mins = Math.ceil(secs / 60);
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Rate limited -- try again in ~' + mins + ' min.';
+                    clientLog('warn', 'Manual run trigger rate limited', {
+                        retryAfterSeconds: secs,
+                    });
                 } else if (res.body && res.body.ok) {
                     enableManualRunFilter();
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Run started. Refreshing data...';
+                    clientLog('info', 'Manual run trigger accepted');
                     reloadExplorer();
                     loadHeroStats();
                     setTimeout(function () {
@@ -56,10 +65,17 @@
                     }, 90000);
                 } else {
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Run could not be started.';
+                    clientLog('error', 'Manual run trigger rejected', {
+                        status: res.status,
+                        parseError: res.parseError || null,
+                    });
                 }
             })
             .catch(function (err) {
                 if (els.triggerStatus) els.triggerStatus.textContent = 'Error: ' + String(err.message || err);
+                clientLog('error', 'Manual run trigger failed', {
+                    message: err && err.message ? err.message : String(err),
+                });
             })
             .finally(function () {
                 triggerInFlight = false;
@@ -79,8 +95,12 @@
             var r = await fetch(apiBase + '/admin/runs?limit=10', { headers: headers });
             var data = await r.json();
             els.runsOutput.textContent = JSON.stringify(data, null, 2);
+            clientLog('info', 'Admin runs loaded', { ok: !!(data && data.ok) });
         } catch (err) {
             els.runsOutput.textContent = JSON.stringify({ ok: false, error: String(err.message || err) }, null, 2);
+            clientLog('error', 'Admin runs load failed', {
+                message: err && err.message ? err.message : String(err),
+            });
         }
     }
 

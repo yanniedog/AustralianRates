@@ -17,3 +17,6 @@
 
 /sitemap.xml
   Cache-Control: public, max-age=86400
+
+/version.json
+  Cache-Control: no-store, no-cache, must-revalidate

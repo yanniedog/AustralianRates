@@ -2,9 +2,12 @@
     var GITHUB_REPO = 'yanniedog/AustralianRates';
     var GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/commits?per_page=1';
     var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
-    var API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
+    var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
+    var LOG_API_BASE = window.location.origin + '/api/home-loan-rates';
+    var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
+    var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
 
-    /* ── Session log (client-side buffer for this tab) ─── */
+    /* Session log (client-side buffer for this tab) */
     var SESSION_LOG_MAX = 500;
     var _sessionLog = [];
     var _systemLogCount = null;
@@ -26,6 +29,10 @@
 
     window.addSessionLog = addSessionLog;
     window.getSessionLogEntries = getSessionLogEntries;
+    var flushedCount = flushClientLogQueue();
+    if (flushedCount > 0) {
+        addSessionLog('info', 'Flushed queued client logs', { count: flushedCount });
+    }
 
     function updateClientLogCount() {
         updateLogLinkText();
@@ -95,7 +102,7 @@
                 '<span id="footer-log-info" class="footer-log-wrap">' +
                     '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log .../0</span></a>' +
                     '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
-                        '<a href="' + esc(API_BASE + '/logs') + '" id="footer-log-download-system" class="footer-log-popup-item" download>Download system log</a>' +
+                        '<a href="' + esc(LOG_API_BASE + '/logs') + '" id="footer-log-download-system" class="footer-log-popup-item" download>Download system log</a>' +
                         '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
                     '</div>' +
                 '</span>' +
@@ -156,6 +163,47 @@
         }
     }
 
+    function getBadgeClass(status) {
+        if (status === 'In sync') return 'footer-version-badge footer-version-sync';
+        if (status === 'Behind') return 'footer-version-badge footer-version-behind';
+        return 'footer-version-badge footer-version-unknown';
+    }
+
+    function renderCommitStatus(el, info) {
+        var badge = '<span id="footer-sync-status" class="' + getBadgeClass(info.status) + '">' + esc(info.status) + '</span>';
+        var deployText = info.deploySha
+            ? '<a href="https://github.com/' + GITHUB_REPO + '/commit/' + esc(info.deploySha) + '" target="_blank" rel="noopener">deploy ' + esc(info.deployShort) + '</a>'
+            : 'deploy unknown';
+        var latestText = info.latestSha
+            ? '<a href="' + esc(info.latestUrl) + '" target="_blank" rel="noopener">latest ' + esc(info.latestShort) + '</a>'
+            : 'latest unknown';
+        var parts = [badge, deployText, latestText];
+        if (info.latestDate) parts.push(esc(formatDate(info.latestDate)));
+        if (info.status === 'Behind') parts.push('Refresh to update.');
+        if (info.status === 'Unknown') parts.push('Deploy metadata unavailable.');
+        el.innerHTML = parts.join(' &middot; ');
+    }
+
+    function fetchDeployVersion(versionUrl) {
+        return fetch(versionUrl, { cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) return null;
+                var type = String(r.headers.get('content-type') || '').toLowerCase();
+                if (type.indexOf('application/json') === -1) return null;
+                return r.json().catch(function () { return null; });
+            })
+            .catch(function () { return null; });
+    }
+
+    function fetchGithubLatestCommit() {
+        return fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } })
+            .then(function (r) {
+                if (!r.ok) return null;
+                return r.json().catch(function () { return null; });
+            })
+            .catch(function () { return null; });
+    }
+
     function loadCommitInfo() {
         var el = document.getElementById('footer-commit');
         if (!el) return;
@@ -165,61 +213,52 @@
             : window.location.origin;
         var versionUrl = base + '/version.json';
 
-        Promise.all([
-            fetch(versionUrl).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
-            fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } }).then(function (r) { return r.json(); })
-        ]).then(function (results) {
+        Promise.all([fetchDeployVersion(versionUrl), fetchGithubLatestCommit()]).then(function (results) {
             var deployVersion = results[0];
             var githubData = results[1];
-            var latestSha = Array.isArray(githubData) && githubData.length > 0 ? githubData[0].sha : null;
-            var latestShort = latestSha ? latestSha.slice(0, 7) : '';
             var commit = Array.isArray(githubData) && githubData.length > 0 ? githubData[0] : null;
-            var date = commit && commit.commit && commit.commit.committer && commit.commit.committer.date ? commit.commit.committer.date : '';
-            var message = commit && commit.commit && commit.commit.message ? commit.commit.message.split('\n')[0].slice(0, 60) : '';
-            var url = commit && commit.html_url ? commit.html_url : 'https://github.com/' + GITHUB_REPO + '/commits';
-
-            addSessionLog('info', 'Commit info loaded', { hasDeployVersion: !!deployVersion, hasGithub: Array.isArray(githubData) && githubData.length > 0 });
-            if (deployVersion && deployVersion.commit && latestSha) {
-                var same = deployVersion.commit === latestSha;
-                var shortDeploy = deployVersion.shortCommit || deployVersion.commit.slice(0, 7);
-                if (same) {
-                    el.innerHTML =
-                        '<span class="footer-version-ok">Current ' +
-                        '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(shortDeploy) + '</a>' +
-                        ' &middot; ' + esc(formatDate(date)) +
-                        '</span>';
-                } else {
-                    el.innerHTML =
-                        '<span class="footer-version-stale">Stale ' +
-                        '<a href="https://github.com/' + GITHUB_REPO + '/commit/' + esc(deployVersion.commit) + '" target="_blank" rel="noopener">' + esc(shortDeploy) + '</a>' +
-                        '; latest ' +
-                        '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(latestShort) + '</a>' +
-                        '. Refresh to update.</span>';
-                }
-                return;
+            var latestSha = commit && commit.sha ? commit.sha : null;
+            var latestUrl = commit && commit.html_url ? commit.html_url : 'https://github.com/' + GITHUB_REPO + '/commits';
+            var latestDate = commit && commit.commit && commit.commit.committer ? commit.commit.committer.date : null;
+            var deploySha = deployVersion && deployVersion.commit ? deployVersion.commit : null;
+            var status = 'Unknown';
+            if (deploySha && latestSha) {
+                status = deploySha === latestSha ? 'In sync' : 'Behind';
             }
-
-            if (!Array.isArray(githubData) || githubData.length === 0) {
-                addSessionLog('warn', 'Commit info unavailable', { githubDataLength: Array.isArray(githubData) ? githubData.length : 0 });
-                el.textContent = 'Commit info unavailable';
-                return;
-            }
-            el.innerHTML =
-                'Latest commit: ' +
-                '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(message) + '">' +
-                    esc(latestShort) +
-                '</a>' +
-                ' &middot; ' + esc(formatDate(date)) +
-                (deployVersion && deployVersion.commit ? ' (deploy version unknown)' : '');
+            renderCommitStatus(el, {
+                status: status,
+                deploySha: deploySha,
+                deployShort: deployVersion && deployVersion.shortCommit ? deployVersion.shortCommit : (deploySha ? deploySha.slice(0, 7) : ''),
+                latestSha: latestSha,
+                latestShort: latestSha ? latestSha.slice(0, 7) : '',
+                latestUrl: latestUrl,
+                latestDate: latestDate,
+            });
+            addSessionLog('info', 'Commit info loaded', {
+                status: status,
+                hasDeployVersion: !!deploySha,
+                hasGithub: !!latestSha,
+            });
         }).catch(function (err) {
             addSessionLog('error', 'Commit info fetch failed', { message: err && err.message });
-            el.textContent = 'Commit info unavailable';
+            renderCommitStatus(el, {
+                status: 'Unknown',
+                deploySha: null,
+                deployShort: '',
+                latestSha: null,
+                latestShort: '',
+                latestUrl: 'https://github.com/' + GITHUB_REPO + '/commits',
+                latestDate: null,
+            });
         });
     }
 
     function loadLogStats() {
-        fetch(API_BASE + '/logs/stats')
-            .then(function (r) { return r.json(); })
+        fetch(LOG_API_BASE + '/logs/stats')
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /logs/stats');
+                return r.json();
+            })
             .then(function (data) {
                 if (data && typeof data.count === 'number') {
                     _systemLogCount = data.count;
@@ -237,7 +276,10 @@
             });
     }
 
-    addSessionLog('info', 'Frame loaded', { apiBase: API_BASE });
+    addSessionLog('info', 'Frame loaded', {
+        sectionApiBase: SECTION_API_BASE,
+        logApiBase: LOG_API_BASE,
+    });
     buildNav();
     buildFooter();
     loadCommitInfo();

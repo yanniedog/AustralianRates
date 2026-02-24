@@ -40,6 +40,92 @@ async function runTests() {
         failed: [],
         warnings: []
     };
+
+    async function verifyFooterDeployStatus(label) {
+        await page.waitForFunction(() => {
+            const el = document.getElementById('footer-commit');
+            if (!el) return false;
+            const txt = String(el.textContent || '');
+            return txt.includes('In sync') || txt.includes('Behind') || txt.includes('Unknown');
+        }, { timeout: 12000 }).catch(() => null);
+
+        const footerText = await page.textContent('#footer-commit').catch(() => '');
+        if (footerText && (footerText.includes('In sync') || footerText.includes('Behind'))) {
+            results.passed.push(`âœ“ ${label}: footer deploy status is clear (${footerText.trim()})`);
+            return;
+        }
+        if (footerText && footerText.includes('Unknown')) {
+            results.failed.push(`âœ— ${label}: footer deploy status is Unknown (must be In sync or Behind)`);
+            return;
+        }
+        results.failed.push(`âœ— ${label}: footer deploy status missing or unreadable (${footerText || 'no text'})`);
+    }
+
+    async function verifyFooterLogControls(label) {
+        const systemHref = await page.getAttribute('#footer-log-download-system', 'href').catch(() => '');
+        if (systemHref && systemHref.includes('/api/home-loan-rates/logs')) {
+            results.passed.push(`âœ“ ${label}: system log endpoint uses /api/home-loan-rates/logs`);
+        } else {
+            results.failed.push(`âœ— ${label}: system log endpoint is incorrect (${systemHref || 'missing'})`);
+        }
+
+        const linkVisible = await page.locator('#footer-log-link').isVisible().catch(() => false);
+        if (!linkVisible) {
+            results.failed.push(`âœ— ${label}: footer log link not visible`);
+            return;
+        }
+
+        await page.click('#footer-log-link');
+        await page.waitForTimeout(250);
+        const popupVisible = await page.evaluate(() => {
+            const popup = document.getElementById('footer-log-popup');
+            return !!(popup && !popup.hidden);
+        }).catch(() => false);
+        const clientItemText = await page.textContent('#footer-log-download-client').catch(() => '');
+        if (popupVisible && clientItemText && clientItemText.includes('Download client log')) {
+            results.passed.push(`âœ“ ${label}: footer popup includes "Download client log"`);
+        } else {
+            results.failed.push(`âœ— ${label}: footer popup missing client log download action`);
+        }
+
+        await page.click('body', { position: { x: 1, y: 1 } }).catch(() => {});
+    }
+
+    async function verifyClientLogIsRich(label, minCount) {
+        const ready = await page.waitForFunction(
+            (threshold) => typeof window.getSessionLogEntries === 'function' && window.getSessionLogEntries().length >= threshold,
+            minCount,
+            { timeout: 10000 }
+        ).catch(() => null);
+
+        if (!ready) {
+            results.failed.push(`âœ— ${label}: client log did not reach ${minCount} entries`);
+            return;
+        }
+
+        const clientLogData = await page.evaluate(() => {
+            const entries = (typeof window.getSessionLogEntries === 'function') ? window.getSessionLogEntries() : [];
+            const messages = entries.map(e => String(e.message || ''));
+            return { count: entries.length, messages };
+        });
+        const hasAppSignal = clientLogData.messages.some(msg =>
+            msg.includes('App init') ||
+            msg.includes('Filter options') ||
+            msg.includes('Hero stats') ||
+            msg.includes('Explorer') ||
+            msg.includes('Pivot') ||
+            msg.includes('Chart') ||
+            msg.includes('Manual run')
+        );
+
+        if (clientLogData.count >= minCount && hasAppSignal) {
+            results.passed.push(`âœ“ ${label}: client log is rich (${clientLogData.count} entries with app lifecycle events)`);
+        } else if (!hasAppSignal) {
+            results.failed.push(`âœ— ${label}: client log missing app lifecycle events`);
+        } else {
+            results.failed.push(`âœ— ${label}: client log count too low (${clientLogData.count})`);
+        }
+    }
     
     try {
         // Test 1: Page loads without errors
@@ -212,22 +298,15 @@ async function runTests() {
             results.failed.push(`✗ Header brand incorrect: "${brand}"`);
         }
 
-        // Client log: frame.js should have populated session log (at least "Frame loaded")
-        console.log('\nTest 4b: Checking client log is populated...');
-        try {
-            const hasClientLog = await page.waitForFunction(
-                () => typeof window.getSessionLogEntries === 'function' && window.getSessionLogEntries().length >= 1,
-                { timeout: 5000 }
-            ).catch(() => null);
-            if (hasClientLog) {
-                const clientLogCount = await page.evaluate(() => window.getSessionLogEntries().length);
-                results.passed.push('✓ Client log populated (' + clientLogCount + ' entries)');
-            } else {
-                results.failed.push('✗ Client log has no entries (getSessionLogEntries missing or empty)');
-            }
-        } catch (e) {
-            results.failed.push('✗ Client log check failed: ' + (e && e.message));
-        }
+        // Footer deploy status and log controls
+        console.log('\nTest 4b: Checking footer deploy status...');
+        await verifyFooterDeployStatus('Homepage');
+
+        console.log('\nTest 4c: Checking footer log controls...');
+        await verifyFooterLogControls('Homepage');
+
+        console.log('\nTest 4d: Checking client log richness...');
+        await verifyClientLogIsRich('Homepage', 5);
         
         // Test 5: Tab buttons
         console.log('\nTest 5: Checking tab buttons...');
@@ -603,6 +682,8 @@ async function runTests() {
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
             await page.waitForSelector('#trigger-run', { timeout: 8000 });
             await page.waitForTimeout(1500);
+            await verifyFooterDeployStatus(name);
+            await verifyFooterLogControls(name);
             await page.click('#trigger-run');
             await page.waitForTimeout(4000);
             const sectionStatus = await page.textContent('#trigger-status').catch(() => '');

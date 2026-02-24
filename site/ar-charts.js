@@ -6,10 +6,12 @@
     var config = window.AR.config;
     var filters = window.AR.filters;
     var state = window.AR.state;
+    var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
+    var clientLog = utils.clientLog || function () {};
 
     var yLabels = {
         interest_rate: 'Interest Rate (%)',
@@ -119,6 +121,7 @@
     function drawChart() {
         if (!els.chartOutput) return;
         if (els.chartStatus) els.chartStatus.textContent = 'Loading chart data...';
+        clientLog('info', 'Chart load started');
 
         var fp = buildFilterParams();
         fp.size = '10000';
@@ -128,12 +131,16 @@
         var q = new URLSearchParams(fp);
 
         fetch(apiBase + '/rates?' + q.toString())
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /rates');
+                return r.json();
+            })
             .then(function (response) {
                 var data = response.data || [];
                 if (data.length === 0) {
                     if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
                     Plotly.purge(els.chartOutput);
+                    clientLog('warn', 'Chart load returned no data');
                     return;
                 }
                 var fields = getChartFieldValues();
@@ -149,9 +156,17 @@
                 var manual = Number(mix.manual || 0).toLocaleString();
                 var mode = String(meta.source_mode || 'all');
                 if (els.chartStatus) els.chartStatus.textContent = 'Chart rendered' + suffix + ' [mode=' + mode + ', scheduled=' + scheduled + ', manual=' + manual + ']';
+                clientLog('info', 'Chart load completed', {
+                    points: data.length,
+                    traceCount: traces.length,
+                    sourceMode: mode,
+                });
             })
             .catch(function (err) {
                 if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);
+                clientLog('error', 'Chart load failed', {
+                    message: err && err.message ? err.message : String(err),
+                });
             });
     }
 
