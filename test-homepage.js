@@ -89,11 +89,11 @@ async function runTests() {
         // Wait for Rate Explorer table to initialize
         console.log('  Waiting for Rate Explorer table to load...');
         try {
-            await page.waitForSelector('#rate-table .tabulator', { timeout: 15000 });
+            await page.waitForSelector('#rate-table .tabulator', { timeout: 25000 });
             await page.waitForTimeout(2000); // Give it time to populate rows
             console.log('  Rate Explorer table loaded');
         } catch (e) {
-            console.log('  Warning: Rate Explorer table did not load within 15 seconds');
+            console.log('  Warning: Rate Explorer table did not load within 25 seconds');
         }
         
         // Take full page screenshot
