@@ -6,6 +6,7 @@
     var LOG_API_BASE = window.location.origin + '/api/home-loan-rates';
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
+    var _secretAdminShortcutBound = false;
 
     /* Session log (client-side buffer for this tab) */
     var SESSION_LOG_MAX = 500;
@@ -102,6 +103,33 @@
         return path.replace(/\/[^/]*$/, '/') + 'admin/';
     }
 
+    function openAdminPortal(reason) {
+        var href = getAdminPortalHref();
+        addSessionLog('info', 'Admin portal navigation', { reason: reason || 'unknown', href: href });
+        window.location.assign(href);
+    }
+
+    function shouldIgnoreShortcutTarget(target) {
+        if (!target) return false;
+        var tag = target.tagName ? String(target.tagName).toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') return true;
+        return !!target.isContentEditable;
+    }
+
+    function bindSecretAdminShortcut() {
+        if (_secretAdminShortcutBound) return;
+        _secretAdminShortcutBound = true;
+
+        document.addEventListener('keydown', function (e) {
+            var key = String(e.key || '').toLowerCase();
+            var hasModifiers = e.shiftKey && e.altKey && (e.ctrlKey || e.metaKey);
+            if (key !== 'a' || !hasModifiers) return;
+            if (shouldIgnoreShortcutTarget(e.target)) return;
+            e.preventDefault();
+            openAdminPortal('keyboard_shortcut');
+        });
+    }
+
     function buildFooter() {
         var existing = document.querySelector('.site-footer');
         if (existing) existing.remove();
@@ -120,7 +148,7 @@
                     '</div>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
-                '<span>&copy; ' + new Date().getFullYear() + ' <a href="' + esc(getAdminPortalHref()) + '" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +
+                '<span id="footer-copyright">&copy; ' + new Date().getFullYear() + ' <a href="' + esc(getAdminPortalHref()) + '" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +
             '</div>';
         document.body.appendChild(footer);
 
@@ -129,6 +157,7 @@
         var downloadSystem = document.getElementById('footer-log-download-system');
         var downloadClient = document.getElementById('footer-log-download-client');
         var adminLink = footer.querySelector('.footer-admin-at');
+        var copyrightEl = document.getElementById('footer-copyright');
 
         if (logLink && popup) {
             logLink.addEventListener('click', function (e) {
@@ -154,8 +183,14 @@
         if (adminLink) {
             adminLink.addEventListener('click', function (e) {
                 e.preventDefault();
-                var href = adminLink.getAttribute('href') || '/admin/';
-                window.location.assign(href);
+                openAdminPortal('footer_at_link');
+            });
+        }
+        if (copyrightEl) {
+            copyrightEl.addEventListener('click', function (e) {
+                if (!e.shiftKey || (!e.ctrlKey && !e.metaKey)) return;
+                e.preventDefault();
+                openAdminPortal('copyright_modifier_click');
             });
         }
         document.addEventListener('click', function (e) {
@@ -165,6 +200,7 @@
                 popup.hidden = true;
             }
         });
+        bindSecretAdminShortcut();
         updateLogLinkText();
     }
 

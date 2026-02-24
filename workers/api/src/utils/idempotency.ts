@@ -14,8 +14,11 @@ export function buildDailyRunId(collectionDate: string): string {
 }
 
 /** Unique run id for interval-based scheduled runs (one per invocation). */
-export function buildScheduledRunId(collectionDate: string): string {
-  return `daily:${collectionDate}:${new Date().toISOString()}`
+export function buildScheduledRunId(collectionDate: string, scheduledTime?: number): string {
+  const scheduledIso = Number.isFinite(scheduledTime)
+    ? new Date(Number(scheduledTime)).toISOString()
+    : new Date().toISOString()
+  return `daily:${collectionDate}:${scheduledIso}`
 }
 
 export function buildBackfillRunId(monthCursor: string): string {

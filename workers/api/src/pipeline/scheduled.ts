@@ -4,6 +4,7 @@ import { triggerDailyRun } from './bootstrap-jobs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
+import { buildScheduledRunId } from '../utils/idempotency'
 
 const RATE_CHECK_INTERVAL_KEY = 'rate_check_interval_minutes'
 const RATE_CHECK_LAST_RUN_KEY = 'rate_check_last_run_iso'
@@ -18,7 +19,7 @@ export function shouldRunScheduledAtTargetHour(hour: number, targetHour: number)
   return normalizedHour % SCHEDULE_STEP_HOURS === normalizedTargetHour % SCHEDULE_STEP_HOURS
 }
 
-export async function handleScheduledDaily(_event: ScheduledController, env: EnvBindings) {
+export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {
   try {
     await ensureAppConfigTable(env.DB)
   } catch (error) {
@@ -55,9 +56,11 @@ export async function handleScheduledDaily(_event: ScheduledController, env: Env
     }
   }
 
+  const runIdOverride = buildScheduledRunId(collectionDate, event.scheduledTime)
   log.info('scheduler', `Triggering rate check run (interval=${intervalMinutes}m, collectionDate=${collectionDate})`)
   const result = await triggerDailyRun(env, {
     source: 'scheduled',
+    runIdOverride,
   })
   log.info('scheduler', `Rate check run result`, { context: JSON.stringify(result) })
 
