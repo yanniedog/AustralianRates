@@ -125,11 +125,18 @@
             },
             ajaxURLGenerator: function (url, _config, params) {
                 var q = new URLSearchParams();
-                Object.keys(params).forEach(function (k) {
-                    if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
-                        q.set(k, String(params[k]));
-                    }
-                });
+                var fp = buildFilterParams();
+                Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
+                q.set('page', String(params.page != null ? params.page : 1));
+                q.set('size', '50');
+                var sortField = 'collection_date';
+                var sortDir = 'desc';
+                if (params.sorters && params.sorters.length > 0) {
+                    sortField = params.sorters[0].field;
+                    sortDir = params.sorters[0].dir;
+                }
+                q.set('sort', sortField);
+                q.set('dir', sortDir);
                 return url + '?' + q.toString();
             },
             ajaxResponse: function (_url, _params, response) {
@@ -144,27 +151,6 @@
             sortMode: 'remote',
             ajaxSorting: true,
             dataSendParams: { page: 'page', size: 'size', sort: 'sort', sorters: 'sorters' },
-            ajaxRequestFunc: function (url, _config, params) {
-                var q = new URLSearchParams();
-                var fp = buildFilterParams();
-                Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
-                q.set('page', String(params.page || 1));
-                q.set('size', '50');
-                var sorters = (params.sorters && params.sorters.length > 0) ? params.sorters : (rateTable && rateTable.getSorters ? rateTable.getSorters() : []);
-                if (sorters.length > 0) {
-                    q.set('sort', sorters[0].field);
-                    q.set('dir', sorters[0].dir);
-                } else {
-                    q.set('sort', 'collection_date');
-                    q.set('dir', 'desc');
-                }
-                var fetchUrl = url + '?' + q.toString();
-                return fetch(fetchUrl, { cache: 'no-store' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        return { last_page: data.last_page || 1, data: data.data || [] };
-                    });
-            },
             movableColumns: !isMobile(),
             resizableColumns: !isMobile(),
             layout: getTableLayout(),
@@ -172,12 +158,6 @@
             columns: getRateTableColumns(),
             initialSort: [{ column: 'collection_date', dir: 'desc' }],
         });
-
-        if (rateTable && rateTable.on) {
-            rateTable.on('sortChanged', function () {
-                if (rateTable && rateTable.setData) rateTable.setData();
-            });
-        }
 
         var resizeTimer;
         window.addEventListener('resize', function () {
