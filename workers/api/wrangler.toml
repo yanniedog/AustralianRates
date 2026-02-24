@@ -54,6 +54,13 @@ class_name = "RunLockDO"
 tag = "v1"
 new_sqlite_classes = ["RunLockDO"]
 
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
 [triggers]
 # Every minute; actual run gated by rate_check_interval_minutes in app_config (default 1).
 crons = ["* * * * *"]

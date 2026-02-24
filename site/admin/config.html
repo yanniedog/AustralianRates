@@ -175,6 +175,17 @@
                 document.getElementById('new-value').value = '';
             });
 
+            var rateCheckSaveBtn = document.getElementById('rate-check-save-btn');
+            if (rateCheckSaveBtn) {
+                rateCheckSaveBtn.addEventListener('click', function () {
+                    var intervalEl = document.getElementById('rate-check-interval');
+                    var val = intervalEl ? intervalEl.value : '';
+                    var num = parseInt(val, 10);
+                    if (isNaN(num) || num < 1) { showMsg('Enter a valid interval (min 1).', true); return; }
+                    saveConfig('rate_check_interval_minutes', String(num));
+                });
+            }
+
             loadConfig();
             loadEnv();
         })();
