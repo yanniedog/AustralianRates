@@ -28,6 +28,11 @@
         .admin-config .message.visible { display: block; }
         .admin-config .message.error { background: #fef2f2; color: #b91c1c; }
         .admin-config .message.success { background: #f0fdf4; color: #166534; }
+        .admin-config .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
+        .admin-config .rate-check-row { margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .admin-config .rate-check-row label { min-width: 140px; }
+        .admin-config .rate-check-row input[type="number"] { width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
+        .admin-config .rate-check-label { min-width: 140px; color: var(--muted); }
     </style>
 </head>
 <body>
@@ -40,6 +45,19 @@
         <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
         <h1>Configuration</h1>
         <div class="message" id="msg"></div>
+        <section id="rate-check-section">
+            <h2>Rate check schedule</h2>
+            <p class="admin-config hint">Server checks mortgage, savings and term deposit rates on this interval. Last run is updated after each run.</p>
+            <div class="rate-check-row">
+                <label for="rate-check-interval">Interval (minutes)</label>
+                <input type="number" id="rate-check-interval" min="1" max="1440" step="1" value="1">
+                <button type="button" id="rate-check-save-btn" class="primary">Save</button>
+            </div>
+            <div class="rate-check-row">
+                <span class="rate-check-label">Last run</span>
+                <span id="rate-check-last-run">—</span>
+            </div>
+        </section>
         <section>
             <h2>App config (key-value overrides)</h2>
             <table id="config-table">
@@ -76,9 +94,33 @@
                 setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
             }
 
+            function updateRateCheckSection(config) {
+                var intervalVal = '1';
+                var lastRunVal = null;
+                if (Array.isArray(config)) {
+                    config.forEach(function (row) {
+                        if (row.key === 'rate_check_interval_minutes') intervalVal = row.value || '1';
+                        if (row.key === 'rate_check_last_run_iso') lastRunVal = row.value || null;
+                    });
+                }
+                var intervalEl = document.getElementById('rate-check-interval');
+                var lastRunEl = document.getElementById('rate-check-last-run');
+                if (intervalEl) intervalEl.value = intervalVal;
+                if (lastRunEl) lastRunEl.textContent = lastRunVal ? formatLastRun(lastRunVal) : 'Never';
+            }
+
+            function formatLastRun(iso) {
+                try {
+                    var d = new Date(iso);
+                    if (isNaN(d.getTime())) return iso;
+                    return d.toLocaleString();
+                } catch (e) { return iso; }
+            }
+
             function loadConfig() {
                 portal.fetchAdmin('/config').then(function (r) { return r.json(); }).then(function (d) {
                     if (!d.ok || !Array.isArray(d.config)) return;
+                    updateRateCheckSection(d.config);
                     configTbody.innerHTML = '';
                     d.config.forEach(function (row) {
                         var tr = document.createElement('tr');

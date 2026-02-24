@@ -21,6 +21,8 @@ import { currentMonthCursor, getMelbourneNowParts, parseIntegerEnv } from '../ut
 type DailyRunOptions = {
   source: 'scheduled' | 'manual'
   force?: boolean
+  /** When set, use this as runId (e.g. for interval-based runs so each run is unique). */
+  runIdOverride?: string
 }
 
 type BackfillRunRequest = {
@@ -45,7 +47,9 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
   const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || MELBOURNE_TIMEZONE)
   const collectionDate = melbourneParts.date
   const baseRunId = buildDailyRunId(collectionDate)
-  const runId = options.force ? `${baseRunId}:force:${crypto.randomUUID()}` : baseRunId
+  const runId =
+    options.runIdOverride ??
+    (options.force ? `${baseRunId}:force:${crypto.randomUUID()}` : baseRunId)
 
   const lockKey = buildRunLockKey('daily', collectionDate)
   const lockTtlSeconds = parseIntegerEnv(env.LOCK_TTL_SECONDS, DEFAULT_LOCK_TTL_SECONDS)
@@ -124,6 +128,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
     await setRunEnqueuedSummary(env.DB, runId, summary)
     const totalEnqueued = enqueue.enqueued + savingsEnqueue.enqueued
     log.info('pipeline', `Daily run ${runId} enqueued ${totalEnqueued} jobs (${enqueue.enqueued} loan + ${savingsEnqueue.enqueued} savings/td) for ${collectionDate}`, { runId })
+
+    if (lockAcquired) {
+      await releaseRunLock(env, { key: lockKey, owner: runId })
+    }
 
     return {
       ok: true,

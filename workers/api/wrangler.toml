@@ -55,10 +55,8 @@ tag = "v1"
 new_sqlite_classes = ["RunLockDO"]
 
 [triggers]
-# 06:00 Australia/Melbourne mapped to UTC across DST:
-# AEDT (UTC+11) => 19:00 UTC previous day
-# AEST (UTC+10) => 20:00 UTC previous day
-crons = ["0 19 * * *", "0 20 * * *"]
+# Every minute; actual run gated by rate_check_interval_minutes in app_config (default 1).
+crons = ["* * * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"

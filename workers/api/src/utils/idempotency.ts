@@ -13,6 +13,11 @@ export function buildDailyRunId(collectionDate: string): string {
   return `daily:${collectionDate}`
 }
 
+/** Unique run id for interval-based scheduled runs (one per invocation). */
+export function buildScheduledRunId(collectionDate: string): string {
+  return `daily:${collectionDate}:${new Date().toISOString()}`
+}
+
 export function buildBackfillRunId(monthCursor: string): string {
   return `backfill:${monthCursor}:${crypto.randomUUID()}`
 }
