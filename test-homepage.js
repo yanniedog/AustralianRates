@@ -211,6 +211,23 @@ async function runTests() {
         } else {
             results.failed.push(`✗ Header brand incorrect: "${brand}"`);
         }
+
+        // Client log: frame.js should have populated session log (at least "Frame loaded")
+        console.log('\nTest 4b: Checking client log is populated...');
+        try {
+            const hasClientLog = await page.waitForFunction(
+                () => typeof window.getSessionLogEntries === 'function' && window.getSessionLogEntries().length >= 1,
+                { timeout: 5000 }
+            ).catch(() => null);
+            if (hasClientLog) {
+                const clientLogCount = await page.evaluate(() => window.getSessionLogEntries().length);
+                results.passed.push('✓ Client log populated (' + clientLogCount + ' entries)');
+            } else {
+                results.failed.push('✗ Client log has no entries (getSessionLogEntries missing or empty)');
+            }
+        } catch (e) {
+            results.failed.push('✗ Client log check failed: ' + (e && e.message));
+        }
         
         // Test 5: Tab buttons
         console.log('\nTest 5: Checking tab buttons...');
