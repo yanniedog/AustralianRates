@@ -16,7 +16,7 @@ import { getLenderPlaybook } from './lender-playbooks'
 import type { LenderConfig } from '../types'
 import { nowIso } from '../utils/time'
 
-type JsonRecord = Record<string, unknown>
+export type JsonRecord = Record<string, unknown>
 
 type FetchJsonResult = {
   ok: boolean
@@ -26,20 +26,20 @@ type FetchJsonResult = {
   text: string
 }
 
-function isRecord(v: unknown): v is JsonRecord {
+export function isRecord(v: unknown): v is JsonRecord {
   return !!v && typeof v === 'object' && !Array.isArray(v)
 }
 
-function asArray<T = unknown>(v: unknown): T[] {
+export function asArray<T = unknown>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : []
 }
 
-function getText(v: unknown): string {
+export function getText(v: unknown): string {
   if (v == null) return ''
   return String(v).trim()
 }
 
-function pickText(obj: JsonRecord, keys: string[]): string {
+export function pickText(obj: JsonRecord, keys: string[]): string {
   for (const key of keys) {
     const v = obj[key]
     const text = getText(v)
@@ -106,7 +106,7 @@ function parseSupportedVersions(body: string): number[] {
     .filter((x) => Number.isFinite(x))
 }
 
-async function fetchCdrJson(url: string, versions: number[]): Promise<FetchJsonResult> {
+export async function fetchCdrJson(url: string, versions: number[]): Promise<FetchJsonResult> {
   const tried = new Set<number>()
   const queue = [...versions]
   while (queue.length > 0) {
@@ -258,13 +258,13 @@ export async function discoverProductsEndpoint(
   return null
 }
 
-function extractProducts(payload: unknown): JsonRecord[] {
+export function extractProducts(payload: unknown): JsonRecord[] {
   if (!isRecord(payload)) return []
   const data = isRecord(payload.data) ? asArray((payload.data as JsonRecord).products) : asArray(payload.data)
   return data.filter(isRecord)
 }
 
-function nextLink(payload: unknown): string | null {
+export function nextLink(payload: unknown): string | null {
   if (!isRecord(payload)) return null
   const links = isRecord(payload.links) ? (payload.links as JsonRecord) : null
   const next = links ? getText(links.next) : ''

@@ -2,12 +2,14 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
-import { API_BASE_PATH } from './constants'
+import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from './constants'
 import { RunLockDO } from './durable/run-lock'
 import { handleScheduledDaily } from './pipeline/scheduled'
 import { consumeIngestQueue } from './queue/consumer'
 import { adminRoutes } from './routes/admin'
 import { publicRoutes } from './routes/public'
+import { savingsPublicRoutes } from './routes/savings-public'
+import { tdPublicRoutes } from './routes/td-public'
 import type { AppContext, EnvBindings, IngestMessage } from './types'
 import { flushBufferedLogs, initLogger, log } from './utils/logger'
 
@@ -50,6 +52,8 @@ app.use(
 
 app.route(API_BASE_PATH, publicRoutes)
 app.route(`${API_BASE_PATH}/admin`, adminRoutes)
+app.route(SAVINGS_API_BASE_PATH, savingsPublicRoutes)
+app.route(TD_API_BASE_PATH, tdPublicRoutes)
 
 app.notFound((c) => c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404))
 

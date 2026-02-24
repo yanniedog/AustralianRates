@@ -80,6 +80,12 @@
     </header>
     <div class="bg-layer" aria-hidden="true"></div>
 
+    <nav class="section-nav" aria-label="Product sections">
+        <a href="/" class="section-link active" aria-current="page">Home Loans</a>
+        <a href="/savings/" class="section-link">Savings</a>
+        <a href="/term-deposits/" class="section-link">Term Deposits</a>
+    </nav>
+
     <main class="shell" id="main-content">
         <header class="hero panel">
             <p class="eyebrow">Australian Home Loan Rate Tracker</p>
@@ -250,6 +256,7 @@
         Always confirm rates directly with the lender before making financial decisions.
     </p>
 
+    <script>window.AR_SECTION = 'home-loans';</script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
@@ -258,6 +265,7 @@
     <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/plotly_renderers.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script src="ar-utils.js"></script>
+    <script src="ar-section-config.js"></script>
     <script src="ar-config.js"></script>
     <script src="ar-dom.js"></script>
     <script src="ar-state.js"></script>

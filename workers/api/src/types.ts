@@ -11,6 +11,10 @@ export type RateStructure = 'variable' | 'fixed_1yr' | 'fixed_2yr' | 'fixed_3yr'
 export type LvrTier = 'lvr_=60%' | 'lvr_60-70%' | 'lvr_70-80%' | 'lvr_80-85%' | 'lvr_85-90%' | 'lvr_90-95%'
 export type FeatureSet = 'basic' | 'premium'
 
+export type SavingsAccountType = 'savings' | 'transaction' | 'at_call'
+export type SavingsRateType = 'base' | 'bonus' | 'introductory' | 'bundle' | 'total'
+export type InterestPayment = 'at_maturity' | 'monthly' | 'quarterly' | 'annually'
+
 export type AdminAuthMode = 'bearer' | 'access'
 
 export type AdminAuthState = {
@@ -55,7 +59,17 @@ export type BackfillSnapshotJob = {
   idempotencyKey: string
 }
 
-export type IngestMessage = DailyLenderJob | ProductDetailJob | BackfillSnapshotJob
+export type DailySavingsLenderJob = {
+  kind: 'daily_savings_lender_fetch'
+  runId: string
+  runSource: RunSource
+  lenderCode: string
+  collectionDate: string
+  attempt: number
+  idempotencyKey: string
+}
+
+export type IngestMessage = DailyLenderJob | ProductDetailJob | BackfillSnapshotJob | DailySavingsLenderJob
 
 export type LenderConfig = {
   code: string

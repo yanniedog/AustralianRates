@@ -1,4 +1,4 @@
-import type { BackfillSnapshotJob, DailyLenderJob, EnvBindings, IngestMessage, LenderConfig, ProductDetailJob, RunSource } from '../types'
+import type { BackfillSnapshotJob, DailyLenderJob, DailySavingsLenderJob, EnvBindings, IngestMessage, LenderConfig, ProductDetailJob, RunSource } from '../types'
 import {
   buildBackfillIdempotencyKey,
   buildDailyLenderIdempotencyKey,
@@ -70,6 +70,36 @@ export async function enqueueProductDetailJobs(
 
   return {
     enqueued: jobs.length,
+  }
+}
+
+export async function enqueueDailySavingsLenderJobs(
+  env: QueueEnv,
+  input: {
+    runId: string
+    runSource?: RunSource
+    collectionDate: string
+    lenders: LenderConfig[]
+  },
+): Promise<{ enqueued: number; perLender: Record<string, number> }> {
+  const runSource = input.runSource ?? 'scheduled'
+  const jobs: DailySavingsLenderJob[] = input.lenders.map((lender) => ({
+    kind: 'daily_savings_lender_fetch',
+    runId: input.runId,
+    runSource,
+    lenderCode: lender.code,
+    collectionDate: input.collectionDate,
+    attempt: 0,
+    idempotencyKey: `${input.runId}:savings:${lender.code}`,
+  }))
+
+  if (jobs.length > 0) {
+    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
+  }
+
+  return {
+    enqueued: jobs.length,
+    perLender: Object.fromEntries(jobs.map((job) => [job.lenderCode, 1])),
   }
 }
 

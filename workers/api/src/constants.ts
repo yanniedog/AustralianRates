@@ -1,7 +1,19 @@
 import lendersConfigRaw from '../config/lenders.json'
-import type { FeatureSet, LenderConfigFile, LvrTier, RateStructure, RepaymentType, SecurityPurpose } from './types'
+import type {
+  FeatureSet,
+  InterestPayment,
+  LenderConfigFile,
+  LvrTier,
+  RateStructure,
+  RepaymentType,
+  SavingsAccountType,
+  SavingsRateType,
+  SecurityPurpose,
+} from './types'
 
 export const API_BASE_PATH = '/api/home-loan-rates'
+export const SAVINGS_API_BASE_PATH = '/api/savings-rates'
+export const TD_API_BASE_PATH = '/api/term-deposit-rates'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
 export const DEFAULT_PUBLIC_CACHE_SECONDS = 120
@@ -20,6 +32,10 @@ export const RATE_STRUCTURES: RateStructure[] = [
 ]
 export const LVR_TIERS: LvrTier[] = ['lvr_=60%', 'lvr_60-70%', 'lvr_70-80%', 'lvr_80-85%', 'lvr_85-90%', 'lvr_90-95%']
 export const FEATURE_SETS: FeatureSet[] = ['basic', 'premium']
+
+export const SAVINGS_ACCOUNT_TYPES: SavingsAccountType[] = ['savings', 'transaction', 'at_call']
+export const SAVINGS_RATE_TYPES: SavingsRateType[] = ['base', 'bonus', 'introductory', 'bundle', 'total']
+export const INTEREST_PAYMENTS: InterestPayment[] = ['at_maturity', 'monthly', 'quarterly', 'annually']
 
 const lendersConfig = lendersConfigRaw as LenderConfigFile
 export const TARGET_LENDERS = lendersConfig.lenders

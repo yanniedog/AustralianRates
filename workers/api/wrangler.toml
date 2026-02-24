@@ -10,6 +10,22 @@ zone_name = "australianrates.com"
 pattern = "australianrates.com/api/home-loan-rates/*"
 zone_name = "australianrates.com"
 
+[[routes]]
+pattern = "www.australianrates.com/api/savings-rates/*"
+zone_name = "australianrates.com"
+
+[[routes]]
+pattern = "australianrates.com/api/savings-rates/*"
+zone_name = "australianrates.com"
+
+[[routes]]
+pattern = "www.australianrates.com/api/term-deposit-rates/*"
+zone_name = "australianrates.com"
+
+[[routes]]
+pattern = "australianrates.com/api/term-deposit-rates/*"
+zone_name = "australianrates.com"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "australianrates_api"

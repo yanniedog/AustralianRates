@@ -12,7 +12,7 @@ import {
 } from '../db/run-reports'
 import { collectRbaCashRateForDate } from '../ingest/rba'
 import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
-import { enqueueBackfillJobs, enqueueDailyLenderJobs } from '../queue/producer'
+import { enqueueBackfillJobs, enqueueDailyLenderJobs, enqueueDailySavingsLenderJobs } from '../queue/producer'
 import type { EnvBindings, LenderConfig } from '../types'
 import { buildBackfillRunId, buildDailyRunId, buildRunLockKey } from '../utils/idempotency'
 import { log } from '../utils/logger'
@@ -113,16 +113,24 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       lenders: TARGET_LENDERS,
     })
 
+    const savingsEnqueue = await enqueueDailySavingsLenderJobs(env, {
+      runId,
+      runSource: options.source,
+      collectionDate,
+      lenders: TARGET_LENDERS,
+    })
+
     const summary = buildInitialPerLenderSummary(enqueue.perLender)
     await setRunEnqueuedSummary(env.DB, runId, summary)
-    log.info('pipeline', `Daily run ${runId} enqueued ${enqueue.enqueued} jobs for ${collectionDate}`, { runId })
+    const totalEnqueued = enqueue.enqueued + savingsEnqueue.enqueued
+    log.info('pipeline', `Daily run ${runId} enqueued ${totalEnqueued} jobs (${enqueue.enqueued} loan + ${savingsEnqueue.enqueued} savings/td) for ${collectionDate}`, { runId })
 
     return {
       ok: true,
       skipped: false,
       runId,
       collectionDate,
-      enqueued: enqueue.enqueued,
+      enqueued: totalEnqueued,
       endpoint_refresh: endpointRefresh,
       rba_collection: rbaCollection,
       source: options.source,

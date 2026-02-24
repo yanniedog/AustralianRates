@@ -1,7 +1,8 @@
 (function () {
     var GITHUB_REPO = 'yanniedog/AustralianRates';
     var GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/commits?per_page=1';
-    var API_BASE = window.location.origin + '/api/home-loan-rates';
+    var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
+    var API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
 
     /* ── Session log (client-side buffer for this tab) ─── */
     var SESSION_LOG_MAX = 500;

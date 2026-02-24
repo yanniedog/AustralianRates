@@ -16,6 +16,11 @@
         filterStructure: document.getElementById('filter-structure'),
         filterLvr:       document.getElementById('filter-lvr'),
         filterFeature:   document.getElementById('filter-feature'),
+        filterAccountType: document.getElementById('filter-account-type'),
+        filterRateType:    document.getElementById('filter-rate-type'),
+        filterDepositTier: document.getElementById('filter-deposit-tier'),
+        filterTermMonths:  document.getElementById('filter-term-months'),
+        filterInterestPayment: document.getElementById('filter-interest-payment'),
         filterStartDate: document.getElementById('filter-start-date'),
         filterEndDate:   document.getElementById('filter-end-date'),
         applyFilters:  document.getElementById('apply-filters'),
@@ -43,5 +48,19 @@
         lastRefreshed: document.getElementById('last-refreshed'),
     };
 
-    window.AR.dom = { els: els };
+    var filterElMap = {
+        'filter-bank': els.filterBank,
+        'filter-security': els.filterSecurity,
+        'filter-repayment': els.filterRepayment,
+        'filter-structure': els.filterStructure,
+        'filter-lvr': els.filterLvr,
+        'filter-feature': els.filterFeature,
+        'filter-account-type': els.filterAccountType,
+        'filter-rate-type': els.filterRateType,
+        'filter-deposit-tier': els.filterDepositTier,
+        'filter-term-months': els.filterTermMonths,
+        'filter-interest-payment': els.filterInterestPayment,
+    };
+
+    window.AR.dom = { els: els, filterElMap: filterElMap };
 })();

@@ -1,5 +1,7 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS, TARGET_LENDERS } from '../constants'
 import { upsertHistoricalRateRows } from '../db/historical-rates'
+import { upsertSavingsRateRows } from '../db/savings-rates'
+import { upsertTdRateRows } from '../db/td-rates'
 import { getCachedEndpoint } from '../db/endpoint-cache'
 import { persistRawPayload } from '../db/raw-payloads'
 import { recordRunQueueOutcome } from '../db/run-reports'
@@ -10,10 +12,18 @@ import {
   fetchProductDetailRows,
   fetchResidentialMortgageProductIds,
 } from '../ingest/cdr'
+import {
+  fetchSavingsProductIds,
+  fetchSavingsProductDetailRows,
+  fetchTermDepositProductIds,
+  fetchTdProductDetailRows,
+} from '../ingest/cdr-savings'
+import { validateNormalizedSavingsRow, type NormalizedSavingsRow } from '../ingest/normalize-savings'
+import { validateNormalizedTdRow, type NormalizedTdRow } from '../ingest/normalize-savings'
 import { extractLenderRatesFromHtml } from '../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../ingest/lender-playbooks'
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
-import type { BackfillSnapshotJob, DailyLenderJob, EnvBindings, IngestMessage, ProductDetailJob } from '../types'
+import type { BackfillSnapshotJob, DailyLenderJob, DailySavingsLenderJob, EnvBindings, IngestMessage, ProductDetailJob } from '../types'
 import { log } from '../utils/logger'
 import { nowIso, parseIntegerEnv } from '../utils/time'
 
@@ -53,6 +63,10 @@ function isIngestMessage(value: unknown): value is IngestMessage {
     )
   }
 
+  if (value.kind === 'daily_savings_lender_fetch') {
+    return typeof value.runId === 'string' && typeof value.lenderCode === 'string' && typeof value.collectionDate === 'string'
+  }
+
   return false
 }
 
@@ -82,6 +96,28 @@ function splitValidatedRows(rows: NormalizedRateRow[]): {
         productId: row.productId,
       })
     }
+  }
+  return { accepted, dropped }
+}
+
+function splitValidatedSavingsRows(rows: NormalizedSavingsRow[]) {
+  const accepted: NormalizedSavingsRow[] = []
+  const dropped: Array<{ reason: string; productId: string }> = []
+  for (const row of rows) {
+    const verdict = validateNormalizedSavingsRow(row)
+    if (verdict.ok) accepted.push(row)
+    else dropped.push({ reason: verdict.reason, productId: row.productId })
+  }
+  return { accepted, dropped }
+}
+
+function splitValidatedTdRows(rows: NormalizedTdRow[]) {
+  const accepted: NormalizedTdRow[] = []
+  const dropped: Array<{ reason: string; productId: string }> = []
+  for (const row of rows) {
+    const verdict = validateNormalizedTdRow(row)
+    if (verdict.ok) accepted.push(row)
+    else dropped.push({ reason: verdict.reason, productId: row.productId })
   }
   return { accepted, dropped }
 }
@@ -387,6 +423,111 @@ async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillSnapshot
     .run()
 }
 
+async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLenderJob): Promise<void> {
+  const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
+  if (!lender) throw new Error(`unknown_lender_code:${job.lenderCode}`)
+  log.info('consumer', `daily_savings_lender_fetch started`, { runId: job.runId, lenderCode: job.lenderCode })
+
+  const playbook = getLenderPlaybook(lender)
+  const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
+  const endpointCandidates: string[] = []
+  if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
+  if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
+  const discovered = await discoverProductsEndpoint(lender)
+  if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
+  const uniqueCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
+
+  const savingsRows: NormalizedSavingsRow[] = []
+  const tdRows: NormalizedTdRow[] = []
+
+  for (const candidateEndpoint of uniqueCandidates) {
+    const [savingsProducts, tdProducts] = await Promise.all([
+      fetchSavingsProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions }),
+      fetchTermDepositProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions }),
+    ])
+
+    for (const payload of [...savingsProducts.rawPayloads, ...tdProducts.rawPayloads]) {
+      await persistRawPayload(env, {
+        sourceType: 'cdr_products',
+        sourceUrl: payload.sourceUrl,
+        payload: payload.body,
+        httpStatus: payload.status,
+        notes: `savings_td_product_index lender=${job.lenderCode}`,
+      })
+    }
+
+    for (const productId of savingsProducts.productIds.slice(0, 250)) {
+      const details = await fetchSavingsProductDetailRows({
+        lender,
+        endpointUrl: candidateEndpoint,
+        productId,
+        collectionDate: job.collectionDate,
+        cdrVersions: playbook.cdrVersions,
+      })
+      await persistRawPayload(env, {
+        sourceType: 'cdr_product_detail',
+        sourceUrl: details.rawPayload.sourceUrl,
+        payload: details.rawPayload.body,
+        httpStatus: details.rawPayload.status,
+        notes: `savings_product_detail lender=${job.lenderCode} product=${productId}`,
+      })
+      for (const row of details.savingsRows) savingsRows.push(row)
+    }
+
+    for (const productId of tdProducts.productIds.slice(0, 250)) {
+      const details = await fetchTdProductDetailRows({
+        lender,
+        endpointUrl: candidateEndpoint,
+        productId,
+        collectionDate: job.collectionDate,
+        cdrVersions: playbook.cdrVersions,
+      })
+      await persistRawPayload(env, {
+        sourceType: 'cdr_product_detail',
+        sourceUrl: details.rawPayload.sourceUrl,
+        payload: details.rawPayload.body,
+        httpStatus: details.rawPayload.status,
+        notes: `td_product_detail lender=${job.lenderCode} product=${productId}`,
+      })
+      for (const row of details.tdRows) tdRows.push(row)
+    }
+
+    if (savingsRows.length > 0 || tdRows.length > 0) break
+  }
+
+  const { accepted: savingsAccepted } = splitValidatedSavingsRows(savingsRows)
+  for (const row of savingsAccepted) {
+    row.runId = job.runId
+    row.runSource = job.runSource ?? 'scheduled'
+  }
+  if (savingsAccepted.length > 0) {
+    const written = await upsertSavingsRateRows(env.DB, savingsAccepted)
+    log.info('consumer', `savings_lender_fetch: ${written} savings rows written`, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+    })
+  }
+
+  const { accepted: tdAccepted } = splitValidatedTdRows(tdRows)
+  for (const row of tdAccepted) {
+    row.runId = job.runId
+    row.runSource = job.runSource ?? 'scheduled'
+  }
+  if (tdAccepted.length > 0) {
+    const written = await upsertTdRateRows(env.DB, tdAccepted)
+    log.info('consumer', `savings_lender_fetch: ${written} td rows written`, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+    })
+  }
+
+  log.info('consumer', `daily_savings_lender_fetch completed`, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    context: `savings=${savingsAccepted.length} td=${tdAccepted.length}`,
+  })
+}
+
 async function processMessage(env: EnvBindings, message: IngestMessage): Promise<void> {
   if (message.kind === 'daily_lender_fetch') {
     return handleDailyLenderJob(env, message)
@@ -397,9 +538,11 @@ async function processMessage(env: EnvBindings, message: IngestMessage): Promise
   if (message.kind === 'backfill_snapshot_fetch') {
     return handleBackfillSnapshotJob(env, message)
   }
+  if (message.kind === 'daily_savings_lender_fetch') {
+    return handleDailySavingsLenderJob(env, message)
+  }
 
-  const exhaustive: never = message
-  throw new Error(`Unsupported message kind: ${String(exhaustive)}`)
+  throw new Error(`Unsupported message kind: ${String((message as Record<string, unknown>).kind)}`)
 }
 
 export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env: EnvBindings): Promise<void> {

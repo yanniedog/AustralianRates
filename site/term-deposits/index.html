@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Compare Australian Term Deposit Rates - Daily CDR Data | AustralianRates</title>
+    <meta name="description" content="Compare term deposit interest rates from Australia's major banks updated daily from official CDR data. Track rates across terms from 1 to 60 months.">
+    <link rel="canonical" href="https://www.australianrates.com/term-deposits/">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%</text></svg>">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Compare Australian Term Deposit Rates | AustralianRates">
+    <meta property="og:description" content="Daily term deposit rates from major Australian banks via the Consumer Data Right API.">
+    <meta property="og:url" content="https://www.australianrates.com/term-deposits/">
+    <meta property="og:site_name" content="AustralianRates">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": "Australian Term Deposit Interest Rates",
+        "description": "Daily term deposit interest rates from major Australian banks collected via the Consumer Data Right (CDR) API, covering terms from 1 to 60 months across multiple deposit tiers.",
+        "url": "https://www.australianrates.com/term-deposits/",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "temporalCoverage": "2026/..",
+        "creator": { "@type": "Organization", "name": "AustralianRates" }
+    }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
+    <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.css">
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <div class="bg-layer" aria-hidden="true"></div>
+
+    <nav class="section-nav" aria-label="Product sections">
+        <a href="/" class="section-link">Home Loans</a>
+        <a href="/savings/" class="section-link">Savings</a>
+        <a href="/term-deposits/" class="section-link active" aria-current="page">Term Deposits</a>
+    </nav>
+
+    <main class="shell" id="main-content">
+        <header class="hero panel">
+            <p class="eyebrow">Australian Term Deposit Rate Tracker</p>
+            <h1>Compare term deposit rates from major banks</h1>
+            <p class="subtitle">
+                Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates across all banks.
+            </p>
+            <div class="hero-stats" id="hero-stats">
+                <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
+                <span class="hero-stat" id="stat-cash-rate"></span>
+                <span class="hero-stat" id="stat-records" title="Total term deposit rate records">Records: <strong>...</strong></span>
+            </div>
+        </header>
+
+        <section class="seo-summary" aria-label="About this data">
+            <p>Compare term deposit interest rates from Australia's major banks including
+            Commonwealth Bank (CBA), Westpac, NAB, ANZ, Macquarie, Bendigo Bank, Suncorp, Bankwest, ING, AMP,
+            HSBC, UBank, St. George, Bank of Melbourne, Bank of Queensland (BOQ), and Great Southern Bank.
+            Rates are collected daily from official Consumer Data Right (CDR) feeds and cover terms from
+            1 month to 5 years across different deposit amounts and interest payment frequencies.</p>
+        </section>
+
+        <nav class="tabs panel" role="tablist" aria-label="Data views">
+            <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
+            <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot Table</button>
+            <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
+        </nav>
+
+        <section class="filters panel" id="filter-bar">
+            <div class="filters-grid">
+                <label>Bank
+                    <select id="filter-bank"><option value="">All</option></select>
+                </label>
+                <label title="Term length in months">Term
+                    <select id="filter-term-months"><option value="">All</option></select>
+                </label>
+                <label title="Minimum deposit range">Deposit Tier
+                    <select id="filter-deposit-tier"><option value="">All</option></select>
+                </label>
+                <label title="Interest payment frequency">Payment
+                    <select id="filter-interest-payment"><option value="">All</option></select>
+                </label>
+                <label>From
+                    <input id="filter-start-date" type="date">
+                </label>
+                <label>To
+                    <input id="filter-end-date" type="date">
+                </label>
+                <label class="toggle-label" title="Show data from manually triggered runs">
+                    <input id="filter-include-manual" type="checkbox"> Include manual runs
+                </label>
+                <label title="How often to auto-refresh data (minutes, 0 = off)">Auto-refresh
+                    <select id="refresh-interval">
+                        <option value="0">Off</option>
+                        <option value="15">15 min</option>
+                        <option value="30">30 min</option>
+                        <option value="60" selected>1 hour</option>
+                        <option value="120">2 hours</option>
+                    </select>
+                </label>
+                <div class="filter-actions">
+                    <button id="apply-filters" class="small" type="button">Apply Filters</button>
+                    <span id="last-refreshed" class="hint"></span>
+                </div>
+            </div>
+        </section>
+
+        <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
+            <div class="panel panel-wide">
+                <div id="rate-table"></div>
+            </div>
+        </section>
+
+        <section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>
+            <div class="panel panel-wide">
+                <div class="pivot-controls">
+                    <button id="load-pivot" type="button" class="small">Load Data for Pivot</button>
+                    <span id="pivot-status" class="hint">Select filters and a date range, then click Load. Max 10,000 rows.</span>
+                </div>
+                <div id="pivot-output"></div>
+            </div>
+        </section>
+
+        <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
+            <div class="panel panel-wide">
+                <div class="chart-controls">
+                    <label>X Axis
+                        <select id="chart-x">
+                            <option value="collection_date">Date</option>
+                            <option value="bank_name">Bank</option>
+                            <option value="term_months">Term (months)</option>
+                            <option value="deposit_tier">Deposit Tier</option>
+                            <option value="interest_payment">Payment</option>
+                        </select>
+                    </label>
+                    <label>Y Axis
+                        <select id="chart-y">
+                            <option value="interest_rate">Interest Rate</option>
+                        </select>
+                    </label>
+                    <label>Group By
+                        <select id="chart-group">
+                            <option value="">None</option>
+                            <option value="product_key" selected>Product</option>
+                            <option value="bank_name">Bank</option>
+                            <option value="term_months">Term</option>
+                            <option value="deposit_tier">Deposit Tier</option>
+                            <option value="interest_payment">Payment</option>
+                        </select>
+                    </label>
+                    <label>Chart Type
+                        <select id="chart-type">
+                            <option value="scatter">Line / Scatter</option>
+                            <option value="bar">Bar</option>
+                            <option value="box">Box Plot</option>
+                        </select>
+                    </label>
+                    <div class="filter-actions">
+                        <button id="draw-chart" type="button" class="small">Draw Chart</button>
+                    </div>
+                </div>
+                <div id="chart-output" aria-label="Interactive chart"></div>
+                <p id="chart-status" class="hint">Configure axes and click Draw Chart.</p>
+                <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
+            </div>
+        </section>
+    </main>
+
+    <p class="disclaimer">
+        This site provides general information only and does not constitute financial advice.
+        Rates are sourced from publicly available CDR feeds and may not reflect the latest changes.
+        Always confirm rates directly with the institution before making financial decisions.
+    </p>
+
+    <script>window.AR_SECTION = 'term-deposits';</script>
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/plotly_renderers.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="../ar-utils.js"></script>
+    <script src="../ar-section-config.js"></script>
+    <script src="../ar-config.js"></script>
+    <script src="../ar-dom.js"></script>
+    <script src="../ar-state.js"></script>
+    <script src="../ar-tabs.js"></script>
+    <script src="../ar-filters.js"></script>
+    <script src="../ar-hero.js"></script>
+    <script src="../ar-explorer.js"></script>
+    <script src="../ar-pivot.js"></script>
+    <script src="../ar-charts.js"></script>
+    <script src="../ar-admin.js"></script>
+    <script src="../ar-refresh.js"></script>
+    <script src="../ar-export.js"></script>
+    <script src="../app.js"></script>
+    <script src="../frame.js"></script>
+</body>
+</html>

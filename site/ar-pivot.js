@@ -6,29 +6,13 @@
     var config = window.AR.config;
     var filters = window.AR.filters;
     var state = window.AR.state;
+    var sc = window.AR.sectionConfig || {};
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
 
-    var pivotFieldLabels = {
-        collection_date: 'Date',
-        bank_name: 'Bank',
-        interest_rate: 'Interest Rate (%)',
-        comparison_rate: 'Comparison Rate (%)',
-        rate_structure: 'Structure',
-        security_purpose: 'Purpose',
-        repayment_type: 'Repayment',
-        lvr_tier: 'LVR',
-        feature_set: 'Feature',
-        product_name: 'Product',
-        annual_fee: 'Annual Fee ($)',
-        rba_cash_rate: 'Cash Rate (%)',
-        run_source: 'Source',
-        parsed_at: 'Checked At',
-        source_url: 'Source URL',
-        data_quality_flag: 'Quality',
-    };
+    var pivotFieldLabels = sc.pivotFieldLabels || {};
 
     function pivotRowFromApi(apiRow) {
         var out = {};
@@ -95,7 +79,8 @@
                 registerPivotFormatters();
 
                 var renderers = $.extend($.pivotUtilities.renderers, $.pivotUtilities.plotly_renderers);
-                var rateAggregator = ($.pivotUtilities.aggregators && $.pivotUtilities.aggregators['Average (as %)']) ? 'Average (as %)' : 'Average';
+                var defaults = sc.pivotDefaults || {};
+                var rateAggregator = ($.pivotUtilities.aggregators && $.pivotUtilities.aggregators[defaults.aggregator]) ? defaults.aggregator : 'Average';
 
                 var narrow = window.innerWidth <= 760;
                 var pivotMargin = narrow ? 30 : 80;
@@ -103,9 +88,9 @@
                 var pivotHeight = Math.max(280, Math.min(500, window.innerHeight - 200));
 
                 $(els.pivotOutput).empty().pivotUI(pivotData, {
-                    rows: ['Bank'],
-                    cols: ['Structure'],
-                    vals: ['Interest Rate (%)'],
+                    rows: defaults.rows || ['Bank'],
+                    cols: defaults.cols || [],
+                    vals: defaults.vals || ['Interest Rate (%)'],
                     aggregatorName: rateAggregator,
                     renderers: renderers,
                     rendererName: 'Table',

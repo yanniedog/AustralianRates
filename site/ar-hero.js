@@ -5,6 +5,7 @@
     var dom = window.AR.dom;
     var config = window.AR.config;
     var utils = window.AR.utils;
+    var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
@@ -21,7 +22,7 @@
                     if (els.statUpdated && latest.collection_date) {
                         els.statUpdated.innerHTML = 'Last updated: <strong>' + esc(latest.collection_date) + '</strong>';
                     }
-                    if (els.statCashRate && latest.rba_cash_rate != null) {
+                    if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
                         els.statCashRate.innerHTML = 'RBA Cash Rate: <strong>' + pct(latest.rba_cash_rate) + '</strong>';
                     }
                 }
