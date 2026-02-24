@@ -546,7 +546,39 @@ async function runTests() {
         } else {
             results.warnings.push('⚠ Trigger status text empty');
         }
-        
+
+        // Test 10i2: Check Rates Now on Savings and Term deposits - POST to trigger-run and no "Run could not be started"
+        const baseOrigin = new URL(TEST_URL).origin;
+        const savingsUrl = baseOrigin + '/savings/';
+        const termDepositsUrl = baseOrigin + '/term-deposits/';
+        for (const { name, url } of [{ name: 'Savings', url: savingsUrl }, { name: 'Term deposits', url: termDepositsUrl }]) {
+            console.log('\nTest 10i2: Check Rates Now on ' + name + '...');
+            let sectionTriggerPosted = false;
+            page.removeAllListeners('request');
+            page.on('request', req => {
+                if (req.method() === 'POST' && req.url().includes('/trigger-run')) sectionTriggerPosted = true;
+            });
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await page.waitForSelector('#trigger-run', { timeout: 8000 });
+            await page.waitForTimeout(1500);
+            await page.click('#trigger-run');
+            await page.waitForTimeout(4000);
+            const sectionStatus = await page.textContent('#trigger-status').catch(() => '');
+            const isFailure = sectionStatus && sectionStatus.includes('Run could not be started');
+            if (sectionTriggerPosted && !isFailure) {
+                results.passed.push('✓ Check Rates Now on ' + name + ' sends POST and succeeds');
+            } else if (!sectionTriggerPosted) {
+                results.failed.push('✗ Check Rates Now on ' + name + ' did not send POST to trigger-run');
+            } else if (isFailure) {
+                results.failed.push('✗ Check Rates Now on ' + name + ' failed: ' + (sectionStatus || 'Run could not be started'));
+            } else {
+                results.passed.push('✓ Check Rates Now on ' + name + ' (POST sent, status: ' + (sectionStatus ? sectionStatus.slice(0, 40) : 'ok') + ')');
+            }
+        }
+        await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForSelector('#main-content', { timeout: 5000 });
+        await page.waitForTimeout(1000);
+
         // Test 10j: URL state - tab and params sync
         console.log('\nTest 10j: URL state sync...');
         await page.click('#tab-pivot');

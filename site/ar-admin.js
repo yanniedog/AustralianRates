@@ -29,9 +29,6 @@
         fetch(apiBase + '/trigger-run', { method: 'POST' })
             .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }).catch(function (e) { return { status: r.status, body: null, parseError: String(e && e.message) }; }); })
             .then(function (res) {
-                // #region agent log
-                console.log('[AR-DEBUG-eb90c6] trigger-run response: status=' + res.status + ', body.ok=' + (res.body && res.body.ok));
-                // #endregion
                 if (res.status === 429) {
                     var secs = (res.body && res.body.retry_after_seconds) || 0;
                     var mins = Math.ceil(secs / 60);
@@ -42,25 +39,16 @@
                     reloadExplorer();
                     loadHeroStats();
                     setTimeout(function () {
-                        // #region agent log
-                        console.log('[AR-DEBUG-eb90c6] 15s delayed reload');
-                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = 'Refreshing data (banks still reporting)...';
                     }, 15000);
                     setTimeout(function () {
-                        // #region agent log
-                        console.log('[AR-DEBUG-eb90c6] 45s delayed reload');
-                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = 'Refreshing data (almost done)...';
                     }, 45000);
                     setTimeout(function () {
-                        // #region agent log
-                        console.log('[AR-DEBUG-eb90c6] 90s final reload');
-                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = 'Data refreshed.';
@@ -68,9 +56,6 @@
                     }, 90000);
                 } else {
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Run could not be started.';
-                    // #region agent log
-                    console.log('[AR-DEBUG-eb90c6] Run failed. Body:', JSON.stringify(res.body));
-                    // #endregion
                 }
             })
             .catch(function (err) {
