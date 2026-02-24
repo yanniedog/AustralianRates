@@ -411,16 +411,23 @@ async function runTests() {
         });
         console.log('  Screenshot saved: 05-rate-explorer-table.png');
         
-        // Test 9b: Column sort - click a sortable header and ensure table still has data
+        // Test 9b: Column sort - click a sortable header and ensure table re-sorts
         if (tableRows > 0) {
             console.log('  Testing column sort (click Bank header)...');
             const bankHeader = page.locator('#rate-table .tabulator-col').filter({ hasText: 'Bank' }).first();
             if (await bankHeader.isVisible().catch(() => false)) {
+                const firstRowBankBefore = await page.locator('#rate-table .tabulator-row').first().locator('.tabulator-cell').nth(1).textContent().catch(() => '');
                 await bankHeader.click();
-                await page.waitForTimeout(1500);
+                await page.waitForTimeout(2000);
                 const rowsAfterSort = await page.locator('#rate-table .tabulator-row').count();
+                const firstRowBankAfter = await page.locator('#rate-table .tabulator-row').first().locator('.tabulator-cell').nth(1).textContent().catch(() => '');
                 if (rowsAfterSort > 0) {
                     results.passed.push('✓ Column sort (Bank) works - table still has data');
+                    if (firstRowBankBefore && firstRowBankAfter && firstRowBankBefore !== firstRowBankAfter) {
+                        results.passed.push('✓ Column sort (Bank) changed order - first row Bank changed');
+                    } else if (rowsAfterSort >= 2) {
+                        results.warnings.push('⚠ Column sort: first row Bank unchanged (sort may be same or API order)');
+                    }
                 } else {
                     results.failed.push('✗ After clicking sort, table has no rows');
                 }

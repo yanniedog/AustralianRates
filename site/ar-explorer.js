@@ -143,32 +143,19 @@
             ajaxSorting: true,
             dataSendParams: { page: 'page', size: 'size', sort: 'sort', sorters: 'sorters' },
             ajaxRequestFunc: function (url, _config, params) {
-                // #region agent log
-                var paramKeys = params ? Object.keys(params) : [];
-                var fromParams = params && params.sorters && params.sorters.length > 0 ? params.sorters : null;
-                var fromTable = rateTable && rateTable.getSorters ? rateTable.getSorters() : [];
-                fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e20206'},body:JSON.stringify({sessionId:'e20206',location:'ar-explorer.js:ajaxRequestFunc',message:'ajaxRequestFunc called',data:{paramKeys:paramKeys,paramsSorters:fromParams,getSorters:fromTable,paramsSort:params&&params.sort},timestamp:Date.now(),hypothesisId:'A'})}).catch(function(){});
-                // #endregion
                 var q = new URLSearchParams();
                 var fp = buildFilterParams();
                 Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
                 q.set('page', String(params.page || 1));
                 q.set('size', '50');
                 var sorters = (params.sorters && params.sorters.length > 0) ? params.sorters : (rateTable && rateTable.getSorters ? rateTable.getSorters() : []);
-                var sortField = 'collection_date';
-                var sortDir = 'desc';
                 if (sorters.length > 0) {
-                    sortField = sorters[0].field;
-                    sortDir = sorters[0].dir;
-                    q.set('sort', sortField);
-                    q.set('dir', sortDir);
+                    q.set('sort', sorters[0].field);
+                    q.set('dir', sorters[0].dir);
                 } else {
-                    q.set('sort', sortField);
-                    q.set('dir', sortDir);
+                    q.set('sort', 'collection_date');
+                    q.set('dir', 'desc');
                 }
-                // #region agent log
-                fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e20206'},body:JSON.stringify({sessionId:'e20206',location:'ar-explorer.js:ajaxRequestFunc',message:'sort applied',data:{sortField:sortField,sortDir:sortDir,sortersLen:sorters.length},timestamp:Date.now(),hypothesisId:'D'})}).catch(function(){});
-                // #endregion
                 var fetchUrl = url + '?' + q.toString();
                 return fetch(fetchUrl, { cache: 'no-store' })
                     .then(function (r) { return r.json(); })
@@ -184,16 +171,11 @@
             initialSort: [{ column: 'collection_date', dir: 'desc' }],
         });
 
-        // #region agent log
         if (rateTable && rateTable.on) {
-            rateTable.on('dataLoaded', function () {
-                fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e20206'},body:JSON.stringify({sessionId:'e20206',location:'ar-explorer.js:dataLoaded',message:'dataLoaded after request',data:{sorters:rateTable.getSorters ? rateTable.getSorters() : []},timestamp:Date.now(),hypothesisId:'B'})}).catch(function(){});
-            });
-            rateTable.on('sortChanged', function (_sorters) {
-                fetch('http://127.0.0.1:7387/ingest/142ac719-0ef0-4470-bdb0-605715664be9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e20206'},body:JSON.stringify({sessionId:'e20206',location:'ar-explorer.js:sortChanged',message:'sortChanged fired',data:{sorters:rateTable.getSorters ? rateTable.getSorters() : []},timestamp:Date.now(),hypothesisId:'C'})}).catch(function(){});
+            rateTable.on('sortChanged', function () {
+                if (rateTable && rateTable.setData) rateTable.setData();
             });
         }
-        // #endregion
 
         var resizeTimer;
         window.addEventListener('resize', function () {

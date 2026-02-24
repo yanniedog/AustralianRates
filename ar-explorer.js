@@ -173,6 +173,12 @@
             initialSort: [{ column: 'collection_date', dir: 'desc' }],
         });
 
+        if (rateTable && rateTable.on) {
+            rateTable.on('sortChanged', function () {
+                if (rateTable && rateTable.setData) rateTable.setData();
+            });
+        }
+
         var resizeTimer;
         window.addEventListener('resize', function () {
             clearTimeout(resizeTimer);
