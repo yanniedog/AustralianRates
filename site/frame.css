@@ -76,19 +76,25 @@
     border: none;
     background: none;
     color: rgba(255, 255, 255, 0.7);
-    font-size: 0.82rem;
-    font-weight: 500;
-    padding: 6px 12px;
+    padding: 6px;
     border-radius: 6px;
     cursor: pointer;
     transition: color 0.15s, background 0.15s;
-    white-space: nowrap;
     font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .site-nav-theme-btn:hover {
     color: #fff;
     background: rgba(255, 255, 255, 0.08);
+}
+
+.site-nav-theme-btn .theme-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
 .site-nav-refresh-btn {

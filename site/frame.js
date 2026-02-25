@@ -116,8 +116,8 @@
         inner.innerHTML =
             '<h1 class="site-brand"><a href="/">AustralianRates</a></h1>' +
             '<nav class="site-nav">' +
-                '<button type="button" id="theme-toggle" class="site-nav-theme-btn" aria-label="Toggle dark mode" title="Toggle dark mode">' +
-                    '<span id="theme-toggle-label">Dark</span>' +
+                '<button type="button" id="theme-toggle" class="site-nav-theme-btn" aria-label="Switch to dark mode" title="Switch to dark mode">' +
+                    '<span class="theme-toggle-icon" id="theme-toggle-icon"></span>' +
                 '</button>' +
                 '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
                 '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
@@ -130,21 +130,24 @@
         if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
     }
 
+    var THEME_ICON_SUN = '<svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+    var THEME_ICON_MOON = '<svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
     function bindThemeToggle(headerInner) {
         var btn = headerInner && headerInner.querySelector('#theme-toggle');
-        var label = headerInner && headerInner.querySelector('#theme-toggle-label');
-        if (!btn) return;
-        function updateLabel() {
+        var iconEl = headerInner && headerInner.querySelector('#theme-toggle-icon');
+        if (!btn || !iconEl) return;
+        function updateIcon() {
             var theme = (window.ARTheme && window.ARTheme.getTheme) ? window.ARTheme.getTheme() : 'light';
-            if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+            iconEl.innerHTML = theme === 'dark' ? THEME_ICON_SUN : THEME_ICON_MOON;
             btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
             btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
         }
-        updateLabel();
+        updateIcon();
         btn.addEventListener('click', function () {
             if (window.ARTheme && typeof window.ARTheme.toggle === 'function') {
                 window.ARTheme.toggle();
-                updateLabel();
+                updateIcon();
             }
         });
     }
