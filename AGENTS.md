@@ -81,3 +81,32 @@ These rules are mandatory and override any conflicting preference.
 - Generated: Database migrations, `node_modules`, build output.
 - Config: `.env`, `.env.local`, `package.json`.
 - Single-purpose entry points: `main.ts`, `index.ts` when they only bootstrap or re-export.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+| Service | Dev command | Port | Notes |
+|---------|-----------|------|-------|
+| API Worker | `npm run dev:api` (from root) | 8787 | Wrangler emulates D1/R2/Queue/DO locally |
+| Archive Worker | `npm run dev:archive` (from root) | 8786 | Independent; not needed for main frontend |
+| Frontend | `npx wrangler pages dev site/ --port 8788` | 8788 | Static files, no build step |
+
+### Running locally
+
+- The API worker dev server (`wrangler dev --test-scheduled`) creates a local D1 database automatically on first run. No manual migration step is needed for local development.
+- The frontend is plain HTML/CSS/JS in `site/` -- no bundler, no build step. Serve it with any static server or `wrangler pages dev`.
+- The frontend talks to the **production** API (`https://www.australianrates.com`) by default, not localhost. To test against the local API, you would need to modify the API base URL in the frontend JS files.
+- Copy `workers/api/.dev.vars.example` to `workers/api/.dev.vars` before running `npm run dev:api`. The `ADMIN_API_TOKEN` secret is required for admin endpoints but the dev server starts without it.
+
+### Testing
+
+- `npm run test:api` and `npm run test:archive` run vitest unit/integration tests (no network or Cloudflare account needed).
+- `npm run typecheck:api` runs TypeScript type checking on the API worker.
+- `npm run test:homepage` runs Playwright E2E tests against the **production** URL and requires network access.
+- Playwright needs Chromium installed (`npx playwright install --with-deps chromium`).
+
+### Gotchas
+
+- The archive worker uses `vitest.config.mts` with `@cloudflare/vitest-pool-workers`, while the API worker uses plain vitest with no config file (defaults).
+- The archive worker's `wrangler.jsonc` has `dev` and `prod` environments; the default `npm run dev:archive` uses the dev environment.
