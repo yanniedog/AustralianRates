@@ -4,7 +4,7 @@ This document defines rendering, interaction, accessibility, and API checks for 
 
 ## Test target and configuration
 
-- Frontend: static Pages app under `site/` with tabs, filters, table, pivot, charts, legal pages, and calculator.
+- Frontend: static Pages app under `site/` with tabs, filters, table, pivot, charts, and legal pages.
 - API: Workers under:
   - `/api/home-loan-rates/*`
   - `/api/savings-rates/*`
@@ -31,7 +31,6 @@ Configuration:
 | Footer | Disclaimer plus legal links visible | Assert disclaimer text and `About/Privacy/Terms/Contact` links |
 | Legal pages | Each legal page is reachable and distinct | Visit `/about/`, `/privacy/`, `/terms/`, `/contact/` and check title/content |
 | No-JS fallback | Noscript helper blocks exist in HTML | Fetch raw HTML and assert noscript + API link presence |
-| Calculator | Home-loan repayment estimator works | Fill known inputs and verify deterministic output |
 
 Script: `npm run test:homepage`
 
@@ -90,6 +89,6 @@ Automated checks are in `test-homepage.js`. Manual screen reader checks remain r
 
 | Command | Description |
 |---------|-------------|
-| `npm run test:homepage` | Playwright UI checks (layout, interactions, legal links, calculator, noscript presence checks). |
+| `npm run test:homepage` | Playwright UI checks (layout, interactions, legal links, noscript presence checks). |
 | `npm run diagnose:api` | API diagnostics and performance checks across all datasets, including `latest-all`. |
 | `npm run test:site` | Runs homepage then API diagnostics. |

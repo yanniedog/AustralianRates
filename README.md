@@ -122,9 +122,9 @@ See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (r
 
 1. Create a Cloudflare Pages project from this repository.
 2. Configure Pages build settings (mandatory):
-   - Build command: `npm run build:site-version`
+   - Build command: `npm run build`
    - Build output directory: `site`
-   - This generates `site/version.json` from `CF_PAGES_COMMIT_SHA` so the footer can show `In sync` or `Behind`. Without it, footer status becomes `Unknown`.
+   - This generates `site/version.json` from `CF_PAGES_COMMIT_SHA` so the footer can show `In sync` or `Behind`. Without it, footer status shows `Unknown` and deploy version is unavailable.
 3. Add custom domains `www.australianrates.com` and `australianrates.com` to the Pages project.
 4. Deploy API worker and set route:
    - `www.australianrates.com/api/home-loan-rates/*`

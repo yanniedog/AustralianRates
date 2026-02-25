@@ -183,47 +183,6 @@ async function runTests() {
         }
     }
 
-    async function verifyCalculator() {
-        const toggle = page.locator('#calculator-toggle');
-        const hasCollapsible = await toggle.isVisible().catch(() => false);
-        if (hasCollapsible) {
-            const details = page.locator('#calculator-details');
-            const isOpen = await details.getAttribute('open').then(Boolean).catch(() => false);
-            if (!isOpen) {
-                await toggle.click();
-                await page.waitForSelector('#calc-loan-amount', { state: 'visible', timeout: 3000 }).catch(() => null);
-            }
-        }
-        const calcVisible = await page.locator('#calc-loan-amount').isVisible().catch(() => false);
-        if (!calcVisible) {
-            results.failed.push('✗ Repayment estimator not visible on homepage');
-            return;
-        }
-
-        await page.fill('#calc-loan-amount', '700000');
-        await page.fill('#calc-interest-rate', '6');
-        await page.fill('#calc-term-years', '30');
-        await page.selectOption('#calc-repayment-type', 'principal_and_interest');
-        await page.click('#calc-run');
-        await page.waitForTimeout(200);
-        const piText = await page.textContent('#calc-result').catch(() => '');
-        if (piText && piText.includes('4,196.85')) {
-            results.passed.push('✓ Repayment estimator P&I calculation matches expected value');
-        } else {
-            results.failed.push(`✗ Repayment estimator P&I value unexpected (${piText || 'empty'})`);
-        }
-
-        await page.selectOption('#calc-repayment-type', 'interest_only');
-        await page.click('#calc-run');
-        await page.waitForTimeout(200);
-        const ioText = await page.textContent('#calc-result').catch(() => '');
-        if (ioText && ioText.includes('3,500.00')) {
-            results.passed.push('✓ Repayment estimator interest-only calculation matches expected value');
-        } else {
-            results.failed.push(`✗ Repayment estimator interest-only value unexpected (${ioText || 'empty'})`);
-        }
-    }
-
     async function verifyLegalPagesDistinct() {
         const pages = [
             { name: 'About', path: '/about/', titleIncludes: 'About AustralianRates' },
@@ -428,10 +387,6 @@ async function runTests() {
         await verifyFooterLegalLinks('Homepage');
         await verifyNoScriptFallback(TEST_URL, 'Homepage', '/api/home-loan-rates');
 
-        // Test 4e: Repayment estimator
-        console.log('\nTest 4e: Checking repayment estimator...');
-        await verifyCalculator();
-        
         // Test 5: Tab buttons
         console.log('\nTest 5: Checking tab buttons...');
         

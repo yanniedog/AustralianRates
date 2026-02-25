@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "install:all": "npm install --workspaces",
+    "build": "npm run build:site-version",
     "build:site-version": "node write-deploy-version.js",
     "dev:api": "npm run dev -w workers/api",
     "dev:archive": "npm run dev -w workers/archive",

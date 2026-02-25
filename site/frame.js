@@ -241,7 +241,7 @@
         var parts = [badge, deployText, latestText];
         if (info.latestDate) parts.push(esc(formatDate(info.latestDate)));
         if (info.status === 'Behind') parts.push('Refresh to update.');
-        if (info.status === 'Unknown') parts.push('Deploy metadata unavailable.');
+        if (info.status === 'Unknown') parts.push('Set Pages build to npm run build to show deploy version.');
         el.innerHTML = parts.join(' &middot; ');
     }
 

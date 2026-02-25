@@ -278,35 +278,6 @@
                 <pre id="runs-output" class="output">No data yet.</pre>
             </div>
         </section>
-
-        <details class="calculator-collapse" id="calculator-details">
-            <summary id="calculator-toggle" class="calculator-summary">Quick repayment estimator</summary>
-            <section class="panel calculator-panel" aria-label="Repayment estimator">
-                <p class="hint">Estimate monthly repayments using the selected rate and term.</p>
-                <div class="calculator-grid">
-                    <label for="calc-loan-amount">Loan Amount (AUD)
-                        <input id="calc-loan-amount" type="number" min="1" step="1000" placeholder="e.g. 700000">
-                    </label>
-                    <label for="calc-interest-rate">Annual Interest Rate (%)
-                        <input id="calc-interest-rate" type="number" min="0" step="0.01" placeholder="e.g. 6.49">
-                    </label>
-                    <label for="calc-term-years">Loan Term (Years)
-                        <input id="calc-term-years" type="number" min="1" step="1" value="30">
-                    </label>
-                    <label for="calc-repayment-type">Repayment Type
-                        <select id="calc-repayment-type">
-                            <option value="principal_and_interest" selected>Principal &amp; Interest</option>
-                            <option value="interest_only">Interest Only</option>
-                        </select>
-                    </label>
-                    <div class="filter-actions">
-                        <button id="calc-run" type="button" class="small">Calculate</button>
-                    </div>
-                </div>
-                <p id="calc-result" class="calculator-output"><strong>Estimate:</strong> Enter values and click Calculate.</p>
-                <p class="calculator-note">Estimate only. Excludes fees, offset/redraw effects, insurance, taxes, and lender-specific calculation methods.</p>
-            </section>
-        </details>
     </main>
 
     <p class="disclaimer">
@@ -340,7 +311,6 @@
     <script src="ar-admin.js"></script>
     <script src="ar-refresh.js"></script>
     <script src="ar-export.js"></script>
-    <script src="ar-calculator.js"></script>
     <script src="app.js"></script>
     <script src="frame.js"></script>
 </body>
