@@ -29,48 +29,36 @@
         fetch(apiBase + '/trigger-run', { method: 'POST' })
             .then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }).catch(function (e) { return { status: r.status, body: null, parseError: String(e && e.message) }; }); })
             .then(function (res) {
-                // #region agent log
-                console.log('[AR-DEBUG-eb90c6] trigger-run response: status=' + res.status + ', body.ok=' + (res.body && res.body.ok));
-                // #endregion
                 if (res.status === 429) {
+                    var rateMsg = res.body && (res.body.message || res.body.reason);
                     var secs = (res.body && res.body.retry_after_seconds) || 0;
                     var mins = Math.ceil(secs / 60);
-                    if (els.triggerStatus) els.triggerStatus.textContent = 'Rate limited -- try again in ~' + mins + ' min.';
+                    if (els.triggerStatus) els.triggerStatus.textContent = rateMsg || ('Rate limited -- try again in ~' + mins + ' min.');
                 } else if (res.body && res.body.ok) {
                     enableManualRunFilter();
                     if (els.triggerStatus) els.triggerStatus.textContent = 'Run started. Refreshing data...';
                     reloadExplorer();
                     loadHeroStats();
                     setTimeout(function () {
-                        // #region agent log
-                        console.log('[AR-DEBUG-eb90c6] 15s delayed reload');
-                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = 'Refreshing data (banks still reporting)...';
                     }, 15000);
                     setTimeout(function () {
-                        // #region agent log
-                        console.log('[AR-DEBUG-eb90c6] 45s delayed reload');
-                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = 'Refreshing data (almost done)...';
                     }, 45000);
                     setTimeout(function () {
-                        // #region agent log
-                        console.log('[AR-DEBUG-eb90c6] 90s final reload');
-                        // #endregion
                         reloadExplorer();
                         loadHeroStats();
                         if (els.triggerStatus) els.triggerStatus.textContent = 'Data refreshed.';
                         setTimeout(function () { if (els.triggerStatus) els.triggerStatus.textContent = ''; }, 5000);
                     }, 90000);
                 } else {
-                    if (els.triggerStatus) els.triggerStatus.textContent = 'Run could not be started.';
-                    // #region agent log
-                    console.log('[AR-DEBUG-eb90c6] Run failed. Body:', JSON.stringify(res.body));
-                    // #endregion
+                    var displayMsg = res.body && (res.body.message || res.body.reason || (res.body.error && res.body.error.message));
+                    var fallback = res.body ? 'Run could not be started.' : (res.parseError ? 'Server response could not be read. Try again.' : 'Run could not be started.');
+                    if (els.triggerStatus) els.triggerStatus.textContent = displayMsg ? String(displayMsg) : fallback;
                 }
             })
             .catch(function (err) {
