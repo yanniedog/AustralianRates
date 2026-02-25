@@ -14,13 +14,6 @@ import { buildScheduledRunId } from '../utils/idempotency'
 
 /** Minimum minutes between scheduled runs; cron fires every 6 hours. */
 const SCHEDULED_INTERVAL_MIN_MINUTES = MIN_RATE_CHECK_INTERVAL_MINUTES
-const SCHEDULE_STEP_HOURS = 6
-
-export function shouldRunScheduledAtTargetHour(hour: number, targetHour: number): boolean {
-  const normalizedHour = ((hour % 24) + 24) % 24
-  const normalizedTargetHour = ((targetHour % 24) + 24) % 24
-  return normalizedHour % SCHEDULE_STEP_HOURS === normalizedTargetHour % SCHEDULE_STEP_HOURS
-}
 
 export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {
   try {
@@ -47,9 +40,12 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   const intervalMinutes = Math.max(SCHEDULED_INTERVAL_MIN_MINUTES, configuredMinutes)
 
   const lastRunIso = await getAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY)
-  const now = Date.now()
+  const cronIso = Number.isFinite(event.scheduledTime)
+    ? new Date(event.scheduledTime).toISOString()
+    : new Date().toISOString()
+  const cronMs = new Date(cronIso).getTime()
   const lastRunMs = lastRunIso ? new Date(lastRunIso).getTime() : 0
-  const elapsedMinutes = (now - lastRunMs) / (60 * 1000)
+  const elapsedMinutes = (cronMs - lastRunMs) / (60 * 1000)
 
   if (lastRunIso && elapsedMinutes < intervalMinutes) {
     log.info('scheduler', `Skipping: interval not elapsed (${Math.round(elapsedMinutes)}m < ${intervalMinutes}m)`)
@@ -63,12 +59,14 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   }
 
   const runIdOverride = buildScheduledRunId(collectionDate, event.scheduledTime)
-  log.info('scheduler', `Triggering rate check run (interval=${intervalMinutes}m, collectionDate=${collectionDate})`)
+  log.info('scheduler', `Triggering rate check run (interval=${intervalMinutes}m, collectionDate=${collectionDate}, runId=${runIdOverride})`)
   const result = await triggerDailyRun(env, {
     source: 'scheduled',
     runIdOverride,
   })
   log.info('scheduler', `Rate check run result`, { context: JSON.stringify(result) })
+
+  const skipped = (result as { skipped?: unknown }).skipped === true
 
   let autoBackfill: { ok: boolean; enqueued: number; cap: number; considered: number } | null = null
   const runId = (result as { runId?: unknown }).runId
@@ -87,8 +85,8 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     }
   }
 
-  if (result.ok) {
-    await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY, new Date().toISOString())
+  if (result.ok && !skipped) {
+    await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY, cronIso)
   }
 
   return {
