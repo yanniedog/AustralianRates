@@ -19,7 +19,7 @@
             var ratesRes = await fetch(apiBase + '/rates?' + new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' }));
             if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
             var ratesData = await ratesRes.json();
-            if (ratesData && ratesData.total != null) {
+                if (ratesData && ratesData.total != null) {
                 var total = Number(ratesData.total || 0);
                 if (els.statRecords) {
                     var meta = ratesData.meta || {};

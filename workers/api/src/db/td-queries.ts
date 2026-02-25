@@ -114,7 +114,7 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
   let scheduled = 0
   let manual = 0
   for (const row of rows(dataResult)) {
-    if (String((row as Record<string, unknown>).run_source ?? 'scheduled') === 'manual') manual += 1
+    if (String((row as Record<string, unknown>).run_source ?? 'scheduled').toLowerCase() === 'manual') manual += 1
     else scheduled += 1
   }
   const data = rows(dataResult).map((row) => presentTdRow(row))
@@ -229,7 +229,7 @@ FROM historical_term_deposit_rates h
   let scheduled = 0
   let manual = 0
   for (const row of rows(dataResult)) {
-    if (String((row as Record<string, unknown>).run_source ?? 'scheduled') === 'manual') manual += 1
+    if (String((row as Record<string, unknown>).run_source ?? 'scheduled').toLowerCase() === 'manual') manual += 1
     else scheduled += 1
   }
   return {
@@ -301,7 +301,7 @@ export async function getTdQualityDiagnostics(db: D1Database) {
   let scheduled = 0
   let manual = 0
   for (const row of rows(sourceMix)) {
-    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
 

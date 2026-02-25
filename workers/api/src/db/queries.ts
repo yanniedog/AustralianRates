@@ -413,7 +413,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   let scheduled = 0
   let manual = 0
   for (const row of rows(sourceResult)) {
-    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
 
@@ -534,7 +534,7 @@ export async function queryRatesForExport(
   let scheduled = 0
   let manual = 0
   for (const row of rows(sourceResult)) {
-    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
   return {

@@ -122,7 +122,7 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
   let scheduled = 0
   let manual = 0
   for (const row of rows(sourceResult)) {
-    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
   const data = rows(dataResult).map((row) => presentSavingsRow(row))
@@ -245,7 +245,7 @@ export async function querySavingsForExport(db: D1Database, filters: SavingsPagi
   let scheduled = 0
   let manual = 0
   for (const row of rows(sourceResult)) {
-    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
   return {
@@ -317,7 +317,7 @@ export async function getSavingsQualityDiagnostics(db: D1Database) {
   let scheduled = 0
   let manual = 0
   for (const row of rows(sourceMix)) {
-    if (String(row.run_source) === 'manual') manual += Number(row.n)
+    if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
 
