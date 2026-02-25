@@ -56,6 +56,10 @@ export function buildBackfillDayIdempotencyKey(runId: string, lenderCode: string
   ].join(':')
 }
 
+export function buildHistoricalTaskIdempotencyKey(runId: string, taskId: number): string {
+  return ['historical-task', normalizeKeyPart(runId), String(Math.max(0, Math.floor(taskId)))].join(':')
+}
+
 function extensionForSource(sourceType: SourceType): string {
   return sourceType === 'wayback_html' ? 'html' : 'json'
 }

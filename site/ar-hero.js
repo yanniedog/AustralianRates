@@ -30,13 +30,7 @@
                 if (ratesData && ratesData.total != null) {
                 var total = Number(ratesData.total || 0);
                 if (els.statRecords) {
-                    var meta = ratesData.meta || {};
-                    var mix = meta.source_mix || {};
-                    var scheduled = Number(mix.scheduled || 0);
-                    var manual = Number(mix.manual || 0);
-                    var mode = meta.source_mode || 'all';
-                    var mixText = ' (mode: ' + esc(mode) + ', scheduled ' + scheduled.toLocaleString() + ', manual ' + manual.toLocaleString() + ')';
-                    els.statRecords.innerHTML = 'Records: <strong>' + total.toLocaleString() + '</strong><span class="hint">' + mixText + '</span>';
+                    els.statRecords.innerHTML = 'Records: <strong>' + total.toLocaleString() + '</strong>';
                 }
                 if (ratesData.data && ratesData.data.length > 0) {
                     var latest = ratesData.data[0];

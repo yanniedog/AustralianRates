@@ -203,7 +203,7 @@
             });
     }
 
-    function startRunProgressPolling(runId, historicalQueued) {
+    function startRunProgressPolling(runId) {
         clearRunProgressPolling(true);
         runProgressRunId = String(runId || '').trim();
         runProgressLastCompleted = -1;
@@ -220,9 +220,7 @@
         }
 
         if (els.triggerStatus) {
-            var intro = 'Full check started (mortgage, savings, term deposits, historical lookup).';
-            if (historicalQueued > 0) intro += ' Historical lookups queued: ' + historicalQueued + '.';
-            els.triggerStatus.textContent = intro + ' Getting live progress...';
+            els.triggerStatus.textContent = 'Full check started. Getting live progress...';
         }
         pollRunProgress();
         runProgressTimer = setInterval(pollRunProgress, RUN_PROGRESS_POLL_MS);
@@ -239,67 +237,18 @@
         });
     }
 
-    function getHistoricalQueuedCount(body) {
-        return Number(
-            body &&
-            body.result &&
-            body.result.auto_backfill &&
-            body.result.auto_backfill.enqueued,
-        ) || 0;
-    }
-
     function getRunId(body) {
         return String(body && body.result && body.result.runId || '');
-    }
-
-    function getHistoricalRunId(body) {
-        return String(body && body.historical_run_id || '');
-    }
-
-    function getHistoricalWorkerCommand(body) {
-        return String(body && body.worker_command || '');
-    }
-
-    function buildHistoricalTriggerPayload() {
-        var enabled = !!(els.historicalPullEnabled && els.historicalPullEnabled.checked);
-        if (!enabled) return { enabled: false };
-        var startDate = els.historicalStartDate ? String(els.historicalStartDate.value || '').trim() : '';
-        var endDate = els.historicalEndDate ? String(els.historicalEndDate.value || '').trim() : '';
-        if (!startDate || !endDate) {
-            return { enabled: true, error: 'Select both historical start and end dates.' };
-        }
-        return {
-            enabled: true,
-            payload: {
-                historical: {
-                    enabled: true,
-                    start_date: startDate,
-                    end_date: endDate
-                }
-            }
-        };
     }
 
     function handleAcceptedResponse(res) {
         clearTriggerCooldown();
         enableManualRunFilter();
-        var historicalQueued = getHistoricalQueuedCount(res.body);
         var runId = getRunId(res.body);
-        var historicalRunId = getHistoricalRunId(res.body);
-        var workerCommand = getHistoricalWorkerCommand(res.body);
-        if (els.historicalWorkerHint) {
-            if (historicalRunId && workerCommand) {
-                els.historicalWorkerHint.textContent = 'Historical pull queued: ' + historicalRunId + '. Run locally: ' + workerCommand;
-            } else {
-                els.historicalWorkerHint.textContent = '';
-            }
-        }
         clientLog('info', 'Manual run trigger accepted', {
             runId: runId || null,
-            historicalQueued: historicalQueued,
-            historicalRunId: historicalRunId || null,
         });
-        startRunProgressPolling(runId, historicalQueued);
+        startRunProgressPolling(runId);
     }
 
     function handleRejectedResponse(res) {
@@ -321,23 +270,14 @@
         triggerInFlight = true;
         syncTriggerButtonState();
         if (els.triggerStatus) els.triggerStatus.textContent = 'Starting run...';
-        if (els.historicalWorkerHint) els.historicalWorkerHint.textContent = '';
         clientLog('info', 'Manual run trigger requested', {
             section: window.AR.section || 'home-loans',
         });
 
-        var historical = buildHistoricalTriggerPayload();
-        if (historical.enabled && historical.error) {
-            if (els.triggerStatus) els.triggerStatus.textContent = historical.error;
-            triggerInFlight = false;
-            syncTriggerButtonState();
-            return;
-        }
-
         fetch(apiBase + '/trigger-run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(historical.payload || {}),
+            body: JSON.stringify({}),
         })
             .then(parseTriggerResponse)
             .then(function (res) {

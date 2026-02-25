@@ -114,7 +114,7 @@ describe('admin config routes', () => {
     expect(res.status).toBe(401)
   })
 
-  it('clamps rate_check_interval_minutes to min (60) on PUT /admin/config', async () => {
+  it('clamps rate_check_interval_minutes to min (360) on PUT /admin/config', async () => {
     const env = makeEnv()
     const req = new Request(`https://x${API_BASE}/admin/config`, {
       method: 'PUT',
@@ -125,7 +125,7 @@ describe('admin config routes', () => {
     expect(res.status).toBe(200)
     const data = await res.json() as { ok: boolean; row?: { value?: string } }
     expect(data.ok).toBe(true)
-    expect(data.row?.value).toBe('60')
+    expect(data.row?.value).toBe('360')
   })
 
   it('returns 400 for invalid rate_check_interval_minutes on PUT /admin/config', async () => {
@@ -283,5 +283,20 @@ describe('admin clear routes', () => {
     })
     const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
     expect(res.status).toBe(400)
+  })
+})
+
+describe('admin historical local-worker deprecation', () => {
+  it('returns 410 for POST /admin/historical/pull/tasks/claim', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/historical/pull/tasks/claim`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: 'run-1', worker_id: 'worker-1' }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(410)
+    const data = await res.json() as { error?: { code?: string } }
+    expect(data.error?.code).toBe('HISTORICAL_LOCAL_WORKER_DEPRECATED')
   })
 })

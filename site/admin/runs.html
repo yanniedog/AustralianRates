@@ -68,8 +68,6 @@
             <button type="button" class="secondary" id="refresh-now">Refresh now</button>
             <span class="status" id="run-status"></span>
         </div>
-        <div class="live-meta" id="historical-command"></div>
-
         <div class="live-meta" id="live-meta">Loading realtime snapshot...</div>
 
         <section class="section-card">
@@ -84,12 +82,14 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Lender</th>
-                            <th>Next Date (canonical)</th>
+                            <th>Dataset</th>
+                            <th>First Coverage</th>
+                            <th>Cursor Date</th>
                             <th>Status</th>
                             <th>Empty Streak</th>
-                            <th>Claimed</th>
+                            <th>Last Tick Status</th>
                             <th>Last Run</th>
+                            <th>Last Message</th>
                             <th>Updated At</th>
                         </tr>
                     </thead>
@@ -131,7 +131,6 @@
             var historicalBtn = document.getElementById('trigger-historical');
             var historicalStart = document.getElementById('historical-start-date');
             var historicalEnd = document.getElementById('historical-end-date');
-            var historicalCommand = document.getElementById('historical-command');
             var refreshBtn = document.getElementById('refresh-now');
             var inFlight = false;
             var pollTimer = null;
@@ -192,12 +191,12 @@
                 var rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
 
                 var cells = [
-                    { label: 'Lenders Total', value: asInt(summary.lenders_total) },
-                    { label: 'Active', value: asInt(summary.active_lenders) },
-                    { label: 'Completed', value: asInt(summary.completed_lenders) },
-                    { label: 'Claimed', value: asInt(summary.claimed_lenders) },
-                    { label: 'Earliest Next', value: summary.earliest_next_collection_date || '—' },
-                    { label: 'Latest Next', value: summary.latest_next_collection_date || '—' }
+                    { label: 'Datasets', value: asInt(summary.datasets_total) },
+                    { label: 'Active', value: asInt(summary.active_datasets) },
+                    { label: 'Pending', value: asInt(summary.pending_datasets) },
+                    { label: 'Completed', value: asInt(summary.completed_datasets) },
+                    { label: 'Earliest Cursor', value: summary.earliest_cursor_date || '—' },
+                    { label: 'Latest Cursor', value: summary.latest_cursor_date || '—' }
                 ];
                 historicalSummary.innerHTML = '';
                 cells.forEach(function (cell) {
@@ -209,7 +208,7 @@
 
                 historicalRows.innerHTML = '';
                 if (rows.length === 0) {
-                    historicalRows.innerHTML = '<tr><td colspan="7">No historical progress rows available.</td></tr>';
+                    historicalRows.innerHTML = '<tr><td colspan="9">No coverage progress rows available.</td></tr>';
                     return;
                 }
                 rows.forEach(function (row) {
@@ -217,12 +216,14 @@
                     historicalRows.insertAdjacentHTML(
                         'beforeend',
                         '<tr>'
-                        + '<td class="mono">' + esc(row.lender_code || '') + '</td>'
-                        + '<td>' + esc(row.next_collection_date || '') + '</td>'
+                        + '<td class="mono">' + esc(row.dataset_key || '') + '</td>'
+                        + '<td>' + esc(row.first_coverage_date || '—') + '</td>'
+                        + '<td>' + esc(row.cursor_date || '—') + '</td>'
                         + '<td>' + esc(row.status || '') + '</td>'
                         + '<td>' + asInt(row.empty_streak) + '</td>'
-                        + '<td>' + (row.claimed ? 'Yes' : 'No') + '</td>'
-                        + '<td class="mono">' + esc(row.last_run_id || '—') + '</td>'
+                        + '<td>' + esc(row.last_tick_status || '—') + '</td>'
+                        + '<td class="mono">' + esc(row.last_tick_run_id || '—') + '</td>'
+                        + '<td>' + esc(row.last_tick_message || '—') + '</td>'
                         + '<td>' + esc(updated) + '</td>'
                         + '</tr>'
                     );
@@ -244,13 +245,16 @@
                     pollIntervalMs = Math.max(1000, Number(d.poll_interval_ms) || 10000);
                     var localServerTime = fmtTs(d.server_time);
                     var activeCount = d.runs && Array.isArray(d.runs.active) ? d.runs.active.length : 0;
-                    var cron = d.scheduler && d.scheduler.cron_expression ? d.scheduler.cron_expression : '0 */6 * * *';
+                    var dailyCron = d.scheduler && d.scheduler.daily_cron_expression
+                        ? d.scheduler.daily_cron_expression
+                        : (d.scheduler && d.scheduler.cron_expression ? d.scheduler.cron_expression : '0 */6 * * *');
+                    var hourlyCron = d.scheduler && d.scheduler.hourly_cron_expression ? d.scheduler.hourly_cron_expression : '0 * * * *';
                     liveMeta.textContent = 'Live updates every ' + Math.round(pollIntervalMs / 1000) + 's | Active runs: '
-                        + activeCount + ' | Scheduler: ' + cron + ' | Server time (local): ' + localServerTime;
+                        + activeCount + ' | Scheduler daily=' + dailyCron + ' hourly=' + hourlyCron + ' | Server time (local): ' + localServerTime;
 
                     renderRunList(activeRuns, d.runs && d.runs.active, 'No active runs.');
                     renderRunList(recentRuns, d.runs && d.runs.recent, 'No recent completed runs.');
-                    renderHistorical(d.historical);
+                    renderHistorical(d.coverage || d.historical);
                 }).catch(function (e) {
                     var msg = e && e.message ? e.message : 'Failed to load realtime data';
                     runStatus.textContent = msg;
@@ -296,7 +300,6 @@
                 }
                 historicalBtn.disabled = true;
                 runStatus.textContent = 'Starting historical pull...';
-                if (historicalCommand) historicalCommand.textContent = '';
                 portal.fetchAdmin('/historical/pull', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -308,10 +311,8 @@
                             runStatus.textContent = (d && d.error && d.error.message) ? d.error.message : 'Failed';
                             return;
                         }
-                        runStatus.textContent = 'Historical pull started: ' + String(d.run_id || '');
-                        if (historicalCommand && d.worker_command) {
-                            historicalCommand.textContent = 'Run locally: ' + String(d.worker_command);
-                        }
+                        runStatus.textContent = 'Historical pull queued: ' + String(d.run_id || '')
+                            + ' (' + String(d.tasks_queued || 0) + ' tasks)';
                         loadRealtime();
                     })
                     .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
@@ -332,4 +333,3 @@
     </script>
 </body>
 </html>
-

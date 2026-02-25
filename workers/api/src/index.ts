@@ -4,7 +4,7 @@ import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from './constants'
 import { RunLockDO } from './durable/run-lock'
-import { handleScheduledDaily } from './pipeline/scheduled'
+import { dispatchScheduledEvent } from './pipeline/scheduler-dispatch'
 import { consumeIngestQueue } from './queue/consumer'
 import { adminRoutes } from './routes/admin'
 import { publicRoutes } from './routes/public'
@@ -71,8 +71,9 @@ const worker: ExportedHandler<EnvBindings, IngestMessage> = {
 
   async scheduled(event, env): Promise<void> {
     initLogger(env.DB)
-    log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()}`)
-    const result = await handleScheduledDaily(event, env)
+    const cron = String((event as ScheduledController & { cron?: string }).cron || '')
+    log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()} (${cron || 'unknown'})`)
+    const result = await dispatchScheduledEvent(event, env)
     log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
     await flushBufferedLogs()
   },

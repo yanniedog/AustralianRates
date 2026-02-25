@@ -62,8 +62,8 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Every hour at :00 UTC: mortgage, savings, and term deposit rate checks.
-crons = ["0 * * * *"]
+# Daily ingest cadence + hourly Wayback coverage backfill.
+crons = ["0 */6 * * *", "0 * * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"

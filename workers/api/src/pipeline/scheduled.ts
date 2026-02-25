@@ -5,7 +5,6 @@ import {
   RATE_CHECK_INTERVAL_MINUTES_KEY,
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
-import { runAutoBackfillTick } from './auto-backfill'
 import { triggerDailyRun } from './bootstrap-jobs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -68,30 +67,12 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
 
   const skipped = (result as { skipped?: unknown }).skipped === true
 
-  let autoBackfill: { ok: boolean; enqueued: number; cap: number; considered: number } | null = null
-  const runId = (result as { runId?: unknown }).runId
-  const runCollectionDate = (result as { collectionDate?: unknown }).collectionDate
-  if (result.ok && typeof runId === 'string' && typeof runCollectionDate === 'string') {
-    try {
-      autoBackfill = await runAutoBackfillTick(env, {
-        runId,
-        collectionDate: runCollectionDate,
-        runSource: 'scheduled',
-      })
-    } catch (error) {
-      log.error('scheduler', 'Auto backfill tick failed', {
-        context: (error as Error)?.message || String(error),
-      })
-    }
-  }
-
   if (result.ok && !skipped) {
     await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY, cronIso)
   }
 
   return {
     ...result,
-    auto_backfill: autoBackfill,
     melbourne: melbourneParts,
     intervalMinutes,
   }

@@ -1,5 +1,20 @@
 import { TARGET_LENDERS } from '../constants'
-import { claimHistoricalTask, createHistoricalRunWithTasks, daysBetweenInclusive, findActiveHistoricalRun, finalizeHistoricalTask, getHistoricalRunDetail, getHistoricalRunById, getHistoricalTaskById, getLastHistoricalRunCreatedAt, refreshHistoricalRunStats, registerHistoricalBatch, addHistoricalTaskBatchCounts } from '../db/client-historical-runs'
+import {
+  addHistoricalTaskBatchCounts,
+  claimHistoricalTask,
+  createHistoricalRunWithTasks,
+  daysBetweenInclusive,
+  finalizeHistoricalTask,
+  findActiveHistoricalRun,
+  getHistoricalRunById,
+  getHistoricalRunDetail,
+  getHistoricalTaskById,
+  getLastHistoricalRunCreatedAt,
+  listHistoricalTaskIds,
+  markHistoricalRunFailed,
+  refreshHistoricalRunStats,
+  registerHistoricalBatch,
+} from '../db/client-historical-runs'
 import { getCachedEndpoint } from '../db/endpoint-cache'
 import { upsertHistoricalRateRows } from '../db/historical-rates'
 import { upsertSavingsRateRows } from '../db/savings-rates'
@@ -7,7 +22,8 @@ import { upsertTdRateRows } from '../db/td-rates'
 import { discoverProductsEndpoint } from '../ingest/cdr'
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
 import { type NormalizedSavingsRow, type NormalizedTdRow, validateNormalizedSavingsRow, validateNormalizedTdRow } from '../ingest/normalize-savings'
-import type { EnvBindings } from '../types'
+import { enqueueHistoricalTaskJobs } from '../queue/producer'
+import type { EnvBindings, HistoricalProductScope } from '../types'
 import { sha256HexFromJson } from '../utils/hash'
 import { parseIntegerEnv } from '../utils/time'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
@@ -22,6 +38,8 @@ type HistoricalCreateInput = {
   requestedBy?: string | null
   startDate: string
   endDate: string
+  runSource?: 'scheduled' | 'manual'
+  productScope?: HistoricalProductScope
 }
 
 type HistoricalBatchInput = {
@@ -53,10 +71,6 @@ function clampRangeDays(value: number, fallback: number): number {
 
 function toHistoricalRunId(triggerSource: 'public' | 'admin', startDate: string, endDate: string): string {
   return `historical:${triggerSource}:${startDate}:${endDate}:${crypto.randomUUID()}`
-}
-
-function toWorkerCommand(runId: string): string {
-  return `AR_ADMIN_TOKEN=<token> npm run historical:worker -- --run-id ${runId}`
 }
 
 function parseRowArray<T>(value: unknown): T[] {
@@ -124,7 +138,7 @@ function toTdRows(rawRows: unknown, runId: string): ServiceResult<NormalizedTdRo
 export async function startHistoricalPullRun(
   env: EnvBindings,
   input: HistoricalCreateInput,
-): Promise<ServiceResult<{ run_id: string; worker_command: string; range_days: number }>> {
+): Promise<ServiceResult<{ run_id: string; range_days: number; tasks_queued: number }>> {
   const startDate = String(input.startDate || '').trim()
   const endDate = String(input.endDate || '').trim()
   if (!isDateOnly(startDate) || !isDateOnly(endDate)) {
@@ -166,21 +180,34 @@ export async function startHistoricalPullRun(
 
   const lenderCodes = TARGET_LENDERS.map((x) => x.code)
   const runId = toHistoricalRunId(input.triggerSource, startDate, endDate)
-  await createHistoricalRunWithTasks(env.DB, {
-    runId,
-    triggerSource: input.triggerSource,
-    requestedBy: input.requestedBy ?? null,
-    startDate,
-    endDate,
-    lenderCodes,
-    runSource: 'manual',
-  })
 
-  return ok({
-    run_id: runId,
-    worker_command: toWorkerCommand(runId),
-    range_days: rangeDays,
-  })
+  try {
+    await createHistoricalRunWithTasks(env.DB, {
+      runId,
+      triggerSource: input.triggerSource,
+      requestedBy: input.requestedBy ?? null,
+      startDate,
+      endDate,
+      lenderCodes,
+      productScope: input.productScope ?? 'all',
+      runSource: input.runSource ?? 'manual',
+    })
+    const taskIds = await listHistoricalTaskIds(env.DB, runId)
+    const enqueued = await enqueueHistoricalTaskJobs(env, {
+      runId,
+      runSource: input.runSource ?? 'manual',
+      taskIds,
+    })
+
+    return ok({
+      run_id: runId,
+      range_days: rangeDays,
+      tasks_queued: enqueued.enqueued,
+    })
+  } catch (error) {
+    await markHistoricalRunFailed(env.DB, runId, (error as Error)?.message || String(error))
+    return fail(500, 'HISTORICAL_QUEUE_FAILED', 'Historical run was created but queueing failed.')
+  }
 }
 
 export async function getHistoricalPullDetail(

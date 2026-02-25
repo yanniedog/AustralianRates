@@ -1,5 +1,4 @@
 import { getLastManualRunStartedAt, hasRunningManualRun } from '../db/run-reports'
-import { runAutoBackfillTick } from '../pipeline/auto-backfill'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -68,26 +67,13 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
   log.info('api', `Public manual run triggered (${logLabel})`)
   try {
     const result = await triggerDailyRun(env, { source: 'manual', force: true })
-    let autoBackfill: Awaited<ReturnType<typeof runAutoBackfillTick>> | null = null
-    const runId = (result as { runId?: unknown }).runId
-    const collectionDate = (result as { collectionDate?: unknown }).collectionDate
-    if (typeof runId === 'string' && typeof collectionDate === 'string') {
-      autoBackfill = await runAutoBackfillTick(env, {
-        runId,
-        collectionDate,
-        runSource: 'manual',
-      })
-    }
 
     return {
       ok: true,
       status: 200,
       body: {
         ok: true,
-        result: {
-          ...result,
-          auto_backfill: autoBackfill,
-        },
+        result,
       },
     }
   } catch (error) {

@@ -20,6 +20,7 @@ const ADMIN_DB_TABLES = [
   'client_historical_runs',
   'client_historical_tasks',
   'client_historical_batches',
+  'dataset_coverage_progress',
   'rba_cash_rates',
   'global_log',
 ] as const
@@ -78,6 +79,7 @@ const TABLE_KEY_COLUMNS: Record<TableName, string[]> = {
   client_historical_runs: ['run_id'],
   client_historical_tasks: ['task_id'],
   client_historical_batches: ['batch_id'],
+  dataset_coverage_progress: ['dataset_key'],
   rba_cash_rates: ['collection_date'],
   global_log: ['id'],
 }

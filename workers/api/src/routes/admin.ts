@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { requireAdmin } from '../auth/admin'
 import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
 import { getRunReport, listRunReports } from '../db/run-reports'
-import { claimHistoricalPullTask, finalizeHistoricalPullTaskRun, getHistoricalPullDetail, ingestHistoricalPullTaskBatch, startHistoricalPullRun } from '../pipeline/client-historical'
+import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
@@ -128,63 +128,28 @@ adminRoutes.get('/historical/pull/:runId', async (c) => {
 })
 
 adminRoutes.post('/historical/pull/tasks/claim', async (c) => {
-  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const runId = String(body.run_id ?? body.runId ?? '').trim()
-  const workerId = String(body.worker_id ?? body.workerId ?? '').trim()
-  const claimed = await claimHistoricalPullTask(c.env, { runId, workerId })
-  if (!claimed.ok) {
-    return jsonError(c, claimed.status as 400 | 401 | 403 | 404 | 409 | 429 | 500, claimed.code, claimed.message, claimed.details)
-  }
-  return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, ...claimed.value })
+  return jsonError(
+    c,
+    410,
+    'HISTORICAL_LOCAL_WORKER_DEPRECATED',
+    'Local historical worker task claim is deprecated. Historical tasks are now executed by the server queue.',
+  )
 })
 
 adminRoutes.post('/historical/pull/tasks/:taskId/batch', async (c) => {
-  const taskId = Number(c.req.param('taskId'))
-  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const runId = String(body.run_id ?? body.runId ?? '').trim()
-  const batchId = String(body.batch_id ?? body.batchId ?? '').trim()
-  const workerId = String(body.worker_id ?? body.workerId ?? '').trim()
-  const mortgageRows = Array.isArray(body.mortgage_rows) ? body.mortgage_rows : Array.isArray(body.mortgageRows) ? body.mortgageRows : []
-  const savingsRows = Array.isArray(body.savings_rows) ? body.savings_rows : Array.isArray(body.savingsRows) ? body.savingsRows : []
-  const tdRows = Array.isArray(body.td_rows) ? body.td_rows : Array.isArray(body.tdRows) ? body.tdRows : []
-  const hadSignals = Boolean(body.had_signals ?? body.hadSignals)
-
-  const ingested = await ingestHistoricalPullTaskBatch(c.env, {
-    runId,
-    taskId,
-    batchId,
-    workerId: workerId || null,
-    hadSignals,
-    mortgageRows: mortgageRows as never[],
-    savingsRows: savingsRows as never[],
-    tdRows: tdRows as never[],
-  })
-  if (!ingested.ok) {
-    return jsonError(c, ingested.status as 400 | 401 | 403 | 404 | 409 | 429 | 500, ingested.code, ingested.message, ingested.details)
-  }
-  return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, ...ingested.value })
+  return jsonError(
+    c,
+    410,
+    'HISTORICAL_LOCAL_WORKER_DEPRECATED',
+    'Local historical worker batch ingestion is deprecated. Historical tasks are now executed by the server queue.',
+  )
 })
 
 adminRoutes.post('/historical/pull/tasks/:taskId/finalize', async (c) => {
-  const taskId = Number(c.req.param('taskId'))
-  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const runId = String(body.run_id ?? body.runId ?? '').trim()
-  const workerId = String(body.worker_id ?? body.workerId ?? '').trim()
-  const statusRaw = String(body.status ?? '').trim().toLowerCase()
-  const status = statusRaw === 'failed' ? 'failed' : 'completed'
-  const error = status === 'failed' ? String(body.error ?? body.last_error ?? '').trim() : null
-  const hadSignals = Boolean(body.had_signals ?? body.hadSignals)
-
-  const finalized = await finalizeHistoricalPullTaskRun(c.env, {
-    runId,
-    taskId,
-    workerId: workerId || null,
-    status,
-    hadSignals,
-    error,
-  })
-  if (!finalized.ok) {
-    return jsonError(c, finalized.status as 400 | 401 | 403 | 404 | 409 | 429 | 500, finalized.code, finalized.message, finalized.details)
-  }
-  return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, ...finalized.value })
+  return jsonError(
+    c,
+    410,
+    'HISTORICAL_LOCAL_WORKER_DEPRECATED',
+    'Local historical worker finalize is deprecated. Historical tasks are now executed by the server queue.',
+  )
 })

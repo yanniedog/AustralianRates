@@ -27,6 +27,7 @@ export type AdminAuthState = {
 
 export type RunSource = 'scheduled' | 'manual'
 export type RetrievalType = 'historical_scrape' | 'present_scrape_same_date'
+export type HistoricalProductScope = 'all' | 'mortgage' | 'savings' | 'term_deposits'
 
 export type DailyLenderJob = {
   kind: 'daily_lender_fetch'
@@ -80,7 +81,22 @@ export type DailySavingsLenderJob = {
   idempotencyKey: string
 }
 
-export type IngestMessage = DailyLenderJob | ProductDetailJob | BackfillSnapshotJob | BackfillDayJob | DailySavingsLenderJob
+export type HistoricalTaskExecuteJob = {
+  kind: 'historical_task_execute'
+  runId: string
+  runSource: RunSource
+  taskId: number
+  attempt: number
+  idempotencyKey: string
+}
+
+export type IngestMessage =
+  | DailyLenderJob
+  | ProductDetailJob
+  | BackfillSnapshotJob
+  | BackfillDayJob
+  | DailySavingsLenderJob
+  | HistoricalTaskExecuteJob
 
 export type LenderConfig = {
   code: string

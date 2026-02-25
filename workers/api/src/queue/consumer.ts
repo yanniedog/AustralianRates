@@ -1,5 +1,7 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS, TARGET_LENDERS } from '../constants'
 import { advanceAutoBackfillAfterDay, releaseAutoBackfillClaim } from '../db/auto-backfill-progress'
+import { addHistoricalTaskBatchCounts, claimHistoricalTaskById, finalizeHistoricalTask, getHistoricalRunById } from '../db/client-historical-runs'
+import { recordDatasetCoverageRunOutcome, type CoverageDataset } from '../db/dataset-coverage'
 import { upsertHistoricalRateRows } from '../db/historical-rates'
 import { upsertSavingsRateRows } from '../db/savings-rates'
 import { upsertTdRateRows } from '../db/td-rates'
@@ -31,6 +33,7 @@ import type {
   DailyLenderJob,
   DailySavingsLenderJob,
   EnvBindings,
+  HistoricalTaskExecuteJob,
   IngestMessage,
   ProductDetailJob,
 } from '../types'
@@ -72,7 +75,10 @@ function isNonRetryableErrorMessage(message: string): boolean {
   return (
     message === 'invalid_queue_message_shape' ||
     message.startsWith('unknown_lender_code:') ||
-    message.startsWith('daily_ingest_no_valid_rows:')
+    message.startsWith('daily_ingest_no_valid_rows:') ||
+    message.startsWith('historical_run_not_found:') ||
+    message.startsWith('historical_task_claim_failed:') ||
+    message.startsWith('historical_task_lender_not_found:')
   )
 }
 
@@ -117,6 +123,10 @@ function isIngestMessage(value: unknown): value is IngestMessage {
 
   if (value.kind === 'daily_savings_lender_fetch') {
     return typeof value.runId === 'string' && typeof value.lenderCode === 'string' && typeof value.collectionDate === 'string'
+  }
+
+  if (value.kind === 'historical_task_execute') {
+    return typeof value.runId === 'string' && Number.isFinite(Number(value.taskId))
   }
 
   return false
@@ -180,6 +190,26 @@ function summarizeDropReasons(items: Array<{ reason: string }>): Record<string, 
     out[item.reason] = (out[item.reason] || 0) + 1
   }
   return out
+}
+
+type HistoricalScope = 'all' | 'mortgage' | 'savings' | 'term_deposits'
+
+function asHistoricalScope(value: unknown): HistoricalScope {
+  const scope = String(value || 'all')
+  if (scope === 'mortgage' || scope === 'savings' || scope === 'term_deposits') return scope
+  return 'all'
+}
+
+function scopeCoverageDataset(scope: HistoricalScope): CoverageDataset | null {
+  if (scope === 'mortgage' || scope === 'savings' || scope === 'term_deposits') return scope
+  return null
+}
+
+function rowsWrittenForScope(scope: HistoricalScope, run: { mortgage_rows: number; savings_rows: number; td_rows: number }): number {
+  if (scope === 'mortgage') return Math.max(0, Number(run.mortgage_rows || 0))
+  if (scope === 'savings') return Math.max(0, Number(run.savings_rows || 0))
+  if (scope === 'term_deposits') return Math.max(0, Number(run.td_rows || 0))
+  return Math.max(0, Number(run.mortgage_rows || 0)) + Math.max(0, Number(run.savings_rows || 0)) + Math.max(0, Number(run.td_rows || 0))
 }
 
 async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
@@ -592,6 +622,203 @@ async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob): Prom
   }
 }
 
+async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalTaskExecuteJob): Promise<void> {
+  const workerId = `queue-historical:${job.runId}:${job.taskId}`
+  const claimTtl = Math.max(60, parseIntegerEnv(env.HISTORICAL_TASK_CLAIM_TTL_SECONDS, 900))
+  const task = await claimHistoricalTaskById(env.DB, {
+    runId: job.runId,
+    taskId: job.taskId,
+    workerId,
+    claimTtlSeconds: claimTtl,
+  })
+  if (!task) {
+    log.info('consumer', 'historical_task_execute skipped (already claimed/completed)', {
+      runId: job.runId,
+      context: `task_id=${job.taskId}`,
+    })
+    return
+  }
+
+  const run = await getHistoricalRunById(env.DB, job.runId)
+  if (!run) {
+    await finalizeHistoricalTask(env.DB, {
+      taskId: task.task_id,
+      runId: job.runId,
+      workerId,
+      status: 'failed',
+      lastError: `historical_run_not_found:${job.runId}`,
+      hadSignals: false,
+    })
+    throw new Error(`historical_run_not_found:${job.runId}`)
+  }
+
+  const scope = asHistoricalScope(run.product_scope)
+  const lender = TARGET_LENDERS.find((entry) => entry.code === task.lender_code)
+  if (!lender) {
+    await finalizeHistoricalTask(env.DB, {
+      taskId: task.task_id,
+      runId: job.runId,
+      workerId,
+      status: 'failed',
+      lastError: `historical_task_lender_not_found:${task.lender_code}`,
+      hadSignals: false,
+    })
+    throw new Error(`historical_task_lender_not_found:${task.lender_code}`)
+  }
+
+  log.info('consumer', 'historical_task_execute started', {
+    runId: job.runId,
+    lenderCode: task.lender_code,
+    context: `task_id=${task.task_id} date=${task.collection_date} scope=${scope}`,
+  })
+
+  try {
+    const endpointCandidates: string[] = []
+    const endpoint = await getCachedEndpoint(env.DB, task.lender_code)
+    if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
+    if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
+    const discovered = await discoverProductsEndpoint(lender)
+    if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
+
+    const collected = await collectHistoricalDayFromWayback({
+      lender,
+      collectionDate: task.collection_date,
+      endpointCandidates,
+      productCap: maxProductsPerLender(env),
+      maxSeedUrls: 2,
+    })
+
+    for (const payload of collected.payloads) {
+      await persistRawPayload(env, {
+        sourceType: 'wayback_html',
+        sourceUrl: payload.sourceUrl,
+        payload: payload.payload,
+        httpStatus: payload.status,
+        notes: `${payload.notes} run=${job.runId} task=${task.task_id} scope=${scope}`,
+      })
+    }
+
+    const mortgageRows = scope === 'all' || scope === 'mortgage' ? collected.mortgageRows : []
+    const savingsRows = scope === 'all' || scope === 'savings' ? collected.savingsRows : []
+    const tdRows = scope === 'all' || scope === 'term_deposits' ? collected.tdRows : []
+
+    for (const row of mortgageRows) {
+      row.runId = job.runId
+      row.runSource = run.run_source
+      row.retrievalType = 'historical_scrape'
+    }
+    for (const row of savingsRows) {
+      row.runId = job.runId
+      row.runSource = run.run_source
+      row.retrievalType = 'historical_scrape'
+    }
+    for (const row of tdRows) {
+      row.runId = job.runId
+      row.runSource = run.run_source
+      row.retrievalType = 'historical_scrape'
+    }
+
+    const { accepted: mortgageAccepted } = splitValidatedRows(mortgageRows)
+    const { accepted: savingsAccepted } = splitValidatedSavingsRows(savingsRows)
+    const { accepted: tdAccepted } = splitValidatedTdRows(tdRows)
+    const [mortgageWritten, savingsWritten, tdWritten] = await Promise.all([
+      upsertHistoricalRateRows(env.DB, mortgageAccepted),
+      upsertSavingsRateRows(env.DB, savingsAccepted),
+      upsertTdRateRows(env.DB, tdAccepted),
+    ])
+
+    const hadSignals =
+      collected.hadSignals || mortgageWritten > 0 || savingsWritten > 0 || tdWritten > 0
+
+    await addHistoricalTaskBatchCounts(env.DB, {
+      taskId: task.task_id,
+      runId: job.runId,
+      mortgageRows: mortgageWritten,
+      savingsRows: savingsWritten,
+      tdRows: tdWritten,
+      hadSignals,
+    })
+
+    await finalizeHistoricalTask(env.DB, {
+      taskId: task.task_id,
+      runId: job.runId,
+      workerId,
+      status: 'completed',
+      hadSignals,
+      lastError: null,
+    })
+
+    await persistRawPayload(env, {
+      sourceType: 'wayback_html',
+      sourceUrl: `summary://${task.lender_code}/historical-task/${task.collection_date}`,
+      payload: {
+        run_id: job.runId,
+        task_id: task.task_id,
+        lender_code: task.lender_code,
+        collection_date: task.collection_date,
+        scope,
+        parsed_counts: {
+          mortgage_rows: mortgageRows.length,
+          savings_rows: savingsRows.length,
+          td_rows: tdRows.length,
+        },
+        written_counts: {
+          mortgage_rows: mortgageWritten,
+          savings_rows: savingsWritten,
+          td_rows: tdWritten,
+        },
+        had_signals: hadSignals,
+        counters: collected.counters,
+        captured_at: nowIso(),
+      },
+      httpStatus: 200,
+      notes: `historical_task_summary lender=${task.lender_code} date=${task.collection_date} scope=${scope}`,
+    })
+
+    log.info('consumer', 'historical_task_execute completed', {
+      runId: job.runId,
+      lenderCode: task.lender_code,
+      context:
+        `task_id=${task.task_id} date=${task.collection_date} scope=${scope}` +
+        ` parsed(m=${mortgageRows.length},s=${savingsRows.length},td=${tdRows.length})` +
+        ` written(m=${mortgageWritten},s=${savingsWritten},td=${tdWritten})`,
+    })
+  } catch (error) {
+    const message = (error as Error)?.message || String(error)
+    await finalizeHistoricalTask(env.DB, {
+      taskId: task.task_id,
+      runId: job.runId,
+      workerId,
+      status: 'failed',
+      hadSignals: false,
+      lastError: message.slice(0, 1800),
+    })
+    log.error('consumer', 'historical_task_execute failed', {
+      runId: job.runId,
+      lenderCode: task.lender_code,
+      context: `task_id=${task.task_id} date=${task.collection_date} error=${message}`,
+    })
+    throw error
+  }
+
+  const runAfter = await getHistoricalRunById(env.DB, job.runId)
+  const coverageDataset = scopeCoverageDataset(scope)
+  if (
+    coverageDataset &&
+    runAfter &&
+    runAfter.run_source === 'scheduled' &&
+    (runAfter.status === 'completed' || runAfter.status === 'partial' || runAfter.status === 'failed')
+  ) {
+    await recordDatasetCoverageRunOutcome(env.DB, {
+      dataset: coverageDataset,
+      runId: runAfter.run_id,
+      runStatus: runAfter.status,
+      rowsWritten: rowsWrittenForScope(scope, runAfter),
+      message: `run_status=${runAfter.status} rows=${rowsWrittenForScope(scope, runAfter)}`,
+    })
+  }
+}
+
 async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLenderJob): Promise<void> {
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!lender) throw new Error(`unknown_lender_code:${job.lenderCode}`)
@@ -741,6 +968,9 @@ async function processMessage(env: EnvBindings, message: IngestMessage): Promise
   }
   if (message.kind === 'daily_savings_lender_fetch') {
     return handleDailySavingsLenderJob(env, message)
+  }
+  if (message.kind === 'historical_task_execute') {
+    return handleHistoricalTaskJob(env, message)
   }
 
   throw new Error(`Unsupported message kind: ${String((message as Record<string, unknown>).kind)}`)

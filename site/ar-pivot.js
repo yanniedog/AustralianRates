@@ -80,16 +80,10 @@
                 }
                 var total = response.total || data.length;
                 var warning = total > 10000 ? ' (showing first 10,000 of ' + total.toLocaleString() + ' rows)' : '';
-                var meta = response.meta || {};
-                var mix = meta.source_mix || {};
-                var scheduled = Number(mix.scheduled || 0).toLocaleString();
-                var manual = Number(mix.manual || 0).toLocaleString();
-                var mode = String(meta.source_mode || 'all');
-                if (els.pivotStatus) els.pivotStatus.textContent = 'Loaded ' + data.length.toLocaleString() + ' rows' + warning + ' [mode=' + mode + ', scheduled=' + scheduled + ', manual=' + manual + ']. Drag fields to configure the pivot.';
+                if (els.pivotStatus) els.pivotStatus.textContent = 'Loaded ' + data.length.toLocaleString() + ' rows' + warning + '. Drag fields to configure the pivot.';
                 clientLog('info', 'Pivot load completed', {
                     rows: data.length,
                     total: Number(total),
-                    sourceMode: mode,
                 });
 
                 var pivotData = data.map(pivotRowFromApi);

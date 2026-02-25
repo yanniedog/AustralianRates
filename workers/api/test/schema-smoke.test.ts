@@ -33,4 +33,13 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE VIEW vw_latest_savings_rates AS')
     expect(sql).toContain('CREATE VIEW vw_latest_td_rates AS')
   })
+
+  it('includes dataset coverage progress migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0014_dataset_coverage_progress.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS dataset_coverage_progress')
+    expect(sql).toContain("dataset_key IN ('mortgage', 'savings', 'term_deposits')")
+    expect(sql).toContain("status IN ('pending', 'active', 'completed_lower_bound')")
+    expect(sql).toContain("INSERT OR IGNORE INTO dataset_coverage_progress (dataset_key, status)")
+  })
 })

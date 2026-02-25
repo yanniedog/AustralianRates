@@ -4,22 +4,32 @@ import type {
   DailyLenderJob,
   DailySavingsLenderJob,
   EnvBindings,
+  HistoricalTaskExecuteJob,
   IngestMessage,
   LenderConfig,
   ProductDetailJob,
   RunSource,
 } from '../types'
 import {
-  buildBackfillIdempotencyKey,
   buildBackfillDayIdempotencyKey,
+  buildBackfillIdempotencyKey,
   buildDailyLenderIdempotencyKey,
+  buildHistoricalTaskIdempotencyKey,
   buildProductDetailIdempotencyKey,
 } from '../utils/idempotency'
 
 type QueueEnv = Pick<EnvBindings, 'INGEST_QUEUE'>
+const MAX_QUEUE_BATCH_SIZE = 100
 
 function asQueueBatch(messages: IngestMessage[]) {
   return messages.map((message) => ({ body: message }))
+}
+
+async function sendInChunks(env: QueueEnv, messages: IngestMessage[]): Promise<void> {
+  if (messages.length === 0) return
+  for (let index = 0; index < messages.length; index += MAX_QUEUE_BATCH_SIZE) {
+    await env.INGEST_QUEUE.sendBatch(asQueueBatch(messages.slice(index, index + MAX_QUEUE_BATCH_SIZE)))
+  }
 }
 
 export async function enqueueDailyLenderJobs(
@@ -42,9 +52,7 @@ export async function enqueueDailyLenderJobs(
     idempotencyKey: buildDailyLenderIdempotencyKey(input.runId, lender.code),
   }))
 
-  if (jobs.length > 0) {
-    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
-  }
+  await sendInChunks(env, jobs)
 
   return {
     enqueued: jobs.length,
@@ -75,9 +83,7 @@ export async function enqueueProductDetailJobs(
     idempotencyKey: buildProductDetailIdempotencyKey(input.runId, input.lenderCode, productId),
   }))
 
-  if (jobs.length > 0) {
-    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
-  }
+  await sendInChunks(env, jobs)
 
   return {
     enqueued: jobs.length,
@@ -104,9 +110,7 @@ export async function enqueueDailySavingsLenderJobs(
     idempotencyKey: `${input.runId}:savings:${lender.code}`,
   }))
 
-  if (jobs.length > 0) {
-    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
-  }
+  await sendInChunks(env, jobs)
 
   return {
     enqueued: jobs.length,
@@ -134,9 +138,7 @@ export async function enqueueBackfillJobs(
     idempotencyKey: buildBackfillIdempotencyKey(input.runId, job.lenderCode, job.seedUrl, job.monthCursor),
   }))
 
-  if (jobs.length > 0) {
-    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
-  }
+  await sendInChunks(env, jobs)
 
   const perLender: Record<string, number> = {}
   for (const job of jobs) {
@@ -168,9 +170,7 @@ export async function enqueueBackfillDayJobs(
     idempotencyKey: buildBackfillDayIdempotencyKey(input.runId, job.lenderCode, job.collectionDate),
   }))
 
-  if (jobs.length > 0) {
-    await env.INGEST_QUEUE.sendBatch(asQueueBatch(jobs))
-  }
+  await sendInChunks(env, jobs)
 
   const perLender: Record<string, number> = {}
   for (const job of jobs) {
@@ -178,4 +178,29 @@ export async function enqueueBackfillDayJobs(
   }
 
   return { enqueued: jobs.length, perLender }
+}
+
+export async function enqueueHistoricalTaskJobs(
+  env: QueueEnv,
+  input: {
+    runId: string
+    runSource?: RunSource
+    taskIds: number[]
+  },
+): Promise<{ enqueued: number }> {
+  const runSource = input.runSource ?? 'manual'
+  const uniqueTaskIds = Array.from(
+    new Set(input.taskIds.map((taskId) => Math.floor(Number(taskId))).filter((taskId) => Number.isFinite(taskId) && taskId > 0)),
+  )
+  const jobs: HistoricalTaskExecuteJob[] = uniqueTaskIds.map((taskId) => ({
+    kind: 'historical_task_execute',
+    runId: input.runId,
+    runSource,
+    taskId,
+    attempt: 0,
+    idempotencyKey: buildHistoricalTaskIdempotencyKey(input.runId, taskId),
+  }))
+
+  await sendInChunks(env, jobs)
+  return { enqueued: jobs.length }
 }

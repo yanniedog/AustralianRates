@@ -1,4 +1,5 @@
 import { nowIso } from '../utils/time'
+import type { HistoricalProductScope } from '../types'
 
 export type HistoricalTriggerSource = 'public' | 'admin'
 export type HistoricalRunStatus = 'pending' | 'running' | 'completed' | 'partial' | 'failed'
@@ -7,7 +8,7 @@ export type HistoricalTaskStatus = 'pending' | 'claimed' | 'completed' | 'failed
 export type HistoricalRunRow = {
   run_id: string
   trigger_source: HistoricalTriggerSource
-  product_scope: string
+  product_scope: HistoricalProductScope
   run_source: 'scheduled' | 'manual'
   start_date: string
   end_date: string
@@ -181,6 +182,19 @@ export async function getHistoricalTaskById(db: D1Database, taskId: number): Pro
   )
 }
 
+export async function listHistoricalTaskIds(db: D1Database, runId: string): Promise<number[]> {
+  const rows = await db
+    .prepare(
+      `SELECT task_id
+       FROM client_historical_tasks
+       WHERE run_id = ?1
+       ORDER BY task_id ASC`,
+    )
+    .bind(runId)
+    .all<{ task_id: number }>()
+  return (rows.results ?? []).map((row) => Number(row.task_id)).filter((taskId) => Number.isFinite(taskId))
+}
+
 export async function findActiveHistoricalRun(
   db: D1Database,
   triggerSource: HistoricalTriggerSource,
@@ -229,6 +243,7 @@ export async function createHistoricalRunWithTasks(
     startDate: string
     endDate: string
     lenderCodes: string[]
+    productScope?: HistoricalProductScope
     runSource?: 'scheduled' | 'manual'
   },
 ): Promise<{ run: HistoricalRunRow; tasksCreated: number }> {
@@ -243,11 +258,12 @@ export async function createHistoricalRunWithTasks(
          run_id, trigger_source, product_scope, run_source, start_date, end_date, status,
          total_tasks, pending_tasks, claimed_tasks, completed_tasks, failed_tasks,
          mortgage_rows, savings_rows, td_rows, requested_by, created_at, updated_at
-       ) VALUES (?1, ?2, 'all', ?3, ?4, ?5, 'pending', ?6, ?6, 0, 0, 0, 0, 0, 0, ?7, ?8, ?8)`,
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?7, 0, 0, 0, 0, 0, 0, ?8, ?9, ?9)`,
     )
     .bind(
       input.runId,
       input.triggerSource,
+      input.productScope ?? 'all',
       input.runSource ?? 'manual',
       input.startDate,
       input.endDate,
@@ -393,6 +409,46 @@ export async function claimHistoricalTask(
   return null
 }
 
+export async function claimHistoricalTaskById(
+  db: D1Database,
+  input: {
+    runId: string
+    taskId: number
+    workerId: string
+    claimTtlSeconds: number
+  },
+): Promise<HistoricalTaskRow | null> {
+  const now = nowIso()
+  const expiresAt = new Date(Date.now() + Math.max(30, input.claimTtlSeconds) * 1000).toISOString()
+
+  const result = await db
+    .prepare(
+      `UPDATE client_historical_tasks
+       SET status = 'claimed',
+           claimed_by = ?1,
+           claimed_at = ?2,
+           claim_expires_at = ?3,
+           attempt_count = attempt_count + CASE WHEN status = 'pending' THEN 1 ELSE 0 END,
+           updated_at = ?2
+       WHERE task_id = ?4
+         AND run_id = ?5
+         AND (
+           status = 'pending'
+           OR (status = 'claimed' AND claimed_by = ?1)
+           OR (status = 'claimed' AND claim_expires_at IS NOT NULL AND claim_expires_at <= ?2)
+         )`,
+    )
+    .bind(input.workerId, now, expiresAt, input.taskId, input.runId)
+    .run()
+
+  if (Number(result.meta?.changes ?? 0) <= 0) {
+    return null
+  }
+
+  await refreshHistoricalRunStats(db, input.runId)
+  return getHistoricalTaskById(db, input.taskId)
+}
+
 export async function registerHistoricalBatch(
   db: D1Database,
   input: {
@@ -487,6 +543,35 @@ export async function finalizeHistoricalTask(
   }
 
   return getHistoricalTaskById(db, input.taskId)
+}
+
+export async function markHistoricalRunFailed(db: D1Database, runId: string, message?: string | null): Promise<void> {
+  const now = nowIso()
+  await db
+    .prepare(
+      `UPDATE client_historical_runs
+       SET status = 'failed',
+           finished_at = ?1,
+           updated_at = ?1
+       WHERE run_id = ?2`,
+    )
+    .bind(now, runId)
+    .run()
+
+  if (message) {
+    await db
+      .prepare(
+        `UPDATE client_historical_tasks
+         SET status = CASE WHEN status = 'completed' THEN status ELSE 'failed' END,
+             last_error = COALESCE(last_error, ?1),
+             updated_at = ?2
+         WHERE run_id = ?3`,
+      )
+      .bind(String(message).slice(0, 2000), now, runId)
+      .run()
+  }
+
+  await refreshHistoricalRunStats(db, runId)
 }
 
 export async function getHistoricalRunDetail(

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
 import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
+import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
 import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
@@ -13,20 +14,6 @@ import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { handlePublicRunStatus } from './public-run-status'
 
 export const publicRoutes = new Hono<AppContext>()
-
-function parseHistoricalRequest(body: Record<string, unknown>): { enabled: boolean; startDate?: string; endDate?: string } {
-  const historicalBody = body.historical
-  const nested = historicalBody && typeof historicalBody === 'object' ? (historicalBody as Record<string, unknown>) : {}
-  const enabledRaw = nested.enabled ?? body.include_historical ?? body.historical_pull ?? false
-  const enabled = String(enabledRaw).toLowerCase() === 'true' || enabledRaw === true || enabledRaw === 1 || enabledRaw === '1'
-  const startDate = String(nested.start_date ?? nested.startDate ?? body.start_date ?? body.startDate ?? '').trim()
-  const endDate = String(nested.end_date ?? nested.endDate ?? body.end_date ?? body.endDate ?? '').trim()
-  return {
-    enabled,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-  }
-}
 
 publicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
@@ -75,47 +62,12 @@ publicRoutes.get('/staleness', async (c) => {
 
 publicRoutes.post('/trigger-run', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const historicalReq = parseHistoricalRequest(body)
-  if (historicalReq.enabled && (!historicalReq.startDate || !historicalReq.endDate)) {
-    return jsonError(c, 400, 'INVALID_REQUEST', 'Historical pull requires start_date and end_date.')
+  if (hasDeprecatedHistoricalTriggerPayload(body)) {
+    return jsonError(c, 410, HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE)
   }
 
   const result = await handlePublicTriggerRun(c.env, 'home-loans')
-  if (!historicalReq.enabled) {
-    return c.json(result.body, result.status)
-  }
-  if (!result.ok) {
-    return c.json(result.body, result.status)
-  }
-
-  const historical = await startHistoricalPullRun(c.env, {
-    triggerSource: 'public',
-    requestedBy: 'public_trigger_run',
-    startDate: historicalReq.startDate || '',
-    endDate: historicalReq.endDate || '',
-  })
-  if (!historical.ok) {
-    return c.json(
-      {
-        ok: false,
-        reason: 'historical_pull_failed',
-        message: historical.message,
-        details: historical.details,
-        daily_result: result.body.result,
-      },
-      historical.status,
-    )
-  }
-
-  return c.json(
-    {
-      ...result.body,
-      historical_run_id: historical.value.run_id,
-      worker_command: historical.value.worker_command,
-      historical_range_days: historical.value.range_days,
-    },
-    result.status,
-  )
+  return c.json(result.body, result.status)
 })
 
 publicRoutes.get('/run-status/:runId', handlePublicRunStatus)

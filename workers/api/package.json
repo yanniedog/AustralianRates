@@ -7,8 +7,7 @@
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "historical:worker": "tsx src/tools/historical-worker.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "hono": "^4.7.2",

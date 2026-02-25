@@ -20,7 +20,6 @@
     "pages:set-build": "node set-pages-build-config.js",
     "pages:create-full-token": "node create-full-access-token.js",
     "typecheck:api": "npm run typecheck -w workers/api",
-    "historical:worker": "npm run historical:worker -w workers/api --",
     "deploy:api": "npm run deploy -w workers/api",
     "deploy:archive": "npm run deploy -w workers/archive"
   },

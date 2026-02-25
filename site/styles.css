@@ -233,11 +233,6 @@ h2 {
     font-size: 0.78rem;
 }
 
-#historical-worker-hint {
-    flex-basis: 100%;
-    font-size: 0.78rem;
-}
-
 .trigger-run-btn {
     font-size: 0.82rem;
     padding: 6px 14px;
