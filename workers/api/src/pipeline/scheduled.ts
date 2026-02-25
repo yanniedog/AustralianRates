@@ -1,4 +1,10 @@
 import { ensureAppConfigTable, getAppConfig, setAppConfig } from '../db/app-config'
+import {
+  DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
+  MIN_RATE_CHECK_INTERVAL_MINUTES,
+  RATE_CHECK_INTERVAL_MINUTES_KEY,
+  RATE_CHECK_LAST_RUN_ISO_KEY,
+} from '../constants'
 import { runAutoBackfillTick } from './auto-backfill'
 import { triggerDailyRun } from './bootstrap-jobs'
 import type { EnvBindings } from '../types'
@@ -6,11 +12,8 @@ import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
 import { buildScheduledRunId } from '../utils/idempotency'
 
-const RATE_CHECK_INTERVAL_KEY = 'rate_check_interval_minutes'
-const RATE_CHECK_LAST_RUN_KEY = 'rate_check_last_run_iso'
-const DEFAULT_INTERVAL_MINUTES = 360
 /** Minimum minutes between scheduled runs; cron fires every 6 hours. */
-const SCHEDULED_INTERVAL_MIN_MINUTES = 360
+const SCHEDULED_INTERVAL_MIN_MINUTES = MIN_RATE_CHECK_INTERVAL_MINUTES
 const SCHEDULE_STEP_HOURS = 6
 
 export function shouldRunScheduledAtTargetHour(hour: number, targetHour: number): boolean {
@@ -36,11 +39,14 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
   const collectionDate = melbourneParts.date
 
-  const intervalRaw = await getAppConfig(env.DB, RATE_CHECK_INTERVAL_KEY)
-  const configuredMinutes = Math.max(1, parseInt(intervalRaw ?? String(DEFAULT_INTERVAL_MINUTES), 10) || DEFAULT_INTERVAL_MINUTES)
+  const intervalRaw = await getAppConfig(env.DB, RATE_CHECK_INTERVAL_MINUTES_KEY)
+  const configuredMinutes = Math.max(
+    1,
+    parseInt(intervalRaw ?? String(DEFAULT_RATE_CHECK_INTERVAL_MINUTES), 10) || DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
+  )
   const intervalMinutes = Math.max(SCHEDULED_INTERVAL_MIN_MINUTES, configuredMinutes)
 
-  const lastRunIso = await getAppConfig(env.DB, RATE_CHECK_LAST_RUN_KEY)
+  const lastRunIso = await getAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY)
   const now = Date.now()
   const lastRunMs = lastRunIso ? new Date(lastRunIso).getTime() : 0
   const elapsedMinutes = (now - lastRunMs) / (60 * 1000)
@@ -82,7 +88,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   }
 
   if (result.ok) {
-    await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_KEY, new Date().toISOString())
+    await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY, new Date().toISOString())
   }
 
   return {

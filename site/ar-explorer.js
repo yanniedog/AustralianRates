@@ -6,6 +6,7 @@
     var config = window.AR.config;
     var filters = window.AR.filters;
     var utils = window.AR.utils;
+    var timeUtils = window.AR.time || {};
     var els = dom && dom.els ? dom.els : {};
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
@@ -70,7 +71,26 @@
     function parsedAtFormatter(cell) {
         var v = cell.getValue();
         if (!v) return '-';
-        try { return new Date(v).toLocaleString(); } catch (_) { return String(v); }
+        var rendered = timeUtils.formatCheckedAt ? timeUtils.formatCheckedAt(v) : { text: String(v), title: String(v) };
+        var cellEl = cell.getElement ? cell.getElement() : null;
+        if (cellEl && rendered && rendered.title) {
+            cellEl.setAttribute('title', rendered.title);
+        }
+        return rendered && rendered.text ? rendered.text : String(v);
+    }
+
+    function collectionDateFormatter(cell) {
+        var value = cell.getValue();
+        var rowData = cell.getRow && cell.getRow() ? cell.getRow().getData() : null;
+        var parsedAt = rowData && rowData.parsed_at ? rowData.parsed_at : '';
+        var rendered = timeUtils.formatSourceDateWithLocal
+            ? timeUtils.formatSourceDateWithLocal(value, parsedAt)
+            : { text: String(value || ''), title: String(value || '') };
+        var cellEl = cell.getElement ? cell.getElement() : null;
+        if (cellEl && rendered && rendered.title) {
+            cellEl.setAttribute('title', rendered.title);
+        }
+        return rendered && rendered.text ? rendered.text : String(value || '');
     }
 
     function retrievalTypeFormatter(cell) {
@@ -85,7 +105,7 @@
     function getLoanColumns() {
         var narrow = isMobile();
         return [
-            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110 },
+            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
             { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
             { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80, visible: !narrow },
@@ -108,7 +128,7 @@
     function getSavingsColumns() {
         var narrow = isMobile();
         return [
-            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110 },
+            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
             { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
             { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 90 },
@@ -128,7 +148,7 @@
     function getTdColumns() {
         var narrow = isMobile();
         return [
-            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110 },
+            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
             { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
             { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 80 },

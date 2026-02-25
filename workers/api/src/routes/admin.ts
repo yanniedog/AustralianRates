@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { requireAdmin } from '../auth/admin'
+import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
 import { getRunReport, listRunReports } from '../db/run-reports'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { adminClearRoutes } from './admin-clear'
@@ -31,6 +32,15 @@ adminRoutes.get('/runs', async (c) => {
     count: runs.length,
     auth_mode: c.get('adminAuthState')?.mode || null,
     runs,
+  })
+})
+
+adminRoutes.get('/runs/realtime', async (c) => {
+  const limit = Number(c.req.query('limit') || 15)
+  const snapshot = await getAdminRealtimeSnapshot(c.env.DB, { recentLimit: limit, pollIntervalMs: 10000 })
+  return c.json({
+    ...snapshot,
+    auth_mode: c.get('adminAuthState')?.mode || null,
   })
 })
 

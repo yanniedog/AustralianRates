@@ -1,4 +1,5 @@
 import { getRunReport } from './run-reports'
+import type { RunSource, RunStatus, RunType } from '../types'
 import { nowIso } from '../utils/time'
 
 type LenderProgress = {
@@ -31,6 +32,21 @@ export type PublicRunProgress = {
   completed_total: number
   progress_pct: number
   per_lender: Record<string, LenderProgress>
+}
+
+export type AdminRunProgress = PublicRunProgress & {
+  run_type: RunType
+  run_source: RunSource
+}
+
+type RunProgressRow = {
+  run_id: string
+  run_type: RunType
+  run_source: RunSource
+  status: RunStatus
+  started_at: string
+  finished_at: string | null
+  per_lender_json: string
 }
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -88,13 +104,7 @@ function asPerLenderSummary(input: unknown): PerLenderSummary {
   }
 }
 
-function toPublicRunProgress(row: {
-  run_id: string
-  status: 'running' | 'ok' | 'partial' | 'failed'
-  started_at: string
-  finished_at: string | null
-  per_lender_json: string
-}): PublicRunProgress {
+function buildRunProgressBase(row: RunProgressRow): PublicRunProgress {
   const summary = asPerLenderSummary(parseJson<Record<string, unknown>>(row.per_lender_json, {}))
   const completedTotal = summary._meta.processed_total + summary._meta.failed_total
   const pendingTotal = Math.max(0, summary._meta.enqueued_total - completedTotal)
@@ -126,10 +136,55 @@ function toPublicRunProgress(row: {
   }
 }
 
+function toPublicRunProgress(row: RunProgressRow): PublicRunProgress {
+  return buildRunProgressBase(row)
+}
+
+function toAdminRunProgress(row: RunProgressRow): AdminRunProgress {
+  return {
+    ...buildRunProgressBase(row),
+    run_type: row.run_type,
+    run_source: row.run_source,
+  }
+}
+
 export async function getPublicRunProgress(db: D1Database, runId: string): Promise<PublicRunProgress | null> {
   const row = await getRunReport(db, runId)
   if (!row) return null
   return toPublicRunProgress(row)
+}
+
+async function listRunProgressRows(
+  db: D1Database,
+  whereClause: string,
+  limit: number,
+): Promise<RunProgressRow[]> {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit || 1)))
+  const rows = await db
+    .prepare(
+      `SELECT run_id, run_type, run_source, status, started_at, finished_at, per_lender_json
+       FROM run_reports
+       ${whereClause}
+       ORDER BY started_at DESC
+       LIMIT ?1`,
+    )
+    .bind(safeLimit)
+    .all<RunProgressRow>()
+  return rows.results ?? []
+}
+
+export async function listAdminRunProgress(
+  db: D1Database,
+  input?: { activeLimit?: number; recentLimit?: number },
+): Promise<{ active: AdminRunProgress[]; recent: AdminRunProgress[] }> {
+  const [activeRows, recentRows] = await Promise.all([
+    listRunProgressRows(db, `WHERE status = 'running'`, input?.activeLimit ?? 50),
+    listRunProgressRows(db, `WHERE status != 'running'`, input?.recentLimit ?? 15),
+  ])
+  return {
+    active: activeRows.map(toAdminRunProgress),
+    recent: recentRows.map(toAdminRunProgress),
+  }
 }
 
 export async function addRunEnqueuedCounts(

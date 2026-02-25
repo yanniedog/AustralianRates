@@ -44,6 +44,20 @@ export async function listAutoBackfillProgress(
   return out
 }
 
+export async function listAllAutoBackfillProgress(db: D1Database): Promise<AutoBackfillProgressRow[]> {
+  const result = await db
+    .prepare(
+      `SELECT lender_code, next_collection_date, empty_streak, status, updated_at, last_run_id
+       FROM auto_backfill_progress
+       ORDER BY
+         CASE status WHEN 'active' THEN 0 ELSE 1 END,
+         next_collection_date DESC,
+         lender_code ASC`,
+    )
+    .all<AutoBackfillProgressRow>()
+  return result.results ?? []
+}
+
 export async function ensureAutoBackfillProgressRow(
   db: D1Database,
   lenderCode: string,

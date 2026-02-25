@@ -82,6 +82,62 @@ describe('admin config routes', () => {
     expect(typeof data.env).toBe('object')
     expect(data.env.ADMIN_API_TOKEN).toBeUndefined()
   })
+
+  it('returns 200 for GET /admin/runs/realtime with Bearer token', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/runs/realtime?limit=15`, {
+      method: 'GET',
+      headers: { Authorization: 'Bearer test-admin-token' },
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(200)
+    const data = await res.json() as {
+      ok: boolean
+      runs: { active: unknown[]; recent: unknown[] }
+      historical: { summary: Record<string, unknown>; rows: unknown[] }
+      scheduler: Record<string, unknown>
+      server_time: string
+    }
+    expect(data.ok).toBe(true)
+    expect(Array.isArray(data.runs.active)).toBe(true)
+    expect(Array.isArray(data.runs.recent)).toBe(true)
+    expect(Array.isArray(data.historical.rows)).toBe(true)
+    expect(typeof data.historical.summary).toBe('object')
+    expect(typeof data.scheduler).toBe('object')
+    expect(typeof data.server_time).toBe('string')
+  })
+
+  it('returns 401 for GET /admin/runs/realtime without auth', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/runs/realtime?limit=15`, { method: 'GET' })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(401)
+  })
+
+  it('clamps rate_check_interval_minutes to 360 on PUT /admin/config', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/config`, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'rate_check_interval_minutes', value: '15' }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(200)
+    const data = await res.json() as { ok: boolean; row?: { value?: string } }
+    expect(data.ok).toBe(true)
+    expect(data.row?.value).toBe('360')
+  })
+
+  it('returns 400 for invalid rate_check_interval_minutes on PUT /admin/config', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/config`, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'rate_check_interval_minutes', value: 'abc' }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('admin db routes', () => {

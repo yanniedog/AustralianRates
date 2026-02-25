@@ -5,6 +5,7 @@
     var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
     var LOG_API_BASE = window.location.origin + '/api/home-loan-rates';
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
+    var timeUtils = (window.AR && window.AR.time) ? window.AR.time : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
     var _secretAdminShortcutBound = false;
 
@@ -205,19 +206,11 @@
     }
 
     function formatDate(iso) {
-        try {
-            var d = new Date(iso);
-            return d.toLocaleString('en-AU', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZoneName: 'short'
-            });
-        } catch (e) {
-            return iso;
+        if (timeUtils && typeof timeUtils.formatCheckedAt === 'function') {
+            var rendered = timeUtils.formatCheckedAt(iso);
+            if (rendered && rendered.text) return rendered.text;
         }
+        return String(iso || '');
     }
 
     function getBadgeClass(status) {

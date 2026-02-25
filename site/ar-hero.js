@@ -5,6 +5,7 @@
     var dom = window.AR.dom;
     var config = window.AR.config;
     var utils = window.AR.utils;
+    var timeUtils = window.AR.time || {};
     var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
@@ -32,7 +33,13 @@
                 if (ratesData.data && ratesData.data.length > 0) {
                     var latest = ratesData.data[0];
                     if (els.statUpdated && latest.collection_date) {
-                        els.statUpdated.innerHTML = 'Last updated: <strong>' + esc(latest.collection_date) + '</strong>';
+                        var renderedDate = timeUtils.formatSourceDateWithLocal
+                            ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
+                            : { text: String(latest.collection_date) };
+                        els.statUpdated.innerHTML = 'Last updated: <strong>' + esc(renderedDate.text) + '</strong>';
+                        if (renderedDate.title) {
+                            els.statUpdated.setAttribute('title', renderedDate.title);
+                        }
                     }
                     if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
                         els.statCashRate.innerHTML = 'RBA Cash Rate: <strong>' + pct(latest.rba_cash_rate) + '</strong>';

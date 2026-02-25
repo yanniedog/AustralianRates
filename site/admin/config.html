@@ -47,15 +47,15 @@
         <div class="message" id="msg"></div>
         <section id="rate-check-section">
             <h2>Rate check schedule</h2>
-            <p class="admin-config hint">Server checks mortgage, savings and term deposit rates on this interval. Last run is updated after each run.</p>
+            <p class="admin-config hint">Server checks mortgage, savings and term deposit rates on this interval. Minimum is 360 minutes (6 hours). Last run is shown in your local timezone.</p>
             <div class="rate-check-row">
                 <label for="rate-check-interval">Interval (minutes)</label>
-                <input type="number" id="rate-check-interval" min="1" max="1440" step="1" value="1">
+                <input type="number" id="rate-check-interval" min="360" max="10080" step="1" value="360">
                 <button type="button" id="rate-check-save-btn" class="primary">Save</button>
             </div>
             <div class="rate-check-row">
                 <span class="rate-check-label">Last run</span>
-                <span id="rate-check-last-run">—</span>
+                <span id="rate-check-last-run">-</span>
             </div>
         </section>
         <section>
@@ -78,12 +78,14 @@
             </table>
         </section>
     </main>
+    <script src="../ar-time.js"></script>
     <script src="admin-portal.js"></script>
     <script>
         (function () {
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
 
             var portal = window.AR.AdminPortal;
+            var timeUtils = window.AR.time || {};
             var msgEl = document.getElementById('msg');
             var configTbody = document.getElementById('config-tbody');
             var envTbody = document.getElementById('env-tbody');
@@ -95,7 +97,7 @@
             }
 
             function updateRateCheckSection(config) {
-                var intervalVal = '1';
+                var intervalVal = '360';
                 var lastRunVal = null;
                 if (Array.isArray(config)) {
                     config.forEach(function (row) {
@@ -106,15 +108,21 @@
                 var intervalEl = document.getElementById('rate-check-interval');
                 var lastRunEl = document.getElementById('rate-check-last-run');
                 if (intervalEl) intervalEl.value = intervalVal;
-                if (lastRunEl) lastRunEl.textContent = lastRunVal ? formatLastRun(lastRunVal) : 'Never';
+                if (lastRunEl) {
+                    if (!lastRunVal) {
+                        lastRunEl.textContent = 'Never';
+                        lastRunEl.removeAttribute('title');
+                    } else {
+                        var rendered = timeUtils.formatCheckedAt ? timeUtils.formatCheckedAt(lastRunVal) : { text: formatLastRun(lastRunVal), title: String(lastRunVal) };
+                        lastRunEl.textContent = rendered.text || String(lastRunVal);
+                        if (rendered.title) lastRunEl.setAttribute('title', rendered.title);
+                    }
+                }
             }
 
             function formatLastRun(iso) {
-                try {
-                    var d = new Date(iso);
-                    if (isNaN(d.getTime())) return iso;
-                    return d.toLocaleString();
-                } catch (e) { return iso; }
+                var rendered = timeUtils.formatCheckedAt ? timeUtils.formatCheckedAt(iso) : { text: String(iso || '') };
+                return rendered && rendered.text ? rendered.text : String(iso || '');
             }
 
             function loadConfig() {
@@ -181,7 +189,8 @@
                     var intervalEl = document.getElementById('rate-check-interval');
                     var val = intervalEl ? intervalEl.value : '';
                     var num = parseInt(val, 10);
-                    if (isNaN(num) || num < 1) { showMsg('Enter a valid interval (min 1).', true); return; }
+                    if (isNaN(num)) { showMsg('Enter a valid integer interval.', true); return; }
+                    if (num < 360) num = 360;
                     saveConfig('rate_check_interval_minutes', String(num));
                 });
             }

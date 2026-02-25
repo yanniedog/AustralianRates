@@ -19,12 +19,9 @@ const { chromium } = require('playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const SCREENSHOT_DIR = './test-screenshots';
-// On production we fail if Retrieval column is missing; on localhost/dev we only warn. Env overrides.
-const STRICT_RETRIEVAL_COLUMN =
-    process.env.STRICT_RETRIEVAL_COLUMN === '1' ||
-    (process.env.STRICT_RETRIEVAL_COLUMN !== '0' &&
-        !TEST_URL.includes('localhost') &&
-        !TEST_URL.includes('127.0.0.1'));
+// On production we fail if Retrieval column is missing; on localhost/dev we only warn. Env can force strict (1) on dev.
+const isProductionUrl = !TEST_URL.includes('localhost') && !TEST_URL.includes('127.0.0.1');
+const STRICT_RETRIEVAL_COLUMN = isProductionUrl || process.env.STRICT_RETRIEVAL_COLUMN === '1';
 
 async function runTests() {
     console.log('Starting Australian Rates Homepage Tests...');

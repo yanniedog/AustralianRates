@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
     <style>
-        .admin-runs { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        .admin-runs { max-width: 1100px; margin: 0 auto; padding: 2rem; }
         .admin-runs h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
         .admin-runs .back { margin-bottom: 1rem; }
         .admin-runs .back a { color: var(--brand); text-decoration: none; }
@@ -17,8 +17,35 @@
         .admin-runs .actions button.primary { background: var(--brand); color: #fff; }
         .admin-runs .actions button.secondary { background: #e2e8f0; color: var(--text); }
         .admin-runs .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .admin-runs .status { margin-left: 0.5rem; font-size: 0.9rem; color: var(--muted); }
-        .admin-runs pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow: auto; max-height: 400px; font-size: 0.85rem; }
+        .admin-runs .status { margin-left: 0.5rem; font-size: 0.9rem; color: var(--muted); min-height: 1.2rem; }
+        .admin-runs .live-meta { margin-bottom: 1rem; color: var(--muted); font-size: 0.9rem; }
+        .admin-runs .section-card {
+            background: var(--card, #fff);
+            border: 1px solid var(--line, #e2e8f0);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .admin-runs h2 { margin: 0 0 0.75rem; font-size: 1.05rem; }
+        .admin-runs .run-grid { display: grid; gap: 0.75rem; }
+        .admin-runs .run-item { border: 1px solid var(--line, #e2e8f0); border-radius: 8px; padding: 0.75rem; background: #fff; }
+        .admin-runs .run-item .head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-weight: 600; margin-bottom: 0.35rem; }
+        .admin-runs .run-item .meta { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+        .admin-runs .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem; }
+        .admin-runs .summary-cell { border: 1px solid var(--line, #e2e8f0); border-radius: 8px; padding: 0.6rem; background: #fff; }
+        .admin-runs .summary-cell .label { color: var(--muted); font-size: 0.8rem; }
+        .admin-runs .summary-cell .value { font-size: 1.05rem; font-weight: 700; margin-top: 0.15rem; }
+        .admin-runs table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .admin-runs th, .admin-runs td { border-bottom: 1px solid var(--line, #e2e8f0); padding: 0.45rem 0.4rem; text-align: left; vertical-align: top; }
+        .admin-runs th { color: var(--muted); font-weight: 600; }
+        .admin-runs .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
+        .admin-runs details { margin-top: 0.5rem; }
+        .admin-runs pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow: auto; max-height: 380px; font-size: 0.8rem; }
+        @media (max-width: 760px) {
+            .admin-runs { padding: 1rem; }
+            .admin-runs table { font-size: 0.82rem; }
+        }
     </style>
 </head>
 <body>
@@ -33,38 +60,197 @@
         <div class="actions">
             <button type="button" class="primary" id="trigger-daily">Trigger daily run</button>
             <button type="button" class="secondary" id="trigger-backfill">Trigger backfill</button>
+            <button type="button" class="secondary" id="refresh-now">Refresh now</button>
             <span class="status" id="run-status"></span>
         </div>
-        <p style="color: var(--muted); margin-bottom: 1rem;">Recent runs (from API):</p>
-        <pre id="runs-output">Loadingâ€¦</pre>
+
+        <div class="live-meta" id="live-meta">Loading realtime snapshot...</div>
+
+        <section class="section-card">
+            <h2>Active Runs</h2>
+            <div id="active-runs" class="run-grid"></div>
+        </section>
+
+        <section class="section-card">
+            <h2>Historical Collection</h2>
+            <div id="historical-summary" class="summary-grid"></div>
+            <div style="overflow:auto; margin-top: 0.8rem;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Lender</th>
+                            <th>Next Date (canonical)</th>
+                            <th>Status</th>
+                            <th>Empty Streak</th>
+                            <th>Claimed</th>
+                            <th>Last Run</th>
+                            <th>Updated At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historical-rows"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section-card">
+            <h2>Recent Completed Runs</h2>
+            <div id="recent-runs" class="run-grid"></div>
+        </section>
+
+        <section class="section-card">
+            <h2>Debug</h2>
+            <details>
+                <summary>Show raw realtime payload</summary>
+                <pre id="runs-output">No data yet.</pre>
+            </details>
+        </section>
     </main>
+    <script src="../ar-time.js"></script>
     <script src="admin-portal.js"></script>
     <script>
         (function () {
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
 
             var portal = window.AR.AdminPortal;
+            var timeUtils = window.AR.time || {};
             var runsOutput = document.getElementById('runs-output');
             var runStatus = document.getElementById('run-status');
+            var liveMeta = document.getElementById('live-meta');
+            var activeRuns = document.getElementById('active-runs');
+            var recentRuns = document.getElementById('recent-runs');
+            var historicalSummary = document.getElementById('historical-summary');
+            var historicalRows = document.getElementById('historical-rows');
             var dailyBtn = document.getElementById('trigger-daily');
             var backfillBtn = document.getElementById('trigger-backfill');
+            var refreshBtn = document.getElementById('refresh-now');
+            var inFlight = false;
+            var pollTimer = null;
+            var pollIntervalMs = 10000;
 
-            function loadRuns() {
-                portal.fetchAdmin('/runs?limit=15').then(function (r) { return r.json(); }).then(function (d) {
+            function esc(value) {
+                var div = document.createElement('div');
+                div.textContent = value == null ? '' : String(value);
+                return div.innerHTML;
+            }
+
+            function asInt(value) {
+                var n = Number(value);
+                if (!isFinite(n)) return 0;
+                return Math.max(0, Math.floor(n));
+            }
+
+            function fmtTs(value) {
+                if (!value) return '—';
+                if (!timeUtils.formatCheckedAt) return String(value);
+                return timeUtils.formatCheckedAt(value).text || String(value);
+            }
+
+            function renderRunList(target, runs, emptyText) {
+                target.innerHTML = '';
+                if (!Array.isArray(runs) || runs.length === 0) {
+                    target.innerHTML = '<div class="run-item"><div class="meta">' + esc(emptyText) + '</div></div>';
+                    return;
+                }
+                runs.forEach(function (run) {
+                    var pct = Number(run.progress_pct || 0);
+                    if (!isFinite(pct)) pct = 0;
+                    var started = fmtTs(run.started_at);
+                    var finished = run.finished_at ? fmtTs(run.finished_at) : '—';
+                    var html = ''
+                        + '<div class="run-item">'
+                        + '  <div class="head"><span class="mono">' + esc(run.run_id || '') + '</span><span>' + esc(run.status || '') + '</span></div>'
+                        + '  <div class="meta">'
+                        + '    Type: ' + esc(run.run_type || '') + ' | Source: ' + esc(run.run_source || '') + '<br>'
+                        + '    Progress: ' + pct.toFixed(1) + '% (' + asInt(run.completed_total) + '/' + asInt(run.enqueued_total) + ') | Failed: ' + asInt(run.failed_total) + '<br>'
+                        + '    Started: ' + esc(started) + ' | Finished: ' + esc(finished)
+                        + '  </div>'
+                        + '</div>';
+                    target.insertAdjacentHTML('beforeend', html);
+                });
+            }
+
+            function renderHistorical(snapshot) {
+                var summary = snapshot && snapshot.summary ? snapshot.summary : {};
+                var rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
+
+                var cells = [
+                    { label: 'Lenders Total', value: asInt(summary.lenders_total) },
+                    { label: 'Active', value: asInt(summary.active_lenders) },
+                    { label: 'Completed', value: asInt(summary.completed_lenders) },
+                    { label: 'Claimed', value: asInt(summary.claimed_lenders) },
+                    { label: 'Earliest Next', value: summary.earliest_next_collection_date || '—' },
+                    { label: 'Latest Next', value: summary.latest_next_collection_date || '—' }
+                ];
+                historicalSummary.innerHTML = '';
+                cells.forEach(function (cell) {
+                    historicalSummary.insertAdjacentHTML(
+                        'beforeend',
+                        '<div class="summary-cell"><div class="label">' + esc(cell.label) + '</div><div class="value">' + esc(cell.value) + '</div></div>'
+                    );
+                });
+
+                historicalRows.innerHTML = '';
+                if (rows.length === 0) {
+                    historicalRows.innerHTML = '<tr><td colspan="7">No historical progress rows available.</td></tr>';
+                    return;
+                }
+                rows.forEach(function (row) {
+                    var updated = fmtTs(row.updated_at);
+                    historicalRows.insertAdjacentHTML(
+                        'beforeend',
+                        '<tr>'
+                        + '<td class="mono">' + esc(row.lender_code || '') + '</td>'
+                        + '<td>' + esc(row.next_collection_date || '') + '</td>'
+                        + '<td>' + esc(row.status || '') + '</td>'
+                        + '<td>' + asInt(row.empty_streak) + '</td>'
+                        + '<td>' + (row.claimed ? 'Yes' : 'No') + '</td>'
+                        + '<td class="mono">' + esc(row.last_run_id || '—') + '</td>'
+                        + '<td>' + esc(updated) + '</td>'
+                        + '</tr>'
+                    );
+                });
+            }
+
+            function scheduleNextPoll(delayMs) {
+                if (pollTimer) clearTimeout(pollTimer);
+                pollTimer = setTimeout(loadRealtime, Math.max(1000, Number(delayMs) || pollIntervalMs));
+            }
+
+            function loadRealtime() {
+                if (inFlight) return;
+                inFlight = true;
+                portal.fetchAdmin('/runs/realtime?limit=15').then(function (r) { return r.json(); }).then(function (d) {
                     runsOutput.textContent = JSON.stringify(d, null, 2);
+                    if (!d || !d.ok) throw new Error('Realtime response invalid');
+
+                    pollIntervalMs = Math.max(1000, Number(d.poll_interval_ms) || 10000);
+                    var localServerTime = fmtTs(d.server_time);
+                    var activeCount = d.runs && Array.isArray(d.runs.active) ? d.runs.active.length : 0;
+                    var cron = d.scheduler && d.scheduler.cron_expression ? d.scheduler.cron_expression : '0 */6 * * *';
+                    liveMeta.textContent = 'Live updates every ' + Math.round(pollIntervalMs / 1000) + 's | Active runs: '
+                        + activeCount + ' | Scheduler: ' + cron + ' | Server time (local): ' + localServerTime;
+
+                    renderRunList(activeRuns, d.runs && d.runs.active, 'No active runs.');
+                    renderRunList(recentRuns, d.runs && d.runs.recent, 'No recent completed runs.');
+                    renderHistorical(d.historical);
                 }).catch(function (e) {
-                    runsOutput.textContent = (e && e.message ? e.message : 'Failed to load runs');
+                    var msg = e && e.message ? e.message : 'Failed to load realtime data';
+                    runStatus.textContent = msg;
+                    liveMeta.textContent = 'Realtime unavailable. Retrying shortly.';
+                }).finally(function () {
+                    inFlight = false;
+                    scheduleNextPoll(pollIntervalMs);
                 });
             }
 
             dailyBtn.addEventListener('click', function () {
                 dailyBtn.disabled = true;
-                runStatus.textContent = 'Starting daily runâ€¦';
+                runStatus.textContent = 'Starting daily run...';
                 portal.fetchAdmin('/runs/daily', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         runStatus.textContent = d.ok ? 'Daily run started.' : (d.error && d.error.message ? d.error.message : 'Failed');
-                        loadRuns();
+                        loadRealtime();
                     })
                     .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
                     .finally(function () { dailyBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
@@ -72,18 +258,22 @@
 
             backfillBtn.addEventListener('click', function () {
                 backfillBtn.disabled = true;
-                runStatus.textContent = 'Starting backfillâ€¦';
+                runStatus.textContent = 'Starting backfill...';
                 portal.fetchAdmin('/runs/backfill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         runStatus.textContent = d.ok ? 'Backfill started.' : (d.error && d.error.message ? d.error.message : 'Failed');
-                        loadRuns();
+                        loadRealtime();
                     })
                     .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
                     .finally(function () { backfillBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
             });
 
-            loadRuns();
+            refreshBtn.addEventListener('click', function () {
+                loadRealtime();
+            });
+
+            loadRealtime();
         })();
     </script>
 </body>

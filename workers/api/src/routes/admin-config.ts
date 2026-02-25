@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { ensureAppConfigTable } from '../db/app-config'
+import { MIN_RATE_CHECK_INTERVAL_MINUTES, RATE_CHECK_INTERVAL_MINUTES_KEY } from '../constants'
 import type { AppContext, EnvBindings } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -25,6 +26,18 @@ const SAFE_ENV_KEYS = [
 
 export const adminConfigRoutes = new Hono<AppContext>()
 
+function normalizeRateCheckMinutes(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
+  const text = String(raw ?? '').trim()
+  if (!/^-?\d+$/.test(text)) {
+    return { ok: false, error: 'rate_check_interval_minutes must be an integer.' }
+  }
+  const parsed = Number.parseInt(text, 10)
+  if (!Number.isFinite(parsed)) {
+    return { ok: false, error: 'rate_check_interval_minutes must be a valid integer.' }
+  }
+  return { ok: true, value: String(Math.max(MIN_RATE_CHECK_INTERVAL_MINUTES, parsed)) }
+}
+
 /** GET /admin/config - return all app_config rows */
 adminConfigRoutes.get('/config', async (c) => {
   const db = c.env.DB
@@ -46,7 +59,15 @@ adminConfigRoutes.put('/config', async (c) => {
     return jsonError(c, 400, 'BAD_REQUEST', 'Missing or invalid key')
   }
   const key = String(body.key).trim()
-  const value = typeof body.value === 'string' ? body.value : String(body.value ?? '')
+  let value = typeof body.value === 'string' ? body.value : String(body.value ?? '')
+
+  if (key === RATE_CHECK_INTERVAL_MINUTES_KEY) {
+    const normalized = normalizeRateCheckMinutes(value)
+    if (!normalized.ok) {
+      return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
+    }
+    value = normalized.value
+  }
 
   const db = c.env.DB
   await ensureAppConfigTable(db)
