@@ -16,6 +16,16 @@
     var clientLog = utils.clientLog || function () {};
     var downloadInFlight = false;
 
+    /** Trigger CSV/JSON download in same user gesture (avoids Chrome blocking after async). */
+    function downloadCsvOrJsonSync(format) {
+        var q = buildExportQuery();
+        q.set('format', format);
+        var url = apiBase + '/export?' + q.toString();
+        window.open(url, '_blank', 'noopener,noreferrer');
+        resetDownloadFormat();
+        clientLog('info', 'Export download started (sync)', { format: format });
+    }
+
     function safeSectionLabel() {
         var section = String(window.AR.section || 'home-loans').toLowerCase();
         if (section === 'savings') return 'savings-rates';
@@ -89,13 +99,17 @@
 
     async function downloadSelectedFormat(format) {
         var selected = String(format || '').toLowerCase().trim();
-        if (!selected || downloadInFlight) return;
+        if (!selected) return;
 
+        if (selected === 'csv' || selected === 'json') {
+            downloadCsvOrJsonSync(selected);
+            return;
+        }
+
+        if (downloadInFlight) return;
         downloadInFlight = true;
         try {
-            if (selected === 'csv' || selected === 'json') {
-                await downloadViaApi(selected);
-            } else if (selected === 'xls') {
+            if (selected === 'xls') {
                 await downloadXlsx();
             } else {
                 throw new Error('Unsupported download format: ' + selected);

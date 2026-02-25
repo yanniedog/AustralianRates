@@ -364,17 +364,16 @@
                 return fp;
             },
             ajaxURLGenerator: function (url, _config, params) {
-                var q = new URLSearchParams();
-                var fp = buildFilterParams();
-                Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
-                q.set('page', String(params.page != null ? params.page : 1));
-                q.set('size', '50');
-
                 var sorters = resolveSorters(params);
                 if (!sorters.length && rateTable && rateTable.getSorters) {
                     sorters = resolveSorters({ sorters: rateTable.getSorters() });
                 }
                 applySorters(sorters);
+                var q = new URLSearchParams();
+                var fp = buildFilterParams();
+                Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
+                q.set('page', String(params.page != null ? params.page : 1));
+                q.set('size', '50');
                 q.set('sort', currentSort.field);
                 q.set('dir', currentSort.dir);
 
@@ -404,6 +403,7 @@
             ajaxSorting: true,
             dataSorting: function (sorters) {
                 applySorters(sorters);
+                if (rateTable && rateTable.setData) rateTable.setData();
             },
             dataSendParams: { page: 'page', size: 'size' },
             movableColumns: !isMobile(),
