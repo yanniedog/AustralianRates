@@ -17,6 +17,7 @@
     "test:site": "node test-homepage.js && node diagnose-api.js",
     "diagnose:api": "node diagnose-api.js",
     "typecheck:api": "npm run typecheck -w workers/api",
+    "historical:worker": "npm run historical:worker -w workers/api --",
     "deploy:api": "npm run deploy -w workers/api",
     "deploy:archive": "npm run deploy -w workers/archive"
   },

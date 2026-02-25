@@ -32,6 +32,7 @@ async function runTests() {
         viewport: { width: 1920, height: 1080 }
     });
     const page = await context.newPage();
+    const baseOrigin = new URL(TEST_URL).origin;
     
     const fs = require('fs');
     if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -127,6 +128,110 @@ async function runTests() {
             results.failed.push(`âœ— ${label}: client log missing app lifecycle events`);
         } else {
             results.failed.push(`âœ— ${label}: client log count too low (${clientLogData.count})`);
+        }
+    }
+
+    async function verifyFooterLegalLinks(label) {
+        const links = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('.footer-legal-links a')).map((a) => ({
+                text: String(a.textContent || '').trim(),
+                href: String(a.getAttribute('href') || '').trim(),
+            }));
+        }).catch(() => []);
+
+        const expected = [
+            { text: 'About', href: '/about/' },
+            { text: 'Privacy', href: '/privacy/' },
+            { text: 'Terms', href: '/terms/' },
+            { text: 'Contact', href: '/contact/' },
+        ];
+
+        let ok = true;
+        for (const item of expected) {
+            const found = links.find((x) => x.text === item.text && x.href === item.href);
+            if (!found) ok = false;
+        }
+        if (ok) {
+            results.passed.push(`✓ ${label}: footer legal links are present`);
+        } else {
+            results.failed.push(`✗ ${label}: missing one or more footer legal links`);
+        }
+    }
+
+    async function verifyNoScriptFallback(url, label, apiBasePath) {
+        try {
+            const res = await fetch(url, { redirect: 'follow' });
+            const html = await res.text();
+            if (res.status !== 200) {
+                results.failed.push(`✗ ${label}: HTML fetch failed (${res.status})`);
+                return;
+            }
+            const checks = [
+                '<noscript',
+                `${apiBasePath}/export.csv`,
+                `${apiBasePath}/filters`,
+                `${apiBasePath}/health`,
+            ];
+            const allPresent = checks.every((needle) => html.includes(needle));
+            if (allPresent) {
+                results.passed.push(`✓ ${label}: noscript fallback links present`);
+            } else {
+                results.failed.push(`✗ ${label}: noscript fallback block or links missing`);
+            }
+        } catch (err) {
+            results.failed.push(`✗ ${label}: noscript fallback fetch error (${err.message})`);
+        }
+    }
+
+    async function verifyCalculator() {
+        const calcVisible = await page.locator('#calc-loan-amount').isVisible().catch(() => false);
+        if (!calcVisible) {
+            results.failed.push('✗ Repayment estimator not visible on homepage');
+            return;
+        }
+
+        await page.fill('#calc-loan-amount', '700000');
+        await page.fill('#calc-interest-rate', '6');
+        await page.fill('#calc-term-years', '30');
+        await page.selectOption('#calc-repayment-type', 'principal_and_interest');
+        await page.click('#calc-run');
+        await page.waitForTimeout(200);
+        const piText = await page.textContent('#calc-result').catch(() => '');
+        if (piText && piText.includes('4,196.85')) {
+            results.passed.push('✓ Repayment estimator P&I calculation matches expected value');
+        } else {
+            results.failed.push(`✗ Repayment estimator P&I value unexpected (${piText || 'empty'})`);
+        }
+
+        await page.selectOption('#calc-repayment-type', 'interest_only');
+        await page.click('#calc-run');
+        await page.waitForTimeout(200);
+        const ioText = await page.textContent('#calc-result').catch(() => '');
+        if (ioText && ioText.includes('3,500.00')) {
+            results.passed.push('✓ Repayment estimator interest-only calculation matches expected value');
+        } else {
+            results.failed.push(`✗ Repayment estimator interest-only value unexpected (${ioText || 'empty'})`);
+        }
+    }
+
+    async function verifyLegalPagesDistinct() {
+        const pages = [
+            { name: 'About', path: '/about/', titleIncludes: 'About AustralianRates' },
+            { name: 'Privacy', path: '/privacy/', titleIncludes: 'Privacy Policy' },
+            { name: 'Terms', path: '/terms/', titleIncludes: 'Terms of Use' },
+            { name: 'Contact', path: '/contact/', titleIncludes: 'Contact AustralianRates' },
+        ];
+
+        for (const legal of pages) {
+            const url = baseOrigin + legal.path;
+            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            const title = await page.title();
+            const bodyText = await page.textContent('body').catch(() => '');
+            if (response && response.status() === 200 && title.includes(legal.titleIncludes) && bodyText.includes('support@australianrates.com')) {
+                results.passed.push(`✓ ${legal.name} page is reachable with distinct content`);
+            } else {
+                results.failed.push(`✗ ${legal.name} page validation failed (status/title/content mismatch)`);
+            }
         }
     }
     
@@ -310,6 +415,12 @@ async function runTests() {
 
         console.log('\nTest 4d: Checking client log richness...');
         await verifyClientLogIsRich('Homepage', 5);
+        await verifyFooterLegalLinks('Homepage');
+        await verifyNoScriptFallback(TEST_URL, 'Homepage', '/api/home-loan-rates');
+
+        // Test 4e: Repayment estimator
+        console.log('\nTest 4e: Checking repayment estimator...');
+        await verifyCalculator();
         
         // Test 5: Tab buttons
         console.log('\nTest 5: Checking tab buttons...');
@@ -681,7 +792,6 @@ async function runTests() {
         }
 
         // Test 10i2: Check Rates Now on Savings and Term deposits - POST to trigger-run and no "Run could not be started"
-        const baseOrigin = new URL(TEST_URL).origin;
         const savingsUrl = baseOrigin + '/savings/';
         const termDepositsUrl = baseOrigin + '/term-deposits/';
         for (const { name, url } of [{ name: 'Savings', url: savingsUrl }, { name: 'Term deposits', url: termDepositsUrl }]) {
@@ -696,6 +806,12 @@ async function runTests() {
             await page.waitForTimeout(1500);
             await verifyFooterDeployStatus(name);
             await verifyFooterLogControls(name);
+            await verifyFooterLegalLinks(name);
+            if (name === 'Savings') {
+                await verifyNoScriptFallback(url, 'Savings', '/api/savings-rates');
+            } else {
+                await verifyNoScriptFallback(url, 'Term deposits', '/api/term-deposit-rates');
+            }
             const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
             const sectionHasRetrieval = sectionHeaders.some(h => String(h).trim() === 'Retrieval');
             if (sectionHasRetrieval) {
@@ -813,6 +929,12 @@ async function runTests() {
         }
         await page.click('#tab-explorer');
         await page.waitForTimeout(500);
+
+        // Test 13: Legal pages
+        console.log('\nTest 13: Legal pages...');
+        await verifyLegalPagesDistinct();
+        await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForSelector('#main-content', { timeout: 5000 });
         
     } catch (error) {
         results.failed.push(`✗ Fatal error during testing: ${error.message}`);

@@ -17,6 +17,9 @@ const ADMIN_DB_TABLES = [
   'brand_normalization_map',
   'backfill_cursors',
   'auto_backfill_progress',
+  'client_historical_runs',
+  'client_historical_tasks',
+  'client_historical_batches',
   'rba_cash_rates',
   'global_log',
 ] as const
@@ -61,6 +64,9 @@ const TABLE_KEY_COLUMNS: Record<TableName, string[]> = {
   brand_normalization_map: ['id'],
   backfill_cursors: ['cursor_key'],
   auto_backfill_progress: ['lender_code'],
+  client_historical_runs: ['run_id'],
+  client_historical_tasks: ['task_id'],
+  client_historical_batches: ['batch_id'],
   rba_cash_rates: ['collection_date'],
   global_log: ['id'],
 }

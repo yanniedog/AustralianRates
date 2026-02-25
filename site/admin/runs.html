@@ -1,4 +1,4 @@
-<!doctype html>
+ï»¿<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -14,6 +14,7 @@
         .admin-runs .back a { color: var(--brand); text-decoration: none; }
         .admin-runs .actions { margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
         .admin-runs .actions button { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
+        .admin-runs .actions input[type="date"] { padding: 8px; border-radius: 8px; border: 1px solid var(--line, #cbd5e1); }
         .admin-runs .actions button.primary { background: var(--brand); color: #fff; }
         .admin-runs .actions button.secondary { background: #e2e8f0; color: var(--text); }
         .admin-runs .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -60,9 +61,13 @@
         <div class="actions">
             <button type="button" class="primary" id="trigger-daily">Trigger daily run</button>
             <button type="button" class="secondary" id="trigger-backfill">Trigger backfill</button>
+            <input type="date" id="historical-start-date" title="Historical start date">
+            <input type="date" id="historical-end-date" title="Historical end date">
+            <button type="button" class="secondary" id="trigger-historical">Trigger historical pull</button>
             <button type="button" class="secondary" id="refresh-now">Refresh now</button>
             <span class="status" id="run-status"></span>
         </div>
+        <div class="live-meta" id="historical-command"></div>
 
         <div class="live-meta" id="live-meta">Loading realtime snapshot...</div>
 
@@ -122,10 +127,22 @@
             var historicalRows = document.getElementById('historical-rows');
             var dailyBtn = document.getElementById('trigger-daily');
             var backfillBtn = document.getElementById('trigger-backfill');
+            var historicalBtn = document.getElementById('trigger-historical');
+            var historicalStart = document.getElementById('historical-start-date');
+            var historicalEnd = document.getElementById('historical-end-date');
+            var historicalCommand = document.getElementById('historical-command');
             var refreshBtn = document.getElementById('refresh-now');
             var inFlight = false;
             var pollTimer = null;
             var pollIntervalMs = 10000;
+
+            function isoDate(daysAgo) {
+                var d = new Date();
+                d.setUTCDate(d.getUTCDate() - Number(daysAgo || 0));
+                return d.toISOString().slice(0, 10);
+            }
+            if (historicalStart) historicalStart.value = isoDate(30);
+            if (historicalEnd) historicalEnd.value = isoDate(0);
 
             function esc(value) {
                 var div = document.createElement('div');
@@ -140,7 +157,7 @@
             }
 
             function fmtTs(value) {
-                if (!value) return '—';
+                if (!value) return 'â€”';
                 if (!timeUtils.formatCheckedAt) return String(value);
                 return timeUtils.formatCheckedAt(value).text || String(value);
             }
@@ -155,7 +172,7 @@
                     var pct = Number(run.progress_pct || 0);
                     if (!isFinite(pct)) pct = 0;
                     var started = fmtTs(run.started_at);
-                    var finished = run.finished_at ? fmtTs(run.finished_at) : '—';
+                    var finished = run.finished_at ? fmtTs(run.finished_at) : 'â€”';
                     var html = ''
                         + '<div class="run-item">'
                         + '  <div class="head"><span class="mono">' + esc(run.run_id || '') + '</span><span>' + esc(run.status || '') + '</span></div>'
@@ -178,8 +195,8 @@
                     { label: 'Active', value: asInt(summary.active_lenders) },
                     { label: 'Completed', value: asInt(summary.completed_lenders) },
                     { label: 'Claimed', value: asInt(summary.claimed_lenders) },
-                    { label: 'Earliest Next', value: summary.earliest_next_collection_date || '—' },
-                    { label: 'Latest Next', value: summary.latest_next_collection_date || '—' }
+                    { label: 'Earliest Next', value: summary.earliest_next_collection_date || 'â€”' },
+                    { label: 'Latest Next', value: summary.latest_next_collection_date || 'â€”' }
                 ];
                 historicalSummary.innerHTML = '';
                 cells.forEach(function (cell) {
@@ -204,7 +221,7 @@
                         + '<td>' + esc(row.status || '') + '</td>'
                         + '<td>' + asInt(row.empty_streak) + '</td>'
                         + '<td>' + (row.claimed ? 'Yes' : 'No') + '</td>'
-                        + '<td class="mono">' + esc(row.last_run_id || '—') + '</td>'
+                        + '<td class="mono">' + esc(row.last_run_id || 'â€”') + '</td>'
                         + '<td>' + esc(updated) + '</td>'
                         + '</tr>'
                     );
@@ -269,6 +286,42 @@
                     .finally(function () { backfillBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
             });
 
+            historicalBtn.addEventListener('click', function () {
+                var startDate = String(historicalStart && historicalStart.value || '').trim();
+                var endDate = String(historicalEnd && historicalEnd.value || '').trim();
+                if (!startDate || !endDate) {
+                    runStatus.textContent = 'Select start and end dates for historical pull.';
+                    return;
+                }
+                historicalBtn.disabled = true;
+                runStatus.textContent = 'Starting historical pull...';
+                if (historicalCommand) historicalCommand.textContent = '';
+                portal.fetchAdmin('/historical/pull', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: startDate, end_date: endDate })
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || !d.ok) {
+                            runStatus.textContent = (d && d.error && d.error.message) ? d.error.message : 'Failed';
+                            return;
+                        }
+                        runStatus.textContent = 'Historical pull started: ' + String(d.run_id || '');
+                        if (historicalCommand && d.worker_command) {
+                            historicalCommand.textContent = 'Run locally: ' + String(d.worker_command);
+                        }
+                        loadRealtime();
+                    })
+                    .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
+                    .finally(function () {
+                        historicalBtn.disabled = false;
+                        setTimeout(function () {
+                            if (runStatus.textContent.indexOf('Historical pull started') !== 0) runStatus.textContent = '';
+                        }, 7000);
+                    });
+            });
+
             refreshBtn.addEventListener('click', function () {
                 loadRealtime();
             });
@@ -278,3 +331,4 @@
     </script>
 </body>
 </html>
+

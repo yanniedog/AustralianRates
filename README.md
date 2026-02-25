@@ -17,7 +17,7 @@ Standalone Australian home loan rates project hosted on Cloudflare.
 - Routing split:
   - Pages serves frontend at `/` on apex + www.
   - Worker serves `/api/home-loan-rates/*` on apex + www.
-- Public API checks: `/health`, `/latest` (daily + historical), `/timeseries`, and `/export.csv` return successful responses.
+- Public API checks: `/health`, `/latest`, `/latest-all`, `/timeseries`, and `/export.csv` return successful responses.
 
 ## Repository Layout
 
@@ -39,8 +39,11 @@ Standalone Australian home loan rates project hosted on Cloudflare.
   - `GET /api/home-loan-rates/health`
   - `GET /api/home-loan-rates/filters`
   - `GET /api/home-loan-rates/latest`
+  - `GET /api/home-loan-rates/latest-all`
   - `GET /api/home-loan-rates/timeseries`
   - `GET /api/home-loan-rates/export.csv`
+
+`/latest` remains backward-compatible. Use `/latest-all` for latest-per-product coverage across the full filtered dataset.
 
 ## Admin portal
 
@@ -101,7 +104,7 @@ Update IDs/names in:
 Comprehensive tests for the site and API:
 
 - **Homepage (Playwright):** `npm run test:homepage` — page load, hero, tabs, filters, table, download (`#download-format`), Apply Filters, Pivot load, Chart draw, Check Rates Now, URL state, viewports, accessibility (skip link, tab roles). Screenshots in `test-screenshots/`.
-- **API diagnostics:** `npm run diagnose:api` — health, filters, rates, latest, timeseries, export.csv, homepage.
+- **API diagnostics:** `npm run diagnose:api` — health, filters, rates, latest, latest-all, timeseries, export.csv, homepage.
 - **Full site:** `npm run test:site` — runs test:homepage then diagnose:api; exits with failure if either fails.
 
 **Configuration:** `TEST_URL` (e.g. `TEST_URL=http://localhost:8788/`) for frontend and API base; `API_BASE` to override API only; `HEADLESS=0` to show browser.
@@ -158,4 +161,5 @@ should resolve to Pages, and `/api/home-loan-rates/*` should be served by the AP
 5. Validate public output:
    - `GET /api/home-loan-rates/latest?mode=daily`
    - `GET /api/home-loan-rates/latest?mode=historical`
+   - `GET /api/home-loan-rates/latest-all?mode=daily`
    - `GET /api/home-loan-rates/export.csv?mode=daily`

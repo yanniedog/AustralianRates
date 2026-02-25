@@ -5,6 +5,7 @@ import { presentSavingsRow } from '../utils/row-presentation'
 const MIN_PUBLIC_RATE = 0
 const MAX_PUBLIC_RATE = 15
 const MIN_CONFIDENCE = 0.85
+const MIN_CONFIDENCE_HISTORICAL = 0.65
 
 function safeLimit(limit: number | undefined, fallback: number, max = 500): number {
   if (!Number.isFinite(limit)) return fallback
@@ -44,6 +45,7 @@ type SavingsPaginatedFilters = {
   depositTier?: string
   sort?: string
   dir?: 'asc' | 'desc'
+  mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
 }
 
@@ -67,8 +69,18 @@ function buildWhere(filters: SavingsPaginatedFilters): { clause: string; binds: 
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
-  where.push('h.confidence_score >= ?')
-  binds.push(MIN_CONFIDENCE)
+  if (filters.mode === 'daily') {
+    where.push("h.retrieval_type != 'historical_scrape'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (filters.mode === 'historical') {
+    where.push("h.retrieval_type = 'historical_scrape'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
 
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
   if (filters.bank) { where.push('h.bank_name = ?'); binds.push(filters.bank) }
@@ -137,6 +149,7 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
 
 export async function queryLatestSavingsRates(db: D1Database, filters: {
   bank?: string; accountType?: string; rateType?: string; depositTier?: string
+  mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number; orderBy?: 'default' | 'rate_asc' | 'rate_desc'
 }) {
@@ -145,8 +158,18 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
 
   where.push('v.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
-  where.push('v.confidence_score >= ?')
-  binds.push(MIN_CONFIDENCE)
+  if (filters.mode === 'daily') {
+    where.push("v.retrieval_type != 'historical_scrape'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (filters.mode === 'historical') {
+    where.push("v.retrieval_type = 'historical_scrape'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
 
   if (filters.bank) { where.push('v.bank_name = ?'); binds.push(filters.bank) }
   if (filters.accountType) { where.push('v.account_type = ?'); binds.push(filters.accountType) }
@@ -173,8 +196,109 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
   return rows(result).map((row) => presentSavingsRow(row))
 }
 
+export async function queryLatestAllSavingsRates(db: D1Database, filters: {
+  bank?: string; accountType?: string; rateType?: string; depositTier?: string
+  mode?: 'all' | 'daily' | 'historical'
+  sourceMode?: SourceMode
+  limit?: number; orderBy?: 'default' | 'rate_asc' | 'rate_desc'
+}) {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('h.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  if (filters.mode === 'daily') {
+    where.push("h.retrieval_type != 'historical_scrape'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (filters.mode === 'historical') {
+    where.push("h.retrieval_type = 'historical_scrape'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
+
+  if (filters.bank) { where.push('h.bank_name = ?'); binds.push(filters.bank) }
+  if (filters.accountType) { where.push('h.account_type = ?'); binds.push(filters.accountType) }
+  if (filters.rateType) { where.push('h.rate_type = ?'); binds.push(filters.rateType) }
+  if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
+  where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
+
+  const orderBy = filters.orderBy ?? 'default'
+  const orderClause =
+    orderBy === 'rate_asc'
+      ? 'ranked.interest_rate ASC, ranked.bank_name ASC'
+      : orderBy === 'rate_desc'
+        ? 'ranked.interest_rate DESC, ranked.bank_name ASC'
+        : 'ranked.collection_date DESC, ranked.bank_name ASC, ranked.product_name ASC'
+
+  const limit = safeLimit(filters.limit, 200, 1000)
+  binds.push(limit)
+
+  const sql = `
+    WITH ranked AS (
+      SELECT
+        h.bank_name,
+        h.collection_date,
+        h.product_id,
+        h.product_name,
+        h.account_type,
+        h.rate_type,
+        h.interest_rate,
+        h.deposit_tier,
+        h.min_balance,
+        h.max_balance,
+        h.conditions,
+        h.monthly_fee,
+        h.source_url,
+        h.data_quality_flag,
+        h.confidence_score,
+        h.retrieval_type,
+        h.parsed_at,
+        h.run_source,
+        h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY h.bank_name, h.product_id, h.account_type, h.rate_type, h.deposit_tier
+          ORDER BY h.collection_date DESC, h.parsed_at DESC
+        ) AS row_num
+      FROM historical_savings_rates h
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    )
+    SELECT
+      ranked.bank_name,
+      ranked.collection_date,
+      ranked.product_id,
+      ranked.product_name,
+      ranked.account_type,
+      ranked.rate_type,
+      ranked.interest_rate,
+      ranked.deposit_tier,
+      ranked.min_balance,
+      ranked.max_balance,
+      ranked.conditions,
+      ranked.monthly_fee,
+      ranked.source_url,
+      ranked.data_quality_flag,
+      ranked.confidence_score,
+      ranked.retrieval_type,
+      ranked.parsed_at,
+      ranked.run_source,
+      ranked.product_key
+    FROM ranked
+    WHERE ranked.row_num = 1
+    ORDER BY ${orderClause}
+    LIMIT ?
+  `
+
+  const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
+  return rows(result).map((row) => presentSavingsRow(row))
+}
+
 export async function querySavingsTimeseries(db: D1Database, input: {
   bank?: string; productKey?: string; accountType?: string; rateType?: string
+  mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   startDate?: string; endDate?: string; limit?: number
 }) {
@@ -183,8 +307,18 @@ export async function querySavingsTimeseries(db: D1Database, input: {
 
   where.push('t.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
-  where.push('t.confidence_score >= ?')
-  binds.push(MIN_CONFIDENCE)
+  if (input.mode === 'daily') {
+    where.push("t.retrieval_type != 'historical_scrape'")
+    where.push('t.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (input.mode === 'historical') {
+    where.push("t.retrieval_type = 'historical_scrape'")
+    where.push('t.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('t.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
 
   if (input.bank) { where.push('t.bank_name = ?'); binds.push(input.bank) }
   if (input.productKey) { where.push('t.product_key = ?'); binds.push(input.productKey) }

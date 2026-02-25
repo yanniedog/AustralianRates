@@ -63,9 +63,32 @@
                 <span class="hero-stat" id="stat-cash-rate"></span>
                 <span class="hero-stat" id="stat-records" title="Total savings rate records">Records: <strong>...</strong></span>
                 <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
+                <label class="toggle-label" title="Also queue historical Wayback pull that is processed by your local worker">
+                    <input id="historical-pull-enabled" type="checkbox"> Pull historical (Wayback)
+                </label>
+                <label title="Historical pull start date">
+                    Historical from
+                    <input id="historical-start-date" type="date">
+                </label>
+                <label title="Historical pull end date">
+                    to
+                    <input id="historical-end-date" type="date">
+                </label>
                 <span id="trigger-status" class="hint"></span>
+                <span id="historical-worker-hint" class="hint"></span>
             </div>
         </header>
+
+        <noscript>
+            <section class="panel noscript-panel" aria-label="No JavaScript fallback">
+                <p>JavaScript is disabled. Access core savings-rate data directly:</p>
+                <div class="noscript-links">
+                    <a href="/api/savings-rates/export.csv" target="_blank" rel="noopener">Download CSV</a>
+                    <a href="/api/savings-rates/filters" target="_blank" rel="noopener">View filters JSON</a>
+                    <a href="/api/savings-rates/health" target="_blank" rel="noopener">API health</a>
+                </div>
+            </section>
+        </noscript>
 
         <section class="seo-summary" aria-label="About this data">
             <p>Compare savings account interest rates from Australia's major banks including
@@ -100,6 +123,13 @@
                 </label>
                 <label>To
                     <input id="filter-end-date" type="date">
+                </label>
+                <label title="Show all, daily-only, or historical-only rows">Rate Mode
+                    <select id="filter-mode">
+                        <option value="all" selected>All</option>
+                        <option value="daily">Daily only</option>
+                        <option value="historical">Historical only</option>
+                    </select>
                 </label>
                 <label class="toggle-label" title="Show data from manually triggered runs">
                     <input id="filter-include-manual" type="checkbox"> Include manual runs

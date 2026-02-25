@@ -4,11 +4,13 @@
 
     var dom = window.AR.dom;
     var config = window.AR.config;
+    var filters = window.AR.filters;
     var utils = window.AR.utils;
     var timeUtils = window.AR.time || {};
     var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
+    var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils && utils.esc ? utils.esc : window._arEsc;
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
@@ -16,7 +18,13 @@
     async function loadHeroStats() {
         clientLog('info', 'Hero stats load started', { section: section });
         try {
-            var ratesRes = await fetch(apiBase + '/rates?' + new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' }));
+            var baseParams = { page: '1', size: '1', sort: 'collection_date', dir: 'desc' };
+            var filterParams = buildFilterParams();
+            var query = new URLSearchParams(baseParams);
+            Object.keys(filterParams || {}).forEach(function (key) {
+                query.set(key, filterParams[key]);
+            });
+            var ratesRes = await fetch(apiBase + '/rates?' + query.toString());
             if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
             var ratesData = await ratesRes.json();
                 if (ratesData && ratesData.total != null) {

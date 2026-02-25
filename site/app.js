@@ -61,6 +61,7 @@
         if (admin && admin.triggerManualRun) admin.triggerManualRun();
     });
     if (els.filterIncludeManual) els.filterIncludeManual.addEventListener('change', applyFilters);
+    if (els.filterMode) els.filterMode.addEventListener('change', applyFilters);
     if (els.refreshInterval) els.refreshInterval.addEventListener('change', function () {
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();

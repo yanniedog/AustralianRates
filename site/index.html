@@ -98,9 +98,32 @@
                 <span class="hero-stat" id="stat-cash-rate" title="Current RBA official cash rate">RBA Cash Rate: <strong>...</strong></span>
                 <span class="hero-stat" id="stat-records" title="Total rate records in database">Records: <strong>...</strong></span>
                 <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
+                <label class="toggle-label" title="Also queue historical Wayback pull that is processed by your local worker">
+                    <input id="historical-pull-enabled" type="checkbox"> Pull historical (Wayback)
+                </label>
+                <label title="Historical pull start date">
+                    Historical from
+                    <input id="historical-start-date" type="date">
+                </label>
+                <label title="Historical pull end date">
+                    to
+                    <input id="historical-end-date" type="date">
+                </label>
                 <span id="trigger-status" class="hint"></span>
+                <span id="historical-worker-hint" class="hint"></span>
             </div>
         </header>
+
+        <noscript>
+            <section class="panel noscript-panel" aria-label="No JavaScript fallback">
+                <p>JavaScript is disabled. You can still access current data and downloads using these direct endpoints:</p>
+                <div class="noscript-links">
+                    <a href="/api/home-loan-rates/export.csv" target="_blank" rel="noopener">Download CSV</a>
+                    <a href="/api/home-loan-rates/filters" target="_blank" rel="noopener">View filters JSON</a>
+                    <a href="/api/home-loan-rates/health" target="_blank" rel="noopener">API health</a>
+                </div>
+            </section>
+        </noscript>
 
         <section class="seo-summary" aria-label="About this data">
             <p>Compare variable and fixed home loan interest rates from Australia's major banks including
@@ -110,6 +133,33 @@
             investment loans, principal-and-interest and interest-only repayments, across all LVR tiers from
             under 60% to 95%. Use the Rate Explorer to browse and sort, the Pivot Table to aggregate and
             cross-tabulate, or the Chart Builder to visualise trends over time.</p>
+        </section>
+
+        <section class="panel calculator-panel" aria-label="Repayment estimator">
+            <h2>Quick repayment estimator</h2>
+            <p class="hint">Estimate monthly repayments using the selected rate and term.</p>
+            <div class="calculator-grid">
+                <label for="calc-loan-amount">Loan Amount (AUD)
+                    <input id="calc-loan-amount" type="number" min="1" step="1000" placeholder="e.g. 700000">
+                </label>
+                <label for="calc-interest-rate">Annual Interest Rate (%)
+                    <input id="calc-interest-rate" type="number" min="0" step="0.01" placeholder="e.g. 6.49">
+                </label>
+                <label for="calc-term-years">Loan Term (Years)
+                    <input id="calc-term-years" type="number" min="1" step="1" value="30">
+                </label>
+                <label for="calc-repayment-type">Repayment Type
+                    <select id="calc-repayment-type">
+                        <option value="principal_and_interest" selected>Principal &amp; Interest</option>
+                        <option value="interest_only">Interest Only</option>
+                    </select>
+                </label>
+                <div class="filter-actions">
+                    <button id="calc-run" type="button" class="small">Calculate</button>
+                </div>
+            </div>
+            <p id="calc-result" class="calculator-output"><strong>Estimate:</strong> Enter values and click Calculate.</p>
+            <p class="calculator-note">Estimate only. Excludes fees, offset/redraw effects, insurance, taxes, and lender-specific calculation methods.</p>
         </section>
 
         <nav class="tabs panel" role="tablist" aria-label="Data views">
@@ -143,6 +193,13 @@
                 </label>
                 <label>To
                     <input id="filter-end-date" type="date">
+                </label>
+                <label title="Show all, daily-only, or historical-only rows">Rate Mode
+                    <select id="filter-mode">
+                        <option value="all" selected>All</option>
+                        <option value="daily">Daily only</option>
+                        <option value="historical">Historical only</option>
+                    </select>
                 </label>
                 <label class="toggle-label" title="Show data from manually triggered runs">
                     <input id="filter-include-manual" type="checkbox"> Include manual runs
@@ -281,6 +338,7 @@
     <script src="ar-admin.js"></script>
     <script src="ar-refresh.js"></script>
     <script src="ar-export.js"></script>
+    <script src="ar-calculator.js"></script>
     <script src="app.js"></script>
     <script src="frame.js"></script>
 </body>

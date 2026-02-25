@@ -159,6 +159,9 @@ describe('admin db routes', () => {
     const data = await res.json() as { ok: boolean; tables: { name: string }[] }
     expect(data.ok).toBe(true)
     expect(data.tables.some((t) => t.name === 'historical_loan_rates')).toBe(true)
+    expect(data.tables.some((t) => t.name === 'client_historical_runs')).toBe(true)
+    expect(data.tables.some((t) => t.name === 'client_historical_tasks')).toBe(true)
+    expect(data.tables.some((t) => t.name === 'client_historical_batches')).toBe(true)
     expect(data.tables.some((t) => t.name === 'app_config')).toBe(false)
   })
 

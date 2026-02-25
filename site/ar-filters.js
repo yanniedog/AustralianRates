@@ -45,6 +45,7 @@
         }
         if (els.filterStartDate && els.filterStartDate.value) p.start_date = els.filterStartDate.value;
         if (els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
+        if (els.filterMode && els.filterMode.value) p.mode = els.filterMode.value;
         if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
         return p;
     }
@@ -59,6 +60,7 @@
         }
         if (els.filterStartDate && els.filterStartDate.value) q.set('start_date', els.filterStartDate.value);
         if (els.filterEndDate && els.filterEndDate.value) q.set('end_date', els.filterEndDate.value);
+        if (els.filterMode && els.filterMode.value && els.filterMode.value !== 'all') q.set('mode', els.filterMode.value);
         if (els.filterIncludeManual && els.filterIncludeManual.checked) q.set('include_manual', 'true');
         if (els.refreshInterval && els.refreshInterval.value !== '60') q.set('refresh_interval', els.refreshInterval.value);
         if (apiOverride) q.set('apiBase', apiOverride);
@@ -87,6 +89,10 @@
         if (p.get('end_date') && els.filterEndDate) {
             els.filterEndDate.value = p.get('end_date');
             restored.end_date = p.get('end_date');
+        }
+        if (p.get('mode') && els.filterMode) {
+            els.filterMode.value = p.get('mode');
+            restored.mode = p.get('mode');
         }
         if (p.get('include_manual') === 'true' && els.filterIncludeManual) {
             els.filterIncludeManual.checked = true;

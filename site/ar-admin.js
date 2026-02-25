@@ -252,22 +252,62 @@
         return String(body && body.result && body.result.runId || '');
     }
 
+    function getHistoricalRunId(body) {
+        return String(body && body.historical_run_id || '');
+    }
+
+    function getHistoricalWorkerCommand(body) {
+        return String(body && body.worker_command || '');
+    }
+
+    function buildHistoricalTriggerPayload() {
+        var enabled = !!(els.historicalPullEnabled && els.historicalPullEnabled.checked);
+        if (!enabled) return { enabled: false };
+        var startDate = els.historicalStartDate ? String(els.historicalStartDate.value || '').trim() : '';
+        var endDate = els.historicalEndDate ? String(els.historicalEndDate.value || '').trim() : '';
+        if (!startDate || !endDate) {
+            return { enabled: true, error: 'Select both historical start and end dates.' };
+        }
+        return {
+            enabled: true,
+            payload: {
+                historical: {
+                    enabled: true,
+                    start_date: startDate,
+                    end_date: endDate
+                }
+            }
+        };
+    }
+
     function handleAcceptedResponse(res) {
         clearTriggerCooldown();
         enableManualRunFilter();
         var historicalQueued = getHistoricalQueuedCount(res.body);
         var runId = getRunId(res.body);
+        var historicalRunId = getHistoricalRunId(res.body);
+        var workerCommand = getHistoricalWorkerCommand(res.body);
+        if (els.historicalWorkerHint) {
+            if (historicalRunId && workerCommand) {
+                els.historicalWorkerHint.textContent = 'Historical pull queued: ' + historicalRunId + '. Run locally: ' + workerCommand;
+            } else {
+                els.historicalWorkerHint.textContent = '';
+            }
+        }
         clientLog('info', 'Manual run trigger accepted', {
             runId: runId || null,
             historicalQueued: historicalQueued,
+            historicalRunId: historicalRunId || null,
         });
         startRunProgressPolling(runId, historicalQueued);
     }
 
     function handleRejectedResponse(res) {
-        if (els.triggerStatus) els.triggerStatus.textContent = 'Run could not be started.';
+        var message = String((res.body && (res.body.message || res.body.reason)) || 'Run could not be started.');
+        if (els.triggerStatus) els.triggerStatus.textContent = message;
         clientLog('error', 'Manual run trigger rejected', {
             status: res.status,
+            message: message,
             parseError: res.parseError || null,
         });
     }
@@ -280,11 +320,24 @@
         triggerInFlight = true;
         syncTriggerButtonState();
         if (els.triggerStatus) els.triggerStatus.textContent = 'Starting run...';
+        if (els.historicalWorkerHint) els.historicalWorkerHint.textContent = '';
         clientLog('info', 'Manual run trigger requested', {
             section: window.AR.section || 'home-loans',
         });
 
-        fetch(apiBase + '/trigger-run', { method: 'POST' })
+        var historical = buildHistoricalTriggerPayload();
+        if (historical.enabled && historical.error) {
+            if (els.triggerStatus) els.triggerStatus.textContent = historical.error;
+            triggerInFlight = false;
+            syncTriggerButtonState();
+            return;
+        }
+
+        fetch(apiBase + '/trigger-run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(historical.payload || {}),
+        })
             .then(parseTriggerResponse)
             .then(function (res) {
                 if (res.status === 429) {

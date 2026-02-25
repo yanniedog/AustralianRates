@@ -171,6 +171,124 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   return rows(result).map((row) => presentHomeLoanRow(row))
 }
 
+export async function queryLatestAllRates(db: D1Database, filters: LatestFilters) {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('h.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+
+  if (filters.bank) {
+    where.push('h.bank_name = ?')
+    binds.push(filters.bank)
+  }
+  if (filters.securityPurpose) {
+    where.push('h.security_purpose = ?')
+    binds.push(filters.securityPurpose)
+  }
+  if (filters.repaymentType) {
+    where.push('h.repayment_type = ?')
+    binds.push(filters.repaymentType)
+  }
+  if (filters.rateStructure) {
+    where.push('h.rate_structure = ?')
+    binds.push(filters.rateStructure)
+  }
+  if (filters.lvrTier) {
+    where.push('h.lvr_tier = ?')
+    binds.push(filters.lvrTier)
+  }
+  if (filters.featureSet) {
+    where.push('h.feature_set = ?')
+    binds.push(filters.featureSet)
+  }
+  where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
+  if (filters.mode === 'daily') {
+    where.push("h.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_DAILY)
+  } else if (filters.mode === 'historical') {
+    where.push("h.data_quality_flag LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_ALL)
+  }
+
+  const limit = safeLimit(filters.limit, 200, 1000)
+  binds.push(limit)
+
+  const orderBy = filters.orderBy ?? 'default'
+  const orderClause =
+    orderBy === 'rate_asc'
+      ? 'ranked.interest_rate ASC, ranked.bank_name ASC, ranked.product_name ASC'
+      : orderBy === 'rate_desc'
+        ? 'ranked.interest_rate DESC, ranked.bank_name ASC, ranked.product_name ASC'
+        : 'ranked.collection_date DESC, ranked.bank_name ASC, ranked.product_name ASC, ranked.lvr_tier ASC, ranked.rate_structure ASC'
+
+  const sql = `
+    WITH ranked AS (
+      SELECT
+        h.bank_name,
+        h.collection_date,
+        h.product_id,
+        h.product_name,
+        h.security_purpose,
+        h.repayment_type,
+        h.rate_structure,
+        h.lvr_tier,
+        h.feature_set,
+        h.interest_rate,
+        h.comparison_rate,
+        h.annual_fee,
+        h.source_url,
+        h.data_quality_flag,
+        h.confidence_score,
+        h.retrieval_type,
+        h.parsed_at,
+        h.run_source,
+        h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+          ORDER BY h.collection_date DESC, h.parsed_at DESC
+        ) AS row_num
+      FROM historical_loan_rates h
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    )
+    SELECT
+      ranked.bank_name,
+      ranked.collection_date,
+      ranked.product_id,
+      ranked.product_name,
+      ranked.security_purpose,
+      ranked.repayment_type,
+      ranked.rate_structure,
+      ranked.lvr_tier,
+      ranked.feature_set,
+      ranked.interest_rate,
+      ranked.comparison_rate,
+      ranked.annual_fee,
+      ranked.source_url,
+      ranked.data_quality_flag,
+      ranked.confidence_score,
+      ranked.retrieval_type,
+      ranked.parsed_at,
+      ranked.run_source,
+      ranked.product_key,
+      r.cash_rate AS rba_cash_rate
+    FROM ranked
+    LEFT JOIN rba_cash_rates r
+      ON r.collection_date = ranked.collection_date
+    WHERE ranked.row_num = 1
+    ORDER BY ${orderClause}
+    LIMIT ?
+  `
+
+  const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
+  return rows(result).map((row) => presentHomeLoanRow(row))
+}
+
 export async function queryTimeseries(
   db: D1Database,
   input: {
@@ -284,6 +402,7 @@ type RatesPaginatedFilters = {
   featureSet?: string
   sort?: string
   dir?: 'asc' | 'desc'
+  mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
 }
 
@@ -313,10 +432,19 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
-  where.push('h.confidence_score >= ?')
-  binds.push(MIN_CONFIDENCE_ALL)
-
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
+  if (filters.mode === 'daily') {
+    where.push("h.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_DAILY)
+  } else if (filters.mode === 'historical') {
+    where.push("h.data_quality_flag LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_ALL)
+  }
 
   if (filters.bank) {
     where.push('h.bank_name = ?')
@@ -442,10 +570,19 @@ export async function queryRatesForExport(
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
-  where.push('h.confidence_score >= ?')
-  binds.push(MIN_CONFIDENCE_ALL)
-
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
+  if (filters.mode === 'daily') {
+    where.push("h.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_DAILY)
+  } else if (filters.mode === 'historical') {
+    where.push("h.data_quality_flag LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_ALL)
+  }
 
   if (filters.bank) {
     where.push('h.bank_name = ?')

@@ -104,6 +104,10 @@
         return path.replace(/\/[^/]*$/, '/') + 'admin/';
     }
 
+    function getLegalHref(slug) {
+        return '/' + String(slug || '').replace(/^\/+|\/+$/g, '') + '/';
+    }
+
     function openAdminPortal(reason) {
         var href = getAdminPortalHref();
         addSessionLog('info', 'Admin portal navigation', { reason: reason || 'unknown', href: href });
@@ -147,6 +151,13 @@
                         '<a href="' + esc(LOG_API_BASE + '/logs') + '" id="footer-log-download-system" class="footer-log-popup-item" download>Download system log</a>' +
                         '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
                     '</div>' +
+                '</span>' +
+                '<span class="footer-sep">|</span>' +
+                '<span class="footer-legal-links">' +
+                    '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
+                    '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
+                    '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
+                    '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
                 '<span id="footer-copyright">&copy; ' + new Date().getFullYear() + ' <a href="' + esc(getAdminPortalHref()) + '" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +

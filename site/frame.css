@@ -247,6 +247,23 @@
     font-size: 0.72rem;
 }
 
+.footer-legal-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.footer-legal-links a {
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+}
+
+.footer-legal-links a:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
 @media (max-width: 760px) {
     .site-header-inner {
         height: auto;
@@ -281,5 +298,9 @@
     .footer-log-popup {
         left: auto;
         right: 0;
+    }
+
+    .footer-legal-links {
+        gap: 8px;
     }
 }

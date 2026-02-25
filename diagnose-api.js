@@ -123,6 +123,13 @@ async function runDatasetDiagnostics(dataset) {
   }
   const latestShape = inferRowsAndTotal(latest.json)
 
+  const latestAll = await requestJson(`${base}/latest-all?limit=50&source_mode=all`)
+  out.checks.push({ name: 'latest-all', status: latestAll.status, ms: latestAll.durationMs })
+  if (latestAll.status !== 200 || !latestAll.json) {
+    out.failures.push(`latest-all status ${latestAll.status}`)
+  }
+  const latestAllShape = inferRowsAndTotal(latestAll.json)
+
   let timeseries = null
   const productKey = (latestShape.rows[0] && latestShape.rows[0].product_key) || null
   if (productKey) {
@@ -148,10 +155,17 @@ async function runDatasetDiagnostics(dataset) {
   if (!Array.isArray(latestShape.rows)) {
     out.failures.push('latest response shape invalid')
   }
+  if (!Array.isArray(latestAllShape.rows)) {
+    out.failures.push('latest-all response shape invalid')
+  }
+  if (latestShape.total > 0 && latestAllShape.total === 0) {
+    out.failures.push('latest-all returned zero rows while latest returned data')
+  }
 
   const benchTargets = [
     `${base}/rates?page=1&size=50&source_mode=all`,
     `${base}/latest?limit=200&source_mode=all`,
+    `${base}/latest-all?limit=200&source_mode=all`,
     `${base}/filters`,
   ]
   for (const path of benchTargets) {
