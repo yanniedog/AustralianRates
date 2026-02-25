@@ -261,9 +261,10 @@
         if (logLink && popup) {
             logLink.addEventListener('click', function (e) {
                 e.preventDefault();
-                var isOpen = !popup.hidden;
-                popup.hidden = isOpen;
-                if (!isOpen) {
+                var wasHidden = popup.hidden;
+                popup.hidden = !wasHidden;
+                if (wasHidden) {
+                    loadLogStats();
                     downloadSystem.focus();
                 }
             });
@@ -423,6 +424,8 @@
                 updateLogLinkText();
             });
     }
+
+    window.refreshSystemLogCount = loadLogStats;
 
     addSessionLog('info', 'Frame loaded', {
         sectionApiBase: SECTION_API_BASE,

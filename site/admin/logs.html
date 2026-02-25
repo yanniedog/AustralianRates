@@ -110,6 +110,7 @@
                         if (d.ok) {
                             showMsg('System log wiped. ' + (d.deleted || 0) + ' entries deleted.', false);
                             loadSystemStats();
+                            if (typeof window.refreshSystemLogCount === 'function') window.refreshSystemLogCount();
                         } else {
                             showMsg(d.error && d.error.message ? d.error.message : 'Wipe failed', true);
                         }
@@ -120,17 +121,26 @@
             }
 
             function loadSystemStats() {
-                portal.fetchAdmin('/logs/system/stats')
-                    .then(function (r) { return r.json(); })
+                systemStatsEl.textContent = 'Loading...';
+                portal.fetchAdmin('/logs/system/stats', { cache: 'no-store' })
+                    .then(function (r) {
+                        if (!r.ok) {
+                            systemStatsEl.textContent = 'Stats unavailable (HTTP ' + r.status + ')';
+                            return null;
+                        }
+                        return r.json();
+                    })
                     .then(function (d) {
-                        if (d.ok) {
-                            systemStatsEl.textContent = (d.count ?? 0) + ' entries' + (d.latest_ts ? '; latest ' + d.latest_ts : '');
+                        if (d == null) return;
+                        if (d.ok && typeof d.count === 'number') {
+                            var latest = d.latest_ts ? '; latest ' + d.latest_ts : '';
+                            systemStatsEl.textContent = d.count + ' entries' + latest;
                         } else {
                             systemStatsEl.textContent = 'Could not load stats';
                         }
                     })
-                    .catch(function () {
-                        systemStatsEl.textContent = 'Could not load stats';
+                    .catch(function (e) {
+                        systemStatsEl.textContent = e && e.message ? 'Stats: ' + e.message : 'Could not load stats';
                     });
             }
 
