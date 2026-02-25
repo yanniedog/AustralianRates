@@ -330,8 +330,13 @@
     function applySorters(sorters) {
         if (!Array.isArray(sorters) || sorters.length === 0) return;
         var first = sorters[0] || {};
-        if (!first.field) return;
-        currentSort.field = String(first.field);
+        var field = first.field;
+        if (!field && first.column != null) {
+            if (typeof first.column.getField === 'function') field = first.column.getField();
+            else if (typeof first.column === 'string') field = first.column;
+        }
+        if (!field) return;
+        currentSort.field = String(field);
         currentSort.dir = normalizeSortDir(first.dir);
     }
 
@@ -406,7 +411,7 @@
             layout: getTableLayout(),
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
             columns: getRateTableColumns(),
-            initialSort: [{ field: currentSort.field, dir: currentSort.dir }],
+            initialSort: [{ column: currentSort.field, dir: currentSort.dir }],
         });
         clientLog('info', 'Explorer table init complete');
 

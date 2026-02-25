@@ -8,7 +8,10 @@
     var explorer = window.AR.explorer;
     var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
-    var apiBase = config && config.apiBase ? config.apiBase : '';
+    var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+    var pathApiPath = (path.indexOf('/savings') !== -1) ? '/api/savings-rates' : (path.indexOf('/term-deposits') !== -1) ? '/api/term-deposit-rates' : '/api/home-loan-rates';
+    var effectiveApiPath = (window.AR.sectionConfig && window.AR.sectionConfig.apiPath) ? window.AR.sectionConfig.apiPath : pathApiPath;
+    var apiBase = (config && config.apiBase) ? config.apiBase : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin + effectiveApiPath : '');
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var clientLog = utils.clientLog || function () {};
     var downloadInFlight = false;
