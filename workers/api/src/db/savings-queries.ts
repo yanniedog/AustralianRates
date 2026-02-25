@@ -1,5 +1,6 @@
 import { SAVINGS_ACCOUNT_TYPES, SAVINGS_RATE_TYPES } from '../constants'
 import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
+import { presentSavingsRow } from '../utils/row-presentation'
 
 const MIN_PUBLIC_RATE = 0
 const MAX_PUBLIC_RATE = 15
@@ -124,10 +125,12 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
     if (String(row.run_source) === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
+  const data = rows(dataResult).map((row) => presentSavingsRow(row))
+
   return {
     last_page: Math.max(1, Math.ceil(total / size)),
     total,
-    data: rows(dataResult),
+    data,
     source_mix: { scheduled, manual },
   }
 }
@@ -167,7 +170,7 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
     LIMIT ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result)
+  return rows(result).map((row) => presentSavingsRow(row))
 }
 
 export async function querySavingsTimeseries(db: D1Database, input: {
@@ -202,7 +205,7 @@ export async function querySavingsTimeseries(db: D1Database, input: {
     LIMIT ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result)
+  return rows(result).map((row) => presentSavingsRow(row))
 }
 
 export async function querySavingsForExport(db: D1Database, filters: SavingsPaginatedFilters, maxRows = 10000) {

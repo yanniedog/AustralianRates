@@ -1,5 +1,6 @@
 import { INTEREST_PAYMENTS } from '../constants'
 import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
+import { presentTdRow } from '../utils/row-presentation'
 
 const MIN_PUBLIC_RATE = 0
 const MAX_PUBLIC_RATE = 15
@@ -116,10 +117,12 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
     if (String((row as Record<string, unknown>).run_source ?? 'scheduled') === 'manual') manual += 1
     else scheduled += 1
   }
+  const data = rows(dataResult).map((row) => presentTdRow(row))
+
   return {
     last_page: Math.max(1, Math.ceil(total / size)),
     total,
-    data: rows(dataResult),
+    data,
     source_mix: { scheduled, manual },
   }
 }
@@ -159,7 +162,7 @@ export async function queryLatestTdRates(db: D1Database, filters: {
     LIMIT ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result)
+  return rows(result).map((row) => presentTdRow(row))
 }
 
 export async function queryTdTimeseries(db: D1Database, input: {
@@ -193,7 +196,7 @@ export async function queryTdTimeseries(db: D1Database, input: {
     LIMIT ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result)
+  return rows(result).map((row) => presentTdRow(row))
 }
 
 export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilters, maxRows = 10000) {

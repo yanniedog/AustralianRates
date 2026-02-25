@@ -14,16 +14,18 @@
     var isAdmin = config && config.isAdmin ? config.isAdmin : false;
     var utils = window.AR.utils || {};
     var esc = utils.esc || window._arEsc;
+    var formatFilterValue = utils.formatFilterValue || function (_field, value) { return String(value == null ? '' : value); };
     var clientLog = utils.clientLog || function () {};
 
     var filterFields = sc.filterFields || [];
     var filterApiMap = sc.filterApiMap || {};
 
-    function fillSelect(el, values) {
+    function fillSelect(el, values, fieldName) {
         if (!el) return;
         var current = el.value;
         el.innerHTML = '<option value="">All</option>' + values.map(function (v) {
-            return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+            var label = formatFilterValue(fieldName, v);
+            return '<option value="' + esc(v) + '">' + esc(label || v) + '</option>';
         }).join('');
         if (current && values.indexOf(current) >= 0) {
             el.value = current;
@@ -112,7 +114,14 @@
                 if (Object.prototype.hasOwnProperty.call(filterApiMap, filterId)) {
                     var el = getFilterEl(filterId);
                     var apiKey = filterApiMap[filterId];
-                    if (el && f[apiKey]) fillSelect(el, f[apiKey]);
+                    var fieldName = '';
+                    for (var i = 0; i < filterFields.length; i++) {
+                        if (filterFields[i].id === filterId) {
+                            fieldName = filterFields[i].param;
+                            break;
+                        }
+                    }
+                    if (el && f[apiKey]) fillSelect(el, f[apiKey], fieldName);
                 }
             }
             clientLog('info', 'Filter options loaded', {

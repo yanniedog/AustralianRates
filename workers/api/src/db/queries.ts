@@ -6,6 +6,7 @@ import {
   SECURITY_PURPOSES,
 } from '../constants'
 import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
+import { presentHomeLoanRow } from '../utils/row-presentation'
 
 type LatestFilters = {
   bank?: string
@@ -167,7 +168,7 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   `
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result)
+  return rows(result).map((row) => presentHomeLoanRow(row))
 }
 
 export async function queryTimeseries(
@@ -267,7 +268,7 @@ export async function queryTimeseries(
   `
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result)
+  return rows(result).map((row) => presentHomeLoanRow(row))
 }
 
 type RatesPaginatedFilters = {
@@ -416,10 +417,12 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     else scheduled += Number(row.n)
   }
 
+  const data = rows(dataResult).map((row) => presentHomeLoanRow(row))
+
   return {
     last_page: lastPage,
     total,
-    data: rows(dataResult),
+    data,
     source_mix: { scheduled, manual },
   }
 }
