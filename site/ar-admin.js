@@ -303,7 +303,8 @@
     }
 
     function handleRejectedResponse(res) {
-        var message = String((res.body && (res.body.message || res.body.reason)) || 'Run could not be started.');
+        var msg = res.body && (res.body.message || res.body.reason || (res.body.error && res.body.error.message));
+        var message = String(msg || (res.body ? 'Run could not be started.' : (res.parseError ? 'Server response could not be read. Try again.' : 'Run could not be started.')));
         if (els.triggerStatus) els.triggerStatus.textContent = message;
         clientLog('error', 'Manual run trigger rejected', {
             status: res.status,

@@ -7,8 +7,8 @@ import { parseIntegerEnv } from '../utils/time'
 
 type TriggerRunResult =
   | { ok: true; status: 200; body: { ok: true; result: unknown } }
-  | { ok: false; status: 429; body: { ok: false; reason: string; retry_after_seconds: number } }
-  | { ok: false; status: 500; body: { ok: false; reason: string } }
+  | { ok: false; status: 429; body: { ok: false; reason: string; message?: string; retry_after_seconds: number } }
+  | { ok: false; status: 500; body: { ok: false; reason: string; message?: string } }
 
 function toRetryAfterSeconds(cooldownMs: number, elapsedMs: number): number {
   const remaining = Math.max(0, cooldownMs - elapsedMs)
@@ -41,7 +41,7 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
     return {
       ok: false,
       status: 429,
-      body: { ok: false, reason: 'manual_run_in_progress', retry_after_seconds: retryAfter },
+      body: { ok: false, reason: 'manual_run_in_progress', message: 'A check is already running.', retry_after_seconds: retryAfter },
     }
   }
 
@@ -57,6 +57,7 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
           body: {
             ok: false,
             reason: 'rate_limited',
+            message: 'Please wait before starting another run.',
             retry_after_seconds: toRetryAfterSeconds(cooldownMs, elapsed),
           },
         }
@@ -94,12 +95,12 @@ export async function handlePublicTriggerRun(env: EnvBindings, logLabel: string)
       return {
         ok: false,
         status: 429,
-        body: { ok: false, reason: 'queue_throttled', retry_after_seconds: Math.max(60, cooldownSeconds) },
+        body: { ok: false, reason: 'queue_throttled', message: 'Too many requests. Try again later.', retry_after_seconds: Math.max(60, cooldownSeconds) },
       }
     }
     log.error('api', `trigger_run_failed (${logLabel})`, {
       context: (error as Error)?.message || String(error),
     })
-    return { ok: false, status: 500, body: { ok: false, reason: 'trigger_run_failed' } }
+    return { ok: false, status: 500, body: { ok: false, reason: 'trigger_run_failed', message: 'Run could not be started. Please try again later.' } }
   }
 }
