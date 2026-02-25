@@ -281,8 +281,66 @@
 
     var rateTable = null;
     var lastMobileState = null;
+    var currentSort = { field: 'collection_date', dir: 'desc' };
 
     function getTableLayout() { return isMobile() ? 'fitColumns' : 'fitDataFill'; }
+
+    function normalizeSortDir(dir) {
+        return String(dir || '').toLowerCase() === 'asc' ? 'asc' : 'desc';
+    }
+
+    function parseSortersValue(raw) {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        if (typeof raw === 'object') {
+            if (raw.field) return [raw];
+            return [];
+        }
+        if (typeof raw === 'string') {
+            var text = raw.trim();
+            if (!text) return [];
+            try {
+                var parsed = JSON.parse(text);
+                if (Array.isArray(parsed)) return parsed;
+                if (parsed && typeof parsed === 'object' && parsed.field) return [parsed];
+            } catch (_err) {
+                return [];
+            }
+        }
+        return [];
+    }
+
+    function resolveSorters(params) {
+        var sorters = parseSortersValue(params && params.sorters);
+        if (!sorters.length) sorters = parseSortersValue(params && params.sort);
+
+        if (!sorters.length && params && typeof params === 'object') {
+            var field = params['sorters[0][field]'] || params['sort[0][field]'];
+            var dir = params['sorters[0][dir]'] || params['sort[0][dir]'];
+            if (field) sorters = [{ field: field, dir: dir || 'asc' }];
+        }
+
+        if (!sorters.length && params && typeof params.sort === 'string' && (params.dir === 'asc' || params.dir === 'desc')) {
+            sorters = [{ field: params.sort, dir: params.dir }];
+        }
+
+        return sorters;
+    }
+
+    function applySorters(sorters) {
+        if (!Array.isArray(sorters) || sorters.length === 0) return;
+        var first = sorters[0] || {};
+        if (!first.field) return;
+        currentSort.field = String(first.field);
+        currentSort.dir = normalizeSortDir(first.dir);
+    }
+
+    function getCurrentSort() {
+        return {
+            field: currentSort.field,
+            dir: currentSort.dir,
+        };
+    }
 
     function initRateTable() {
         lastMobileState = isMobile();
@@ -306,14 +364,15 @@
                 Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
                 q.set('page', String(params.page != null ? params.page : 1));
                 q.set('size', '50');
-                var sortField = 'collection_date';
-                var sortDir = 'desc';
-                if (params.sorters && params.sorters.length > 0) {
-                    sortField = params.sorters[0].field;
-                    sortDir = params.sorters[0].dir;
+
+                var sorters = resolveSorters(params);
+                if (!sorters.length && rateTable && rateTable.getSorters) {
+                    sorters = resolveSorters({ sorters: rateTable.getSorters() });
                 }
-                q.set('sort', sortField);
-                q.set('dir', sortDir);
+                applySorters(sorters);
+                q.set('sort', currentSort.field);
+                q.set('dir', currentSort.dir);
+
                 return url + '?' + q.toString();
             },
             ajaxResponse: function (_url, _params, response) {
@@ -338,13 +397,16 @@
             },
             sortMode: 'remote',
             ajaxSorting: true,
-            dataSendParams: { page: 'page', size: 'size', sort: 'sort', sorters: 'sorters' },
+            dataSorting: function (sorters) {
+                applySorters(sorters);
+            },
+            dataSendParams: { page: 'page', size: 'size' },
             movableColumns: !isMobile(),
             resizableColumns: !isMobile(),
             layout: getTableLayout(),
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
             columns: getRateTableColumns(),
-            initialSort: [{ column: 'collection_date', dir: 'desc' }],
+            initialSort: [{ field: currentSort.field, dir: currentSort.dir }],
         });
         clientLog('info', 'Explorer table init complete');
 
@@ -370,5 +432,6 @@
     window.AR.explorer = {
         initRateTable: initRateTable,
         reloadExplorer: reloadExplorer,
+        getCurrentSort: getCurrentSort,
     };
 })();

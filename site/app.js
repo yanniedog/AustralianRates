@@ -45,8 +45,18 @@
     }
 
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
+    if (els.downloadFormat) els.downloadFormat.addEventListener('change', function () {
+        var format = String(els.downloadFormat.value || '').trim();
+        if (!format) return;
+        if (exportModule && exportModule.downloadSelectedFormat) {
+            exportModule.downloadSelectedFormat(format);
+        } else if (exportModule && exportModule.downloadCsv) {
+            exportModule.downloadCsv();
+        }
+    });
     if (els.downloadCsv) els.downloadCsv.addEventListener('click', function () {
-        if (exportModule && exportModule.downloadCsv) exportModule.downloadCsv();
+        if (exportModule && exportModule.downloadSelectedFormat) exportModule.downloadSelectedFormat('csv');
+        else if (exportModule && exportModule.downloadCsv) exportModule.downloadCsv();
     });
     if (els.loadPivot) els.loadPivot.addEventListener('click', function () {
         if (pivot && pivot.loadPivotData) pivot.loadPivotData();

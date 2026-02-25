@@ -25,6 +25,7 @@
         filterEndDate:   document.getElementById('filter-end-date'),
         filterMode:      document.getElementById('filter-mode'),
         applyFilters:  document.getElementById('apply-filters'),
+        downloadFormat: document.getElementById('download-format'),
         downloadCsv:   document.getElementById('download-csv'),
         loadPivot:     document.getElementById('load-pivot'),
         pivotStatus:   document.getElementById('pivot-status'),
