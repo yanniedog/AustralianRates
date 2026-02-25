@@ -29,8 +29,14 @@
         return _sessionLog.slice();
     }
 
+    function clearSessionLog() {
+        _sessionLog.length = 0;
+        updateClientLogCount();
+    }
+
     window.addSessionLog = addSessionLog;
     window.getSessionLogEntries = getSessionLogEntries;
+    window.clearSessionLog = clearSessionLog;
     var flushedCount = flushClientLogQueue();
     if (flushedCount > 0) {
         addSessionLog('info', 'Flushed queued client logs', { count: flushedCount });

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Logs | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+    <script src="../theme.js"></script>
+    <style>
+        .admin-logs { max-width: 640px; margin: 0 auto; padding: 2rem; }
+        .admin-logs h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
+        .admin-logs .back { margin-bottom: 1rem; }
+        .admin-logs .back a { color: var(--brand); text-decoration: none; }
+        .admin-logs section { margin-bottom: 2rem; padding: 1rem; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 8px; }
+        .admin-logs h2 { font-size: 1.1rem; margin: 0 0 0.75rem; color: var(--muted); }
+        .admin-logs .log-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+        .admin-logs .log-actions button { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
+        .admin-logs .log-actions button.primary { background: var(--brand); color: #fff; border: none; }
+        .admin-logs .log-actions button.danger { background: transparent; border: 1px solid #b91c1c; color: #b91c1c; }
+        .admin-logs .log-actions button.danger:hover { background: #fef2f2; }
+        .admin-logs .log-stats { font-size: 0.9rem; color: var(--muted); margin-top: 0.5rem; }
+        .admin-logs .hint { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+        .admin-logs .message { margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
+        .admin-logs .message.visible { display: block; }
+        .admin-logs .message.error { background: #fef2f2; color: #b91c1c; }
+        .admin-logs .message.success { background: #f0fdf4; color: #166534; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-logs" id="main-content" tabindex="-1">
+        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
+        <h1>Logs</h1>
+        <p style="color: var(--muted);">Download or wipe the system log (server) and client log (this browser tab).</p>
+        <div class="message" id="msg"></div>
+
+        <section>
+            <h2>System log</h2>
+            <p class="hint">Server-side log (global_log). Download returns up to 10,000 entries as text.</p>
+            <div class="log-actions">
+                <button type="button" class="primary" id="download-system-btn">Download system log</button>
+                <button type="button" class="danger" id="wipe-system-btn">Wipe system log</button>
+            </div>
+            <div class="log-stats" id="system-stats">Loading...</div>
+        </section>
+
+        <section>
+            <h2>Client log</h2>
+            <p class="hint">In-browser session log for this tab. If you opened this page from the main site, the client log may include earlier entries from that session.</p>
+            <div class="log-actions">
+                <button type="button" class="primary" id="download-client-btn">Download client log</button>
+                <button type="button" class="danger" id="wipe-client-btn">Wipe client log</button>
+            </div>
+            <div class="log-stats" id="client-stats"></div>
+        </section>
+    </main>
+    <script src="admin-portal.js"></script>
+    <script src="../frame.js"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var msgEl = document.getElementById('msg');
+            var systemStatsEl = document.getElementById('system-stats');
+            var clientStatsEl = document.getElementById('client-stats');
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+            }
+
+            function updateClientStats() {
+                var entries = typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries() : [];
+                clientStatsEl.textContent = entries.length + ' entries in this tab';
+            }
+
+            function downloadSystemLog() {
+                var url = portal.apiBase() + '/admin/logs/system?limit=10000';
+                fetch(url, { headers: portal.authHeaders() })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.text();
+                    })
+                    .then(function (text) {
+                        var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'australianrates-system-log.txt';
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                        showMsg('System log downloaded.', false);
+                    })
+                    .catch(function (e) {
+                        showMsg(e && e.message ? e.message : 'Download failed', true);
+                    });
+            }
+
+            function wipeSystemLog() {
+                if (!confirm('Delete all entries from the system log (global_log)? This cannot be undone.')) return;
+                portal.fetchAdmin('/logs/system/wipe', { method: 'POST' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.ok) {
+                            showMsg('System log wiped. ' + (d.deleted || 0) + ' entries deleted.', false);
+                            loadSystemStats();
+                        } else {
+                            showMsg(d.error && d.error.message ? d.error.message : 'Wipe failed', true);
+                        }
+                    })
+                    .catch(function (e) {
+                        showMsg(e && e.message ? e.message : 'Request failed', true);
+                    });
+            }
+
+            function loadSystemStats() {
+                portal.fetchAdmin('/logs/system/stats')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.ok) {
+                            systemStatsEl.textContent = (d.count ?? 0) + ' entries' + (d.latest_ts ? '; latest ' + d.latest_ts : '');
+                        } else {
+                            systemStatsEl.textContent = 'Could not load stats';
+                        }
+                    })
+                    .catch(function () {
+                        systemStatsEl.textContent = 'Could not load stats';
+                    });
+            }
+
+            function downloadClientLog() {
+                var entries = typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries() : [];
+                var lines = entries.map(function (e) {
+                    var parts = [e.ts, '[' + (e.level || 'info').toUpperCase() + ']', e.message];
+                    if (e.detail != null) parts.push(typeof e.detail === 'object' ? JSON.stringify(e.detail) : String(e.detail));
+                    return parts.join(' ');
+                });
+                var text = '# AustralianRates Client Log (' + entries.length + ' entries)\n# Downloaded at ' + new Date().toISOString() + '\n\n' + lines.join('\n') + '\n';
+                var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'australianrates-client-log.txt';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                showMsg('Client log downloaded.', false);
+            }
+
+            function wipeClientLog() {
+                if (typeof window.clearSessionLog === 'function') {
+                    window.clearSessionLog();
+                    updateClientStats();
+                    showMsg('Client log wiped for this tab.', false);
+                } else {
+                    showMsg('Client log not available.', true);
+                }
+            }
+
+            document.getElementById('download-system-btn').addEventListener('click', downloadSystemLog);
+            document.getElementById('wipe-system-btn').addEventListener('click', wipeSystemLog);
+            document.getElementById('download-client-btn').addEventListener('click', downloadClientLog);
+            document.getElementById('wipe-client-btn').addEventListener('click', wipeClientLog);
+
+            loadSystemStats();
+            updateClientStats();
+        })();
+    </script>
+</body>
+</html>

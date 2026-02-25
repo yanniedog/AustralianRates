@@ -18,7 +18,7 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
         retrieval_type,
         parsed_at, run_id, run_source
       ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,CURRENT_TIMESTAMP,?19,?20)
-      ON CONFLICT(bank_name, collection_date, product_id, rate_type, deposit_tier, run_source) DO UPDATE SET
+      ON CONFLICT(bank_name, collection_date, product_id, account_type, rate_type, deposit_tier, run_source) DO UPDATE SET
         product_name = excluded.product_name,
         account_type = excluded.account_type,
         interest_rate = excluded.interest_rate,

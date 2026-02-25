@@ -18,7 +18,7 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         retrieval_type,
         parsed_at, run_id, run_source
       ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,CURRENT_TIMESTAMP,?17,?18)
-      ON CONFLICT(bank_name, collection_date, product_id, term_months, deposit_tier, run_source) DO UPDATE SET
+      ON CONFLICT(bank_name, collection_date, product_id, term_months, deposit_tier, interest_payment, run_source) DO UPDATE SET
         product_name = excluded.product_name,
         interest_rate = excluded.interest_rate,
         min_deposit = excluded.min_deposit,
