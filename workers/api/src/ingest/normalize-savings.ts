@@ -1,4 +1,19 @@
+import {
+  DATA_QUALITY_FLAGS,
+  INTEREST_PAYMENTS,
+  RUN_SOURCES,
+  SAVINGS_ACCOUNT_TYPES,
+  SAVINGS_RATE_TYPES,
+} from '../constants'
 import type { InterestPayment, RetrievalType, RunSource, SavingsAccountType, SavingsRateType } from '../types'
+import {
+  isAllowedDataQualityFlag,
+  isFiniteNumber,
+  isValidCollectionDate,
+  isValidUrl,
+  reasonableStringLength,
+  VALIDATE_COMMON,
+} from './validate-common'
 
 export type NormalizedSavingsRow = {
   bankName: string
@@ -174,27 +189,57 @@ export function parseSavingsInterestRate(value: unknown): number | null {
 export function validateNormalizedSavingsRow(
   row: NormalizedSavingsRow,
 ): { ok: true } | { ok: false; reason: string } {
-  if (!row.productId?.trim()) return { ok: false, reason: 'missing_product_id' }
-  if (!row.productName?.trim()) return { ok: false, reason: 'missing_product_name' }
+  if (!reasonableStringLength(row.bankName, VALIDATE_COMMON.MAX_BANK_NAME_LENGTH)) {
+    return { ok: false, reason: 'invalid_bank_name' }
+  }
+  if (!isValidCollectionDate(row.collectionDate)) {
+    return { ok: false, reason: 'invalid_collection_date' }
+  }
+  if (!reasonableStringLength(row.productId, VALIDATE_COMMON.MAX_PRODUCT_ID_LENGTH)) {
+    return { ok: false, reason: 'missing_product_id' }
+  }
+  if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
+    return { ok: false, reason: 'missing_product_name' }
+  }
   if (!isLikelySavingsProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
-  if (!row.sourceUrl?.trim()) return { ok: false, reason: 'missing_source_url' }
-  if (!Number.isFinite(row.interestRate) || row.interestRate < MIN_SAVINGS_RATE || row.interestRate > MAX_SAVINGS_RATE) {
+  if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
+  if (!row.depositTier?.trim() || row.depositTier.length > VALIDATE_COMMON.MAX_DEPOSIT_TIER_LENGTH) {
+    return { ok: false, reason: 'invalid_deposit_tier' }
+  }
+  if (!isAllowedDataQualityFlag(row.dataQualityFlag, DATA_QUALITY_FLAGS)) {
+    return { ok: false, reason: 'invalid_data_quality_flag' }
+  }
+  if (row.runSource != null && !RUN_SOURCES.includes(row.runSource)) {
+    return { ok: false, reason: 'invalid_run_source' }
+  }
+  if (!SAVINGS_ACCOUNT_TYPES.includes(row.accountType)) {
+    return { ok: false, reason: 'invalid_account_type' }
+  }
+  if (!SAVINGS_RATE_TYPES.includes(row.rateType)) {
+    return { ok: false, reason: 'invalid_rate_type' }
+  }
+  if (!isFiniteNumber(row.interestRate) || row.interestRate < MIN_SAVINGS_RATE || row.interestRate > MAX_SAVINGS_RATE) {
     return { ok: false, reason: 'interest_rate_out_of_bounds' }
   }
-  if (row.minBalance != null && (!Number.isFinite(row.minBalance) || row.minBalance < 0 || row.minBalance > MAX_BALANCE_VALUE)) {
+  if (row.minBalance != null && (!isFiniteNumber(row.minBalance) || row.minBalance < 0 || row.minBalance > MAX_BALANCE_VALUE)) {
     return { ok: false, reason: 'min_balance_out_of_bounds' }
   }
-  if (row.maxBalance != null && (!Number.isFinite(row.maxBalance) || row.maxBalance < 0 || row.maxBalance > MAX_BALANCE_VALUE)) {
+  if (row.maxBalance != null && (!isFiniteNumber(row.maxBalance) || row.maxBalance < 0 || row.maxBalance > MAX_BALANCE_VALUE)) {
     return { ok: false, reason: 'max_balance_out_of_bounds' }
   }
   if (row.minBalance != null && row.maxBalance != null && row.minBalance > row.maxBalance) {
     return { ok: false, reason: 'balance_bounds_invalid' }
   }
-  if (row.monthlyFee != null && (!Number.isFinite(row.monthlyFee) || row.monthlyFee < 0 || row.monthlyFee > MAX_MONTHLY_FEE)) {
+  if (row.monthlyFee != null && (!isFiniteNumber(row.monthlyFee) || row.monthlyFee < 0 || row.monthlyFee > MAX_MONTHLY_FEE)) {
     return { ok: false, reason: 'monthly_fee_out_of_bounds' }
   }
   const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
-  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < minConfidence || row.confidenceScore > 1) {
+  if (
+    !isFiniteNumber(row.confidenceScore) ||
+    row.confidenceScore < 0 ||
+    row.confidenceScore < minConfidence ||
+    row.confidenceScore > 1
+  ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
   }
   return { ok: true }
@@ -203,27 +248,60 @@ export function validateNormalizedSavingsRow(
 export function validateNormalizedTdRow(
   row: NormalizedTdRow,
 ): { ok: true } | { ok: false; reason: string } {
-  if (!row.productId?.trim()) return { ok: false, reason: 'missing_product_id' }
-  if (!row.productName?.trim()) return { ok: false, reason: 'missing_product_name' }
+  if (!reasonableStringLength(row.bankName, VALIDATE_COMMON.MAX_BANK_NAME_LENGTH)) {
+    return { ok: false, reason: 'invalid_bank_name' }
+  }
+  if (!isValidCollectionDate(row.collectionDate)) {
+    return { ok: false, reason: 'invalid_collection_date' }
+  }
+  if (!reasonableStringLength(row.productId, VALIDATE_COMMON.MAX_PRODUCT_ID_LENGTH)) {
+    return { ok: false, reason: 'missing_product_id' }
+  }
+  if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
+    return { ok: false, reason: 'missing_product_name' }
+  }
   if (!isLikelyTdProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
-  if (!row.sourceUrl?.trim()) return { ok: false, reason: 'missing_source_url' }
-  if (!Number.isFinite(row.interestRate) || row.interestRate < MIN_SAVINGS_RATE || row.interestRate > MAX_SAVINGS_RATE) {
+  if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
+  if (!row.depositTier?.trim() || row.depositTier.length > VALIDATE_COMMON.MAX_DEPOSIT_TIER_LENGTH) {
+    return { ok: false, reason: 'invalid_deposit_tier' }
+  }
+  if (!isAllowedDataQualityFlag(row.dataQualityFlag, DATA_QUALITY_FLAGS)) {
+    return { ok: false, reason: 'invalid_data_quality_flag' }
+  }
+  if (row.runSource != null && !RUN_SOURCES.includes(row.runSource)) {
+    return { ok: false, reason: 'invalid_run_source' }
+  }
+  if (!INTEREST_PAYMENTS.includes(row.interestPayment)) {
+    return { ok: false, reason: 'invalid_interest_payment' }
+  }
+  if (!isFiniteNumber(row.interestRate) || row.interestRate < MIN_SAVINGS_RATE || row.interestRate > MAX_SAVINGS_RATE) {
     return { ok: false, reason: 'interest_rate_out_of_bounds' }
   }
-  if (!Number.isFinite(row.termMonths) || row.termMonths < 1 || row.termMonths > 120) {
+  const termMonths = row.termMonths
+  if (
+    !isFiniteNumber(termMonths) ||
+    !Number.isInteger(termMonths) ||
+    termMonths < 1 ||
+    termMonths > 120
+  ) {
     return { ok: false, reason: 'term_months_out_of_bounds' }
   }
-  if (row.minDeposit != null && (!Number.isFinite(row.minDeposit) || row.minDeposit < 0 || row.minDeposit > MAX_DEPOSIT_VALUE)) {
+  if (row.minDeposit != null && (!isFiniteNumber(row.minDeposit) || row.minDeposit < 0 || row.minDeposit > MAX_DEPOSIT_VALUE)) {
     return { ok: false, reason: 'min_deposit_out_of_bounds' }
   }
-  if (row.maxDeposit != null && (!Number.isFinite(row.maxDeposit) || row.maxDeposit < 0 || row.maxDeposit > MAX_DEPOSIT_VALUE)) {
+  if (row.maxDeposit != null && (!isFiniteNumber(row.maxDeposit) || row.maxDeposit < 0 || row.maxDeposit > MAX_DEPOSIT_VALUE)) {
     return { ok: false, reason: 'max_deposit_out_of_bounds' }
   }
   if (row.minDeposit != null && row.maxDeposit != null && row.minDeposit > row.maxDeposit) {
     return { ok: false, reason: 'deposit_bounds_invalid' }
   }
   const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
-  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < minConfidence || row.confidenceScore > 1) {
+  if (
+    !isFiniteNumber(row.confidenceScore) ||
+    row.confidenceScore < 0 ||
+    row.confidenceScore < minConfidence ||
+    row.confidenceScore > 1
+  ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
   }
   return { ok: true }

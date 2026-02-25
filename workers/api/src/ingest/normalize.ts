@@ -1,4 +1,21 @@
+import {
+  DATA_QUALITY_FLAGS,
+  FEATURE_SETS,
+  LVR_TIERS,
+  REPAYMENT_TYPES,
+  RATE_STRUCTURES,
+  RUN_SOURCES,
+  SECURITY_PURPOSES,
+} from '../constants'
 import type { FeatureSet, LvrTier, RateStructure, RepaymentType, RetrievalType, RunSource, SecurityPurpose } from '../types'
+import {
+  isAllowedDataQualityFlag,
+  isFiniteNumber,
+  isValidCollectionDate,
+  isValidUrl,
+  reasonableStringLength,
+  VALIDATE_COMMON,
+} from './validate-common'
 
 export type NormalizedRateRow = {
   bankName: string
@@ -242,26 +259,55 @@ export function isProductNameLikelyRateProduct(name: string): boolean {
   return helpfulTokens.some((x) => normalized.includes(x))
 }
 
+const COMPARISON_RATE_MAX_ABOVE_INTEREST = 10
+
 export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { ok: false; reason: string } {
+  if (!reasonableStringLength(row.bankName, VALIDATE_COMMON.MAX_BANK_NAME_LENGTH)) {
+    return { ok: false, reason: 'invalid_bank_name' }
+  }
+  if (!isValidCollectionDate(row.collectionDate)) {
+    return { ok: false, reason: 'invalid_collection_date' }
+  }
+  if (!reasonableStringLength(row.productId, VALIDATE_COMMON.MAX_PRODUCT_ID_LENGTH)) {
+    return { ok: false, reason: 'missing_product_id' }
+  }
   const productName = normalizeProductName(row.productName)
-  if (!productName) {
+  if (!productName || productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
   if (!isProductNameLikelyRateProduct(productName)) {
     return { ok: false, reason: 'product_name_not_rate_like' }
   }
-  if (!row.productId || !row.productId.trim()) {
-    return { ok: false, reason: 'missing_product_id' }
+  if (!isValidUrl(row.sourceUrl)) {
+    return { ok: false, reason: 'invalid_source_url' }
   }
-  if (!row.sourceUrl || !row.sourceUrl.trim()) {
-    return { ok: false, reason: 'missing_source_url' }
+  if (!isAllowedDataQualityFlag(row.dataQualityFlag, DATA_QUALITY_FLAGS)) {
+    return { ok: false, reason: 'invalid_data_quality_flag' }
   }
-  if (!Number.isFinite(row.interestRate) || row.interestRate < MIN_RATE_PERCENT || row.interestRate > MAX_RATE_PERCENT) {
+  if (row.runSource != null && !RUN_SOURCES.includes(row.runSource)) {
+    return { ok: false, reason: 'invalid_run_source' }
+  }
+  if (!SECURITY_PURPOSES.includes(row.securityPurpose)) {
+    return { ok: false, reason: 'invalid_security_purpose' }
+  }
+  if (!REPAYMENT_TYPES.includes(row.repaymentType)) {
+    return { ok: false, reason: 'invalid_repayment_type' }
+  }
+  if (!RATE_STRUCTURES.includes(row.rateStructure)) {
+    return { ok: false, reason: 'invalid_rate_structure' }
+  }
+  if (!LVR_TIERS.includes(row.lvrTier)) {
+    return { ok: false, reason: 'invalid_lvr_tier' }
+  }
+  if (!FEATURE_SETS.includes(row.featureSet)) {
+    return { ok: false, reason: 'invalid_feature_set' }
+  }
+  if (!isFiniteNumber(row.interestRate) || row.interestRate < MIN_RATE_PERCENT || row.interestRate > MAX_RATE_PERCENT) {
     return { ok: false, reason: 'interest_rate_out_of_bounds' }
   }
   if (
     row.comparisonRate != null &&
-    (!Number.isFinite(row.comparisonRate) ||
+    (!isFiniteNumber(row.comparisonRate) ||
       row.comparisonRate < MIN_COMPARISON_RATE_PERCENT ||
       row.comparisonRate > MAX_COMPARISON_RATE_PERCENT)
   ) {
@@ -270,12 +316,26 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   if (row.comparisonRate != null && row.comparisonRate + 0.01 < row.interestRate) {
     return { ok: false, reason: 'comparison_rate_below_interest_rate' }
   }
-  if (row.annualFee != null && (!Number.isFinite(row.annualFee) || row.annualFee < 0 || row.annualFee > MAX_ANNUAL_FEE)) {
+  if (
+    row.comparisonRate != null &&
+    row.comparisonRate > row.interestRate + COMPARISON_RATE_MAX_ABOVE_INTEREST
+  ) {
+    return { ok: false, reason: 'comparison_rate_anomalous' }
+  }
+  if (row.annualFee != null && (!isFiniteNumber(row.annualFee) || row.annualFee < 0 || row.annualFee > MAX_ANNUAL_FEE)) {
     return { ok: false, reason: 'annual_fee_out_of_bounds' }
   }
   const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
-  if (!Number.isFinite(row.confidenceScore) || row.confidenceScore < minConfidence || row.confidenceScore > 1) {
+  if (
+    !isFiniteNumber(row.confidenceScore) ||
+    row.confidenceScore < 0 ||
+    row.confidenceScore < minConfidence ||
+    row.confidenceScore > 1
+  ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
+  }
+  if (row.runId != null && row.runId !== '' && row.runId.length > VALIDATE_COMMON.MAX_RUN_ID_LENGTH) {
+    return { ok: false, reason: 'invalid_run_id' }
   }
 
   return { ok: true }

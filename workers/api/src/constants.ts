@@ -42,6 +42,22 @@ export const SAVINGS_ACCOUNT_TYPES: SavingsAccountType[] = ['savings', 'transact
 export const SAVINGS_RATE_TYPES: SavingsRateType[] = ['base', 'bonus', 'introductory', 'bundle', 'total']
 export const INTEREST_PAYMENTS: InterestPayment[] = ['at_maturity', 'monthly', 'quarterly', 'annually']
 
+/** Allowed data_quality_flag values; unknown flags are rejected at validation. */
+export const DATA_QUALITY_FLAGS: string[] = [
+  'cdr_live',
+  'scraped_fallback_strict',
+  'parsed_from_wayback_strict',
+  'parsed_from_wayback_cdr',
+  'parsed_from_wayback',
+  'ok',
+]
+
+/** Allowed run_source values. */
+export const RUN_SOURCES = ['scheduled', 'manual'] as const
+
+/** Allowed retrieval_type values. */
+export const RETRIEVAL_TYPES = ['historical_scrape', 'present_scrape_same_date'] as const
+
 const lendersConfig = lendersConfigRaw as LenderConfigFile
 export const TARGET_LENDERS = lendersConfig.lenders
 export const CDR_REGISTER_DISCOVERY_URL = 'https://consumerdatastandardsaustralia.github.io/register/'

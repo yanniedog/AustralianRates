@@ -174,6 +174,55 @@ describe('admin db routes', () => {
     const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
     expect(res.status).toBe(400)
   })
+
+  it('returns 400 RATE_TABLE_READ_ONLY for POST on historical_loan_rates', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/tables/historical_loan_rates/rows`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bank_name: 'Test',
+        collection_date: '2025-02-20',
+        product_id: 'p1',
+        product_name: 'Loan',
+        security_purpose: 'owner_occupied',
+        repayment_type: 'principal_and_interest',
+        rate_structure: 'variable',
+        lvr_tier: 'lvr_80-85%',
+        feature_set: 'basic',
+        interest_rate: 6,
+        source_url: 'https://example.com',
+        data_quality_flag: 'cdr_live',
+        confidence_score: 0.9,
+        run_source: 'scheduled',
+      }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(400)
+    const data = await res.json() as { error?: { code?: string } }
+    expect(data.error?.code).toBe('RATE_TABLE_READ_ONLY')
+  })
+
+  it('returns 400 RATE_TABLE_READ_ONLY for PUT on historical_savings_rates', async () => {
+    const env = makeEnv()
+    const req = new Request(`https://x${API_BASE}/admin/db/tables/historical_savings_rates/rows`, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer test-admin-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bank_name: 'Test',
+        collection_date: '2025-02-20',
+        product_id: 'p1',
+        rate_type: 'base',
+        deposit_tier: 'all',
+        run_source: 'scheduled',
+        interest_rate: 4,
+      }),
+    })
+    const res = await (worker as { fetch: (r: Request, e: EnvBindings) => Promise<Response> }).fetch(req, env)
+    expect(res.status).toBe(400)
+    const data = await res.json() as { error?: { code?: string } }
+    expect(data.error?.code).toBe('RATE_TABLE_READ_ONLY')
+  })
 })
 
 describe('admin clear routes', () => {

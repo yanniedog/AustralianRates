@@ -16,7 +16,7 @@ function loadEnv() {
   if (!fs.existsSync(envPath)) return;
   const content = fs.readFileSync(envPath, 'utf8');
   for (const line of content.split('\n')) {
-    const m = line.match(/^\s*(CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|CF_API_TOKEN|CF_ACCOUNT_ID)\s*=\s*(.+)\s*$/);
+    const m = line.match(/^\s*(CLOUDFLARE_[A-Z_]+|CF_API_TOKEN|CF_ACCOUNT_ID)\s*=\s*(.+)\s*$/);
     if (m) {
       const val = m[2].replace(/^["']|["']$/g, '').trim();
       if (m[1] === 'CF_API_TOKEN') process.env.CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || val;
@@ -29,7 +29,7 @@ loadEnv();
 
 const PROJECT_NAME = 'australianrates';
 const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || 'f3250f7113cfd8c7f747a09f942ca6d0';
-const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN;
+const API_TOKEN = process.env.CLOUDFLARE_PAGES_TOKEN || process.env.CLOUDFLARE_API_TOKEN || process.env.CLOUDFLARE_GENERAL_TOKEN || process.env.CF_API_TOKEN;
 
 const BUILD_COMMAND = 'npm run build';
 const BUILD_OUTPUT_DIR = 'site';
@@ -52,12 +52,14 @@ function request(method, path, body) {
         try {
           const json = JSON.parse(data);
           if (json.success === false) {
-            reject(new Error(json.errors?.[0]?.message || data || 'API error'));
+            const err = json.errors?.[0];
+            const msg = err ? (err.message + (err.code ? ' (code ' + err.code + ')' : '')) : data || 'API error';
+            reject(new Error(msg));
             return;
           }
           resolve(json);
         } catch (e) {
-          reject(new Error(data || res.statusCode));
+          reject(new Error(data || String(res.statusCode)));
         }
       });
     });
@@ -69,9 +71,8 @@ function request(method, path, body) {
 
 async function main() {
   if (!API_TOKEN) {
-    console.error('Set CLOUDFLARE_API_TOKEN or CF_API_TOKEN (Cloudflare API token with Pages Edit).');
-    console.error('Create at: https://dash.cloudflare.com/profile/api-tokens');
-    console.error('Or add to .env in repo root (see .env.example).');
+    console.error('Set CLOUDFLARE_PAGES_TOKEN, CLOUDFLARE_API_TOKEN, or CLOUDFLARE_GENERAL_TOKEN in .env.');
+    console.error('Token needs Account | Cloudflare Pages | Write. See .env.example.');
     process.exit(1);
   }
 
@@ -80,6 +81,9 @@ async function main() {
   console.log('Fetching current project...');
   const getResult = await request('GET', path).catch((e) => {
     console.error('GET project failed:', e.message);
+    if (e.message.includes('Authentication') || e.message.includes('Invalid') || e.message.includes('403') || e.message.includes('401')) {
+      console.error('Use an API Token with Account | Cloudflare Pages | Edit.');
+    }
     process.exit(1);
   });
 
@@ -90,6 +94,15 @@ async function main() {
     (currentBuild.destination_dir === BUILD_OUTPUT_DIR || currentBuild.build_output_dir === BUILD_OUTPUT_DIR)
   ) {
     console.log('Build config already set: build_command=%s, output=%s', BUILD_COMMAND, BUILD_OUTPUT_DIR);
+    console.log('Triggering a deployment so the next build includes version.json...');
+    const deployPath = `/accounts/${ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments`;
+    const deployResult = await request('POST', deployPath, {}).catch((e) => {
+      console.warn('Trigger deploy failed (push a commit or retry from dashboard):', e.message);
+      return null;
+    });
+    if (deployResult && deployResult.result?.url) {
+      console.log('Deployment triggered:', deployResult.result.url);
+    }
     return;
   }
 
