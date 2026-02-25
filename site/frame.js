@@ -75,16 +75,21 @@
     }
 
     /**
-     * Clears all site data for this origin: cookies, localStorage, sessionStorage,
-     * and Cache API caches, then hard-reloads the page.
+     * Clears all site data for australianrates.com: cookies (current origin),
+     * localStorage, sessionStorage, Cache API caches, and service workers;
+     * then hard-reloads so the site is loaded fresh.
      */
     function clearSiteDataAndReload() {
+        var hostname = typeof location !== 'undefined' && location.hostname ? location.hostname : '';
+        var expired = 'expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
+
         try {
             var cookies = document.cookie.split(';');
             for (var i = 0; i < cookies.length; i++) {
                 var name = cookies[i].split('=')[0].trim();
                 if (name) {
-                    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
+                    document.cookie = name + '=;' + expired;
+                    if (hostname) document.cookie = name + '=;' + expired + ';domain=' + hostname;
                 }
             }
         } catch (e) { /* ignore */ }
@@ -94,16 +99,31 @@
         try {
             if (typeof sessionStorage !== 'undefined' && sessionStorage) sessionStorage.clear();
         } catch (e) { /* ignore */ }
+
         function doReload() {
-            window.location.replace(window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + '_=' + Date.now());
+            var q = (window.location.search ? '&' : '?') + '_=' + Date.now();
+            window.location.replace(window.location.pathname + window.location.search + q);
         }
-        if (typeof caches !== 'undefined' && caches.keys) {
-            caches.keys().then(function (keys) {
-                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-            }).then(doReload).catch(doReload);
-        } else {
-            doReload();
+
+        function runClearThenReload() {
+            var p = Promise.resolve();
+            if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                p = p.then(function () {
+                    return navigator.serviceWorker.getRegistrations().then(function (regs) {
+                        return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                    });
+                });
+            }
+            if (typeof caches !== 'undefined' && caches.keys) {
+                p = p.then(function () {
+                    return caches.keys().then(function (keys) {
+                        return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                    });
+                });
+            }
+            p.then(doReload).catch(doReload);
         }
+        runClearThenReload();
     }
 
     function buildNav() {

@@ -421,12 +421,21 @@ button:focus-visible {
 
 /* ── Inputs ────────────────────────────────────── */
 
+input,
+select {
+    color: var(--text);
+}
+
 input {
     border: 1px solid var(--line);
     border-radius: 10px;
     padding: 10px;
     font: inherit;
     background: var(--input-bg);
+}
+
+input::placeholder {
+    color: var(--muted);
 }
 
 input:focus-visible,
@@ -442,6 +451,7 @@ select:focus-visible {
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--output-bg);
+    color: var(--text);
     padding: 10px;
     font-family: "JetBrains Mono", Consolas, monospace;
     font-size: 0.76rem;
@@ -522,6 +532,72 @@ select:focus-visible {
 
 .pvtTable td, .pvtTable th {
     padding: 4px 8px;
+}
+
+/* Pivot table: library uses light-theme colors; override for dark mode */
+[data-theme="dark"] .pvtUi {
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtTable tbody tr th,
+[data-theme="dark"] .pvtTable thead tr th {
+    background-color: var(--card) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtTable tbody tr td {
+    background-color: var(--output-bg) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtAxisContainer,
+[data-theme="dark"] .pvtVals {
+    background: var(--card) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtAxisContainer li span.pvtAttr {
+    background: var(--input-bg) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtFilterBox {
+    background-color: var(--card) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtFilterBox h4,
+[data-theme="dark"] .pvtFilterBox p,
+[data-theme="dark"] .pvtFilterBox label {
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtFilterBox .count {
+    color: var(--muted) !important;
+}
+
+[data-theme="dark"] .pvtFilterBox input[type="text"] {
+    background: var(--input-bg) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtCheckContainer {
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] .pvtTriangle {
+    color: var(--muted) !important;
+}
+
+[data-theme="dark"] .pvtAxisContainer li.pvtPlaceholder {
+    border-color: var(--line) !important;
 }
 
 /* ── Chart Builder ─────────────────────────────── */
