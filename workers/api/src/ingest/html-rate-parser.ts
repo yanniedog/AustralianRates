@@ -167,6 +167,8 @@ export function extractLenderRatesFromHtml(input: {
       comparisonRate: parsed.comparisonRate,
       annualFee: null,
       sourceUrl: input.sourceUrl,
+      productUrl: input.sourceUrl,
+      publishedAt: null,
       dataQualityFlag: input.qualityFlag,
       confidenceScore: Number(confidence.toFixed(3)),
       retrievalType: input.mode === 'historical' ? 'historical_scrape' : 'present_scrape_same_date',

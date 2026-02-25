@@ -17,6 +17,8 @@ import {
   isRecord,
   nextLink,
   pickText,
+  productUrlFromDetail,
+  publishedAtFromDetail,
   type JsonRecord,
 } from './cdr'
 import type { LenderConfig } from '../types'
@@ -95,6 +97,8 @@ export function parseSavingsRatesFromDetail(input: {
   if (rates.length === 0) return []
 
   const monthlyFee = parseMonthlyFeeFromDetail(detail)
+  const productUrl = productUrlFromDetail(detail, sourceUrl)
+  const publishedAt = publishedAtFromDetail(detail)
   const result: NormalizedSavingsRow[] = []
   const accountType = normalizeAccountType(`${productName} ${pickText(detail, ['description', 'productCategory'])}`)
 
@@ -125,6 +129,8 @@ export function parseSavingsRatesFromDetail(input: {
       conditions: conditions || null,
       monthlyFee,
       sourceUrl,
+      productUrl,
+      publishedAt,
       dataQualityFlag: 'cdr_live',
       confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
       retrievalType: 'present_scrape_same_date',
@@ -148,6 +154,8 @@ export function parseTermDepositRatesFromDetail(input: {
   const rates = extractDepositRatesArray(detail)
   if (rates.length === 0) return []
 
+  const productUrl = productUrlFromDetail(detail, sourceUrl)
+  const publishedAt = publishedAtFromDetail(detail)
   const result: NormalizedTdRow[] = []
 
   for (const rate of rates) {
@@ -178,6 +186,8 @@ export function parseTermDepositRatesFromDetail(input: {
       maxDeposit: bounds.max,
       interestPayment,
       sourceUrl,
+      productUrl,
+      publishedAt,
       dataQualityFlag: 'cdr_live',
       confidenceScore: Number(Math.max(0.6, Math.min(0.99, confidence)).toFixed(3)),
       retrievalType: 'present_scrape_same_date',

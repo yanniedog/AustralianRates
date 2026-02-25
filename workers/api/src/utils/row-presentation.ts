@@ -3,6 +3,7 @@ import type { RetrievalType } from '../types'
 type RowRecord = Record<string, unknown>
 
 const WAYBACK_PREFIX = 'web.archive.org/web/'
+const WAYBACK_TS_RE = /\/web\/(\d{14})(?:id_)?\//i
 
 function asText(value: unknown): string {
   if (value == null) return ''
@@ -124,6 +125,47 @@ function isWaybackUrl(url: unknown): boolean {
   return asText(url).toLowerCase().includes(WAYBACK_PREFIX)
 }
 
+function normalizeTimestamp(value: unknown): string {
+  const raw = asText(value)
+  if (!raw) return ''
+
+  let normalized = raw
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    normalized = `${raw}T00:00:00Z`
+  } else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw)) {
+    normalized = raw.replace(' ', 'T') + 'Z'
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw)) {
+    normalized = `${raw}Z`
+  }
+
+  const date = new Date(normalized)
+  if (!Number.isFinite(date.getTime())) return ''
+  return date.toISOString()
+}
+
+function waybackPublishedAt(sourceUrl: unknown): string {
+  const raw = asText(sourceUrl)
+  const match = raw.match(WAYBACK_TS_RE)
+  if (!match) return ''
+  const ts = match[1]
+  if (ts.length !== 14) return ''
+  return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(8, 10)}:${ts.slice(10, 12)}:${ts.slice(12, 14)}Z`
+}
+
+export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<string, unknown> {
+  const sourceUrl = asText(row.source_url)
+  const productUrl = asText(row.product_url) || sourceUrl
+  const publishedAt = normalizeTimestamp(row.published_at) || waybackPublishedAt(sourceUrl)
+  const retrievedAt = asText(row.retrieved_at) || asText(row.parsed_at)
+
+  return {
+    ...row,
+    product_url: productUrl,
+    published_at: publishedAt,
+    retrieved_at: retrievedAt,
+  }
+}
+
 function canonicalRetrievalType(row: RowRecord): RetrievalType {
   const retrievalType = asText(row.retrieval_type).toLowerCase()
   const qualityFlag = asText(row.data_quality_flag).toLowerCase()
@@ -216,12 +258,13 @@ function termMonthsDisplay(value: unknown): string {
 }
 
 function withBaseDisplayFields<T extends RowRecord>(row: T): T & Record<string, unknown> {
-  const canonical = canonicalRetrievalType(row)
+  const core = presentCoreRowFields(row)
+  const canonical = canonicalRetrievalType(core)
   return {
-    ...row,
+    ...core,
     retrieval_type_canonical: canonical,
     retrieval_type_display: retrievalTypeDisplay(canonical),
-    data_quality_display: dataQualityDisplay(row.data_quality_flag),
+    data_quality_display: dataQualityDisplay(core.data_quality_flag),
   }
 }
 

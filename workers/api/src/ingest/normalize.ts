@@ -31,6 +31,8 @@ export type NormalizedRateRow = {
   comparisonRate: number | null
   annualFee: number | null
   sourceUrl: string
+  productUrl?: string | null
+  publishedAt?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
@@ -280,6 +282,15 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   }
   if (!isValidUrl(row.sourceUrl)) {
     return { ok: false, reason: 'invalid_source_url' }
+  }
+  if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
+    return { ok: false, reason: 'invalid_product_url' }
+  }
+  if (row.publishedAt != null && row.publishedAt !== '') {
+    const published = new Date(String(row.publishedAt))
+    if (!Number.isFinite(published.getTime())) {
+      return { ok: false, reason: 'invalid_published_at' }
+    }
   }
   if (!isAllowedDataQualityFlag(row.dataQualityFlag, DATA_QUALITY_FLAGS)) {
     return { ok: false, reason: 'invalid_data_quality_flag' }

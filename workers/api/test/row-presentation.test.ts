@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cleanConditionsText,
+  presentCoreRowFields,
   presentHomeLoanRow,
   presentSavingsRow,
   presentTdRow,
@@ -65,5 +66,39 @@ describe('row presentation', () => {
   it('cleans conditions by removing machine fragments and duplicates', () => {
     const cleaned = cleanConditionsText('PT3M | Bonus when you deposit monthly | Bonus when you deposit monthly | ')
     expect(cleaned).toBe('Bonus when you deposit monthly')
+  })
+
+  it('derives core row fields with fallback product_url and retrieved_at alias', () => {
+    const row = presentCoreRowFields({
+      source_url: 'https://example.com/rates',
+      parsed_at: '2026-02-25 06:17:08',
+      published_at: '',
+    })
+
+    expect(row.product_url).toBe('https://example.com/rates')
+    expect(row.retrieved_at).toBe('2026-02-25 06:17:08')
+    expect(row.published_at).toBe('')
+  })
+
+  it('derives published_at from wayback snapshot timestamp when missing', () => {
+    const row = presentCoreRowFields({
+      source_url: 'https://web.archive.org/web/20200102030405/https://example.com/rates',
+      published_at: null,
+      parsed_at: '2026-02-25 06:17:08',
+    })
+
+    expect(row.published_at).toBe('2020-01-02T03:04:05Z')
+  })
+
+  it('normalizes provider published_at to ISO UTC when present', () => {
+    const row = presentCoreRowFields({
+      source_url: 'https://example.com/rates',
+      product_url: 'https://example.com/product',
+      published_at: '2026-02-25T17:30:45+11:00',
+      parsed_at: '2026-02-25 06:17:08',
+    })
+
+    expect(row.product_url).toBe('https://example.com/product')
+    expect(row.published_at).toBe('2026-02-25T06:30:45.000Z')
   })
 })

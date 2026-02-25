@@ -14,10 +14,10 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         bank_name, collection_date, product_id, product_name,
         term_months, interest_rate, deposit_tier,
         min_deposit, max_deposit, interest_payment,
-        source_url, data_quality_flag, confidence_score,
+        source_url, product_url, published_at, data_quality_flag, confidence_score,
         retrieval_type,
         parsed_at, run_id, run_source
-      ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,CURRENT_TIMESTAMP,?15,?16)
+      ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,CURRENT_TIMESTAMP,?17,?18)
       ON CONFLICT(bank_name, collection_date, product_id, term_months, deposit_tier, run_source) DO UPDATE SET
         product_name = excluded.product_name,
         interest_rate = excluded.interest_rate,
@@ -25,6 +25,8 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         max_deposit = excluded.max_deposit,
         interest_payment = excluded.interest_payment,
         source_url = excluded.source_url,
+        product_url = excluded.product_url,
+        published_at = excluded.published_at,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
         retrieval_type = excluded.retrieval_type,
@@ -43,6 +45,8 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
       row.maxDeposit,
       row.interestPayment,
       row.sourceUrl,
+      row.productUrl ?? row.sourceUrl,
+      row.publishedAt ?? null,
       row.dataQualityFlag,
       row.confidenceScore,
       row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl),

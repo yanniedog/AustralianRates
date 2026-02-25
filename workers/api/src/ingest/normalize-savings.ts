@@ -29,6 +29,8 @@ export type NormalizedSavingsRow = {
   conditions: string | null
   monthlyFee: number | null
   sourceUrl: string
+  productUrl?: string | null
+  publishedAt?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
@@ -48,6 +50,8 @@ export type NormalizedTdRow = {
   maxDeposit: number | null
   interestPayment: InterestPayment
   sourceUrl: string
+  productUrl?: string | null
+  publishedAt?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
@@ -203,6 +207,13 @@ export function validateNormalizedSavingsRow(
   }
   if (!isLikelySavingsProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
+  if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
+    return { ok: false, reason: 'invalid_product_url' }
+  }
+  if (row.publishedAt != null && row.publishedAt !== '') {
+    const published = new Date(String(row.publishedAt))
+    if (!Number.isFinite(published.getTime())) return { ok: false, reason: 'invalid_published_at' }
+  }
   if (!row.depositTier?.trim() || row.depositTier.length > VALIDATE_COMMON.MAX_DEPOSIT_TIER_LENGTH) {
     return { ok: false, reason: 'invalid_deposit_tier' }
   }
@@ -262,6 +273,13 @@ export function validateNormalizedTdRow(
   }
   if (!isLikelyTdProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
+  if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
+    return { ok: false, reason: 'invalid_product_url' }
+  }
+  if (row.publishedAt != null && row.publishedAt !== '') {
+    const published = new Date(String(row.publishedAt))
+    if (!Number.isFinite(published.getTime())) return { ok: false, reason: 'invalid_published_at' }
+  }
   if (!row.depositTier?.trim() || row.depositTier.length > VALIDATE_COMMON.MAX_DEPOSIT_TIER_LENGTH) {
     return { ok: false, reason: 'invalid_deposit_tier' }
   }

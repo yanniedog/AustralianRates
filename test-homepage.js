@@ -22,6 +22,7 @@ const SCREENSHOT_DIR = './test-screenshots';
 // On production we fail if Retrieval column is missing; on localhost/dev we only warn. Env can force strict (1) on dev.
 const isProductionUrl = !TEST_URL.includes('localhost') && !TEST_URL.includes('127.0.0.1');
 const STRICT_RETRIEVAL_COLUMN = isProductionUrl || process.env.STRICT_RETRIEVAL_COLUMN === '1';
+const REQUIRED_METADATA_HEADERS = ['Retrieval', 'Product URL', 'Published At', 'Retrieved At'];
 
 async function runTests() {
     console.log('Starting Australian Rates Homepage Tests...');
@@ -44,6 +45,20 @@ async function runTests() {
         failed: [],
         warnings: []
     };
+
+    function verifyMetadataHeaders(headers, scopeLabel) {
+        const normalized = headers.map(h => String(h).trim());
+        for (const header of REQUIRED_METADATA_HEADERS) {
+            const hasHeader = normalized.includes(header);
+            if (hasHeader) {
+                results.passed.push(`✓ ${scopeLabel} table includes ${header} column`);
+            } else if (STRICT_RETRIEVAL_COLUMN) {
+                results.failed.push(`✗ ${scopeLabel} table missing ${header} column`);
+            } else {
+                results.warnings.push(`⚠ ${scopeLabel} table missing ${header} column on this environment`);
+            }
+        }
+    }
 
     async function verifyFooterDeployStatus(label) {
         await page.waitForFunction(() => {
@@ -564,13 +579,7 @@ async function runTests() {
         }
 
         const explorerHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
-        const hasRetrievalHeader = explorerHeaders.some(h => String(h).trim() === 'Retrieval');
-        if (hasRetrievalHeader) {
-            results.passed.push('✓ Rate Explorer table includes Retrieval column');
-        } else {
-            if (STRICT_RETRIEVAL_COLUMN) results.failed.push('✗ Rate Explorer table missing Retrieval column');
-            else results.warnings.push('⚠ Rate Explorer table missing Retrieval column on this environment');
-        }
+        verifyMetadataHeaders(explorerHeaders, 'Rate Explorer');
         
         await page.screenshot({ 
             path: `${SCREENSHOT_DIR}/05-rate-explorer-table.png`,
@@ -778,13 +787,7 @@ async function runTests() {
                 await verifyNoScriptFallback(url, 'Term deposits', '/api/term-deposit-rates');
             }
             const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
-            const sectionHasRetrieval = sectionHeaders.some(h => String(h).trim() === 'Retrieval');
-            if (sectionHasRetrieval) {
-                results.passed.push('✓ ' + name + ' table includes Retrieval column');
-            } else {
-                if (STRICT_RETRIEVAL_COLUMN) results.failed.push('✗ ' + name + ' table missing Retrieval column');
-                else results.warnings.push('⚠ ' + name + ' table missing Retrieval column on this environment');
-            }
+            verifyMetadataHeaders(sectionHeaders, name);
             await page.click('#trigger-run');
             await page.waitForTimeout(4000);
             const sectionStatus = await page.textContent('#trigger-status').catch(() => '');

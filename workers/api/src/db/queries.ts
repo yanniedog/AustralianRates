@@ -6,7 +6,7 @@ import {
   SECURITY_PURPOSES,
 } from '../constants'
 import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
-import { presentHomeLoanRow } from '../utils/row-presentation'
+import { presentCoreRowFields, presentHomeLoanRow } from '../utils/row-presentation'
 
 type LatestFilters = {
   bank?: string
@@ -152,6 +152,8 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
       v.comparison_rate,
       v.annual_fee,
       v.source_url,
+      v.product_url,
+      v.published_at,
       v.data_quality_flag,
       v.confidence_score,
       v.retrieval_type,
@@ -243,6 +245,8 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
         h.comparison_rate,
         h.annual_fee,
         h.source_url,
+        h.product_url,
+        h.published_at,
         h.data_quality_flag,
         h.confidence_score,
         h.retrieval_type,
@@ -270,6 +274,8 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
       ranked.comparison_rate,
       ranked.annual_fee,
       ranked.source_url,
+      ranked.product_url,
+      ranked.published_at,
       ranked.data_quality_flag,
       ranked.confidence_score,
       ranked.retrieval_type,
@@ -373,6 +379,8 @@ export async function queryTimeseries(
       t.confidence_score,
       t.retrieval_type,
       t.source_url,
+      t.product_url,
+      t.published_at,
       t.parsed_at,
       t.run_source,
       t.product_key,
@@ -420,9 +428,12 @@ const PAGINATED_SORT_COLUMNS: Record<string, string> = {
   annual_fee: 'h.annual_fee',
   rba_cash_rate: 'rba_cash_rate',
   parsed_at: 'h.parsed_at',
+  retrieved_at: 'h.parsed_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
   source_url: 'h.source_url',
+  product_url: 'h.product_url',
+  published_at: 'h.published_at',
 }
 
 export async function queryRatesPaginated(db: D1Database, filters: RatesPaginatedFilters) {
@@ -512,6 +523,8 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
       h.comparison_rate,
       h.annual_fee,
       h.source_url,
+      h.product_url,
+      h.published_at,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -645,6 +658,8 @@ export async function queryRatesForExport(
       h.comparison_rate,
       h.annual_fee,
       h.source_url,
+      h.product_url,
+      h.published_at,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -675,7 +690,7 @@ export async function queryRatesForExport(
     else scheduled += Number(row.n)
   }
   return {
-    data: rows(dataResult),
+    data: rows(dataResult).map((row) => presentCoreRowFields(row)),
     total,
     source_mix: { scheduled, manual },
   }

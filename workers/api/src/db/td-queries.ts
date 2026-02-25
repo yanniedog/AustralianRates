@@ -1,6 +1,6 @@
 import { INTEREST_PAYMENTS } from '../constants'
 import { runSourceWhereClause, type SourceMode } from '../utils/source-mode'
-import { presentTdRow } from '../utils/row-presentation'
+import { presentCoreRowFields, presentTdRow } from '../utils/row-presentation'
 
 const MIN_PUBLIC_RATE = 0
 const MAX_PUBLIC_RATE = 15
@@ -58,8 +58,12 @@ const SORT_COLUMNS: Record<string, string> = {
   deposit_tier: 'h.deposit_tier',
   interest_payment: 'h.interest_payment',
   parsed_at: 'h.parsed_at',
+  retrieved_at: 'h.parsed_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
+  source_url: 'h.source_url',
+  product_url: 'h.product_url',
+  published_at: 'h.published_at',
 }
 
 function buildWhere(filters: TdPaginatedFilters): { clause: string; binds: Array<string | number> } {
@@ -108,7 +112,7 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
-      h.source_url, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at, h.run_id, h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
@@ -243,6 +247,8 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
         h.max_deposit,
         h.interest_payment,
         h.source_url,
+        h.product_url,
+        h.published_at,
         h.data_quality_flag,
         h.confidence_score,
         h.retrieval_type,
@@ -268,6 +274,8 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
       ranked.max_deposit,
       ranked.interest_payment,
       ranked.source_url,
+      ranked.product_url,
+      ranked.published_at,
       ranked.data_quality_flag,
       ranked.confidence_score,
       ranked.retrieval_type,
@@ -341,7 +349,7 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
-      h.source_url, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at, h.run_id, h.run_source,
 h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
@@ -363,7 +371,7 @@ FROM historical_term_deposit_rates h
     else scheduled += 1
   }
   return {
-    data: rows(dataResult),
+    data: rows(dataResult).map((row) => presentCoreRowFields(row)),
     total: Number(countResult?.total ?? 0),
     source_mix: { scheduled, manual },
   }

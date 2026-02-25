@@ -87,6 +87,16 @@
         return '';
     }
 
+    function productUrlFormatter(cell) {
+        var raw = String(cell.getValue() || '').trim();
+        if (!raw) return '\u2014';
+        if (!/^https?:\/\//i.test(raw)) return '\u2014';
+
+        var label = raw.length > 52 ? raw.slice(0, 49) + '...' : raw;
+        cell.getElement().innerHTML = linkHtml(raw, label, raw);
+        return '';
+    }
+
     function runSourceFormatter(cell) {
         var v = String(cell.getValue() || '');
         return v === 'manual' ? 'Manual' : 'Auto';
@@ -101,6 +111,10 @@
             cellEl.setAttribute('title', rendered.title);
         }
         return rendered && rendered.text ? rendered.text : String(v);
+    }
+
+    function publishedAtFormatter(cell) {
+        return parsedAtFormatter(cell);
     }
 
     function collectionDateFormatter(cell) {
@@ -205,10 +219,12 @@
             { title: 'Annual Fee', field: 'annual_fee', formatter: annualFeeFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow, formatter: qualityFormatter },
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
+            { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, visible: !narrow, formatter: productUrlFormatter },
+            { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, visible: !narrow, formatter: publishedAtFormatter },
             { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, visible: !narrow, formatter: offerLinksFormatter },
             { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
-            { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
+            { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, visible: !narrow, formatter: parsedAtFormatter },
         ];
     }
 
@@ -226,9 +242,11 @@
             { title: 'Monthly Fee', field: 'monthly_fee', formatter: monthlyFeeFormatter, headerSort: true, minWidth: 80, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow, formatter: qualityFormatter },
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
+            { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, visible: !narrow, formatter: productUrlFormatter },
+            { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, visible: !narrow, formatter: publishedAtFormatter },
             { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, visible: !narrow, formatter: offerLinksFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
-            { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
+            { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, visible: !narrow, formatter: parsedAtFormatter },
         ];
     }
 
@@ -246,9 +264,11 @@
             { title: 'Max Deposit', field: 'max_deposit', formatter: tdDepositBoundFormatter, headerSort: true, minWidth: 90, visible: !narrow },
             { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, visible: !narrow, formatter: qualityFormatter },
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, visible: !narrow, formatter: retrievalTypeFormatter },
+            { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, visible: !narrow, formatter: productUrlFormatter },
+            { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, visible: !narrow, formatter: publishedAtFormatter },
             { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, visible: !narrow, formatter: offerLinksFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, visible: !narrow, formatter: runSourceFormatter },
-            { title: 'Checked At', field: 'parsed_at', headerSort: true, minWidth: 120, visible: !narrow, formatter: parsedAtFormatter },
+            { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, visible: !narrow, formatter: parsedAtFormatter },
         ];
     }
 

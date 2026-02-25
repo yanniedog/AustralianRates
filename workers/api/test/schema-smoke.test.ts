@@ -22,4 +22,15 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('next_collection_date TEXT NOT NULL')
     expect(sql).toContain("status IN ('active', 'completed_full_history')")
   })
+
+  it('includes product_url and published_at migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0013_product_url_published_at.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('ADD COLUMN product_url TEXT')
+    expect(sql).toContain('ADD COLUMN published_at TEXT')
+    expect(sql).toContain('SET product_url = source_url')
+    expect(sql).toContain('CREATE VIEW vw_latest_rates AS')
+    expect(sql).toContain('CREATE VIEW vw_latest_savings_rates AS')
+    expect(sql).toContain('CREATE VIEW vw_latest_td_rates AS')
+  })
 })

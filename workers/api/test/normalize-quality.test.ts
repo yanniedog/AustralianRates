@@ -66,6 +66,28 @@ describe('row validation', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_source_url')
   })
 
+  it('accepts valid optional product_url and published_at', () => {
+    const verdict = validateNormalizedRow(
+      validHomeLoanRow({
+        productUrl: 'https://example.com/product',
+        publishedAt: '2026-02-25T06:17:08.000Z',
+      }),
+    )
+    expect(verdict.ok).toBe(true)
+  })
+
+  it('rejects invalid optional product_url', () => {
+    const verdict = validateNormalizedRow(validHomeLoanRow({ productUrl: 'not-a-url' }))
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_url')
+  })
+
+  it('rejects invalid optional published_at', () => {
+    const verdict = validateNormalizedRow(validHomeLoanRow({ publishedAt: 'not-a-date' }))
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_published_at')
+  })
+
   it('rejects invalid data_quality_flag', () => {
     const verdict = validateNormalizedRow(validHomeLoanRow({ dataQualityFlag: 'unknown_flag' }))
     expect(verdict.ok).toBe(false)

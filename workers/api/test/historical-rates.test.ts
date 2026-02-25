@@ -58,4 +58,13 @@ describe('upsertHistoricalRateRow', () => {
     const row = invalidHomeLoanRow({ sourceUrl: 'not-a-url' })
     await expect(upsertHistoricalRateRow(db, row)).rejects.toThrow(/invalid_normalized_rate_row:invalid_source_url/)
   })
+
+  it('accepts optional product_url and published_at', async () => {
+    const db = makeMockD1()
+    const row = invalidHomeLoanRow({
+      productUrl: 'https://example.com/product',
+      publishedAt: '2026-02-25T06:17:08.000Z',
+    })
+    await expect(upsertHistoricalRateRow(db, row)).resolves.toBeUndefined()
+  })
 })

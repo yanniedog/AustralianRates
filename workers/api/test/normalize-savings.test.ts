@@ -91,6 +91,22 @@ describe('validateNormalizedSavingsRow', () => {
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('invalid_deposit_tier')
   })
+
+  it('accepts optional product_url and published_at', () => {
+    const verdict = validateNormalizedSavingsRow(
+      validSavingsRow({
+        productUrl: 'https://example.com/savings-product',
+        publishedAt: '2026-02-25T06:17:08.000Z',
+      }),
+    )
+    expect(verdict.ok).toBe(true)
+  })
+
+  it('rejects invalid optional product_url', () => {
+    const verdict = validateNormalizedSavingsRow(validSavingsRow({ productUrl: 'not-a-url' }))
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_url')
+  })
 })
 
 describe('validateNormalizedTdRow', () => {
@@ -117,5 +133,11 @@ describe('validateNormalizedTdRow', () => {
     const verdict = validateNormalizedTdRow(validTdRow({ sourceUrl: 'not-a-url' }))
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('invalid_source_url')
+  })
+
+  it('rejects invalid optional published_at', () => {
+    const verdict = validateNormalizedTdRow(validTdRow({ publishedAt: 'not-a-date' }))
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_published_at')
   })
 })
