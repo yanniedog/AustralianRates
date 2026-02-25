@@ -184,6 +184,16 @@ async function runTests() {
     }
 
     async function verifyCalculator() {
+        const toggle = page.locator('#calculator-toggle');
+        const hasCollapsible = await toggle.isVisible().catch(() => false);
+        if (hasCollapsible) {
+            const details = page.locator('#calculator-details');
+            const isOpen = await details.getAttribute('open').then(Boolean).catch(() => false);
+            if (!isOpen) {
+                await toggle.click();
+                await page.waitForSelector('#calc-loan-amount', { state: 'visible', timeout: 3000 }).catch(() => null);
+            }
+        }
         const calcVisible = await page.locator('#calc-loan-amount').isVisible().catch(() => false);
         if (!calcVisible) {
             results.failed.push('✗ Repayment estimator not visible on homepage');

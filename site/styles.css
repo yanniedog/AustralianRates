@@ -552,6 +552,55 @@ select:focus-visible {
     text-decoration: underline;
 }
 
+/* Collapsible calculator at bottom of main */
+.calculator-collapse {
+    margin: 24px auto 0;
+    max-width: 1240px;
+    padding: 0 18px 18px;
+}
+
+.calculator-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 14px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+    user-select: none;
+}
+
+.calculator-summary::-webkit-details-marker {
+    display: none;
+}
+
+.calculator-summary::before {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid currentColor;
+    margin-right: 8px;
+    vertical-align: middle;
+    transition: transform 0.2s ease;
+}
+
+.calculator-collapse[open] .calculator-summary::before {
+    transform: rotate(-90deg);
+}
+
+.calculator-summary:hover {
+    color: var(--text);
+}
+
+.calculator-collapse .calculator-panel {
+    margin-top: 10px;
+}
+
 .calculator-panel h2 {
     margin-top: 0;
     margin-bottom: 6px;
