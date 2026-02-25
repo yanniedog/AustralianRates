@@ -12,7 +12,7 @@ import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
 import { buildScheduledRunId } from '../utils/idempotency'
 
-/** Minimum minutes between scheduled runs; cron fires every 6 hours. */
+/** Minimum minutes between scheduled runs; cron fires every hour. */
 const SCHEDULED_INTERVAL_MIN_MINUTES = MIN_RATE_CHECK_INTERVAL_MINUTES
 
 export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {

@@ -61,7 +61,7 @@ describe('scheduled pipeline', () => {
     mocks.ensureAppConfigTable.mockResolvedValue(undefined)
     mocks.setAppConfig.mockResolvedValue(undefined)
     mocks.getAppConfig.mockImplementation(async (_db: unknown, key: string) => {
-      if (key === 'rate_check_interval_minutes') return '360'
+      if (key === 'rate_check_interval_minutes') return '60'
       if (key === 'rate_check_last_run_iso') return '2026-02-23T00:00:00.000Z'
       return null
     })
@@ -73,7 +73,7 @@ describe('scheduled pipeline', () => {
     })
   })
 
-  it('uses a per-cron run id so each 6-hour tick can enqueue work', async () => {
+  it('uses a per-cron run id so each hourly tick can enqueue work', async () => {
     mocks.triggerDailyRun.mockResolvedValue({
       ok: true,
       skipped: false,
@@ -123,7 +123,7 @@ describe('scheduled pipeline', () => {
 
   it('uses event.scheduledTime for interval comparison to avoid timing drift', async () => {
     mocks.getAppConfig.mockImplementation(async (_db: unknown, key: string) => {
-      if (key === 'rate_check_interval_minutes') return '360'
+      if (key === 'rate_check_interval_minutes') return '60'
       if (key === 'rate_check_last_run_iso') return '2026-02-24T00:00:00.000Z'
       return null
     })
