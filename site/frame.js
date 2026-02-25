@@ -74,6 +74,38 @@
             .replace(/"/g, '&quot;');
     }
 
+    /**
+     * Clears all site data for this origin: cookies, localStorage, sessionStorage,
+     * and Cache API caches, then hard-reloads the page.
+     */
+    function clearSiteDataAndReload() {
+        try {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var name = cookies[i].split('=')[0].trim();
+                if (name) {
+                    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
+                }
+            }
+        } catch (e) { /* ignore */ }
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage) localStorage.clear();
+        } catch (e) { /* ignore */ }
+        try {
+            if (typeof sessionStorage !== 'undefined' && sessionStorage) sessionStorage.clear();
+        } catch (e) { /* ignore */ }
+        function doReload() {
+            window.location.replace(window.location.pathname + window.location.search + (window.location.search ? '&' : '?') + '_=' + Date.now());
+        }
+        if (typeof caches !== 'undefined' && caches.keys) {
+            caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            }).then(doReload).catch(doReload);
+        } else {
+            doReload();
+        }
+    }
+
     function buildNav() {
         var header = document.querySelector('.site-header');
         if (!header) return;
@@ -87,12 +119,15 @@
                 '<button type="button" id="theme-toggle" class="site-nav-theme-btn" aria-label="Toggle dark mode" title="Toggle dark mode">' +
                     '<span id="theme-toggle-label">Dark</span>' +
                 '</button>' +
+                '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
                 '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
                     '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>' +
                     'GitHub' +
                 '</a>' +
             '</nav>';
         bindThemeToggle(inner);
+        var refreshBtn = inner.querySelector('#refresh-site-btn');
+        if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
     }
 
     function bindThemeToggle(headerInner) {
