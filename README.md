@@ -125,6 +125,7 @@ See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (r
    - Build command: `npm run build`
    - Build output directory: `site`
    - This generates `site/version.json` from `CF_PAGES_COMMIT_SHA` so the footer can show `In sync` or `Behind`. Without it, footer status shows `Unknown` and deploy version is unavailable.
+   - To set via API: create a Cloudflare API token with Pages Edit, set `CLOUDFLARE_API_TOKEN` (e.g. in `.env`), then run `npm run pages:set-build`. Then trigger a new deploy.
 3. Add custom domains `www.australianrates.com` and `australianrates.com` to the Pages project.
 4. Deploy API worker and set route:
    - `www.australianrates.com/api/home-loan-rates/*`

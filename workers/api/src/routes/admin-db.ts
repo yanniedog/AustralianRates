@@ -26,8 +26,19 @@ const ADMIN_DB_TABLES = [
 
 type TableName = (typeof ADMIN_DB_TABLES)[number]
 
+/** Rate tables are read/delete only via admin; all writes must go through validated ingest pipeline. */
+const RATE_TABLES_READ_ONLY: TableName[] = [
+  'historical_loan_rates',
+  'historical_savings_rates',
+  'historical_term_deposit_rates',
+]
+
 function isAllowedTable(name: string): name is TableName {
   return ADMIN_DB_TABLES.includes(name as TableName)
+}
+
+function isRateTableReadOnly(tableName: TableName): boolean {
+  return RATE_TABLES_READ_ONLY.includes(tableName)
 }
 
 /** Key columns for each table (for UPDATE/DELETE and get-by-key). */
@@ -212,6 +223,14 @@ adminDbRoutes.post('/db/tables/:tableName/rows', async (c) => {
   if (!isAllowedTable(tableName)) {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
+  if (isRateTableReadOnly(tableName as TableName)) {
+    return jsonError(
+      c,
+      400,
+      'RATE_TABLE_READ_ONLY',
+      'Rate data must be written via the ingest pipeline; admin DB is read/delete only for this table.',
+    )
+  }
 
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const db = c.env.DB
@@ -251,6 +270,14 @@ adminDbRoutes.put('/db/tables/:tableName/rows', async (c) => {
   const tableName = c.req.param('tableName')
   if (!isAllowedTable(tableName)) {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
+  }
+  if (isRateTableReadOnly(tableName as TableName)) {
+    return jsonError(
+      c,
+      400,
+      'RATE_TABLE_READ_ONLY',
+      'Rate data must be written via the ingest pipeline; admin DB is read/delete only for this table.',
+    )
   }
 
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
