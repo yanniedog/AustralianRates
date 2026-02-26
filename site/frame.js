@@ -7,7 +7,6 @@
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
     var timeUtils = (window.AR && window.AR.time) ? window.AR.time : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
-    var _secretAdminShortcutBound = false;
 
     /* Session log (client-side buffer for this tab) */
     var SESSION_LOG_MAX = 500;
@@ -178,48 +177,8 @@
         });
     }
 
-    function getAdminPortalHref() {
-        var path = (typeof window !== 'undefined' && window.location && window.location.pathname)
-            ? window.location.pathname
-            : '/';
-        var markers = ['/savings/', '/term-deposits/'];
-        for (var i = 0; i < markers.length; i++) {
-            var idx = path.indexOf(markers[i]);
-            if (idx >= 0) return path.substring(0, idx) + '/admin/';
-        }
-        if (path.endsWith('/')) return path + 'admin/';
-        return path.replace(/\/[^/]*$/, '/') + 'admin/';
-    }
-
     function getLegalHref(slug) {
         return '/' + String(slug || '').replace(/^\/+|\/+$/g, '') + '/';
-    }
-
-    function openAdminPortal(reason) {
-        var href = getAdminPortalHref();
-        addSessionLog('info', 'Admin portal navigation', { reason: reason || 'unknown', href: href });
-        window.location.assign(href);
-    }
-
-    function shouldIgnoreShortcutTarget(target) {
-        if (!target) return false;
-        var tag = target.tagName ? String(target.tagName).toLowerCase() : '';
-        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') return true;
-        return !!target.isContentEditable;
-    }
-
-    function bindSecretAdminShortcut() {
-        if (_secretAdminShortcutBound) return;
-        _secretAdminShortcutBound = true;
-
-        document.addEventListener('keydown', function (e) {
-            var key = String(e.key || '').toLowerCase();
-            var hasModifiers = e.shiftKey && e.altKey && (e.ctrlKey || e.metaKey);
-            if (key !== 'a' || !hasModifiers) return;
-            if (shouldIgnoreShortcutTarget(e.target)) return;
-            e.preventDefault();
-            openAdminPortal('keyboard_shortcut');
-        });
     }
 
     function buildFooter() {
@@ -247,7 +206,7 @@
                     '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                 '</span>' +
                 '<span class="footer-spacer"></span>' +
-                '<span id="footer-copyright">&copy; ' + new Date().getFullYear() + ' <a href="' + esc(getAdminPortalHref()) + '" class="footer-admin-at" title="Admin portal">@</a>AustralianRates</span>' +
+                '<span class="footer-operator">Operator: AustralianRates open-source project &middot; Support: <a href="mailto:support@australianrates.com">support@australianrates.com</a></span>' +
             '</div>';
         document.body.appendChild(footer);
 
@@ -255,8 +214,6 @@
         var popup = document.getElementById('footer-log-popup');
         var downloadSystem = document.getElementById('footer-log-download-system');
         var downloadClient = document.getElementById('footer-log-download-client');
-        var adminLink = footer.querySelector('.footer-admin-at');
-        var copyrightEl = document.getElementById('footer-copyright');
 
         if (logLink && popup) {
             logLink.addEventListener('click', function (e) {
@@ -280,19 +237,6 @@
                 popup.hidden = true;
             });
         }
-        if (adminLink) {
-            adminLink.addEventListener('click', function (e) {
-                e.preventDefault();
-                openAdminPortal('footer_at_link');
-            });
-        }
-        if (copyrightEl) {
-            copyrightEl.addEventListener('click', function (e) {
-                if (!e.shiftKey || (!e.ctrlKey && !e.metaKey)) return;
-                e.preventDefault();
-                openAdminPortal('copyright_modifier_click');
-            });
-        }
         document.addEventListener('click', function (e) {
             if (!popup || popup.hidden) return;
             var wrap = document.getElementById('footer-log-info');
@@ -300,7 +244,6 @@
                 popup.hidden = true;
             }
         });
-        bindSecretAdminShortcut();
         updateLogLinkText();
     }
 

@@ -14,6 +14,19 @@ import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { handlePublicRunStatus } from './public-run-status'
 
 export const publicRoutes = new Hono<AppContext>()
+const HOME_LOAN_COMPARISON_RATE_DISCLOSURE = {
+  comparison_rate: {
+    loan_amount_aud: 150000,
+    term_years: 25,
+    statement:
+      'Comparison rates shown are benchmark indicators only and are commonly contextualized on a $150,000 loan over a 25 year term.',
+    limitations: [
+      'Actual cost varies by loan amount, term, and fee structure.',
+      'Ongoing usage-based costs are not fully represented in benchmark disclosure.',
+      'Always confirm current pricing and terms directly with the lender.',
+    ],
+  },
+}
 
 publicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
@@ -142,6 +155,7 @@ publicRoutes.get('/rates', async (c) => {
     returnedRows: result.data.length,
     sourceMix: result.source_mix,
     limited: result.total > result.data.length,
+    disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   return c.json({ ...result, meta })
@@ -179,6 +193,7 @@ publicRoutes.get('/export', async (c) => {
     returnedRows: data.length,
     sourceMix: source_mix,
     limited: total > data.length,
+    disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   if (format === 'csv') {
@@ -220,6 +235,7 @@ publicRoutes.get('/latest', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   return c.json({
@@ -257,6 +273,7 @@ publicRoutes.get('/latest-all', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   return c.json({
@@ -297,6 +314,7 @@ publicRoutes.get('/timeseries', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   return c.json({
@@ -397,6 +415,7 @@ publicRoutes.get('/export.csv', async (c) => {
       returnedRows: rows.length,
       sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
       limited: false,
+      disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
     })
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', `attachment; filename="timeseries-${mode}.csv"`)
@@ -421,6 +440,7 @@ publicRoutes.get('/export.csv', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: false,
+    disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   c.header('Content-Type', 'text/csv; charset=utf-8')

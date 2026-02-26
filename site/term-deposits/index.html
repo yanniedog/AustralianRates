@@ -44,7 +44,6 @@
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
-            <a href="../admin/" class="admin-link">Admin</a>
         </div>
     </header>
     <div class="bg-layer" aria-hidden="true"></div>
@@ -69,8 +68,6 @@
                     <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
                     <span class="hero-stat" id="stat-cash-rate"></span>
                     <span class="hero-stat" id="stat-records" title="Total term deposit rate records">Records: <strong>...</strong></span>
-                    <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
-                    <span id="trigger-status" class="hint"></span>
                 </div>
                 <p class="hero-note">Track term and tier movements with product-level time series anchored by <code>product_key</code>.</p>
             </div>
@@ -93,6 +90,18 @@
             HSBC, UBank, St. George, Bank of Melbourne, Bank of Queensland (BOQ), and Great Southern Bank.
             Rates are collected daily from official Consumer Data Right (CDR) feeds and cover terms from
             1 month to 5 years across different deposit amounts and interest payment frequencies.</p>
+        </section>
+
+        <section class="panel mode-panel" aria-label="Workspace mode">
+            <div class="mode-switch" role="group" aria-label="Select view mode">
+                <button id="mode-consumer" class="mode-btn active" type="button" aria-pressed="true">Consumer</button>
+                <button id="mode-analyst" class="mode-btn" type="button" aria-pressed="false">Analyst</button>
+            </div>
+            <p class="mode-note">Consumer mode shows guided comparison. Analyst mode exposes full filtering, pivoting, and charting controls.</p>
+        </section>
+
+        <section class="panel quick-compare" aria-label="Quick compare summary">
+            <div id="quick-compare-cards" class="quick-compare-cards"></div>
         </section>
 
         <section class="workspace" aria-label="Interactive data workspace">
@@ -244,7 +253,6 @@
     <script src="../ar-explorer.js"></script>
     <script src="../ar-pivot.js"></script>
     <script src="../ar-charts.js"></script>
-    <script src="../ar-admin.js"></script>
     <script src="../ar-refresh.js"></script>
     <script src="../ar-export.js"></script>
     <script src="../app.js"></script>

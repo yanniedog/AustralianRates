@@ -40,7 +40,13 @@ async function runTests() {
         viewport: { width: 1920, height: 1080 }
     });
     const page = await context.newPage();
-    const baseOrigin = new URL(TEST_URL).origin;
+    const testUrlObj = new URL(TEST_URL);
+    const baseOrigin = testUrlObj.origin;
+    const sharedQuery = testUrlObj.search || '';
+    const withSharedQuery = (path) => {
+        if (!sharedQuery) return baseOrigin + path;
+        return baseOrigin + path + sharedQuery;
+    };
     
     const fs = require('fs');
     if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -180,6 +186,39 @@ async function runTests() {
         }
     }
 
+    async function verifyNoPublicAdminSurface(label) {
+        const adminLinks = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('a[href], [data-admin], .admin-link, .admin-entry, .footer-admin-at'))
+                .map((el) => {
+                    const href = (el.tagName === 'A') ? String(el.getAttribute('href') || '') : '';
+                    return href;
+                })
+                .filter((href) => href.includes('/admin') || href === 'admin/' || href === '../admin/');
+        }).catch(() => []);
+
+        if (adminLinks.length === 0) {
+            results.passed.push(`✓ ${label}: no discoverable public admin links`);
+        } else {
+            results.failed.push(`✗ ${label}: public admin links are still present (${adminLinks.join(', ')})`);
+        }
+
+        const beforeUrl = page.url();
+        await page.keyboard.down('Control');
+        await page.keyboard.down('Alt');
+        await page.keyboard.down('Shift');
+        await page.keyboard.press('A');
+        await page.keyboard.up('Shift');
+        await page.keyboard.up('Alt');
+        await page.keyboard.up('Control');
+        await page.waitForTimeout(250);
+        const afterUrl = page.url();
+        if (afterUrl === beforeUrl) {
+            results.passed.push(`✓ ${label}: no public keyboard shortcut navigates to admin`);
+        } else {
+            results.failed.push(`✗ ${label}: keyboard shortcut changed URL unexpectedly (${afterUrl})`);
+        }
+    }
+
     async function verifyNoScriptFallback(url, label, apiBasePath) {
         try {
             const res = await fetch(url, { redirect: 'follow' });
@@ -214,7 +253,7 @@ async function runTests() {
         ];
 
         for (const legal of pages) {
-            const url = baseOrigin + legal.path;
+            const url = withSharedQuery(legal.path);
             const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
             const title = await page.title();
             const bodyText = await page.textContent('body').catch(() => '');
@@ -389,13 +428,11 @@ async function runTests() {
             results.failed.push('✗ Records stat not populated');
         }
         
-        // Check Rates Now button
-        const buttonExists = await page.locator('#trigger-run').isVisible();
-        if (buttonExists) {
-            const buttonText = await page.textContent('#trigger-run');
-            results.passed.push(`✓ "Check Rates Now" button visible: "${buttonText}"`);
+        const triggerButtonCount = await page.locator('#trigger-run').count();
+        if (triggerButtonCount === 0) {
+            results.passed.push('✓ Public trigger button removed from homepage');
         } else {
-            results.failed.push('✗ "Check Rates Now" button not found');
+            results.failed.push('✗ Public trigger button still present on homepage');
         }
         
         await page.screenshot({ 
@@ -438,34 +475,24 @@ async function runTests() {
         await verifyClientLogIsRich('Homepage', 5);
         await verifyFooterLegalLinks('Homepage');
         await verifyNoScriptFallback(TEST_URL, 'Homepage', '/api/home-loan-rates');
+        await verifyNoPublicAdminSurface('Homepage');
 
         // Test 5: Tab buttons
         console.log('\nTest 5: Checking tab buttons...');
         
         const tabExplorer = await page.textContent('#tab-explorer');
-        const tabPivot = await page.textContent('#tab-pivot');
-        const tabCharts = await page.textContent('#tab-charts');
-        
-        const tabsVisible = [
-            { name: 'Rate Explorer', text: tabExplorer, id: '#tab-explorer' },
-            { name: 'Pivot Table', text: tabPivot, id: '#tab-pivot' },
-            { name: 'Chart Builder', text: tabCharts, id: '#tab-charts' }
-        ];
-        
-        let allTabsCorrect = true;
-        tabsVisible.forEach(tab => {
-            if (tab.text === tab.name) {
-                console.log(`  ✓ ${tab.name} tab visible`);
-            } else {
-                console.log(`  ✗ ${tab.name} tab incorrect: "${tab.text}"`);
-                allTabsCorrect = false;
-            }
-        });
-        
-        if (allTabsCorrect) {
-            results.passed.push('✓ All three tab buttons visible with correct text');
+        const tabPivotVisible = await page.locator('#tab-pivot').isVisible().catch(() => false);
+        const tabChartsVisible = await page.locator('#tab-charts').isVisible().catch(() => false);
+
+        if (tabExplorer === 'Rate Explorer') {
+            results.passed.push('PASS Rate Explorer tab text is correct');
         } else {
-            results.failed.push('✗ Some tab buttons have incorrect text');
+            results.failed.push('FAIL Rate Explorer tab incorrect: "' + tabExplorer + '"');
+        }
+        if (!tabPivotVisible && !tabChartsVisible) {
+            results.passed.push('PASS Pivot/Chart tabs are hidden in consumer mode');
+        } else {
+            results.failed.push('FAIL Pivot/Chart tabs should be hidden in consumer mode');
         }
         
         // Test 6: Rate Explorer active by default
@@ -479,7 +506,52 @@ async function runTests() {
         } else {
             results.failed.push('✗ Rate Explorer is not the default active tab');
         }
-        
+        // Test 6b: Consumer mode defaults and analyst toggle
+        console.log('\nTest 6b: Checking consumer/analyst mode toggle...');
+        const modeButtonsVisible = await page.locator('#mode-consumer').isVisible().catch(() => false)
+            && await page.locator('#mode-analyst').isVisible().catch(() => false);
+        if (modeButtonsVisible) {
+            results.passed.push('✓ Consumer/Analyst mode buttons are visible');
+        } else {
+            results.failed.push('✗ Consumer/Analyst mode buttons missing');
+        }
+
+        const consumerPressed = await page.getAttribute('#mode-consumer', 'aria-pressed').catch(() => 'false');
+        if (consumerPressed === 'true') {
+            results.passed.push('✓ Consumer mode is active by default');
+        } else {
+            results.failed.push('✗ Consumer mode is not active by default');
+        }
+
+        const pivotHiddenByDefault = await page.locator('#tab-pivot').isHidden().catch(() => false);
+        const chartsHiddenByDefault = await page.locator('#tab-charts').isHidden().catch(() => false);
+        if (pivotHiddenByDefault && chartsHiddenByDefault) {
+            results.passed.push('✓ Pivot/Chart tabs hidden in consumer mode');
+        } else {
+            results.failed.push('✗ Pivot/Chart tabs should be hidden in consumer mode');
+        }
+
+        await page.click('#mode-analyst');
+        await page.waitForTimeout(500);
+        const pivotVisibleAnalyst = await page.locator('#tab-pivot').isVisible().catch(() => false);
+        const chartsVisibleAnalyst = await page.locator('#tab-charts').isVisible().catch(() => false);
+        if (pivotVisibleAnalyst && chartsVisibleAnalyst) {
+            results.passed.push('✓ Analyst mode reveals Pivot/Chart tabs');
+        } else {
+            results.failed.push('✗ Analyst mode did not reveal Pivot/Chart tabs');
+        }
+
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#main-content', { timeout: 10000 });
+        const analystPersisted = await page.getAttribute('#mode-analyst', 'aria-pressed').catch(() => 'false');
+        if (analystPersisted === 'true') {
+            results.passed.push('✓ Analyst mode selection persists across reload');
+        } else {
+            results.failed.push('✗ Analyst mode did not persist across reload');
+        }
+
+        await page.click('#mode-consumer');
+        await page.waitForTimeout(300);
         // Test 7: Filter bar dropdowns
         console.log('\nTest 7: Checking filter bar...');
         
@@ -488,8 +560,6 @@ async function runTests() {
             { id: '#filter-security', name: 'Purpose' },
             { id: '#filter-repayment', name: 'Repayment' },
             { id: '#filter-structure', name: 'Structure' },
-            { id: '#filter-lvr', name: 'LVR' },
-            { id: '#filter-feature', name: 'Feature' },
             { id: '#filter-start-date', name: 'From date' },
             { id: '#filter-end-date', name: 'To date' }
         ];
@@ -506,27 +576,35 @@ async function runTests() {
         }
         
         if (allFiltersVisible) {
-            results.passed.push('✓ All filter dropdowns visible');
+            results.passed.push('✓ Consumer-mode key filters visible');
         } else {
             results.failed.push('✗ Some filter dropdowns missing');
         }
-        
+
+        const lvrHidden = await page.locator('#filter-lvr').isHidden().catch(() => false);
+        const featureHidden = await page.locator('#filter-feature').isHidden().catch(() => false);
+        if (lvrHidden && featureHidden) {
+            results.passed.push('✓ Advanced filters hidden in consumer mode');
+        } else {
+            results.failed.push('✗ Advanced filters should be hidden in consumer mode');
+        }
+
         // Check checkbox and buttons
         const includeManualVisible = await page.locator('#filter-include-manual').isVisible();
         const autoRefreshVisible = await page.locator('#refresh-interval').isVisible();
         const applyFiltersVisible = await page.locator('#apply-filters').isVisible();
         const downloadFormatVisible = await page.locator('#download-format').isVisible();
         
-        if (includeManualVisible) {
-            results.passed.push('✓ "Include manual runs" checkbox visible');
+        if (!includeManualVisible) {
+            results.passed.push('✓ "Include manual runs" checkbox hidden in consumer mode');
         } else {
-            results.failed.push('✗ "Include manual runs" checkbox not found');
+            results.failed.push('✗ "Include manual runs" checkbox should be hidden in consumer mode');
         }
         
-        if (autoRefreshVisible) {
-            results.passed.push('✓ Auto-refresh selector visible');
+        if (!autoRefreshVisible) {
+            results.passed.push('✓ Auto-refresh selector hidden in consumer mode');
         } else {
-            results.failed.push('✗ Auto-refresh selector not found');
+            results.failed.push('✗ Auto-refresh selector should be hidden in consumer mode');
         }
         
         if (applyFiltersVisible) {
@@ -581,6 +659,8 @@ async function runTests() {
         
         // Test 9: Check Rate Explorer table
         console.log('\nTest 9: Checking Rate Explorer table data...');
+        await page.click('#mode-analyst');
+        await page.waitForTimeout(700);
         
         await page.waitForTimeout(3000); // Wait for table to load
         
@@ -677,6 +757,13 @@ async function runTests() {
             console.log(`  Disclaimer: ${disclaimer.substring(0, 100)}...`);
         } else {
             results.failed.push('✗ Disclaimer text not found or incorrect');
+        }
+
+        const comparisonDisclosure = await page.textContent('#comparison-rate-disclosure').catch(() => '');
+        if (comparisonDisclosure && comparisonDisclosure.includes('$150,000') && comparisonDisclosure.toLowerCase().includes('25 year')) {
+            results.passed.push('✓ Home-loan comparison-rate disclosure is visible');
+        } else {
+            results.failed.push('✗ Home-loan comparison-rate disclosure missing or incomplete');
         }
         
         // Test 10b: Accessibility - skip link and tab semantics
@@ -803,70 +890,40 @@ async function runTests() {
             if (el) el.value = '';
         });
         
-        // Test 10i: Check Rates Now - POST to trigger-run
-        console.log('\nTest 10i: Check Rates Now button...');
-        let triggerRunPosted = false;
-        page.on('request', req => {
-            if (req.method() === 'POST' && req.url().includes('/trigger-run')) triggerRunPosted = true;
-        });
-        await page.click('#trigger-run');
-        await page.waitForTimeout(3000);
-        const triggerStatusText = await page.textContent('#trigger-status').catch(() => '');
-        if (triggerRunPosted) {
-            results.passed.push('✓ Check Rates Now sends POST to trigger-run');
-        } else {
-            results.failed.push('✗ Check Rates Now did not send POST to trigger-run');
-        }
-        if (triggerStatusText && triggerStatusText.length > 0) {
-            results.passed.push('✓ Trigger status text updated');
-        } else {
-            results.warnings.push('⚠ Trigger status text empty');
-        }
-
-        // Test 10i2: Check Rates Now on Savings and Term deposits - POST to trigger-run and no "Run could not be started"
-        const savingsUrl = baseOrigin + '/savings/';
-        const termDepositsUrl = baseOrigin + '/term-deposits/';
-        for (const { name, url } of [{ name: 'Savings', url: savingsUrl }, { name: 'Term deposits', url: termDepositsUrl }]) {
-            console.log('\nTest 10i2: Check Rates Now on ' + name + '...');
-            let sectionTriggerPosted = false;
-            page.removeAllListeners('request');
-            page.on('request', req => {
-                if (req.method() === 'POST' && req.url().includes('/trigger-run')) sectionTriggerPosted = true;
-            });
+        // Test 10i: Section parity checks (Savings + Term deposits)
+        const savingsUrl = withSharedQuery('/savings/');
+        const termDepositsUrl = withSharedQuery('/term-deposits/');
+        for (const { name, url, apiBasePath } of [
+            { name: 'Savings', url: savingsUrl, apiBasePath: '/api/savings-rates' },
+            { name: 'Term deposits', url: termDepositsUrl, apiBasePath: '/api/term-deposit-rates' },
+        ]) {
+            console.log('\nTest 10i: Section checks for ' + name + '...');
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            await page.waitForSelector('#trigger-run', { timeout: 8000 });
+            await page.waitForSelector('#main-content', { timeout: 8000 });
             await page.waitForTimeout(1500);
             await verifyFooterDeployStatus(name);
             await verifyFooterLogControls(name);
             await verifyFooterLegalLinks(name);
-            if (name === 'Savings') {
-                await verifyNoScriptFallback(url, 'Savings', '/api/savings-rates');
+            await verifyNoScriptFallback(url, name, apiBasePath);
+            await verifyNoPublicAdminSurface(name);
+
+            const hasTrigger = await page.locator('#trigger-run').count();
+            if (hasTrigger === 0) {
+                results.passed.push('PASS ' + name + ': public trigger button removed');
             } else {
-                await verifyNoScriptFallback(url, 'Term deposits', '/api/term-deposit-rates');
+                results.failed.push('FAIL ' + name + ': public trigger button still present');
             }
+
             const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
             verifyMetadataHeaders(sectionHeaders, name);
-            await page.click('#trigger-run');
-            await page.waitForTimeout(4000);
-            const sectionStatus = await page.textContent('#trigger-status').catch(() => '');
-            const isFailure = sectionStatus && sectionStatus.includes('Run could not be started');
-            if (sectionTriggerPosted && !isFailure) {
-                results.passed.push('✓ Check Rates Now on ' + name + ' sends POST and succeeds');
-            } else if (!sectionTriggerPosted) {
-                results.failed.push('✗ Check Rates Now on ' + name + ' did not send POST to trigger-run');
-            } else if (isFailure) {
-                results.warnings.push('⚠ Check Rates Now on ' + name + ': run could not be started (API may not be configured for this section)');
-                results.passed.push('✓ Check Rates Now on ' + name + ' sends POST (backend declined run)');
-            } else {
-                results.passed.push('✓ Check Rates Now on ' + name + ' (POST sent, status: ' + (sectionStatus ? sectionStatus.slice(0, 40) : 'ok') + ')');
-            }
         }
         await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForSelector('#main-content', { timeout: 5000 });
         await page.waitForTimeout(1000);
-
         // Test 10j: URL state - tab and params sync
         console.log('\nTest 10j: URL state sync...');
+        await page.click('#mode-analyst');
+        await page.waitForTimeout(400);
         await page.click('#tab-pivot');
         await page.waitForTimeout(500);
         const urlAfterTab = await page.url();
@@ -907,7 +964,7 @@ async function runTests() {
             if (noOverflow) {
                 results.passed.push(`✓ Viewport ${vp.w}x${vp.h} (${vp.name}): no horizontal overflow`);
             } else {
-                results.warnings.push(`⚠ Viewport ${vp.w}x${vp.h}: horizontal overflow (scrollWidth > ${vp.w})`);
+                results.failed.push(`✗ Viewport ${vp.w}x${vp.h}: horizontal overflow (scrollWidth > ${vp.w})`);
             }
         }
         
@@ -1013,3 +1070,6 @@ runTests().catch(error => {
     console.error('Failed to run tests:', error);
     process.exit(1);
 });
+
+
+

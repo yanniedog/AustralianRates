@@ -5,12 +5,16 @@
     var dom = window.AR.dom;
     var config = window.AR.config;
     var filters = window.AR.filters;
+    var state = window.AR.state;
     var utils = window.AR.utils;
     var timeUtils = window.AR.time || {};
     var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
+    var isAnalystMode = state && typeof state.isAnalystMode === 'function'
+        ? state.isAnalystMode
+        : function () { return false; };
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils && utils.esc ? utils.esc : window._arEsc;
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
@@ -61,5 +65,106 @@
         }
     }
 
-    window.AR.hero = { loadHeroStats: loadHeroStats };
+    function getFiniteNumbers(rows, field) {
+        var values = [];
+        for (var i = 0; i < rows.length; i++) {
+            var n = Number(rows[i] && rows[i][field]);
+            if (Number.isFinite(n)) values.push(n);
+        }
+        return values;
+    }
+
+    function median(values) {
+        if (!values.length) return null;
+        var sorted = values.slice().sort(function (a, b) { return a - b; });
+        var mid = Math.floor(sorted.length / 2);
+        if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+        return sorted[mid];
+    }
+
+    function renderQuickCompareCards(rows) {
+        if (!els.quickCompareCards) return;
+
+        if (isAnalystMode()) {
+            els.quickCompareCards.innerHTML = '';
+            return;
+        }
+
+        if (!rows.length) {
+            els.quickCompareCards.innerHTML = '<p class="quick-empty">No matching products for current filters.</p>';
+            return;
+        }
+
+        var interestRates = getFiniteNumbers(rows, 'interest_rate');
+        var bestRate = interestRates.length ? Math.min.apply(null, interestRates) : null;
+        var medRate = median(interestRates);
+
+        var cards = [
+            {
+                label: 'Best headline rate',
+                value: bestRate == null ? '-' : pct(bestRate),
+                note: 'Lowest current interest rate in filtered results',
+            },
+            {
+                label: section === 'home-loans' ? 'Median mortgage rate' : 'Median rate',
+                value: medRate == null ? '-' : pct(medRate),
+                note: 'Middle rate across visible product set',
+            },
+            {
+                label: 'Tracked products',
+                value: String(rows.length),
+                note: 'Current products matching your filters',
+            },
+        ];
+
+        if (section === 'home-loans') {
+            var comparisonRates = getFiniteNumbers(rows, 'comparison_rate');
+            var bestComparison = comparisonRates.length ? Math.min.apply(null, comparisonRates) : null;
+            cards[1] = {
+                label: 'Best comparison rate',
+                value: bestComparison == null ? '-' : pct(bestComparison),
+                note: 'Lowest comparison rate where disclosed',
+            };
+        }
+
+        els.quickCompareCards.innerHTML = cards.map(function (card) {
+            return '' +
+                '<article class="quick-card">' +
+                    '<p class="quick-label">' + esc(card.label) + '</p>' +
+                    '<p class="quick-value">' + esc(card.value) + '</p>' +
+                    '<p class="quick-note">' + esc(card.note) + '</p>' +
+                '</article>';
+        }).join('');
+    }
+
+    async function loadQuickCompare() {
+        if (!els.quickCompareCards) return;
+        if (isAnalystMode()) {
+            renderQuickCompareCards([]);
+            return;
+        }
+
+        clientLog('info', 'Quick compare load started', { section: section });
+        try {
+            var params = buildFilterParams();
+            params.limit = '200';
+            var query = new URLSearchParams(params);
+            var response = await fetch(apiBase + '/latest?' + query.toString());
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
+            var data = await response.json();
+            var rows = data && Array.isArray(data.rows) ? data.rows : [];
+            renderQuickCompareCards(rows);
+            clientLog('info', 'Quick compare load complete', { count: rows.length });
+        } catch (err) {
+            clientLog('error', 'Quick compare load failed', {
+                message: err && err.message ? err.message : String(err),
+            });
+            els.quickCompareCards.innerHTML = '<p class="quick-empty">Quick compare is unavailable right now.</p>';
+        }
+    }
+
+    window.AR.hero = {
+        loadHeroStats: loadHeroStats,
+        loadQuickCompare: loadQuickCompare,
+    };
 })();

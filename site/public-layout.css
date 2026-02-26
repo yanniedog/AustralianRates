@@ -1,4 +1,9 @@
 /* Public dashboard layout and component styling (scoped to .ar-public). */
+.ar-public {
+    width: 100%;
+    max-width: 100%;
+}
+
 .ar-public .site-header {
     border-bottom: 1px solid var(--ar-stroke);
     background: var(--ar-header-bg);
@@ -140,10 +145,99 @@
 .ar-public button.small { font-size: 0.8rem; padding: 8px 11px; }
 .ar-public button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
-.ar-public .workspace { display: grid; gap: 12px; }
+.ar-public .workspace {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
+.ar-public .workspace > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ar-public .mode-panel {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+}
+
+.ar-public .mode-switch {
+    display: inline-flex;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--ar-pill-border);
+    border-radius: 999px;
+    background: var(--ar-pill-bg);
+}
+
+.ar-public .mode-btn {
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    color: var(--ar-muted);
+    background: transparent;
+}
+
+.ar-public .mode-btn.active {
+    color: #fff;
+    background: linear-gradient(145deg, var(--ar-accent), var(--ar-accent-2));
+}
+
+.ar-public .mode-note {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.8rem;
+}
+
+.ar-public .quick-compare-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ar-public .quick-card {
+    border: 1px solid var(--ar-stroke);
+    border-radius: 12px;
+    padding: 10px;
+    background: var(--ar-surface-solid);
+}
+
+.ar-public .quick-label {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.ar-public .quick-value {
+    margin: 6px 0 4px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--ar-strong);
+}
+
+.ar-public .quick-note {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+.ar-public .quick-empty {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.85rem;
+}
 
 .ar-public .tabs {
     display: flex;
+    flex-direction: row;
     flex-wrap: wrap;
     gap: 8px;
     padding: 12px;
@@ -202,6 +296,7 @@
 .ar-public .filters-grid input:hover { border-color: var(--ar-stroke-strong); }
 
 .ar-public .filter-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ar-public .filters-grid .mode-hidden { display: none !important; }
 
 .ar-public .download-label {
     font-size: 0.76rem;
@@ -233,7 +328,16 @@
     line-height: 1.55;
 }
 
-.ar-public .admin-entry { color: var(--ar-muted); }
+.ar-public .comparison-rate-disclosure {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.79rem;
+    line-height: 1.5;
+}
+
+.ar-public.ui-mode-analyst .quick-compare {
+    display: none;
+}
 
 .ar-public .site-footer {
     border-top: 1px solid var(--ar-foot-line);
@@ -262,6 +366,9 @@
     .ar-public .filters-grid { grid-template-columns: 1fr 1fr; }
     .ar-public .filter-actions { grid-column: 1 / -1; }
     .ar-public .site-header-inner { padding: 10px 12px; height: auto; }
+    .ar-public .site-nav { margin-left: auto; gap: 4px; }
+    .ar-public .site-nav-github { display: none; }
+    .ar-public .quick-compare-cards { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {

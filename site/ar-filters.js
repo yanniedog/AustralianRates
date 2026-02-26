@@ -6,12 +6,15 @@
     var config = window.AR.config;
     var state = window.AR.state;
     var sc = window.AR.sectionConfig || {};
+    var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
     var filterElMap = dom && dom.filterElMap ? dom.filterElMap : {};
     var tabState = state && state.state ? state.state : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var apiOverride = config && config.apiOverride ? config.apiOverride : null;
-    var isAdmin = config && config.isAdmin ? config.isAdmin : false;
+    var isAnalystMode = state && typeof state.isAnalystMode === 'function'
+        ? state.isAnalystMode
+        : function () { return false; };
     var utils = window.AR.utils || {};
     var esc = utils.esc || window._arEsc;
     var formatFilterValue = utils.formatFilterValue || function (_field, value) { return String(value == null ? '' : value); };
@@ -19,6 +22,13 @@
 
     var filterFields = sc.filterFields || [];
     var filterApiMap = sc.filterApiMap || {};
+    var consumerFilterIds = getConsumerFilterIds();
+
+    function getConsumerFilterIds() {
+        if (section === 'savings') return ['filter-bank', 'filter-account-type', 'filter-rate-type'];
+        if (section === 'term-deposits') return ['filter-bank', 'filter-term-months', 'filter-deposit-tier'];
+        return ['filter-bank', 'filter-security', 'filter-repayment', 'filter-structure'];
+    }
 
     function fillSelect(el, values, fieldName) {
         if (!el) return;
@@ -36,17 +46,66 @@
         return filterElMap[fieldId] || document.getElementById(fieldId) || null;
     }
 
+    function setControlVisible(el, visible) {
+        if (!el) return;
+        var wrap = el.closest('label') || el.closest('.toggle-label') || el.closest('.filter-actions');
+        if (!wrap) return;
+        wrap.classList.toggle('mode-hidden', !visible);
+    }
+
+    function setFieldVisibleById(fieldId, visible) {
+        setControlVisible(getFilterEl(fieldId), visible);
+    }
+
+    function isFieldVisibleInMode(fieldId) {
+        return isAnalystMode() || consumerFilterIds.indexOf(fieldId) >= 0;
+    }
+
+    function resetAdvancedFiltersForConsumer() {
+        for (var i = 0; i < filterFields.length; i++) {
+            var field = filterFields[i];
+            if (consumerFilterIds.indexOf(field.id) >= 0) continue;
+            var el = getFilterEl(field.id);
+            if (el) el.value = '';
+        }
+        if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
+        if (els.filterMode) els.filterMode.value = 'all';
+        if (els.refreshInterval) els.refreshInterval.value = '60';
+    }
+
+    function applyUiMode() {
+        var analyst = isAnalystMode();
+        if (!analyst) resetAdvancedFiltersForConsumer();
+
+        for (var i = 0; i < filterFields.length; i++) {
+            var field = filterFields[i];
+            setFieldVisibleById(field.id, isFieldVisibleInMode(field.id));
+        }
+
+        if (els.filterMode) setControlVisible(els.filterMode, analyst);
+        if (els.filterIncludeManual) setControlVisible(els.filterIncludeManual, analyst);
+        if (els.refreshInterval) setControlVisible(els.refreshInterval, analyst);
+
+        clientLog('info', 'Filter mode applied', {
+            uiMode: analyst ? 'analyst' : 'consumer',
+            section: section,
+        });
+    }
+
     function buildFilterParams() {
         var p = {};
         for (var i = 0; i < filterFields.length; i++) {
             var field = filterFields[i];
+            if (!isFieldVisibleInMode(field.id)) continue;
             var el = getFilterEl(field.id);
             if (el && el.value) p[field.param] = el.value;
         }
         if (els.filterStartDate && els.filterStartDate.value) p.start_date = els.filterStartDate.value;
         if (els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
-        if (els.filterMode && els.filterMode.value) p.mode = els.filterMode.value;
-        if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
+        if (isAnalystMode()) {
+            if (els.filterMode && els.filterMode.value) p.mode = els.filterMode.value;
+            if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
+        }
         return p;
     }
 
@@ -55,16 +114,17 @@
         q.set('tab', tabState.activeTab);
         for (var i = 0; i < filterFields.length; i++) {
             var field = filterFields[i];
+            if (!isFieldVisibleInMode(field.id)) continue;
             var el = getFilterEl(field.id);
             if (el && el.value) q.set(field.url, el.value);
         }
         if (els.filterStartDate && els.filterStartDate.value) q.set('start_date', els.filterStartDate.value);
         if (els.filterEndDate && els.filterEndDate.value) q.set('end_date', els.filterEndDate.value);
-        if (els.filterMode && els.filterMode.value && els.filterMode.value !== 'all') q.set('mode', els.filterMode.value);
-        if (els.filterIncludeManual && els.filterIncludeManual.checked) q.set('include_manual', 'true');
+        if (isAnalystMode() && els.filterMode && els.filterMode.value && els.filterMode.value !== 'all') q.set('mode', els.filterMode.value);
+        if (isAnalystMode() && els.filterIncludeManual && els.filterIncludeManual.checked) q.set('include_manual', 'true');
         if (els.refreshInterval && els.refreshInterval.value !== '60') q.set('refresh_interval', els.refreshInterval.value);
         if (apiOverride) q.set('apiBase', apiOverride);
-        if (isAdmin) q.set('admin', 'true');
+        if (isAnalystMode()) q.set('view', 'analyst');
         window.history.replaceState(null, '', window.location.pathname + '?' + q.toString());
     }
 
@@ -135,6 +195,7 @@
                 bankCount: Array.isArray(f.banks) ? f.banks.length : 0,
             });
             restoreUrlState();
+            applyUiMode();
         } catch (err) {
             clientLog('error', 'Filter options load failed', {
                 message: err && err.message ? err.message : String(err),
@@ -147,6 +208,7 @@
         buildFilterParams: buildFilterParams,
         syncUrlState: syncUrlState,
         restoreUrlState: restoreUrlState,
+        applyUiMode: applyUiMode,
         loadFilters: loadFilters,
     };
 })();

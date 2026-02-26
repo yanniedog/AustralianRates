@@ -104,8 +104,6 @@
                     <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
                     <span class="hero-stat" id="stat-cash-rate" title="Current RBA official cash rate">RBA Cash Rate: <strong>...</strong></span>
                     <span class="hero-stat" id="stat-records" title="Total rate records in database">Records: <strong>...</strong></span>
-                    <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
-                    <span id="trigger-status" class="hint"></span>
                 </div>
                 <p class="hero-note">Rate-series analysis tracks each product longitudinally using the canonical <code>product_key</code>.</p>
             </div>
@@ -130,6 +128,26 @@
             investment loans, principal-and-interest and interest-only repayments, across all LVR tiers from
             under 60% to 95%. Use the Rate Explorer to browse and sort, the Pivot Table to aggregate and
             cross-tabulate, or the Chart Builder to visualise trends over time.</p>
+        </section>
+
+        <section class="panel mode-panel" aria-label="Workspace mode">
+            <div class="mode-switch" role="group" aria-label="Select view mode">
+                <button id="mode-consumer" class="mode-btn active" type="button" aria-pressed="true">Consumer</button>
+                <button id="mode-analyst" class="mode-btn" type="button" aria-pressed="false">Analyst</button>
+            </div>
+            <p class="mode-note">Consumer mode shows guided comparison. Analyst mode exposes full filtering, pivoting, and charting controls.</p>
+        </section>
+
+        <section class="panel quick-compare" aria-label="Quick compare summary">
+            <div id="quick-compare-cards" class="quick-compare-cards"></div>
+        </section>
+
+        <section class="panel" aria-label="Comparison rate disclosure">
+            <p id="comparison-rate-disclosure" class="comparison-rate-disclosure">
+                Comparison rates are shown where lenders disclose them. For standard comparison, Australian lending markets use a
+                benchmark example based on a loan amount of <strong>$150,000</strong> over a <strong>25 year</strong> term. Your
+                actual total cost will vary based on loan size, term, fees, and product usage.
+            </p>
         </section>
 
         <section class="workspace" aria-label="Interactive data workspace">
@@ -262,29 +280,14 @@
                     <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank. Filter by one bank to compare specific products at that bank.</p>
                 </div>
             </section>
-
-            <section id="panel-admin" class="tab-panel" hidden>
-                <div class="panel panel-wide">
-                    <div class="panel-head">
-                        <h2>Admin Run Status</h2>
-                        <button id="refresh-runs" type="button" class="small">Refresh</button>
-                    </div>
-                    <label class="token-row" for="admin-token">
-                        <span>Admin Token</span>
-                        <input id="admin-token" type="password" placeholder="Paste ADMIN_API_TOKEN">
-                    </label>
-                    <pre id="runs-output" class="output">No data yet.</pre>
-                </div>
-            </section>
         </section>
     </main>
 
     <p class="disclaimer">
         This site provides general information only and does not constitute financial advice.
         Rates are sourced from publicly available CDR feeds and may include both scheduled and manual verification runs.
-        Source and quality labels are shown in the data outputs.
+        Source and quality labels are shown in data outputs.
         Always confirm rates directly with the lender before making financial decisions.
-        <span class="admin-entry-wrap" aria-hidden="true"><a href="admin/" class="admin-entry" title="ops">&#8231;</a></span>
     </p>
 
     <script>window.AR_SECTION = 'home-loans';</script>
@@ -307,7 +310,6 @@
     <script src="ar-explorer.js"></script>
     <script src="ar-pivot.js"></script>
     <script src="ar-charts.js"></script>
-    <script src="ar-admin.js"></script>
     <script src="ar-refresh.js"></script>
     <script src="ar-export.js"></script>
     <script src="app.js"></script>

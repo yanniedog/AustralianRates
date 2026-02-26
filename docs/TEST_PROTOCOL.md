@@ -24,11 +24,13 @@ Configuration:
 |------|----------------|-----|
 | Viewports | No horizontal overflow at 375, 768, 1920 widths | Playwright viewport + screenshots + `scrollWidth <= viewport` |
 | Hero and summary | Eyebrow, heading, subtitle, stats, SEO summary | Assert visibility/text for hero and summary nodes |
+| Mode controls | Consumer default and analyst toggle behaviour | Assert mode buttons, persistence, and tab visibility changes |
 | Tabs and panels | Tab labels and active panel switching | Click tabs and assert panel `hidden`/active state |
 | Filters | Filter controls and download selector are visible | Assert required selectors exist |
 | Table | Tabulator renders and rows load | Wait for table and rows |
 | Pivot/charts | Controls and output containers render | Assert panel controls and content containers |
 | Footer | Disclaimer plus legal links visible | Assert disclaimer text and `About/Privacy/Terms/Contact` links |
+| Admin isolation | No discoverable public admin links/shortcuts | Assert no admin links in public headers/footers/disclaimers |
 | Legal pages | Each legal page is reachable and distinct | Visit `/about/`, `/privacy/`, `/terms/`, `/contact/` and check title/content |
 | No-JS fallback | Noscript helper blocks exist in HTML | Fetch raw HTML and assert noscript + API link presence |
 
@@ -43,9 +45,10 @@ Script: `npm run test:homepage`
 | Load Pivot | Pivot output populates | Click load and assert output content |
 | Draw Chart | Chart output populates | Click draw and assert chart container content |
 | Download | Export request is triggered | Select CSV and detect export request/flow |
-| Check Rates Now | POST to `trigger-run` and status update | Assert request and status text |
+| Public trigger removal | No public manual-run trigger controls | Assert `#trigger-run` is absent on all public sections |
 | URL state | Tab/filter params persist in URL | Change tab/filter and verify URL + restore |
 | Footer links per section | Legal links visible on home/savings/term | Assert links on each section page |
+| Home-loan disclosure | Comparison-rate caveat is visible | Assert `$150,000` + `25 year` disclosure text is present |
 
 Script: `npm run test:homepage`
 

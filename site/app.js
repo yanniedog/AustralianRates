@@ -2,14 +2,12 @@
     'use strict';
 
     var dom = window.AR.dom;
-    var config = window.AR.config;
     var state = window.AR.state;
     var tabs = window.AR.tabs;
     var filters = window.AR.filters;
     var explorer = window.AR.explorer;
     var pivot = window.AR.pivot;
     var charts = window.AR.charts;
-    var admin = window.AR.admin;
     var refresh = window.AR.refresh;
     var exportModule = window.AR.export;
     var hero = window.AR.hero;
@@ -24,9 +22,30 @@
         activeTab: tabState.activeTab || 'explorer',
     });
 
-    if (config && config.isAdmin && els.panelAdmin) {
-        els.panelAdmin.hidden = false;
-        clientLog('info', 'Admin panel enabled from query string');
+    function setModeButtonState(mode) {
+        var consumerActive = mode === 'consumer';
+        if (els.modeConsumer) {
+            els.modeConsumer.classList.toggle('active', consumerActive);
+            els.modeConsumer.setAttribute('aria-pressed', String(consumerActive));
+        }
+        if (els.modeAnalyst) {
+            els.modeAnalyst.classList.toggle('active', !consumerActive);
+            els.modeAnalyst.setAttribute('aria-pressed', String(!consumerActive));
+        }
+    }
+
+    function applyUiMode(mode) {
+        var uiMode = String(mode || (state && state.getUiMode ? state.getUiMode() : 'consumer'));
+        document.body.classList.toggle('ui-mode-consumer', uiMode !== 'analyst');
+        document.body.classList.toggle('ui-mode-analyst', uiMode === 'analyst');
+        setModeButtonState(uiMode);
+
+        if (tabs && tabs.applyUiMode) tabs.applyUiMode();
+        if (filters && filters.applyUiMode) filters.applyUiMode();
+        if (explorer && explorer.applyUiMode) explorer.applyUiMode();
+        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
+
+        clientLog('info', 'UI mode applied', { mode: uiMode });
     }
 
     function applyFilters() {
@@ -36,6 +55,7 @@
         });
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
+        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'Filters changed -- click "Load Data for Pivot" to refresh.';
         }
@@ -64,36 +84,45 @@
     if (els.drawChart) els.drawChart.addEventListener('click', function () {
         if (charts && charts.drawChart) charts.drawChart();
     });
-    if (els.refreshRuns) els.refreshRuns.addEventListener('click', function () {
-        if (admin && admin.loadRuns) admin.loadRuns();
-    });
-    if (els.triggerRun) els.triggerRun.addEventListener('click', function () {
-        if (admin && admin.triggerManualRun) admin.triggerManualRun();
-    });
     if (els.filterIncludeManual) els.filterIncludeManual.addEventListener('change', applyFilters);
     if (els.filterMode) els.filterMode.addEventListener('change', applyFilters);
     if (els.refreshInterval) els.refreshInterval.addEventListener('change', function () {
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
     });
+    if (els.modeConsumer) els.modeConsumer.addEventListener('click', function () {
+        if (state && state.setUiMode) state.setUiMode('consumer');
+    });
+    if (els.modeAnalyst) els.modeAnalyst.addEventListener('click', function () {
+        if (state && state.setUiMode) state.setUiMode('analyst');
+    });
+
+    window.addEventListener('ar:ui-mode-changed', function (event) {
+        var mode = event && event.detail ? event.detail.mode : null;
+        applyUiMode(mode);
+    });
 
     if (tabs && tabs.bindTabListeners) tabs.bindTabListeners();
 
     if (filters && filters.loadFilters) {
         filters.loadFilters().then(function () {
-            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab);
+            applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
+            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
             clientLog('info', 'App init complete', { activeTab: tabState.activeTab || 'explorer' });
         }).catch(function (err) {
             clientLog('error', 'App init failed while loading filters', {
                 message: err && err.message ? err.message : String(err),
             });
-            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab);
+            applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
+            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
         });
     } else if (tabs && tabs.activateTab) {
-        tabs.activateTab(tabState.activeTab);
+        applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
+        tabs.activateTab(tabState.activeTab || 'explorer');
         clientLog('info', 'App init complete (no filter preload)', { activeTab: tabState.activeTab || 'explorer' });
     }
-    if (hero && hero.loadHeroStats) hero.loadHeroStats();
     if (explorer && explorer.initRateTable) explorer.initRateTable();
+    if (hero && hero.loadHeroStats) hero.loadHeroStats();
+    if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
     if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
 })();

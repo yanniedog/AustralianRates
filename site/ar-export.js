@@ -94,6 +94,22 @@
         var worksheet = window.XLSX.utils.json_to_sheet(rows);
         var workbook = window.XLSX.utils.book_new();
         window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Rates');
+
+        var disclosure = payload && payload.meta && payload.meta.disclosures
+            ? payload.meta.disclosures.comparison_rate
+            : null;
+        if (disclosure && typeof disclosure === 'object') {
+            var disclosureRows = [
+                { key: 'type', value: 'comparison_rate' },
+                { key: 'loan_amount_aud', value: disclosure.loan_amount_aud },
+                { key: 'term_years', value: disclosure.term_years },
+                { key: 'statement', value: disclosure.statement || '' },
+                { key: 'limitations', value: Array.isArray(disclosure.limitations) ? disclosure.limitations.join(' | ') : '' },
+            ];
+            var disclosureSheet = window.XLSX.utils.json_to_sheet(disclosureRows);
+            window.XLSX.utils.book_append_sheet(workbook, disclosureSheet, 'Disclosures');
+        }
+
         window.XLSX.writeFile(workbook, safeSectionLabel() + '-export.xlsx');
     }
 

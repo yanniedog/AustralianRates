@@ -15,6 +15,14 @@ export type ListMeta = {
     limited: boolean
   }
   generated_at: string
+  disclosures?: {
+    comparison_rate?: {
+      loan_amount_aud: number
+      term_years: number
+      statement: string
+      limitations: string[]
+    }
+  }
 }
 
 function safeNumber(value: unknown): number {
@@ -46,8 +54,9 @@ export function buildListMeta(input: {
   returnedRows: number
   sourceMix?: Partial<SourceMix> | null
   limited?: boolean
+  disclosures?: ListMeta['disclosures']
 }): ListMeta {
-  return {
+  const meta: ListMeta = {
     source_mode: input.sourceMode,
     source_mix: makeSourceMix(input.sourceMix),
     coverage: {
@@ -58,6 +67,21 @@ export function buildListMeta(input: {
     },
     generated_at: new Date().toISOString(),
   }
+
+  if (input.disclosures && input.disclosures.comparison_rate) {
+    meta.disclosures = {
+      comparison_rate: {
+        loan_amount_aud: Math.max(0, safeNumber(input.disclosures.comparison_rate.loan_amount_aud)),
+        term_years: Math.max(0, safeNumber(input.disclosures.comparison_rate.term_years)),
+        statement: String(input.disclosures.comparison_rate.statement || ''),
+        limitations: Array.isArray(input.disclosures.comparison_rate.limitations)
+          ? input.disclosures.comparison_rate.limitations.map((v) => String(v))
+          : [],
+      },
+    }
+  }
+
+  return meta
 }
 
 export function setCsvMetaHeaders(
@@ -74,4 +98,14 @@ export function setCsvMetaHeaders(
     JSON.stringify(meta.coverage),
   )
   c.header('X-AR-Generated-At', meta.generated_at)
+
+  const comparisonRate = meta.disclosures?.comparison_rate
+  if (comparisonRate) {
+    c.header(
+      'X-AR-Comparison-Rate-Basis',
+      `$${comparisonRate.loan_amount_aud} over ${comparisonRate.term_years} years`,
+    )
+    c.header('X-AR-Comparison-Rate-Statement', comparisonRate.statement)
+    c.header('X-AR-Comparison-Rate-Limitations', JSON.stringify(comparisonRate.limitations))
+  }
 }

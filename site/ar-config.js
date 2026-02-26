@@ -10,12 +10,10 @@
     var effectiveApiPath = sc.apiPath || pathApiPath || '/api/home-loan-rates';
     var apiBase = (apiOverride ? String(apiOverride).replace(/\/+$/, '') : '') ||
                   (window.location.origin + effectiveApiPath);
-    var isAdmin = params.get('admin') === 'true';
 
     window.AR.config = {
         params: params,
         apiOverride: apiOverride,
         apiBase: apiBase,
-        isAdmin: isAdmin,
     };
 })();

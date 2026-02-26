@@ -1,9 +1,11 @@
 /* Public dashboard data widgets: Tabulator, Pivot, and Chart (scoped). */
 .ar-public #rate-table {
     border-radius: 14px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     border: 1px solid var(--ar-stroke);
     background: var(--ar-surface-solid);
+    max-width: 100%;
 }
 
 .ar-public .tabulator {
@@ -12,6 +14,8 @@
     color: var(--ar-text) !important;
     font-family: var(--ar-font-ui) !important;
     font-size: 0.82rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
 }
 
 .ar-public .tabulator .tabulator-header {
@@ -132,6 +136,7 @@
     border-radius: 12px;
     background: var(--ar-surface-solid);
     padding: 10px;
+    max-width: 100%;
 }
 
 .ar-public .pivot-controls {
@@ -215,6 +220,7 @@
     border-radius: 12px;
     background: linear-gradient(180deg, var(--ar-surface-muted), var(--ar-surface-solid));
     overflow: hidden;
+    max-width: 100%;
 }
 
 .ar-public #chart-status {
