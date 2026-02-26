@@ -945,6 +945,27 @@ async function runTests() {
         } else {
             results.failed.push('✗ URL ?tab=pivot did not restore Pivot tab');
         }
+
+        // Test 10l: Shared link - view=analyst&tab=pivot restores analyst mode and Pivot tab (no reliance on localStorage)
+        console.log('\nTest 10l: URL view=analyst&tab=pivot (shared link)...');
+        await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForSelector('#main-content', { timeout: 5000 });
+        await page.click('#mode-consumer').catch(() => {});
+        await page.waitForTimeout(300);
+        const baseForView = (TEST_URL.includes('?') ? TEST_URL + '&' : TEST_URL.replace(/\/?$/, '') + '?');
+        const urlViewAnalystTabPivot = baseForView + 'view=analyst&tab=pivot';
+        await page.goto(urlViewAnalystTabPivot, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForSelector('#panel-pivot', { timeout: 8000 });
+        await page.waitForTimeout(1500);
+        const analystFromUrl = await page.locator('#panel-pivot').evaluate(el => !el.hidden);
+        const pivotTabActiveFromUrl = await page.locator('#tab-pivot').evaluate(el => el.classList.contains('active'));
+        const analystBtnActive = await page.locator('#mode-analyst').evaluate(el => el.classList.contains('active'));
+        if (analystFromUrl && pivotTabActiveFromUrl && analystBtnActive) {
+            results.passed.push('✓ URL ?view=analyst&tab=pivot restores analyst mode and Pivot tab (shared link)');
+        } else {
+            results.failed.push('✗ URL ?view=analyst&tab=pivot did not restore analyst mode and Pivot tab');
+        }
+
         await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForSelector('#main-content', { timeout: 5000 });
         await page.waitForTimeout(1500);
