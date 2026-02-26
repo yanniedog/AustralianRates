@@ -26,14 +26,16 @@
         }
     }
 
+    var urlView = params.get('view');
     var state = {
         activeTab: params.get('tab') || 'explorer',
         pivotLoaded: false,
         chartDrawn: false,
         refreshTimerId: null,
         lastRefreshedAt: null,
-        uiMode: readStoredUiMode(),
+        uiMode: urlView ? normalizeUiMode(urlView) : readStoredUiMode(),
     };
+    if (urlView) persistUiMode(state.uiMode);
 
     function setUiMode(mode) {
         var normalized = normalizeUiMode(mode);

@@ -162,6 +162,10 @@
             els.refreshInterval.value = p.get('refresh_interval');
             restored.refresh_interval = p.get('refresh_interval');
         }
+        if (p.get('view') && state && state.setUiMode) {
+            state.setUiMode(p.get('view'));
+            restored.view = p.get('view');
+        }
         clientLog('info', 'Filter URL state restored', restored);
     }
 

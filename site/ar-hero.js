@@ -68,7 +68,9 @@
     function getFiniteNumbers(rows, field) {
         var values = [];
         for (var i = 0; i < rows.length; i++) {
-            var n = Number(rows[i] && rows[i][field]);
+            var val = rows[i] && rows[i][field];
+            if (val == null) continue;
+            var n = Number(val);
             if (Number.isFinite(n)) values.push(n);
         }
         return values;

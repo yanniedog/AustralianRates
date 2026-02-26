@@ -123,6 +123,5 @@
     }
     if (explorer && explorer.initRateTable) explorer.initRateTable();
     if (hero && hero.loadHeroStats) hero.loadHeroStats();
-    if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
     if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
 })();
