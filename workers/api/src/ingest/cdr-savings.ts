@@ -284,7 +284,10 @@ export async function fetchSavingsProductDetailRows(input: {
       detail,
       sourceUrl: detailUrl,
       collectionDate: input.collectionDate,
-    }),
+    }).map((row) => ({
+      ...row,
+      cdrProductDetailJson: fetched.text || null,
+    })),
     rawPayload,
   }
 }
@@ -313,7 +316,10 @@ export async function fetchTdProductDetailRows(input: {
       detail,
       sourceUrl: detailUrl,
       collectionDate: input.collectionDate,
-    }),
+    }).map((row) => ({
+      ...row,
+      cdrProductDetailJson: fetched.text || null,
+    })),
     rawPayload,
   }
 }

@@ -249,5 +249,101 @@ describe('queue historical task execution', () => {
         rowsWritten: 3,
       }),
     )
+    expect(mocks.logInfo).toHaveBeenCalledWith(
+      'consumer',
+      'historical_task_execute completed',
+      expect.objectContaining({
+        runId: 'historical-run-1',
+      }),
+    )
+  })
+
+  it('logs historical completion as warn when rows are parsed but nothing is written', async () => {
+    mocks.claimHistoricalTaskById.mockResolvedValue({
+      task_id: 43,
+      run_id: 'historical-run-2',
+      lender_code: 'cba',
+      collection_date: '2026-01-16',
+      status: 'claimed',
+      claimed_by: 'worker',
+      claimed_at: '2026-01-16T00:00:00.000Z',
+      claim_expires_at: '2026-01-16T00:15:00.000Z',
+      completed_at: null,
+      attempt_count: 1,
+      mortgage_rows: 0,
+      savings_rows: 0,
+      td_rows: 0,
+      had_signals: 0,
+      last_error: null,
+      updated_at: '2026-01-16T00:00:00.000Z',
+    })
+    mocks.getHistoricalRunById.mockResolvedValue({
+      run_id: 'historical-run-2',
+      trigger_source: 'admin',
+      product_scope: 'savings',
+      run_source: 'scheduled',
+      start_date: '2026-01-16',
+      end_date: '2026-01-16',
+      status: 'completed',
+      total_tasks: 1,
+      pending_tasks: 0,
+      claimed_tasks: 0,
+      completed_tasks: 1,
+      failed_tasks: 0,
+      mortgage_rows: 0,
+      savings_rows: 0,
+      td_rows: 0,
+      requested_by: 'scheduler',
+      created_at: '2026-01-16T00:00:00.000Z',
+      updated_at: '2026-01-16T00:02:00.000Z',
+      started_at: '2026-01-16T00:00:00.000Z',
+      finished_at: '2026-01-16T00:02:00.000Z',
+    })
+    mocks.collectHistoricalDayFromWayback.mockResolvedValue({
+      mortgageRows: [],
+      savingsRows: [{ productId: 's-2' }],
+      tdRows: [],
+      hadSignals: true,
+      payloads: [],
+      counters: { cdx_requests: 1, snapshot_requests: 1, mortgage_rows: 0, savings_rows: 1, td_rows: 0 },
+    })
+    mocks.validateNormalizedSavingsRow.mockReturnValue({ ok: false, reason: 'missing_required_field' })
+    mocks.upsertHistoricalRateRows.mockResolvedValue(0)
+    mocks.upsertSavingsRateRows.mockResolvedValue(0)
+    mocks.upsertTdRateRows.mockResolvedValue(0)
+
+    const ack = vi.fn()
+    const retry = vi.fn()
+    await consumeIngestQueue(
+      {
+        messages: [
+          {
+            body: {
+              kind: 'historical_task_execute',
+              runId: 'historical-run-2',
+              runSource: 'scheduled',
+              taskId: 43,
+              attempt: 0,
+              idempotencyKey: 'hist:2',
+            },
+            attempts: 1,
+            ack,
+            retry,
+          },
+        ],
+      } as unknown as MessageBatch<IngestMessage>,
+      makeEnv(),
+    )
+
+    expect(ack).toHaveBeenCalledTimes(1)
+    expect(retry).not.toHaveBeenCalled()
+    expect(mocks.logWarn).toHaveBeenCalledWith(
+      'consumer',
+      'historical_task_execute completed',
+      expect.objectContaining({
+        runId: 'historical-run-2',
+        context: expect.stringContaining('completion=warn_no_writes'),
+      }),
+    )
   })
 })

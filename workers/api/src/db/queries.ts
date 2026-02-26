@@ -158,6 +158,16 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
       v.confidence_score,
       v.retrieval_type,
       v.parsed_at,
+      (
+        SELECT MIN(h.parsed_at)
+        FROM historical_loan_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.security_purpose = v.security_purpose
+          AND h.repayment_type = v.repayment_type
+          AND h.lvr_tier = v.lvr_tier
+          AND h.rate_structure = v.rate_structure
+      ) AS first_retrieved_at,
       v.run_source,
       v.product_key,
       r.cash_rate AS rba_cash_rate
@@ -251,6 +261,9 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
         h.confidence_score,
         h.retrieval_type,
         h.parsed_at,
+        MIN(h.parsed_at) OVER (
+          PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+        ) AS first_retrieved_at,
         h.run_source,
         h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
         ROW_NUMBER() OVER (
@@ -280,6 +293,7 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
       ranked.confidence_score,
       ranked.retrieval_type,
       ranked.parsed_at,
+      ranked.first_retrieved_at,
       ranked.run_source,
       ranked.product_key,
       r.cash_rate AS rba_cash_rate
@@ -382,6 +396,7 @@ export async function queryTimeseries(
       t.product_url,
       t.published_at,
       t.parsed_at,
+      MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at,
       t.run_source,
       t.product_key,
       r.cash_rate AS rba_cash_rate
@@ -429,11 +444,13 @@ const PAGINATED_SORT_COLUMNS: Record<string, string> = {
   rba_cash_rate: 'rba_cash_rate',
   parsed_at: 'h.parsed_at',
   retrieved_at: 'h.parsed_at',
+  first_retrieved_at: 'first_retrieved_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
   source_url: 'h.source_url',
   product_url: 'h.product_url',
   published_at: 'h.published_at',
+  cdr_product_detail_json: 'h.cdr_product_detail_json',
 }
 
 export async function queryRatesPaginated(db: D1Database, filters: RatesPaginatedFilters) {
@@ -525,10 +542,14 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
       h.source_url,
       h.product_url,
       h.published_at,
+      h.cdr_product_detail_json,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
+      MIN(h.parsed_at) OVER (
+        PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+      ) AS first_retrieved_at,
       h.run_id,
       h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
@@ -660,10 +681,14 @@ export async function queryRatesForExport(
       h.source_url,
       h.product_url,
       h.published_at,
+      h.cdr_product_detail_json,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
+      MIN(h.parsed_at) OVER (
+        PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+      ) AS first_retrieved_at,
       h.run_id,
       h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,

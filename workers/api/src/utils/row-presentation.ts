@@ -154,15 +154,17 @@ function waybackPublishedAt(sourceUrl: unknown): string {
 
 export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<string, unknown> {
   const sourceUrl = asText(row.source_url)
-  const productUrl = asText(row.product_url) || sourceUrl
+  const productUrl = asText(row.product_url)
   const publishedAt = normalizeTimestamp(row.published_at) || waybackPublishedAt(sourceUrl)
   const retrievedAt = asText(row.retrieved_at) || asText(row.parsed_at)
+  const firstRetrievedAt = asText(row.first_retrieved_at)
 
   return {
     ...row,
     product_url: productUrl,
     published_at: publishedAt,
     retrieved_at: retrievedAt,
+    first_retrieved_at: firstRetrievedAt,
   }
 }
 

@@ -1375,10 +1375,11 @@ async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalTaskExec
       notes: `historical_task_summary lender=${task.lender_code} date=${task.collection_date} scope=${scope}`,
     })
 
-    if (
-      mortgageRows.length + savingsRows.length + tdRows.length === 0 &&
-      mortgageWritten + savingsWritten + tdWritten === 0
-    ) {
+    const historicalParsedTotal = mortgageRows.length + savingsRows.length + tdRows.length
+    const historicalWrittenTotal = mortgageWritten + savingsWritten + tdWritten
+    const historicalShouldWarn = historicalWrittenTotal === 0
+
+    if (historicalParsedTotal === 0 && historicalWrittenTotal === 0) {
       log.warn('consumer', 'historical_task_execute empty_result', {
         runId: job.runId,
         lenderCode: task.lender_code,
@@ -1390,20 +1391,30 @@ async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalTaskExec
       })
     }
 
-    log.info('consumer', 'historical_task_execute completed', {
-      runId: job.runId,
-      lenderCode: task.lender_code,
-      context:
-        `task_id=${task.task_id} date=${task.collection_date} scope=${scope}` +
-        ` parsed(m=${mortgageRows.length},s=${savingsRows.length},td=${tdRows.length})` +
-        ` accepted(m=${mortgageAccepted.length},s=${savingsAccepted.length},td=${tdAccepted.length})` +
-        ` dropped(m=${mortgageDropped.length},s=${savingsDropped.length},td=${tdDropped.length})` +
-        ` written(m=${mortgageWritten},s=${savingsWritten},td=${tdWritten})` +
-        ` reasons(m=${serializeForLog(mortgageDroppedReasons)},s=${serializeForLog(savingsDroppedReasons)},td=${serializeForLog(tdDroppedReasons)})` +
-        ` signals(wayback=${collected.hadSignals ? 1 : 0},final=${hadSignals ? 1 : 0})` +
-        ` counters(cdx=${collected.counters.cdx_requests},snap=${collected.counters.snapshot_requests},payloads=${collected.payloads.length})` +
-        ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectMs},payload_persist=${payloadPersistMs},validate=${validateMs},write=${writeMs},total=${elapsedMs(startedAt)}`,
-    })
+    const historicalCompletionContext =
+      `task_id=${task.task_id} date=${task.collection_date} scope=${scope}` +
+      ` parsed(m=${mortgageRows.length},s=${savingsRows.length},td=${tdRows.length})` +
+      ` accepted(m=${mortgageAccepted.length},s=${savingsAccepted.length},td=${tdAccepted.length})` +
+      ` dropped(m=${mortgageDropped.length},s=${savingsDropped.length},td=${tdDropped.length})` +
+      ` written(m=${mortgageWritten},s=${savingsWritten},td=${tdWritten})` +
+      ` reasons(m=${serializeForLog(mortgageDroppedReasons)},s=${serializeForLog(savingsDroppedReasons)},td=${serializeForLog(tdDroppedReasons)})` +
+      ` signals(wayback=${collected.hadSignals ? 1 : 0},final=${hadSignals ? 1 : 0})` +
+      ` counters(cdx=${collected.counters.cdx_requests},snap=${collected.counters.snapshot_requests},payloads=${collected.payloads.length})` +
+      ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectMs},payload_persist=${payloadPersistMs},validate=${validateMs},write=${writeMs},total=${elapsedMs(startedAt)}`
+
+    if (historicalShouldWarn) {
+      log.warn('consumer', 'historical_task_execute completed', {
+        runId: job.runId,
+        lenderCode: task.lender_code,
+        context: `${historicalCompletionContext} completion=warn_no_writes`,
+      })
+    } else {
+      log.info('consumer', 'historical_task_execute completed', {
+        runId: job.runId,
+        lenderCode: task.lender_code,
+        context: historicalCompletionContext,
+      })
+    }
   } catch (error) {
     const message = (error as Error)?.message || String(error)
     await finalizeHistoricalTask(env.DB, {
@@ -1735,7 +1746,11 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     notes: `savings_td_quality_summary lender=${job.lenderCode}`,
   })
 
-  if (savingsRows.length + tdRows.length === 0 && savingsWritten + tdWritten === 0) {
+  const savingsParsedTotal = savingsRows.length + tdRows.length
+  const savingsWrittenTotal = savingsWritten + tdWritten
+  const savingsShouldWarn = savingsWrittenTotal === 0
+
+  if (savingsParsedTotal === 0 && savingsWrittenTotal === 0) {
     log.warn('consumer', 'daily_savings_lender_fetch empty_result', {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -1748,18 +1763,28 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     })
   }
 
-  log.info('consumer', `daily_savings_lender_fetch completed`, {
-    runId: job.runId,
-    lenderCode: job.lenderCode,
-    context:
-      `savings=${savingsAccepted.length}/${savingsRows.length} dropped=${savingsDropped.length} written=${savingsWritten}` +
-      ` td=${tdAccepted.length}/${tdRows.length} dropped=${tdDropped.length} written=${tdWritten}` +
-      ` reasons(s=${JSON.stringify(savingsDroppedReasons)},td=${JSON.stringify(tdDroppedReasons)})` +
-      ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
-      ` product_ids(s=${savingsProductIdsDiscovered},td=${tdProductIdsDiscovered})` +
-      ` detail_requests(s=${savingsDetailRequests},td=${tdDetailRequests})` +
-      ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(startedAt)}`,
-  })
+  const savingsCompletionContext =
+    `savings=${savingsAccepted.length}/${savingsRows.length} dropped=${savingsDropped.length} written=${savingsWritten}` +
+    ` td=${tdAccepted.length}/${tdRows.length} dropped=${tdDropped.length} written=${tdWritten}` +
+    ` reasons(s=${JSON.stringify(savingsDroppedReasons)},td=${JSON.stringify(tdDroppedReasons)})` +
+    ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+    ` product_ids(s=${savingsProductIdsDiscovered},td=${tdProductIdsDiscovered})` +
+    ` detail_requests(s=${savingsDetailRequests},td=${tdDetailRequests})` +
+    ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(startedAt)}`
+
+  if (savingsShouldWarn) {
+    log.warn('consumer', `daily_savings_lender_fetch completed`, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context: `${savingsCompletionContext} completion=warn_no_writes`,
+    })
+  } else {
+    log.info('consumer', `daily_savings_lender_fetch completed`, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context: savingsCompletionContext,
+    })
+  }
 }
 
 async function processMessage(env: EnvBindings, message: IngestMessage): Promise<void> {

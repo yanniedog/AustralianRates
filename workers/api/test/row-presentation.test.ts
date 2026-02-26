@@ -68,14 +68,14 @@ describe('row presentation', () => {
     expect(cleaned).toBe('Bonus when you deposit monthly')
   })
 
-  it('derives core row fields with fallback product_url and retrieved_at alias', () => {
+  it('derives core row fields without source_url fallback and with retrieved_at alias', () => {
     const row = presentCoreRowFields({
       source_url: 'https://example.com/rates',
       parsed_at: '2026-02-25 06:17:08',
       published_at: '',
     })
 
-    expect(row.product_url).toBe('https://example.com/rates')
+    expect(row.product_url).toBe('')
     expect(row.retrieved_at).toBe('2026-02-25 06:17:08')
     expect(row.published_at).toBe('')
   })

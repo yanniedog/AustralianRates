@@ -26,13 +26,14 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url,
         product_url,
         published_at,
+        cdr_product_detail_json,
         data_quality_flag,
         confidence_score,
         retrieval_type,
         parsed_at,
         run_id,
         run_source
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, CURRENT_TIMESTAMP, ?19, ?20)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, CURRENT_TIMESTAMP, ?20, ?21)
       ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure, security_purpose, repayment_type, run_source) DO UPDATE SET
         product_name = excluded.product_name,
         feature_set = excluded.feature_set,
@@ -42,6 +43,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url = excluded.source_url,
         product_url = excluded.product_url,
         published_at = excluded.published_at,
+        cdr_product_detail_json = excluded.cdr_product_detail_json,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
         retrieval_type = excluded.retrieval_type,
@@ -64,6 +66,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
       row.sourceUrl,
       row.productUrl ?? row.sourceUrl,
       row.publishedAt ?? null,
+      row.cdrProductDetailJson ?? null,
       row.dataQualityFlag,
       row.confidenceScore,
       row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl),

@@ -615,7 +615,10 @@ export async function fetchProductDetailRows(input: {
       detail,
       sourceUrl: detailUrl,
       collectionDate: input.collectionDate,
-    }),
+    }).map((row) => ({
+      ...row,
+      cdrProductDetailJson: fetched.text || null,
+    })),
     rawPayload,
   }
 }

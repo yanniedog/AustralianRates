@@ -31,6 +31,7 @@ export type NormalizedSavingsRow = {
   sourceUrl: string
   productUrl?: string | null
   publishedAt?: string | null
+  cdrProductDetailJson?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
@@ -52,6 +53,7 @@ export type NormalizedTdRow = {
   sourceUrl: string
   productUrl?: string | null
   publishedAt?: string | null
+  cdrProductDetailJson?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType

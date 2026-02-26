@@ -59,11 +59,13 @@ const SORT_COLUMNS: Record<string, string> = {
   interest_payment: 'h.interest_payment',
   parsed_at: 'h.parsed_at',
   retrieved_at: 'h.parsed_at',
+  first_retrieved_at: 'first_retrieved_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
   source_url: 'h.source_url',
   product_url: 'h.product_url',
   published_at: 'h.published_at',
+  cdr_product_detail_json: 'h.cdr_product_detail_json',
 }
 
 function buildWhere(filters: TdPaginatedFilters): { clause: string; binds: Array<string | number> } {
@@ -112,9 +114,13 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
-      h.source_url, h.product_url, h.published_at, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_json, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
-      h.parsed_at, h.run_id, h.run_source,
+      h.parsed_at,
+      MIN(h.parsed_at) OVER (
+        PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
+      ) AS first_retrieved_at,
+      h.run_id, h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
     FROM historical_term_deposit_rates h
     ${whereClause} ${orderClause}
@@ -182,7 +188,17 @@ export async function queryLatestTdRates(db: D1Database, filters: {
   binds.push(limit)
 
   const sql = `
-    SELECT v.*, v.product_key
+    SELECT
+      v.*,
+      (
+        SELECT MIN(h.parsed_at)
+        FROM historical_term_deposit_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.term_months = v.term_months
+          AND h.deposit_tier = v.deposit_tier
+      ) AS first_retrieved_at,
+      v.product_key
     FROM vw_latest_td_rates v
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY ${orderMap[filters.orderBy ?? 'default'] ?? orderMap.default}
@@ -253,6 +269,9 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
         h.confidence_score,
         h.retrieval_type,
         h.parsed_at,
+        MIN(h.parsed_at) OVER (
+          PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
+        ) AS first_retrieved_at,
         h.run_source,
         h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key,
         ROW_NUMBER() OVER (
@@ -280,6 +299,7 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
       ranked.confidence_score,
       ranked.retrieval_type,
       ranked.parsed_at,
+      ranked.first_retrieved_at,
       ranked.run_source,
       ranked.product_key
     FROM ranked
@@ -327,7 +347,9 @@ export async function queryTdTimeseries(db: D1Database, input: {
   binds.push(limit)
 
   const sql = `
-    SELECT t.*
+    SELECT
+      t.*,
+      MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at
     FROM vw_td_timeseries t
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY t.collection_date ASC
@@ -349,9 +371,13 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
-      h.source_url, h.product_url, h.published_at, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_json, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
-      h.parsed_at, h.run_id, h.run_source,
+      h.parsed_at,
+      MIN(h.parsed_at) OVER (
+        PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
+      ) AS first_retrieved_at,
+      h.run_id, h.run_source,
 h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
 FROM historical_term_deposit_rates h
     ${whereClause}

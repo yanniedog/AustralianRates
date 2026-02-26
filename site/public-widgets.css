@@ -251,6 +251,10 @@
     font-size: 0.82rem;
 }
 
+.ar-public .chart-point-details[hidden] {
+    display: none;
+}
+
 .ar-public .chart-point-details strong {
     color: var(--ar-strong);
     font-size: 0.88rem;

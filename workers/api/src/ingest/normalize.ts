@@ -33,6 +33,7 @@ export type NormalizedRateRow = {
   sourceUrl: string
   productUrl?: string | null
   publishedAt?: string | null
+  cdrProductDetailJson?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType

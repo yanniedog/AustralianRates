@@ -48,9 +48,7 @@
     function pickPointUrl(row) {
         if (!row || typeof row !== 'object') return '';
         var productUrl = String(row.product_url || '').trim();
-        var sourceUrl = String(row.source_url || '').trim();
         if (/^https?:\/\//i.test(productUrl)) return productUrl;
-        if (/^https?:\/\//i.test(sourceUrl)) return sourceUrl;
         return '';
     }
 

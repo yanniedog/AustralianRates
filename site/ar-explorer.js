@@ -202,6 +202,15 @@
         return safeEsc(shortText);
     }
 
+    function cdrJsonFormatter(cell) {
+        var raw = String(cell.getValue() || '').trim();
+        if (!raw) return '-';
+        var shortText = truncateText(raw, 180);
+        var cellEl = cell.getElement ? cell.getElement() : null;
+        if (cellEl) cellEl.setAttribute('title', raw);
+        return safeEsc(shortText);
+    }
+
     var MOBILE_BREAKPOINT = 760;
     function isMobile() { return window.innerWidth <= MOBILE_BREAKPOINT; }
 
@@ -211,20 +220,21 @@
             return [
                 { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
                 { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+                { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
                 { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
                 { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
                 { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
                 { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
                 { title: 'LVR', field: 'lvr_tier', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('lvr_tier_display', 'lvr_tier', 'lvr_tier') },
                 { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
+                { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
             ];
         }
 
         return [
             { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-            { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+            { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
             { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
             { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
             { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
@@ -237,9 +247,11 @@
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, formatter: retrievalTypeFormatter },
             { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
             { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, formatter: publishedAtFormatter },
+            { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
             { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, formatter: offerLinksFormatter },
             { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, formatter: runSourceFormatter },
+            { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
             { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, formatter: parsedAtFormatter },
         ];
     }
@@ -250,18 +262,21 @@
             return [
                 { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
                 { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+                { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
                 { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
                 { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
                 { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 90, formatter: depositTierFormatter },
                 { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
+                { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
             ];
         }
 
         return [
             { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-            { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+            { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+            { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
             { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
             { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
             { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 80, formatter: depositTierFormatter },
@@ -272,8 +287,10 @@
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, formatter: retrievalTypeFormatter },
             { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
             { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, formatter: publishedAtFormatter },
+            { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
             { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, formatter: offerLinksFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, formatter: runSourceFormatter },
+            { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
             { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, formatter: parsedAtFormatter },
         ];
     }
@@ -284,18 +301,21 @@
             return [
                 { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
                 { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-                { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+                { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
                 { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
                 { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 90, formatter: depositTierFormatter },
                 { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
                 { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
+                { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
             ];
         }
 
         return [
             { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-            { title: 'Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+            { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
+            { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
             { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
             { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 80, formatter: depositTierFormatter },
             { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
@@ -306,8 +326,10 @@
             { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, formatter: retrievalTypeFormatter },
             { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
             { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, formatter: publishedAtFormatter },
+            { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
             { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, formatter: offerLinksFormatter },
             { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, formatter: runSourceFormatter },
+            { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
             { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, formatter: parsedAtFormatter },
         ];
     }
