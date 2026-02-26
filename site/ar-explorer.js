@@ -60,8 +60,21 @@
 
     function extractWaybackOriginalUrl(url) {
         var raw = String(url || '');
-        var m = raw.match(/\/web\/\d+(?:id_)?\/(https?:\/\/.+)$/i);
-        return m && m[1] ? m[1] : '';
+        var m = raw.match(/\/web\/[^/]+\/(.+)$/i);
+        var candidate = m && m[1] ? String(m[1]).trim() : '';
+        if (!candidate) return '';
+        if (!/^https?:\/\//i.test(candidate)) {
+            try {
+                candidate = decodeURIComponent(candidate);
+            } catch (_) {}
+        }
+        return /^https?:\/\//i.test(candidate) ? candidate : '';
+    }
+
+    function waybackLookupUrl(url) {
+        var raw = String(url || '').trim();
+        if (!/^https?:\/\//i.test(raw)) return '';
+        return WAYBACK_PREFIX + encodeURIComponent(raw);
     }
 
     function linkHtml(href, label, title) {
@@ -73,7 +86,7 @@
         if (!raw) return '\u2014';
 
         var currentUrl = isWaybackUrl(raw) ? extractWaybackOriginalUrl(raw) : raw;
-        var waybackUrl = isWaybackUrl(raw) ? raw : (WAYBACK_PREFIX + raw);
+        var waybackUrl = isWaybackUrl(raw) ? raw : waybackLookupUrl(currentUrl);
         var links = [];
 
         if (/^https?:\/\//i.test(currentUrl)) {
