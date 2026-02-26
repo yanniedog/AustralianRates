@@ -306,7 +306,9 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
     row.runId = job.runId
     row.runSource = job.runSource ?? 'scheduled'
   }
+  const hadMortgageSignals = collectedRows.length > 0 || inspectedHtml > 0 || droppedByParser > 0
   if (accepted.length === 0) {
+    const noMortgageSignals = !hadMortgageSignals
     await persistRawPayload(env, {
       sourceType: 'cdr_products',
       sourceUrl: sourceUrl || `fallback://${job.lenderCode}`,
@@ -319,10 +321,19 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         rejectedRows: dropped.length,
         inspectedHtml,
         droppedByParser,
+        hadMortgageSignals,
       },
-      httpStatus: 422,
-      notes: `daily_quality_rejected lender=${job.lenderCode}`,
+      httpStatus: noMortgageSignals ? 204 : 422,
+      notes: noMortgageSignals ? `daily_no_data lender=${job.lenderCode}` : `daily_quality_rejected lender=${job.lenderCode}`,
     })
+    if (noMortgageSignals) {
+      log.info('consumer', `daily_lender_fetch completed: 0 written, no mortgage signals`, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context: `collected=0 inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}`,
+      })
+      return
+    }
     log.warn('consumer', `daily_ingest_no_valid_rows`, { runId: job.runId, lenderCode: job.lenderCode })
     throw new Error(`daily_ingest_no_valid_rows:${job.lenderCode}`)
   }

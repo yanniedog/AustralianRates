@@ -24,6 +24,13 @@ const isProductionUrl = !TEST_URL.includes('localhost') && !TEST_URL.includes('1
 const STRICT_RETRIEVAL_COLUMN = isProductionUrl || process.env.STRICT_RETRIEVAL_COLUMN === '1';
 const REQUIRED_METADATA_HEADERS = ['Retrieval', 'Product URL', 'Published At', 'Retrieved At'];
 
+function isIgnorableTelemetryFailure(failure) {
+    if (!failure || !failure.url) return false;
+    const url = String(failure.url);
+    const error = String(failure.error || '');
+    return url.includes('static.cloudflareinsights.com/beacon.min.js') && error.includes('ERR_NAME_NOT_RESOLVED');
+}
+
 async function runTests() {
     console.log('Starting Australian Rates Homepage Tests...');
     console.log(`Target URL: ${TEST_URL}\n`);
@@ -223,6 +230,8 @@ async function runTests() {
         // Test 1: Page loads without errors
         console.log('Test 1: Navigating to homepage...');
         const navigationErrors = [];
+        const pageErrors = [];
+        const requestFailures = [];
         
         page.on('console', msg => {
             if (msg.type() === 'error') {
@@ -231,7 +240,14 @@ async function runTests() {
         });
         
         page.on('pageerror', error => {
-            navigationErrors.push(error.message);
+            pageErrors.push(error.message);
+        });
+
+        page.on('requestfailed', request => {
+            requestFailures.push({
+                url: request.url(),
+                error: (request.failure() && request.failure().errorText) ? request.failure().errorText : ''
+            });
         });
         
         const response = await page.goto(TEST_URL, { 
@@ -288,6 +304,27 @@ async function runTests() {
             console.log('  Console errors:', navigationErrors);
         }
         
+        const legacyConsoleWarningToken = 'Console errors detected:';
+        const ignorableRequestFailures = requestFailures.filter(isIgnorableTelemetryFailure);
+        const actionableRequestFailures = requestFailures.filter((failure) => !isIgnorableTelemetryFailure(failure));
+        const actionableConsoleErrors = navigationErrors.filter((msg) => {
+            if (!msg.includes('Failed to load resource: net::ERR_NAME_NOT_RESOLVED')) return true;
+            return ignorableRequestFailures.length === 0;
+        });
+        const loadIssueCount = actionableConsoleErrors.length + pageErrors.length + actionableRequestFailures.length;
+        if (loadIssueCount === 0) {
+            results.warnings = results.warnings.filter((msg) => !msg.includes(legacyConsoleWarningToken));
+            if (ignorableRequestFailures.length > 0) {
+                results.passed.push(`Ignored ${ignorableRequestFailures.length} Cloudflare Insights telemetry DNS failure(s)`);
+            }
+        } else {
+            results.warnings = results.warnings.filter((msg) => !msg.includes(legacyConsoleWarningToken));
+            results.warnings.push(`Console/runtime/network issues detected during load: ${loadIssueCount}`);
+            if (actionableConsoleErrors.length > 0) console.log('  Console errors:', actionableConsoleErrors);
+            if (pageErrors.length > 0) console.log('  Page errors:', pageErrors);
+            if (actionableRequestFailures.length > 0) console.log('  Request failures:', actionableRequestFailures);
+        }
+
         // Test 2: Page title and meta description
         console.log('\nTest 2: Checking page title and meta...');
         const title = await page.title();
@@ -592,20 +629,39 @@ async function runTests() {
             console.log('  Testing column sort (click Bank header)...');
             const bankHeader = page.locator('#rate-table .tabulator-col').filter({ hasText: 'Bank' }).first();
             if (await bankHeader.isVisible().catch(() => false)) {
-                const firstRowBankBefore = await page.locator('#rate-table .tabulator-row').first().locator('.tabulator-cell').nth(1).textContent().catch(() => '');
-                await bankHeader.click();
-                await page.waitForTimeout(2000);
-                const rowsAfterSort = await page.locator('#rate-table .tabulator-row').count();
-                const firstRowBankAfter = await page.locator('#rate-table .tabulator-row').first().locator('.tabulator-cell').nth(1).textContent().catch(() => '');
-                if (rowsAfterSort > 0) {
-                    results.passed.push('✓ Column sort (Bank) works - table still has data');
-                    if (firstRowBankBefore && firstRowBankAfter && firstRowBankBefore !== firstRowBankAfter) {
-                        results.passed.push('✓ Column sort (Bank) changed order - first row Bank changed');
-                    } else if (rowsAfterSort >= 2) {
-                        results.warnings.push('⚠ Column sort: first row Bank unchanged (sort may be same or API order)');
+                const readTopBanks = async (maxRows) => {
+                    const rowsLocator = page.locator('#rate-table .tabulator-row');
+                    const count = Math.min(await rowsLocator.count(), maxRows);
+                    const banks = [];
+                    for (let i = 0; i < count; i++) {
+                        const bank = await rowsLocator.nth(i).locator('.tabulator-cell').nth(1).textContent().catch(() => '');
+                        banks.push(String(bank || '').trim());
                     }
+                    return banks;
+                };
+
+                const topBanksBefore = await readTopBanks(5);
+                await bankHeader.click();
+                await page.waitForTimeout(1200);
+                const topBanksAfterFirstClick = await readTopBanks(5);
+                await bankHeader.click();
+                await page.waitForTimeout(1200);
+                const topBanksAfterSecondClick = await readTopBanks(5);
+                const rowsAfterSort = await page.locator('#rate-table .tabulator-row').count();
+                if (rowsAfterSort > 0) {
+                    results.passed.push('Column sort (Bank) works - table still has data');
                 } else {
-                    results.failed.push('✗ After clicking sort, table has no rows');
+                    results.failed.push('After clicking sort, table has no rows');
+                }
+
+                const seqBefore = JSON.stringify(topBanksBefore);
+                const seqAfterFirst = JSON.stringify(topBanksAfterFirstClick);
+                const seqAfterSecond = JSON.stringify(topBanksAfterSecondClick);
+                const sortChangedOrder = seqBefore !== seqAfterFirst || seqBefore !== seqAfterSecond;
+                if (sortChangedOrder) {
+                    results.passed.push('Column sort (Bank) changed visible row order');
+                } else {
+                    results.warnings.push('Column sort: top rows unchanged after toggling sort twice (dataset may already match order)');
                 }
             } else {
                 results.warnings.push('⚠ Sort test skipped: Bank column header not found');
@@ -729,12 +785,14 @@ async function runTests() {
         await page.click('#tab-explorer');
         await page.waitForTimeout(500);
         let exportRequested = false;
-        page.on('request', req => {
+        const onExportRequest = (req) => {
             const u = req.url();
             if (u.includes('/export') || u.includes('export.csv')) exportRequested = true;
-        });
+        };
+        context.on('request', onExportRequest);
         await page.selectOption('#download-format', 'csv');
         await page.waitForTimeout(3000);
+        context.off('request', onExportRequest);
         if (exportRequested) {
             results.passed.push('✓ Download format CSV triggers export request');
         } else {

@@ -54,7 +54,7 @@ describe('scheduler dispatch', () => {
 
   it('dispatches daily cron to daily handler', async () => {
     const result = await dispatchScheduledEvent(
-      { scheduledTime: Date.parse('2026-02-24T12:00:00.000Z'), cron: '0 */6 * * *' } as ScheduledController & { cron: string },
+      { scheduledTime: Date.parse('2026-02-24T12:05:00.000Z'), cron: '5 * * * *' } as ScheduledController & { cron: string },
       makeEnv(),
     )
 
@@ -65,7 +65,7 @@ describe('scheduler dispatch', () => {
 
   it('skips unknown cron expressions', async () => {
     const result = await dispatchScheduledEvent(
-      { scheduledTime: Date.parse('2026-02-24T12:00:00.000Z'), cron: '5 * * * *' } as ScheduledController & { cron: string },
+      { scheduledTime: Date.parse('2026-02-24T12:10:00.000Z'), cron: '10 * * * *' } as ScheduledController & { cron: string },
       makeEnv(),
     )
 
@@ -75,7 +75,7 @@ describe('scheduler dispatch', () => {
       ok: true,
       skipped: true,
       reason: 'unknown_cron_expression',
-      cron: '5 * * * *',
+      cron: '10 * * * *',
     })
   })
 })
