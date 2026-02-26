@@ -98,14 +98,14 @@
         }
 
         var interestRates = getFiniteNumbers(rows, 'interest_rate');
-        var bestRate = interestRates.length ? Math.min.apply(null, interestRates) : null;
+        var bestRate = interestRates.length ? Math.max.apply(null, interestRates) : null;
         var medRate = median(interestRates);
 
         var cards = [
             {
                 label: 'Best headline rate',
                 value: bestRate == null ? '-' : pct(bestRate),
-                note: 'Lowest current interest rate in filtered results',
+                note: 'Highest current interest rate in filtered results',
             },
             {
                 label: section === 'home-loans' ? 'Median mortgage rate' : 'Median rate',
