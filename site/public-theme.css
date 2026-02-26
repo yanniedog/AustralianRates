@@ -32,6 +32,12 @@ body.ar-public {
     --ar-filter-input: #ffffff;
     --ar-pill-bg: rgba(255, 255, 255, 0.75);
     --ar-pill-border: rgba(22, 54, 93, 0.14);
+    --ar-nav-btn-bg: rgba(255, 255, 255, 0.78);
+    --ar-nav-btn-border: rgba(22, 54, 93, 0.2);
+    --ar-nav-btn-text: #243a59;
+    --ar-nav-btn-hover-bg: rgba(255, 255, 255, 0.98);
+    --ar-nav-btn-hover-border: rgba(22, 54, 93, 0.3);
+    --ar-nav-btn-hover-text: #0f223c;
     --ar-transition: 180ms cubic-bezier(0.22, 1, 0.36, 1);
     color: var(--ar-text);
     font-family: var(--ar-font-ui);
@@ -72,6 +78,12 @@ body.ar-public {
     --ar-filter-input: #162335;
     --ar-pill-bg: rgba(24, 37, 56, 0.82);
     --ar-pill-border: rgba(132, 172, 215, 0.24);
+    --ar-nav-btn-bg: rgba(20, 33, 50, 0.92);
+    --ar-nav-btn-border: rgba(132, 172, 215, 0.34);
+    --ar-nav-btn-text: #d2e4fa;
+    --ar-nav-btn-hover-bg: rgba(31, 47, 69, 0.96);
+    --ar-nav-btn-hover-border: rgba(161, 202, 248, 0.48);
+    --ar-nav-btn-hover-text: #f5fbff;
 }
 
 body.ar-public.ar-section-savings {

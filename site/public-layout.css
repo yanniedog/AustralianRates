@@ -28,6 +28,19 @@
 .ar-public .site-nav-refresh-btn,
 .ar-public .site-nav-theme-btn { color: var(--ar-muted); border: 1px solid transparent; }
 
+.ar-public .site-nav-refresh-btn,
+.ar-public .site-nav-theme-btn {
+    background: var(--ar-nav-btn-bg);
+    border-color: var(--ar-nav-btn-border);
+    color: var(--ar-nav-btn-text);
+}
+
+.ar-public .site-nav-refresh-btn:focus-visible,
+.ar-public .site-nav-theme-btn:focus-visible {
+    outline: 2px solid var(--ar-focus);
+    outline-offset: 2px;
+}
+
 .ar-public .site-nav a:hover,
 .ar-public .site-nav a.active,
 .ar-public .site-nav-refresh-btn:hover,
@@ -35,6 +48,13 @@
     color: var(--ar-strong);
     background: var(--ar-pill-bg);
     border-color: var(--ar-pill-border);
+}
+
+.ar-public .site-nav-refresh-btn:hover,
+.ar-public .site-nav-theme-btn:hover {
+    color: var(--ar-nav-btn-hover-text);
+    background: var(--ar-nav-btn-hover-bg);
+    border-color: var(--ar-nav-btn-hover-border);
 }
 
 .ar-public .site-nav-github {
@@ -290,6 +310,29 @@
     background: var(--ar-filter-input);
     color: var(--ar-text);
     font-size: 0.85rem;
+}
+
+.ar-public select {
+    color-scheme: light;
+}
+
+[data-theme="dark"] .ar-public select {
+    color-scheme: dark;
+}
+
+.ar-public .filters-grid select,
+.ar-public .chart-controls select,
+.ar-public .pvtUi select {
+    background: var(--ar-filter-input);
+    color: var(--ar-text);
+    border: 1px solid var(--ar-stroke);
+}
+
+.ar-public .filters-grid select option,
+.ar-public .chart-controls select option,
+.ar-public .pvtUi select option {
+    background: var(--ar-surface-solid);
+    color: var(--ar-text);
 }
 
 .ar-public .filters-grid select:hover,

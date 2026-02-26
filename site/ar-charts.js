@@ -12,6 +12,7 @@
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
+    var esc = window._arEsc;
 
     var yLabels = {
         interest_rate: 'Interest Rate (%)',
@@ -36,51 +37,145 @@
         };
     }
 
+    function safeEsc(value) {
+        return typeof esc === 'function' ? esc(value) : String(value || '');
+    }
+
+    function safeHref(value) {
+        return String(value || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function pickPointUrl(row) {
+        if (!row || typeof row !== 'object') return '';
+        var productUrl = String(row.product_url || '').trim();
+        var sourceUrl = String(row.source_url || '').trim();
+        if (/^https?:\/\//i.test(productUrl)) return productUrl;
+        if (/^https?:\/\//i.test(sourceUrl)) return sourceUrl;
+        return '';
+    }
+
+    function pointDetailHtml(row) {
+        if (!row) return '';
+        var productName = String(row.product_name || '').trim() || 'Unknown product';
+        var bankName = String(row.bank_name || '').trim() || 'Unknown bank';
+        var collectionDate = String(row.collection_date || '').trim() || 'Unknown date';
+        var rateVal = Number(row.interest_rate);
+        var comparisonVal = Number(row.comparison_rate);
+        var url = pickPointUrl(row);
+        var lines = [
+            '<strong>' + safeEsc(productName) + '</strong>',
+            '<span>' + safeEsc(bankName) + '</span>',
+            '<span>Date: ' + safeEsc(collectionDate) + '</span>',
+            '<span>Interest: ' + (Number.isFinite(rateVal) ? safeEsc(rateVal.toFixed(3) + '%') : '\u2014') + '</span>',
+            '<span>Comparison: ' + (Number.isFinite(comparisonVal) ? safeEsc(comparisonVal.toFixed(3) + '%') : '\u2014') + '</span>',
+        ];
+        if (url) {
+            lines.push('<a class="chart-point-link" href="' + safeHref(url) + '" target="_blank" rel="noopener noreferrer">Open product page</a>');
+        } else {
+            lines.push('<span>No URL available for this point.</span>');
+        }
+        return lines.join('');
+    }
+
+    function clearPointDetails() {
+        if (!els.chartPointDetails) return;
+        els.chartPointDetails.hidden = true;
+        els.chartPointDetails.innerHTML = '';
+    }
+
+    function bindChartPointClick(rowsByTrace) {
+        if (!els.chartOutput || !els.chartPointDetails) return;
+
+        els.chartOutput.on('plotly_click', function (ev) {
+            var points = ev && ev.points ? ev.points : [];
+            if (!points.length) return;
+
+            var point = points[0];
+            var curveIndex = Number(point.curveNumber);
+            var pointIndex = Number(point.pointNumber);
+            if (!Number.isFinite(pointIndex) && point.pointIndex != null) {
+                pointIndex = Number(point.pointIndex);
+            }
+            if (!Number.isFinite(pointIndex) && Array.isArray(point.pointNumber) && point.pointNumber.length) {
+                pointIndex = Number(point.pointNumber[0]);
+            }
+            var traceRows = rowsByTrace[curveIndex] || [];
+            var row = traceRows[pointIndex] || null;
+            if (!row) {
+                clearPointDetails();
+                return;
+            }
+
+            els.chartPointDetails.innerHTML = pointDetailHtml(row);
+            els.chartPointDetails.hidden = false;
+        });
+    }
+
     function buildGroupedTraces(data, xField, yField, groupField, chartType) {
         var groups = {};
         data.forEach(function (row) {
             var key = String(row[groupField] || 'Unknown');
             if (!groups[key]) {
-                groups[key] = { x: [], y: [], firstRow: null };
+                groups[key] = { points: [], firstRow: null };
             }
-            groups[key].x.push(row[xField]);
-            groups[key].y.push(Number(row[yField]));
+            groups[key].points.push({
+                x: row[xField],
+                y: Number(row[yField]),
+                row: row,
+            });
             if (!groups[key].firstRow) groups[key].firstRow = row;
         });
+
         var traces = [];
+        var rowsByTrace = [];
         Object.keys(groups).sort().forEach(function (key) {
             var g = groups[key];
-            var x = g.x;
-            var y = g.y;
-            var pairs = x.map(function (xv, i) { return [xv, y[i]]; });
-            pairs.sort(function (a, b) {
-                var ax = a[0];
-                var bx = b[0];
+            var points = g.points.slice();
+            points.sort(function (a, b) {
+                var ax = a.x;
+                var bx = b.x;
                 if (ax === bx) return 0;
                 if (typeof ax === 'number' && typeof bx === 'number') return ax - bx;
                 return String(ax).localeCompare(String(bx));
             });
-            x = pairs.map(function (p) { return p[0]; });
-            y = pairs.map(function (p) { return p[1]; });
+
+            var x = points.map(function (p) { return p.x; });
+            var y = points.map(function (p) { return p.y; });
+
             var traceName = key;
             if (groupField === 'product_key' && g.firstRow) {
                 var r = g.firstRow;
                 traceName = [r.bank_name, r.product_name, r.lvr_tier, r.rate_structure].filter(Boolean).join(' | ');
             }
+
             var trace = { x: x, y: y, name: traceName, type: chartType };
             if (chartType === 'scatter') {
                 trace.mode = 'lines+markers';
                 trace.marker = { size: 4 };
             }
             traces.push(trace);
+            rowsByTrace.push(points.map(function (p) { return p.row; }));
         });
-        return traces;
+
+        return { traces: traces, rowsByTrace: rowsByTrace };
     }
 
     function buildUngroupedTrace(data, xField, yField, chartType) {
+        var points = data.map(function (r) {
+            return { x: r[xField], y: Number(r[yField]), row: r };
+        });
+
+        points.sort(function (a, b) {
+            var ax = a.x;
+            var bx = b.x;
+            if (ax === bx) return 0;
+            if (typeof ax === 'number' && typeof bx === 'number') return ax - bx;
+            return String(ax).localeCompare(String(bx));
+        });
+
         var trace = {
-            x: data.map(function (r) { return r[xField]; }),
-            y: data.map(function (r) { return Number(r[yField]); }),
+            x: points.map(function (p) { return p.x; }),
+            y: points.map(function (p) { return p.y; }),
             type: chartType,
             name: yField,
         };
@@ -88,7 +183,8 @@
             trace.mode = 'lines+markers';
             trace.marker = { size: 4 };
         }
-        return [trace];
+
+        return { traces: [trace], rowsByTrace: [points.map(function (p) { return p.row; })] };
     }
 
     function buildTraces(data, xField, yField, groupField, chartType) {
@@ -121,6 +217,7 @@
     function drawChart() {
         if (!els.chartOutput) return;
         if (els.chartStatus) els.chartStatus.textContent = 'Loading chart data...';
+        clearPointDetails();
         clientLog('info', 'Chart load started');
 
         var fp = buildFilterParams();
@@ -140,13 +237,18 @@
                 if (data.length === 0) {
                     if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
                     Plotly.purge(els.chartOutput);
+                    clearPointDetails();
                     clientLog('warn', 'Chart load returned no data');
                     return;
                 }
                 var fields = getChartFieldValues();
-                var traces = buildTraces(data, fields.xField, fields.yField, fields.groupField, fields.chartType);
+                var chartData = buildTraces(data, fields.xField, fields.yField, fields.groupField, fields.chartType);
+                var traces = chartData.traces || [];
                 var layout = buildLayout(fields.xField, fields.yField);
-                Plotly.newPlot(els.chartOutput, traces, layout, { responsive: true });
+                Plotly.newPlot(els.chartOutput, traces, layout, { responsive: true }).then(function () {
+                    bindChartPointClick(chartData.rowsByTrace || []);
+                    clearPointDetails();
+                });
                 tabState.chartDrawn = true;
                 var total = response.total || data.length;
                 var suffix = total > 10000 ? ' (charted first 10,000 of ' + total.toLocaleString() + ')' : ' (' + data.length.toLocaleString() + ' data points)';
@@ -158,6 +260,7 @@
             })
             .catch(function (err) {
                 if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);
+                clearPointDetails();
                 clientLog('error', 'Chart load failed', {
                     message: err && err.message ? err.message : String(err),
                 });

@@ -40,6 +40,7 @@
         drawChart:     document.getElementById('draw-chart'),
         chartOutput:   document.getElementById('chart-output'),
         chartStatus:   document.getElementById('chart-status'),
+        chartPointDetails: document.getElementById('chart-point-details'),
         statUpdated:   document.getElementById('stat-updated'),
         statCashRate:  document.getElementById('stat-cash-rate'),
         statRecords:   document.getElementById('stat-records'),

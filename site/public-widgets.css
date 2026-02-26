@@ -153,6 +153,18 @@
     font-size: 0.82rem !important;
 }
 
+.ar-public .pvtUi select {
+    background: var(--ar-filter-input) !important;
+    color: var(--ar-text) !important;
+    border: 1px solid var(--ar-stroke) !important;
+    border-radius: 8px !important;
+}
+
+.ar-public .pvtUi select option {
+    background: var(--ar-surface-solid) !important;
+    color: var(--ar-text) !important;
+}
+
 .ar-public .pvtAxisContainer,
 .ar-public .pvtVals {
     border: 1px solid var(--ar-stroke) !important;
@@ -225,6 +237,33 @@
 
 .ar-public #chart-status {
     margin: 10px 0 4px;
+}
+
+.ar-public .chart-point-details {
+    margin: 8px 0 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--ar-stroke);
+    border-radius: 10px;
+    background: var(--ar-surface-muted);
+    color: var(--ar-text);
+    display: grid;
+    gap: 4px;
+    font-size: 0.82rem;
+}
+
+.ar-public .chart-point-details strong {
+    color: var(--ar-strong);
+    font-size: 0.88rem;
+}
+
+.ar-public .chart-point-link {
+    color: var(--ar-accent-2);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.ar-public .chart-point-link:hover {
+    text-decoration: underline;
 }
 
 .ar-public .chart-controls {
