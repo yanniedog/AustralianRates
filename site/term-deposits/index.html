@@ -29,14 +29,17 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.css">
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="../public-theme.css">
+    <link rel="stylesheet" href="../public-layout.css">
+    <link rel="stylesheet" href="../public-widgets.css">
     <script src="../theme.js"></script>
 </head>
-<body>
+<body class="ar-public ar-section-term-deposits">
     <a href="#main-content" class="skip-link">Skip to content</a>
     <header class="site-header">
         <div class="site-header-inner">
@@ -54,17 +57,22 @@
 
     <main class="shell" id="main-content" tabindex="-1">
         <header class="hero panel">
-            <p class="eyebrow">Australian Term Deposit Rate Tracker</p>
-            <h1>Compare term deposit rates from major banks</h1>
-            <p class="subtitle">
-                Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates across all banks.
-            </p>
-            <div class="hero-stats" id="hero-stats">
-                <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
-                <span class="hero-stat" id="stat-cash-rate"></span>
-                <span class="hero-stat" id="stat-records" title="Total term deposit rate records">Records: <strong>...</strong></span>
-                <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
-                <span id="trigger-status" class="hint"></span>
+            <div class="hero-copy">
+                <p class="eyebrow">Australian Term Deposit Rate Tracker</p>
+                <h1>Compare term deposit rates from major banks</h1>
+                <p class="subtitle">
+                    Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates across all banks.
+                </p>
+            </div>
+            <div class="hero-meta">
+                <div class="hero-stats" id="hero-stats">
+                    <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
+                    <span class="hero-stat" id="stat-cash-rate"></span>
+                    <span class="hero-stat" id="stat-records" title="Total term deposit rate records">Records: <strong>...</strong></span>
+                    <button id="trigger-run" class="small trigger-run-btn" type="button">Check Rates Now</button>
+                    <span id="trigger-status" class="hint"></span>
+                </div>
+                <p class="hero-note">Track term and tier movements with product-level time series anchored by <code>product_key</code>.</p>
             </div>
         </header>
 
@@ -87,123 +95,125 @@
             1 month to 5 years across different deposit amounts and interest payment frequencies.</p>
         </section>
 
-        <nav class="tabs panel" role="tablist" aria-label="Data views">
-            <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
-            <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot Table</button>
-            <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
-        </nav>
+        <section class="workspace" aria-label="Interactive data workspace">
+            <nav class="tabs panel" role="tablist" aria-label="Data views">
+                <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
+                <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot Table</button>
+                <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
+            </nav>
 
-        <section class="filters panel" id="filter-bar">
-            <div class="filters-grid">
-                <label>Bank
-                    <select id="filter-bank"><option value="">All</option></select>
-                </label>
-                <label title="Term length in months">Term
-                    <select id="filter-term-months"><option value="">All</option></select>
-                </label>
-                <label title="Minimum deposit range">Deposit Tier
-                    <select id="filter-deposit-tier"><option value="">All</option></select>
-                </label>
-                <label title="Interest payment frequency">Payment
-                    <select id="filter-interest-payment"><option value="">All</option></select>
-                </label>
-                <label>From
-                    <input id="filter-start-date" type="date">
-                </label>
-                <label>To
-                    <input id="filter-end-date" type="date">
-                </label>
-                <label title="Show all, daily-only, or historical-only rows">Rate Mode
-                    <select id="filter-mode">
-                        <option value="all" selected>All</option>
-                        <option value="daily">Daily only</option>
-                        <option value="historical">Historical only</option>
-                    </select>
-                </label>
-                <label class="toggle-label" title="Show data from manually triggered runs">
-                    <input id="filter-include-manual" type="checkbox"> Include manual runs
-                </label>
-                <label title="How often to auto-refresh data (minutes, 0 = off)">Auto-refresh
-                    <select id="refresh-interval">
-                        <option value="0">Off</option>
-                        <option value="15">15 min</option>
-                        <option value="30">30 min</option>
-                        <option value="60" selected>1 hour</option>
-                        <option value="120">2 hours</option>
-                    </select>
-                </label>
-                <div class="filter-actions">
-                    <button id="apply-filters" class="small" type="button">Apply Filters</button>
-                    <label for="download-format" class="download-label">Download</label>
-                    <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
-                        <option value="">Download as...</option>
-                        <option value="csv">CSV</option>
-                        <option value="xls">XLS</option>
-                        <option value="json">JSON</option>
-                    </select>
-                    <span id="last-refreshed" class="hint"></span>
-                </div>
-            </div>
-        </section>
-
-        <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
-            <div class="panel panel-wide">
-                <div id="rate-table"></div>
-            </div>
-        </section>
-
-        <section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>
-            <div class="panel panel-wide">
-                <div class="pivot-controls">
-                    <button id="load-pivot" type="button" class="small">Load Data for Pivot</button>
-                    <span id="pivot-status" class="hint">Select filters and a date range, then click Load. Max 10,000 rows.</span>
-                </div>
-                <div id="pivot-output"></div>
-            </div>
-        </section>
-
-        <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
-            <div class="panel panel-wide">
-                <div class="chart-controls">
-                    <label>X Axis
-                        <select id="chart-x">
-                            <option value="collection_date">Date</option>
-                            <option value="bank_name">Bank</option>
-                            <option value="term_months">Term (months)</option>
-                            <option value="deposit_tier">Deposit Tier</option>
-                            <option value="interest_payment">Payment</option>
+            <section class="filters panel" id="filter-bar">
+                <div class="filters-grid">
+                    <label>Bank
+                        <select id="filter-bank"><option value="">All</option></select>
+                    </label>
+                    <label title="Term length in months">Term
+                        <select id="filter-term-months"><option value="">All</option></select>
+                    </label>
+                    <label title="Minimum deposit range">Deposit Tier
+                        <select id="filter-deposit-tier"><option value="">All</option></select>
+                    </label>
+                    <label title="Interest payment frequency">Payment
+                        <select id="filter-interest-payment"><option value="">All</option></select>
+                    </label>
+                    <label>From
+                        <input id="filter-start-date" type="date">
+                    </label>
+                    <label>To
+                        <input id="filter-end-date" type="date">
+                    </label>
+                    <label title="Show all, daily-only, or historical-only rows">Rate Mode
+                        <select id="filter-mode">
+                            <option value="all" selected>All</option>
+                            <option value="daily">Daily only</option>
+                            <option value="historical">Historical only</option>
                         </select>
                     </label>
-                    <label>Y Axis
-                        <select id="chart-y">
-                            <option value="interest_rate">Interest Rate</option>
-                        </select>
+                    <label class="toggle-label" title="Show data from manually triggered runs">
+                        <input id="filter-include-manual" type="checkbox"> Include manual runs
                     </label>
-                    <label>Group By
-                        <select id="chart-group">
-                            <option value="">None</option>
-                            <option value="product_key" selected>Product</option>
-                            <option value="bank_name">Bank</option>
-                            <option value="term_months">Term</option>
-                            <option value="deposit_tier">Deposit Tier</option>
-                            <option value="interest_payment">Payment</option>
-                        </select>
-                    </label>
-                    <label>Chart Type
-                        <select id="chart-type">
-                            <option value="scatter">Line / Scatter</option>
-                            <option value="bar">Bar</option>
-                            <option value="box">Box Plot</option>
+                    <label title="How often to auto-refresh data (minutes, 0 = off)">Auto-refresh
+                        <select id="refresh-interval">
+                            <option value="0">Off</option>
+                            <option value="15">15 min</option>
+                            <option value="30">30 min</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="120">2 hours</option>
                         </select>
                     </label>
                     <div class="filter-actions">
-                        <button id="draw-chart" type="button" class="small">Draw Chart</button>
+                        <button id="apply-filters" class="small" type="button">Apply Filters</button>
+                        <label for="download-format" class="download-label">Download</label>
+                        <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
+                            <option value="">Download as...</option>
+                            <option value="csv">CSV</option>
+                            <option value="xls">XLS</option>
+                            <option value="json">JSON</option>
+                        </select>
+                        <span id="last-refreshed" class="hint"></span>
                     </div>
                 </div>
-                <div id="chart-output" aria-label="Interactive chart"></div>
-                <p id="chart-status" class="hint">Configure axes and click Draw Chart.</p>
-                <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
-            </div>
+            </section>
+
+            <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
+                <div class="panel panel-wide">
+                    <div id="rate-table"></div>
+                </div>
+            </section>
+
+            <section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>
+                <div class="panel panel-wide">
+                    <div class="pivot-controls">
+                        <button id="load-pivot" type="button" class="small">Load Data for Pivot</button>
+                        <span id="pivot-status" class="hint">Select filters and a date range, then click Load. Max 10,000 rows.</span>
+                    </div>
+                    <div id="pivot-output"></div>
+                </div>
+            </section>
+
+            <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
+                <div class="panel panel-wide">
+                    <div class="chart-controls">
+                        <label>X Axis
+                            <select id="chart-x">
+                                <option value="collection_date">Date</option>
+                                <option value="bank_name">Bank</option>
+                                <option value="term_months">Term (months)</option>
+                                <option value="deposit_tier">Deposit Tier</option>
+                                <option value="interest_payment">Payment</option>
+                            </select>
+                        </label>
+                        <label>Y Axis
+                            <select id="chart-y">
+                                <option value="interest_rate">Interest Rate</option>
+                            </select>
+                        </label>
+                        <label>Group By
+                            <select id="chart-group">
+                                <option value="">None</option>
+                                <option value="product_key" selected>Product</option>
+                                <option value="bank_name">Bank</option>
+                                <option value="term_months">Term</option>
+                                <option value="deposit_tier">Deposit Tier</option>
+                                <option value="interest_payment">Payment</option>
+                            </select>
+                        </label>
+                        <label>Chart Type
+                            <select id="chart-type">
+                                <option value="scatter">Line / Scatter</option>
+                                <option value="bar">Bar</option>
+                                <option value="box">Box Plot</option>
+                            </select>
+                        </label>
+                        <div class="filter-actions">
+                            <button id="draw-chart" type="button" class="small">Draw Chart</button>
+                        </div>
+                    </div>
+                    <div id="chart-output" aria-label="Interactive chart"></div>
+                    <p id="chart-status" class="hint">Configure axes and click Draw Chart.</p>
+                    <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
+                </div>
+            </section>
         </section>
     </main>
 
