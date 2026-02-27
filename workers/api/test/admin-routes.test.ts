@@ -114,7 +114,7 @@ describe('admin config routes', () => {
     expect(res.status).toBe(401)
   })
 
-  it('clamps rate_check_interval_minutes to min (60) on PUT /admin/config', async () => {
+  it('clamps rate_check_interval_minutes to min (1440) on PUT /admin/config', async () => {
     const env = makeEnv()
     const req = new Request(`https://x${API_BASE}/admin/config`, {
       method: 'PUT',
@@ -125,7 +125,7 @@ describe('admin config routes', () => {
     expect(res.status).toBe(200)
     const data = await res.json() as { ok: boolean; row?: { value?: string } }
     expect(data.ok).toBe(true)
-    expect(data.row?.value).toBe('60')
+    expect(data.row?.value).toBe('1440')
   })
 
   it('returns 400 for invalid rate_check_interval_minutes on PUT /admin/config', async () => {

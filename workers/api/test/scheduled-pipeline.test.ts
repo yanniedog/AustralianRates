@@ -56,7 +56,7 @@ describe('scheduled pipeline', () => {
     mocks.ensureAppConfigTable.mockResolvedValue(undefined)
     mocks.setAppConfig.mockResolvedValue(undefined)
     mocks.getAppConfig.mockImplementation(async (_db: unknown, key: string) => {
-      if (key === 'rate_check_interval_minutes') return '60'
+      if (key === 'rate_check_interval_minutes') return '1440'
       if (key === 'rate_check_last_run_iso') return '2026-02-23T00:00:00.000Z'
       return null
     })
@@ -112,7 +112,7 @@ describe('scheduled pipeline', () => {
 
   it('uses event.scheduledTime for interval comparison to avoid timing drift', async () => {
     mocks.getAppConfig.mockImplementation(async (_db: unknown, key: string) => {
-      if (key === 'rate_check_interval_minutes') return '60'
+      if (key === 'rate_check_interval_minutes') return '1440'
       if (key === 'rate_check_last_run_iso') return '2026-02-24T00:00:00.000Z'
       return null
     })
@@ -120,13 +120,13 @@ describe('scheduled pipeline', () => {
     mocks.triggerDailyRun.mockResolvedValue({
       ok: true,
       skipped: false,
-      runId: 'daily:2026-02-24:2026-02-24T01:00:00.000Z',
+      runId: 'daily:2026-02-25:2026-02-25T01:00:00.000Z',
       collectionDate: '2026-02-24',
       enqueued: 12,
     })
 
     await handleScheduledDaily(
-      { scheduledTime: Date.parse('2026-02-24T01:00:00.000Z') } as ScheduledController,
+      { scheduledTime: Date.parse('2026-02-25T01:00:00.000Z') } as ScheduledController,
       makeEnv(),
     )
 
