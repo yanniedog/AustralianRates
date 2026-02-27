@@ -670,8 +670,10 @@
                         rows: rows.length,
                         total: response && response.total != null ? Number(response.total) : 0,
                     });
-                    // Tabulator expects an array of row objects from ajaxResponse; it reads last_page from the raw response.
-                    return rows;
+                    // Return full object so Tabulator gets pagination metadata and clears the loading overlay.
+                    var lastPage = response && response.last_page != null ? Number(response.last_page) : 1;
+                    var total = response && response.total != null ? Number(response.total) : rows.length;
+                    return { last_page: Math.max(1, lastPage), last_row: total, data: rows };
                 } catch (e) {
                     var errMsg = e && e.message ? e.message : String(e);
                     clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data response processing failed', { message: errMsg });
@@ -710,6 +712,8 @@
         rateTable.on('dataLoaded', function () {
             var container = document.getElementById('rate-table');
             if (!container) return;
+            var loader = container.querySelector('.tabulator-loader');
+            if (loader) loader.style.display = 'none';
             var titles = [];
             container.querySelectorAll('.tabulator-col-title').forEach(function (el) {
                 var t = (el.textContent || '').trim();
