@@ -196,6 +196,11 @@
     function clientLog(level, message, detail) {
         var entryLevel = normalizeLevel(level);
         var entryMessage = String(message || '');
+        if (entryLevel === 'error') {
+            if (typeof console !== 'undefined' && console.error) {
+                console.error('[Client error]', entryMessage, detail != null ? detail : '');
+            }
+        }
         if (typeof window.addSessionLog === 'function') {
             window.addSessionLog(entryLevel, entryMessage, detail);
             return;

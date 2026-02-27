@@ -351,6 +351,11 @@
         return v === true || v === 1 || v === '1' || String(v || '').toLowerCase() === 'true';
     }
 
+    function hasComparisonValue(value) {
+        var n = Number(value);
+        return Number.isFinite(n);
+    }
+
     function isComparisonAvailable(rows) {
         if (!Array.isArray(rows) || rows.length === 0) return false;
         for (var i = 0; i < rows.length; i++) {
@@ -588,6 +593,11 @@
     }
 
     function initRateTable() {
+        if (rateTable) {
+            try { rateTable.destroy(); } catch (_) {}
+            rateTable = null;
+            clientLog('warn', 'Explorer table re-init: previous table destroyed', {});
+        }
         lastMobileState = isMobile();
         columnPrefs = readColumnPrefs();
         comparisonAvailable = true;
@@ -624,27 +634,32 @@
                 return url + '?' + q.toString();
             },
             ajaxResponse: function (_url, _params, response) {
-                var rows = response && Array.isArray(response.data) ? response.data : [];
-                var nextComparisonAvailable = isComparisonAvailable(rows);
-                if (nextComparisonAvailable !== comparisonAvailable) {
-                    comparisonAvailable = nextComparisonAvailable;
-                    setTimeout(function () {
-                        applyColumnPreferences();
-                        renderSettingsPopover();
-                    }, 0);
+                try {
+                    var rows = response && Array.isArray(response.data) ? response.data : [];
+                    var nextComparisonAvailable = isComparisonAvailable(rows);
+                    if (nextComparisonAvailable !== comparisonAvailable) {
+                        comparisonAvailable = nextComparisonAvailable;
+                        setTimeout(function () {
+                            applyColumnPreferences();
+                            renderSettingsPopover();
+                        }, 0);
+                    }
+                    clientLog('info', 'Explorer data loaded', {
+                        rows: rows.length,
+                        total: response && response.total != null ? Number(response.total) : 0,
+                    });
+                    return { last_page: response.last_page || 1, data: rows };
+                } catch (e) {
+                    var errMsg = e && e.message ? e.message : String(e);
+                    clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data response processing failed', { message: errMsg });
+                    if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: ajaxResponse threw', e);
+                    throw e;
                 }
-                clientLog('info', 'Explorer data loaded', {
-                    rows: rows.length,
-                    total: response && response.total != null ? Number(response.total) : 0,
-                });
-                return { last_page: response.last_page || 1, data: rows };
             },
             ajaxError: function (xhr, textStatus, errorThrown) {
-                clientLog('error', 'Explorer data load failed', {
-                    status: xhr && xhr.status ? xhr.status : null,
-                    textStatus: textStatus || null,
-                    message: errorThrown ? String(errorThrown) : null,
-                });
+                var errData = { status: xhr && xhr.status ? xhr.status : null, textStatus: textStatus || null, message: errorThrown ? String(errorThrown) : null };
+                clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
+                if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
             },
             pagination: true,
             paginationMode: 'remote',
@@ -704,4 +719,19 @@
         applyUiMode: applyUiMode,
         getCurrentSort: getCurrentSort,
     };
+
+    window.addEventListener('error', function (event) {
+        var target = event && event.target;
+        var inTable = (target && target.nodeType === 1 && document.getElementById('rate-table') && document.getElementById('rate-table').contains(target)) || (event.filename && (String(event.filename).indexOf('ar-explorer') !== -1 || String(event.filename).indexOf('tabulator') !== -1));
+        if (!inTable && event.message) {
+            var stack = (event.error && event.error.stack) ? event.error.stack : '';
+            inTable = stack.indexOf('ar-explorer') !== -1 || stack.indexOf('tabulator') !== -1 || stack.indexOf('Tabulator') !== -1;
+        }
+        if (inTable || (event.message && /rate-table|explorer|tabulator/i.test(event.message))) {
+            var data = { message: event.message || null, filename: event.filename || null, lineno: event.lineno != null ? event.lineno : null, colno: event.colno != null ? event.colno : null };
+            if (event.error && event.error.stack) data.stack = event.error.stack;
+            clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Uncaught error in table context', data);
+            if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: Uncaught error in table context', event.error || event.message, data);
+        }
+    });
 })();
