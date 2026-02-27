@@ -99,15 +99,21 @@
         }
 
         var interestRates = getFiniteNumbers(rows, 'interest_rate');
-        var bestRate = interestRates.length ? Math.max.apply(null, interestRates) : null;
+        var bestIsLowest = section === 'home-loans';
+        var bestRate = interestRates.length
+            ? (bestIsLowest ? Math.min.apply(null, interestRates) : Math.max.apply(null, interestRates))
+            : null;
         var medRate = median(interestRates);
 
         var topRateLabel = section === 'term-deposits' ? 'Best term deposit rate' : 'Best headline rate';
+        var topRateNote = bestIsLowest
+            ? 'Lowest current interest rate in filtered results'
+            : 'Highest current interest rate in filtered results';
         var cards = [
             {
                 label: topRateLabel,
                 value: bestRate == null ? '-' : pct(bestRate),
-                note: 'Highest current interest rate in filtered results',
+                note: topRateNote,
             },
             {
                 label: section === 'home-loans' ? 'Median mortgage rate' : 'Median rate',
