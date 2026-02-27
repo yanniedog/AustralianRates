@@ -197,6 +197,10 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   const limit = safeLimit(filters.limit, 200, 1000)
   binds.push(limit)
 
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const whereNoPps = where.filter((w) => !w.includes('pps.'))
+  const whereClauseNoPps = whereNoPps.length ? `WHERE ${whereNoPps.join(' AND ')}` : ''
+
   const sql = `
     SELECT
       v.bank_name,
@@ -264,13 +268,86 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
       ON pps.section = 'home_loans'
       AND pps.bank_name = v.bank_name
       AND pps.product_id = v.product_id
-    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ${whereClause}
     ORDER BY ${VALID_ORDER_BY[filters.orderBy ?? 'default'] ?? VALID_ORDER_BY.default}
     LIMIT ?
   `
 
-  const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentHomeLoanRow(row))
+  const sqlNoPps = `
+    SELECT
+      v.bank_name,
+      v.collection_date,
+      v.product_id,
+      v.product_name,
+      v.security_purpose,
+      v.repayment_type,
+      v.rate_structure,
+      v.lvr_tier,
+      v.feature_set,
+      v.interest_rate,
+      v.comparison_rate,
+      v.annual_fee,
+      v.source_url,
+      v.product_url,
+      v.published_at,
+      v.data_quality_flag,
+      v.confidence_score,
+      v.retrieval_type,
+      v.parsed_at,
+      (
+        SELECT MIN(h.parsed_at)
+        FROM historical_loan_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.security_purpose = v.security_purpose
+          AND h.repayment_type = v.repayment_type
+          AND h.lvr_tier = v.lvr_tier
+          AND h.rate_structure = v.rate_structure
+      ) AS first_retrieved_at,
+      (
+        SELECT MAX(h.parsed_at)
+        FROM historical_loan_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.security_purpose = v.security_purpose
+          AND h.repayment_type = v.repayment_type
+          AND h.lvr_tier = v.lvr_tier
+          AND h.rate_structure = v.rate_structure
+          AND h.interest_rate = v.interest_rate
+          AND (
+            (h.comparison_rate = v.comparison_rate)
+            OR (h.comparison_rate IS NULL AND v.comparison_rate IS NULL)
+          )
+          AND (
+            (h.annual_fee = v.annual_fee)
+            OR (h.annual_fee IS NULL AND v.annual_fee IS NULL)
+          )
+          AND h.data_quality_flag LIKE 'cdr_live%'
+      ) AS rate_confirmed_at,
+      v.run_source,
+      v.product_key,
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= v.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      0 AS is_removed,
+      NULL AS removed_at
+    FROM vw_latest_rates v
+    ${whereClauseNoPps}
+    ORDER BY ${VALID_ORDER_BY[filters.orderBy ?? 'default'] ?? VALID_ORDER_BY.default}
+    LIMIT ?
+  `
+
+  try {
+    const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
+    return rows(result).map((row) => presentHomeLoanRow(row))
+  } catch {
+    const result = await db.prepare(sqlNoPps).bind(...binds).all<Record<string, unknown>>()
+    return rows(result).map((row) => presentHomeLoanRow(row))
+  }
 }
 
 /** Count of current products matching the same filters as queryLatestRates (for "Tracked products" total). */
@@ -319,6 +396,10 @@ export async function queryLatestRatesCount(db: D1Database, filters: LatestFilte
     binds.push(MIN_CONFIDENCE_ALL)
   }
 
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const whereNoPps = where.filter((w) => !w.includes('pps.'))
+  const whereClauseNoPps = whereNoPps.length ? `WHERE ${whereNoPps.join(' AND ')}` : ''
+
   const countSql = `
     SELECT COUNT(*) AS n
     FROM vw_latest_rates v
@@ -326,11 +407,17 @@ export async function queryLatestRatesCount(db: D1Database, filters: LatestFilte
       ON pps.section = 'home_loans'
       AND pps.bank_name = v.bank_name
       AND pps.product_id = v.product_id
-    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ${whereClause}
   `
-  const countResult = await db.prepare(countSql).bind(...binds).first<{ n: number }>()
-  const n = countResult?.n ?? 0
-  return Number(n)
+  const countSqlNoPps = `SELECT COUNT(*) AS n FROM vw_latest_rates v ${whereClauseNoPps}`
+
+  try {
+    const countResult = await db.prepare(countSql).bind(...binds).first<{ n: number }>()
+    return Number(countResult?.n ?? 0)
+  } catch {
+    const countResult = await db.prepare(countSqlNoPps).bind(...binds).first<{ n: number }>()
+    return Number(countResult?.n ?? 0)
+  }
 }
 
 export async function queryLatestAllRates(db: D1Database, filters: LatestFilters) {
@@ -387,6 +474,8 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
         ? 'ranked.interest_rate DESC, ranked.bank_name ASC, ranked.product_name ASC'
         : 'ranked.collection_date DESC, ranked.bank_name ASC, ranked.product_name ASC, ranked.lvr_tier ASC, ranked.rate_structure ASC'
 
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
   const sql = `
     WITH ranked AS (
       SELECT
@@ -431,7 +520,7 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
           ORDER BY h.collection_date DESC, h.parsed_at DESC
         ) AS row_num
       FROM historical_loan_rates h
-      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ${whereClause}
     )
     SELECT
       ranked.bank_name,
@@ -477,8 +566,98 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
     LIMIT ?
   `
 
-  const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentHomeLoanRow(row))
+  const sqlNoPps = `
+    WITH ranked AS (
+      SELECT
+        h.bank_name,
+        h.collection_date,
+        h.product_id,
+        h.product_name,
+        h.security_purpose,
+        h.repayment_type,
+        h.rate_structure,
+        h.lvr_tier,
+        h.feature_set,
+        h.interest_rate,
+        h.comparison_rate,
+        h.annual_fee,
+        h.source_url,
+        h.product_url,
+        h.published_at,
+        h.data_quality_flag,
+        h.confidence_score,
+        h.retrieval_type,
+        h.parsed_at,
+        MIN(h.parsed_at) OVER (
+          PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+        ) AS first_retrieved_at,
+        MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+          PARTITION BY
+            h.bank_name,
+            h.product_id,
+            h.security_purpose,
+            h.repayment_type,
+            h.lvr_tier,
+            h.rate_structure,
+            h.interest_rate,
+            h.comparison_rate,
+            h.annual_fee
+        ) AS rate_confirmed_at,
+        h.run_source,
+        h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+          ORDER BY h.collection_date DESC, h.parsed_at DESC
+        ) AS row_num
+      FROM historical_loan_rates h
+      ${whereClause}
+    )
+    SELECT
+      ranked.bank_name,
+      ranked.collection_date,
+      ranked.product_id,
+      ranked.product_name,
+      ranked.security_purpose,
+      ranked.repayment_type,
+      ranked.rate_structure,
+      ranked.lvr_tier,
+      ranked.feature_set,
+      ranked.interest_rate,
+      ranked.comparison_rate,
+      ranked.annual_fee,
+      ranked.source_url,
+      ranked.product_url,
+      ranked.published_at,
+      ranked.data_quality_flag,
+      ranked.confidence_score,
+      ranked.retrieval_type,
+      ranked.parsed_at,
+      ranked.first_retrieved_at,
+      ranked.rate_confirmed_at,
+      ranked.run_source,
+      ranked.product_key,
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= ranked.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      0 AS is_removed,
+      NULL AS removed_at
+    FROM ranked
+    WHERE ranked.row_num = 1
+    ORDER BY ${orderClause}
+    LIMIT ?
+  `
+
+  try {
+    const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
+    return rows(result).map((row) => presentHomeLoanRow(row))
+  } catch {
+    const result = await db.prepare(sqlNoPps).bind(...binds).all<Record<string, unknown>>()
+    return rows(result).map((row) => presentHomeLoanRow(row))
+  }
 }
 
 export async function queryTimeseries(
@@ -720,6 +899,9 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const whereWithoutPps = where.filter((w) => !w.includes('pps.'))
+  const whereClauseNoPps =
+    whereWithoutPps.length ? `WHERE ${whereWithoutPps.join(' AND ')}` : ''
 
   const sortCol = PAGINATED_SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
   const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
@@ -729,7 +911,6 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   const size = Math.min(1000, Math.max(1, Math.floor(Number(filters.size) || 50)))
   const offset = (page - 1) * size
 
-  // product_key is the canonical longitudinal identity for the same product across collection dates
   const countSql = `
     SELECT COUNT(*) AS total
     FROM historical_loan_rates h
@@ -808,13 +989,112 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     LIMIT ? OFFSET ?
   `
 
+  const countSqlNoPps = `
+    SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClauseNoPps}
+  `
+  const sourceSqlNoPps = `
+    SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
+    FROM historical_loan_rates h ${whereClauseNoPps}
+    GROUP BY COALESCE(h.run_source, 'scheduled')
+  `
+  const dataSqlNoPps = `
+    SELECT
+      h.bank_name,
+      h.collection_date,
+      h.product_id,
+      h.product_name,
+      h.security_purpose,
+      h.repayment_type,
+      h.rate_structure,
+      h.lvr_tier,
+      h.feature_set,
+      h.interest_rate,
+      h.comparison_rate,
+      h.annual_fee,
+      h.source_url,
+      h.product_url,
+      h.published_at,
+      h.cdr_product_detail_json,
+      h.data_quality_flag,
+      h.confidence_score,
+      h.retrieval_type,
+      h.parsed_at,
+      MIN(h.parsed_at) OVER (
+        PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+      ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.security_purpose,
+          h.repayment_type,
+          h.lvr_tier,
+          h.rate_structure,
+          h.interest_rate,
+          h.comparison_rate,
+          h.annual_fee
+      ) AS rate_confirmed_at,
+      h.run_id,
+      h.run_source,
+      h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= h.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      0 AS is_removed,
+      NULL AS removed_at
+    FROM historical_loan_rates h
+    ${whereClauseNoPps}
+    ${orderClause}
+    LIMIT ? OFFSET ?
+  `
+
   const dataBinds = [...binds, size, offset]
 
-  const [countResult, sourceResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(...binds).first<{ total: number }>(),
-    db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
-    db.prepare(dataSql).bind(...dataBinds).all<Record<string, unknown>>(),
-  ])
+  async function runWithPps(): Promise<{
+    countResult: { total: number } | null
+    sourceResult: D1Result<{ run_source: string; n: number }>
+    dataResult: D1Result<Record<string, unknown>>
+  }> {
+    const [countResult, sourceResult, dataResult] = await Promise.all([
+      db.prepare(countSql).bind(...binds).first<{ total: number }>(),
+      db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
+      db.prepare(dataSql).bind(...dataBinds).all<Record<string, unknown>>(),
+    ])
+    return { countResult: countResult ?? null, sourceResult, dataResult }
+  }
+
+  async function runWithoutPps(): Promise<{
+    countResult: { total: number } | null
+    sourceResult: D1Result<{ run_source: string; n: number }>
+    dataResult: D1Result<Record<string, unknown>>
+  }> {
+    const [countResult, sourceResult, dataResult] = await Promise.all([
+      db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>(),
+      db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>(),
+      db.prepare(dataSqlNoPps).bind(...dataBinds).all<Record<string, unknown>>(),
+    ])
+    return { countResult: countResult ?? null, sourceResult, dataResult }
+  }
+
+  let countResult: { total: number } | null
+  let sourceResult: D1Result<{ run_source: string; n: number }>
+  let dataResult: D1Result<Record<string, unknown>>
+
+  try {
+    const out = await runWithPps()
+    countResult = out.countResult
+    sourceResult = out.sourceResult
+    dataResult = out.dataResult
+  } catch {
+    const out = await runWithoutPps()
+    countResult = out.countResult
+    sourceResult = out.sourceResult
+    dataResult = out.dataResult
+  }
 
   const total = Number(countResult?.total ?? 0)
   const lastPage = Math.max(1, Math.ceil(total / size))
@@ -899,6 +1179,8 @@ export async function queryRatesForExport(
   }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const whereNoPps = where.filter((w) => !w.includes('pps.'))
+  const whereClauseNoPps = whereNoPps.length ? `WHERE ${whereNoPps.join(' AND ')}` : ''
   const sortCol = PAGINATED_SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
   const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
   const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
@@ -913,6 +1195,7 @@ export async function queryRatesForExport(
       AND pps.product_id = h.product_id
     ${whereClause}
   `
+  const countSqlNoPps = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClauseNoPps}`
   const sourceSql = `
     SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
     FROM historical_loan_rates h
@@ -921,6 +1204,11 @@ export async function queryRatesForExport(
       AND pps.bank_name = h.bank_name
       AND pps.product_id = h.product_id
     ${whereClause}
+    GROUP BY COALESCE(h.run_source, 'scheduled')
+  `
+  const sourceSqlNoPps = `
+    SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
+    FROM historical_loan_rates h ${whereClauseNoPps}
     GROUP BY COALESCE(h.run_source, 'scheduled')
   `
   const dataSql = `
@@ -981,12 +1269,84 @@ export async function queryRatesForExport(
     ${orderClause}
     LIMIT ?
   `
+  const dataSqlNoPps = `
+    SELECT
+      h.bank_name,
+      h.collection_date,
+      h.product_id,
+      h.product_name,
+      h.security_purpose,
+      h.repayment_type,
+      h.rate_structure,
+      h.lvr_tier,
+      h.feature_set,
+      h.interest_rate,
+      h.comparison_rate,
+      h.annual_fee,
+      h.source_url,
+      h.product_url,
+      h.published_at,
+      h.cdr_product_detail_json,
+      h.data_quality_flag,
+      h.confidence_score,
+      h.retrieval_type,
+      h.parsed_at,
+      MIN(h.parsed_at) OVER (
+        PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
+      ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.security_purpose,
+          h.repayment_type,
+          h.lvr_tier,
+          h.rate_structure,
+          h.interest_rate,
+          h.comparison_rate,
+          h.annual_fee
+      ) AS rate_confirmed_at,
+      h.run_id,
+      h.run_source,
+      h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= h.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      0 AS is_removed,
+      NULL AS removed_at
+    FROM historical_loan_rates h
+    ${whereClauseNoPps}
+    ${orderClause}
+    LIMIT ?
+  `
 
-  const [countResult, sourceResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(...binds).first<{ total: number }>(),
-    db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
-    db.prepare(dataSql).bind(...binds, limit).all<Record<string, unknown>>(),
-  ])
+  let countResult: { total: number } | null
+  let sourceResult: D1Result<{ run_source: string; n: number }>
+  let dataResult: D1Result<Record<string, unknown>>
+
+  try {
+    const [c, s, d] = await Promise.all([
+      db.prepare(countSql).bind(...binds).first<{ total: number }>(),
+      db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
+      db.prepare(dataSql).bind(...binds, limit).all<Record<string, unknown>>(),
+    ])
+    countResult = c ?? null
+    sourceResult = s
+    dataResult = d
+  } catch {
+    const [c, s, d] = await Promise.all([
+      db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>(),
+      db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>(),
+      db.prepare(dataSqlNoPps).bind(...binds, limit).all<Record<string, unknown>>(),
+    ])
+    countResult = c ?? null
+    sourceResult = s
+    dataResult = d
+  }
 
   const total = Number(countResult?.total ?? 0)
   let scheduled = 0
