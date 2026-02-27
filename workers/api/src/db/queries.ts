@@ -792,7 +792,7 @@ export async function queryTimeseries(
   return rows(result).map((row) => presentHomeLoanRow(row))
 }
 
-type RatesPaginatedFilters = {
+export type RatesPaginatedFilters = {
   page?: number
   size?: number
   startDate?: string

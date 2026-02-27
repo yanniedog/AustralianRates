@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
+import type { RatesPaginatedFilters } from '../db/queries'
 import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
@@ -7,7 +8,7 @@ import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
-import { getLogStats, queryLogs } from '../utils/logger'
+import { getLogStats, log, queryLogs } from '../utils/logger'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { parseSourceMode } from '../utils/source-mode'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -157,7 +158,7 @@ publicRoutes.get('/rates', async (c) => {
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
 
-  const result = await queryRatesPaginated(c.env.DB, {
+  const filters: RatesPaginatedFilters = {
     page: Number(query.page || 1),
     size: Number(query.size || 50),
     startDate: query.start_date,
@@ -178,7 +179,22 @@ publicRoutes.get('/rates', async (c) => {
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
     sourceMode,
-  })
+  }
+
+  let result: Awaited<ReturnType<typeof queryRatesPaginated>>
+  try {
+    result = await queryRatesPaginated(c.env.DB, filters)
+  } catch (err) {
+    log.error('public', 'rates paginated failed, returning empty', {
+      context: (err as Error)?.message ?? String(err),
+    })
+    result = {
+      last_page: 1,
+      total: 0,
+      data: [],
+      source_mix: { scheduled: 0, manual: 0 },
+    }
+  }
 
   const meta = buildListMeta({
     sourceMode,
