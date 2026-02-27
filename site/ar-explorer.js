@@ -224,7 +224,7 @@
 
     function sharedLeadingColumns() {
         return [
-            { title: 'Found:', field: 'found_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
+            { title: 'Found at', field: 'found_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
             { title: 'Comparison Rate', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 108 },
             { title: 'Headline Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 104 },
             { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 98 },
@@ -644,6 +644,28 @@
                             renderSettingsPopover();
                         }, 0);
                     }
+                    (function logIfSuspiciousCellValues(dataRows) {
+                        var suspicious = /undefined|^\s*nan\s*$|^\s*null\s*$|^\s*error\s*$/i;
+                        var samples = [];
+                        for (var r = 0; r < Math.min(dataRows.length, 100); r++) {
+                            var row = dataRows[r];
+                            if (!row || typeof row !== 'object') continue;
+                            for (var key in row) {
+                                if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+                                var v = row[key];
+                                if (v === undefined || v === null) continue;
+                                var s = String(v).trim();
+                                if (suspicious.test(s) || s === 'undefined' || s === 'NaN') {
+                                    samples.push({ rowIndex: r, field: key, value: s.slice(0, 80) });
+                                    if (samples.length >= 5) break;
+                                }
+                            }
+                            if (samples.length >= 5) break;
+                        }
+                        if (samples.length > 0) {
+                            clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Suspicious cell value(s) in table', { sample: samples });
+                        }
+                    })(rows);
                     clientLog('info', 'Explorer data loaded', {
                         rows: rows.length,
                         total: response && response.total != null ? Number(response.total) : 0,
@@ -682,6 +704,19 @@
             rowFormatter: rowFormatter,
             columns: getRateTableColumns(),
             initialSort: [{ column: currentSort.field, dir: currentSort.dir }],
+        });
+        rateTable.on('dataLoaded', function () {
+            var container = document.getElementById('rate-table');
+            if (!container) return;
+            var titles = [];
+            container.querySelectorAll('.tabulator-col-title').forEach(function (el) {
+                var t = (el.textContent || '').trim();
+                if (t) titles.push(t);
+            });
+            var bad = titles.filter(function (t) { return t.indexOf('::') !== -1; });
+            if (bad.length > 0) {
+                clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Column header(s) contain double colon', { sample: bad.slice(0, 10) });
+            }
         });
         clientLog('info', 'Explorer table init complete');
 

@@ -24,7 +24,7 @@ const isProductionUrl = !TEST_URL.includes('localhost') && !TEST_URL.includes('1
 const STRICT_RETRIEVAL_COLUMN = isProductionUrl || process.env.STRICT_RETRIEVAL_COLUMN === '1';
 const STRICT_NEW_EXPLORER_COLUMNS = !isProductionUrl || process.env.STRICT_NEW_EXPLORER_COLUMNS === '1';
 const STRICT_RBA_CASH_RATE = !isProductionUrl || process.env.STRICT_RBA_CASH_RATE === '1';
-const REQUIRED_METADATA_HEADERS = ['Found:', 'Headline Rate', 'Bank', 'Rate Confirmed', 'URLs'];
+const REQUIRED_METADATA_HEADERS = ['Found at', 'Headline Rate', 'Bank', 'Rate Confirmed', 'URLs'];
 
 function isIgnorableTelemetryFailure(failure) {
     if (!failure || !failure.url) return false;
