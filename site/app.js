@@ -10,6 +10,7 @@
     var charts = window.AR.charts;
     var refresh = window.AR.refresh;
     var exportModule = window.AR.export;
+    var rateChanges = window.AR.rateChanges;
     var hero = window.AR.hero;
     var utils = window.AR.utils;
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
@@ -62,6 +63,7 @@
         if (tabState.chartDrawn && els.chartStatus) {
             els.chartStatus.textContent = 'Filters changed -- click "Draw Chart" to refresh.';
         }
+        if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
     }
 
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
@@ -123,5 +125,6 @@
     }
     if (explorer && explorer.initRateTable) explorer.initRateTable();
     if (hero && hero.loadHeroStats) hero.loadHeroStats();
+    if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
     if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
 })();

@@ -112,15 +112,38 @@
         return v === 'manual' ? 'Manual' : 'Auto';
     }
 
+    function pad2(value) {
+        var n = Number(value);
+        if (!Number.isFinite(n)) return '00';
+        return (n < 10 ? '0' : '') + String(Math.floor(n));
+    }
+
+    function formatYmdSlash(value) {
+        var raw = String(value == null ? '' : value).trim();
+        if (!raw) return '-';
+
+        var fromRawDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (fromRawDate) return fromRawDate[1] + '/' + fromRawDate[2] + '/' + fromRawDate[3];
+
+        var parsed = timeUtils && typeof timeUtils.parseServerTimestamp === 'function'
+            ? timeUtils.parseServerTimestamp(raw)
+            : null;
+        var date = parsed && parsed.ok ? parsed.date : new Date(raw);
+        if (!date || !isFinite(date.getTime())) return raw;
+
+        return date.getUTCFullYear() + '/' + pad2(date.getUTCMonth() + 1) + '/' + pad2(date.getUTCDate());
+    }
+
     function parsedAtFormatter(cell) {
         var v = cell.getValue();
         if (!v) return '-';
+        var text = formatYmdSlash(v);
         var rendered = timeUtils.formatCompactDateTime ? timeUtils.formatCompactDateTime(v) : { text: String(v), title: String(v) };
         var cellEl = cell.getElement ? cell.getElement() : null;
         if (cellEl && rendered && rendered.title) {
             cellEl.setAttribute('title', rendered.title);
         }
-        return rendered && rendered.text ? rendered.text : String(v);
+        return text;
     }
 
     function publishedAtFormatter(cell) {
@@ -131,6 +154,7 @@
         var value = cell.getValue();
         var rowData = cell.getRow && cell.getRow() ? cell.getRow().getData() : null;
         var parsedAt = rowData && rowData.parsed_at ? rowData.parsed_at : '';
+        var text = formatYmdSlash(value);
         var rendered = timeUtils.formatSourceDateWithLocal
             ? timeUtils.formatSourceDateWithLocal(value, parsedAt)
             : { text: String(value || ''), title: String(value || '') };
@@ -138,7 +162,7 @@
         if (cellEl && rendered && rendered.title) {
             cellEl.setAttribute('title', rendered.title);
         }
-        return rendered && rendered.text ? rendered.text : String(value || '');
+        return text;
     }
 
     function enumDisplayFormatter(displayField, rawField, enumField) {

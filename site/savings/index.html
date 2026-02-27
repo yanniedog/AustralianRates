@@ -104,6 +104,14 @@
             <div id="quick-compare-cards" class="quick-compare-cards"></div>
         </section>
 
+        <section class="panel rate-change-log" aria-label="Rate change log">
+            <h2>Rate Change Log</h2>
+            <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
+            <ul id="rate-change-list" class="rate-change-list">
+                <li class="rate-change-item-empty">Loading...</li>
+            </ul>
+        </section>
+
         <section class="workspace" aria-label="Interactive data workspace">
             <nav class="tabs panel" role="tablist" aria-label="Data views">
                 <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
@@ -268,6 +276,7 @@
     <script src="../ar-charts.js"></script>
     <script src="../ar-refresh.js"></script>
     <script src="../ar-export.js"></script>
+    <script src="../ar-rate-changes.js"></script>
     <script src="../app.js"></script>
     <script src="../frame.js"></script>
 </body>
