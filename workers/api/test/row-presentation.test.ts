@@ -100,6 +100,15 @@ describe('row presentation', () => {
     expect(row.removed_at).toBe('2026-02-26 00:00:00')
   })
 
+  it('falls back to parsed_at for found_at when found_at and first_retrieved_at are missing', () => {
+    const row = presentCoreRowFields({
+      source_url: 'https://example.com/rates',
+      parsed_at: '2026-02-25 06:17:08',
+    })
+
+    expect(row.found_at).toBe('2026-02-25 06:17:08')
+  })
+
   it('derives published_at from wayback snapshot timestamp when missing', () => {
     const row = presentCoreRowFields({
       source_url: 'https://web.archive.org/web/20200102030405/https://example.com/rates',

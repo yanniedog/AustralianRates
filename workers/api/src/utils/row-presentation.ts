@@ -158,7 +158,11 @@ export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<st
   const publishedAt = normalizeTimestamp(row.published_at) || waybackPublishedAt(sourceUrl)
   const retrievedAt = asText(row.retrieved_at) || asText(row.parsed_at)
   const firstRetrievedAt = asText(row.first_retrieved_at) || asText(row.found_at)
-  const foundAt = asText(row.found_at) || firstRetrievedAt
+  const foundAt =
+    asText(row.found_at) ||
+    firstRetrievedAt ||
+    asText(row.parsed_at) ||
+    retrievedAt
   const rateConfirmedAt = asText(row.rate_confirmed_at)
   const removedAt = asText(row.removed_at)
   const isRemovedRaw = row.is_removed
