@@ -709,11 +709,22 @@
             columns: getRateTableColumns(),
             initialSort: [{ column: currentSort.field, dir: currentSort.dir }],
         });
-        rateTable.on('dataLoaded', function () {
+        function hideTableLoader() {
             var container = document.getElementById('rate-table');
             if (!container) return;
-            var loader = container.querySelector('.tabulator-loader');
-            if (loader) loader.style.display = 'none';
+            container.querySelectorAll('.tabulator-loader, .tabulator-loader-msg, [class*="tabulator-loading"]').forEach(function (el) {
+                el.style.display = 'none';
+            });
+            container.querySelectorAll('.tabulator-table').forEach(function (tableBody) {
+                var loadingEl = tableBody.querySelector ? tableBody.querySelector('[class*="loader"], [class*="loading"]') : null;
+                if (loadingEl && (loadingEl.textContent || '').trim() === 'Loading') loadingEl.style.display = 'none';
+            });
+        }
+        rateTable.on('dataLoaded', function () {
+            hideTableLoader();
+            [0, 50, 150, 300].forEach(function (ms) { setTimeout(hideTableLoader, ms); });
+            var container = document.getElementById('rate-table');
+            if (!container) return;
             var titles = [];
             container.querySelectorAll('.tabulator-col-title').forEach(function (el) {
                 var t = (el.textContent || '').trim();
