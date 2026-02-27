@@ -685,6 +685,13 @@
                 var errData = { status: xhr && xhr.status ? xhr.status : null, textStatus: textStatus || null, message: errorThrown ? String(errorThrown) : null };
                 clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
                 if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
+                setTimeout(function () {
+                    var container = document.getElementById('rate-table');
+                    if (!container) return;
+                    container.querySelectorAll('.tabulator-loader, .tabulator-loader-msg, [class*="tabulator-loading"]').forEach(function (el) {
+                        el.style.display = 'none';
+                    });
+                }, 0);
             },
             pagination: true,
             paginationMode: 'remote',
@@ -717,12 +724,14 @@
             });
             container.querySelectorAll('.tabulator-table').forEach(function (tableBody) {
                 var loadingEl = tableBody.querySelector ? tableBody.querySelector('[class*="loader"], [class*="loading"]') : null;
-                if (loadingEl && (loadingEl.textContent || '').trim() === 'Loading') loadingEl.style.display = 'none';
+                if (loadingEl && (loadingEl.textContent || '').trim().toLowerCase().indexOf('loading') !== -1) loadingEl.style.display = 'none';
             });
         }
-        rateTable.on('dataLoaded', function () {
-            hideTableLoader();
+        function scheduleHideTableLoader() {
             [0, 50, 150, 300].forEach(function (ms) { setTimeout(hideTableLoader, ms); });
+        }
+        rateTable.on('dataLoaded', function () {
+            scheduleHideTableLoader();
             var container = document.getElementById('rate-table');
             if (!container) return;
             var titles = [];
@@ -735,6 +744,9 @@
                 clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Column header(s) contain double colon', { sample: bad.slice(0, 10) });
             }
         });
+        rateTable.on('dataProcessed', scheduleHideTableLoader);
+        rateTable.on('renderComplete', scheduleHideTableLoader);
+        rateTable.on('pageLoaded', scheduleHideTableLoader);
         clientLog('info', 'Explorer table init complete');
 
         var resizeTimer;
