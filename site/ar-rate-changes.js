@@ -10,6 +10,14 @@
     var esc = window._arEsc || function (v) { return String(v == null ? '' : v); };
     var apiBase = config && config.apiBase ? config.apiBase : '';
 
+    function getStatusEl() {
+        return (els && els.rateChangeStatus) || document.getElementById('rate-change-status');
+    }
+
+    function getListEl() {
+        return (els && els.rateChangeList) || document.getElementById('rate-change-list');
+    }
+
     function ymd(value) {
         var raw = String(value == null ? '' : value).trim();
         if (!raw) return '-';
@@ -49,9 +57,10 @@
     }
 
     function renderRows(rows) {
-        if (!els.rateChangeList) return;
+        var listEl = getListEl();
+        if (!listEl) return;
         if (!Array.isArray(rows) || rows.length === 0) {
-            els.rateChangeList.innerHTML = '<li class="rate-change-item-empty">No rate changes logged yet.</li>';
+            listEl.innerHTML = '<li class="rate-change-item-empty">No rate changes logged yet.</li>';
             return;
         }
 
@@ -80,24 +89,33 @@
                 '</li>'
             );
         }).join('');
-        els.rateChangeList.innerHTML = html;
+        listEl.innerHTML = html;
     }
 
     async function loadRateChanges() {
-        if (!els.rateChangeList || !apiBase) return;
-        if (els.rateChangeStatus) els.rateChangeStatus.textContent = 'Loading latest rate changes...';
+        var listEl = getListEl();
+        var statusEl = getStatusEl();
+        if (!listEl || !statusEl || !apiBase) {
+            clientLog('error', 'RATE_CHANGE_LOG_ABNORMALITY: Missing DOM container or API base', {
+                hasList: !!listEl,
+                hasStatus: !!statusEl,
+                hasApiBase: !!apiBase
+            });
+            return;
+        }
+        if (statusEl) statusEl.textContent = 'Loading latest rate changes...';
         try {
             var res = await fetch(apiBase + '/changes?limit=200&offset=0', { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
             var rows = Array.isArray(data && data.rows) ? data.rows : [];
             renderRows(rows);
-            if (els.rateChangeStatus) {
+            if (statusEl) {
                 var total = Number(data && data.total) || rows.length;
-                els.rateChangeStatus.textContent = 'Showing latest ' + rows.length + ' changes (' + total + ' total tracked).';
+                statusEl.textContent = 'Showing latest ' + rows.length + ' changes (' + total + ' total tracked).';
             }
         } catch (err) {
-            if (els.rateChangeStatus) els.rateChangeStatus.textContent = 'Rate change log unavailable right now.';
+            if (statusEl) statusEl.textContent = 'Rate change log unavailable right now.';
             renderRows([]);
             clientLog('error', 'Rate change log load failed', {
                 message: err && err.message ? err.message : String(err),
