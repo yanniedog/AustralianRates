@@ -10,11 +10,17 @@ import { presentCoreRowFields, presentHomeLoanRow } from '../utils/row-presentat
 
 type LatestFilters = {
   bank?: string
+  banks?: string[]
   securityPurpose?: string
   repaymentType?: string
   rateStructure?: string
   lvrTier?: string
   featureSet?: string
+  minRate?: number
+  maxRate?: number
+  minComparisonRate?: number
+  maxComparisonRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number
@@ -42,6 +48,59 @@ function safeLimit(limit: number | undefined, fallback: number, max = 500): numb
 
 function rows<T>(result: D1Result<T>): T[] {
   return result.results ?? []
+}
+
+function addBankWhere(
+  where: string[],
+  binds: Array<string | number>,
+  column: string,
+  bank?: string,
+  banks?: string[],
+) {
+  const uniqueBanks = Array.from(new Set((banks ?? []).map((v) => String(v || '').trim()).filter(Boolean)))
+  if (uniqueBanks.length > 0) {
+    const placeholders = uniqueBanks.map(() => '?').join(', ')
+    where.push(`${column} IN (${placeholders})`)
+    for (const value of uniqueBanks) binds.push(value)
+    return
+  }
+
+  if (bank) {
+    where.push(`${column} = ?`)
+    binds.push(bank)
+  }
+}
+
+function addRateBoundsWhere(
+  where: string[],
+  binds: Array<string | number>,
+  interestRateColumn: string,
+  comparisonRateColumn: string,
+  filters: {
+    minRate?: number
+    maxRate?: number
+    minComparisonRate?: number
+    maxComparisonRate?: number
+  },
+) {
+  if (Number.isFinite(filters.minRate)) {
+    where.push(`${interestRateColumn} >= ?`)
+    binds.push(Number(filters.minRate))
+  }
+  if (Number.isFinite(filters.maxRate)) {
+    where.push(`${interestRateColumn} <= ?`)
+    binds.push(Number(filters.maxRate))
+  }
+  if (Number.isFinite(filters.minComparisonRate)) {
+    where.push(`${comparisonRateColumn} IS NOT NULL`)
+    where.push(`${comparisonRateColumn} >= ?`)
+    binds.push(Number(filters.minComparisonRate))
+  }
+  if (Number.isFinite(filters.maxComparisonRate)) {
+    where.push(`${comparisonRateColumn} IS NOT NULL`)
+    where.push(`${comparisonRateColumn} <= ?`)
+    binds.push(Number(filters.maxComparisonRate))
+  }
 }
 
 export async function getFilters(db: D1Database) {
@@ -96,10 +155,8 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   where.push('v.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
-  if (filters.bank) {
-    where.push('v.bank_name = ?')
-    binds.push(filters.bank)
-  }
+  addBankWhere(where, binds, 'v.bank_name', filters.bank, filters.banks)
+  addRateBoundsWhere(where, binds, 'v.interest_rate', 'v.comparison_rate', filters)
   if (filters.securityPurpose) {
     where.push('v.security_purpose = ?')
     binds.push(filters.securityPurpose)
@@ -119,6 +176,9 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   if (filters.featureSet) {
     where.push('v.feature_set = ?')
     binds.push(filters.featureSet)
+  }
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
   }
   where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
   if (filters.mode === 'daily') {
@@ -168,12 +228,42 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
           AND h.lvr_tier = v.lvr_tier
           AND h.rate_structure = v.rate_structure
       ) AS first_retrieved_at,
+      (
+        SELECT MAX(h.parsed_at)
+        FROM historical_loan_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.security_purpose = v.security_purpose
+          AND h.repayment_type = v.repayment_type
+          AND h.lvr_tier = v.lvr_tier
+          AND h.rate_structure = v.rate_structure
+          AND h.interest_rate = v.interest_rate
+          AND (
+            (h.comparison_rate = v.comparison_rate)
+            OR (h.comparison_rate IS NULL AND v.comparison_rate IS NULL)
+          )
+          AND (
+            (h.annual_fee = v.annual_fee)
+            OR (h.annual_fee IS NULL AND v.annual_fee IS NULL)
+          )
+          AND h.data_quality_flag LIKE 'cdr_live%'
+      ) AS rate_confirmed_at,
       v.run_source,
       v.product_key,
-      r.cash_rate AS rba_cash_rate
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= v.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM vw_latest_rates v
-    LEFT JOIN rba_cash_rates r
-      ON r.collection_date = v.collection_date
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = v.bank_name
+      AND pps.product_id = v.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY ${VALID_ORDER_BY[filters.orderBy ?? 'default'] ?? VALID_ORDER_BY.default}
     LIMIT ?
@@ -183,6 +273,66 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
   return rows(result).map((row) => presentHomeLoanRow(row))
 }
 
+/** Count of current products matching the same filters as queryLatestRates (for "Tracked products" total). */
+export async function queryLatestRatesCount(db: D1Database, filters: LatestFilters): Promise<number> {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('v.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addBankWhere(where, binds, 'v.bank_name', filters.bank, filters.banks)
+  addRateBoundsWhere(where, binds, 'v.interest_rate', 'v.comparison_rate', filters)
+  if (filters.securityPurpose) {
+    where.push('v.security_purpose = ?')
+    binds.push(filters.securityPurpose)
+  }
+  if (filters.repaymentType) {
+    where.push('v.repayment_type = ?')
+    binds.push(filters.repaymentType)
+  }
+  if (filters.rateStructure) {
+    where.push('v.rate_structure = ?')
+    binds.push(filters.rateStructure)
+  }
+  if (filters.lvrTier) {
+    where.push('v.lvr_tier = ?')
+    binds.push(filters.lvrTier)
+  }
+  if (filters.featureSet) {
+    where.push('v.feature_set = ?')
+    binds.push(filters.featureSet)
+  }
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+  }
+  where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
+  if (filters.mode === 'daily') {
+    where.push("v.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_DAILY)
+  } else if (filters.mode === 'historical') {
+    where.push("v.data_quality_flag LIKE 'parsed_from_wayback%'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_ALL)
+  }
+
+  const countSql = `
+    SELECT COUNT(*) AS n
+    FROM vw_latest_rates v
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = v.bank_name
+      AND pps.product_id = v.product_id
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+  `
+  const countResult = await db.prepare(countSql).bind(...binds).first<{ n: number }>()
+  const n = countResult?.n ?? 0
+  return Number(n)
+}
+
 export async function queryLatestAllRates(db: D1Database, filters: LatestFilters) {
   const where: string[] = []
   const binds: Array<string | number> = []
@@ -190,10 +340,8 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
-  if (filters.bank) {
-    where.push('h.bank_name = ?')
-    binds.push(filters.bank)
-  }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', 'h.comparison_rate', filters)
   if (filters.securityPurpose) {
     where.push('h.security_purpose = ?')
     binds.push(filters.securityPurpose)
@@ -264,6 +412,18 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
         MIN(h.parsed_at) OVER (
           PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
         ) AS first_retrieved_at,
+        MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+          PARTITION BY
+            h.bank_name,
+            h.product_id,
+            h.security_purpose,
+            h.repayment_type,
+            h.lvr_tier,
+            h.rate_structure,
+            h.interest_rate,
+            h.comparison_rate,
+            h.annual_fee
+        ) AS rate_confirmed_at,
         h.run_source,
         h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
         ROW_NUMBER() OVER (
@@ -294,13 +454,25 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
       ranked.retrieval_type,
       ranked.parsed_at,
       ranked.first_retrieved_at,
+      ranked.rate_confirmed_at,
       ranked.run_source,
       ranked.product_key,
-      r.cash_rate AS rba_cash_rate
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= ranked.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM ranked
-    LEFT JOIN rba_cash_rates r
-      ON r.collection_date = ranked.collection_date
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = ranked.bank_name
+      AND pps.product_id = ranked.product_id
     WHERE ranked.row_num = 1
+      ${filters.includeRemoved ? '' : 'AND COALESCE(pps.is_removed, 0) = 0'}
     ORDER BY ${orderClause}
     LIMIT ?
   `
@@ -313,10 +485,16 @@ export async function queryTimeseries(
   db: D1Database,
   input: {
     bank?: string
+    banks?: string[]
     productKey?: string
     securityPurpose?: string
     repaymentType?: string
     featureSet?: string
+    minRate?: number
+    maxRate?: number
+    minComparisonRate?: number
+    maxComparisonRate?: number
+    includeRemoved?: boolean
     mode?: 'all' | 'daily' | 'historical'
     sourceMode?: SourceMode
     startDate?: string
@@ -330,10 +508,8 @@ export async function queryTimeseries(
   where.push('t.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
 
-  if (input.bank) {
-    where.push('t.bank_name = ?')
-    binds.push(input.bank)
-  }
+  addBankWhere(where, binds, 't.bank_name', input.bank, input.banks)
+  addRateBoundsWhere(where, binds, 't.interest_rate', 't.comparison_rate', input)
   if (input.productKey) {
     where.push('t.product_key = ?')
     binds.push(input.productKey)
@@ -349,6 +525,9 @@ export async function queryTimeseries(
   if (input.featureSet) {
     where.push('t.feature_set = ?')
     binds.push(input.featureSet)
+  }
+  if (!input.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
   }
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) {
@@ -397,12 +576,34 @@ export async function queryTimeseries(
       t.published_at,
       t.parsed_at,
       MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at,
+      MAX(CASE WHEN t.data_quality_flag LIKE 'cdr_live%' THEN t.parsed_at END) OVER (
+        PARTITION BY
+          t.bank_name,
+          t.product_id,
+          t.security_purpose,
+          t.repayment_type,
+          t.lvr_tier,
+          t.rate_structure,
+          t.interest_rate,
+          t.comparison_rate,
+          t.annual_fee
+      ) AS rate_confirmed_at,
       t.run_source,
       t.product_key,
-      r.cash_rate AS rba_cash_rate
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= t.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM vw_rate_timeseries t
-    LEFT JOIN rba_cash_rates r
-      ON r.collection_date = t.collection_date
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = t.bank_name
+      AND pps.product_id = t.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY t.collection_date ASC
     LIMIT ?
@@ -418,11 +619,17 @@ type RatesPaginatedFilters = {
   startDate?: string
   endDate?: string
   bank?: string
+  banks?: string[]
   securityPurpose?: string
   repaymentType?: string
   rateStructure?: string
   lvrTier?: string
   featureSet?: string
+  minRate?: number
+  maxRate?: number
+  minComparisonRate?: number
+  maxComparisonRate?: number
+  includeRemoved?: boolean
   sort?: string
   dir?: 'asc' | 'desc'
   mode?: 'all' | 'daily' | 'historical'
@@ -444,9 +651,13 @@ const PAGINATED_SORT_COLUMNS: Record<string, string> = {
   rba_cash_rate: 'rba_cash_rate',
   parsed_at: 'h.parsed_at',
   retrieved_at: 'h.parsed_at',
+  found_at: 'first_retrieved_at',
   first_retrieved_at: 'first_retrieved_at',
+  rate_confirmed_at: 'rate_confirmed_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
+  is_removed: 'is_removed',
+  removed_at: 'removed_at',
   source_url: 'h.source_url',
   product_url: 'h.product_url',
   published_at: 'h.published_at',
@@ -459,6 +670,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', 'h.comparison_rate', filters)
 
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
   if (filters.mode === 'daily') {
@@ -474,10 +686,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     binds.push(MIN_CONFIDENCE_ALL)
   }
 
-  if (filters.bank) {
-    where.push('h.bank_name = ?')
-    binds.push(filters.bank)
-  }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.securityPurpose) {
     where.push('h.security_purpose = ?')
     binds.push(filters.securityPurpose)
@@ -506,6 +715,9 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     where.push('h.collection_date <= ?')
     binds.push(filters.endDate)
   }
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+  }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
@@ -514,14 +726,26 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
 
   const page = Math.max(1, Math.floor(Number(filters.page) || 1))
-  const size = Math.min(500, Math.max(1, Math.floor(Number(filters.size) || 50)))
+  const size = Math.min(1000, Math.max(1, Math.floor(Number(filters.size) || 50)))
   const offset = (page - 1) * size
 
   // product_key is the canonical longitudinal identity for the same product across collection dates
-  const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM historical_loan_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
+    ${whereClause}
+  `
   const sourceSql = `
     SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
     FROM historical_loan_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     GROUP BY COALESCE(h.run_source, 'scheduled')
   `
@@ -550,13 +774,35 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
       MIN(h.parsed_at) OVER (
         PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
       ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.security_purpose,
+          h.repayment_type,
+          h.lvr_tier,
+          h.rate_structure,
+          h.interest_rate,
+          h.comparison_rate,
+          h.annual_fee
+      ) AS rate_confirmed_at,
       h.run_id,
       h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
-      r.cash_rate AS rba_cash_rate
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= h.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM historical_loan_rates h
-    LEFT JOIN rba_cash_rates r
-      ON r.collection_date = h.collection_date
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     ${orderClause}
     LIMIT ? OFFSET ?
@@ -603,6 +849,7 @@ export async function queryRatesForExport(
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', 'h.comparison_rate', filters)
 
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
   if (filters.mode === 'daily') {
@@ -618,10 +865,7 @@ export async function queryRatesForExport(
     binds.push(MIN_CONFIDENCE_ALL)
   }
 
-  if (filters.bank) {
-    where.push('h.bank_name = ?')
-    binds.push(filters.bank)
-  }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.securityPurpose) {
     where.push('h.security_purpose = ?')
     binds.push(filters.securityPurpose)
@@ -650,6 +894,9 @@ export async function queryRatesForExport(
     where.push('h.collection_date <= ?')
     binds.push(filters.endDate)
   }
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+  }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
   const sortCol = PAGINATED_SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
@@ -657,10 +904,22 @@ export async function queryRatesForExport(
   const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
   const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(filters.limit) || maxRows)))
 
-  const countSql = `SELECT COUNT(*) AS total FROM historical_loan_rates h ${whereClause}`
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM historical_loan_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
+    ${whereClause}
+  `
   const sourceSql = `
     SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
     FROM historical_loan_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     GROUP BY COALESCE(h.run_source, 'scheduled')
   `
@@ -689,13 +948,35 @@ export async function queryRatesForExport(
       MIN(h.parsed_at) OVER (
         PARTITION BY h.bank_name, h.product_id, h.security_purpose, h.repayment_type, h.lvr_tier, h.rate_structure
       ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.security_purpose,
+          h.repayment_type,
+          h.lvr_tier,
+          h.rate_structure,
+          h.interest_rate,
+          h.comparison_rate,
+          h.annual_fee
+      ) AS rate_confirmed_at,
       h.run_id,
       h.run_source,
       h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key,
-      r.cash_rate AS rba_cash_rate
+      (
+        SELECT r.cash_rate
+        FROM rba_cash_rates r
+        WHERE r.collection_date <= h.collection_date
+        ORDER BY r.collection_date DESC
+        LIMIT 1
+      ) AS rba_cash_rate,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM historical_loan_rates h
-    LEFT JOIN rba_cash_rates r
-      ON r.collection_date = h.collection_date
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     ${orderClause}
     LIMIT ?

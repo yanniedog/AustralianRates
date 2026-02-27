@@ -3,6 +3,7 @@ import { advanceAutoBackfillAfterDay, releaseAutoBackfillClaim } from '../db/aut
 import { addHistoricalTaskBatchCounts, claimHistoricalTaskById, finalizeHistoricalTask, getHistoricalRunById } from '../db/client-historical-runs'
 import { recordDatasetCoverageRunOutcome, type CoverageDataset } from '../db/dataset-coverage'
 import { upsertHistoricalRateRows } from '../db/historical-rates'
+import { markMissingProductsRemoved, markProductsSeen } from '../db/product-status'
 import { upsertSavingsRateRows } from '../db/savings-rates'
 import { upsertTdRateRows } from '../db/td-rates'
 import { getCachedEndpoint } from '../db/endpoint-cache'
@@ -303,12 +304,46 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   let indexPayloads = 0
   let productIdsDiscovered = 0
   let productDetailsRequested = 0
+  let removalSyncProductIds: string[] | null = null
   let fallbackSeedFetches = 0
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   const seedDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
   let validationMs = 0
   let writeMs = 0
+  const syncRemovalStatus = async (): Promise<void> => {
+    if (removalSyncProductIds == null) {
+      log.info('consumer', 'daily_lender_fetch removal_sync_skipped', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context: 'reason=no_successful_cdr_index_fetch',
+      })
+      return
+    }
+
+    const bankName = lender.canonical_bank_name || lender.name
+    const removalStartedAt = Date.now()
+    const seenTouched = await markProductsSeen(env.DB, {
+      section: 'home_loans',
+      bankName,
+      productIds: removalSyncProductIds,
+      collectionDate: job.collectionDate,
+      runId: job.runId,
+    })
+    const removedTouched = await markMissingProductsRemoved(env.DB, {
+      section: 'home_loans',
+      bankName,
+      activeProductIds: removalSyncProductIds,
+    })
+    log.info('consumer', 'daily_lender_fetch removal_sync', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context:
+        `bank=${bankName} discovered=${removalSyncProductIds.length}` +
+        ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
+        ` elapsed_ms=${elapsedMs(removalStartedAt)}`,
+    })
+  }
 
   log.info('consumer', 'daily_lender_fetch collect', {
     runId: job.runId,
@@ -336,6 +371,11 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
     productIdsDiscovered += products.productIds.length
     const endpointRowsBefore = collectedRows.length
     const indexStatusSummary = summarizeStatusCodes(products.rawPayloads.map((payload) => payload.status))
+    const indexFetchSucceeded =
+      products.rawPayloads.length > 0 && products.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
+    if (indexFetchSucceeded && removalSyncProductIds == null) {
+      removalSyncProductIds = products.productIds.slice()
+    }
     let endpointDetailRows = 0
     const detailStatuses: number[] = []
     for (const payload of products.rawPayloads) {
@@ -492,6 +532,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   }
   const hadMortgageSignals = collectedRows.length > 0 || inspectedHtml > 0 || droppedByParser > 0
   if (accepted.length === 0) {
+    await syncRemovalStatus()
     const noMortgageSignals = !hadMortgageSignals
     await persistRawPayload(env, {
       sourceType: 'cdr_products',
@@ -559,6 +600,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   const writeStartedAt = Date.now()
   const written = await upsertHistoricalRateRows(env.DB, accepted)
   writeMs = elapsedMs(writeStartedAt)
+  await syncRemovalStatus()
   log.info('consumer', `daily_lender_fetch completed: ${written} written, ${dropped.length} dropped`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
@@ -1500,10 +1542,74 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
   let tdProductIdsDiscovered = 0
   let savingsDetailRequests = 0
   let tdDetailRequests = 0
+  let savingsRemovalSyncProductIds: string[] | null = null
+  let tdRemovalSyncProductIds: string[] | null = null
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
   let validationMs = 0
   let writeMs = 0
+  const syncRemovalStatus = async (): Promise<void> => {
+    const bankName = lender.canonical_bank_name || lender.name
+    if (savingsRemovalSyncProductIds != null) {
+      const started = Date.now()
+      const seenTouched = await markProductsSeen(env.DB, {
+        section: 'savings',
+        bankName,
+        productIds: savingsRemovalSyncProductIds,
+        collectionDate: job.collectionDate,
+        runId: job.runId,
+      })
+      const removedTouched = await markMissingProductsRemoved(env.DB, {
+        section: 'savings',
+        bankName,
+        activeProductIds: savingsRemovalSyncProductIds,
+      })
+      log.info('consumer', 'daily_savings_lender_fetch removal_sync_savings', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `bank=${bankName} discovered=${savingsRemovalSyncProductIds.length}` +
+          ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
+          ` elapsed_ms=${elapsedMs(started)}`,
+      })
+    } else {
+      log.info('consumer', 'daily_savings_lender_fetch removal_sync_savings_skipped', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context: 'reason=no_successful_cdr_index_fetch',
+      })
+    }
+
+    if (tdRemovalSyncProductIds != null) {
+      const started = Date.now()
+      const seenTouched = await markProductsSeen(env.DB, {
+        section: 'term_deposits',
+        bankName,
+        productIds: tdRemovalSyncProductIds,
+        collectionDate: job.collectionDate,
+        runId: job.runId,
+      })
+      const removedTouched = await markMissingProductsRemoved(env.DB, {
+        section: 'term_deposits',
+        bankName,
+        activeProductIds: tdRemovalSyncProductIds,
+      })
+      log.info('consumer', 'daily_savings_lender_fetch removal_sync_td', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `bank=${bankName} discovered=${tdRemovalSyncProductIds.length}` +
+          ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
+          ` elapsed_ms=${elapsedMs(started)}`,
+      })
+    } else {
+      log.info('consumer', 'daily_savings_lender_fetch removal_sync_td_skipped', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context: 'reason=no_successful_cdr_index_fetch',
+      })
+    }
+  }
 
   log.info('consumer', 'daily_savings_lender_fetch collect', {
     runId: job.runId,
@@ -1534,6 +1640,17 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     indexPayloads += savingsProducts.rawPayloads.length + tdProducts.rawPayloads.length
     const savingsIndexStatuses = summarizeStatusCodes(savingsProducts.rawPayloads.map((payload) => payload.status))
     const tdIndexStatuses = summarizeStatusCodes(tdProducts.rawPayloads.map((payload) => payload.status))
+    const savingsIndexFetchSucceeded =
+      savingsProducts.rawPayloads.length > 0 &&
+      savingsProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
+    if (savingsIndexFetchSucceeded && savingsRemovalSyncProductIds == null) {
+      savingsRemovalSyncProductIds = savingsProducts.productIds.slice()
+    }
+    const tdIndexFetchSucceeded =
+      tdProducts.rawPayloads.length > 0 && tdProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
+    if (tdIndexFetchSucceeded && tdRemovalSyncProductIds == null) {
+      tdRemovalSyncProductIds = tdProducts.productIds.slice()
+    }
     const savingsRowsBefore = savingsRows.length
     const tdRowsBefore = tdRows.length
     const savingsDetailStatuses: number[] = []
@@ -1693,6 +1810,7 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     tdAccepted.length > 0 ? upsertTdRateRows(env.DB, tdAccepted) : Promise.resolve(0),
   ])
   writeMs = elapsedMs(writeStartedAt)
+  await syncRemovalStatus()
 
   log.info('consumer', 'daily_savings_lender_fetch write_completed', {
     runId: job.runId,

@@ -60,6 +60,47 @@
         }).format(date);
     }
 
+    function partsMap(parts) {
+        var out = {};
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i];
+            if (!part || !part.type) continue;
+            out[part.type] = part.value;
+        }
+        return out;
+    }
+
+    function formatCompactDateTime(value, tz) {
+        var timeZone = asText(tz) || getUserTimeZone();
+        var parsed = parseServerTimestamp(value);
+        if (!parsed.ok) {
+            return {
+                ok: false,
+                text: '-',
+                title: 'Invalid timestamp. Raw: ' + (parsed.raw || '(empty)')
+            };
+        }
+
+        var formatter = new Intl.DateTimeFormat('en-GB', {
+            timeZone: timeZone,
+            year: '2-digit',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            hourCycle: 'h23'
+        });
+        var map = partsMap(formatter.formatToParts(parsed.date));
+        var compact = (map.year || '--') + '/' + (map.month || '--') + '/' + (map.day || '--') + ' - ' + (map.hour || '--') + ':' + (map.minute || '--');
+        var verbose = formatLocalDateTime(parsed.date, timeZone);
+        return {
+            ok: true,
+            text: compact,
+            title: 'Raw: ' + parsed.raw + ' | Local: ' + verbose + ' (' + timeZone + ')'
+        };
+    }
+
     function formatCheckedAt(value, tz) {
         var timeZone = asText(tz) || getUserTimeZone();
         var parsed = parseServerTimestamp(value);
@@ -106,6 +147,7 @@
         getUserTimeZone: getUserTimeZone,
         parseServerTimestamp: parseServerTimestamp,
         formatCheckedAt: formatCheckedAt,
-        formatSourceDateWithLocal: formatSourceDateWithLocal
+        formatSourceDateWithLocal: formatSourceDateWithLocal,
+        formatCompactDateTime: formatCompactDateTime
     };
 })();

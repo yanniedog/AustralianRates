@@ -42,4 +42,13 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain("status IN ('pending', 'active', 'completed_lower_bound')")
     expect(sql).toContain("INSERT OR IGNORE INTO dataset_coverage_progress (dataset_key, status)")
   })
+
+  it('includes product presence status migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0016_product_presence_status.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS product_presence_status')
+    expect(sql).toContain("section IN ('home_loans', 'savings', 'term_deposits')")
+    expect(sql).toContain('is_removed INTEGER NOT NULL DEFAULT 0')
+    expect(sql).toContain('PRIMARY KEY (section, bank_name, product_id)')
+  })
 })

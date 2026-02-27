@@ -113,8 +113,8 @@
 
             <section class="filters panel" id="filter-bar">
                 <div class="filters-grid">
-                    <label>Bank
-                        <select id="filter-bank"><option value="">All</option></select>
+                    <label>Banks
+                        <select id="filter-bank" multiple size="5"></select>
                     </label>
                     <label title="Savings, transaction, or at-call">Account Type
                         <select id="filter-account-type"><option value="">All</option></select>
@@ -124,6 +124,12 @@
                     </label>
                     <label title="Balance range tier">Deposit Tier
                         <select id="filter-deposit-tier"><option value="">All</option></select>
+                    </label>
+                    <label title="Minimum headline interest rate">Min Headline %
+                        <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="e.g. 1.50">
+                    </label>
+                    <label title="Maximum headline interest rate">Max Headline %
+                        <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="e.g. 6.00">
                     </label>
                     <label>From
                         <input id="filter-start-date" type="date">
@@ -166,6 +172,10 @@
 
             <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
                 <div class="panel panel-wide">
+                    <div class="explorer-toolbar">
+                        <button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button>
+                        <div id="table-settings-popover" class="table-settings-popover" hidden></div>
+                    </div>
                     <div id="rate-table"></div>
                 </div>
             </section>

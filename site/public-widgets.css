@@ -8,6 +8,85 @@
     max-width: 100%;
 }
 
+.ar-public .explorer-toolbar {
+    position: relative;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+
+.ar-public .table-settings-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid var(--ar-stroke);
+    background: var(--ar-surface-muted);
+    color: var(--ar-muted);
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0;
+}
+
+.ar-public .table-settings-btn:hover {
+    color: var(--ar-strong);
+    border-color: var(--ar-stroke-strong);
+}
+
+.ar-public .table-settings-popover {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    z-index: 30;
+    width: min(300px, 90vw);
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid var(--ar-stroke);
+    border-radius: 12px;
+    background: var(--ar-surface-solid);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+    padding: 10px;
+}
+
+.ar-public .table-settings-section {
+    display: grid;
+    gap: 6px;
+}
+
+.ar-public .table-settings-section + .table-settings-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ar-stroke);
+}
+
+.ar-public .table-settings-title {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ar-public .table-settings-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ar-text);
+    font-size: 0.8rem;
+}
+
+.ar-public .table-settings-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--ar-accent);
+}
+
+.ar-public .table-settings-empty {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.8rem;
+}
+
 .ar-public .tabulator {
     border: none !important;
     background: var(--ar-surface-solid) !important;
@@ -55,6 +134,11 @@
 .ar-public .tabulator .tabulator-row {
     border-bottom: 1px solid var(--ar-stroke) !important;
     background: transparent !important;
+}
+
+.ar-public .tabulator .tabulator-row.ar-row-removed .tabulator-cell {
+    text-decoration: line-through;
+    opacity: 0.58;
 }
 
 .ar-public .tabulator .tabulator-row:nth-child(2n) {

@@ -312,6 +312,11 @@
     font-size: 0.85rem;
 }
 
+.ar-public .filters-grid select[multiple] {
+    min-height: 108px;
+    padding: 6px 8px;
+}
+
 .ar-public select {
     color-scheme: light;
 }
@@ -407,6 +412,7 @@
     .ar-public .tabs { gap: 6px; }
     .ar-public .tab-btn { flex: 1 1 calc(50% - 6px); }
     .ar-public .filters-grid { grid-template-columns: 1fr 1fr; }
+    .ar-public .filters-grid select[multiple] { min-height: 92px; }
     .ar-public .filter-actions { grid-column: 1 / -1; }
     .ar-public .site-header-inner { padding: 10px 12px; height: auto; }
     .ar-public .site-nav { margin-left: auto; gap: 4px; }

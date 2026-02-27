@@ -18,6 +18,7 @@
     var pct = utils && utils.pct ? utils.pct : function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils && utils.esc ? utils.esc : window._arEsc;
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
+    var QUICK_COMPARE_LIMIT = 1000;
 
     async function loadHeroStats() {
         clientLog('info', 'Hero stats load started', { section: section });
@@ -84,7 +85,7 @@
         return sorted[mid];
     }
 
-    function renderQuickCompareCards(rows) {
+    function renderQuickCompareCards(rows, trackedTotal, limited) {
         if (!els.quickCompareCards) return;
 
         if (isAnalystMode()) {
@@ -101,9 +102,10 @@
         var bestRate = interestRates.length ? Math.max.apply(null, interestRates) : null;
         var medRate = median(interestRates);
 
+        var topRateLabel = section === 'term-deposits' ? 'Best term deposit rate' : 'Best headline rate';
         var cards = [
             {
-                label: 'Best headline rate',
+                label: topRateLabel,
                 value: bestRate == null ? '-' : pct(bestRate),
                 note: 'Highest current interest rate in filtered results',
             },
@@ -114,8 +116,10 @@
             },
             {
                 label: 'Tracked products',
-                value: String(rows.length),
-                note: 'Current products matching your filters',
+                value: Number.isFinite(Number(trackedTotal)) ? Number(trackedTotal).toLocaleString() : String(rows.length),
+                note: limited
+                    ? 'Current products matching your filters (quick compare limited to top ' + QUICK_COMPARE_LIMIT.toLocaleString() + ')'
+                    : 'Current products matching your filters',
             },
         ];
 
@@ -142,21 +146,26 @@
     async function loadQuickCompare() {
         if (!els.quickCompareCards) return;
         if (isAnalystMode()) {
-            renderQuickCompareCards([]);
+            renderQuickCompareCards([], 0, false);
             return;
         }
 
         clientLog('info', 'Quick compare load started', { section: section });
         try {
-            var params = buildFilterParams();
-            params.limit = '200';
-            var query = new URLSearchParams(params);
-            var response = await fetch(apiBase + '/latest?' + query.toString());
+            var latestParams = buildFilterParams();
+            latestParams.limit = String(QUICK_COMPARE_LIMIT);
+            latestParams.order_by = 'rate_desc';
+            var latestQuery = new URLSearchParams(latestParams);
+            var response = await fetch(apiBase + '/latest?' + latestQuery.toString());
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
+
             var data = await response.json();
             var rows = data && Array.isArray(data.rows) ? data.rows : [];
-            renderQuickCompareCards(rows);
-            clientLog('info', 'Quick compare load complete', { count: rows.length });
+            // total = count of current products matching filters (from /latest); fallback to rows.length if API does not return total
+            var trackedTotal = data && data.total != null ? Number(data.total) : rows.length;
+            var limited = rows.length >= QUICK_COMPARE_LIMIT;
+            renderQuickCompareCards(rows, trackedTotal, limited);
+            clientLog('info', 'Quick compare load complete', { count: rows.length, trackedTotal: trackedTotal, limited: limited });
         } catch (err) {
             clientLog('error', 'Quick compare load failed', {
                 message: err && err.message ? err.message : String(err),

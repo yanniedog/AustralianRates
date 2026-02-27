@@ -26,6 +26,10 @@
     };
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
     var esc = window._arEsc;
+    var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
+    var COLUMN_PREFS_KEY = 'ar_column_prefs_' + section;
+    var ORDER_FIRST = ['found_at', 'comparison_rate', 'interest_rate', 'bank_name'];
+    var ORDER_LAST = ['rate_confirmed_at', 'urls'];
     var WAYBACK_PREFIX = 'https://web.archive.org/web/*/';
 
     function pctFormatter(cell) { return pct(cell.getValue()); }
@@ -81,35 +85,26 @@
         return '<a href="' + safeHref(href) + '" target="_blank" rel="noopener noreferrer" title="' + safeEsc(title) + '">' + safeEsc(label) + '</a>';
     }
 
-    function offerLinksFormatter(cell) {
-        var raw = String(cell.getValue() || '').trim();
-        if (!raw) return '\u2014';
-
-        var currentUrl = isWaybackUrl(raw) ? extractWaybackOriginalUrl(raw) : raw;
-        var waybackUrl = isWaybackUrl(raw) ? raw : waybackLookupUrl(currentUrl);
+    function urlsFormatter(cell) {
+        var row = getRowData(cell) || {};
+        var source = String(row.source_url || '').trim();
+        var product = String(row.product_url || '').trim();
+        var currentUrl = isWaybackUrl(source) ? extractWaybackOriginalUrl(source) : source;
+        var waybackUrl = isWaybackUrl(source) ? source : waybackLookupUrl(currentUrl || source);
         var links = [];
+        var seen = {};
 
-        if (/^https?:\/\//i.test(currentUrl)) {
-            links.push(linkHtml(currentUrl, 'Current', currentUrl));
-        }
-        if (/^https?:\/\//i.test(waybackUrl)) {
-            links.push(linkHtml(waybackUrl, 'Wayback', waybackUrl));
-        }
-
-        if (links.length === 0) {
-            return '\u2014';
+        function addLink(url, label) {
+            if (!/^https?:\/\//i.test(String(url || ''))) return;
+            if (seen[url]) return;
+            seen[url] = true;
+            links.push(linkHtml(url, label, url));
         }
 
-        return links.join(' &middot; ');
-    }
-
-    function productUrlFormatter(cell) {
-        var raw = String(cell.getValue() || '').trim();
-        if (!raw) return '\u2014';
-        if (!/^https?:\/\//i.test(raw)) return '\u2014';
-
-        var label = raw.length > 52 ? raw.slice(0, 49) + '...' : raw;
-        return linkHtml(raw, label, raw);
+        addLink(product, 'Product');
+        addLink(currentUrl, 'Source');
+        addLink(waybackUrl, 'Wayback');
+        return links.length ? links.join(' &middot; ') : '\u2014';
     }
 
     function runSourceFormatter(cell) {
@@ -120,7 +115,7 @@
     function parsedAtFormatter(cell) {
         var v = cell.getValue();
         if (!v) return '-';
-        var rendered = timeUtils.formatCheckedAt ? timeUtils.formatCheckedAt(v) : { text: String(v), title: String(v) };
+        var rendered = timeUtils.formatCompactDateTime ? timeUtils.formatCompactDateTime(v) : { text: String(v), title: String(v) };
         var cellEl = cell.getElement ? cell.getElement() : null;
         if (cellEl && rendered && rendered.title) {
             cellEl.setAttribute('title', rendered.title);
@@ -227,138 +222,197 @@
     var MOBILE_BREAKPOINT = 760;
     function isMobile() { return window.innerWidth <= MOBILE_BREAKPOINT; }
 
-    function getLoanColumns() {
-        var narrow = isMobile();
-        if (!isAnalystMode()) {
-            return [
-                { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
-                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-                { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
-                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-                { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
-                { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
-                { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
-                { title: 'LVR', field: 'lvr_tier', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('lvr_tier_display', 'lvr_tier', 'lvr_tier') },
-                { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
-                { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
-            ];
-        }
-
+    function sharedLeadingColumns() {
         return [
-            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
-            { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-            { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
-            { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-            { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
-            { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
-            { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
-            { title: 'LVR', field: 'lvr_tier', headerSort: true, minWidth: 70, formatter: enumDisplayFormatter('lvr_tier_display', 'lvr_tier', 'lvr_tier') },
-            { title: 'Feature', field: 'feature_set', headerSort: true, minWidth: 70, formatter: enumDisplayFormatter('feature_set_display', 'feature_set', 'feature_set') },
-            { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
-            { title: 'Annual Fee', field: 'annual_fee', formatter: annualFeeFormatter, headerSort: true, minWidth: 80 },
-            { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, formatter: qualityFormatter },
-            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, formatter: retrievalTypeFormatter },
-            { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
-            { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, formatter: publishedAtFormatter },
-            { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
-            { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, formatter: offerLinksFormatter },
-            { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-            { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, formatter: runSourceFormatter },
-            { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
-            { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, formatter: parsedAtFormatter },
+            { title: 'Found:', field: 'found_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
+            { title: 'Comparison Rate', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 108 },
+            { title: 'Headline Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 104 },
+            { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 98 },
         ];
+    }
+
+    function sharedTrailingColumns() {
+        return [
+            { title: 'Rate Confirmed', field: 'rate_confirmed_at', headerSort: true, minWidth: 138, formatter: parsedAtFormatter },
+            { title: 'URLs', field: 'urls', headerSort: false, minWidth: 160, formatter: urlsFormatter },
+        ];
+    }
+
+    function getLoanColumns() {
+        var base = sharedLeadingColumns();
+        if (isAnalystMode()) {
+            base = base.concat([
+                { title: 'Snapshot Date', field: 'collection_date', headerSort: true, minWidth: 118, formatter: collectionDateFormatter },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
+                { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
+                { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
+                { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 104, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
+                { title: 'LVR', field: 'lvr_tier', headerSort: true, minWidth: 82, formatter: enumDisplayFormatter('lvr_tier_display', 'lvr_tier', 'lvr_tier') },
+                { title: 'Feature', field: 'feature_set', headerSort: true, minWidth: 82, formatter: enumDisplayFormatter('feature_set_display', 'feature_set', 'feature_set') },
+                { title: 'Annual Fee', field: 'annual_fee', formatter: annualFeeFormatter, headerSort: true, minWidth: 94 },
+                { title: 'Cash Rate', field: 'rba_cash_rate', formatter: pctFormatter, headerSort: true, minWidth: 88 },
+                { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 96, formatter: qualityFormatter },
+                { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 126, formatter: retrievalTypeFormatter },
+                { title: 'Source', field: 'run_source', headerSort: true, minWidth: 74, formatter: runSourceFormatter },
+                { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 126, formatter: publishedAtFormatter },
+                { title: 'Removed At', field: 'removed_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
+                { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
+            ]);
+        } else {
+            base = base.concat([
+                { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
+                { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
+                { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 102, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
+                { title: 'LVR', field: 'lvr_tier', headerSort: true, minWidth: 82, formatter: enumDisplayFormatter('lvr_tier_display', 'lvr_tier', 'lvr_tier') },
+            ]);
+        }
+        return base.concat(sharedTrailingColumns());
     }
 
     function getSavingsColumns() {
-        var narrow = isMobile();
-        if (!isAnalystMode()) {
-            return [
-                { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
-                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-                { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
-                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-                { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
-                { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
-                { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 90, formatter: depositTierFormatter },
-                { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
-                { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
-            ];
+        var base = sharedLeadingColumns();
+        if (isAnalystMode()) {
+            base = base.concat([
+                { title: 'Snapshot Date', field: 'collection_date', headerSort: true, minWidth: 118, formatter: collectionDateFormatter },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
+                { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 108, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
+                { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 96, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
+                { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 102, formatter: depositTierFormatter },
+                { title: 'Conditions', field: 'conditions', headerSort: false, minWidth: 160, formatter: conditionsFormatter },
+                { title: 'Monthly Fee', field: 'monthly_fee', formatter: monthlyFeeFormatter, headerSort: true, minWidth: 94 },
+                { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 96, formatter: qualityFormatter },
+                { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 126, formatter: retrievalTypeFormatter },
+                { title: 'Source', field: 'run_source', headerSort: true, minWidth: 74, formatter: runSourceFormatter },
+                { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 126, formatter: publishedAtFormatter },
+                { title: 'Removed At', field: 'removed_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
+                { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
+            ]);
+        } else {
+            base = base.concat([
+                { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 104, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
+                { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
+                { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 98, formatter: depositTierFormatter },
+            ]);
         }
-
-        return [
-            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
-            { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-            { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
-            { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-            { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
-            { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
-            { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 80, formatter: depositTierFormatter },
-            { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
-            { title: 'Conditions', field: 'conditions', headerSort: false, minWidth: 150, formatter: conditionsFormatter },
-            { title: 'Monthly Fee', field: 'monthly_fee', formatter: monthlyFeeFormatter, headerSort: true, minWidth: 80 },
-            { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, formatter: qualityFormatter },
-            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, formatter: retrievalTypeFormatter },
-            { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
-            { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, formatter: publishedAtFormatter },
-            { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
-            { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, formatter: offerLinksFormatter },
-            { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, formatter: runSourceFormatter },
-            { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
-            { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, formatter: parsedAtFormatter },
-        ];
+        return base.concat(sharedTrailingColumns());
     }
 
     function getTdColumns() {
-        var narrow = isMobile();
-        if (!isAnalystMode()) {
-            return [
-                { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
-                { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-                { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
-                { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-                { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
-                { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 90, formatter: depositTierFormatter },
-                { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
-                { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
-                { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
-            ];
+        var base = sharedLeadingColumns();
+        if (isAnalystMode()) {
+            base = base.concat([
+                { title: 'Snapshot Date', field: 'collection_date', headerSort: true, minWidth: 118, formatter: collectionDateFormatter },
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
+                { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 104, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
+                { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 102, formatter: depositTierFormatter },
+                { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 102, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
+                { title: 'Min Deposit', field: 'min_deposit', formatter: tdDepositBoundFormatter, headerSort: true, minWidth: 96 },
+                { title: 'Max Deposit', field: 'max_deposit', formatter: tdDepositBoundFormatter, headerSort: true, minWidth: 96 },
+                { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 96, formatter: qualityFormatter },
+                { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 126, formatter: retrievalTypeFormatter },
+                { title: 'Source', field: 'run_source', headerSort: true, minWidth: 74, formatter: runSourceFormatter },
+                { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 126, formatter: publishedAtFormatter },
+                { title: 'Removed At', field: 'removed_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
+                { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
+            ]);
+        } else {
+            base = base.concat([
+                { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
+                { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 98, formatter: depositTierFormatter },
+                { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 98, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
+            ]);
         }
-
-        return [
-            { title: 'Date', field: 'collection_date', headerSort: true, minWidth: 90, width: narrow ? undefined : 110, formatter: collectionDateFormatter },
-            { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 90 },
-            { title: 'Headline', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 70, width: narrow ? undefined : 90 },
-            { title: 'Comparison', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 80 },
-            { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 80, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
-            { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 80, formatter: depositTierFormatter },
-            { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 90, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
-            { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
-            { title: 'Min Deposit', field: 'min_deposit', formatter: tdDepositBoundFormatter, headerSort: true, minWidth: 90 },
-            { title: 'Max Deposit', field: 'max_deposit', formatter: tdDepositBoundFormatter, headerSort: true, minWidth: 90 },
-            { title: 'Quality', field: 'data_quality_flag', headerSort: true, minWidth: 90, formatter: qualityFormatter },
-            { title: 'Retrieval', field: 'retrieval_type', headerSort: true, minWidth: 140, formatter: retrievalTypeFormatter },
-            { title: 'Product URL', field: 'product_url', headerSort: true, minWidth: 150, formatter: productUrlFormatter },
-            { title: 'Published At', field: 'published_at', headerSort: true, minWidth: 150, formatter: publishedAtFormatter },
-            { title: 'CDR Detail JSON', field: 'cdr_product_detail_json', headerSort: false, minWidth: 220, formatter: cdrJsonFormatter },
-            { title: 'Offer Links', field: 'source_url', headerSort: false, minWidth: 120, formatter: offerLinksFormatter },
-            { title: 'Source', field: 'run_source', headerSort: true, minWidth: 60, formatter: runSourceFormatter },
-            { title: 'First Retrieved At', field: 'first_retrieved_at', headerSort: true, minWidth: 170, formatter: parsedAtFormatter },
-            { title: 'Retrieved At', field: 'retrieved_at', headerSort: true, minWidth: 150, formatter: parsedAtFormatter },
-        ];
+        return base.concat(sharedTrailingColumns());
     }
 
-    function getRateTableColumns() {
-        var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
+    function readColumnPrefs() {
+        try {
+            var raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
+            if (!raw) return { visible: {}, showRemoved: false };
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return { visible: {}, showRemoved: false };
+            return {
+                visible: parsed.visible && typeof parsed.visible === 'object' ? parsed.visible : {},
+                showRemoved: !!parsed.showRemoved,
+            };
+        } catch (_err) {
+            return { visible: {}, showRemoved: false };
+        }
+    }
+
+    function writeColumnPrefs(next) {
+        try {
+            window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(next || { visible: {}, showRemoved: false }));
+        } catch (_err) {}
+    }
+
+    function isRowRemoved(row) {
+        var v = row && row.is_removed;
+        return v === true || v === 1 || v === '1' || String(v || '').toLowerCase() === 'true';
+    }
+
+    function isComparisonAvailable(rows) {
+        if (!Array.isArray(rows) || rows.length === 0) return false;
+        for (var i = 0; i < rows.length; i++) {
+            if (hasComparisonValue(rows[i] && rows[i].comparison_rate)) return true;
+        }
+        return false;
+    }
+
+    function ensureColumnOrder(columns) {
+        var mapped = {};
+        var ordered = [];
+        columns.forEach(function (column) {
+            if (column && column.field) mapped[column.field] = column;
+        });
+        ORDER_FIRST.forEach(function (field) {
+            if (mapped[field]) {
+                ordered.push(mapped[field]);
+                delete mapped[field];
+            }
+        });
+        columns.forEach(function (column) {
+            if (!column || !column.field) return;
+            if (ORDER_LAST.indexOf(column.field) >= 0) return;
+            if (!mapped[column.field]) return;
+            ordered.push(mapped[column.field]);
+            delete mapped[column.field];
+        });
+        ORDER_LAST.forEach(function (field) {
+            if (mapped[field]) {
+                ordered.push(mapped[field]);
+                delete mapped[field];
+            }
+        });
+        return ordered.length ? ordered : columns;
+    }
+
+    function getBaseColumns() {
         if (section === 'savings') return getSavingsColumns();
         if (section === 'term-deposits') return getTdColumns();
         return getLoanColumns();
     }
 
+    function getRateTableColumns() {
+        var columns = getBaseColumns().slice();
+        if (!comparisonAvailable) {
+            columns = columns.filter(function (column) { return column.field !== 'comparison_rate'; });
+        }
+        columns = columns.filter(function (column) {
+            return columnPrefs.visible[column.field] !== false;
+        });
+        columns = ensureColumnOrder(columns);
+        return columns.length ? columns : getBaseColumns().slice(0, 1);
+    }
+
     var rateTable = null;
     var lastMobileState = null;
     var currentSort = { field: 'collection_date', dir: 'desc' };
+    var columnPrefs = readColumnPrefs();
+    var comparisonAvailable = true;
+    var settingsBound = false;
 
-    function getTableLayout() { return 'fitColumns'; }
+    function getTableLayout() { return 'fitDataStretch'; }
 
     function normalizeSortDir(dir) {
         return String(dir || '').toLowerCase() === 'asc' ? 'asc' : 'desc';
@@ -422,8 +476,123 @@
         };
     }
 
+    function refreshSupportWidgets() {
+        if (filters && filters.syncUrlState) filters.syncUrlState();
+        if (window.AR.hero && window.AR.hero.loadHeroStats) window.AR.hero.loadHeroStats();
+        if (window.AR.hero && window.AR.hero.loadQuickCompare) window.AR.hero.loadQuickCompare();
+    }
+
+    function applyColumnPreferences() {
+        if (!rateTable) return;
+        rateTable.setColumns(getRateTableColumns());
+        rateTable.redraw(true);
+    }
+
+    function rowFormatter(row) {
+        var data = row && row.getData ? row.getData() : null;
+        var element = row && row.getElement ? row.getElement() : null;
+        if (!element) return;
+        element.classList.toggle('ar-row-removed', isRowRemoved(data));
+    }
+
+    function renderSettingsPopover() {
+        if (!els.tableSettingsPopover) return;
+        var columns = getBaseColumns();
+        var seen = {};
+        var items = [];
+
+        columns.forEach(function (column) {
+            if (!column || !column.field || seen[column.field]) return;
+            seen[column.field] = true;
+            var disabled = column.field === 'comparison_rate' && !comparisonAvailable;
+            var checked = !disabled && columnPrefs.visible[column.field] !== false;
+            items.push(
+                '<label class=\"table-settings-item\">' +
+                    '<input type=\"checkbox\" data-field=\"' + safeEsc(column.field) + '\"' +
+                    (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+                    '<span>' + safeEsc(column.title || column.field) + '</span>' +
+                '</label>'
+            );
+        });
+
+        els.tableSettingsPopover.innerHTML = '' +
+            '<div class=\"table-settings-section\">' +
+                '<label class=\"table-settings-item\">' +
+                    '<input type=\"checkbox\" data-setting=\"show-removed\"' + (columnPrefs.showRemoved ? ' checked' : '') + '>' +
+                    '<span>Show removed rates</span>' +
+                '</label>' +
+            '</div>' +
+            '<div class=\"table-settings-section\">' +
+                '<p class=\"table-settings-title\">Visible columns</p>' +
+                (items.length ? items.join('') : '<p class=\"table-settings-empty\">No configurable columns.</p>') +
+            '</div>';
+    }
+
+    function setSettingsOpen(open) {
+        if (!els.tableSettingsBtn || !els.tableSettingsPopover) return;
+        var next = !!open;
+        els.tableSettingsPopover.hidden = !next;
+        els.tableSettingsBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
+        if (next) renderSettingsPopover();
+    }
+
+    function bindSettingsUi() {
+        if (settingsBound) return;
+        settingsBound = true;
+        if (!els.tableSettingsBtn || !els.tableSettingsPopover) return;
+
+        els.tableSettingsBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            setSettingsOpen(els.tableSettingsPopover.hidden);
+        });
+
+        els.tableSettingsPopover.addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+
+        els.tableSettingsPopover.addEventListener('change', function (event) {
+            var target = event.target;
+            if (!target) return;
+            var setting = target.getAttribute('data-setting');
+            if (setting === 'show-removed') {
+                columnPrefs.showRemoved = !!target.checked;
+                writeColumnPrefs(columnPrefs);
+                refreshSupportWidgets();
+                reloadExplorer();
+                renderSettingsPopover();
+                return;
+            }
+
+            var field = target.getAttribute('data-field');
+            if (!field) return;
+            columnPrefs.visible[field] = !!target.checked;
+            writeColumnPrefs(columnPrefs);
+            applyColumnPreferences();
+            renderSettingsPopover();
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!els.tableSettingsPopover || els.tableSettingsPopover.hidden) return;
+            var target = event.target;
+            if (els.tableSettingsBtn.contains(target)) return;
+            if (els.tableSettingsPopover.contains(target)) return;
+            setSettingsOpen(false);
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            if (!els.tableSettingsPopover || els.tableSettingsPopover.hidden) return;
+            setSettingsOpen(false);
+        });
+    }
+
     function initRateTable() {
         lastMobileState = isMobile();
+        columnPrefs = readColumnPrefs();
+        comparisonAvailable = true;
+        bindSettingsUi();
+        renderSettingsPopover();
         clientLog('info', 'Explorer table init start', {
             section: window.AR.section || 'home-loans',
         });
@@ -455,11 +624,20 @@
                 return url + '?' + q.toString();
             },
             ajaxResponse: function (_url, _params, response) {
+                var rows = response && Array.isArray(response.data) ? response.data : [];
+                var nextComparisonAvailable = isComparisonAvailable(rows);
+                if (nextComparisonAvailable !== comparisonAvailable) {
+                    comparisonAvailable = nextComparisonAvailable;
+                    setTimeout(function () {
+                        applyColumnPreferences();
+                        renderSettingsPopover();
+                    }, 0);
+                }
                 clientLog('info', 'Explorer data loaded', {
-                    rows: response && response.data ? response.data.length : 0,
+                    rows: rows.length,
                     total: response && response.total != null ? Number(response.total) : 0,
                 });
-                return { last_page: response.last_page || 1, data: response.data || [] };
+                return { last_page: response.last_page || 1, data: rows };
             },
             ajaxError: function (xhr, textStatus, errorThrown) {
                 clientLog('error', 'Explorer data load failed', {
@@ -484,7 +662,9 @@
             movableColumns: isAnalystMode() && !isMobile(),
             resizableColumns: isAnalystMode() && !isMobile(),
             layout: getTableLayout(),
+            layoutColumnsOnNewData: true,
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
+            rowFormatter: rowFormatter,
             columns: getRateTableColumns(),
             initialSort: [{ column: currentSort.field, dir: currentSort.dir }],
         });
@@ -498,16 +678,16 @@
                 var narrow = isMobile();
                 if (narrow === lastMobileState) return;
                 lastMobileState = narrow;
-                rateTable.setColumns(getRateTableColumns());
-                rateTable.redraw(true);
+                applyColumnPreferences();
             }, 250);
         });
     }
 
     function applyUiMode() {
         if (!rateTable) return;
-        rateTable.setColumns(getRateTableColumns());
-        rateTable.redraw(true);
+        setSettingsOpen(false);
+        applyColumnPreferences();
+        renderSettingsPopover();
         reloadExplorer();
     }
 

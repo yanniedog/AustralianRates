@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
-import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
 import { handlePublicTriggerRun } from './trigger-run'
@@ -26,6 +26,29 @@ const HOME_LOAN_COMPARISON_RATE_DISCLOSURE = {
       'Always confirm current pricing and terms directly with the lender.',
     ],
   },
+}
+
+function parseCsvList(value: string | undefined): string[] {
+  if (!value) return []
+  return Array.from(
+    new Set(
+      String(value)
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+  if (value == null || String(value).trim() === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseIncludeRemoved(value: string | undefined): boolean {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
 }
 
 publicRoutes.use('*', async (c, next) => {
@@ -131,6 +154,8 @@ publicRoutes.get('/rates', async (c) => {
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
+  const banks = parseCsvList(query.banks)
+  const includeRemoved = parseIncludeRemoved(query.include_removed)
 
   const result = await queryRatesPaginated(c.env.DB, {
     page: Number(query.page || 1),
@@ -143,6 +168,12 @@ publicRoutes.get('/rates', async (c) => {
     rateStructure: query.rate_structure,
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
+    banks,
+    minRate: parseOptionalNumber(query.min_rate),
+    maxRate: parseOptionalNumber(query.max_rate),
+    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+    includeRemoved,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -171,6 +202,8 @@ publicRoutes.get('/export', async (c) => {
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
+  const banks = parseCsvList(query.banks)
+  const includeRemoved = parseIncludeRemoved(query.include_removed)
 
   const { data, total, source_mix } = await queryRatesForExport(c.env.DB, {
     startDate: query.start_date,
@@ -181,6 +214,12 @@ publicRoutes.get('/export', async (c) => {
     rateStructure: query.rate_structure,
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
+    banks,
+    minRate: parseOptionalNumber(query.min_rate),
+    maxRate: parseOptionalNumber(query.max_rate),
+    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+    includeRemoved,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -210,25 +249,37 @@ publicRoutes.get('/export', async (c) => {
 
 publicRoutes.get('/latest', async (c) => {
   const query = c.req.query()
-  const limit = Number(query.limit || 200)
+  const limit = Number(query.limit || 1000)
   const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const mode: 'daily' | 'historical' | 'all' = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const orderByRaw = String(query.order_by || query.orderBy || 'default').toLowerCase()
-  const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const orderBy: 'default' | 'rate_asc' | 'rate_desc' = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
+  const banks = parseCsvList(query.banks)
+  const includeRemoved = parseIncludeRemoved(query.include_removed)
 
-  const rows = await queryLatestRates(c.env.DB, {
+  const filters = {
     bank: query.bank,
+    banks,
     securityPurpose: query.security_purpose,
     repaymentType: query.repayment_type,
     rateStructure: query.rate_structure,
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
+    minRate: parseOptionalNumber(query.min_rate),
+    maxRate: parseOptionalNumber(query.max_rate),
+    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+    includeRemoved,
     mode,
     sourceMode,
     limit,
     orderBy,
-  })
+  }
+  const [rows, total] = await Promise.all([
+    queryLatestRates(c.env.DB, filters),
+    queryLatestRatesCount(c.env.DB, filters),
+  ])
   const meta = buildListMeta({
     sourceMode,
     totalRows: rows.length,
@@ -241,6 +292,7 @@ publicRoutes.get('/latest', async (c) => {
   return c.json({
     ok: true,
     count: rows.length,
+    total,
     rows,
     meta,
   })
@@ -248,20 +300,28 @@ publicRoutes.get('/latest', async (c) => {
 
 publicRoutes.get('/latest-all', async (c) => {
   const query = c.req.query()
-  const limit = Number(query.limit || 200)
+  const limit = Number(query.limit || 1000)
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const orderByRaw = String(query.order_by || query.orderBy || 'default').toLowerCase()
   const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
+  const banks = parseCsvList(query.banks)
+  const includeRemoved = parseIncludeRemoved(query.include_removed)
 
   const rows = await queryLatestAllRates(c.env.DB, {
     bank: query.bank,
+    banks,
     securityPurpose: query.security_purpose,
     repaymentType: query.repayment_type,
     rateStructure: query.rate_structure,
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
+    minRate: parseOptionalNumber(query.min_rate),
+    maxRate: parseOptionalNumber(query.max_rate),
+    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+    includeRemoved,
     mode,
     sourceMode,
     limit,
@@ -291,6 +351,7 @@ publicRoutes.get('/timeseries', async (c) => {
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const limit = Number(query.limit || 1000)
+  const banks = parseCsvList(query.banks)
 
   if (!productKey) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
@@ -298,10 +359,16 @@ publicRoutes.get('/timeseries', async (c) => {
 
   const rows = await queryTimeseries(c.env.DB, {
     bank: query.bank,
+    banks,
     productKey,
     securityPurpose: query.security_purpose,
     repaymentType: query.repayment_type,
     featureSet: query.feature_set,
+    minRate: parseOptionalNumber(query.min_rate),
+    maxRate: parseOptionalNumber(query.max_rate),
+    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+    includeRemoved: parseIncludeRemoved(query.include_removed),
     mode,
     sourceMode,
     startDate: query.start_date,
@@ -399,10 +466,16 @@ publicRoutes.get('/export.csv', async (c) => {
     }
     const rows = await queryTimeseries(c.env.DB, {
       bank: query.bank,
+      banks: parseCsvList(query.banks),
       productKey,
       securityPurpose: query.security_purpose,
       repaymentType: query.repayment_type,
       featureSet: query.feature_set,
+      minRate: parseOptionalNumber(query.min_rate),
+      maxRate: parseOptionalNumber(query.max_rate),
+      minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+      maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+      includeRemoved: parseIncludeRemoved(query.include_removed),
       mode,
       sourceMode,
       startDate: query.start_date,
@@ -425,11 +498,17 @@ publicRoutes.get('/export.csv', async (c) => {
 
   const rows = await queryLatestRates(c.env.DB, {
     bank: query.bank,
+    banks: parseCsvList(query.banks),
     securityPurpose: query.security_purpose,
     repaymentType: query.repayment_type,
     rateStructure: query.rate_structure,
     lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
+    minRate: parseOptionalNumber(query.min_rate),
+    maxRate: parseOptionalNumber(query.max_rate),
+    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+    includeRemoved: parseIncludeRemoved(query.include_removed),
     mode,
     sourceMode,
     limit: Number(query.limit || 1000),

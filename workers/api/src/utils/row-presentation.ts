@@ -157,7 +157,16 @@ export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<st
   const productUrl = asText(row.product_url)
   const publishedAt = normalizeTimestamp(row.published_at) || waybackPublishedAt(sourceUrl)
   const retrievedAt = asText(row.retrieved_at) || asText(row.parsed_at)
-  const firstRetrievedAt = asText(row.first_retrieved_at)
+  const firstRetrievedAt = asText(row.first_retrieved_at) || asText(row.found_at)
+  const foundAt = asText(row.found_at) || firstRetrievedAt
+  const rateConfirmedAt = asText(row.rate_confirmed_at)
+  const removedAt = asText(row.removed_at)
+  const isRemovedRaw = row.is_removed
+  const isRemoved =
+    isRemovedRaw === true ||
+    isRemovedRaw === 1 ||
+    isRemovedRaw === '1' ||
+    String(isRemovedRaw || '').toLowerCase() === 'true'
 
   return {
     ...row,
@@ -165,6 +174,10 @@ export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<st
     published_at: publishedAt,
     retrieved_at: retrievedAt,
     first_retrieved_at: firstRetrievedAt,
+    found_at: foundAt,
+    rate_confirmed_at: rateConfirmedAt,
+    is_removed: isRemoved,
+    removed_at: removedAt,
   }
 }
 

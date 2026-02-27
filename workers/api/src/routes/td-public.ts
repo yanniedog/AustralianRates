@@ -6,6 +6,7 @@ import {
   getTdStaleness,
   queryLatestAllTdRates,
   queryLatestTdRates,
+  queryLatestTdRatesCount,
   queryTdForExport,
   queryTdRatesPaginated,
   queryTdTimeseries,
@@ -20,6 +21,29 @@ import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 
 export const tdPublicRoutes = new Hono<AppContext>()
+
+function parseCsvList(value: string | undefined): string[] {
+  if (!value) return []
+  return Array.from(
+    new Set(
+      String(value)
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+  if (value == null || String(value).trim() === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseIncludeRemoved(value: string | undefined): boolean {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
+}
 
 tdPublicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
@@ -90,6 +114,8 @@ tdPublicRoutes.get('/rates', async (c) => {
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
+  const banks = parseCsvList(q.banks)
+  const includeRemoved = parseIncludeRemoved(q.include_removed)
 
   const result = await queryTdRatesPaginated(c.env.DB, {
     page: Number(q.page || 1),
@@ -97,9 +123,13 @@ tdPublicRoutes.get('/rates', async (c) => {
     startDate: q.start_date,
     endDate: q.end_date,
     bank: q.bank,
+    banks,
     termMonths: q.term_months,
     depositTier: q.deposit_tier,
     interestPayment: q.interest_payment,
+    minRate: parseOptionalNumber(q.min_rate),
+    maxRate: parseOptionalNumber(q.max_rate),
+    includeRemoved,
     sort: q.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -118,22 +148,32 @@ tdPublicRoutes.get('/rates', async (c) => {
 tdPublicRoutes.get('/latest', async (c) => {
   const q = c.req.query()
   const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const mode: 'daily' | 'historical' | 'all' = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const orderByRaw = String(q.order_by || q.orderBy || 'default').toLowerCase()
-  const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const orderBy: 'default' | 'rate_asc' | 'rate_desc' = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
-  const limit = Number(q.limit || 200)
+  const limit = Number(q.limit || 1000)
+  const banks = parseCsvList(q.banks)
+  const includeRemoved = parseIncludeRemoved(q.include_removed)
 
-  const rows = await queryLatestTdRates(c.env.DB, {
+  const filters = {
     bank: q.bank,
+    banks,
     termMonths: q.term_months,
     depositTier: q.deposit_tier,
     interestPayment: q.interest_payment,
+    minRate: parseOptionalNumber(q.min_rate),
+    maxRate: parseOptionalNumber(q.max_rate),
+    includeRemoved,
     mode,
     sourceMode,
     limit,
     orderBy,
-  })
+  }
+  const [rows, total] = await Promise.all([
+    queryLatestTdRates(c.env.DB, filters),
+    queryLatestTdRatesCount(c.env.DB, filters),
+  ])
   const meta = buildListMeta({
     sourceMode,
     totalRows: rows.length,
@@ -141,7 +181,7 @@ tdPublicRoutes.get('/latest', async (c) => {
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
   })
-  return c.json({ ok: true, count: rows.length, rows, meta })
+  return c.json({ ok: true, count: rows.length, total, rows, meta })
 })
 
 tdPublicRoutes.get('/latest-all', async (c) => {
@@ -151,13 +191,19 @@ tdPublicRoutes.get('/latest-all', async (c) => {
   const orderByRaw = String(q.order_by || q.orderBy || 'default').toLowerCase()
   const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
-  const limit = Number(q.limit || 200)
+  const limit = Number(q.limit || 1000)
+  const banks = parseCsvList(q.banks)
+  const includeRemoved = parseIncludeRemoved(q.include_removed)
 
   const rows = await queryLatestAllTdRates(c.env.DB, {
     bank: q.bank,
+    banks,
     termMonths: q.term_months,
     depositTier: q.deposit_tier,
     interestPayment: q.interest_payment,
+    minRate: parseOptionalNumber(q.min_rate),
+    maxRate: parseOptionalNumber(q.max_rate),
+    includeRemoved,
     mode,
     sourceMode,
     limit,
@@ -180,14 +226,19 @@ tdPublicRoutes.get('/timeseries', async (c) => {
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const limit = Number(q.limit || 1000)
+  const banks = parseCsvList(q.banks)
   if (!productKey) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
   }
 
   const rows = await queryTdTimeseries(c.env.DB, {
     bank: q.bank,
+    banks,
     productKey,
     termMonths: q.term_months,
+    minRate: parseOptionalNumber(q.min_rate),
+    maxRate: parseOptionalNumber(q.max_rate),
+    includeRemoved: parseIncludeRemoved(q.include_removed),
     mode,
     sourceMode,
     startDate: q.start_date,
@@ -214,14 +265,20 @@ tdPublicRoutes.get('/export', async (c) => {
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
+  const banks = parseCsvList(q.banks)
+  const includeRemoved = parseIncludeRemoved(q.include_removed)
 
   const { data, total, source_mix } = await queryTdForExport(c.env.DB, {
     startDate: q.start_date,
     endDate: q.end_date,
     bank: q.bank,
+    banks,
     termMonths: q.term_months,
     depositTier: q.deposit_tier,
     interestPayment: q.interest_payment,
+    minRate: parseOptionalNumber(q.min_rate),
+    maxRate: parseOptionalNumber(q.max_rate),
+    includeRemoved,
     sort: q.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -258,10 +315,14 @@ tdPublicRoutes.get('/export.csv', async (c) => {
     if (!productKey) {
       return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries CSV export.')
     }
-    const rows = await queryTdTimeseries(c.env.DB, {
+  const rows = await queryTdTimeseries(c.env.DB, {
       bank: q.bank,
+      banks: parseCsvList(q.banks),
       productKey,
       termMonths: q.term_months,
+      minRate: parseOptionalNumber(q.min_rate),
+      maxRate: parseOptionalNumber(q.max_rate),
+      includeRemoved: parseIncludeRemoved(q.include_removed),
       mode,
       sourceMode,
       startDate: q.start_date,
@@ -283,9 +344,13 @@ tdPublicRoutes.get('/export.csv', async (c) => {
 
   const rows = await queryLatestTdRates(c.env.DB, {
     bank: q.bank,
+    banks: parseCsvList(q.banks),
     termMonths: q.term_months,
     depositTier: q.deposit_tier,
     interestPayment: q.interest_payment,
+    minRate: parseOptionalNumber(q.min_rate),
+    maxRate: parseOptionalNumber(q.max_rate),
+    includeRemoved: parseIncludeRemoved(q.include_removed),
     mode,
     sourceMode,
     limit: Number(q.limit || 1000),

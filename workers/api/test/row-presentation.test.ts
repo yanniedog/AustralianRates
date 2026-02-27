@@ -73,11 +73,31 @@ describe('row presentation', () => {
       source_url: 'https://example.com/rates',
       parsed_at: '2026-02-25 06:17:08',
       published_at: '',
+      first_retrieved_at: '2026-02-20 01:02:03',
+      rate_confirmed_at: '2026-02-25 06:17:08',
+      is_removed: 0,
     })
 
     expect(row.product_url).toBe('')
     expect(row.retrieved_at).toBe('2026-02-25 06:17:08')
     expect(row.published_at).toBe('')
+    expect(row.found_at).toBe('2026-02-20 01:02:03')
+    expect(row.rate_confirmed_at).toBe('2026-02-25 06:17:08')
+    expect(row.is_removed).toBe(false)
+  })
+
+  it('normalizes removed flags and keeps removed timestamp', () => {
+    const row = presentCoreRowFields({
+      source_url: 'https://example.com/rates',
+      parsed_at: '2026-02-25 06:17:08',
+      found_at: '2026-02-20 01:02:03',
+      is_removed: '1',
+      removed_at: '2026-02-26 00:00:00',
+    })
+
+    expect(row.found_at).toBe('2026-02-20 01:02:03')
+    expect(row.is_removed).toBe(true)
+    expect(row.removed_at).toBe('2026-02-26 00:00:00')
   })
 
   it('derives published_at from wayback snapshot timestamp when missing', () => {

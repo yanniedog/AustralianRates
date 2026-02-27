@@ -16,6 +16,44 @@ function rows<T>(result: D1Result<T>): T[] {
   return result.results ?? []
 }
 
+function addBankWhere(
+  where: string[],
+  binds: Array<string | number>,
+  column: string,
+  bank?: string,
+  banks?: string[],
+) {
+  const uniqueBanks = Array.from(new Set((banks ?? []).map((v) => String(v || '').trim()).filter(Boolean)))
+  if (uniqueBanks.length > 0) {
+    const placeholders = uniqueBanks.map(() => '?').join(', ')
+    where.push(`${column} IN (${placeholders})`)
+    for (const value of uniqueBanks) binds.push(value)
+    return
+  }
+
+  if (bank) {
+    where.push(`${column} = ?`)
+    binds.push(bank)
+  }
+}
+
+function addRateBoundsWhere(
+  where: string[],
+  binds: Array<string | number>,
+  interestRateColumn: string,
+  minRate?: number,
+  maxRate?: number,
+) {
+  if (Number.isFinite(minRate)) {
+    where.push(`${interestRateColumn} >= ?`)
+    binds.push(Number(minRate))
+  }
+  if (Number.isFinite(maxRate)) {
+    where.push(`${interestRateColumn} <= ?`)
+    binds.push(Number(maxRate))
+  }
+}
+
 export async function getTdFilters(db: D1Database) {
   const [banks, termMonths, depositTiers, interestPayments] = await Promise.all([
     db.prepare('SELECT DISTINCT bank_name AS value FROM historical_term_deposit_rates ORDER BY bank_name ASC').all<{ value: string }>(),
@@ -40,9 +78,13 @@ type TdPaginatedFilters = {
   startDate?: string
   endDate?: string
   bank?: string
+  banks?: string[]
   termMonths?: string
   depositTier?: string
   interestPayment?: string
+  minRate?: number
+  maxRate?: number
+  includeRemoved?: boolean
   sort?: string
   dir?: 'asc' | 'desc'
   mode?: 'all' | 'daily' | 'historical'
@@ -59,9 +101,13 @@ const SORT_COLUMNS: Record<string, string> = {
   interest_payment: 'h.interest_payment',
   parsed_at: 'h.parsed_at',
   retrieved_at: 'h.parsed_at',
+  found_at: 'first_retrieved_at',
   first_retrieved_at: 'first_retrieved_at',
+  rate_confirmed_at: 'rate_confirmed_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
+  is_removed: 'is_removed',
+  removed_at: 'removed_at',
   source_url: 'h.source_url',
   product_url: 'h.product_url',
   published_at: 'h.published_at',
@@ -74,6 +120,7 @@ function buildWhere(filters: TdPaginatedFilters): { clause: string; binds: Array
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', filters.minRate, filters.maxRate)
   if (filters.mode === 'daily') {
     where.push("h.retrieval_type != 'historical_scrape'")
     where.push('h.confidence_score >= ?')
@@ -88,12 +135,13 @@ function buildWhere(filters: TdPaginatedFilters): { clause: string; binds: Array
   }
 
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
-  if (filters.bank) { where.push('h.bank_name = ?'); binds.push(filters.bank) }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.termMonths) { where.push('CAST(h.term_months AS TEXT) = ?'); binds.push(filters.termMonths) }
   if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
   if (filters.interestPayment) { where.push('h.interest_payment = ?'); binds.push(filters.interestPayment) }
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }
+  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
 
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -105,10 +153,18 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
   const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
 
   const page = Math.max(1, Math.floor(Number(filters.page) || 1))
-  const size = Math.min(500, Math.max(1, Math.floor(Number(filters.size) || 50)))
+  const size = Math.min(1000, Math.max(1, Math.floor(Number(filters.size) || 50)))
   const offset = (page - 1) * size
 
-  const countSql = `SELECT COUNT(*) AS total FROM historical_term_deposit_rates h ${whereClause}`
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM historical_term_deposit_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
+    ${whereClause}
+  `
   const dataSql = `
     SELECT
       h.bank_name, h.collection_date, h.product_id, h.product_name,
@@ -120,9 +176,26 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
       MIN(h.parsed_at) OVER (
         PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
       ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.term_months,
+          h.deposit_tier,
+          h.interest_payment,
+          h.interest_rate,
+          h.min_deposit,
+          h.max_deposit
+      ) AS rate_confirmed_at,
       h.run_id, h.run_source,
-      h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
+      h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM historical_term_deposit_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause} ${orderClause}
     LIMIT ? OFFSET ?
   `
@@ -150,7 +223,9 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
 }
 
 export async function queryLatestTdRates(db: D1Database, filters: {
-  bank?: string; termMonths?: string; depositTier?: string; interestPayment?: string
+  bank?: string; banks?: string[]; termMonths?: string; depositTier?: string; interestPayment?: string
+  minRate?: number; maxRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number; orderBy?: 'default' | 'rate_asc' | 'rate_desc'
@@ -160,6 +235,7 @@ export async function queryLatestTdRates(db: D1Database, filters: {
 
   where.push('v.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'v.interest_rate', filters.minRate, filters.maxRate)
   if (filters.mode === 'daily') {
     where.push("v.retrieval_type != 'historical_scrape'")
     where.push('v.confidence_score >= ?')
@@ -173,10 +249,11 @@ export async function queryLatestTdRates(db: D1Database, filters: {
     binds.push(MIN_CONFIDENCE)
   }
 
-  if (filters.bank) { where.push('v.bank_name = ?'); binds.push(filters.bank) }
+  addBankWhere(where, binds, 'v.bank_name', filters.bank, filters.banks)
   if (filters.termMonths) { where.push('CAST(v.term_months AS TEXT) = ?'); binds.push(filters.termMonths) }
   if (filters.depositTier) { where.push('v.deposit_tier = ?'); binds.push(filters.depositTier) }
   if (filters.interestPayment) { where.push('v.interest_payment = ?'); binds.push(filters.interestPayment) }
+  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
 
   const orderMap: Record<string, string> = {
@@ -198,8 +275,33 @@ export async function queryLatestTdRates(db: D1Database, filters: {
           AND h.term_months = v.term_months
           AND h.deposit_tier = v.deposit_tier
       ) AS first_retrieved_at,
-      v.product_key
+      (
+        SELECT MAX(h.parsed_at)
+        FROM historical_term_deposit_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.term_months = v.term_months
+          AND h.deposit_tier = v.deposit_tier
+          AND h.interest_payment = v.interest_payment
+          AND h.interest_rate = v.interest_rate
+          AND (
+            (h.min_deposit = v.min_deposit)
+            OR (h.min_deposit IS NULL AND v.min_deposit IS NULL)
+          )
+          AND (
+            (h.max_deposit = v.max_deposit)
+            OR (h.max_deposit IS NULL AND v.max_deposit IS NULL)
+          )
+          AND h.data_quality_flag LIKE 'cdr_live%'
+      ) AS rate_confirmed_at,
+      v.product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM vw_latest_td_rates v
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = v.bank_name
+      AND pps.product_id = v.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY ${orderMap[filters.orderBy ?? 'default'] ?? orderMap.default}
     LIMIT ?
@@ -208,8 +310,51 @@ export async function queryLatestTdRates(db: D1Database, filters: {
   return rows(result).map((row) => presentTdRow(row))
 }
 
+/** Count of current products matching the same filters as queryLatestTdRates. */
+export async function queryLatestTdRatesCount(db: D1Database, filters: Parameters<typeof queryLatestTdRates>[1]): Promise<number> {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('v.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'v.interest_rate', filters.minRate, filters.maxRate)
+  if (filters.mode === 'daily') {
+    where.push("v.retrieval_type != 'historical_scrape'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (filters.mode === 'historical') {
+    where.push("v.retrieval_type = 'historical_scrape'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
+  addBankWhere(where, binds, 'v.bank_name', filters.bank, filters.banks)
+  if (filters.termMonths) { where.push('CAST(v.term_months AS TEXT) = ?'); binds.push(filters.termMonths) }
+  if (filters.depositTier) { where.push('v.deposit_tier = ?'); binds.push(filters.depositTier) }
+  if (filters.interestPayment) { where.push('v.interest_payment = ?'); binds.push(filters.interestPayment) }
+  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
+
+  const countSql = `
+    SELECT COUNT(*) AS n
+    FROM vw_latest_td_rates v
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = v.bank_name
+      AND pps.product_id = v.product_id
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+  `
+  const countResult = await db.prepare(countSql).bind(...binds).first<{ n: number }>()
+  const n = countResult?.n ?? 0
+  return Number(n)
+}
+
 export async function queryLatestAllTdRates(db: D1Database, filters: {
-  bank?: string; termMonths?: string; depositTier?: string; interestPayment?: string
+  bank?: string; banks?: string[]; termMonths?: string; depositTier?: string; interestPayment?: string
+  minRate?: number; maxRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number; orderBy?: 'default' | 'rate_asc' | 'rate_desc'
@@ -219,6 +364,7 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', filters.minRate, filters.maxRate)
   if (filters.mode === 'daily') {
     where.push("h.retrieval_type != 'historical_scrape'")
     where.push('h.confidence_score >= ?')
@@ -232,7 +378,7 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
     binds.push(MIN_CONFIDENCE)
   }
 
-  if (filters.bank) { where.push('h.bank_name = ?'); binds.push(filters.bank) }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.termMonths) { where.push('CAST(h.term_months AS TEXT) = ?'); binds.push(filters.termMonths) }
   if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
   if (filters.interestPayment) { where.push('h.interest_payment = ?'); binds.push(filters.interestPayment) }
@@ -272,6 +418,17 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
         MIN(h.parsed_at) OVER (
           PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
         ) AS first_retrieved_at,
+        MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+          PARTITION BY
+            h.bank_name,
+            h.product_id,
+            h.term_months,
+            h.deposit_tier,
+            h.interest_payment,
+            h.interest_rate,
+            h.min_deposit,
+            h.max_deposit
+        ) AS rate_confirmed_at,
         h.run_source,
         h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key,
         ROW_NUMBER() OVER (
@@ -300,10 +457,18 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
       ranked.retrieval_type,
       ranked.parsed_at,
       ranked.first_retrieved_at,
+      ranked.rate_confirmed_at,
       ranked.run_source,
-      ranked.product_key
+      ranked.product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM ranked
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = ranked.bank_name
+      AND pps.product_id = ranked.product_id
     WHERE ranked.row_num = 1
+      ${filters.includeRemoved ? '' : 'AND COALESCE(pps.is_removed, 0) = 0'}
     ORDER BY ${orderClause}
     LIMIT ?
   `
@@ -313,7 +478,9 @@ export async function queryLatestAllTdRates(db: D1Database, filters: {
 }
 
 export async function queryTdTimeseries(db: D1Database, input: {
-  bank?: string; productKey?: string; termMonths?: string
+  bank?: string; banks?: string[]; productKey?: string; termMonths?: string
+  minRate?: number; maxRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   startDate?: string; endDate?: string; limit?: number
@@ -323,6 +490,7 @@ export async function queryTdTimeseries(db: D1Database, input: {
 
   where.push('t.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 't.interest_rate', input.minRate, input.maxRate)
   if (input.mode === 'daily') {
     where.push("t.retrieval_type != 'historical_scrape'")
     where.push('t.confidence_score >= ?')
@@ -336,9 +504,10 @@ export async function queryTdTimeseries(db: D1Database, input: {
     binds.push(MIN_CONFIDENCE)
   }
 
-  if (input.bank) { where.push('t.bank_name = ?'); binds.push(input.bank) }
+  addBankWhere(where, binds, 't.bank_name', input.bank, input.banks)
   if (input.productKey) { where.push('t.product_key = ?'); binds.push(input.productKey) }
   if (input.termMonths) { where.push('CAST(t.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
+  if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('t.collection_date >= ?'); binds.push(input.startDate) }
   if (input.endDate) { where.push('t.collection_date <= ?'); binds.push(input.endDate) }
@@ -349,8 +518,25 @@ export async function queryTdTimeseries(db: D1Database, input: {
   const sql = `
     SELECT
       t.*,
-      MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at
+      MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at,
+      MAX(CASE WHEN t.data_quality_flag LIKE 'cdr_live%' THEN t.parsed_at END) OVER (
+        PARTITION BY
+          t.bank_name,
+          t.product_id,
+          t.term_months,
+          t.deposit_tier,
+          t.interest_payment,
+          t.interest_rate,
+          t.min_deposit,
+          t.max_deposit
+      ) AS rate_confirmed_at,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM vw_td_timeseries t
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = t.bank_name
+      AND pps.product_id = t.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY t.collection_date ASC
     LIMIT ?
@@ -365,7 +551,15 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
   const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
   const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(maxRows))))
 
-  const countSql = `SELECT COUNT(*) AS total FROM historical_term_deposit_rates h ${whereClause}`
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM historical_term_deposit_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
+    ${whereClause}
+  `
   const dataSql = `
     SELECT
       h.bank_name, h.collection_date, h.product_id, h.product_name,
@@ -377,9 +571,26 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
       MIN(h.parsed_at) OVER (
         PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
       ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.term_months,
+          h.deposit_tier,
+          h.interest_payment,
+          h.interest_rate,
+          h.min_deposit,
+          h.max_deposit
+      ) AS rate_confirmed_at,
       h.run_id, h.run_source,
-h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
+      h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
 FROM historical_term_deposit_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC
     LIMIT ?

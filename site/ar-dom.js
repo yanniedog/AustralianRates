@@ -19,6 +19,10 @@
         filterStructure: document.getElementById('filter-structure'),
         filterLvr:       document.getElementById('filter-lvr'),
         filterFeature:   document.getElementById('filter-feature'),
+        filterMinRate:   document.getElementById('filter-min-rate'),
+        filterMaxRate:   document.getElementById('filter-max-rate'),
+        filterMinComparisonRate: document.getElementById('filter-min-comparison-rate'),
+        filterMaxComparisonRate: document.getElementById('filter-max-comparison-rate'),
         filterAccountType: document.getElementById('filter-account-type'),
         filterRateType:    document.getElementById('filter-rate-type'),
         filterDepositTier: document.getElementById('filter-deposit-tier'),
@@ -47,6 +51,8 @@
         filterIncludeManual: document.getElementById('filter-include-manual'),
         refreshInterval: document.getElementById('refresh-interval'),
         lastRefreshed: document.getElementById('last-refreshed'),
+        tableSettingsBtn: document.getElementById('table-settings-btn'),
+        tableSettingsPopover: document.getElementById('table-settings-popover'),
     };
 
     var filterElMap = {
@@ -56,6 +62,10 @@
         'filter-structure': els.filterStructure,
         'filter-lvr': els.filterLvr,
         'filter-feature': els.filterFeature,
+        'filter-min-rate': els.filterMinRate,
+        'filter-max-rate': els.filterMaxRate,
+        'filter-min-comparison-rate': els.filterMinComparisonRate,
+        'filter-max-comparison-rate': els.filterMaxComparisonRate,
         'filter-account-type': els.filterAccountType,
         'filter-rate-type': els.filterRateType,
         'filter-deposit-tier': els.filterDepositTier,

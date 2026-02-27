@@ -16,6 +16,44 @@ function rows<T>(result: D1Result<T>): T[] {
   return result.results ?? []
 }
 
+function addBankWhere(
+  where: string[],
+  binds: Array<string | number>,
+  column: string,
+  bank?: string,
+  banks?: string[],
+) {
+  const uniqueBanks = Array.from(new Set((banks ?? []).map((v) => String(v || '').trim()).filter(Boolean)))
+  if (uniqueBanks.length > 0) {
+    const placeholders = uniqueBanks.map(() => '?').join(', ')
+    where.push(`${column} IN (${placeholders})`)
+    for (const value of uniqueBanks) binds.push(value)
+    return
+  }
+
+  if (bank) {
+    where.push(`${column} = ?`)
+    binds.push(bank)
+  }
+}
+
+function addRateBoundsWhere(
+  where: string[],
+  binds: Array<string | number>,
+  interestRateColumn: string,
+  minRate?: number,
+  maxRate?: number,
+) {
+  if (Number.isFinite(minRate)) {
+    where.push(`${interestRateColumn} >= ?`)
+    binds.push(Number(minRate))
+  }
+  if (Number.isFinite(maxRate)) {
+    where.push(`${interestRateColumn} <= ?`)
+    binds.push(Number(maxRate))
+  }
+}
+
 export async function getSavingsFilters(db: D1Database) {
   const [banks, accountTypes, rateTypes, depositTiers] = await Promise.all([
     db.prepare('SELECT DISTINCT bank_name AS value FROM historical_savings_rates ORDER BY bank_name ASC').all<{ value: string }>(),
@@ -40,9 +78,13 @@ type SavingsPaginatedFilters = {
   startDate?: string
   endDate?: string
   bank?: string
+  banks?: string[]
   accountType?: string
   rateType?: string
   depositTier?: string
+  minRate?: number
+  maxRate?: number
+  includeRemoved?: boolean
   sort?: string
   dir?: 'asc' | 'desc'
   mode?: 'all' | 'daily' | 'historical'
@@ -60,9 +102,13 @@ const SORT_COLUMNS: Record<string, string> = {
   monthly_fee: 'h.monthly_fee',
   parsed_at: 'h.parsed_at',
   retrieved_at: 'h.parsed_at',
+  found_at: 'first_retrieved_at',
   first_retrieved_at: 'first_retrieved_at',
+  rate_confirmed_at: 'rate_confirmed_at',
   run_source: 'h.run_source',
   retrieval_type: 'h.retrieval_type',
+  is_removed: 'is_removed',
+  removed_at: 'removed_at',
   source_url: 'h.source_url',
   product_url: 'h.product_url',
   published_at: 'h.published_at',
@@ -75,6 +121,7 @@ function buildWhere(filters: SavingsPaginatedFilters): { clause: string; binds: 
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', filters.minRate, filters.maxRate)
   if (filters.mode === 'daily') {
     where.push("h.retrieval_type != 'historical_scrape'")
     where.push('h.confidence_score >= ?')
@@ -89,12 +136,13 @@ function buildWhere(filters: SavingsPaginatedFilters): { clause: string; binds: 
   }
 
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
-  if (filters.bank) { where.push('h.bank_name = ?'); binds.push(filters.bank) }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.accountType) { where.push('h.account_type = ?'); binds.push(filters.accountType) }
   if (filters.rateType) { where.push('h.rate_type = ?'); binds.push(filters.rateType) }
   if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }
+  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
 
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -106,13 +154,25 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
   const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
 
   const page = Math.max(1, Math.floor(Number(filters.page) || 1))
-  const size = Math.min(500, Math.max(1, Math.floor(Number(filters.size) || 50)))
+  const size = Math.min(1000, Math.max(1, Math.floor(Number(filters.size) || 50)))
   const offset = (page - 1) * size
 
-  const countSql = `SELECT COUNT(*) AS total FROM historical_savings_rates h ${whereClause}`
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM historical_savings_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
+    ${whereClause}
+  `
   const sourceSql = `
     SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
     FROM historical_savings_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     GROUP BY COALESCE(h.run_source, 'scheduled')
   `
@@ -127,9 +187,28 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
       MIN(h.parsed_at) OVER (
         PARTITION BY h.bank_name, h.product_id, h.account_type, h.rate_type, h.deposit_tier
       ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.account_type,
+          h.rate_type,
+          h.deposit_tier,
+          h.interest_rate,
+          h.monthly_fee,
+          h.min_balance,
+          h.max_balance,
+          h.conditions
+      ) AS rate_confirmed_at,
       h.run_id, h.run_source,
-      h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key
+      h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM historical_savings_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause} ${orderClause}
     LIMIT ? OFFSET ?
   `
@@ -158,7 +237,9 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
 }
 
 export async function queryLatestSavingsRates(db: D1Database, filters: {
-  bank?: string; accountType?: string; rateType?: string; depositTier?: string
+  bank?: string; banks?: string[]; accountType?: string; rateType?: string; depositTier?: string
+  minRate?: number; maxRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number; orderBy?: 'default' | 'rate_asc' | 'rate_desc'
@@ -168,6 +249,7 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
 
   where.push('v.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'v.interest_rate', filters.minRate, filters.maxRate)
   if (filters.mode === 'daily') {
     where.push("v.retrieval_type != 'historical_scrape'")
     where.push('v.confidence_score >= ?')
@@ -181,10 +263,11 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
     binds.push(MIN_CONFIDENCE)
   }
 
-  if (filters.bank) { where.push('v.bank_name = ?'); binds.push(filters.bank) }
+  addBankWhere(where, binds, 'v.bank_name', filters.bank, filters.banks)
   if (filters.accountType) { where.push('v.account_type = ?'); binds.push(filters.accountType) }
   if (filters.rateType) { where.push('v.rate_type = ?'); binds.push(filters.rateType) }
   if (filters.depositTier) { where.push('v.deposit_tier = ?'); binds.push(filters.depositTier) }
+  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
 
   const orderMap: Record<string, string> = {
@@ -207,8 +290,41 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
           AND h.rate_type = v.rate_type
           AND h.deposit_tier = v.deposit_tier
       ) AS first_retrieved_at,
-      v.product_key
+      (
+        SELECT MAX(h.parsed_at)
+        FROM historical_savings_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.account_type = v.account_type
+          AND h.rate_type = v.rate_type
+          AND h.deposit_tier = v.deposit_tier
+          AND h.interest_rate = v.interest_rate
+          AND (
+            (h.monthly_fee = v.monthly_fee)
+            OR (h.monthly_fee IS NULL AND v.monthly_fee IS NULL)
+          )
+          AND (
+            (h.min_balance = v.min_balance)
+            OR (h.min_balance IS NULL AND v.min_balance IS NULL)
+          )
+          AND (
+            (h.max_balance = v.max_balance)
+            OR (h.max_balance IS NULL AND v.max_balance IS NULL)
+          )
+          AND (
+            (h.conditions = v.conditions)
+            OR (h.conditions IS NULL AND v.conditions IS NULL)
+          )
+          AND h.data_quality_flag LIKE 'cdr_live%'
+      ) AS rate_confirmed_at,
+      v.product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM vw_latest_savings_rates v
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = v.bank_name
+      AND pps.product_id = v.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY ${orderMap[filters.orderBy ?? 'default'] ?? orderMap.default}
     LIMIT ?
@@ -217,8 +333,51 @@ export async function queryLatestSavingsRates(db: D1Database, filters: {
   return rows(result).map((row) => presentSavingsRow(row))
 }
 
+/** Count of current products matching the same filters as queryLatestSavingsRates. */
+export async function queryLatestSavingsRatesCount(db: D1Database, filters: Parameters<typeof queryLatestSavingsRates>[1]): Promise<number> {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('v.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'v.interest_rate', filters.minRate, filters.maxRate)
+  if (filters.mode === 'daily') {
+    where.push("v.retrieval_type != 'historical_scrape'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (filters.mode === 'historical') {
+    where.push("v.retrieval_type = 'historical_scrape'")
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('v.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
+  addBankWhere(where, binds, 'v.bank_name', filters.bank, filters.banks)
+  if (filters.accountType) { where.push('v.account_type = ?'); binds.push(filters.accountType) }
+  if (filters.rateType) { where.push('v.rate_type = ?'); binds.push(filters.rateType) }
+  if (filters.depositTier) { where.push('v.deposit_tier = ?'); binds.push(filters.depositTier) }
+  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  where.push(runSourceWhereClause('v.run_source', filters.sourceMode ?? 'all'))
+
+  const countSql = `
+    SELECT COUNT(*) AS n
+    FROM vw_latest_savings_rates v
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = v.bank_name
+      AND pps.product_id = v.product_id
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+  `
+  const countResult = await db.prepare(countSql).bind(...binds).first<{ n: number }>()
+  const n = countResult?.n ?? 0
+  return Number(n)
+}
+
 export async function queryLatestAllSavingsRates(db: D1Database, filters: {
-  bank?: string; accountType?: string; rateType?: string; depositTier?: string
+  bank?: string; banks?: string[]; accountType?: string; rateType?: string; depositTier?: string
+  minRate?: number; maxRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number; orderBy?: 'default' | 'rate_asc' | 'rate_desc'
@@ -228,6 +387,7 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: {
 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', filters.minRate, filters.maxRate)
   if (filters.mode === 'daily') {
     where.push("h.retrieval_type != 'historical_scrape'")
     where.push('h.confidence_score >= ?')
@@ -241,7 +401,7 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: {
     binds.push(MIN_CONFIDENCE)
   }
 
-  if (filters.bank) { where.push('h.bank_name = ?'); binds.push(filters.bank) }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.accountType) { where.push('h.account_type = ?'); binds.push(filters.accountType) }
   if (filters.rateType) { where.push('h.rate_type = ?'); binds.push(filters.rateType) }
   if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
@@ -283,6 +443,19 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: {
         MIN(h.parsed_at) OVER (
           PARTITION BY h.bank_name, h.product_id, h.account_type, h.rate_type, h.deposit_tier
         ) AS first_retrieved_at,
+        MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+          PARTITION BY
+            h.bank_name,
+            h.product_id,
+            h.account_type,
+            h.rate_type,
+            h.deposit_tier,
+            h.interest_rate,
+            h.monthly_fee,
+            h.min_balance,
+            h.max_balance,
+            h.conditions
+        ) AS rate_confirmed_at,
         h.run_source,
         h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key,
         ROW_NUMBER() OVER (
@@ -313,10 +486,18 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: {
       ranked.retrieval_type,
       ranked.parsed_at,
       ranked.first_retrieved_at,
+      ranked.rate_confirmed_at,
       ranked.run_source,
-      ranked.product_key
+      ranked.product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM ranked
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = ranked.bank_name
+      AND pps.product_id = ranked.product_id
     WHERE ranked.row_num = 1
+      ${filters.includeRemoved ? '' : 'AND COALESCE(pps.is_removed, 0) = 0'}
     ORDER BY ${orderClause}
     LIMIT ?
   `
@@ -326,7 +507,9 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: {
 }
 
 export async function querySavingsTimeseries(db: D1Database, input: {
-  bank?: string; productKey?: string; accountType?: string; rateType?: string
+  bank?: string; banks?: string[]; productKey?: string; accountType?: string; rateType?: string
+  minRate?: number; maxRate?: number
+  includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   startDate?: string; endDate?: string; limit?: number
@@ -336,6 +519,7 @@ export async function querySavingsTimeseries(db: D1Database, input: {
 
   where.push('t.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 't.interest_rate', input.minRate, input.maxRate)
   if (input.mode === 'daily') {
     where.push("t.retrieval_type != 'historical_scrape'")
     where.push('t.confidence_score >= ?')
@@ -349,10 +533,11 @@ export async function querySavingsTimeseries(db: D1Database, input: {
     binds.push(MIN_CONFIDENCE)
   }
 
-  if (input.bank) { where.push('t.bank_name = ?'); binds.push(input.bank) }
+  addBankWhere(where, binds, 't.bank_name', input.bank, input.banks)
   if (input.productKey) { where.push('t.product_key = ?'); binds.push(input.productKey) }
   if (input.accountType) { where.push('t.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('t.rate_type = ?'); binds.push(input.rateType) }
+  if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('t.collection_date >= ?'); binds.push(input.startDate) }
   if (input.endDate) { where.push('t.collection_date <= ?'); binds.push(input.endDate) }
@@ -363,8 +548,27 @@ export async function querySavingsTimeseries(db: D1Database, input: {
   const sql = `
     SELECT
       t.*,
-      MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at
+      MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at,
+      MAX(CASE WHEN t.data_quality_flag LIKE 'cdr_live%' THEN t.parsed_at END) OVER (
+        PARTITION BY
+          t.bank_name,
+          t.product_id,
+          t.account_type,
+          t.rate_type,
+          t.deposit_tier,
+          t.interest_rate,
+          t.monthly_fee,
+          t.min_balance,
+          t.max_balance,
+          t.conditions
+      ) AS rate_confirmed_at,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM vw_savings_timeseries t
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = t.bank_name
+      AND pps.product_id = t.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY t.collection_date ASC
     LIMIT ?
@@ -379,10 +583,22 @@ export async function querySavingsForExport(db: D1Database, filters: SavingsPagi
   const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
   const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(maxRows))))
 
-  const countSql = `SELECT COUNT(*) AS total FROM historical_savings_rates h ${whereClause}`
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM historical_savings_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
+    ${whereClause}
+  `
   const sourceSql = `
     SELECT COALESCE(h.run_source, 'scheduled') AS run_source, COUNT(*) AS n
     FROM historical_savings_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     GROUP BY COALESCE(h.run_source, 'scheduled')
   `
@@ -397,9 +613,28 @@ export async function querySavingsForExport(db: D1Database, filters: SavingsPagi
       MIN(h.parsed_at) OVER (
         PARTITION BY h.bank_name, h.product_id, h.account_type, h.rate_type, h.deposit_tier
       ) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.account_type,
+          h.rate_type,
+          h.deposit_tier,
+          h.interest_rate,
+          h.monthly_fee,
+          h.min_balance,
+          h.max_balance,
+          h.conditions
+      ) AS rate_confirmed_at,
       h.run_id, h.run_source,
-      h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key
+      h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
     FROM historical_savings_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'savings'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id
     ${whereClause}
     ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC
     LIMIT ?

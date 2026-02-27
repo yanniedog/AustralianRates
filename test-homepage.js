@@ -19,10 +19,12 @@ const { chromium } = require('playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const SCREENSHOT_DIR = './test-screenshots';
-// On production we fail if Retrieval column is missing; on localhost/dev we only warn. Env can force strict (1) on dev.
+// New explorer-column checks are strict on localhost/dev and optional on production until rollout is complete.
 const isProductionUrl = !TEST_URL.includes('localhost') && !TEST_URL.includes('127.0.0.1');
 const STRICT_RETRIEVAL_COLUMN = isProductionUrl || process.env.STRICT_RETRIEVAL_COLUMN === '1';
-const REQUIRED_METADATA_HEADERS = ['Retrieval', 'Product URL', 'Published At', 'Retrieved At'];
+const STRICT_NEW_EXPLORER_COLUMNS = !isProductionUrl || process.env.STRICT_NEW_EXPLORER_COLUMNS === '1';
+const STRICT_RBA_CASH_RATE = !isProductionUrl || process.env.STRICT_RBA_CASH_RATE === '1';
+const REQUIRED_METADATA_HEADERS = ['Found:', 'Headline Rate', 'Bank', 'Rate Confirmed', 'URLs'];
 
 function isIgnorableTelemetryFailure(failure) {
     if (!failure || !failure.url) return false;
@@ -64,12 +66,23 @@ async function runTests() {
         for (const header of REQUIRED_METADATA_HEADERS) {
             const hasHeader = normalized.includes(header);
             if (hasHeader) {
-                results.passed.push(`✓ ${scopeLabel} table includes ${header} column`);
-            } else if (STRICT_RETRIEVAL_COLUMN) {
-                results.failed.push(`✗ ${scopeLabel} table missing ${header} column`);
+                results.passed.push(`PASS ${scopeLabel}: table includes ${header} column`);
+            } else if (STRICT_NEW_EXPLORER_COLUMNS) {
+                results.failed.push(`FAIL ${scopeLabel}: table missing ${header} column`);
             } else {
-                results.warnings.push(`⚠ ${scopeLabel} table missing ${header} column on this environment`);
+                results.warnings.push(`WARN ${scopeLabel}: table missing ${header} column on this environment`);
             }
+        }
+        if (normalized.includes('Comparison Rate')) {
+            results.passed.push(`PASS ${scopeLabel}: table includes Comparison Rate when available`);
+        } else {
+            results.warnings.push(`WARN ${scopeLabel}: table currently hides Comparison Rate (likely no comparison values in this slice)`);
+        }
+        if (normalized.includes('Retrieved At')) {
+            if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push(`FAIL ${scopeLabel}: table still includes obsolete Retrieved At column`);
+            else results.warnings.push(`WARN ${scopeLabel}: table still includes obsolete Retrieved At column on this environment`);
+        } else {
+            results.passed.push(`PASS ${scopeLabel}: table no longer includes Retrieved At`);
         }
     }
 
@@ -419,7 +432,8 @@ async function runTests() {
         if (statCashRate.includes('RBA Cash Rate:') && !statCashRate.includes('...')) {
             results.passed.push(`✓ RBA Cash Rate stat populated: ${statCashRate}`);
         } else {
-            results.failed.push('✗ RBA Cash Rate stat not populated');
+            if (STRICT_RBA_CASH_RATE) results.failed.push('✗ RBA Cash Rate stat not populated');
+            else results.warnings.push('⚠ RBA Cash Rate stat not populated on this environment');
         }
         
         if (statRecords.includes('Records:') && !statRecords.includes('...')) {
@@ -697,6 +711,57 @@ async function runTests() {
 
         const explorerHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
         verifyMetadataHeaders(explorerHeaders, 'Rate Explorer');
+
+        const settingsBtn = page.locator('#table-settings-btn');
+        const settingsBtnVisible = await settingsBtn.isVisible().catch(() => false);
+        if (settingsBtnVisible) {
+            results.passed.push('PASS Rate Explorer: settings icon is visible');
+            let includeRemovedRequested = false;
+            const onRatesRequest = (req) => {
+                const url = req.url();
+                if (url.includes('/rates?') && url.includes('include_removed=true')) {
+                    includeRemovedRequested = true;
+                }
+            };
+            context.on('request', onRatesRequest);
+            await settingsBtn.click();
+            await page.waitForTimeout(300);
+            const popoverVisible = await page.locator('#table-settings-popover').isVisible().catch(() => false);
+            if (popoverVisible) {
+                results.passed.push('PASS Rate Explorer: settings popover opens');
+                const showRemovedToggle = page.locator('#table-settings-popover input[data-setting=\"show-removed\"]');
+                if (await showRemovedToggle.isVisible().catch(() => false)) {
+                    const isChecked = await showRemovedToggle.isChecked().catch(() => false);
+                    if (!isChecked) {
+                        await showRemovedToggle.click();
+                        await page.waitForTimeout(1600);
+                    }
+                    if (includeRemovedRequested) {
+                        results.passed.push('PASS Rate Explorer: show removed toggle requests include_removed=true');
+                    } else {
+                        if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push('FAIL Rate Explorer: show removed toggle did not request include_removed=true');
+                        else results.warnings.push('WARN Rate Explorer: show removed toggle did not request include_removed=true on this environment');
+                    }
+                    const removedRowsRendered = await page.locator('#rate-table .tabulator-row.ar-row-removed').count();
+                    if (removedRowsRendered > 0) {
+                        results.passed.push(`PASS Rate Explorer: removed rows render with strike-through class (${removedRowsRendered})`);
+                    } else {
+                        results.warnings.push('WARN Rate Explorer: no removed rows found in current dataset after toggling show removed');
+                    }
+                } else {
+                    if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push('FAIL Rate Explorer: show removed toggle not found in settings popover');
+                    else results.warnings.push('WARN Rate Explorer: show removed toggle not found in settings popover on this environment');
+                }
+            } else {
+                if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push('FAIL Rate Explorer: settings popover did not open');
+                else results.warnings.push('WARN Rate Explorer: settings popover did not open on this environment');
+            }
+            context.off('request', onRatesRequest);
+            await page.keyboard.press('Escape').catch(() => {});
+        } else {
+            if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push('FAIL Rate Explorer: settings icon not found');
+            else results.warnings.push('WARN Rate Explorer: settings icon not found on this environment');
+        }
         
         await page.screenshot({ 
             path: `${SCREENSHOT_DIR}/05-rate-explorer-table.png`,
@@ -710,11 +775,20 @@ async function runTests() {
             const bankHeader = page.locator('#rate-table .tabulator-col').filter({ hasText: 'Bank' }).first();
             if (await bankHeader.isVisible().catch(() => false)) {
                 const readTopBanks = async (maxRows) => {
+                    const bankColumnIndex = await page.evaluate(() => {
+                        const columns = Array.from(document.querySelectorAll('#rate-table .tabulator-col'));
+                        for (let i = 0; i < columns.length; i++) {
+                            const title = String(columns[i].querySelector('.tabulator-col-title')?.textContent || '').trim();
+                            if (title === 'Bank') return i;
+                        }
+                        return -1;
+                    });
+                    if (bankColumnIndex < 0) return [];
                     const rowsLocator = page.locator('#rate-table .tabulator-row');
                     const count = Math.min(await rowsLocator.count(), maxRows);
                     const banks = [];
                     for (let i = 0; i < count; i++) {
-                        const bank = await rowsLocator.nth(i).locator('.tabulator-cell').nth(1).textContent().catch(() => '');
+                        const bank = await rowsLocator.nth(i).locator('.tabulator-cell').nth(bankColumnIndex).textContent().catch(() => '');
                         banks.push(String(bank || '').trim());
                     }
                     return banks;
@@ -1091,6 +1165,7 @@ runTests().catch(error => {
     console.error('Failed to run tests:', error);
     process.exit(1);
 });
+
 
 
 

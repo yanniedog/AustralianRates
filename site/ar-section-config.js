@@ -13,12 +13,16 @@
             heroHeading: 'Compare mortgage rates from major banks',
             heroSubtitle: 'Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart rates across all collection dates.',
             filterFields: [
-                { id: 'filter-bank', param: 'bank', label: 'Bank', url: 'bank' },
+                { id: 'filter-bank', param: 'banks', label: 'Banks', url: 'banks', legacyUrl: 'bank', multiple: true },
                 { id: 'filter-security', param: 'security_purpose', label: 'Purpose', url: 'purpose', title: 'Owner-occupied (live in) or investment (rent out)' },
                 { id: 'filter-repayment', param: 'repayment_type', label: 'Repayment', url: 'repayment', title: 'Principal & Interest (P&I) or Interest Only (IO)' },
                 { id: 'filter-structure', param: 'rate_structure', label: 'Structure', url: 'structure', title: 'Variable rate or fixed term (1-5 years)' },
                 { id: 'filter-lvr', param: 'lvr_tier', label: 'LVR', url: 'lvr', title: 'Loan-to-Value Ratio' },
-                { id: 'filter-feature', param: 'feature_set', label: 'Feature', url: 'feature', title: 'Basic or Premium (with offset/redraw)' }
+                { id: 'filter-feature', param: 'feature_set', label: 'Feature', url: 'feature', title: 'Basic or Premium (with offset/redraw)' },
+                { id: 'filter-min-rate', param: 'min_rate', label: 'Min Headline', url: 'min_rate' },
+                { id: 'filter-max-rate', param: 'max_rate', label: 'Max Headline', url: 'max_rate' },
+                { id: 'filter-min-comparison-rate', param: 'min_comparison_rate', label: 'Min Comparison', url: 'min_comparison_rate' },
+                { id: 'filter-max-comparison-rate', param: 'max_comparison_rate', label: 'Max Comparison', url: 'max_comparison_rate' }
             ],
             filterApiMap: {
                 'filter-bank': 'banks',
@@ -34,7 +38,8 @@
                 comparison_rate: 'Comparison Rate (%)', rate_structure: 'Structure', security_purpose: 'Purpose',
                 repayment_type: 'Repayment', lvr_tier: 'LVR', feature_set: 'Feature', product_name: 'Product',
                 annual_fee: 'Annual Fee ($)', rba_cash_rate: 'Cash Rate (%)', run_source: 'Source',
-                parsed_at: 'Checked At', source_url: 'Source URL', data_quality_flag: 'Quality',
+                parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed',
+                source_url: 'Source URL', data_quality_flag: 'Quality',
                 retrieval_type: 'Retrieval'
             },
             chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
@@ -45,10 +50,12 @@
             heroHeading: 'Compare savings rates from major banks',
             heroSubtitle: 'Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart savings rates across all banks.',
             filterFields: [
-                { id: 'filter-bank', param: 'bank', label: 'Bank', url: 'bank' },
+                { id: 'filter-bank', param: 'banks', label: 'Banks', url: 'banks', legacyUrl: 'bank', multiple: true },
                 { id: 'filter-account-type', param: 'account_type', label: 'Account Type', url: 'account_type', title: 'Savings, transaction, or at-call' },
                 { id: 'filter-rate-type', param: 'rate_type', label: 'Rate Type', url: 'rate_type', title: 'Base, bonus, introductory, or bundle rate' },
-                { id: 'filter-deposit-tier', param: 'deposit_tier', label: 'Deposit Tier', url: 'deposit_tier', title: 'Balance range tier' }
+                { id: 'filter-deposit-tier', param: 'deposit_tier', label: 'Deposit Tier', url: 'deposit_tier', title: 'Balance range tier' },
+                { id: 'filter-min-rate', param: 'min_rate', label: 'Min Headline', url: 'min_rate' },
+                { id: 'filter-max-rate', param: 'max_rate', label: 'Max Headline', url: 'max_rate' }
             ],
             filterApiMap: {
                 'filter-bank': 'banks',
@@ -61,7 +68,7 @@
                 collection_date: 'Date', bank_name: 'Bank', interest_rate: 'Interest Rate (%)',
                 account_type: 'Account Type', rate_type: 'Rate Type', deposit_tier: 'Deposit Tier',
                 product_name: 'Product', conditions: 'Conditions', monthly_fee: 'Monthly Fee ($)',
-                run_source: 'Source', parsed_at: 'Checked At', source_url: 'Source URL',
+                run_source: 'Source', parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed', source_url: 'Source URL',
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
             chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
@@ -72,10 +79,12 @@
             heroHeading: 'Compare term deposit rates from major banks',
             heroSubtitle: 'Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates.',
             filterFields: [
-                { id: 'filter-bank', param: 'bank', label: 'Bank', url: 'bank' },
+                { id: 'filter-bank', param: 'banks', label: 'Banks', url: 'banks', legacyUrl: 'bank', multiple: true },
                 { id: 'filter-term-months', param: 'term_months', label: 'Term', url: 'term_months', title: 'Term length in months' },
                 { id: 'filter-deposit-tier', param: 'deposit_tier', label: 'Deposit Tier', url: 'deposit_tier', title: 'Minimum deposit range' },
-                { id: 'filter-interest-payment', param: 'interest_payment', label: 'Payment', url: 'interest_payment', title: 'Interest payment frequency' }
+                { id: 'filter-interest-payment', param: 'interest_payment', label: 'Payment', url: 'interest_payment', title: 'Interest payment frequency' },
+                { id: 'filter-min-rate', param: 'min_rate', label: 'Min Headline', url: 'min_rate' },
+                { id: 'filter-max-rate', param: 'max_rate', label: 'Max Headline', url: 'max_rate' }
             ],
             filterApiMap: {
                 'filter-bank': 'banks',
@@ -88,7 +97,7 @@
                 collection_date: 'Date', bank_name: 'Bank', interest_rate: 'Interest Rate (%)',
                 term_months: 'Term (months)', deposit_tier: 'Deposit Tier', interest_payment: 'Payment Frequency',
                 product_name: 'Product', min_deposit: 'Min Deposit ($)', max_deposit: 'Max Deposit ($)',
-                run_source: 'Source', parsed_at: 'Checked At', source_url: 'Source URL',
+                run_source: 'Source', parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed', source_url: 'Source URL',
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
             chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'

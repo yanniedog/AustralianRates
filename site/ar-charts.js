@@ -13,6 +13,7 @@
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
     var esc = window._arEsc;
+    var MAX_CHART_POINTS = 1000;
 
     var yLabels = {
         interest_rate: 'Interest Rate (%)',
@@ -212,34 +213,80 @@
         };
     }
 
+    function fetchRates(params) {
+        var query = new URLSearchParams(params || {});
+        return fetch(apiBase + '/rates?' + query.toString())
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
+                return response.json();
+            });
+    }
+
     function drawChart() {
         if (!els.chartOutput) return;
-        if (els.chartStatus) els.chartStatus.textContent = 'Loading chart data...';
+        if (els.chartStatus) els.chartStatus.textContent = 'Checking chart point count...';
         clearPointDetails();
         clientLog('info', 'Chart load started');
 
-        var fp = buildFilterParams();
-        fp.size = '10000';
-        fp.page = '1';
-        fp.sort = els.chartX ? els.chartX.value : 'collection_date';
-        fp.dir = 'asc';
-        var q = new URLSearchParams(fp);
+        var fields = getChartFieldValues();
+        var baseParams = buildFilterParams();
+        var preflightParams = {};
+        Object.keys(baseParams || {}).forEach(function (key) { preflightParams[key] = baseParams[key]; });
+        preflightParams.page = '1';
+        preflightParams.size = '1';
 
-        fetch(apiBase + '/rates?' + q.toString())
-            .then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /rates');
-                return r.json();
-            })
-            .then(function (response) {
-                var data = response.data || [];
-                if (data.length === 0) {
+        fetchRates(preflightParams)
+            .then(function (preflight) {
+                var total = Number(preflight && preflight.total != null ? preflight.total : 0);
+                if (!Number.isFinite(total) || total <= 0) {
                     if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
                     Plotly.purge(els.chartOutput);
                     clearPointDetails();
                     clientLog('warn', 'Chart load returned no data');
+                    return null;
+                }
+                if (total > MAX_CHART_POINTS) {
+                    if (els.chartStatus) {
+                        els.chartStatus.textContent = 'Too many points (' + total.toLocaleString() + '). Narrow your filters to ' + MAX_CHART_POINTS.toLocaleString() + ' or fewer points.';
+                    }
+                    Plotly.purge(els.chartOutput);
+                    clearPointDetails();
+                    clientLog('warn', 'Chart render blocked by hard point limit', { total: total, limit: MAX_CHART_POINTS });
+                    return null;
+                }
+
+                if (els.chartStatus) els.chartStatus.textContent = 'Loading ' + total.toLocaleString() + ' chart points...';
+                var dataParams = {};
+                Object.keys(baseParams || {}).forEach(function (key) { dataParams[key] = baseParams[key]; });
+                dataParams.page = '1';
+                dataParams.size = String(MAX_CHART_POINTS);
+                dataParams.sort = fields.xField || 'collection_date';
+                dataParams.dir = 'asc';
+                return fetchRates(dataParams).then(function (payload) {
+                    payload._preflightTotal = total;
+                    return payload;
+                });
+            })
+            .then(function (response) {
+                if (!response) return;
+                var data = response.data || [];
+                var total = Number(response._preflightTotal || response.total || data.length || 0);
+                if (total > MAX_CHART_POINTS) {
+                    if (els.chartStatus) {
+                        els.chartStatus.textContent = 'Too many points (' + total.toLocaleString() + '). Narrow your filters to ' + MAX_CHART_POINTS.toLocaleString() + ' or fewer points.';
+                    }
+                    Plotly.purge(els.chartOutput);
+                    clearPointDetails();
+                    clientLog('warn', 'Chart render blocked after data fetch limit check', { total: total, limit: MAX_CHART_POINTS });
                     return;
                 }
-                var fields = getChartFieldValues();
+                if (data.length === 0) {
+                    if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
+                    Plotly.purge(els.chartOutput);
+                    clearPointDetails();
+                    clientLog('warn', 'Chart load returned empty dataset after preflight');
+                    return;
+                }
                 var chartData = buildTraces(data, fields.xField, fields.yField, fields.groupField, fields.chartType);
                 var traces = chartData.traces || [];
                 var layout = buildLayout(fields.xField, fields.yField);
@@ -248,12 +295,13 @@
                     clearPointDetails();
                 });
                 tabState.chartDrawn = true;
-                var total = response.total || data.length;
-                var suffix = total > 10000 ? ' (charted first 10,000 of ' + total.toLocaleString() + ')' : ' (' + data.length.toLocaleString() + ' data points)';
-                if (els.chartStatus) els.chartStatus.textContent = 'Chart rendered' + suffix;
+                if (els.chartStatus) {
+                    els.chartStatus.textContent = 'Chart rendered (' + data.length.toLocaleString() + ' data points).';
+                }
                 clientLog('info', 'Chart load completed', {
                     points: data.length,
                     traceCount: traces.length,
+                    total: total,
                 });
             })
             .catch(function (err) {
