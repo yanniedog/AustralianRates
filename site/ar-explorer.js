@@ -416,6 +416,7 @@
     var columnPrefs = readColumnPrefs();
     var comparisonAvailable = true;
     var settingsBound = false;
+    var tableOverlayObserver = null;
 
     function getTableLayout() { return 'fitDataStretch'; }
 
@@ -593,6 +594,10 @@
     }
 
     function initRateTable() {
+        if (tableOverlayObserver) {
+            try { tableOverlayObserver.disconnect(); } catch (_) {}
+            tableOverlayObserver = null;
+        }
         if (rateTable) {
             try { rateTable.destroy(); } catch (_) {}
             rateTable = null;
@@ -678,20 +683,23 @@
                     var errMsg = e && e.message ? e.message : String(e);
                     clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data response processing failed', { message: errMsg });
                     if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: ajaxResponse threw', e);
-                    throw e;
+                    return { last_page: 1, last_row: 0, data: [] };
                 }
             },
             ajaxError: function (xhr, textStatus, errorThrown) {
                 var errData = { status: xhr && xhr.status ? xhr.status : null, textStatus: textStatus || null, message: errorThrown ? String(errorThrown) : null };
                 clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
                 if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
-                setTimeout(function () {
-                    var container = document.getElementById('rate-table');
-                    if (!container) return;
-                    container.querySelectorAll('.tabulator-loader, .tabulator-loader-msg, [class*="tabulator-loading"]').forEach(function (el) {
-                        el.style.display = 'none';
-                    });
-                }, 0);
+                if (rateTable) {
+                    try {
+                        hideTableLoader('ajaxError');
+                        rateTable.setData([]);
+                        var placeholder = rateTable.element.querySelector('.tabulator-placeholder');
+                        if (placeholder) {
+                            placeholder.style.display = 'block';
+                        }
+                    } catch (_e) {}
+                }
             },
             pagination: true,
             paginationMode: 'remote',
@@ -709,6 +717,7 @@
             dataReceiveParams: { last_row: 'total' },
             movableColumns: isAnalystMode() && !isMobile(),
             resizableColumns: isAnalystMode() && !isMobile(),
+            dataLoader: false,
             layout: getTableLayout(),
             layoutColumnsOnNewData: true,
             placeholder: 'No rate data found. Try adjusting your filters or date range.',
@@ -716,21 +725,56 @@
             columns: getRateTableColumns(),
             initialSort: [{ column: currentSort.field, dir: currentSort.dir }],
         });
-        function hideTableLoader() {
+        function hideTableLoader(reason) {
             var container = document.getElementById('rate-table');
             if (!container) return;
-            container.querySelectorAll('.tabulator-loader, .tabulator-loader-msg, [class*="tabulator-loading"]').forEach(function (el) {
+            var removedCount = 0;
+            var samples = [];
+            var sawLoadingOverlay = false;
+            container.querySelectorAll('.tabulator-loader, .tabulator-loader-msg, [class*="tabulator-loading"], .tabulator-alert').forEach(function (el) {
+                var text = (el.textContent || '').trim();
+                if (samples.length < 3 && text) samples.push(text.slice(0, 80));
+                if (/^\s*loading\s*$/i.test(text) || /\bloading\b/i.test(text)) sawLoadingOverlay = true;
                 el.style.display = 'none';
+                removedCount += 1;
             });
             container.querySelectorAll('.tabulator-table').forEach(function (tableBody) {
                 var loadingEl = tableBody.querySelector ? tableBody.querySelector('[class*="loader"], [class*="loading"]') : null;
-                if (loadingEl && (loadingEl.textContent || '').trim().toLowerCase().indexOf('loading') !== -1) loadingEl.style.display = 'none';
+                if (loadingEl && (loadingEl.textContent || '').trim().toLowerCase().indexOf('loading') !== -1) {
+                    loadingEl.style.display = 'none';
+                    removedCount += 1;
+                    sawLoadingOverlay = true;
+                    if (samples.length < 3) samples.push('Loading');
+                }
             });
+            var rowCount = container.querySelectorAll('.tabulator-row').length;
+            var placeholder = container.querySelector('.tabulator-placeholder');
+            if (rowCount === 0 && placeholder) placeholder.style.display = 'block';
+            var placeholderText = placeholder ? String(placeholder.textContent || '').trim() : '';
+            var isNoDataState = !!placeholderText && placeholderText.indexOf('No rate data found') !== -1;
+            if (removedCount > 0 && sawLoadingOverlay && isNoDataState) {
+                clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Stale loading/error overlay detected in table', {
+                    reason: reason || 'unknown',
+                    removedCount: removedCount,
+                    sample: samples,
+                });
+            }
         }
         function scheduleHideTableLoader() {
-            [0, 50, 150, 300].forEach(function (ms) { setTimeout(hideTableLoader, ms); });
+            [0, 50, 150, 300].forEach(function (ms) {
+                setTimeout(function () { hideTableLoader('deferred'); }, ms);
+            });
         }
+        var tableContainer = document.getElementById('rate-table');
+        if (tableContainer && typeof MutationObserver !== 'undefined') {
+            tableOverlayObserver = new MutationObserver(function () { hideTableLoader('mutation'); });
+            tableOverlayObserver.observe(tableContainer, { childList: true, subtree: true });
+        }
+        [0, 100, 300, 700].forEach(function (ms) {
+            setTimeout(function () { hideTableLoader('init'); }, ms);
+        });
         rateTable.on('dataLoaded', function () {
+            hideTableLoader('dataLoaded');
             scheduleHideTableLoader();
             var container = document.getElementById('rate-table');
             if (!container) return;
