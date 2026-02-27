@@ -566,9 +566,13 @@ async function runTests() {
 
         await page.click('#mode-consumer');
         await page.waitForTimeout(300);
-        // Test 7: Filter bar dropdowns
+        // Test 7: Filter bar dropdowns (open collapsible filters so controls are visible)
         console.log('\nTest 7: Checking filter bar...');
-        
+        await page.evaluate(function () {
+            var el = document.getElementById('filter-bar');
+            if (el && el.tagName === 'DETAILS') el.setAttribute('open', '');
+        });
+        await page.waitForTimeout(200);
         const filterElements = [
             { id: '#filter-bank', name: 'Bank' },
             { id: '#filter-security', name: 'Purpose' },

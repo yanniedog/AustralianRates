@@ -111,7 +111,8 @@
                 <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
             </nav>
 
-            <section class="filters panel" id="filter-bar">
+            <details class="filters panel filters-collapsible" id="filter-bar">
+                <summary class="filters-toggle" aria-label="Show or hide filter settings">Filters</summary>
                 <div class="filters-grid">
                     <label>Banks
                         <select id="filter-bank" multiple size="5"></select>
@@ -168,7 +169,7 @@
                         <span id="last-refreshed" class="hint"></span>
                     </div>
                 </div>
-            </section>
+            </details>
 
             <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
                 <div class="panel panel-wide">

@@ -353,6 +353,58 @@ button:focus-visible {
     padding: 16px;
 }
 
+.filters-collapsible {
+    padding: 0;
+}
+
+.filters-collapsible .filters-toggle {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    margin: 0;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    list-style: none;
+}
+
+.filters-collapsible .filters-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.filters-collapsible .filters-toggle::before {
+    content: "";
+    display: inline-block;
+    width: 0.5em;
+    height: 0.5em;
+    margin-right: 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.2s;
+    vertical-align: 0.15em;
+}
+
+.filters-collapsible[open] .filters-toggle::before {
+    transform: rotate(45deg);
+}
+
+.filters-collapsible .filters-toggle:hover {
+    color: var(--brand);
+}
+
+.filters-collapsible[open] .filters-grid {
+    padding: 12px 0 4px;
+    border-top: 1px solid var(--line);
+    margin-top: 2px;
+}
+
 .filters-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

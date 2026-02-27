@@ -283,6 +283,13 @@
 .ar-public .tab-panel.active { display: block; }
 
 .ar-public .filters { padding: 14px; }
+.ar-public .filters-collapsible { padding: 0; }
+.ar-public .filters-collapsible .filters-toggle {
+    padding: 10px 14px;
+    color: var(--ar-muted);
+}
+.ar-public .filters-collapsible .filters-toggle:hover { color: var(--ar-strong); }
+.ar-public .filters-collapsible[open] .filters-grid { padding-top: 12px; margin-top: 2px; border-top: 1px solid var(--ar-stroke); }
 
 .ar-public .filters-grid {
     display: grid;
