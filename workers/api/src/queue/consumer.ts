@@ -55,7 +55,11 @@ function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean 
 }
 
 function maxProductsPerLender(env: EnvBindings): number {
-  return Math.max(10, Math.min(250, parseIntegerEnv(env.MAX_PRODUCTS_PER_LENDER, 80)))
+  return Math.max(100, Math.min(50000, parseIntegerEnv(env.MAX_PRODUCTS_PER_LENDER, 20000)))
+}
+
+function maxCdrProductPages(): number {
+  return 500
 }
 
 async function persistProductDetailPayload(
@@ -304,7 +308,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   let indexPayloads = 0
   let productIdsDiscovered = 0
   let productDetailsRequested = 0
-  let removalSyncProductIds: string[] | null = null
+  let removalSyncProductIds: Set<string> | null = null
   let fallbackSeedFetches = 0
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   const seedDiagnostics: Array<Record<string, unknown>> = []
@@ -321,25 +325,26 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       return
     }
 
+    const discoveredProductIds = Array.from(removalSyncProductIds)
     const bankName = lender.canonical_bank_name || lender.name
     const removalStartedAt = Date.now()
     const seenTouched = await markProductsSeen(env.DB, {
       section: 'home_loans',
       bankName,
-      productIds: removalSyncProductIds,
+      productIds: discoveredProductIds,
       collectionDate: job.collectionDate,
       runId: job.runId,
     })
     const removedTouched = await markMissingProductsRemoved(env.DB, {
       section: 'home_loans',
       bankName,
-      activeProductIds: removalSyncProductIds,
+      activeProductIds: discoveredProductIds,
     })
     log.info('consumer', 'daily_lender_fetch removal_sync', {
       runId: job.runId,
       lenderCode: job.lenderCode,
       context:
-        `bank=${bankName} discovered=${removalSyncProductIds.length}` +
+        `bank=${bankName} discovered=${discoveredProductIds.length}` +
         ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
         ` elapsed_ms=${elapsedMs(removalStartedAt)}`,
     })
@@ -366,15 +371,25 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         `endpoint_idx=${endpointIndex + 1}/${uniqueCandidates.length}` +
         ` endpoint=${shortUrlForLog(candidateEndpoint)}`,
     })
-    const products = await fetchResidentialMortgageProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions })
+    const products = await fetchResidentialMortgageProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions })
     indexPayloads += products.rawPayloads.length
     productIdsDiscovered += products.productIds.length
     const endpointRowsBefore = collectedRows.length
     const indexStatusSummary = summarizeStatusCodes(products.rawPayloads.map((payload) => payload.status))
     const indexFetchSucceeded =
       products.rawPayloads.length > 0 && products.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
-    if (indexFetchSucceeded && removalSyncProductIds == null) {
-      removalSyncProductIds = products.productIds.slice()
+    if (indexFetchSucceeded) {
+      if (removalSyncProductIds == null) removalSyncProductIds = new Set<string>()
+      for (const productId of products.productIds) removalSyncProductIds.add(productId)
+    }
+    if (products.pageLimitHit) {
+      log.error('consumer', 'daily_lender_fetch index_page_limit_hit', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)} pages=${products.pagesFetched}` +
+          ` next=${products.nextUrl || 'none'} discovered=${products.productIds.length}`,
+      })
     }
     let endpointDetailRows = 0
     const detailStatuses: number[] = []
@@ -389,6 +404,16 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
     }
 
     const productIds = products.productIds.slice(0, productCap)
+    if (products.productIds.length > productIds.length) {
+      log.error('consumer', 'daily_lender_fetch product_cap_truncated', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)}` +
+          ` discovered=${products.productIds.length} used=${productIds.length}` +
+          ` dropped=${products.productIds.length - productIds.length} product_cap=${productCap}`,
+      })
+    }
     productDetailsRequested += productIds.length
     for (const productId of productIds) {
       const detailStartedAt = Date.now()
@@ -452,9 +477,8 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         ` detail_statuses=${serializeForLog(summarizeStatusCodes(detailStatuses))}` +
         ` elapsed_ms=${endpointElapsedMs}`,
     })
-    if (collectedRows.length > 0) {
+    if (collectedRows.length > 0 && !sourceUrl) {
       sourceUrl = candidateEndpoint
-      break
     }
   }
 
@@ -1542,8 +1566,8 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
   let tdProductIdsDiscovered = 0
   let savingsDetailRequests = 0
   let tdDetailRequests = 0
-  let savingsRemovalSyncProductIds: string[] | null = null
-  let tdRemovalSyncProductIds: string[] | null = null
+  let savingsRemovalSyncProductIds: Set<string> | null = null
+  let tdRemovalSyncProductIds: Set<string> | null = null
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
   let validationMs = 0
@@ -1551,24 +1575,25 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
   const syncRemovalStatus = async (): Promise<void> => {
     const bankName = lender.canonical_bank_name || lender.name
     if (savingsRemovalSyncProductIds != null) {
+      const discoveredSavingsProductIds = Array.from(savingsRemovalSyncProductIds)
       const started = Date.now()
       const seenTouched = await markProductsSeen(env.DB, {
         section: 'savings',
         bankName,
-        productIds: savingsRemovalSyncProductIds,
+        productIds: discoveredSavingsProductIds,
         collectionDate: job.collectionDate,
         runId: job.runId,
       })
       const removedTouched = await markMissingProductsRemoved(env.DB, {
         section: 'savings',
         bankName,
-        activeProductIds: savingsRemovalSyncProductIds,
+        activeProductIds: discoveredSavingsProductIds,
       })
       log.info('consumer', 'daily_savings_lender_fetch removal_sync_savings', {
         runId: job.runId,
         lenderCode: job.lenderCode,
         context:
-          `bank=${bankName} discovered=${savingsRemovalSyncProductIds.length}` +
+          `bank=${bankName} discovered=${discoveredSavingsProductIds.length}` +
           ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
           ` elapsed_ms=${elapsedMs(started)}`,
       })
@@ -1581,24 +1606,25 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     }
 
     if (tdRemovalSyncProductIds != null) {
+      const discoveredTdProductIds = Array.from(tdRemovalSyncProductIds)
       const started = Date.now()
       const seenTouched = await markProductsSeen(env.DB, {
         section: 'term_deposits',
         bankName,
-        productIds: tdRemovalSyncProductIds,
+        productIds: discoveredTdProductIds,
         collectionDate: job.collectionDate,
         runId: job.runId,
       })
       const removedTouched = await markMissingProductsRemoved(env.DB, {
         section: 'term_deposits',
         bankName,
-        activeProductIds: tdRemovalSyncProductIds,
+        activeProductIds: discoveredTdProductIds,
       })
       log.info('consumer', 'daily_savings_lender_fetch removal_sync_td', {
         runId: job.runId,
         lenderCode: job.lenderCode,
         context:
-          `bank=${bankName} discovered=${tdRemovalSyncProductIds.length}` +
+          `bank=${bankName} discovered=${discoveredTdProductIds.length}` +
           ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
           ` elapsed_ms=${elapsedMs(started)}`,
       })
@@ -1632,8 +1658,8 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
         ` endpoint=${shortUrlForLog(candidateEndpoint)}`,
     })
     const [savingsProducts, tdProducts] = await Promise.all([
-      fetchSavingsProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions }),
-      fetchTermDepositProductIds(candidateEndpoint, 20, { cdrVersions: playbook.cdrVersions }),
+      fetchSavingsProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions }),
+      fetchTermDepositProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions }),
     ])
     savingsProductIdsDiscovered += savingsProducts.productIds.length
     tdProductIdsDiscovered += tdProducts.productIds.length
@@ -1643,13 +1669,33 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     const savingsIndexFetchSucceeded =
       savingsProducts.rawPayloads.length > 0 &&
       savingsProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
-    if (savingsIndexFetchSucceeded && savingsRemovalSyncProductIds == null) {
-      savingsRemovalSyncProductIds = savingsProducts.productIds.slice()
+    if (savingsIndexFetchSucceeded) {
+      if (savingsRemovalSyncProductIds == null) savingsRemovalSyncProductIds = new Set<string>()
+      for (const productId of savingsProducts.productIds) savingsRemovalSyncProductIds.add(productId)
     }
     const tdIndexFetchSucceeded =
       tdProducts.rawPayloads.length > 0 && tdProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
-    if (tdIndexFetchSucceeded && tdRemovalSyncProductIds == null) {
-      tdRemovalSyncProductIds = tdProducts.productIds.slice()
+    if (tdIndexFetchSucceeded) {
+      if (tdRemovalSyncProductIds == null) tdRemovalSyncProductIds = new Set<string>()
+      for (const productId of tdProducts.productIds) tdRemovalSyncProductIds.add(productId)
+    }
+    if (savingsProducts.pageLimitHit) {
+      log.error('consumer', 'daily_savings_lender_fetch savings_index_page_limit_hit', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)} pages=${savingsProducts.pagesFetched}` +
+          ` next=${savingsProducts.nextUrl || 'none'} discovered=${savingsProducts.productIds.length}`,
+      })
+    }
+    if (tdProducts.pageLimitHit) {
+      log.error('consumer', 'daily_savings_lender_fetch td_index_page_limit_hit', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)} pages=${tdProducts.pagesFetched}` +
+          ` next=${tdProducts.nextUrl || 'none'} discovered=${tdProducts.productIds.length}`,
+      })
     }
     const savingsRowsBefore = savingsRows.length
     const tdRowsBefore = tdRows.length
@@ -1669,6 +1715,16 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     }
 
     const savingsProductIds = savingsProducts.productIds.slice(0, productCap)
+    if (savingsProducts.productIds.length > savingsProductIds.length) {
+      log.error('consumer', 'daily_savings_lender_fetch savings_product_cap_truncated', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)}` +
+          ` discovered=${savingsProducts.productIds.length} used=${savingsProductIds.length}` +
+          ` dropped=${savingsProducts.productIds.length - savingsProductIds.length} product_cap=${productCap}`,
+      })
+    }
     savingsDetailRequests += savingsProductIds.length
     for (const productId of savingsProductIds) {
       const detailStartedAt = Date.now()
@@ -1701,6 +1757,16 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
     }
 
     const tdProductIds = tdProducts.productIds.slice(0, productCap)
+    if (tdProducts.productIds.length > tdProductIds.length) {
+      log.error('consumer', 'daily_savings_lender_fetch td_product_cap_truncated', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)}` +
+          ` discovered=${tdProducts.productIds.length} used=${tdProductIds.length}` +
+          ` dropped=${tdProducts.productIds.length - tdProductIds.length} product_cap=${productCap}`,
+      })
+    }
     tdDetailRequests += tdProductIds.length
     for (const productId of tdProductIds) {
       const detailStartedAt = Date.now()
@@ -1771,7 +1837,6 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
         ` elapsed_ms=${endpointSummary.elapsed_ms}`,
     })
 
-    if (savingsRows.length > 0 || tdRows.length > 0) break
   }
   collectionMs = elapsedMs(collectStartedAt)
 

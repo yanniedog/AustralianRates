@@ -545,6 +545,9 @@ function parseRatesFromDetail(input: {
 type ProductListFetchResult = {
   productIds: string[]
   rawPayloads: Array<{ sourceUrl: string; status: number; body: string }>
+  pagesFetched: number
+  pageLimitHit: boolean
+  nextUrl: string | null
 }
 
 export async function fetchResidentialMortgageProductIds(
@@ -556,9 +559,12 @@ export async function fetchResidentialMortgageProductIds(
   const payloads: Array<{ sourceUrl: string; status: number; body: string }> = []
   let url: string | null = endpointUrl
   let pages = 0
+  const visitedUrls = new Set<string>()
   const versions = options?.cdrVersions && options.cdrVersions.length > 0 ? options.cdrVersions : [6, 5, 4, 3]
 
   while (url && pages < pageLimit) {
+    if (visitedUrls.has(url)) break
+    visitedUrls.add(url)
     pages += 1
     const response = await fetchCdrJson(url, versions)
     payloads.push({
@@ -576,12 +582,20 @@ export async function fetchResidentialMortgageProductIds(
       const id = pickText(product, ['productId', 'id'])
       if (id) ids.add(id)
     }
-    url = nextLink(response.data)
+    const next = nextLink(response.data)
+    if (next && visitedUrls.has(next)) {
+      url = null
+      break
+    }
+    url = next
   }
 
   return {
     productIds: Array.from(ids),
     rawPayloads: payloads,
+    pagesFetched: pages,
+    pageLimitHit: Boolean(url && pages >= pageLimit),
+    nextUrl: url,
   }
 }
 
