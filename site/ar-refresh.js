@@ -6,10 +6,12 @@
     var state = window.AR.state;
     var explorer = window.AR.explorer;
     var hero = window.AR.hero;
+    var rateChanges = window.AR.rateChanges;
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var reloadExplorer = explorer && explorer.reloadExplorer ? explorer.reloadExplorer : function () {};
     var loadHeroStats = hero && hero.loadHeroStats ? hero.loadHeroStats : function () {};
+    var loadRateChanges = rateChanges && rateChanges.loadRateChanges ? rateChanges.loadRateChanges : function () {};
 
     function updateLastRefreshed() {
         if (!els.lastRefreshed) return;
@@ -24,6 +26,7 @@
     function doAutoRefresh() {
         reloadExplorer();
         loadHeroStats();
+        loadRateChanges();
         tabState.lastRefreshedAt = Date.now();
         updateLastRefreshed();
     }

@@ -19,6 +19,7 @@ import { jsonError, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
+import { queryTdRateChanges } from '../db/rate-change-log'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -65,6 +66,20 @@ tdPublicRoutes.get('/staleness', async (c) => {
 tdPublicRoutes.get('/quality/diagnostics', async (c) => {
   const diagnostics = await getTdQualityDiagnostics(c.env.DB)
   return c.json({ ok: true, diagnostics })
+})
+
+tdPublicRoutes.get('/changes', async (c) => {
+  withPublicCache(c, 120)
+  const q = c.req.query()
+  const limit = Number(q.limit || 200)
+  const offset = Number(q.offset || 0)
+  const result = await queryTdRateChanges(c.env.DB, { limit, offset })
+  return c.json({
+    ok: true,
+    count: result.rows.length,
+    total: result.total,
+    rows: result.rows,
+  })
 })
 
 tdPublicRoutes.post('/trigger-run', async (c) => {

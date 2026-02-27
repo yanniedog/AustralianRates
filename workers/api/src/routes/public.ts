@@ -3,6 +3,7 @@ import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from 
 import type { RatesPaginatedFilters } from '../db/queries'
 import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
+import { queryHomeLoanRateChanges } from '../db/rate-change-log'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
 import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
@@ -146,6 +147,20 @@ publicRoutes.get('/quality/diagnostics', async (c) => {
   return c.json({
     ok: true,
     diagnostics,
+  })
+})
+
+publicRoutes.get('/changes', async (c) => {
+  withPublicCache(c, 120)
+  const q = c.req.query()
+  const limit = Number(q.limit || 200)
+  const offset = Number(q.offset || 0)
+  const result = await queryHomeLoanRateChanges(c.env.DB, { limit, offset })
+  return c.json({
+    ok: true,
+    count: result.rows.length,
+    total: result.total,
+    rows: result.rows,
   })
 })
 

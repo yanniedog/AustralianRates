@@ -48,6 +48,8 @@
         statUpdated:   document.getElementById('stat-updated'),
         statCashRate:  document.getElementById('stat-cash-rate'),
         statRecords:   document.getElementById('stat-records'),
+        rateChangeStatus: document.getElementById('rate-change-status'),
+        rateChangeList: document.getElementById('rate-change-list'),
         filterIncludeManual: document.getElementById('filter-include-manual'),
         refreshInterval: document.getElementById('refresh-interval'),
         lastRefreshed: document.getElementById('last-refreshed'),

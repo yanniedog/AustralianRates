@@ -19,6 +19,7 @@ import { jsonError, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
+import { querySavingsRateChanges } from '../db/rate-change-log'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -65,6 +66,20 @@ savingsPublicRoutes.get('/staleness', async (c) => {
 savingsPublicRoutes.get('/quality/diagnostics', async (c) => {
   const diagnostics = await getSavingsQualityDiagnostics(c.env.DB)
   return c.json({ ok: true, diagnostics })
+})
+
+savingsPublicRoutes.get('/changes', async (c) => {
+  withPublicCache(c, 120)
+  const q = c.req.query()
+  const limit = Number(q.limit || 200)
+  const offset = Number(q.offset || 0)
+  const result = await querySavingsRateChanges(c.env.DB, { limit, offset })
+  return c.json({
+    ok: true,
+    count: result.rows.length,
+    total: result.total,
+    rows: result.rows,
+  })
 })
 
 savingsPublicRoutes.post('/trigger-run', async (c) => {

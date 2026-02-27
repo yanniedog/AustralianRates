@@ -319,6 +319,85 @@
     max-width: 100%;
 }
 
+.ar-public .rate-change-log {
+    display: grid;
+    gap: 8px;
+}
+
+.ar-public .rate-change-log .hint {
+    margin: 0;
+}
+
+.ar-public .rate-change-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--ar-stroke);
+    border-radius: 12px;
+    background: var(--ar-surface-solid);
+    max-height: 320px;
+    overflow: auto;
+}
+
+.ar-public .rate-change-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--ar-stroke);
+    display: grid;
+    gap: 4px;
+}
+
+.ar-public .rate-change-item:last-child {
+    border-bottom: none;
+}
+
+.ar-public .rate-change-item-empty {
+    padding: 10px;
+    color: var(--ar-muted);
+}
+
+.ar-public .rate-change-main,
+.ar-public .rate-change-sub {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: baseline;
+}
+
+.ar-public .rate-change-date {
+    color: var(--ar-muted);
+    font-size: 0.78rem;
+}
+
+.ar-public .rate-change-bank {
+    color: var(--ar-strong);
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+.ar-public .rate-change-product {
+    color: var(--ar-text);
+    font-size: 0.8rem;
+}
+
+.ar-public .rate-change-rates {
+    font-size: 0.8rem;
+    color: var(--ar-text);
+}
+
+.ar-public .rate-change-delta {
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.ar-public .rate-change-delta.up { color: #d14c4c; }
+.ar-public .rate-change-delta.down { color: #2f9a55; }
+.ar-public .rate-change-delta.flat { color: var(--ar-muted); }
+
+.ar-public .rate-change-detail {
+    font-size: 0.76rem;
+    color: var(--ar-muted);
+}
+
 .ar-public #chart-status {
     margin: 10px 0 4px;
 }
