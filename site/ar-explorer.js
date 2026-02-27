@@ -670,7 +670,8 @@
                         rows: rows.length,
                         total: response && response.total != null ? Number(response.total) : 0,
                     });
-                    return { last_page: response.last_page || 1, data: rows };
+                    // Tabulator expects an array of row objects from ajaxResponse; it reads last_page from the raw response.
+                    return rows;
                 } catch (e) {
                     var errMsg = e && e.message ? e.message : String(e);
                     clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data response processing failed', { message: errMsg });
@@ -696,6 +697,7 @@
                 if (rateTable && rateTable.setData) rateTable.setData();
             },
             dataSendParams: { page: 'page', size: 'size' },
+            dataReceiveParams: { last_row: 'total' },
             movableColumns: isAnalystMode() && !isMobile(),
             resizableColumns: isAnalystMode() && !isMobile(),
             layout: getTableLayout(),
