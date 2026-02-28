@@ -355,21 +355,32 @@
     function readColumnPrefs() {
         try {
             var raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
-            if (!raw) return { visible: {}, showRemoved: false };
+            if (!raw) return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
             var parsed = JSON.parse(raw);
-            if (!parsed || typeof parsed !== 'object') return { visible: {}, showRemoved: false };
+            if (!parsed || typeof parsed !== 'object') return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
+            var order = parsed.columnOrder;
+            if (!Array.isArray(order)) order = null;
             return {
                 visible: parsed.visible && typeof parsed.visible === 'object' ? parsed.visible : {},
                 showRemoved: !!parsed.showRemoved,
+                moveColumnsMode: !!parsed.moveColumnsMode,
+                columnOrder: order,
             };
         } catch (_err) {
-            return { visible: {}, showRemoved: false };
+            return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
         }
     }
 
     function writeColumnPrefs(next) {
         try {
-            window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(next || { visible: {}, showRemoved: false }));
+            var def = { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
+            var o = next && typeof next === 'object' ? next : def;
+            window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify({
+                visible: o.visible && typeof o.visible === 'object' ? o.visible : {},
+                showRemoved: !!o.showRemoved,
+                moveColumnsMode: !!o.moveColumnsMode,
+                columnOrder: Array.isArray(o.columnOrder) ? o.columnOrder : null,
+            }));
         } catch (_err) {}
     }
 
@@ -419,6 +430,23 @@
         return ordered.length ? ordered : columns;
     }
 
+    function applyColumnOrder(columns, orderFields) {
+        if (!Array.isArray(orderFields) || orderFields.length === 0) return ensureColumnOrder(columns);
+        var byField = {};
+        columns.forEach(function (col) {
+            if (col && col.field) byField[col.field] = col;
+        });
+        var ordered = [];
+        orderFields.forEach(function (field) {
+            if (byField[field]) {
+                ordered.push(byField[field]);
+                delete byField[field];
+            }
+        });
+        Object.keys(byField).forEach(function (field) { ordered.push(byField[field]); });
+        return ordered.length ? ordered : columns;
+    }
+
     function getBaseColumns() {
         if (section === 'savings') return getSavingsColumns();
         if (section === 'term-deposits') return getTdColumns();
@@ -433,7 +461,7 @@
         columns = columns.filter(function (column) {
             return columnPrefs.visible[column.field] !== false;
         });
-        columns = ensureColumnOrder(columns);
+        columns = applyColumnOrder(columns, columnPrefs.columnOrder);
         return columns.length ? columns : getBaseColumns().slice(0, 1);
     }
 
@@ -515,10 +543,25 @@
         if (window.AR.hero && window.AR.hero.loadQuickCompare) window.AR.hero.loadQuickCompare();
     }
 
+    function persistColumnOrder() {
+        if (!rateTable || !columnPrefs.moveColumnsMode) return;
+        var cols = rateTable.getColumns ? rateTable.getColumns() : [];
+        var order = [];
+        for (var i = 0; i < cols.length; i++) {
+            var field = cols[i] && typeof cols[i].getField === 'function' ? cols[i].getField() : null;
+            if (field) order.push(field);
+        }
+        if (order.length > 0) {
+            columnPrefs.columnOrder = order;
+            writeColumnPrefs(columnPrefs);
+        }
+    }
+
     function applyColumnPreferences() {
         if (!rateTable) return;
         rateTable.setColumns(getRateTableColumns());
         rateTable.redraw(true);
+        if (columnPrefs.moveColumnsMode) scheduleUpdateMoveColumnHeaders();
     }
 
     function rowFormatter(row) {
@@ -526,6 +569,120 @@
         var element = row && row.getElement ? row.getElement() : null;
         if (!element) return;
         element.classList.toggle('ar-row-removed', isRowRemoved(data));
+    }
+
+    var moveColumnHeadersTimer = null;
+    function scheduleUpdateMoveColumnHeaders() {
+        if (moveColumnHeadersTimer) clearTimeout(moveColumnHeadersTimer);
+        moveColumnHeadersTimer = setTimeout(function () {
+            moveColumnHeadersTimer = null;
+            updateMoveColumnHeaders();
+        }, 50);
+    }
+
+    function updateMoveColumnHeaders() {
+        var container = document.getElementById('rate-table');
+        if (!container || !rateTable) return;
+        var cols = container.querySelectorAll('.tabulator-header .tabulator-col');
+        if (columnPrefs.moveColumnsMode) {
+            var columnComponents = rateTable.getColumns ? rateTable.getColumns() : [];
+            cols.forEach(function (colEl, idx) {
+                var col = columnComponents[idx];
+                var field = col && typeof col.getField === 'function' ? col.getField() : null;
+                if (!field) return;
+                var content = colEl.querySelector('.tabulator-col-content');
+                if (!content) return;
+                var existing = content.querySelector('.ar-move-col-wrap');
+                if (existing) {
+                    existing.remove();
+                }
+                var wrap = document.createElement('div');
+                wrap.className = 'ar-move-col-wrap';
+                var grip = document.createElement('span');
+                grip.className = 'ar-move-col-grip';
+                grip.setAttribute('title', 'Drag to reorder column');
+                grip.setAttribute('aria-hidden', 'true');
+                grip.textContent = '\u2016'; /* double vertical line: drag to reorder */
+                var titleEl = content.querySelector('.tabulator-col-title');
+                var titleClone = titleEl ? titleEl.cloneNode(true) : document.createElement('span');
+                titleClone.classList.add('ar-move-col-title');
+                var btnLeft = document.createElement('button');
+                btnLeft.type = 'button';
+                btnLeft.className = 'ar-move-col-btn ar-move-col-btn-left';
+                btnLeft.setAttribute('aria-label', 'Move column left');
+                btnLeft.textContent = '<';
+                btnLeft.dataset.field = field;
+                btnLeft.dataset.dir = 'left';
+                var btnRight = document.createElement('button');
+                btnRight.type = 'button';
+                btnRight.className = 'ar-move-col-btn ar-move-col-btn-right';
+                btnRight.setAttribute('aria-label', 'Move column right');
+                btnRight.textContent = '>';
+                btnRight.dataset.field = field;
+                btnRight.dataset.dir = 'right';
+                wrap.appendChild(grip);
+                wrap.appendChild(titleClone);
+                wrap.appendChild(btnLeft);
+                wrap.appendChild(btnRight);
+                content.appendChild(wrap);
+                if (titleEl) titleEl.style.display = 'none';
+            });
+            attachMoveColumnButtonListeners(container);
+            updateMoveColumnButtonsState(container);
+        } else {
+            cols.forEach(function (colEl) {
+                var content = colEl.querySelector('.tabulator-col-content');
+                if (!content) return;
+                content.querySelectorAll('.ar-move-col-wrap').forEach(function (w) { w.remove(); });
+                var titleEl = content.querySelector('.tabulator-col-title');
+                if (titleEl) titleEl.style.display = '';
+            });
+        }
+    }
+
+    function attachMoveColumnButtonListeners(container) {
+        if (!container) return;
+        container.querySelectorAll('.ar-move-col-btn').forEach(function (btn) {
+            if (btn._arMoveBound) return;
+            btn._arMoveBound = true;
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var field = btn.dataset.field;
+                var dir = btn.dataset.dir;
+                if (!rateTable || !field) return;
+                var cols = rateTable.getColumns ? rateTable.getColumns() : [];
+                var idx = -1;
+                for (var i = 0; i < cols.length; i++) {
+                    if (cols[i] && cols[i].getField && cols[i].getField() === field) { idx = i; break; }
+                }
+                if (idx < 0) return;
+                if (dir === 'left' && idx > 0) {
+                    rateTable.moveColumn && rateTable.moveColumn(cols[idx], cols[idx - 1], false);
+                    persistColumnOrder();
+                    scheduleUpdateMoveColumnHeaders();
+                } else if (dir === 'right' && idx < cols.length - 1) {
+                    rateTable.moveColumn && rateTable.moveColumn(cols[idx], cols[idx + 1], true);
+                    persistColumnOrder();
+                    scheduleUpdateMoveColumnHeaders();
+                }
+            });
+        });
+    }
+
+    function updateMoveColumnButtonsState(container) {
+        if (!container) return;
+        var cols = container.querySelectorAll('.tabulator-header .tabulator-col');
+        cols.forEach(function (colEl, idx) {
+            var left = colEl.querySelector('.ar-move-col-btn-left');
+            var right = colEl.querySelector('.ar-move-col-btn-right');
+            if (left) {
+                left.disabled = idx === 0;
+            }
+            if (right) {
+                right.disabled = idx === cols.length - 1;
+            }
+        });
     }
 
     function renderSettingsPopover() {
@@ -553,6 +710,10 @@
                 '<label class=\"table-settings-item\">' +
                     '<input type=\"checkbox\" data-setting=\"show-removed\"' + (columnPrefs.showRemoved ? ' checked' : '') + '>' +
                     '<span>Show removed rates</span>' +
+                '</label>' +
+                '<label class=\"table-settings-item\">' +
+                    '<input type=\"checkbox\" data-setting=\"move-columns\"' + (columnPrefs.moveColumnsMode ? ' checked' : '') + '>' +
+                    '<span>Move columns</span>' +
                 '</label>' +
             '</div>' +
             '<div class=\"table-settings-section\">' +
@@ -594,6 +755,13 @@
                 refreshSupportWidgets();
                 reloadExplorer();
                 renderSettingsPopover();
+                return;
+            }
+            if (setting === 'move-columns') {
+                columnPrefs.moveColumnsMode = !!target.checked;
+                writeColumnPrefs(columnPrefs);
+                setSettingsOpen(false);
+                initRateTable();
                 return;
             }
 
@@ -742,7 +910,7 @@
             },
             dataSendParams: { page: 'page', size: 'size' },
             dataReceiveParams: { last_row: 'total' },
-            movableColumns: isAnalystMode() && !isMobile(),
+            movableColumns: (isAnalystMode() && !isMobile()) || columnPrefs.moveColumnsMode,
             resizableColumns: isAnalystMode() && !isMobile(),
             dataLoader: false,
             layout: getTableLayout(),
@@ -800,6 +968,15 @@
         [0, 100, 300, 700].forEach(function (ms) {
             setTimeout(function () { hideTableLoader('init'); }, ms);
         });
+        if (columnPrefs.moveColumnsMode) {
+            [100, 300].forEach(function (ms) {
+                setTimeout(function () { scheduleUpdateMoveColumnHeaders(); }, ms);
+            });
+        }
+        rateTable.on('columnMoved', function () {
+            persistColumnOrder();
+            scheduleUpdateMoveColumnHeaders();
+        });
         rateTable.on('dataLoaded', function () {
             hideTableLoader('dataLoaded');
             scheduleHideTableLoader();
@@ -816,7 +993,10 @@
             }
         });
         rateTable.on('dataProcessed', scheduleHideTableLoader);
-        rateTable.on('renderComplete', scheduleHideTableLoader);
+        rateTable.on('renderComplete', function () {
+            scheduleHideTableLoader();
+            if (columnPrefs.moveColumnsMode) scheduleUpdateMoveColumnHeaders();
+        });
         rateTable.on('pageLoaded', scheduleHideTableLoader);
         clientLog('info', 'Explorer table init complete');
 
