@@ -1,4 +1,4 @@
-import type { SourceType } from '../types'
+import type { DatasetKind } from '../../../../packages/shared/src'
 
 function normalizeKeyPart(value: string): string {
   return value
@@ -33,8 +33,17 @@ export function buildDailyLenderIdempotencyKey(runId: string, lenderCode: string
   return `daily:${normalizeKeyPart(runId)}:${normalizeKeyPart(lenderCode)}`
 }
 
-export function buildProductDetailIdempotencyKey(runId: string, lenderCode: string, productId: string): string {
-  return `product:${normalizeKeyPart(runId)}:${normalizeKeyPart(lenderCode)}:${normalizeKeyPart(productId)}`
+export function buildProductDetailIdempotencyKey(
+  runId: string,
+  lenderCode: string,
+  dataset: DatasetKind,
+  productId: string,
+): string {
+  return `product:${normalizeKeyPart(runId)}:${normalizeKeyPart(lenderCode)}:${normalizeKeyPart(dataset)}:${normalizeKeyPart(productId)}`
+}
+
+export function buildLenderFinalizeIdempotencyKey(runId: string, lenderCode: string, dataset: DatasetKind): string {
+  return `finalize:${normalizeKeyPart(runId)}:${normalizeKeyPart(lenderCode)}:${normalizeKeyPart(dataset)}`
 }
 
 export function buildBackfillIdempotencyKey(runId: string, lenderCode: string, seedUrl: string, monthCursor: string): string {
@@ -60,11 +69,11 @@ export function buildHistoricalTaskIdempotencyKey(runId: string, taskId: number)
   return ['historical-task', normalizeKeyPart(runId), String(Math.max(0, Math.floor(taskId)))].join(':')
 }
 
-function extensionForSource(sourceType: SourceType): string {
+function extensionForSource(sourceType: string): string {
   return sourceType === 'wayback_html' ? 'html' : 'json'
 }
 
-export function buildRawR2Key(sourceType: SourceType, fetchedAtIso: string, contentHash: string): string {
+export function buildRawR2Key(sourceType: string, fetchedAtIso: string, contentHash: string): string {
   const [datePart] = fetchedAtIso.split('T')
   const [year, month = '00', day = '00'] = (datePart || '1970-01-01').split('-')
   const ext = extensionForSource(sourceType)

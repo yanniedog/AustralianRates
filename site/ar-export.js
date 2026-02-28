@@ -16,16 +16,6 @@
     var clientLog = utils.clientLog || function () {};
     var downloadInFlight = false;
 
-    /** Trigger CSV/JSON download in same user gesture (avoids Chrome blocking after async). */
-    function downloadCsvOrJsonSync(format) {
-        var q = buildExportQuery();
-        q.set('format', format);
-        var url = apiBase + '/export?' + q.toString();
-        window.open(url, '_blank', 'noopener,noreferrer');
-        resetDownloadFormat();
-        clientLog('info', 'Export download started (sync)', { format: format });
-    }
-
     function safeSectionLabel() {
         var section = String(window.AR.section || 'home-loans').toLowerCase();
         if (section === 'savings') return 'savings-rates';
@@ -41,6 +31,15 @@
             fp.dir = String(sortState.dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
         }
         return new URLSearchParams(fp);
+    }
+
+    function buildExportRequestBody(format) {
+        var query = buildExportQuery();
+        var body = { format: format, export_type: 'rates' };
+        query.forEach(function (value, key) {
+            body[key] = value;
+        });
+        return body;
     }
 
     function parseFileName(contentDisposition, fallback) {
@@ -68,14 +67,58 @@
         if (els.downloadFormat) els.downloadFormat.value = '';
     }
 
-    async function downloadViaApi(format) {
-        var q = buildExportQuery();
-        q.set('format', format);
-        var url = apiBase + '/export?' + q.toString();
-        var response = await fetch(url);
+    function sleep(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+    }
+
+    async function requestExportJob(format) {
+        var response = await fetch(apiBase + '/exports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildExportRequestBody(format)),
+        });
         if (!response.ok) throw new Error('Export failed (HTTP ' + response.status + ')');
-        var filename = parseFileName(response.headers.get('content-disposition'), safeSectionLabel() + '-export.' + format);
-        var blob = await response.blob();
+        return response.json();
+    }
+
+    async function waitForExportJob(jobId) {
+        var attempts = 0;
+        while (attempts < 120) {
+            attempts += 1;
+            var response = await fetch(apiBase + '/exports/' + encodeURIComponent(jobId));
+            if (!response.ok) throw new Error('Export status failed (HTTP ' + response.status + ')');
+            var payload = await response.json();
+            if (payload.status === 'completed') return payload;
+            if (payload.status === 'failed') {
+                throw new Error(payload.error_message || 'Export job failed');
+            }
+            await sleep(1000);
+        }
+        throw new Error('Export job timed out');
+    }
+
+    async function fetchCompletedExport(format) {
+        var started = await requestExportJob(format);
+        var job = started;
+        if (job.status !== 'completed') {
+            job = await waitForExportJob(job.job_id);
+        }
+        if (!job.download_path) throw new Error('Export job completed without a download path');
+        var response = await fetch(apiBase + job.download_path);
+        if (!response.ok) throw new Error('Export download failed (HTTP ' + response.status + ')');
+        return {
+            response: response,
+            job: job,
+        };
+    }
+
+    async function downloadViaJob(format) {
+        var result = await fetchCompletedExport(format);
+        var filename = parseFileName(
+            result.response.headers.get('content-disposition'),
+            safeSectionLabel() + '-export.' + format
+        );
+        var blob = await result.response.blob();
         triggerBlobDownload(blob, filename);
     }
 
@@ -84,31 +127,12 @@
             throw new Error('XLSX library is unavailable');
         }
 
-        var q = buildExportQuery();
-        q.set('format', 'json');
-        var url = apiBase + '/export?' + q.toString();
-        var response = await fetch(url);
-        if (!response.ok) throw new Error('Export failed (HTTP ' + response.status + ')');
-        var payload = await response.json();
-        var rows = payload && payload.data && Array.isArray(payload.data) ? payload.data : [];
+        var result = await fetchCompletedExport('json');
+        var payload = await result.response.json();
+        var rows = Array.isArray(payload && payload.rows) ? payload.rows : [];
         var worksheet = window.XLSX.utils.json_to_sheet(rows);
         var workbook = window.XLSX.utils.book_new();
         window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Rates');
-
-        var disclosure = payload && payload.meta && payload.meta.disclosures
-            ? payload.meta.disclosures.comparison_rate
-            : null;
-        if (disclosure && typeof disclosure === 'object') {
-            var disclosureRows = [
-                { key: 'type', value: 'comparison_rate' },
-                { key: 'loan_amount_aud', value: disclosure.loan_amount_aud },
-                { key: 'term_years', value: disclosure.term_years },
-                { key: 'statement', value: disclosure.statement || '' },
-                { key: 'limitations', value: Array.isArray(disclosure.limitations) ? disclosure.limitations.join(' | ') : '' },
-            ];
-            var disclosureSheet = window.XLSX.utils.json_to_sheet(disclosureRows);
-            window.XLSX.utils.book_append_sheet(workbook, disclosureSheet, 'Disclosures');
-        }
 
         window.XLSX.writeFile(workbook, safeSectionLabel() + '-export.xlsx');
     }
@@ -117,15 +141,12 @@
         var selected = String(format || '').toLowerCase().trim();
         if (!selected) return;
 
-        if (selected === 'csv' || selected === 'json') {
-            downloadCsvOrJsonSync(selected);
-            return;
-        }
-
         if (downloadInFlight) return;
         downloadInFlight = true;
         try {
-            if (selected === 'xls') {
+            if (selected === 'csv' || selected === 'json') {
+                await downloadViaJob(selected);
+            } else if (selected === 'xls') {
                 await downloadXlsx();
             } else {
                 throw new Error('Unsupported download format: ' + selected);

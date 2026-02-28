@@ -268,6 +268,7 @@
             base = base.concat([
                 { title: 'Snapshot Date', field: 'collection_date', headerSort: true, minWidth: 118, formatter: collectionDateFormatter },
                 { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
+                { title: 'Product Code', field: 'product_code', headerSort: true, minWidth: 132 },
                 { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
                 { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
                 { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 104, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
@@ -299,6 +300,7 @@
             base = base.concat([
                 { title: 'Snapshot Date', field: 'collection_date', headerSort: true, minWidth: 118, formatter: collectionDateFormatter },
                 { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
+                { title: 'Product Code', field: 'product_code', headerSort: true, minWidth: 132 },
                 { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 108, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
                 { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 96, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
                 { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 102, formatter: depositTierFormatter },
@@ -327,6 +329,7 @@
             base = base.concat([
                 { title: 'Snapshot Date', field: 'collection_date', headerSort: true, minWidth: 118, formatter: collectionDateFormatter },
                 { title: 'Product', field: 'product_name', headerSort: true, minWidth: 120 },
+                { title: 'Product Code', field: 'product_code', headerSort: true, minWidth: 132 },
                 { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 104, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
                 { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 102, formatter: depositTierFormatter },
                 { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 102, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },

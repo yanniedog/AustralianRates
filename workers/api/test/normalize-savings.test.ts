@@ -68,12 +68,11 @@ describe('validateNormalizedSavingsRow', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_data_quality_flag')
   })
 
-  it('rejects interest_rate out of bounds', () => {
+  it('accepts unusually high savings rates for anomaly review', () => {
     const verdict = validateNormalizedSavingsRow(
       validSavingsRow({ productName: 'ANZ Savings Account', interestRate: 20 }),
     )
-    expect(verdict.ok).toBe(false)
-    expect(verdict.ok === false && verdict.reason).toBe('interest_rate_out_of_bounds')
+    expect(verdict.ok).toBe(true)
   })
 
   it('rejects invalid account_type', () => {
@@ -115,10 +114,9 @@ describe('validateNormalizedTdRow', () => {
     expect(verdict.ok).toBe(true)
   })
 
-  it('rejects term_months out of bounds', () => {
-    const verdict = validateNormalizedTdRow(validTdRow({ termMonths: 0 }))
-    expect(verdict.ok).toBe(false)
-    expect(verdict.ok === false && verdict.reason).toBe('term_months_out_of_bounds')
+  it('accepts long term deposits beyond the old 120-month cap', () => {
+    const verdict = validateNormalizedTdRow(validTdRow({ termMonths: 240 }))
+    expect(verdict.ok).toBe(true)
   })
 
   it('rejects invalid interest_payment enum', () => {

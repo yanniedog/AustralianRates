@@ -143,6 +143,26 @@ function normalizeTimestamp(value: unknown): string {
   return date.toISOString()
 }
 
+function fallbackSeriesKey(row: RowRecord): string {
+  const bankName = asText(row.bank_name)
+  const productId = asText(row.product_id)
+  if (!bankName || !productId) return ''
+
+  if (row.security_purpose != null || row.repayment_type != null || row.lvr_tier != null || row.rate_structure != null) {
+    return [bankName, productId, asText(row.security_purpose), asText(row.repayment_type), asText(row.lvr_tier), asText(row.rate_structure)].join('|')
+  }
+
+  if (row.account_type != null || row.rate_type != null || row.deposit_tier != null) {
+    return [bankName, productId, asText(row.account_type), asText(row.rate_type), asText(row.deposit_tier)].join('|')
+  }
+
+  if (row.term_months != null || row.deposit_tier != null || row.interest_payment != null) {
+    return [bankName, productId, asText(row.term_months), asText(row.deposit_tier), asText(row.interest_payment)].join('|')
+  }
+
+  return ''
+}
+
 function waybackPublishedAt(sourceUrl: unknown): string {
   const raw = asText(sourceUrl)
   const match = raw.match(WAYBACK_TS_RE)
@@ -155,6 +175,8 @@ function waybackPublishedAt(sourceUrl: unknown): string {
 export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<string, unknown> {
   const sourceUrl = asText(row.source_url)
   const productUrl = asText(row.product_url)
+  const productCode = asText(row.product_code) || asText(row.product_id)
+  const seriesKey = asText(row.series_key) || fallbackSeriesKey(row)
   const publishedAt = normalizeTimestamp(row.published_at) || waybackPublishedAt(sourceUrl)
   const retrievedAt = asText(row.retrieved_at) || asText(row.parsed_at)
   const firstRetrievedAt = asText(row.first_retrieved_at) || asText(row.found_at)
@@ -174,6 +196,8 @@ export function presentCoreRowFields<T extends RowRecord>(row: T): T & Record<st
 
   return {
     ...row,
+    product_code: productCode,
+    series_key: seriesKey,
     product_url: productUrl,
     published_at: publishedAt,
     retrieved_at: retrievedAt,

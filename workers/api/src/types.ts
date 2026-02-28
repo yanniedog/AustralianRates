@@ -1,4 +1,5 @@
 import type { JWTPayload } from 'jose'
+import type { DatasetKind, IngestTaskKind } from '../../../packages/shared/src'
 
 export type RunType = 'daily' | 'backfill'
 export type RunStatus = 'running' | 'ok' | 'partial' | 'failed'
@@ -44,7 +45,19 @@ export type ProductDetailJob = {
   runId: string
   runSource: RunSource
   lenderCode: string
+  dataset: DatasetKind
   productId: string
+  collectionDate: string
+  attempt: number
+  idempotencyKey: string
+}
+
+export type LenderFinalizeJob = {
+  kind: 'lender_finalize'
+  runId: string
+  runSource: RunSource
+  lenderCode: string
+  dataset: DatasetKind
   collectionDate: string
   attempt: number
   idempotencyKey: string
@@ -93,6 +106,7 @@ export type HistoricalTaskExecuteJob = {
 export type IngestMessage =
   | DailyLenderJob
   | ProductDetailJob
+  | LenderFinalizeJob
   | BackfillSnapshotJob
   | BackfillDayJob
   | DailySavingsLenderJob
@@ -150,6 +164,8 @@ export type EnvBindings = {
   HISTORICAL_MAX_BATCH_ROWS?: string
   PUBLIC_HISTORICAL_COOLDOWN_SECONDS?: string
 }
+
+export type SharedIngestTaskKind = IngestTaskKind
 
 export type AppContext = {
   Bindings: EnvBindings

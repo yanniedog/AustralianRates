@@ -6,6 +6,7 @@ import type {
   EnvBindings,
   HistoricalTaskExecuteJob,
   IngestMessage,
+  LenderFinalizeJob,
   LenderConfig,
   ProductDetailJob,
   RunSource,
@@ -15,8 +16,10 @@ import {
   buildBackfillIdempotencyKey,
   buildDailyLenderIdempotencyKey,
   buildHistoricalTaskIdempotencyKey,
+  buildLenderFinalizeIdempotencyKey,
   buildProductDetailIdempotencyKey,
 } from '../utils/idempotency'
+import type { DatasetKind } from '../../../../packages/shared/src'
 
 type QueueEnv = Pick<EnvBindings, 'INGEST_QUEUE'>
 const MAX_QUEUE_BATCH_SIZE = 100
@@ -66,6 +69,7 @@ export async function enqueueProductDetailJobs(
     runId: string
     runSource?: RunSource
     lenderCode: string
+    dataset: DatasetKind
     collectionDate: string
     productIds: string[]
   },
@@ -77,10 +81,41 @@ export async function enqueueProductDetailJobs(
     runId: input.runId,
     runSource,
     lenderCode: input.lenderCode,
+    dataset: input.dataset,
     productId,
     collectionDate: input.collectionDate,
     attempt: 0,
-    idempotencyKey: buildProductDetailIdempotencyKey(input.runId, input.lenderCode, productId),
+    idempotencyKey: buildProductDetailIdempotencyKey(input.runId, input.lenderCode, input.dataset, productId),
+  }))
+
+  await sendInChunks(env, jobs)
+
+  return {
+    enqueued: jobs.length,
+  }
+}
+
+export async function enqueueLenderFinalizeJobs(
+  env: QueueEnv,
+  input: {
+    runId: string
+    runSource?: RunSource
+    lenderCode: string
+    collectionDate: string
+    datasets: DatasetKind[]
+  },
+): Promise<{ enqueued: number }> {
+  const datasets = Array.from(new Set(input.datasets)).filter(Boolean)
+  const runSource = input.runSource ?? 'scheduled'
+  const jobs: LenderFinalizeJob[] = datasets.map((dataset) => ({
+    kind: 'lender_finalize',
+    runId: input.runId,
+    runSource,
+    lenderCode: input.lenderCode,
+    dataset,
+    collectionDate: input.collectionDate,
+    attempt: 0,
+    idempotencyKey: buildLenderFinalizeIdempotencyKey(input.runId, input.lenderCode, dataset),
   }))
 
   await sendInChunks(env, jobs)

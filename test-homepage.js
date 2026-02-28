@@ -715,6 +715,12 @@ async function runTests() {
 
         const explorerHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
         verifyMetadataHeaders(explorerHeaders, 'Rate Explorer');
+        const hasProductCodeHeader = explorerHeaders.some((text) => String(text || '').trim() === 'Product Code');
+        if (hasProductCodeHeader) {
+            results.passed.push('PASS Rate Explorer: analyst mode shows Product Code column');
+        } else {
+            results.failed.push('FAIL Rate Explorer: Product Code column missing in analyst mode');
+        }
 
         const settingsBtn = page.locator('#table-settings-btn');
         const settingsBtnVisible = await settingsBtn.isVisible().catch(() => false);
@@ -984,6 +990,8 @@ async function runTests() {
             await verifyFooterLegalLinks(name);
             await verifyNoScriptFallback(url, name, apiBasePath);
             await verifyNoPublicAdminSurface(name);
+            await page.click('#mode-analyst').catch(() => {});
+            await page.waitForTimeout(800);
 
             const hasTrigger = await page.locator('#trigger-run').count();
             if (hasTrigger === 0) {
@@ -994,6 +1002,12 @@ async function runTests() {
 
             const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
             verifyMetadataHeaders(sectionHeaders, name);
+            const sectionHasProductCode = sectionHeaders.some((text) => String(text || '').trim() === 'Product Code');
+            if (sectionHasProductCode) {
+                results.passed.push('PASS ' + name + ': analyst mode shows Product Code column');
+            } else {
+                results.failed.push('FAIL ' + name + ': Product Code column missing in analyst mode');
+            }
         }
         await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForSelector('#main-content', { timeout: 5000 });

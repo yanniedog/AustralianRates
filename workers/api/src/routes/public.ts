@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
 import type { RatesPaginatedFilters } from '../db/queries'
 import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { queryHomeLoanRateChanges } from '../db/rate-change-log'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
@@ -11,9 +12,12 @@ import { jsonError, withPublicCache } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
 import { getLogStats, log, queryLogs } from '../utils/logger'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
+import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { handlePublicRunStatus } from './public-run-status'
+import { registerHomeLoanExportRoutes } from './home-loan-exports'
+import { toCsv } from '../utils/csv'
 
 export const publicRoutes = new Hono<AppContext>()
 const HOME_LOAN_COMPARISON_RATE_DISCLOSURE = {
@@ -57,6 +61,8 @@ publicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
   await next()
 })
+
+registerHomeLoanExportRoutes(publicRoutes)
 
 publicRoutes.get('/health', async (c) => {
   withPublicCache(c, 30)
@@ -377,21 +383,23 @@ publicRoutes.get('/latest-all', async (c) => {
 
 publicRoutes.get('/timeseries', async (c) => {
   const query = c.req.query()
-  const productKey = query.product_key || query.productKey
+  const productKey = query.product_key || query.productKey || query.series_key
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
-  const limit = Number(query.limit || 1000)
+  const pageSize = parsePageSize(String(query.page_size || query.limit || ''), 1000, 1000)
+  const cursor = parseCursorOffset(query.cursor)
   const banks = parseCsvList(query.banks)
 
   if (!productKey) {
-    return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
+    return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
   const rows = await queryTimeseries(c.env.DB, {
     bank: query.bank,
     banks,
     productKey,
+    seriesKey: query.series_key,
     securityPurpose: query.security_purpose,
     repaymentType: query.repayment_type,
     featureSet: query.feature_set,
@@ -404,23 +412,37 @@ publicRoutes.get('/timeseries', async (c) => {
     sourceMode,
     startDate: query.start_date,
     endDate: query.end_date,
-    limit,
+    limit: pageSize + 1,
+    offset: cursor,
   })
+  const paged = paginateRows(rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
-    totalRows: rows.length,
-    returnedRows: rows.length,
-    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
-    limited: rows.length >= Math.max(1, Math.floor(limit)),
+    totalRows: paged.rows.length,
+    returnedRows: paged.rows.length,
+    sourceMix: sourceMixFromRows(paged.rows as Array<Record<string, unknown>>),
+    limited: paged.partial,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
   return c.json({
     ok: true,
-    count: rows.length,
-    rows,
+    count: paged.rows.length,
+    rows: paged.rows,
+    next_cursor: paged.nextCursor,
+    partial: paged.partial,
     meta,
   })
+})
+
+publicRoutes.get('/coverage', async (c) => {
+  withPublicCache(c, 60)
+  const coverage = await getLenderDatasetCoverage(c.env.DB, 'home_loans', {
+    lenderCode: c.req.query('lender_code') || undefined,
+    collectionDate: c.req.query('collection_date') || undefined,
+    limit: Number(c.req.query('limit') || 200),
+  })
+  return c.json({ ok: true, ...coverage })
 })
 
 publicRoutes.get('/logs/stats', async (c) => {
@@ -462,27 +484,6 @@ publicRoutes.get('/logs', async (c) => {
   return c.body(`# AustralianRates Global Log (${total} entries total, showing ${entries.length})\n# Downloaded at ${new Date().toISOString()}\n\n${lines.join('\n')}\n`)
 })
 
-function csvEscape(value: unknown): string {
-  if (value == null) return ''
-  const raw = String(value)
-  if (/[",\n\r]/.test(raw)) {
-    return `"${raw.replace(/"/g, '""')}"`
-  }
-  return raw
-}
-
-function toCsv(rows: Array<Record<string, unknown>>): string {
-  if (rows.length === 0) {
-    return ''
-  }
-  const headers = Object.keys(rows[0])
-  const lines = [headers.join(',')]
-  for (const row of rows) {
-    lines.push(headers.map((h) => csvEscape(row[h])).join(','))
-  }
-  return lines.join('\n')
-}
-
 publicRoutes.get('/export.csv', async (c) => {
   const query = c.req.query()
   const dataset = String(query.dataset || 'latest').toLowerCase()
@@ -491,14 +492,15 @@ publicRoutes.get('/export.csv', async (c) => {
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
 
   if (dataset === 'timeseries') {
-    const productKey = query.product_key || query.productKey
+    const productKey = query.product_key || query.productKey || query.series_key
     if (!productKey) {
-      return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries CSV export.')
+      return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries CSV export.')
     }
     const rows = await queryTimeseries(c.env.DB, {
       bank: query.bank,
       banks: parseCsvList(query.banks),
       productKey,
+      seriesKey: query.series_key,
       securityPurpose: query.security_purpose,
       repaymentType: query.repayment_type,
       featureSet: query.feature_set,

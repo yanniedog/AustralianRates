@@ -666,6 +666,7 @@ export async function queryTimeseries(
     bank?: string
     banks?: string[]
     productKey?: string
+    seriesKey?: string
     securityPurpose?: string
     repaymentType?: string
     featureSet?: string
@@ -679,6 +680,7 @@ export async function queryTimeseries(
     startDate?: string
     endDate?: string
     limit?: number
+    offset?: number
   },
 ) {
   const where: string[] = []
@@ -689,9 +691,10 @@ export async function queryTimeseries(
 
   addBankWhere(where, binds, 't.bank_name', input.bank, input.banks)
   addRateBoundsWhere(where, binds, 't.interest_rate', 't.comparison_rate', input)
-  if (input.productKey) {
+  const productOrSeriesKey = input.seriesKey ?? input.productKey
+  if (productOrSeriesKey) {
     where.push('t.product_key = ?')
-    binds.push(input.productKey)
+    binds.push(productOrSeriesKey)
   }
   if (input.securityPurpose) {
     where.push('t.security_purpose = ?')
@@ -730,8 +733,9 @@ export async function queryTimeseries(
     binds.push(MIN_CONFIDENCE_ALL)
   }
 
-  const limit = safeLimit(input.limit, 500, 5000)
-  binds.push(limit)
+  const limit = safeLimit(input.limit, 500, 2000)
+  const offset = Math.max(0, Math.floor(Number(input.offset) || 0))
+  binds.push(limit, offset)
 
   const sql = `
     SELECT
@@ -784,8 +788,8 @@ export async function queryTimeseries(
       AND pps.bank_name = t.bank_name
       AND pps.product_id = t.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY t.collection_date ASC
-    LIMIT ?
+    ORDER BY t.collection_date ASC, t.parsed_at ASC
+    LIMIT ? OFFSET ?
   `
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()

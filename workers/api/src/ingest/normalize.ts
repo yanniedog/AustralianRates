@@ -37,15 +37,16 @@ export type NormalizedRateRow = {
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
+  fetchEventId?: number | null
   runId?: string
   runSource?: RunSource
 }
 
-export const MIN_RATE_PERCENT = 0.5
-export const MAX_RATE_PERCENT = 25
-export const MIN_COMPARISON_RATE_PERCENT = 0.5
-export const MAX_COMPARISON_RATE_PERCENT = 30
-export const MAX_ANNUAL_FEE = 10000
+export const MIN_RATE_PERCENT = 0
+export const MAX_RATE_PERCENT = 100
+export const MIN_COMPARISON_RATE_PERCENT = 0
+export const MAX_COMPARISON_RATE_PERCENT = 100
+export const MAX_ANNUAL_FEE = 1000000
 
 function asText(value: unknown): string {
   if (value == null) {
@@ -278,9 +279,6 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   if (!productName || productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isProductNameLikelyRateProduct(productName)) {
-    return { ok: false, reason: 'product_name_not_rate_like' }
-  }
   if (!isValidUrl(row.sourceUrl)) {
     return { ok: false, reason: 'invalid_source_url' }
   }
@@ -325,23 +323,12 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   ) {
     return { ok: false, reason: 'comparison_rate_out_of_bounds' }
   }
-  if (row.comparisonRate != null && row.comparisonRate + 0.01 < row.interestRate) {
-    return { ok: false, reason: 'comparison_rate_below_interest_rate' }
-  }
-  if (
-    row.comparisonRate != null &&
-    row.comparisonRate > row.interestRate + COMPARISON_RATE_MAX_ABOVE_INTEREST
-  ) {
-    return { ok: false, reason: 'comparison_rate_anomalous' }
-  }
   if (row.annualFee != null && (!isFiniteNumber(row.annualFee) || row.annualFee < 0 || row.annualFee > MAX_ANNUAL_FEE)) {
     return { ok: false, reason: 'annual_fee_out_of_bounds' }
   }
-  const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
   if (
     !isFiniteNumber(row.confidenceScore) ||
     row.confidenceScore < 0 ||
-    row.confidenceScore < minConfidence ||
     row.confidenceScore > 1
   ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }

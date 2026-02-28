@@ -19,9 +19,9 @@ export const MELBOURNE_TARGET_HOUR = 6
 export const DAILY_SCHEDULE_CRON_EXPRESSION = '5 * * * *'
 export const HOURLY_WAYBACK_CRON_EXPRESSION = '0 * * * *'
 export const SCHEDULE_CRON_EXPRESSION = DAILY_SCHEDULE_CRON_EXPRESSION
-// Keep scheduler checks hourly, but enforce one full ingest run each 24 hours.
-export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 1440
-export const MIN_RATE_CHECK_INTERVAL_MINUTES = 1440
+// Hourly cron should keep attempting the active Melbourne collection date until coverage is complete.
+export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 0
+export const MIN_RATE_CHECK_INTERVAL_MINUTES = 0
 export const RATE_CHECK_INTERVAL_MINUTES_KEY = 'rate_check_interval_minutes'
 export const RATE_CHECK_LAST_RUN_ISO_KEY = 'rate_check_last_run_iso'
 export const DEFAULT_PUBLIC_CACHE_SECONDS = 120

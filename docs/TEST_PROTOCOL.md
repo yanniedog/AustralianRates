@@ -10,7 +10,7 @@ This document defines rendering, interaction, accessibility, and API checks for 
   - `/api/savings-rates/*`
   - `/api/term-deposit-rates/*`
 
-Covered endpoints include `health`, `filters`, `rates`, `latest`, `latest-all`, `timeseries`, and `export.csv`.
+Covered endpoints include `health`, `filters`, `rates`, `latest`, `latest-all`, `timeseries`, `export.csv`, and async export jobs under `POST /exports` plus `GET /exports/:jobId`.
 
 Configuration:
 
@@ -34,7 +34,10 @@ Configuration:
 | Legal pages | Each legal page is reachable and distinct | Visit `/about/`, `/privacy/`, `/terms/`, `/contact/` and check title/content |
 | No-JS fallback | Noscript helper blocks exist in HTML | Fetch raw HTML and assert noscript + API link presence |
 
-Script: `npm run test:homepage`
+Scripts:
+
+- `npm run test:homepage`
+- `npm run verify:prod-hosting`
 
 ## 2. Interaction checks
 
@@ -67,7 +70,10 @@ Checks:
 - `latest-all` returns `ok`, `count`, `rows`, `meta`
 - Benchmark p95 threshold and non-200 failures reported
 
-Script: `npm run diagnose:api`
+Scripts:
+
+- `npm run diagnose:api`
+- `npm run verify:prod-hosting`
 
 ## 4. Accessibility baseline
 
@@ -84,9 +90,10 @@ Automated checks are in `test-homepage.js`. Manual screen reader checks remain r
 
 1. Run `npm run test:homepage`.
 2. Run `npm run diagnose:api`.
-3. Optionally run `npm run test:site`.
-4. Review screenshots under `test-screenshots/`.
-5. Validate keyboard navigation and visible focus.
+3. Run `npm run verify:prod-hosting`.
+4. Optionally run `npm run test:site`.
+5. Review screenshots under `test-screenshots/`.
+6. Validate keyboard navigation and visible focus.
 
 ## Commands summary
 
@@ -94,4 +101,5 @@ Automated checks are in `test-homepage.js`. Manual screen reader checks remain r
 |---------|-------------|
 | `npm run test:homepage` | Playwright UI checks (layout, interactions, legal links, noscript presence checks). |
 | `npm run diagnose:api` | API diagnostics and performance checks across all datasets, including `latest-all`. |
+| `npm run verify:prod-hosting` | DNS, TLS, homepage, and API health verification for both apex and `www` production hosts. |
 | `npm run test:site` | Runs homepage then API diagnostics. |
