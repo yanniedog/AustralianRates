@@ -123,6 +123,62 @@
     text-transform: uppercase;
 }
 
+/* Move columns mode: drag handle (double vertical line) and < > buttons in header only */
+.ar-public .tabulator .tabulator-col .ar-move-col-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.ar-public .tabulator .tabulator-col .ar-move-col-grip {
+    flex-shrink: 0;
+    color: var(--ar-muted);
+    font-size: 0.9rem;
+    cursor: grab;
+    user-select: none;
+}
+
+.ar-public .tabulator .tabulator-col .ar-move-col-grip:active {
+    cursor: grabbing;
+}
+
+.ar-public .tabulator .tabulator-col .ar-move-col-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ar-public .tabulator .tabulator-col .ar-move-col-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--ar-stroke);
+    border-radius: 4px;
+    background: var(--ar-surface-muted);
+    color: var(--ar-muted);
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ar-public .tabulator .tabulator-col .ar-move-col-btn:hover:not(:disabled) {
+    border-color: var(--ar-stroke-strong);
+    color: var(--ar-strong);
+}
+
+.ar-public .tabulator .tabulator-col .ar-move-col-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
 .ar-public .tabulator .tabulator-col.tabulator-sortable:hover {
     background: var(--ar-accent-soft) !important;
 }
@@ -392,6 +448,12 @@
 .ar-public .rate-change-delta.up { color: #d14c4c; }
 .ar-public .rate-change-delta.down { color: #2f9a55; }
 .ar-public .rate-change-delta.flat { color: var(--ar-muted); }
+
+/* Savings and term deposits: rate up = green/positive, rate down = red/negative */
+.ar-public.ar-section-savings .rate-change-delta.up,
+.ar-public.ar-section-term-deposits .rate-change-delta.up { color: #2f9a55; }
+.ar-public.ar-section-savings .rate-change-delta.down,
+.ar-public.ar-section-term-deposits .rate-change-delta.down { color: #d14c4c; }
 
 .ar-public .rate-change-detail {
     font-size: 0.76rem;
