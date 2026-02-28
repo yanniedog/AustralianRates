@@ -449,11 +449,11 @@
 .ar-public .rate-change-delta.down { color: #2f9a55; }
 .ar-public .rate-change-delta.flat { color: var(--ar-muted); }
 
-/* Savings and term deposits: rate up = green/positive, rate down = red/negative */
-.ar-public.ar-section-savings .rate-change-delta.up,
-.ar-public.ar-section-term-deposits .rate-change-delta.up { color: #2f9a55; }
-.ar-public.ar-section-savings .rate-change-delta.down,
-.ar-public.ar-section-term-deposits .rate-change-delta.down { color: #d14c4c; }
+/* Savings and term deposits: positive delta = GREEN, negative delta = RED */
+.rate-change-list.section-savings .rate-change-delta.up,
+.rate-change-list.section-term-deposits .rate-change-delta.up { color: #2f9a55 !important; }
+.rate-change-list.section-savings .rate-change-delta.down,
+.rate-change-list.section-term-deposits .rate-change-delta.down { color: #d14c4c !important; }
 
 .ar-public .rate-change-detail {
     font-size: 0.76rem;

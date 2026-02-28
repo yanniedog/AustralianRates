@@ -59,6 +59,15 @@
     function renderRows(rows) {
         var listEl = getListEl();
         if (!listEl) return;
+        var section = window.AR.section || 'home-loans';
+        var listBaseClass = 'rate-change-list';
+        if (section === 'savings') {
+            listEl.className = listBaseClass + ' section-savings';
+        } else if (section === 'term-deposits') {
+            listEl.className = listBaseClass + ' section-term-deposits';
+        } else {
+            listEl.className = listBaseClass;
+        }
         if (!Array.isArray(rows) || rows.length === 0) {
             listEl.innerHTML = '<li class="rate-change-item-empty">No rate changes logged yet.</li>';
             return;
