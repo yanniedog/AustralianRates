@@ -123,28 +123,42 @@ export async function getFilters(db: D1Database) {
 
   const fallbackIfEmpty = (values: string[], fallback: string[]) => (values.length > 0 ? values : fallback)
 
+  const securityPurposesList = fallbackIfEmpty(
+    rows(securityPurposes).map((x) => x.value),
+    SECURITY_PURPOSES,
+  )
+  const repaymentTypesList = fallbackIfEmpty(
+    rows(repaymentTypes).map((x) => x.value),
+    REPAYMENT_TYPES,
+  )
+  const rateStructuresList = fallbackIfEmpty(
+    rows(rateStructures).map((x) => x.value),
+    RATE_STRUCTURES,
+  )
+  const lvrTiersList = fallbackIfEmpty(
+    rows(lvrTiers).map((x) => x.value),
+    LVR_TIERS,
+  )
+  const featureSetsList = fallbackIfEmpty(
+    rows(featureSets).map((x) => x.value),
+    FEATURE_SETS,
+  )
+
+  const single_value_columns: string[] = []
+  if (securityPurposesList.length <= 1) single_value_columns.push('security_purpose')
+  if (repaymentTypesList.length <= 1) single_value_columns.push('repayment_type')
+  if (rateStructuresList.length <= 1) single_value_columns.push('rate_structure')
+  if (lvrTiersList.length <= 1) single_value_columns.push('lvr_tier')
+  if (featureSetsList.length <= 1) single_value_columns.push('feature_set')
+
   return {
     banks: rows(banks).map((x) => x.value),
-    security_purposes: fallbackIfEmpty(
-      rows(securityPurposes).map((x) => x.value),
-      SECURITY_PURPOSES,
-    ),
-    repayment_types: fallbackIfEmpty(
-      rows(repaymentTypes).map((x) => x.value),
-      REPAYMENT_TYPES,
-    ),
-    rate_structures: fallbackIfEmpty(
-      rows(rateStructures).map((x) => x.value),
-      RATE_STRUCTURES,
-    ),
-    lvr_tiers: fallbackIfEmpty(
-      rows(lvrTiers).map((x) => x.value),
-      LVR_TIERS,
-    ),
-    feature_sets: fallbackIfEmpty(
-      rows(featureSets).map((x) => x.value),
-      FEATURE_SETS,
-    ),
+    security_purposes: securityPurposesList,
+    repayment_types: repaymentTypesList,
+    rate_structures: rateStructuresList,
+    lvr_tiers: lvrTiersList,
+    feature_sets: featureSetsList,
+    single_value_columns,
   }
 }
 

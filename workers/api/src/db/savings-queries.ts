@@ -64,11 +64,21 @@ export async function getSavingsFilters(db: D1Database) {
 
   const fallback = (vals: string[], fb: string[]) => (vals.length > 0 ? vals : fb)
 
+  const accountTypesList = fallback(rows(accountTypes).map((x) => x.value), SAVINGS_ACCOUNT_TYPES)
+  const rateTypesList = fallback(rows(rateTypes).map((x) => x.value), SAVINGS_RATE_TYPES)
+  const depositTiersList = rows(depositTiers).map((x) => x.value)
+
+  const single_value_columns: string[] = []
+  if (accountTypesList.length <= 1) single_value_columns.push('account_type')
+  if (rateTypesList.length <= 1) single_value_columns.push('rate_type')
+  if (depositTiersList.length <= 1) single_value_columns.push('deposit_tier')
+
   return {
     banks: rows(banks).map((x) => x.value),
-    account_types: fallback(rows(accountTypes).map((x) => x.value), SAVINGS_ACCOUNT_TYPES),
-    rate_types: fallback(rows(rateTypes).map((x) => x.value), SAVINGS_RATE_TYPES),
-    deposit_tiers: rows(depositTiers).map((x) => x.value),
+    account_types: accountTypesList,
+    rate_types: rateTypesList,
+    deposit_tiers: depositTiersList,
+    single_value_columns,
   }
 }
 

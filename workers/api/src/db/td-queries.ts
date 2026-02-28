@@ -64,11 +64,21 @@ export async function getTdFilters(db: D1Database) {
 
   const fallback = (vals: string[], fb: string[]) => (vals.length > 0 ? vals : fb)
 
+  const termMonthsList = rows(termMonths).map((x) => x.value)
+  const depositTiersList = rows(depositTiers).map((x) => x.value)
+  const interestPaymentsList = fallback(rows(interestPayments).map((x) => x.value), INTEREST_PAYMENTS)
+
+  const single_value_columns: string[] = []
+  if (termMonthsList.length <= 1) single_value_columns.push('term_months')
+  if (depositTiersList.length <= 1) single_value_columns.push('deposit_tier')
+  if (interestPaymentsList.length <= 1) single_value_columns.push('interest_payment')
+
   return {
     banks: rows(banks).map((x) => x.value),
-    term_months: rows(termMonths).map((x) => x.value),
-    deposit_tiers: rows(depositTiers).map((x) => x.value),
-    interest_payments: fallback(rows(interestPayments).map((x) => x.value), INTEREST_PAYMENTS),
+    term_months: termMonthsList,
+    deposit_tiers: depositTiersList,
+    interest_payments: interestPaymentsList,
+    single_value_columns,
   }
 }
 

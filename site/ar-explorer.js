@@ -453,13 +453,20 @@
         return getLoanColumns();
     }
 
+    function isColumnVisible(field) {
+        if (columnPrefs.visible[field] === false) return false;
+        if (columnPrefs.visible[field] === true) return true;
+        if (singleValueColumns && singleValueColumns.indexOf(field) >= 0) return false;
+        return true;
+    }
+
     function getRateTableColumns() {
         var columns = getBaseColumns().slice();
         if (!comparisonAvailable) {
             columns = columns.filter(function (column) { return column.field !== 'comparison_rate'; });
         }
         columns = columns.filter(function (column) {
-            return columnPrefs.visible[column.field] !== false;
+            return isColumnVisible(column.field);
         });
         columns = applyColumnOrder(columns, columnPrefs.columnOrder);
         return columns.length ? columns : getBaseColumns().slice(0, 1);
@@ -469,6 +476,7 @@
     var lastMobileState = null;
     var currentSort = { field: 'collection_date', dir: 'desc' };
     var columnPrefs = readColumnPrefs();
+    var singleValueColumns = [];
     var comparisonAvailable = true;
     var settingsBound = false;
     var tableOverlayObserver = null;
@@ -695,7 +703,7 @@
             if (!column || !column.field || seen[column.field]) return;
             seen[column.field] = true;
             var disabled = column.field === 'comparison_rate' && !comparisonAvailable;
-            var checked = !disabled && columnPrefs.visible[column.field] !== false;
+            var checked = !disabled && isColumnVisible(column.field);
             items.push(
                 '<label class=\"table-settings-item\">' +
                     '<input type=\"checkbox\" data-field=\"' + safeEsc(column.field) + '\"' +
@@ -801,6 +809,7 @@
         lastMobileState = isMobile();
         columnPrefs = readColumnPrefs();
         comparisonAvailable = true;
+        singleValueColumns = [];
         bindSettingsUi();
         renderSettingsPopover();
         clientLog('info', 'Explorer table init start', {
@@ -808,6 +817,15 @@
         });
 
         var apiBase = (config && config.apiBase) ? config.apiBase : (window.location.origin + (window.AR.sectionConfig && window.AR.sectionConfig.apiPath ? window.AR.sectionConfig.apiPath : '/api/home-loan-rates'));
+        fetch(apiBase + '/filters').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (!data || !data.filters || !Array.isArray(data.filters.single_value_columns)) return;
+            singleValueColumns = data.filters.single_value_columns;
+            if (rateTable) {
+                applyColumnPreferences();
+                renderSettingsPopover();
+            }
+        }).catch(function () {});
+
         rateTable = new Tabulator('#rate-table', {
             ajaxURL: apiBase + '/rates',
             ajaxConfig: 'GET',
