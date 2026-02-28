@@ -1,8 +1,5 @@
-import { ensureAppConfigTable, getAppConfig, setAppConfig } from '../db/app-config'
+import { ensureAppConfigTable, setAppConfig } from '../db/app-config'
 import {
-  DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
-  MIN_RATE_CHECK_INTERVAL_MINUTES,
-  RATE_CHECK_INTERVAL_MINUTES_KEY,
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
@@ -10,9 +7,6 @@ import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
 import { buildScheduledRunId } from '../utils/idempotency'
-
-/** Minimum minutes between scheduled runs; cron fires every hour. */
-const SCHEDULED_INTERVAL_MIN_MINUTES = MIN_RATE_CHECK_INTERVAL_MINUTES
 
 export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {
   try {
@@ -31,34 +25,12 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
   const collectionDate = melbourneParts.date
 
-  const intervalRaw = await getAppConfig(env.DB, RATE_CHECK_INTERVAL_MINUTES_KEY)
-  const configuredMinutes = Math.max(
-    1,
-    parseInt(intervalRaw ?? String(DEFAULT_RATE_CHECK_INTERVAL_MINUTES), 10) || DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
-  )
-  const intervalMinutes = Math.max(SCHEDULED_INTERVAL_MIN_MINUTES, configuredMinutes)
-
-  const lastRunIso = await getAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY)
   const cronIso = Number.isFinite(event.scheduledTime)
     ? new Date(event.scheduledTime).toISOString()
     : new Date().toISOString()
-  const cronMs = new Date(cronIso).getTime()
-  const lastRunMs = lastRunIso ? new Date(lastRunIso).getTime() : 0
-  const elapsedMinutes = (cronMs - lastRunMs) / (60 * 1000)
-
-  if (lastRunIso && elapsedMinutes < intervalMinutes) {
-    log.info('scheduler', `Skipping: interval not elapsed (${Math.round(elapsedMinutes)}m < ${intervalMinutes}m)`)
-    return {
-      ok: true,
-      skipped: true,
-      reason: 'interval_not_elapsed',
-      elapsedMinutes: Math.round(elapsedMinutes * 10) / 10,
-      intervalMinutes,
-    }
-  }
 
   const runIdOverride = buildScheduledRunId(collectionDate, event.scheduledTime)
-  log.info('scheduler', `Triggering rate check run (interval=${intervalMinutes}m, collectionDate=${collectionDate}, runId=${runIdOverride})`)
+  log.info('scheduler', `Triggering rate check run (collectionDate=${collectionDate}, runId=${runIdOverride})`)
   const result = await triggerDailyRun(env, {
     source: 'scheduled',
     runIdOverride,
@@ -74,6 +46,6 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   return {
     ...result,
     melbourne: melbourneParts,
-    intervalMinutes,
+    intervalMinutes: 0,
   }
 }

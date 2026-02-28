@@ -86,6 +86,22 @@ describe('row presentation', () => {
     expect(row.is_removed).toBe(false)
   })
 
+  it('surfaces product_code and derives a series_key fallback', () => {
+    const row = presentCoreRowFields({
+      bank_name: 'ANZ',
+      product_id: 'anz-1',
+      product_code: 'anz-1',
+      account_type: 'savings',
+      rate_type: 'bonus',
+      deposit_tier: 'all',
+      source_url: 'https://example.com/rates',
+      parsed_at: '2026-02-25 06:17:08',
+    })
+
+    expect(row.product_code).toBe('anz-1')
+    expect(row.series_key).toBe('ANZ|anz-1|savings|bonus|all')
+  })
+
   it('normalizes removed flags and keeps removed timestamp', () => {
     const row = presentCoreRowFields({
       source_url: 'https://example.com/rates',

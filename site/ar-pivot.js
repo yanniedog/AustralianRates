@@ -56,68 +56,104 @@
         }
     }
 
-    function loadPivotData() {
+    function fetchRatesPage(params) {
+        var q = new URLSearchParams(params || {});
+        return fetch(apiBase + '/rates?' + q.toString())
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
+                return response.json();
+            });
+    }
+
+    async function fetchAllRateRows(baseParams, onProgress) {
+        var page = 1;
+        var lastPage = 1;
+        var total = 0;
+        var rows = [];
+        do {
+            var params = {};
+            Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
+            params.page = String(page);
+            params.size = '1000';
+            var response = await fetchRatesPage(params);
+            var chunk = Array.isArray(response.data) ? response.data : [];
+            total = Number(response.total || total || chunk.length || 0);
+            lastPage = Math.max(1, Number(response.last_page || 1));
+            rows = rows.concat(chunk);
+            if (typeof onProgress === 'function') {
+                onProgress({
+                    page: page,
+                    lastPage: lastPage,
+                    loaded: rows.length,
+                    total: total,
+                });
+            }
+            page += 1;
+        } while (page <= lastPage);
+        return { rows: rows, total: total || rows.length };
+    }
+
+    async function loadPivotData() {
         if (!els.pivotOutput) return;
         if (els.pivotStatus) els.pivotStatus.textContent = 'Loading data for pivot...';
         clientLog('info', 'Pivot load started');
 
-        var fp = buildFilterParams();
-        fp.size = '10000';
-        fp.page = '1';
-        var q = new URLSearchParams(fp);
-
-        fetch(apiBase + '/rates?' + q.toString())
-            .then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /rates');
-                return r.json();
-            })
-            .then(function (response) {
-                var data = response.data || [];
-                if (data.length === 0) {
-                    if (els.pivotStatus) els.pivotStatus.textContent = 'No data returned. Try broadening your filters or date range.';
-                    clientLog('warn', 'Pivot load returned no data');
-                    return;
-                }
-                var total = response.total || data.length;
-                var warning = total > 10000 ? ' (showing first 10,000 of ' + total.toLocaleString() + ' rows)' : '';
-                if (els.pivotStatus) els.pivotStatus.textContent = 'Loaded ' + data.length.toLocaleString() + ' rows' + warning + '. Drag fields to configure the pivot.';
-                clientLog('info', 'Pivot load completed', {
-                    rows: data.length,
-                    total: Number(total),
-                });
-
-                var pivotData = data.map(pivotRowFromApi);
-                registerPivotFormatters();
-
-                var renderers = $.extend($.pivotUtilities.renderers, $.pivotUtilities.plotly_renderers);
-                var defaults = sc.pivotDefaults || {};
-                var rateAggregator = ($.pivotUtilities.aggregators && $.pivotUtilities.aggregators[defaults.aggregator]) ? defaults.aggregator : 'Average';
-
-                var narrow = window.innerWidth <= 760;
-                var pivotMargin = narrow ? 30 : 80;
-                var pivotWidth = Math.min(1100, window.innerWidth - pivotMargin);
-                var pivotHeight = Math.max(280, Math.min(500, window.innerHeight - 200));
-
-                $(els.pivotOutput).empty().pivotUI(pivotData, {
-                    rows: defaults.rows || ['Bank'],
-                    cols: defaults.cols || [],
-                    vals: defaults.vals || ['Interest Rate (%)'],
-                    aggregatorName: rateAggregator,
-                    renderers: renderers,
-                    rendererName: 'Table',
-                    rendererOptions: {
-                        plotly: { width: pivotWidth, height: pivotHeight },
-                    },
-                    localeStrings: { totals: 'Averages' },
-                }, true);
-                tabState.pivotLoaded = true;
-            })
-            .catch(function (err) {
-                if (els.pivotStatus) els.pivotStatus.textContent = 'Error loading pivot data: ' + String(err.message || err);
-                clientLog('error', 'Pivot load failed', {
-                    message: err && err.message ? err.message : String(err),
-                });
+        try {
+            var fp = buildFilterParams();
+            var payload = await fetchAllRateRows(fp, function (progress) {
+                if (!els.pivotStatus) return;
+                els.pivotStatus.textContent =
+                    'Loading data for pivot... ' +
+                    progress.loaded.toLocaleString() + ' of ' +
+                    progress.total.toLocaleString() + ' rows (' +
+                    progress.page + '/' + progress.lastPage + ' pages).';
             });
+            var data = payload.rows || [];
+            if (data.length === 0) {
+                if (els.pivotStatus) els.pivotStatus.textContent = 'No data returned. Try broadening your filters or date range.';
+                clientLog('warn', 'Pivot load returned no data');
+                return;
+            }
+            if (els.pivotStatus) {
+                els.pivotStatus.textContent =
+                    'Loaded ' + data.length.toLocaleString() + ' rows across all pages. Drag fields to configure the pivot.';
+            }
+            clientLog('info', 'Pivot load completed', {
+                rows: data.length,
+                total: Number(payload.total || data.length),
+            });
+
+            var pivotData = data.map(pivotRowFromApi);
+            registerPivotFormatters();
+
+            var renderers = $.extend($.pivotUtilities.renderers, $.pivotUtilities.plotly_renderers);
+            var defaults = sc.pivotDefaults || {};
+            var rateAggregator = ($.pivotUtilities.aggregators && $.pivotUtilities.aggregators[defaults.aggregator]) ? defaults.aggregator : 'Average';
+
+            var narrow = window.innerWidth <= 760;
+            var pivotMargin = narrow ? 30 : 80;
+            var pivotWidth = Math.min(1100, window.innerWidth - pivotMargin);
+            var pivotHeight = Math.max(280, Math.min(500, window.innerHeight - 200));
+
+            $(els.pivotOutput).empty().pivotUI(pivotData, {
+                rows: defaults.rows || ['Bank'],
+                cols: defaults.cols || [],
+                vals: defaults.vals || ['Interest Rate (%)'],
+                aggregatorName: rateAggregator,
+                renderers: renderers,
+                rendererName: 'Table',
+                rendererOptions: {
+                    plotly: { width: pivotWidth, height: pivotHeight },
+                },
+                localeStrings: { totals: 'Averages' },
+            }, true);
+            tabState.pivotLoaded = true;
+        } catch (err) {
+            if (els.pivotStatus) els.pivotStatus.textContent = 'Error loading pivot data: ' + String(err.message || err);
+            clientLog('error', 'Pivot load failed', {
+                message: err && err.message ? err.message : String(err),
+            });
+        }
     }
 
     window.AR.pivot = { loadPivotData: loadPivotData };

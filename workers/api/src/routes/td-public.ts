@@ -11,15 +11,19 @@ import {
   queryTdRatesPaginated,
   queryTdTimeseries,
 } from '../db/td-queries'
+import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
 import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
+import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { queryTdRateChanges } from '../db/rate-change-log'
+import { registerTdExportRoutes } from './td-exports'
+import { toCsv } from '../utils/csv'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -50,6 +54,8 @@ tdPublicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
   await next()
 })
+
+registerTdExportRoutes(tdPublicRoutes)
 
 tdPublicRoutes.get('/health', (c) => {
   withPublicCache(c, 30)
@@ -237,20 +243,25 @@ tdPublicRoutes.get('/latest-all', async (c) => {
 tdPublicRoutes.get('/timeseries', async (c) => {
   const q = c.req.query()
   const productKey = q.product_key || q.productKey
+  const seriesKey = q.series_key
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
-  const limit = Number(q.limit || 1000)
+  const pageSize = parsePageSize(String(q.page_size || q.limit || ''), 1000, 1000)
+  const cursor = parseCursorOffset(q.cursor)
   const banks = parseCsvList(q.banks)
-  if (!productKey) {
-    return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries queries.')
+  if (!productKey && !seriesKey) {
+    return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
   const rows = await queryTdTimeseries(c.env.DB, {
     bank: q.bank,
     banks,
     productKey,
+    seriesKey,
     termMonths: q.term_months,
+    depositTier: q.deposit_tier,
+    interestPayment: q.interest_payment,
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved: parseIncludeRemoved(q.include_removed),
@@ -258,16 +269,28 @@ tdPublicRoutes.get('/timeseries', async (c) => {
     sourceMode,
     startDate: q.start_date,
     endDate: q.end_date,
-    limit,
+    limit: pageSize + 1,
+    offset: cursor,
   })
+  const paged = paginateRows(rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
-    totalRows: rows.length,
-    returnedRows: rows.length,
-    sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
-    limited: rows.length >= Math.max(1, Math.floor(limit)),
+    totalRows: paged.rows.length,
+    returnedRows: paged.rows.length,
+    sourceMix: sourceMixFromRows(paged.rows as Array<Record<string, unknown>>),
+    limited: paged.partial,
   })
-  return c.json({ ok: true, count: rows.length, rows, meta })
+  return c.json({ ok: true, count: paged.rows.length, rows: paged.rows, next_cursor: paged.nextCursor, partial: paged.partial, meta })
+})
+
+tdPublicRoutes.get('/coverage', async (c) => {
+  withPublicCache(c, 60)
+  const coverage = await getLenderDatasetCoverage(c.env.DB, 'term_deposits', {
+    lenderCode: c.req.query('lender_code') || undefined,
+    collectionDate: c.req.query('collection_date') || undefined,
+    limit: Number(c.req.query('limit') || 200),
+  })
+  return c.json({ ok: true, ...coverage })
 })
 
 tdPublicRoutes.get('/export', async (c) => {
@@ -327,14 +350,18 @@ tdPublicRoutes.get('/export.csv', async (c) => {
 
   if (dataset === 'timeseries') {
     const productKey = q.product_key || q.productKey
-    if (!productKey) {
-      return jsonError(c, 400, 'INVALID_REQUEST', 'product_key is required for timeseries CSV export.')
+    const seriesKey = q.series_key
+    if (!productKey && !seriesKey) {
+      return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries CSV export.')
     }
   const rows = await queryTdTimeseries(c.env.DB, {
       bank: q.bank,
       banks: parseCsvList(q.banks),
       productKey,
+      seriesKey,
       termMonths: q.term_months,
+      depositTier: q.deposit_tier,
+      interestPayment: q.interest_payment,
       minRate: parseOptionalNumber(q.min_rate),
       maxRate: parseOptionalNumber(q.max_rate),
       includeRemoved: parseIncludeRemoved(q.include_removed),
@@ -383,19 +410,3 @@ tdPublicRoutes.get('/export.csv', async (c) => {
   return c.body(toCsv(rows as Array<Record<string, unknown>>))
 })
 
-function csvEscape(value: unknown): string {
-  if (value == null) return ''
-  const raw = String(value)
-  if (/[",\n\r]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`
-  return raw
-}
-
-function toCsv(rows: Array<Record<string, unknown>>): string {
-  if (rows.length === 0) return ''
-  const headers = Object.keys(rows[0])
-  const lines = [headers.join(',')]
-  for (const row of rows) {
-    lines.push(headers.map((h) => csvEscape(row[h])).join(','))
-  }
-  return lines.join('\n')
-}

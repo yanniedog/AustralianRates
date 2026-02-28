@@ -35,6 +35,7 @@ export type NormalizedSavingsRow = {
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
+  fetchEventId?: number | null
   runId?: string
   runSource?: RunSource
 }
@@ -57,15 +58,16 @@ export type NormalizedTdRow = {
   dataQualityFlag: string
   confidenceScore: number
   retrievalType?: RetrievalType
+  fetchEventId?: number | null
   runId?: string
   runSource?: RunSource
 }
 
 export const MIN_SAVINGS_RATE = 0
-export const MAX_SAVINGS_RATE = 15
-export const MAX_MONTHLY_FEE = 50
-const MAX_BALANCE_VALUE = 100000000
-const MAX_DEPOSIT_VALUE = 100000000
+export const MAX_SAVINGS_RATE = 100
+export const MAX_MONTHLY_FEE = 1000000
+const MAX_BALANCE_VALUE = 1000000000000
+const MAX_DEPOSIT_VALUE = 1000000000000
 
 function asText(value: unknown): string {
   if (value == null) return ''
@@ -163,7 +165,7 @@ export function parseTermMonths(duration: string): number | null {
   const yearMatch = t.match(/(\d+)\s*year/i)
   if (yearMatch) return Number(yearMatch[1]) * 12
   const n = Number(t)
-  if (Number.isFinite(n) && n > 0 && n <= 120) return n
+  if (Number.isFinite(n) && n > 0 && n <= 1200) return n
   return null
 }
 
@@ -207,7 +209,6 @@ export function validateNormalizedSavingsRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isLikelySavingsProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
   if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
     return { ok: false, reason: 'invalid_product_url' }
@@ -246,11 +247,9 @@ export function validateNormalizedSavingsRow(
   if (row.monthlyFee != null && (!isFiniteNumber(row.monthlyFee) || row.monthlyFee < 0 || row.monthlyFee > MAX_MONTHLY_FEE)) {
     return { ok: false, reason: 'monthly_fee_out_of_bounds' }
   }
-  const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
   if (
     !isFiniteNumber(row.confidenceScore) ||
     row.confidenceScore < 0 ||
-    row.confidenceScore < minConfidence ||
     row.confidenceScore > 1
   ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
@@ -273,7 +272,6 @@ export function validateNormalizedTdRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isLikelyTdProductName(row.productName)) return { ok: false, reason: 'product_name_not_rate_like' }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
   if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
     return { ok: false, reason: 'invalid_product_url' }
@@ -302,7 +300,7 @@ export function validateNormalizedTdRow(
     !isFiniteNumber(termMonths) ||
     !Number.isInteger(termMonths) ||
     termMonths < 1 ||
-    termMonths > 120
+    termMonths > 1200
   ) {
     return { ok: false, reason: 'term_months_out_of_bounds' }
   }
@@ -315,11 +313,9 @@ export function validateNormalizedTdRow(
   if (row.minDeposit != null && row.maxDeposit != null && row.minDeposit > row.maxDeposit) {
     return { ok: false, reason: 'deposit_bounds_invalid' }
   }
-  const minConfidence = minConfidenceForFlag(row.dataQualityFlag)
   if (
     !isFiniteNumber(row.confidenceScore) ||
     row.confidenceScore < 0 ||
-    row.confidenceScore < minConfidence ||
     row.confidenceScore > 1
   ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }

@@ -507,12 +507,12 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: {
 }
 
 export async function querySavingsTimeseries(db: D1Database, input: {
-  bank?: string; banks?: string[]; productKey?: string; accountType?: string; rateType?: string
+  bank?: string; banks?: string[]; productKey?: string; seriesKey?: string; accountType?: string; rateType?: string
   minRate?: number; maxRate?: number
   includeRemoved?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
-  startDate?: string; endDate?: string; limit?: number
+  startDate?: string; endDate?: string; limit?: number; offset?: number
 }) {
   const where: string[] = []
   const binds: Array<string | number> = []
@@ -534,7 +534,8 @@ export async function querySavingsTimeseries(db: D1Database, input: {
   }
 
   addBankWhere(where, binds, 't.bank_name', input.bank, input.banks)
-  if (input.productKey) { where.push('t.product_key = ?'); binds.push(input.productKey) }
+  const productOrSeriesKey = input.seriesKey ?? input.productKey
+  if (productOrSeriesKey) { where.push('t.product_key = ?'); binds.push(productOrSeriesKey) }
   if (input.accountType) { where.push('t.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('t.rate_type = ?'); binds.push(input.rateType) }
   if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
@@ -542,8 +543,9 @@ export async function querySavingsTimeseries(db: D1Database, input: {
   if (input.startDate) { where.push('t.collection_date >= ?'); binds.push(input.startDate) }
   if (input.endDate) { where.push('t.collection_date <= ?'); binds.push(input.endDate) }
 
-  const limit = safeLimit(input.limit, 500, 5000)
-  binds.push(limit)
+  const limit = safeLimit(input.limit, 500, 2000)
+  const offset = Math.max(0, Math.floor(Number(input.offset) || 0))
+  binds.push(limit, offset)
 
   const sql = `
     SELECT
@@ -570,8 +572,8 @@ export async function querySavingsTimeseries(db: D1Database, input: {
       AND pps.bank_name = t.bank_name
       AND pps.product_id = t.product_id
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY t.collection_date ASC
-    LIMIT ?
+    ORDER BY t.collection_date ASC, t.parsed_at ASC
+    LIMIT ? OFFSET ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
   return rows(result).map((row) => presentSavingsRow(row))

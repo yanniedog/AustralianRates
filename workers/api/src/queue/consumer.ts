@@ -1,9 +1,13 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS, TARGET_LENDERS } from '../constants'
 import { advanceAutoBackfillAfterDay, releaseAutoBackfillClaim } from '../db/auto-backfill-progress'
 import { addHistoricalTaskBatchCounts, claimHistoricalTaskById, finalizeHistoricalTask, getHistoricalRunById } from '../db/client-historical-runs'
+import { markRunSeenProduct, markRunSeenSeries } from '../db/catalog'
 import { recordDatasetCoverageRunOutcome, type CoverageDataset } from '../db/dataset-coverage'
+import { recordIngestAnomaly } from '../db/ingest-anomalies'
 import { upsertHistoricalRateRows } from '../db/historical-rates'
-import { markMissingProductsRemoved, markProductsSeen } from '../db/product-status'
+import { ensureLenderDatasetRun, getLenderDatasetRun, markLenderDatasetDetailProcessed, setLenderDatasetExpectedDetails, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
+import { finalizePresenceForRun } from '../db/presence-finalize'
+import { addRunEnqueuedCounts } from '../db/run-progress'
 import { upsertSavingsRateRows } from '../db/savings-rates'
 import { upsertTdRateRows } from '../db/td-rates'
 import { getCachedEndpoint } from '../db/endpoint-cache'
@@ -22,6 +26,7 @@ import {
   fetchTermDepositProductIds,
   fetchTdProductDetailRows,
 } from '../ingest/cdr-savings'
+import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from './producer'
 import { validateNormalizedSavingsRow, type NormalizedSavingsRow } from '../ingest/normalize-savings'
 import { validateNormalizedTdRow, type NormalizedTdRow } from '../ingest/normalize-savings'
 import { extractLenderRatesFromHtml } from '../ingest/html-rate-parser'
@@ -36,10 +41,13 @@ import type {
   EnvBindings,
   HistoricalTaskExecuteJob,
   IngestMessage,
+  LenderFinalizeJob,
   ProductDetailJob,
 } from '../types'
 import { log } from '../utils/logger'
+import { homeLoanSeriesKey, savingsSeriesKey, tdSeriesKey } from '../utils/series-identity'
 import { nowIso, parseIntegerEnv } from '../utils/time'
+import type { DatasetKind } from '../../../../packages/shared/src'
 
 export function calculateRetryDelaySeconds(attempts: number): number {
   const safeAttempt = Math.max(1, Math.floor(attempts))
@@ -54,26 +62,26 @@ function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean 
   return fallback
 }
 
-function maxProductsPerLender(env: EnvBindings): number {
-  return Math.max(100, Math.min(50000, parseIntegerEnv(env.MAX_PRODUCTS_PER_LENDER, 20000)))
+function maxCdrProductPages(): number {
+  return Number.MAX_SAFE_INTEGER
 }
 
-function maxCdrProductPages(): number {
-  return 500
+function maxProductsPerLender(env: EnvBindings): number {
+  return Math.max(100, Math.min(50000, parseIntegerEnv(env.MAX_PRODUCTS_PER_LENDER, 20000)))
 }
 
 async function persistProductDetailPayload(
   env: EnvBindings,
   runSource: 'scheduled' | 'manual' | undefined,
   input: Parameters<typeof persistRawPayload>[1],
-): Promise<void> {
+): Promise<Awaited<ReturnType<typeof persistRawPayload>> | null> {
   const persistSuccessful = parseBooleanEnv(env.PERSIST_SUCCESSFUL_PRODUCT_DETAILS, false)
   const isScheduled = (runSource ?? 'scheduled') === 'scheduled'
   const isSuccess = (input.httpStatus ?? 200) < 400
   if (isScheduled && isSuccess && !persistSuccessful) {
-    return
+    return null
   }
-  await persistRawPayload(env, input)
+  return persistRawPayload(env, input)
 }
 
 function isNonRetryableErrorMessage(message: string): boolean {
@@ -81,6 +89,8 @@ function isNonRetryableErrorMessage(message: string): boolean {
     message === 'invalid_queue_message_shape' ||
     message.startsWith('unknown_lender_code:') ||
     message.startsWith('daily_ingest_no_valid_rows:') ||
+    message.startsWith('product_detail_missing_context:') ||
+    message.startsWith('lender_finalize_missing_run_state:') ||
     message.startsWith('historical_run_not_found:') ||
     message.startsWith('historical_task_claim_failed:') ||
     message.startsWith('historical_task_lender_not_found:')
@@ -104,7 +114,17 @@ function isIngestMessage(value: unknown): value is IngestMessage {
     return (
       typeof value.runId === 'string' &&
       typeof value.lenderCode === 'string' &&
+      typeof value.dataset === 'string' &&
       typeof value.productId === 'string' &&
+      typeof value.collectionDate === 'string'
+    )
+  }
+
+  if (value.kind === 'lender_finalize') {
+    return (
+      typeof value.runId === 'string' &&
+      typeof value.lenderCode === 'string' &&
+      typeof value.dataset === 'string' &&
       typeof value.collectionDate === 'string'
     )
   }
@@ -147,12 +167,18 @@ function extractRunContext(body: unknown): { runId: string | null; lenderCode: s
   return { runId, lenderCode }
 }
 
+type DroppedRow<T> = {
+  reason: string
+  productId: string
+  row: T
+}
+
 function splitValidatedRows(rows: NormalizedRateRow[]): {
   accepted: NormalizedRateRow[]
-  dropped: Array<{ reason: string; productId: string }>
+  dropped: Array<DroppedRow<NormalizedRateRow>>
 } {
   const accepted: NormalizedRateRow[] = []
-  const dropped: Array<{ reason: string; productId: string }> = []
+  const dropped: Array<DroppedRow<NormalizedRateRow>> = []
   for (const row of rows) {
     const verdict = validateNormalizedRow(row)
     if (verdict.ok) {
@@ -161,6 +187,7 @@ function splitValidatedRows(rows: NormalizedRateRow[]): {
       dropped.push({
         reason: verdict.reason,
         productId: row.productId,
+        row,
       })
     }
   }
@@ -169,24 +196,148 @@ function splitValidatedRows(rows: NormalizedRateRow[]): {
 
 function splitValidatedSavingsRows(rows: NormalizedSavingsRow[]) {
   const accepted: NormalizedSavingsRow[] = []
-  const dropped: Array<{ reason: string; productId: string }> = []
+  const dropped: Array<DroppedRow<NormalizedSavingsRow>> = []
   for (const row of rows) {
     const verdict = validateNormalizedSavingsRow(row)
     if (verdict.ok) accepted.push(row)
-    else dropped.push({ reason: verdict.reason, productId: row.productId })
+    else dropped.push({ reason: verdict.reason, productId: row.productId, row })
   }
   return { accepted, dropped }
 }
 
 function splitValidatedTdRows(rows: NormalizedTdRow[]) {
   const accepted: NormalizedTdRow[] = []
-  const dropped: Array<{ reason: string; productId: string }> = []
+  const dropped: Array<DroppedRow<NormalizedTdRow>> = []
   for (const row of rows) {
     const verdict = validateNormalizedTdRow(row)
     if (verdict.ok) accepted.push(row)
-    else dropped.push({ reason: verdict.reason, productId: row.productId })
+    else dropped.push({ reason: verdict.reason, productId: row.productId, row })
   }
   return { accepted, dropped }
+}
+
+function bankNameForLender(lender: { canonical_bank_name: string; name: string }): string {
+  return lender.canonical_bank_name || lender.name
+}
+
+async function markProductsSeenForRun(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    dataset: DatasetKind
+    bankName: string
+    collectionDate: string
+    productIds: string[]
+  },
+): Promise<void> {
+  for (const productId of Array.from(new Set(input.productIds)).filter(Boolean)) {
+    await markRunSeenProduct(db, {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: input.dataset,
+      bankName: input.bankName,
+      productId,
+      productCode: productId,
+      collectionDate: input.collectionDate,
+    })
+  }
+}
+
+async function markHomeLoanSeriesSeenForRun(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    collectionDate: string
+    rows: NormalizedRateRow[]
+  },
+): Promise<void> {
+  for (const row of input.rows) {
+    await markRunSeenSeries(db, {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: 'home_loans',
+      seriesKey: homeLoanSeriesKey(row),
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode: row.productId,
+      collectionDate: input.collectionDate,
+    })
+  }
+}
+
+async function markSavingsSeriesSeenForRun(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    collectionDate: string
+    rows: NormalizedSavingsRow[]
+  },
+): Promise<void> {
+  for (const row of input.rows) {
+    await markRunSeenSeries(db, {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: 'savings',
+      seriesKey: savingsSeriesKey(row),
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode: row.productId,
+      collectionDate: input.collectionDate,
+    })
+  }
+}
+
+async function markTdSeriesSeenForRun(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    collectionDate: string
+    rows: NormalizedTdRow[]
+  },
+): Promise<void> {
+  for (const row of input.rows) {
+    await markRunSeenSeries(db, {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: 'term_deposits',
+      seriesKey: tdSeriesKey(row),
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode: row.productId,
+      collectionDate: input.collectionDate,
+    })
+  }
+}
+
+async function recordDroppedAnomalies<T extends { productId: string; collectionDate: string }>(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    dataset: DatasetKind
+    fetchEventId?: number | null
+    dropped: Array<DroppedRow<T>>
+  },
+): Promise<void> {
+  for (const item of input.dropped) {
+    await recordIngestAnomaly(db, {
+      fetchEventId: input.fetchEventId ?? null,
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      dataset: input.dataset,
+      productId: item.productId,
+      collectionDate: item.row.collectionDate,
+      reason: item.reason,
+      severity: 'warn',
+      candidateJson: JSON.stringify(item.row),
+      normalizedCandidateJson: JSON.stringify(item.row),
+      seriesKey: null,
+    })
+  }
 }
 
 function summarizeDropReasons(items: Array<{ reason: string }>): Record<string, number> {
@@ -288,6 +439,14 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   })
 
   const playbook = getLenderPlaybook(lender)
+  const bankName = bankNameForLender(lender)
+  await ensureLenderDatasetRun(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: 'home_loans',
+    bankName,
+    collectionDate: job.collectionDate,
+  })
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   let sourceUrl = ''
@@ -303,52 +462,17 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   const collectedRows: NormalizedRateRow[] = []
   let inspectedHtml = 0
   let droppedByParser = 0
-  const productCap = maxProductsPerLender(env)
   let endpointsTried = 0
   let indexPayloads = 0
-  let productIdsDiscovered = 0
-  let productDetailsRequested = 0
-  let removalSyncProductIds: Set<string> | null = null
+  let detailJobsEnqueued = 0
+  const discoveredProductIds = new Set<string>()
+  let successfulIndexFetch = false
   let fallbackSeedFetches = 0
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   const seedDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
   let validationMs = 0
   let writeMs = 0
-  const syncRemovalStatus = async (): Promise<void> => {
-    if (removalSyncProductIds == null) {
-      log.info('consumer', 'daily_lender_fetch removal_sync_skipped', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context: 'reason=no_successful_cdr_index_fetch',
-      })
-      return
-    }
-
-    const discoveredProductIds = Array.from(removalSyncProductIds)
-    const bankName = lender.canonical_bank_name || lender.name
-    const removalStartedAt = Date.now()
-    const seenTouched = await markProductsSeen(env.DB, {
-      section: 'home_loans',
-      bankName,
-      productIds: discoveredProductIds,
-      collectionDate: job.collectionDate,
-      runId: job.runId,
-    })
-    const removedTouched = await markMissingProductsRemoved(env.DB, {
-      section: 'home_loans',
-      bankName,
-      activeProductIds: discoveredProductIds,
-    })
-    log.info('consumer', 'daily_lender_fetch removal_sync', {
-      runId: job.runId,
-      lenderCode: job.lenderCode,
-      context:
-        `bank=${bankName} discovered=${discoveredProductIds.length}` +
-        ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
-        ` elapsed_ms=${elapsedMs(removalStartedAt)}`,
-    })
-  }
 
   log.info('consumer', 'daily_lender_fetch collect', {
     runId: job.runId,
@@ -356,7 +480,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
     context:
       `date=${job.collectionDate} endpoints=${uniqueCandidates.length}` +
       ` endpoint_hosts=${endpointHosts || 'none'}` +
-      ` seeds=${Math.min(2, lender.seed_rate_urls.length)} product_cap=${productCap}` +
+      ` seeds=${Math.min(2, lender.seed_rate_urls.length)}` +
       ` discovery_ms=${endpointDiscoveryMs}`,
   })
 
@@ -373,14 +497,21 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
     })
     const products = await fetchResidentialMortgageProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions })
     indexPayloads += products.rawPayloads.length
-    productIdsDiscovered += products.productIds.length
-    const endpointRowsBefore = collectedRows.length
+    const endpointIds = Array.from(new Set(products.productIds)).filter(Boolean)
     const indexStatusSummary = summarizeStatusCodes(products.rawPayloads.map((payload) => payload.status))
     const indexFetchSucceeded =
       products.rawPayloads.length > 0 && products.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
     if (indexFetchSucceeded) {
-      if (removalSyncProductIds == null) removalSyncProductIds = new Set<string>()
-      for (const productId of products.productIds) removalSyncProductIds.add(productId)
+      successfulIndexFetch = true
+      for (const productId of endpointIds) discoveredProductIds.add(productId)
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: endpointIds,
+      })
     }
     if (products.pageLimitHit) {
       log.error('consumer', 'daily_lender_fetch index_page_limit_hit', {
@@ -391,76 +522,28 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
           ` next=${products.nextUrl || 'none'} discovered=${products.productIds.length}`,
       })
     }
-    let endpointDetailRows = 0
-    const detailStatuses: number[] = []
     for (const payload of products.rawPayloads) {
       await persistRawPayload(env, {
         sourceType: 'cdr_products',
         sourceUrl: payload.sourceUrl,
         payload: payload.body,
         httpStatus: payload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        jobKind: 'daily_home_index_fetch',
+        collectionDate: job.collectionDate,
         notes: `daily_product_index lender=${job.lenderCode}`,
       })
     }
-
-    const productIds = products.productIds.slice(0, productCap)
-    if (products.productIds.length > productIds.length) {
-      log.error('consumer', 'daily_lender_fetch product_cap_truncated', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context:
-          `endpoint=${shortUrlForLog(candidateEndpoint)}` +
-          ` discovered=${products.productIds.length} used=${productIds.length}` +
-          ` dropped=${products.productIds.length - productIds.length} product_cap=${productCap}`,
-      })
-    }
-    productDetailsRequested += productIds.length
-    for (const productId of productIds) {
-      const detailStartedAt = Date.now()
-      const details = await fetchProductDetailRows({
-        lender,
-        endpointUrl: candidateEndpoint,
-        productId,
-        collectionDate: job.collectionDate,
-        cdrVersions: playbook.cdrVersions,
-      })
-      detailStatuses.push(details.rawPayload.status)
-      endpointDetailRows += details.rows.length
-
-      await persistProductDetailPayload(env, job.runSource, {
-        sourceType: 'cdr_product_detail',
-        sourceUrl: details.rawPayload.sourceUrl,
-        payload: details.rawPayload.body,
-        httpStatus: details.rawPayload.status,
-        notes: `daily_product_detail lender=${job.lenderCode} product=${productId}`,
-      })
-
-      for (const row of details.rows) {
-        collectedRows.push(row)
-      }
-
-      if (details.rows.length === 0) {
-        log.debug('consumer', 'daily_lender_fetch product_detail_empty', {
-          runId: job.runId,
-          lenderCode: job.lenderCode,
-          context:
-            `endpoint=${shortUrlForLog(candidateEndpoint)} product=${productId}` +
-            ` status=${details.rawPayload.status} elapsed_ms=${elapsedMs(detailStartedAt)}`,
-        })
-      }
-    }
-    const endpointRowsCollected = collectedRows.length - endpointRowsBefore
     const endpointElapsedMs = elapsedMs(endpointStartedAt)
     const endpointSummary = {
       endpoint: candidateEndpoint,
       index_payloads: products.rawPayloads.length,
       index_statuses: indexStatusSummary,
-      product_ids_discovered: products.productIds.length,
-      product_ids_sample: summarizeProductSample(products.productIds),
-      product_ids_used: productIds.length,
-      detail_statuses: summarizeStatusCodes(detailStatuses),
-      detail_rows: endpointDetailRows,
-      rows_collected: endpointRowsCollected,
+      product_ids_discovered: endpointIds.length,
+      product_ids_sample: summarizeProductSample(endpointIds),
+      detail_jobs_planned: endpointIds.length,
       elapsed_ms: endpointElapsedMs,
     }
     endpointDiagnostics.push(endpointSummary)
@@ -471,15 +554,91 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         `endpoint_idx=${endpointIndex + 1}/${uniqueCandidates.length}` +
         ` endpoint=${shortUrlForLog(candidateEndpoint)}` +
         ` index_payloads=${products.rawPayloads.length} index_statuses=${serializeForLog(indexStatusSummary)}` +
-        ` discovered=${products.productIds.length} used=${productIds.length}` +
-        ` sample_products=${summarizeProductSample(products.productIds)}` +
-        ` detail_rows=${endpointDetailRows} collected=${endpointRowsCollected}` +
-        ` detail_statuses=${serializeForLog(summarizeStatusCodes(detailStatuses))}` +
+        ` discovered=${endpointIds.length}` +
+        ` sample_products=${summarizeProductSample(endpointIds)}` +
+        ` detail_jobs_planned=${endpointIds.length}` +
         ` elapsed_ms=${endpointElapsedMs}`,
     })
-    if (collectedRows.length > 0 && !sourceUrl) {
+    if (indexFetchSucceeded && !sourceUrl) {
       sourceUrl = candidateEndpoint
     }
+  }
+
+  collectionMs = elapsedMs(collectionStartedAt)
+
+  if (successfulIndexFetch) {
+    const productIds = Array.from(discoveredProductIds)
+    await setLenderDatasetExpectedDetails(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      bankName,
+      collectionDate: job.collectionDate,
+      expectedDetailCount: productIds.length,
+    })
+    const detailEnqueue =
+      productIds.length > 0
+        ? await enqueueProductDetailJobs(env, {
+            runId: job.runId,
+            runSource: job.runSource,
+            lenderCode: job.lenderCode,
+            dataset: 'home_loans',
+            collectionDate: job.collectionDate,
+            productIds,
+          })
+        : { enqueued: 0 }
+    const finalizerEnqueue = await enqueueLenderFinalizeJobs(env, {
+      runId: job.runId,
+      runSource: job.runSource,
+      lenderCode: job.lenderCode,
+      collectionDate: job.collectionDate,
+      datasets: ['home_loans'],
+    })
+    detailJobsEnqueued = detailEnqueue.enqueued
+    await addRunEnqueuedCounts(env.DB, job.runId, {
+      [job.lenderCode]: detailEnqueue.enqueued + finalizerEnqueue.enqueued,
+    })
+    await persistRawPayload(env, {
+      sourceType: 'cdr_products',
+      sourceUrl: sourceUrl || `summary://${job.lenderCode}/home-loans`,
+      payload: {
+        lenderCode: job.lenderCode,
+        runId: job.runId,
+        collectionDate: job.collectionDate,
+        fetchedAt: nowIso(),
+        acceptedRows: 0,
+        rejectedRows: 0,
+        discoveredProducts: productIds.length,
+        detailJobsEnqueued,
+        collection: {
+          endpointsTried,
+          indexPayloads,
+        },
+        endpointDiagnostics,
+        timings: {
+          endpointDiscoveryMs,
+          collectionMs,
+          totalMs: elapsedMs(jobStartedAt),
+        },
+      },
+      httpStatus: 202,
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      jobKind: 'daily_home_index_fetch',
+      collectionDate: job.collectionDate,
+      notes: cdrCollectionNotes(productIds.length, 0),
+    })
+    log.info('consumer', 'daily_lender_fetch enqueued_detail_jobs', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context:
+        `products=${productIds.length} detail_jobs=${detailEnqueue.enqueued}` +
+        ` finalizer_jobs=${finalizerEnqueue.enqueued}` +
+        ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+        ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(jobStartedAt)}`,
+    })
+    return
   }
 
   if (collectedRows.length === 0) {
@@ -493,11 +652,16 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       fallbackSeedFetches += 1
       const response = await fetch(seedUrl)
       const html = await response.text()
-      await persistRawPayload(env, {
+      const persisted = await persistRawPayload(env, {
         sourceType: 'wayback_html',
         sourceUrl: seedUrl,
         payload: html,
         httpStatus: response.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        jobKind: 'daily_home_index_fetch',
+        collectionDate: job.collectionDate,
         notes: `fallback_scrape lender=${job.lenderCode}`,
       })
       const parsed = extractLenderRatesFromHtml({
@@ -511,6 +675,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       inspectedHtml += parsed.inspected
       droppedByParser += parsed.dropped
       for (const row of parsed.rows) {
+        row.fetchEventId = persisted.fetchEventId
         collectedRows.push(row)
       }
       const seedSummary = {
@@ -534,13 +699,24 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       })
     }
   }
-  collectionMs = elapsedMs(collectionStartedAt)
 
   const validationStartedAt = Date.now()
   const { accepted, dropped } = splitValidatedRows(collectedRows)
   const droppedReasons = summarizeDropReasons(dropped)
   const droppedProductsSample = summarizeProductSample(dropped.map((item) => item.productId))
   validationMs = elapsedMs(validationStartedAt)
+  await markHomeLoanSeriesSeenForRun(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    collectionDate: job.collectionDate,
+    rows: collectedRows,
+  })
+  await recordDroppedAnomalies(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: 'home_loans',
+    dropped,
+  })
   log.info('consumer', 'daily_lender_fetch validation', {
     runId: job.runId,
     lenderCode: job.lenderCode,
@@ -556,7 +732,6 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   }
   const hadMortgageSignals = collectedRows.length > 0 || inspectedHtml > 0 || droppedByParser > 0
   if (accepted.length === 0) {
-    await syncRemovalStatus()
     const noMortgageSignals = !hadMortgageSignals
     await persistRawPayload(env, {
       sourceType: 'cdr_products',
@@ -575,8 +750,8 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         collection: {
           endpointsTried,
           indexPayloads,
-          productIdsDiscovered,
-          productDetailsRequested,
+          productIdsDiscovered: 0,
+          detailJobsEnqueued,
           fallbackSeedFetches,
         },
         endpointDiagnostics,
@@ -590,6 +765,11 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         },
       },
       httpStatus: noMortgageSignals ? 204 : 422,
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      jobKind: 'daily_home_index_fetch',
+      collectionDate: job.collectionDate,
       notes: noMortgageSignals ? `daily_no_data lender=${job.lenderCode}` : `daily_quality_rejected lender=${job.lenderCode}`,
     })
     if (noMortgageSignals) {
@@ -599,7 +779,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         context:
           `collected=0 inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
           ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
-          ` product_ids=${productIdsDiscovered} detail_requests=${productDetailsRequested}` +
+          ` detail_jobs=${detailJobsEnqueued}` +
           ` seed_fetches=${fallbackSeedFetches} timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},total=${elapsedMs(jobStartedAt)}`,
       })
       return
@@ -612,7 +792,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
         ` reasons=${JSON.stringify(droppedReasons)}` +
         ` inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
         ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
-        ` product_ids=${productIdsDiscovered} detail_requests=${productDetailsRequested}` +
+        ` detail_jobs=${detailJobsEnqueued}` +
         ` seed_fetches=${fallbackSeedFetches}` +
         ` endpoint_diagnostics=${serializeForLog(endpointDiagnostics)}` +
         ` seed_diagnostics=${serializeForLog(seedDiagnostics)}` +
@@ -624,7 +804,6 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
   const writeStartedAt = Date.now()
   const written = await upsertHistoricalRateRows(env.DB, accepted)
   writeMs = elapsedMs(writeStartedAt)
-  await syncRemovalStatus()
   log.info('consumer', `daily_lender_fetch completed: ${written} written, ${dropped.length} dropped`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
@@ -633,7 +812,7 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       ` reasons=${JSON.stringify(droppedReasons)}` +
       ` inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
       ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
-      ` product_ids=${productIdsDiscovered} detail_requests=${productDetailsRequested}` +
+      ` detail_jobs=${detailJobsEnqueued}` +
       ` seed_fetches=${fallbackSeedFetches}` +
       ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(jobStartedAt)}`,
   })
@@ -648,30 +827,35 @@ async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Prom
       fetchedAt: nowIso(),
       productsRows: collectedRows.length,
       acceptedRows: accepted.length,
-      rejectedRows: dropped.length,
-      droppedReasons,
-      inspectedHtml,
-      droppedByParser,
-      collection: {
-        endpointsTried,
-        indexPayloads,
-        productIdsDiscovered,
-        productDetailsRequested,
-        fallbackSeedFetches,
-      },
-      endpointDiagnostics,
-      seedDiagnostics,
-      timings: {
+        rejectedRows: dropped.length,
+        droppedReasons,
+        inspectedHtml,
+        droppedByParser,
+        collection: {
+          endpointsTried,
+          indexPayloads,
+          productIdsDiscovered: 0,
+          detailJobsEnqueued,
+          fallbackSeedFetches,
+        },
+        endpointDiagnostics,
+        seedDiagnostics,
+        timings: {
         endpointDiscoveryMs,
         collectionMs,
         validationMs,
         writeMs,
         totalMs: elapsedMs(jobStartedAt),
+        },
       },
-    },
-    httpStatus: 200,
-    notes: cdrCollectionNotes(collectedRows.length, accepted.length),
-  })
+      httpStatus: 200,
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      jobKind: 'daily_home_index_fetch',
+      collectionDate: job.collectionDate,
+      notes: cdrCollectionNotes(collectedRows.length, accepted.length),
+    })
 }
 
 async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): Promise<void> {
@@ -679,84 +863,275 @@ async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): 
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!endpoint || !lender) {
+    await markLenderDatasetDetailProcessed(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: job.dataset,
+      failed: true,
+      errorMessage: 'missing_endpoint_or_lender',
+    })
     log.warn('consumer', `product_detail_fetch skipped: missing endpoint or lender`, {
       runId: job.runId,
       lenderCode: job.lenderCode,
       context:
-        `product=${job.productId} date=${job.collectionDate}` +
+        `dataset=${job.dataset} product=${job.productId} date=${job.collectionDate}` +
         ` has_endpoint=${endpoint ? 1 : 0} has_lender=${lender ? 1 : 0}`,
     })
-    return
+    throw new Error(`product_detail_missing_context:${job.lenderCode}:${job.dataset}:${job.productId}`)
   }
+  const bankName = bankNameForLender(lender)
+  await ensureLenderDatasetRun(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: job.dataset,
+    bankName,
+    collectionDate: job.collectionDate,
+  })
   log.info('consumer', `product_detail_fetch started for ${job.productId}`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
     context:
-      `date=${job.collectionDate} endpoint=${shortUrlForLog(endpoint.endpointUrl)}` +
+      `dataset=${job.dataset} date=${job.collectionDate} endpoint=${shortUrlForLog(endpoint.endpointUrl)}` +
       ` run_source=${job.runSource ?? 'scheduled'} attempt=${job.attempt}`,
   })
 
-  const fetchStartedAt = Date.now()
-  const details = await fetchProductDetailRows({
-    lender,
-    endpointUrl: endpoint.endpointUrl,
-    productId: job.productId,
-    collectionDate: job.collectionDate,
-    cdrVersions: getLenderPlaybook(lender).cdrVersions,
-  })
-  const fetchMs = elapsedMs(fetchStartedAt)
+  try {
+    const fetchStartedAt = Date.now()
+    const versions = getLenderPlaybook(lender).cdrVersions
 
-  log.info('consumer', 'product_detail_fetch fetched', {
-    runId: job.runId,
-    lenderCode: job.lenderCode,
-    context:
-      `product=${job.productId} status=${details.rawPayload.status}` +
-      ` rows=${details.rows.length} fetch_ms=${fetchMs}`,
-  })
+    let fetchedRows = 0
+    let acceptedRows = 0
+    let written = 0
+    let validationMs = 0
+    let fetchStatus = 0
+    let fetchEventId: number | null | undefined
+    let droppedReasons: Record<string, number> = {}
 
-  await persistProductDetailPayload(env, job.runSource, {
-    sourceType: 'cdr_product_detail',
-    sourceUrl: details.rawPayload.sourceUrl,
-    payload: details.rawPayload.body,
-    httpStatus: details.rawPayload.status,
-    notes: `direct_product_detail lender=${job.lenderCode} product=${job.productId}`,
-  })
+    if (job.dataset === 'home_loans') {
+      const details = await fetchProductDetailRows({
+        lender,
+        endpointUrl: endpoint.endpointUrl,
+        productId: job.productId,
+        collectionDate: job.collectionDate,
+        cdrVersions: versions,
+      })
+      fetchStatus = details.rawPayload.status
+      const persisted = await persistProductDetailPayload(env, job.runSource, {
+        sourceType: 'cdr_product_detail',
+        sourceUrl: details.rawPayload.sourceUrl,
+        payload: details.rawPayload.body,
+        httpStatus: details.rawPayload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        jobKind: 'product_detail_fetch',
+        collectionDate: job.collectionDate,
+        durationMs: elapsedMs(fetchStartedAt),
+        productId: job.productId,
+        notes: `direct_product_detail lender=${job.lenderCode} product=${job.productId}`,
+      })
+      fetchEventId = persisted?.fetchEventId
+      for (const row of details.rows) row.fetchEventId = fetchEventId ?? row.fetchEventId ?? null
+      fetchedRows = details.rows.length
+      await markHomeLoanSeriesSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        collectionDate: job.collectionDate,
+        rows: details.rows,
+      })
+      const validationStartedAt = Date.now()
+      const { accepted, dropped } = splitValidatedRows(details.rows)
+      validationMs = elapsedMs(validationStartedAt)
+      droppedReasons = summarizeDropReasons(dropped)
+      await recordDroppedAnomalies(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        fetchEventId,
+        dropped,
+      })
+      for (const row of accepted) {
+        row.runId = job.runId
+        row.runSource = job.runSource ?? 'scheduled'
+      }
+      acceptedRows = accepted.length
+      if (accepted.length > 0) {
+        written = await upsertHistoricalRateRows(env.DB, accepted)
+      }
+    } else if (job.dataset === 'savings') {
+      const details = await fetchSavingsProductDetailRows({
+        lender,
+        endpointUrl: endpoint.endpointUrl,
+        productId: job.productId,
+        collectionDate: job.collectionDate,
+        cdrVersions: versions,
+      })
+      fetchStatus = details.rawPayload.status
+      const persisted = await persistProductDetailPayload(env, job.runSource, {
+        sourceType: 'cdr_product_detail',
+        sourceUrl: details.rawPayload.sourceUrl,
+        payload: details.rawPayload.body,
+        httpStatus: details.rawPayload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        jobKind: 'product_detail_fetch',
+        collectionDate: job.collectionDate,
+        durationMs: elapsedMs(fetchStartedAt),
+        productId: job.productId,
+        notes: `savings_product_detail lender=${job.lenderCode} product=${job.productId}`,
+      })
+      fetchEventId = persisted?.fetchEventId
+      for (const row of details.savingsRows) row.fetchEventId = fetchEventId ?? row.fetchEventId ?? null
+      fetchedRows = details.savingsRows.length
+      await markSavingsSeriesSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        collectionDate: job.collectionDate,
+        rows: details.savingsRows,
+      })
+      const validationStartedAt = Date.now()
+      const { accepted, dropped } = splitValidatedSavingsRows(details.savingsRows)
+      validationMs = elapsedMs(validationStartedAt)
+      droppedReasons = summarizeDropReasons(dropped)
+      await recordDroppedAnomalies(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        fetchEventId,
+        dropped,
+      })
+      for (const row of accepted) {
+        row.runId = job.runId
+        row.runSource = job.runSource ?? 'scheduled'
+      }
+      acceptedRows = accepted.length
+      if (accepted.length > 0) {
+        written = await upsertSavingsRateRows(env.DB, accepted)
+      }
+    } else {
+      const details = await fetchTdProductDetailRows({
+        lender,
+        endpointUrl: endpoint.endpointUrl,
+        productId: job.productId,
+        collectionDate: job.collectionDate,
+        cdrVersions: versions,
+      })
+      fetchStatus = details.rawPayload.status
+      const persisted = await persistProductDetailPayload(env, job.runSource, {
+        sourceType: 'cdr_product_detail',
+        sourceUrl: details.rawPayload.sourceUrl,
+        payload: details.rawPayload.body,
+        httpStatus: details.rawPayload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        jobKind: 'product_detail_fetch',
+        collectionDate: job.collectionDate,
+        durationMs: elapsedMs(fetchStartedAt),
+        productId: job.productId,
+        notes: `td_product_detail lender=${job.lenderCode} product=${job.productId}`,
+      })
+      fetchEventId = persisted?.fetchEventId
+      for (const row of details.tdRows) row.fetchEventId = fetchEventId ?? row.fetchEventId ?? null
+      fetchedRows = details.tdRows.length
+      await markTdSeriesSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        collectionDate: job.collectionDate,
+        rows: details.tdRows,
+      })
+      const validationStartedAt = Date.now()
+      const { accepted, dropped } = splitValidatedTdRows(details.tdRows)
+      validationMs = elapsedMs(validationStartedAt)
+      droppedReasons = summarizeDropReasons(dropped)
+      await recordDroppedAnomalies(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        fetchEventId,
+        dropped,
+      })
+      for (const row of accepted) {
+        row.runId = job.runId
+        row.runSource = job.runSource ?? 'scheduled'
+      }
+      acceptedRows = accepted.length
+      if (accepted.length > 0) {
+        written = await upsertTdRateRows(env.DB, accepted)
+      }
+    }
 
-  const validationStartedAt = Date.now()
-  const { accepted, dropped } = splitValidatedRows(details.rows)
-  const validationMs = elapsedMs(validationStartedAt)
-  const droppedReasons = summarizeDropReasons(dropped)
-  for (const row of accepted) {
-    row.runId = job.runId
-    row.runSource = job.runSource ?? 'scheduled'
-  }
-  let written = 0
-  if (accepted.length > 0) {
-    const writeStartedAt = Date.now()
-    written = await upsertHistoricalRateRows(env.DB, accepted)
-    log.info('consumer', 'product_detail_fetch write_completed', {
+    await markLenderDatasetDetailProcessed(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
-      context: `product=${job.productId} written=${written} write_ms=${elapsedMs(writeStartedAt)}`,
+      dataset: job.dataset,
     })
-  } else {
-    log.warn('consumer', 'product_detail_fetch no_valid_rows', {
+
+    log.info('consumer', 'product_detail_fetch completed', {
       runId: job.runId,
       lenderCode: job.lenderCode,
       context:
-        `product=${job.productId} fetched=${details.rows.length}` +
-        ` dropped=${dropped.length} reasons=${serializeForLog(droppedReasons)}`,
+        `dataset=${job.dataset} product=${job.productId} status=${fetchStatus}` +
+        ` fetched=${fetchedRows} accepted=${acceptedRows} written=${written}` +
+        ` dropped_reasons=${serializeForLog(droppedReasons)}` +
+        ` timings(ms):validate=${validationMs},total=${elapsedMs(startedAt)}`,
     })
+  } catch (error) {
+    const errorMessage = (error as Error)?.message || String(error)
+    await markLenderDatasetDetailProcessed(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: job.dataset,
+      failed: true,
+      errorMessage,
+    })
+    throw error
+  }
+}
+
+async function handleLenderFinalizeJob(env: EnvBindings, job: LenderFinalizeJob): Promise<void> {
+  const run = await getLenderDatasetRun(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: job.dataset,
+  })
+  if (!run) {
+    throw new Error(`lender_finalize_missing_run_state:${job.lenderCode}:${job.dataset}`)
+  }
+  if (run.finalized_at) {
+    return
   }
 
-  log.info('consumer', 'product_detail_fetch completed', {
+  const detailProcessed = Number(run.completed_detail_count || 0) + Number(run.failed_detail_count || 0)
+  const expected = Number(run.expected_detail_count || 0)
+  if (detailProcessed < expected) {
+    throw new Error(`lender_finalize_not_ready:${job.lenderCode}:${job.dataset}:${detailProcessed}/${expected}`)
+  }
+
+  const marked = await tryMarkLenderDatasetFinalized(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: job.dataset,
+  })
+  if (!marked) {
+    return
+  }
+
+  await finalizePresenceForRun(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: job.dataset,
+    bankName: run.bank_name,
+    collectionDate: run.collection_date,
+  })
+
+  log.info('consumer', 'lender_finalize completed', {
     runId: job.runId,
     lenderCode: job.lenderCode,
     context:
-      `product=${job.productId} fetched=${details.rows.length} accepted=${accepted.length}` +
-      ` dropped=${dropped.length} written=${written}` +
-      ` reasons=${serializeForLog(droppedReasons)}` +
-      ` timings(ms):fetch=${fetchMs},validate=${validationMs},total=${elapsedMs(startedAt)}`,
+      `dataset=${job.dataset} expected=${expected}` +
+      ` completed=${run.completed_detail_count} failed=${run.failed_detail_count}`,
   })
 }
 
@@ -1546,6 +1921,23 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
   })
 
   const playbook = getLenderPlaybook(lender)
+  const bankName = bankNameForLender(lender)
+  await Promise.all([
+    ensureLenderDatasetRun(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'savings',
+      bankName,
+      collectionDate: job.collectionDate,
+    }),
+    ensureLenderDatasetRun(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'term_deposits',
+      bankName,
+      collectionDate: job.collectionDate,
+    }),
+  ])
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   const endpointCandidates: string[] = []
@@ -1557,92 +1949,23 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
   const endpointHosts = summarizeEndpointHosts(uniqueCandidates)
   const endpointDiscoveryMs = elapsedMs(endpointDiscoveryStartedAt)
 
-  const savingsRows: NormalizedSavingsRow[] = []
-  const tdRows: NormalizedTdRow[] = []
-  const productCap = maxProductsPerLender(env)
   let endpointsTried = 0
   let indexPayloads = 0
-  let savingsProductIdsDiscovered = 0
-  let tdProductIdsDiscovered = 0
-  let savingsDetailRequests = 0
-  let tdDetailRequests = 0
-  let savingsRemovalSyncProductIds: Set<string> | null = null
-  let tdRemovalSyncProductIds: Set<string> | null = null
+  let savingsDetailJobsEnqueued = 0
+  let tdDetailJobsEnqueued = 0
+  const savingsProductIds = new Set<string>()
+  const tdProductIds = new Set<string>()
+  let savingsIndexSucceeded = false
+  let tdIndexSucceeded = false
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
-  let validationMs = 0
-  let writeMs = 0
-  const syncRemovalStatus = async (): Promise<void> => {
-    const bankName = lender.canonical_bank_name || lender.name
-    if (savingsRemovalSyncProductIds != null) {
-      const discoveredSavingsProductIds = Array.from(savingsRemovalSyncProductIds)
-      const started = Date.now()
-      const seenTouched = await markProductsSeen(env.DB, {
-        section: 'savings',
-        bankName,
-        productIds: discoveredSavingsProductIds,
-        collectionDate: job.collectionDate,
-        runId: job.runId,
-      })
-      const removedTouched = await markMissingProductsRemoved(env.DB, {
-        section: 'savings',
-        bankName,
-        activeProductIds: discoveredSavingsProductIds,
-      })
-      log.info('consumer', 'daily_savings_lender_fetch removal_sync_savings', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context:
-          `bank=${bankName} discovered=${discoveredSavingsProductIds.length}` +
-          ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
-          ` elapsed_ms=${elapsedMs(started)}`,
-      })
-    } else {
-      log.info('consumer', 'daily_savings_lender_fetch removal_sync_savings_skipped', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context: 'reason=no_successful_cdr_index_fetch',
-      })
-    }
-
-    if (tdRemovalSyncProductIds != null) {
-      const discoveredTdProductIds = Array.from(tdRemovalSyncProductIds)
-      const started = Date.now()
-      const seenTouched = await markProductsSeen(env.DB, {
-        section: 'term_deposits',
-        bankName,
-        productIds: discoveredTdProductIds,
-        collectionDate: job.collectionDate,
-        runId: job.runId,
-      })
-      const removedTouched = await markMissingProductsRemoved(env.DB, {
-        section: 'term_deposits',
-        bankName,
-        activeProductIds: discoveredTdProductIds,
-      })
-      log.info('consumer', 'daily_savings_lender_fetch removal_sync_td', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context:
-          `bank=${bankName} discovered=${discoveredTdProductIds.length}` +
-          ` seen_touched=${seenTouched} removed_touched=${removedTouched}` +
-          ` elapsed_ms=${elapsedMs(started)}`,
-      })
-    } else {
-      log.info('consumer', 'daily_savings_lender_fetch removal_sync_td_skipped', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context: 'reason=no_successful_cdr_index_fetch',
-      })
-    }
-  }
 
   log.info('consumer', 'daily_savings_lender_fetch collect', {
     runId: job.runId,
     lenderCode: job.lenderCode,
     context:
       `date=${job.collectionDate} endpoints=${uniqueCandidates.length}` +
-      ` endpoint_hosts=${endpointHosts || 'none'} product_cap=${productCap}` +
+      ` endpoint_hosts=${endpointHosts || 'none'}` +
       ` discovery_ms=${endpointDiscoveryMs}`,
   })
 
@@ -1661,23 +1984,39 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
       fetchSavingsProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions }),
       fetchTermDepositProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions }),
     ])
-    savingsProductIdsDiscovered += savingsProducts.productIds.length
-    tdProductIdsDiscovered += tdProducts.productIds.length
     indexPayloads += savingsProducts.rawPayloads.length + tdProducts.rawPayloads.length
+    const uniqueSavingsIds = Array.from(new Set(savingsProducts.productIds)).filter(Boolean)
+    const uniqueTdIds = Array.from(new Set(tdProducts.productIds)).filter(Boolean)
     const savingsIndexStatuses = summarizeStatusCodes(savingsProducts.rawPayloads.map((payload) => payload.status))
     const tdIndexStatuses = summarizeStatusCodes(tdProducts.rawPayloads.map((payload) => payload.status))
     const savingsIndexFetchSucceeded =
       savingsProducts.rawPayloads.length > 0 &&
       savingsProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
     if (savingsIndexFetchSucceeded) {
-      if (savingsRemovalSyncProductIds == null) savingsRemovalSyncProductIds = new Set<string>()
-      for (const productId of savingsProducts.productIds) savingsRemovalSyncProductIds.add(productId)
+      savingsIndexSucceeded = true
+      for (const productId of uniqueSavingsIds) savingsProductIds.add(productId)
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: uniqueSavingsIds,
+      })
     }
     const tdIndexFetchSucceeded =
       tdProducts.rawPayloads.length > 0 && tdProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
     if (tdIndexFetchSucceeded) {
-      if (tdRemovalSyncProductIds == null) tdRemovalSyncProductIds = new Set<string>()
-      for (const productId of tdProducts.productIds) tdRemovalSyncProductIds.add(productId)
+      tdIndexSucceeded = true
+      for (const productId of uniqueTdIds) tdProductIds.add(productId)
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: uniqueTdIds,
+      })
     }
     if (savingsProducts.pageLimitHit) {
       log.error('consumer', 'daily_savings_lender_fetch savings_index_page_limit_hit', {
@@ -1697,12 +2036,6 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
           ` next=${tdProducts.nextUrl || 'none'} discovered=${tdProducts.productIds.length}`,
       })
     }
-    const savingsRowsBefore = savingsRows.length
-    const tdRowsBefore = tdRows.length
-    const savingsDetailStatuses: number[] = []
-    const tdDetailStatuses: number[] = []
-    let savingsDetailRows = 0
-    let tdDetailRows = 0
 
     for (const payload of [...savingsProducts.rawPayloads, ...tdProducts.rawPayloads]) {
       await persistRawPayload(env, {
@@ -1710,92 +2043,13 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
         sourceUrl: payload.sourceUrl,
         payload: payload.body,
         httpStatus: payload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: uniqueSavingsIds.length > 0 ? 'savings' : 'term_deposits',
+        jobKind: 'daily_deposit_index_fetch',
+        collectionDate: job.collectionDate,
         notes: `savings_td_product_index lender=${job.lenderCode}`,
       })
-    }
-
-    const savingsProductIds = savingsProducts.productIds.slice(0, productCap)
-    if (savingsProducts.productIds.length > savingsProductIds.length) {
-      log.error('consumer', 'daily_savings_lender_fetch savings_product_cap_truncated', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context:
-          `endpoint=${shortUrlForLog(candidateEndpoint)}` +
-          ` discovered=${savingsProducts.productIds.length} used=${savingsProductIds.length}` +
-          ` dropped=${savingsProducts.productIds.length - savingsProductIds.length} product_cap=${productCap}`,
-      })
-    }
-    savingsDetailRequests += savingsProductIds.length
-    for (const productId of savingsProductIds) {
-      const detailStartedAt = Date.now()
-      const details = await fetchSavingsProductDetailRows({
-        lender,
-        endpointUrl: candidateEndpoint,
-        productId,
-        collectionDate: job.collectionDate,
-        cdrVersions: playbook.cdrVersions,
-      })
-      savingsDetailStatuses.push(details.rawPayload.status)
-      savingsDetailRows += details.savingsRows.length
-      await persistProductDetailPayload(env, job.runSource, {
-        sourceType: 'cdr_product_detail',
-        sourceUrl: details.rawPayload.sourceUrl,
-        payload: details.rawPayload.body,
-        httpStatus: details.rawPayload.status,
-        notes: `savings_product_detail lender=${job.lenderCode} product=${productId}`,
-      })
-      for (const row of details.savingsRows) savingsRows.push(row)
-      if (details.savingsRows.length === 0) {
-        log.debug('consumer', 'daily_savings_lender_fetch savings_detail_empty', {
-          runId: job.runId,
-          lenderCode: job.lenderCode,
-          context:
-            `endpoint=${shortUrlForLog(candidateEndpoint)} product=${productId}` +
-            ` status=${details.rawPayload.status} elapsed_ms=${elapsedMs(detailStartedAt)}`,
-        })
-      }
-    }
-
-    const tdProductIds = tdProducts.productIds.slice(0, productCap)
-    if (tdProducts.productIds.length > tdProductIds.length) {
-      log.error('consumer', 'daily_savings_lender_fetch td_product_cap_truncated', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context:
-          `endpoint=${shortUrlForLog(candidateEndpoint)}` +
-          ` discovered=${tdProducts.productIds.length} used=${tdProductIds.length}` +
-          ` dropped=${tdProducts.productIds.length - tdProductIds.length} product_cap=${productCap}`,
-      })
-    }
-    tdDetailRequests += tdProductIds.length
-    for (const productId of tdProductIds) {
-      const detailStartedAt = Date.now()
-      const details = await fetchTdProductDetailRows({
-        lender,
-        endpointUrl: candidateEndpoint,
-        productId,
-        collectionDate: job.collectionDate,
-        cdrVersions: playbook.cdrVersions,
-      })
-      tdDetailStatuses.push(details.rawPayload.status)
-      tdDetailRows += details.tdRows.length
-      await persistProductDetailPayload(env, job.runSource, {
-        sourceType: 'cdr_product_detail',
-        sourceUrl: details.rawPayload.sourceUrl,
-        payload: details.rawPayload.body,
-        httpStatus: details.rawPayload.status,
-        notes: `td_product_detail lender=${job.lenderCode} product=${productId}`,
-      })
-      for (const row of details.tdRows) tdRows.push(row)
-      if (details.tdRows.length === 0) {
-        log.debug('consumer', 'daily_savings_lender_fetch td_detail_empty', {
-          runId: job.runId,
-          lenderCode: job.lenderCode,
-          context:
-            `endpoint=${shortUrlForLog(candidateEndpoint)} product=${productId}` +
-            ` status=${details.rawPayload.status} elapsed_ms=${elapsedMs(detailStartedAt)}`,
-        })
-      }
     }
 
     const endpointSummary = {
@@ -1804,18 +2058,10 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
       td_index_payloads: tdProducts.rawPayloads.length,
       savings_index_statuses: savingsIndexStatuses,
       td_index_statuses: tdIndexStatuses,
-      savings_ids_discovered: savingsProducts.productIds.length,
-      td_ids_discovered: tdProducts.productIds.length,
-      savings_ids_used: savingsProductIds.length,
-      td_ids_used: tdProductIds.length,
-      savings_ids_sample: summarizeProductSample(savingsProducts.productIds),
-      td_ids_sample: summarizeProductSample(tdProducts.productIds),
-      savings_detail_statuses: summarizeStatusCodes(savingsDetailStatuses),
-      td_detail_statuses: summarizeStatusCodes(tdDetailStatuses),
-      savings_detail_rows: savingsDetailRows,
-      td_detail_rows: tdDetailRows,
-      savings_rows_collected: savingsRows.length - savingsRowsBefore,
-      td_rows_collected: tdRows.length - tdRowsBefore,
+      savings_ids_discovered: uniqueSavingsIds.length,
+      td_ids_discovered: uniqueTdIds.length,
+      savings_ids_sample: summarizeProductSample(uniqueSavingsIds),
+      td_ids_sample: summarizeProductSample(uniqueTdIds),
       elapsed_ms: elapsedMs(endpointStartedAt),
     }
     endpointDiagnostics.push(endpointSummary)
@@ -1827,61 +2073,82 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
         ` endpoint=${shortUrlForLog(candidateEndpoint)}` +
         ` index_payloads(s=${savingsProducts.rawPayloads.length},td=${tdProducts.rawPayloads.length})` +
         ` index_statuses(s=${serializeForLog(savingsIndexStatuses)},td=${serializeForLog(tdIndexStatuses)})` +
-        ` product_ids(s=${savingsProducts.productIds.length},td=${tdProducts.productIds.length})` +
-        ` used(s=${savingsProductIds.length},td=${tdProductIds.length})` +
-        ` detail_rows(s=${savingsDetailRows},td=${tdDetailRows})` +
-        ` collected(s=${savingsRows.length - savingsRowsBefore},td=${tdRows.length - tdRowsBefore})` +
-        ` detail_statuses(s=${serializeForLog(summarizeStatusCodes(savingsDetailStatuses))},td=${serializeForLog(
-          summarizeStatusCodes(tdDetailStatuses),
-        )})` +
+        ` product_ids(s=${uniqueSavingsIds.length},td=${uniqueTdIds.length})` +
         ` elapsed_ms=${endpointSummary.elapsed_ms}`,
     })
 
   }
   collectionMs = elapsedMs(collectStartedAt)
 
-  const validateStartedAt = Date.now()
-  const { accepted: savingsAccepted, dropped: savingsDropped } = splitValidatedSavingsRows(savingsRows)
-  const savingsDroppedReasons = summarizeDropReasons(savingsDropped)
-  const { accepted: tdAccepted, dropped: tdDropped } = splitValidatedTdRows(tdRows)
-  const tdDroppedReasons = summarizeDropReasons(tdDropped)
-  validationMs = elapsedMs(validateStartedAt)
+  const uniqueSavingsProductIds = Array.from(savingsProductIds)
+  const uniqueTdProductIds = Array.from(tdProductIds)
 
-  log.info('consumer', 'daily_savings_lender_fetch validation', {
-    runId: job.runId,
-    lenderCode: job.lenderCode,
-    context:
-      `savings(collected=${savingsRows.length},accepted=${savingsAccepted.length},dropped=${savingsDropped.length})` +
-      ` td(collected=${tdRows.length},accepted=${tdAccepted.length},dropped=${tdDropped.length})` +
-      ` reasons(s=${serializeForLog(savingsDroppedReasons)},td=${serializeForLog(tdDroppedReasons)})` +
-      ` dropped_samples(s=${summarizeProductSample(savingsDropped.map((item) => item.productId))},td=${summarizeProductSample(
-        tdDropped.map((item) => item.productId),
-      )})` +
-      ` validation_ms=${validationMs}`,
-  })
-
-  for (const row of savingsAccepted) {
-    row.runId = job.runId
-    row.runSource = job.runSource ?? 'scheduled'
+  if (savingsIndexSucceeded) {
+    await setLenderDatasetExpectedDetails(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'savings',
+      bankName,
+      collectionDate: job.collectionDate,
+      expectedDetailCount: uniqueSavingsProductIds.length,
+    })
   }
-  for (const row of tdAccepted) {
-    row.runId = job.runId
-    row.runSource = job.runSource ?? 'scheduled'
+  if (tdIndexSucceeded) {
+    await setLenderDatasetExpectedDetails(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'term_deposits',
+      bankName,
+      collectionDate: job.collectionDate,
+      expectedDetailCount: uniqueTdProductIds.length,
+    })
   }
 
-  const writeStartedAt = Date.now()
-  const [savingsWritten, tdWritten] = await Promise.all([
-    savingsAccepted.length > 0 ? upsertSavingsRateRows(env.DB, savingsAccepted) : Promise.resolve(0),
-    tdAccepted.length > 0 ? upsertTdRateRows(env.DB, tdAccepted) : Promise.resolve(0),
-  ])
-  writeMs = elapsedMs(writeStartedAt)
-  await syncRemovalStatus()
+  const savingsDetailEnqueue =
+    savingsIndexSucceeded && uniqueSavingsProductIds.length > 0
+      ? await enqueueProductDetailJobs(env, {
+          runId: job.runId,
+          runSource: job.runSource,
+          lenderCode: job.lenderCode,
+          dataset: 'savings',
+          collectionDate: job.collectionDate,
+          productIds: uniqueSavingsProductIds,
+        })
+      : { enqueued: 0 }
+  const tdDetailEnqueue =
+    tdIndexSucceeded && uniqueTdProductIds.length > 0
+      ? await enqueueProductDetailJobs(env, {
+          runId: job.runId,
+          runSource: job.runSource,
+          lenderCode: job.lenderCode,
+          dataset: 'term_deposits',
+          collectionDate: job.collectionDate,
+          productIds: uniqueTdProductIds,
+        })
+      : { enqueued: 0 }
+  const finalizeDatasets: DatasetKind[] = []
+  if (savingsIndexSucceeded) finalizeDatasets.push('savings')
+  if (tdIndexSucceeded) finalizeDatasets.push('term_deposits')
+  const finalizerEnqueue =
+    finalizeDatasets.length > 0
+      ? await enqueueLenderFinalizeJobs(env, {
+          runId: job.runId,
+          runSource: job.runSource,
+          lenderCode: job.lenderCode,
+          collectionDate: job.collectionDate,
+          datasets: finalizeDatasets,
+        })
+      : { enqueued: 0 }
 
-  log.info('consumer', 'daily_savings_lender_fetch write_completed', {
-    runId: job.runId,
-    lenderCode: job.lenderCode,
-    context: `written(s=${savingsWritten},td=${tdWritten}) write_ms=${writeMs}`,
-  })
+  savingsDetailJobsEnqueued = savingsDetailEnqueue.enqueued
+  tdDetailJobsEnqueued = tdDetailEnqueue.enqueued
+  const totalAdditionalJobs =
+    savingsDetailEnqueue.enqueued + tdDetailEnqueue.enqueued + finalizerEnqueue.enqueued
+  if (totalAdditionalJobs > 0) {
+    await addRunEnqueuedCounts(env.DB, job.runId, {
+      [job.lenderCode]: totalAdditionalJobs,
+    })
+  }
 
   await persistRawPayload(env, {
     sourceType: 'cdr_products',
@@ -1892,82 +2159,59 @@ async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLe
       collectionDate: job.collectionDate,
       fetchedAt: nowIso(),
       savings: {
-        inspected: savingsRows.length,
-        accepted: savingsAccepted.length,
-        dropped: savingsDropped.length,
-        written: savingsWritten,
-        reasons: savingsDroppedReasons,
+        discovered: uniqueSavingsProductIds.length,
+        detail_jobs_enqueued: savingsDetailJobsEnqueued,
+        index_succeeded: savingsIndexSucceeded,
       },
       term_deposits: {
-        inspected: tdRows.length,
-        accepted: tdAccepted.length,
-        dropped: tdDropped.length,
-        written: tdWritten,
-        reasons: tdDroppedReasons,
+        discovered: uniqueTdProductIds.length,
+        detail_jobs_enqueued: tdDetailJobsEnqueued,
+        index_succeeded: tdIndexSucceeded,
       },
       collection: {
         endpointsTried,
         indexPayloads,
-        savingsProductIdsDiscovered,
-        tdProductIdsDiscovered,
-        savingsDetailRequests,
-        tdDetailRequests,
       },
       endpointDiagnostics,
       timing: {
         endpointDiscoveryMs,
         collectionMs,
-        validationMs,
-        writeMs,
         totalMs: elapsedMs(startedAt),
       },
       source_mix: {
-        [job.runSource ?? 'scheduled']: savingsAccepted.length + tdAccepted.length,
+        [job.runSource ?? 'scheduled']: totalAdditionalJobs,
       },
     },
-    httpStatus: 200,
-    notes: `savings_td_quality_summary lender=${job.lenderCode}`,
+    httpStatus: finalizeDatasets.length > 0 ? 202 : 204,
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: savingsIndexSucceeded ? 'savings' : 'term_deposits',
+    jobKind: 'daily_deposit_index_fetch',
+    collectionDate: job.collectionDate,
+    notes: `savings_td_index_summary lender=${job.lenderCode}`,
   })
 
-  const savingsParsedTotal = savingsRows.length + tdRows.length
-  const savingsWrittenTotal = savingsWritten + tdWritten
-  const savingsShouldWarn = savingsWrittenTotal === 0
-
-  if (savingsParsedTotal === 0 && savingsWrittenTotal === 0) {
+  if (finalizeDatasets.length === 0) {
     log.warn('consumer', 'daily_savings_lender_fetch empty_result', {
       runId: job.runId,
       lenderCode: job.lenderCode,
       context:
         `date=${job.collectionDate} endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
-        ` product_ids(s=${savingsProductIdsDiscovered},td=${tdProductIdsDiscovered})` +
-        ` detail_requests(s=${savingsDetailRequests},td=${tdDetailRequests})` +
         ` endpoint_diagnostics=${serializeForLog(endpointDiagnostics)}` +
-        ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(startedAt)}`,
+        ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(startedAt)}`,
     })
+    return
   }
 
-  const savingsCompletionContext =
-    `savings=${savingsAccepted.length}/${savingsRows.length} dropped=${savingsDropped.length} written=${savingsWritten}` +
-    ` td=${tdAccepted.length}/${tdRows.length} dropped=${tdDropped.length} written=${tdWritten}` +
-    ` reasons(s=${JSON.stringify(savingsDroppedReasons)},td=${JSON.stringify(tdDroppedReasons)})` +
-    ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
-    ` product_ids(s=${savingsProductIdsDiscovered},td=${tdProductIdsDiscovered})` +
-    ` detail_requests(s=${savingsDetailRequests},td=${tdDetailRequests})` +
-    ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(startedAt)}`
-
-  if (savingsShouldWarn) {
-    log.warn('consumer', `daily_savings_lender_fetch completed`, {
-      runId: job.runId,
-      lenderCode: job.lenderCode,
-      context: `${savingsCompletionContext} completion=warn_no_writes`,
-    })
-  } else {
-    log.info('consumer', `daily_savings_lender_fetch completed`, {
-      runId: job.runId,
-      lenderCode: job.lenderCode,
-      context: savingsCompletionContext,
-    })
-  }
+  log.info('consumer', 'daily_savings_lender_fetch enqueued_detail_jobs', {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    context:
+      `products(s=${uniqueSavingsProductIds.length},td=${uniqueTdProductIds.length})` +
+      ` detail_jobs(s=${savingsDetailJobsEnqueued},td=${tdDetailJobsEnqueued})` +
+      ` finalizer_jobs=${finalizerEnqueue.enqueued}` +
+      ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(startedAt)}`,
+  })
 }
 
 async function processMessage(env: EnvBindings, message: IngestMessage): Promise<void> {
@@ -1976,6 +2220,9 @@ async function processMessage(env: EnvBindings, message: IngestMessage): Promise
   }
   if (message.kind === 'product_detail_fetch') {
     return handleProductDetailJob(env, message)
+  }
+  if (message.kind === 'lender_finalize') {
+    return handleLenderFinalizeJob(env, message)
   }
   if (message.kind === 'backfill_snapshot_fetch') {
     return handleBackfillSnapshotJob(env, message)

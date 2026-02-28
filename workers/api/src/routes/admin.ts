@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { requireAdmin } from '../auth/admin'
 import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
+import { getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
@@ -11,6 +12,7 @@ import { adminLogRoutes } from './admin-logs'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import { log } from '../utils/logger'
+import type { DatasetKind } from '../../../../packages/shared/src'
 
 export const adminRoutes = new Hono<AppContext>()
 
@@ -59,6 +61,104 @@ adminRoutes.get('/runs/:runId', async (c) => {
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
     run,
+  })
+})
+
+adminRoutes.get('/diagnostics/fetch-events', async (c) => {
+  const dataset = c.req.query('dataset') as DatasetKind | undefined
+  const lenderCode = c.req.query('lender_code') || undefined
+  const limit = Number(c.req.query('limit') || 100)
+  const events = await getRecentFetchEvents(c.env.DB, { dataset, lenderCode, limit })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    count: events.length,
+    events,
+  })
+})
+
+adminRoutes.get('/diagnostics/anomalies', async (c) => {
+  const dataset = c.req.query('dataset') || undefined
+  const lenderCode = c.req.query('lender_code') || undefined
+  const limit = Math.max(1, Math.min(1000, Math.floor(Number(c.req.query('limit') || 100))))
+  const where: string[] = []
+  const binds: Array<string | number> = []
+  if (dataset) {
+    where.push('dataset_kind = ?')
+    binds.push(dataset)
+  }
+  if (lenderCode) {
+    where.push('lender_code = ?')
+    binds.push(lenderCode)
+  }
+  binds.push(limit)
+  const result = await c.env.DB
+    .prepare(
+      `SELECT
+         id, fetch_event_id, run_id, lender_code, dataset_kind, product_id, series_key,
+         collection_date, reason, severity, candidate_json, normalized_candidate_json, created_at
+       FROM ingest_anomalies
+       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<Record<string, unknown>>()
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    count: (result.results ?? []).length,
+    rows: result.results ?? [],
+  })
+})
+
+adminRoutes.get('/diagnostics/series', async (c) => {
+  const dataset = c.req.query('dataset') || undefined
+  const lenderCode = c.req.query('lender_code') || undefined
+  const limit = Math.max(1, Math.min(1000, Math.floor(Number(c.req.query('limit') || 100))))
+  const where: string[] = []
+  const binds: Array<string | number> = []
+  if (dataset) {
+    where.push('sc.dataset_kind = ?')
+    binds.push(dataset)
+  }
+  if (lenderCode) {
+    where.push('lrs.lender_code = ?')
+    binds.push(lenderCode)
+  }
+  binds.push(limit)
+  const result = await c.env.DB
+    .prepare(
+      `SELECT
+         sc.dataset_kind,
+         sc.series_key,
+         sc.bank_name,
+         sc.product_id,
+         sc.product_code,
+         sc.product_name,
+         sc.first_seen_collection_date,
+         sc.last_seen_collection_date,
+         sc.is_removed,
+         sc.removed_at,
+         sps.last_seen_run_id,
+         sps.last_seen_collection_date
+       FROM series_catalog sc
+       LEFT JOIN series_presence_status sps
+         ON sps.series_key = sc.series_key
+       LEFT JOIN lender_dataset_runs lrs
+         ON lrs.run_id = sps.last_seen_run_id
+         AND lrs.dataset_kind = sc.dataset_kind
+       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+       ORDER BY sc.last_seen_collection_date DESC, sc.bank_name ASC
+       LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<Record<string, unknown>>()
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    count: (result.results ?? []).length,
+    rows: result.results ?? [],
   })
 })
 

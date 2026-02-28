@@ -51,4 +51,22 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('is_removed INTEGER NOT NULL DEFAULT 0')
     expect(sql).toContain('PRIMARY KEY (section, bank_name, product_id)')
   })
+
+  it('includes forward-integrity catalog and fetch event migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0017_forward_integrity.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS product_catalog')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS series_catalog')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS fetch_events')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS ingest_anomalies')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS latest_home_loan_series')
+  })
+
+  it('includes async export jobs migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0018_export_jobs.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS export_jobs')
+    expect(sql).toContain("export_scope IN ('rates', 'timeseries')")
+    expect(sql).toContain("status IN ('queued', 'processing', 'completed', 'failed')")
+  })
 })

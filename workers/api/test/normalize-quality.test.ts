@@ -35,9 +35,9 @@ describe('strict numeric parsing', () => {
     expect(parseComparisonRate(0.061)).toBe(6.1)
   })
 
-  it('rejects ambiguous or out-of-range values', () => {
+  it('rejects ambiguous parsing while allowing broad but finite rates', () => {
     expect(parseInterestRate('LVR 80 to 90%')).toBeNull()
-    expect(parseInterestRate('80%')).toBeNull()
+    expect(parseInterestRate('80%')).toBe(80)
     expect(parseComparisonRate('1.20% and 1.40%')).toBeNull()
   })
 })
@@ -48,10 +48,9 @@ describe('row validation', () => {
     expect(verdict.ok).toBe(true)
   })
 
-  it('rejects weak product name (not rate-like)', () => {
+  it('accepts weak product names so they can be classified later instead of being dropped', () => {
     const verdict = validateNormalizedRow(validHomeLoanRow({ productName: 'Tooltip disclaimer text' }))
-    expect(verdict.ok).toBe(false)
-    expect(verdict.ok === false && verdict.reason).toBe('product_name_not_rate_like')
+    expect(verdict.ok).toBe(true)
   })
 
   it('rejects invalid collection_date', () => {
@@ -100,16 +99,14 @@ describe('row validation', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_run_source')
   })
 
-  it('rejects interest_rate out of bounds', () => {
+  it('accepts unusually high but still finite rates for anomaly review', () => {
     const verdict = validateNormalizedRow(validHomeLoanRow({ interestRate: 100 }))
-    expect(verdict.ok).toBe(false)
-    expect(verdict.ok === false && verdict.reason).toBe('interest_rate_out_of_bounds')
+    expect(verdict.ok).toBe(true)
   })
 
-  it('rejects comparison_rate anomalous (too far above interest)', () => {
+  it('accepts anomalous comparison-rate gaps for later classification', () => {
     const verdict = validateNormalizedRow(validHomeLoanRow({ interestRate: 5, comparisonRate: 20 }))
-    expect(verdict.ok).toBe(false)
-    expect(verdict.ok === false && verdict.reason).toBe('comparison_rate_anomalous')
+    expect(verdict.ok).toBe(true)
   })
 
   it('rejects empty bank_name', () => {

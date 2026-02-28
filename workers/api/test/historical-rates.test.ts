@@ -41,9 +41,9 @@ function invalidHomeLoanRow(overrides: Partial<NormalizedRateRow> = {}): Normali
 }
 
 describe('upsertHistoricalRateRow', () => {
-  it('throws with invalid_normalized_rate_row reason when interest_rate out of bounds', async () => {
+  it('throws with invalid_normalized_rate_row reason when interest_rate is structurally implausible', async () => {
     const db = makeMockD1()
-    const row = invalidHomeLoanRow({ interestRate: 100 })
+    const row = invalidHomeLoanRow({ interestRate: 150 })
     await expect(upsertHistoricalRateRow(db, row)).rejects.toThrow(/invalid_normalized_rate_row:interest_rate_out_of_bounds/)
   })
 
