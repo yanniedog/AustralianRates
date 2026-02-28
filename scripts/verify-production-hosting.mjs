@@ -109,6 +109,12 @@ async function main() {
 
   console.log(JSON.stringify({ ok: !failed, checked_at: new Date().toISOString(), summary }, null, 2))
   if (failed) {
+    const tlsFailed = summary.some((s) => !s.tls?.ok)
+    if (tlsFailed) {
+      console.error(
+        '\nNote: TLS failed from this host. The site may still work in a browser or from another network (e.g. corporate proxy or local TLS stack can cause this). In Cloudflare dashboard set SSL/TLS -> Edge Certificates -> Minimum TLS Version to 1.2.'
+      )
+    }
     process.exitCode = 1
   }
 }

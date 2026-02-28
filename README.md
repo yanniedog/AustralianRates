@@ -126,6 +126,7 @@ See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (r
    - Build output directory: `site`
    - This generates `site/version.json` from `CF_PAGES_COMMIT_SHA` so the footer can show `In sync` or `Behind`. Without it, footer status shows `Unknown` and deploy version is unavailable.
    - To set via API: create a Cloudflare API token with Pages Edit, set `CLOUDFLARE_API_TOKEN` (e.g. in `.env`), then run `npm run pages:set-build`. Then trigger a new deploy.
+   - **If the site shows "Behind" the latest commit:** Production is serving an older Pages build. Either push a new commit (to the production branch) to trigger a build, trigger from the Cloudflare dashboard (Workers & Pages → australianrates → Deployments → "Retry" or "Create deployment"), or run `npm run pages:trigger` to start a new build via API. After the build completes, the footer will show "In sync" when the deployed commit matches GitHub.
 3. Add custom domains `www.australianrates.com` and `australianrates.com` to the Pages project.
 4. Deploy API worker and set route:
    - `www.australianrates.com/api/home-loan-rates/*`
@@ -145,6 +146,18 @@ After DNS propagation, both:
 - `https://australianrates.com`
 
 should resolve to Pages, and `/api/home-loan-rates/*` should be served by the API Worker route.
+
+**Fixing TLS (e.g. tlsv1 alert internal error):** If HTTPS fails with an SSL/TLS handshake error on both apex and www:
+
+1. In Cloudflare dashboard, open the zone **australianrates.com**.
+2. **SSL/TLS** → Overview: set encryption mode to **Full** (or Full (strict)).
+3. **SSL/TLS** → Edge Certificates: ensure **Universal SSL** is **On**. If it was off, turn it on; edge certificates can take up to 15–24 hours to provision.
+4. **SSL/TLS** → Edge Certificates: set **Minimum TLS Version** to **1.2** (avoids legacy TLS issues from some clients).
+5. **DNS**: ensure **www** and **@** (apex) each have a **CNAME** to `australianrates.pages.dev` with proxy status **Proxied** (orange cloud).
+
+If verification still fails from your machine but the site loads in a browser, the failure may be environment-specific (local TLS stack, proxy, or firewall). Try from another network or device.
+
+Alternatively, run from repo root: `npm run fix:cloudflare-dns-tls` with a token in `.env` that has Zone (Read, Edit), DNS (Edit), and SSL and TLS (Edit). Use `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_FULL_ACCESS_TOKEN`.
 
 ## Daily operations runbook
 
