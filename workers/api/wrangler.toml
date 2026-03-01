@@ -63,7 +63,7 @@ invocation_logs = true
 
 [triggers]
 # Daily ingest only (Wayback cron removed for now).
-crons = ["5 * * * *"]
+crons = ["5 * * * *", "*/15 * * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"

@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { extractLenderRatesFromHtml } from '../src/ingest/html-rate-parser'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const FIXTURES_DIR = resolve(__dirname, 'fixtures')
 
 const lender = {
   code: 'anz',
@@ -9,16 +15,13 @@ const lender = {
   seed_rate_urls: ['https://www.anz.com.au/personal/home-loans/interest-rates/'],
 }
 
+function loadFixture(name: string): string {
+  return readFileSync(resolve(FIXTURES_DIR, name), 'utf8')
+}
+
 describe('html rate parser strictness', () => {
-  it('drops LVR-only percentage text', () => {
-    const html = `
-      <html>
-        <body>
-          <p>Estimated LVR 80% and 90% example only</p>
-          <p>Disclaimer terms and conditions 60%</p>
-        </body>
-      </html>
-    `
+  it('drops LVR-only percentage text when using real-data fixture', () => {
+    const html = loadFixture('real-lender-rate-page-no-rates.html')
     const parsed = extractLenderRatesFromHtml({
       lender,
       html,
@@ -30,13 +33,8 @@ describe('html rate parser strictness', () => {
     expect(parsed.rows.length).toBe(0)
   })
 
-  it('extracts a plausible home-loan row with confidence', () => {
-    const html = `
-      <table>
-        <tr><td>ANZ Variable Home Loan Owner Occupied Rate</td><td>6.19%</td></tr>
-        <tr><td>Comparison Rate</td><td>6.25%</td></tr>
-      </table>
-    `
+  it('extracts a plausible home-loan row with confidence from real-data fixture', () => {
+    const html = loadFixture('real-lender-rate-page-with-rates.html')
     const parsed = extractLenderRatesFromHtml({
       lender,
       html,

@@ -4,6 +4,7 @@ export type LogEntry = {
   level: LogLevel
   source: string
   message: string
+  code?: string
   context?: string
   runId?: string
   lenderCode?: string
@@ -20,6 +21,7 @@ export function initLogger(db: D1Database): void {
 
 function formatConsole(entry: LogEntry): string {
   const parts = [`[${entry.level.toUpperCase()}] [${entry.source}]`, entry.message]
+  if (entry.code) parts.push(`code=${entry.code}`)
   if (entry.runId) parts.push(`run=${entry.runId}`)
   if (entry.lenderCode) parts.push(`lender=${entry.lenderCode}`)
   if (entry.context) parts.push(entry.context)
@@ -31,20 +33,39 @@ async function persist(entry: LogEntry): Promise<void> {
   try {
     await _db
       .prepare(
-        `INSERT INTO global_log (level, source, message, context, run_id, lender_code)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+        `INSERT INTO global_log (level, source, message, code, context, run_id, lender_code)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
       )
       .bind(
         entry.level,
         entry.source,
         entry.message.slice(0, 2000),
+        entry.code ? entry.code.slice(0, 100) : null,
         entry.context ? entry.context.slice(0, 4000) : null,
         entry.runId ?? null,
         entry.lenderCode ?? null,
       )
       .run()
   } catch {
-    // avoid recursive logging failures
+    // Backward compatibility for environments without the `code` column.
+    try {
+      await _db
+        .prepare(
+          `INSERT INTO global_log (level, source, message, context, run_id, lender_code)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+        )
+        .bind(
+          entry.level,
+          entry.source,
+          entry.message.slice(0, 2000),
+          entry.context ? entry.context.slice(0, 4000) : null,
+          entry.runId ?? null,
+          entry.lenderCode ?? null,
+        )
+        .run()
+    } catch {
+      // avoid recursive logging failures
+    }
   }
 }
 
@@ -90,38 +111,73 @@ export const log = {
   },
 }
 
+/** Message thrown when code filter is used but global_log.code column is missing (pre-0019). */
+export const CODE_FILTER_UNSUPPORTED_MESSAGE =
+  'Log code filter requires global_log.code column (migration 0019). Database schema may not be up to date.'
+
 export async function queryLogs(
   db: D1Database,
-  opts: { level?: LogLevel; source?: string; limit?: number; offset?: number } = {},
+  opts: { level?: LogLevel; source?: string; code?: string; limit?: number; offset?: number } = {},
 ): Promise<{ entries: Array<Record<string, unknown>>; total: number }> {
-  const where: string[] = []
-  const binds: Array<string | number> = []
+  const whereBase: string[] = []
+  const baseBinds: Array<string | number> = []
 
   if (opts.level) {
-    where.push('level = ?')
-    binds.push(opts.level)
+    whereBase.push('level = ?')
+    baseBinds.push(opts.level)
   }
   if (opts.source) {
-    where.push('source = ?')
-    binds.push(opts.source)
+    whereBase.push('source = ?')
+    baseBinds.push(opts.source)
   }
-
-  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const whereBaseClause = whereBase.length ? `WHERE ${whereBase.join(' AND ')}` : ''
+  const whereWithCodeClause =
+    opts.code != null
+      ? whereBase.length
+        ? `${whereBaseClause} AND code = ?`
+        : 'WHERE code = ?'
+      : whereBaseClause
+  const bindsWithCode = opts.code != null ? [...baseBinds, opts.code] : [...baseBinds]
   const limit = Math.min(Math.max(1, opts.limit ?? 1000), 10000)
   const offset = Math.max(0, opts.offset ?? 0)
 
-  const countSql = `SELECT COUNT(*) AS total FROM global_log ${whereClause}`
-  const countResult = await db
-    .prepare(countSql)
-    .bind(...binds)
-    .first<{ total: number }>()
-  const total = Number(countResult?.total ?? 0)
+  let total = 0
+  if (opts.code != null) {
+    try {
+      const countResult = await db
+        .prepare(`SELECT COUNT(*) AS total FROM global_log ${whereWithCodeClause}`)
+        .bind(...bindsWithCode)
+        .first<{ total: number }>()
+      total = Number(countResult?.total ?? 0)
+    } catch (err) {
+      throw new Error(CODE_FILTER_UNSUPPORTED_MESSAGE, { cause: err })
+    }
+  } else {
+    const countResult = await db
+      .prepare(`SELECT COUNT(*) AS total FROM global_log ${whereBaseClause}`)
+      .bind(...baseBinds)
+      .first<{ total: number }>()
+    total = Number(countResult?.total ?? 0)
+  }
 
-  const dataSql = `SELECT id, ts, level, source, message, context, run_id, lender_code FROM global_log ${whereClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
-  const dataResult = await db
-    .prepare(dataSql)
-    .bind(...binds, limit, offset)
-    .all<Record<string, unknown>>()
+  const dataSqlWithCode = `SELECT id, ts, level, source, message, code, context, run_id, lender_code FROM global_log ${whereWithCodeClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
+  let dataResult: { results?: Array<Record<string, unknown>> }
+  if (opts.code != null) {
+    try {
+      dataResult = await db
+        .prepare(dataSqlWithCode)
+        .bind(...bindsWithCode, limit, offset)
+        .all<Record<string, unknown>>()
+    } catch (err) {
+      throw new Error(CODE_FILTER_UNSUPPORTED_MESSAGE, { cause: err })
+    }
+  } else {
+    const dataSqlLegacy = `SELECT id, ts, level, source, message, context, run_id, lender_code FROM global_log ${whereBaseClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
+    dataResult = await db
+      .prepare(dataSqlLegacy)
+      .bind(...baseBinds, limit, offset)
+      .all<Record<string, unknown>>()
+  }
 
   return { entries: dataResult.results ?? [], total }
 }

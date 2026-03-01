@@ -13,6 +13,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     await ensureAppConfigTable(env.DB)
   } catch (error) {
     log.error('scheduler', 'Failed to ensure app_config schema', {
+      code: 'app_config_unavailable',
       context: (error as Error)?.message || String(error),
     })
     return {

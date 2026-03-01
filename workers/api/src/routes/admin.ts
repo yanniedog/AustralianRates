@@ -8,6 +8,7 @@ import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
+import { adminHealthRoutes } from './admin-health'
 import { adminLogRoutes } from './admin-logs'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
@@ -27,6 +28,7 @@ adminRoutes.route('/', adminConfigRoutes)
 adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
+adminRoutes.route('/', adminHealthRoutes)
 
 adminRoutes.get('/runs', async (c) => {
   const limit = Number(c.req.query('limit') || 25)

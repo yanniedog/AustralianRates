@@ -156,6 +156,7 @@ export async function upsertTdRateRows(db: D1Database, rows: NormalizedTdRow[]):
       written += 1
     } catch (error) {
       log.error('db', `td_upsert_failed product=${row.productId} bank=${row.bankName}`, {
+        code: 'upsert_failed',
         context: (error as Error)?.message || String(error),
         lenderCode: row.bankName,
       })

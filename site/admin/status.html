@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Admin Status | AustralianRates</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="admin-common.css">
+    <script src="../theme.js"></script>
+    <style>
+        .admin-status { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+        .admin-status .back { margin-bottom: 1rem; }
+        .admin-status .back a { color: var(--brand); text-decoration: none; }
+        .admin-status h1 { margin: 0 0 0.75rem; font-size: 1.6rem; }
+        .admin-status .actions { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .admin-status .actions button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; }
+        .admin-status .actions button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+        .admin-status .status-line { color: var(--muted); font-size: 0.9rem; }
+        .admin-status .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: var(--panel-shadow); }
+        .admin-status .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+        .admin-status .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; border: 1px solid var(--line); }
+        .admin-status .pill.ok { background: rgba(0, 160, 90, 0.15); border-color: rgba(0, 160, 90, 0.4); }
+        .admin-status .pill.bad { background: rgba(200, 40, 40, 0.12); border-color: rgba(200, 40, 40, 0.4); }
+        .admin-status table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .admin-status th, .admin-status td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.35rem; text-align: left; vertical-align: top; }
+        .admin-status th { color: var(--muted); font-weight: 600; }
+        .admin-status .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
+        .admin-status .hint-links a { margin-right: 0.75rem; color: var(--brand); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-status" id="main-content" tabindex="-1">
+        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
+        <h1>Status dashboard</h1>
+        <div class="actions">
+            <button type="button" class="primary" id="run-check-btn">Run check now</button>
+            <button type="button" id="refresh-btn">Refresh</button>
+            <span id="status-line" class="status-line">Loading status...</span>
+        </div>
+
+        <section class="card">
+            <h2>Overall</h2>
+            <div id="overall-grid" class="grid"></div>
+        </section>
+
+        <section class="card">
+            <h2>E2E alignment</h2>
+            <div id="e2e-grid" class="grid"></div>
+        </section>
+
+        <section class="card">
+            <h2>Component checks</h2>
+            <div id="components-wrap"></div>
+        </section>
+
+        <section class="card">
+            <h2>Data integrity checks</h2>
+            <div id="integrity-wrap"></div>
+        </section>
+
+        <section class="card">
+            <h2>Recent issues and suggested actions</h2>
+            <div id="issues-wrap"></div>
+            <div class="hint-links">
+                <a href="logs.html">Logs</a>
+                <a href="runs.html">Runs</a>
+                <a href="config.html">Configuration</a>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>History</h2>
+            <div id="history-wrap"></div>
+        </section>
+    </main>
+    <script src="admin-portal.js"></script>
+    <script src="../frame.js"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+            var portal = window.AR.AdminPortal;
+            var statusEl = document.getElementById('status-line');
+            var overallEl = document.getElementById('overall-grid');
+            var e2eEl = document.getElementById('e2e-grid');
+            var componentsEl = document.getElementById('components-wrap');
+            var integrityEl = document.getElementById('integrity-wrap');
+            var issuesEl = document.getElementById('issues-wrap');
+            var historyEl = document.getElementById('history-wrap');
+
+            function esc(v) {
+                return String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            }
+
+            function boolPill(ok) {
+                return '<span class="pill ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'OK' : 'Attention') + '</span>';
+            }
+
+            function cardCell(label, value) {
+                return '<div><div class="status-line">' + esc(label) + '</div><div>' + value + '</div></div>';
+            }
+
+            function renderOverall(latest) {
+                if (!latest) {
+                    overallEl.innerHTML = '<div>No health runs recorded yet.</div>';
+                    return;
+                }
+                overallEl.innerHTML = [
+                    cardCell('Latest run', '<span class="mono">' + esc(latest.run_id) + '</span>'),
+                    cardCell('Checked at', esc(latest.checked_at)),
+                    cardCell('Trigger', esc(latest.trigger_source)),
+                    cardCell('Overall status', boolPill(!!latest.overall_ok)),
+                    cardCell('Duration', esc(String(latest.duration_ms || 0)) + ' ms'),
+                    cardCell('Failures', esc(String((latest.failures || []).length || 0))),
+                ].join('');
+            }
+
+            function renderE2E(latest) {
+                var e2e = latest && latest.e2e ? latest.e2e : null;
+                if (!e2e) {
+                    e2eEl.innerHTML = '<div>No E2E result available.</div>';
+                    return;
+                }
+                var criteria = e2e.criteria || {};
+                e2eEl.innerHTML = [
+                    cardCell('Aligned', boolPill(!!e2e.aligned)),
+                    cardCell('Reason code', '<span class="mono">' + esc(e2e.reasonCode || 'n/a') + '</span>'),
+                    cardCell('Scheduler criterion', boolPill(!!criteria.scheduler)),
+                    cardCell('Runs progress criterion', boolPill(!!criteria.runsProgress)),
+                    cardCell('API latest-data criterion', boolPill(!!criteria.apiServesLatest)),
+                    cardCell('Detail', esc(e2e.reasonDetail || 'None')),
+                ].join('');
+            }
+
+            function renderComponents(latest) {
+                var rows = latest && Array.isArray(latest.components) ? latest.components : [];
+                if (!rows.length) {
+                    componentsEl.innerHTML = '<div>No component results available.</div>';
+                    return;
+                }
+                componentsEl.innerHTML = '<table><thead><tr><th>Component</th><th>Status</th><th>HTTP</th><th>Duration</th><th>Detail</th></tr></thead><tbody>' +
+                    rows.map(function (r) {
+                        return '<tr>' +
+                            '<td class="mono">' + esc(r.key) + '</td>' +
+                            '<td>' + boolPill(!!r.ok) + '</td>' +
+                            '<td>' + esc(r.status) + '</td>' +
+                            '<td>' + esc(r.duration_ms) + ' ms</td>' +
+                            '<td>' + esc(r.detail || '') + '</td>' +
+                            '</tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            function renderIntegrity(latest) {
+                var integrity = latest && latest.integrity ? latest.integrity : null;
+                var checks = integrity && Array.isArray(integrity.checks) ? integrity.checks : [];
+                if (!checks.length) {
+                    integrityEl.innerHTML = '<div>No integrity checks available.</div>';
+                    return;
+                }
+                integrityEl.innerHTML = '<table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>' +
+                    checks.map(function (c) {
+                        return '<tr>' +
+                            '<td class="mono">' + esc(c.name) + '</td>' +
+                            '<td>' + boolPill(!!c.passed) + '</td>' +
+                            '<td><span class="mono">' + esc(JSON.stringify(c.detail || {})) + '</span></td>' +
+                            '</tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            function renderIssues(latest) {
+                var issues = latest && Array.isArray(latest.actionable) ? latest.actionable : [];
+                if (!issues.length) {
+                    issuesEl.innerHTML = '<div>No actionable issues detected from recent warn/error logs.</div>';
+                    return;
+                }
+                issuesEl.innerHTML = '<table><thead><tr><th>Code</th><th>Title</th><th>Count</th><th>Action</th><th>Latest</th></tr></thead><tbody>' +
+                    issues.map(function (i) {
+                        return '<tr>' +
+                            '<td class="mono">' + esc(i.code) + '</td>' +
+                            '<td>' + esc(i.title) + '</td>' +
+                            '<td>' + esc(i.count) + '</td>' +
+                            '<td>' + esc(i.action) + '</td>' +
+                            '<td class="mono">' + esc(i.latest_ts || '') + '</td>' +
+                            '</tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            function renderHistory(history) {
+                if (!Array.isArray(history) || history.length === 0) {
+                    historyEl.innerHTML = '<div>No history yet.</div>';
+                    return;
+                }
+                historyEl.innerHTML = '<table><thead><tr><th>Time</th><th>Trigger</th><th>Overall</th><th>E2E</th><th>Reason</th><th>Duration</th></tr></thead><tbody>' +
+                    history.map(function (h) {
+                        return '<tr>' +
+                            '<td class="mono">' + esc(h.checked_at) + '</td>' +
+                            '<td>' + esc(h.trigger_source) + '</td>' +
+                            '<td>' + boolPill(!!h.overall_ok) + '</td>' +
+                            '<td>' + boolPill(!!(h.e2e && h.e2e.aligned)) + '</td>' +
+                            '<td class="mono">' + esc(h.e2e && h.e2e.reasonCode ? h.e2e.reasonCode : '') + '</td>' +
+                            '<td>' + esc(h.duration_ms) + ' ms</td>' +
+                            '</tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            async function loadStatus() {
+                statusEl.textContent = 'Loading status...';
+                try {
+                    var res = await portal.fetchAdmin('/health?limit=48');
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    var data = await res.json();
+                    renderOverall(data.latest);
+                    renderE2E(data.latest);
+                    renderComponents(data.latest);
+                    renderIntegrity(data.latest);
+                    renderIssues(data.latest);
+                    renderHistory(data.history || []);
+                    statusEl.textContent = data.latest
+                        ? ('Last checked: ' + (data.latest.checked_at || 'n/a'))
+                        : 'No health check runs yet.';
+                } catch (err) {
+                    statusEl.textContent = 'Failed to load status.';
+                    overallEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+                }
+            }
+
+            async function runNow() {
+                statusEl.textContent = 'Running manual health check...';
+                var btn = document.getElementById('run-check-btn');
+                btn.disabled = true;
+                try {
+                    var res = await portal.fetchAdmin('/health/run', { method: 'POST' });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    await loadStatus();
+                    statusEl.textContent = 'Manual health check completed.';
+                } catch (err) {
+                    statusEl.textContent = 'Manual health check failed.';
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+
+            document.getElementById('refresh-btn').addEventListener('click', loadStatus);
+            document.getElementById('run-check-btn').addEventListener('click', runNow);
+            loadStatus();
+        })();
+    </script>
+</body>
+</html>
