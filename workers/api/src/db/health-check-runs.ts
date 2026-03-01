@@ -82,17 +82,24 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
   }
 }
 
+/**
+ * Returns the latest health check run, or null if none or if migration 0019 not applied.
+ */
 export async function getLatestHealthCheckRun(db: D1Database): Promise<HealthCheckRunRow | null> {
-  const row = await db
-    .prepare(
-      `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
-              e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
-       FROM health_check_runs
-       ORDER BY checked_at DESC
-       LIMIT 1`,
-    )
-    .first<HealthCheckRunRow>()
-  return row ?? null
+  try {
+    const row = await db
+      .prepare(
+        `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
+                e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+         FROM health_check_runs
+         ORDER BY checked_at DESC
+         LIMIT 1`,
+      )
+      .first<HealthCheckRunRow>()
+    return row ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
