@@ -240,7 +240,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       source: options.source,
     }
   } catch (error) {
-    log.error('pipeline', `Daily run ${runId} failed: ${(error as Error)?.message || String(error)}`, { runId })
+    log.error('pipeline', `Daily run ${runId} failed: ${(error as Error)?.message || String(error)}`, {
+      code: 'daily_run_failed',
+      runId,
+    })
     await markRunFailed(env.DB, runId, `daily_run_enqueue_failed: ${(error as Error)?.message || String(error)}`)
     throw error
   }
@@ -291,7 +294,10 @@ export async function triggerBackfillRun(env: EnvBindings, input: BackfillRunReq
       enqueued: enqueue.enqueued,
     }
   } catch (error) {
-    log.error('pipeline', `Backfill run ${runId} failed: ${(error as Error)?.message || String(error)}`, { runId })
+    log.error('pipeline', `Backfill run ${runId} failed: ${(error as Error)?.message || String(error)}`, {
+      code: 'backfill_run_failed',
+      runId,
+    })
     await markRunFailed(env.DB, runId, `backfill_enqueue_failed: ${(error as Error)?.message || String(error)}`)
     throw error
   }

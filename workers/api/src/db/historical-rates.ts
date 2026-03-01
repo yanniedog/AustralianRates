@@ -181,6 +181,7 @@ export async function upsertHistoricalRateRows(db: D1Database, rows: NormalizedR
       written += 1
     } catch (error) {
       log.error('db', `upsert_failed product=${row.productId} bank=${row.bankName} date=${row.collectionDate}`, {
+        code: 'upsert_failed',
         context: (error as Error)?.message || String(error),
         lenderCode: row.bankName,
       })

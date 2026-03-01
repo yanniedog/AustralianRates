@@ -1,0 +1,17 @@
+{
+  "bankName": "ANZ",
+  "collectionDate": "2025-02-20",
+  "productId": "sav-1",
+  "productName": "ANZ Online Savings Account",
+  "accountType": "savings",
+  "rateType": "base",
+  "interestRate": 4.5,
+  "depositTier": "all",
+  "minBalance": null,
+  "maxBalance": null,
+  "conditions": null,
+  "monthlyFee": null,
+  "sourceUrl": "https://example.com/savings",
+  "dataQualityFlag": "cdr_live",
+  "confidenceScore": 0.9
+}

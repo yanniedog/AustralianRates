@@ -1,0 +1,15 @@
+{
+  "bankName": "ANZ",
+  "collectionDate": "2025-02-20",
+  "productId": "td-1",
+  "productName": "ANZ Term Deposit 12 months",
+  "termMonths": 12,
+  "interestRate": 4.25,
+  "depositTier": "all",
+  "minDeposit": null,
+  "maxDeposit": null,
+  "interestPayment": "at_maturity",
+  "sourceUrl": "https://example.com/td",
+  "dataQualityFlag": "cdr_live",
+  "confidenceScore": 0.9
+}

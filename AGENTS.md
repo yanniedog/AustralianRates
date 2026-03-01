@@ -68,6 +68,16 @@ These rules are mandatory and override any conflicting preference.
 
 - **product_key** is the canonical identity for linking rates over time for the same product. It is defined as `bank_name|product_id|security_purpose|repayment_type|lvr_tier|rate_structure`. Any chart or export that shows rate over time must group or filter by `product_key` so each series is one specific product tracked longitudinally.
 
+## Project Philosophy: Real Data Only
+
+Tests and tooling must not use mock or simulated data. This is project philosophy and a hard rule.
+
+- **Philosophy:** We test against real data so that passing tests indicate the system works in production. Fake rows, stubbed APIs, and in-memory fake databases validate behavior in an artificial world and can hide real-world failures.
+- **Principle:** All test data must be real. Use real D1 (e.g. vitest-pool-workers with migrations), real API responses, or fixture files captured from production or real ingest runs. Pure unit tests that only use literal inputs (e.g. parsing a string) are fine; any business data in tests must come from a real source.
+- **Hard rule:** No mock or simulated data in tests. Do not use makeMockD1, vi.mock with mockResolvedValue of business data, stub fetch returning fake JSON, or hand-crafted row/response objects. Tests that require real D1/Queue/API may be skipped until run with vitest-pool-workers or integration; they must not be implemented with mocks.
+
+See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and .cursor/rules/no-mock-test-data.mdc.
+
 ## Code Quality Standards
 
 - **Max file size**: 300 lines (flag for review), 500+ lines (trigger refactor).

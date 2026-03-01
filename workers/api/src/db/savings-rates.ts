@@ -162,6 +162,7 @@ export async function upsertSavingsRateRows(db: D1Database, rows: NormalizedSavi
       written += 1
     } catch (error) {
       log.error('db', `savings_upsert_failed product=${row.productId} bank=${row.bankName}`, {
+        code: 'upsert_failed',
         context: (error as Error)?.message || String(error),
         lenderCode: row.bankName,
       })

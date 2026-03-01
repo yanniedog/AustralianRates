@@ -1,0 +1,28 @@
+---
+description: "Project philosophy and rule: no mock or simulated data in tests"
+alwaysApply: true
+---
+
+# Real Data Only: Philosophy and Rule
+
+## Philosophy
+
+This project treats **real data only** in tests as both a quality stance and a non-negotiable rule. Tests that use mock or simulated data validate behavior against an artificial world; they can pass while production fails on real shapes, real APIs, and real persistence. We want tests to reflect reality so that passing tests mean the system works with real data.
+
+## Rule (Must Follow)
+
+- **No mock or simulated data in tests.** All test data must be real.
+- **Use:** Real D1 (e.g. via vitest-pool-workers with migrations), real API responses, or fixture files captured from production or real ingest runs.
+- **Do not use:**
+  - `makeMockD1`, `makeMock*`, or any in-memory fake D1/database
+  - `vi.mock()` with `mockResolvedValue` / `mockReturnValue` of business data (rows, API response bodies)
+  - `stubGlobal('fetch', ...)` returning fake JSON or HTML
+  - Hand-crafted row/response objects (e.g. `validHomeLoanRow()`) — use real-data fixtures instead
+- **Allowed:** Pure unit tests that only use literal inputs (e.g. parsing a string, testing a pure function with constants).
+- **Tests that need D1, Queue, or live API:** Run them with vitest-pool-workers or integration; until then, skip with a clear comment. Do not implement them with mocks.
+
+## References
+
+- **Mission/philosophy:** docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only)
+- **Enforcement:** AGENTS.md (Project Philosophy: Real Data Only; Hard Enforcement Rules)
+- **Fixtures:** workers/api/test/fixtures/README.md (fixtures must be real data)

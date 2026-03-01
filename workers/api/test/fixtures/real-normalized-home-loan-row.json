@@ -1,0 +1,17 @@
+{
+  "bankName": "ANZ",
+  "collectionDate": "2025-02-20",
+  "productId": "anz-1",
+  "productName": "ANZ Variable Home Loan",
+  "securityPurpose": "owner_occupied",
+  "repaymentType": "principal_and_interest",
+  "rateStructure": "variable",
+  "lvrTier": "lvr_80-85%",
+  "featureSet": "basic",
+  "interestRate": 5.99,
+  "comparisonRate": 6.1,
+  "annualFee": null,
+  "sourceUrl": "https://example.com/rates",
+  "dataQualityFlag": "cdr_live",
+  "confidenceScore": 0.95
+}
