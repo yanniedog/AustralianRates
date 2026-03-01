@@ -15,5 +15,5 @@ tmp/
 test-screenshots/
 docs/CLOUDFLARE_USAGE.md
 *.log
-
+logs/
 *australianrates-log*.txt
