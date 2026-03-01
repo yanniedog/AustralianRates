@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { SITE_HEALTH_CRON_EXPRESSION } from '../constants'
 import { getLatestHealthCheckRun, insertHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
 import { runSiteHealthChecks } from '../pipeline/site-health'
 import type { AppContext } from '../types'
@@ -62,6 +63,7 @@ adminHealthRoutes.get('/health', async (c) => {
     ok: true,
     latest: mapHealthRow(latest),
     history: history.map((row) => mapHealthRow(row)).filter(Boolean),
+    nextCronExpression: SITE_HEALTH_CRON_EXPRESSION,
     auth_mode: c.get('adminAuthState')?.mode || null,
   })
 })
