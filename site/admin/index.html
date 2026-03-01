@@ -7,16 +7,17 @@
     <title>Admin Login | AustralianRates</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="admin-common.css">
     <script src="../theme.js"></script>
     <style>
-        .admin-login { max-width: 420px; margin: 4rem auto; padding: 2rem; background: var(--card, #fff); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        .admin-login h1 { margin: 0 0 1.5rem; font-size: 1.5rem; color: var(--text, #10243f); }
-        .admin-login label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--muted, #506178); }
-        .admin-login input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid var(--line, #ccc); border-radius: 8px; font-size: 1rem; margin-bottom: 1rem; }
-        .admin-login button { width: 100%; padding: 12px; background: var(--brand, #0f766e); color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+        .admin-login { max-width: 420px; margin: 4rem auto; padding: 2rem; background: var(--card); border-radius: 12px; box-shadow: var(--panel-shadow); }
+        .admin-login h1 { margin: 0 0 1.5rem; font-size: 1.5rem; color: var(--text); }
+        .admin-login label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--muted); }
+        .admin-login input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 1rem; margin-bottom: 1rem; background: var(--input-bg); color: var(--text); }
+        .admin-login button { width: 100%; padding: 12px; background: var(--brand); color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
         .admin-login button:hover { opacity: 0.9; }
         .admin-login button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .admin-login .error { margin-top: 1rem; padding: 10px; background: #fef2f2; color: #b91c1c; border-radius: 8px; font-size: 0.9rem; display: none; }
+        .admin-login .error { margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
         .admin-login .error.visible { display: block; }
     </style>
 </head>
@@ -37,6 +38,7 @@
         <div class="error" id="login-error" role="alert"></div>
     </main>
     <script src="admin-portal.js"></script>
+    <script src="../frame.js"></script>
     <script>
         (function () {
             var form = document.getElementById('login-form');

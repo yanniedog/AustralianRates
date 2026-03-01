@@ -17,7 +17,6 @@ export const TD_API_BASE_PATH = '/api/term-deposit-rates'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
 export const DAILY_SCHEDULE_CRON_EXPRESSION = '5 * * * *'
-export const HOURLY_WAYBACK_CRON_EXPRESSION = '0 * * * *'
 export const SCHEDULE_CRON_EXPRESSION = DAILY_SCHEDULE_CRON_EXPRESSION
 // Hourly cron should keep attempting the active Melbourne collection date until coverage is complete.
 export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 0

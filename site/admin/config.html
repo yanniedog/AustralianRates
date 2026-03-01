@@ -7,6 +7,7 @@
     <title>Admin Config | AustralianRates</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="admin-common.css">
     <script src="../theme.js"></script>
     <style>
         .admin-config { max-width: 900px; margin: 0 auto; padding: 2rem; }
@@ -15,24 +16,21 @@
         .admin-config .back a { color: var(--brand); text-decoration: none; }
         .admin-config section { margin-bottom: 2rem; }
         .admin-config h2 { font-size: 1.1rem; margin: 0 0 0.75rem; color: var(--muted); }
-        .admin-config table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .admin-config table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; box-shadow: var(--panel-shadow); }
         .admin-config th, .admin-config td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
-        .admin-config th { background: rgba(0,0,0,0.04); font-weight: 600; }
         .admin-config .actions { white-space: nowrap; }
-        .admin-config .actions button { margin-right: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 0.85rem; }
+        .admin-config .actions button { margin-right: 6px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
         .admin-config .actions button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
         .admin-config .add-row { margin-top: 1rem; }
-        .admin-config .add-row input { padding: 8px 12px; margin-right: 8px; border: 1px solid var(--line); border-radius: 6px; width: 180px; }
+        .admin-config .add-row input { padding: 8px 12px; margin-right: 8px; border: 1px solid var(--line); border-radius: 6px; width: 180px; background: var(--input-bg); color: var(--text); }
         .admin-config .add-row button { padding: 8px 16px; background: var(--brand); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
         .admin-config .env-table .value { font-family: monospace; font-size: 0.9rem; }
         .admin-config .message { padding: 10px; border-radius: 8px; margin-bottom: 1rem; display: none; }
         .admin-config .message.visible { display: block; }
-        .admin-config .message.error { background: #fef2f2; color: #b91c1c; }
-        .admin-config .message.success { background: #f0fdf4; color: #166534; }
         .admin-config .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
         .admin-config .rate-check-row { margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
         .admin-config .rate-check-row label { min-width: 140px; }
-        .admin-config .rate-check-row input[type="number"] { width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
+        .admin-config .rate-check-row input[type="number"] { width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--input-bg); color: var(--text); }
         .admin-config .rate-check-label { min-width: 140px; color: var(--muted); }
     </style>
 </head>
@@ -81,6 +79,7 @@
     </main>
     <script src="../ar-time.js"></script>
     <script src="admin-portal.js"></script>
+    <script src="../frame.js"></script>
     <script>
         (function () {
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;

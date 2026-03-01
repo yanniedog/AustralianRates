@@ -7,25 +7,22 @@
     <title>Logs | Admin | AustralianRates</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="admin-common.css">
     <script src="../theme.js"></script>
     <style>
         .admin-logs { max-width: 640px; margin: 0 auto; padding: 2rem; }
         .admin-logs h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
         .admin-logs .back { margin-bottom: 1rem; }
         .admin-logs .back a { color: var(--brand); text-decoration: none; }
-        .admin-logs section { margin-bottom: 2rem; padding: 1rem; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 8px; }
+        .admin-logs section { margin-bottom: 2rem; padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
         .admin-logs h2 { font-size: 1.1rem; margin: 0 0 0.75rem; color: var(--muted); }
         .admin-logs .log-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
         .admin-logs .log-actions button { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
         .admin-logs .log-actions button.primary { background: var(--brand); color: #fff; border: none; }
-        .admin-logs .log-actions button.danger { background: transparent; border: 1px solid #b91c1c; color: #b91c1c; }
-        .admin-logs .log-actions button.danger:hover { background: #fef2f2; }
         .admin-logs .log-stats { font-size: 0.9rem; color: var(--muted); margin-top: 0.5rem; }
         .admin-logs .hint { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
         .admin-logs .message { margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
         .admin-logs .message.visible { display: block; }
-        .admin-logs .message.error { background: #fef2f2; color: #b91c1c; }
-        .admin-logs .message.success { background: #f0fdf4; color: #166534; }
     </style>
 </head>
 <body>

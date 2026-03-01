@@ -7,6 +7,7 @@
     <title>Admin Database | AustralianRates</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="admin-common.css">
     <script src="../theme.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css">
     <style>
@@ -15,28 +16,24 @@
         .admin-db .back { margin-bottom: 1rem; }
         .admin-db .back a { color: var(--brand); text-decoration: none; }
         .admin-db .toolbar { margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-        .admin-db .toolbar select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 200px; }
-        .admin-db .toolbar button { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-weight: 500; }
+        .admin-db .toolbar select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 200px; background: var(--input-bg); color: var(--text); }
+        .admin-db .toolbar button { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; font-weight: 500; }
         .admin-db .toolbar button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
         .admin-db .toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
         .admin-db .pagination { margin: 0.75rem 0; font-size: 0.9rem; color: var(--muted); }
-        .admin-db .pagination button { margin: 0 4px; padding: 4px 10px; cursor: pointer; border-radius: 4px; border: 1px solid var(--line); background: #fff; }
+        .admin-db .pagination button { margin: 0 4px; padding: 4px 10px; cursor: pointer; border-radius: 4px; }
         .admin-db #db-grid { min-height: 300px; }
         .admin-db .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
         .admin-db .modal.visible { display: flex; }
-        .admin-db .modal-inner { background: var(--card, #fff); border-radius: 12px; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; padding: 1.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        .admin-db .modal-inner { background: var(--card); border-radius: 12px; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; padding: 1.5rem; box-shadow: var(--panel-shadow); }
         .admin-db .modal-inner h3 { margin: 0 0 1rem; }
         .admin-db .modal-inner label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--muted); }
-        .admin-db .modal-inner input, .admin-db .modal-inner textarea { width: 100%; padding: 8px 10px; margin-bottom: 0.75rem; border: 1px solid var(--line); border-radius: 6px; box-sizing: border-box; }
-        .admin-db .modal-inner input[readonly] { background: #f1f5f9; color: var(--muted); }
+        .admin-db .modal-inner input, .admin-db .modal-inner textarea { width: 100%; padding: 8px 10px; margin-bottom: 0.75rem; border: 1px solid var(--line); border-radius: 6px; box-sizing: border-box; background: var(--input-bg); color: var(--text); }
         .admin-db .modal-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
         .admin-db .modal-actions button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; }
         .admin-db .modal-actions .save { background: var(--brand); color: #fff; }
-        .admin-db .modal-actions .cancel { background: #e2e8f0; color: var(--text); }
         .admin-db .message { padding: 10px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; display: none; }
         .admin-db .message.visible { display: block; }
-        .admin-db .message.error { background: #fef2f2; color: #b91c1c; }
-        .admin-db .message.success { background: #f0fdf4; color: #166534; }
     </style>
 </head>
 <body>
@@ -73,6 +70,7 @@
     </main>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script src="admin-portal.js"></script>
+    <script src="../frame.js"></script>
     <script>
         (function () {
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;

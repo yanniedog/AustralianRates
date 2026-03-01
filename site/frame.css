@@ -1,8 +1,8 @@
 .site-header {
     width: 100%;
     padding: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(5, 8, 20, 0.95);
+    border-bottom: 1px solid var(--header-border);
+    background: var(--header-bg);
     position: sticky;
     top: 0;
     z-index: 50;
@@ -23,7 +23,7 @@
     margin: 0;
     font-size: 1.05rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--header-text);
     letter-spacing: -0.01em;
     white-space: nowrap;
 }
@@ -44,7 +44,7 @@
 .site-nav-theme-btn {
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--header-text-muted);
     padding: 6px;
     border-radius: 6px;
     cursor: pointer;
@@ -56,8 +56,8 @@
 }
 
 .site-nav-theme-btn:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--header-text);
+    background: var(--line);
 }
 
 .site-nav-theme-btn .theme-icon {
@@ -69,7 +69,7 @@
 .site-nav-refresh-btn {
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--header-text-muted);
     font-size: 0.82rem;
     font-weight: 500;
     padding: 6px 12px;
@@ -81,12 +81,12 @@
 }
 
 .site-nav-refresh-btn:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--header-text);
+    background: var(--line);
 }
 
 .site-nav a {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--header-text-muted);
     text-decoration: none;
     font-size: 0.82rem;
     font-weight: 500;
@@ -98,8 +98,8 @@
 
 .site-nav a:hover,
 .site-nav a.active {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--header-text);
+    background: var(--line);
 }
 
 .site-nav-spacer {
@@ -110,7 +110,7 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--header-text-muted);
     text-decoration: none;
     font-size: 0.8rem;
     padding: 5px 10px;
@@ -119,8 +119,8 @@
 }
 
 .site-nav-github:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--header-text);
+    background: var(--line);
 }
 
 .site-nav-github svg {
@@ -132,8 +132,8 @@
 .site-footer {
     width: 100%;
     border-top: 1px solid var(--line);
-    background: rgba(5, 8, 20, 0.95);
-    color: rgba(255, 255, 255, 0.65);
+    background: var(--footer-bg);
+    color: var(--footer-text);
     font-size: 0.78rem;
     margin-top: 32px;
 }
@@ -149,13 +149,13 @@
 }
 
 .site-footer a {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--footer-link);
     text-decoration: none;
     transition: color 0.15s;
 }
 
 .site-footer a:hover {
-    color: #fff;
+    color: var(--header-text);
     text-decoration: underline;
 }
 
@@ -206,7 +206,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--line);
     padding: 3px 8px;
     border-radius: 4px;
     font-size: 0.74rem;
@@ -218,10 +218,10 @@
     left: 0;
     margin-bottom: 6px;
     min-width: 180px;
-    background: rgba(15, 18, 28, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--card);
+    border: 1px solid var(--line);
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--panel-shadow);
     padding: 6px 0;
     z-index: 100;
 }
@@ -232,7 +232,7 @@
     padding: 8px 14px;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--text);
     font-size: 0.8rem;
     text-align: left;
     text-decoration: none;
@@ -241,8 +241,8 @@
 }
 
 .footer-log-popup-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--line);
+    color: var(--text);
 }
 
 .footer-log-count {
@@ -262,12 +262,12 @@
 }
 
 .footer-legal-links a {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--footer-link);
     text-decoration: none;
 }
 
 .footer-legal-links a:hover {
-    color: #fff;
+    color: var(--header-text);
     text-decoration: underline;
 }
 
