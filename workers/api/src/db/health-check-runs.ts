@@ -28,9 +28,27 @@ export type InsertHealthCheckRunInput = {
   failuresJson: string
 }
 
+const HEALTH_RUN_RETENTION_DAYS = 7
+
+/**
+ * Prune health_check_runs: delete rows older than HEALTH_RUN_RETENTION_DAYS.
+ * No-op on error (e.g. table missing).
+ */
+export async function pruneHealthCheckRuns(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare(`DELETE FROM health_check_runs WHERE checked_at < datetime('now', ?1)`)
+      .bind(`-${HEALTH_RUN_RETENTION_DAYS} days`)
+      .run()
+  } catch {
+    // Table may not exist or schema may differ; ignore.
+  }
+}
+
 /**
  * Persist a health check run. No-op if migration 0019 has not been applied (table missing);
  * callers can rely on the run result in the response or log without persistence.
+ * After insert, prunes runs older than retention window and caps total rows.
  */
 export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCheckRunInput): Promise<void> {
   try {
@@ -57,6 +75,7 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
         input.failuresJson,
       )
       .run()
+    await pruneHealthCheckRuns(db)
   } catch {
     // Table may not exist if migration 0019_health_checks_and_log_codes.sql not yet applied.
     // Health checks still run; persistence is best-effort.
