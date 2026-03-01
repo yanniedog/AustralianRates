@@ -1,7 +1,6 @@
 import {
   DAILY_SCHEDULE_CRON_EXPRESSION,
   DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
-  HOURLY_WAYBACK_CRON_EXPRESSION,
   MIN_RATE_CHECK_INTERVAL_MINUTES,
 } from '../constants'
 import { getDatasetCoverageProgressRows, type DatasetCoverageRow } from './dataset-coverage'
@@ -109,7 +108,6 @@ export async function getAdminRealtimeSnapshot(
     scheduler: {
       cron_expression: DAILY_SCHEDULE_CRON_EXPRESSION,
       daily_cron_expression: DAILY_SCHEDULE_CRON_EXPRESSION,
-      hourly_cron_expression: HOURLY_WAYBACK_CRON_EXPRESSION,
       default_interval_minutes: DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
       effective_min_interval_minutes: MIN_RATE_CHECK_INTERVAL_MINUTES,
     },

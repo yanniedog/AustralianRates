@@ -62,8 +62,8 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Hourly ingest cadence + hourly Wayback coverage backfill.
-crons = ["5 * * * *", "0 * * * *"]
+# Daily ingest only (Wayback cron removed for now).
+crons = ["5 * * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"

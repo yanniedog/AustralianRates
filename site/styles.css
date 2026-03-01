@@ -14,6 +14,23 @@
     --section-tab-bg: rgba(255, 255, 255, 0.5);
     --section-tab-hover: rgba(255, 255, 255, 0.8);
     --panel-shadow: 0 18px 44px rgba(10, 24, 52, 0.1);
+    --msg-error-bg: #fef2f2;
+    --msg-error-text: #b91c1c;
+    --msg-success-bg: #f0fdf4;
+    --msg-success-text: #166534;
+    --header-bg: rgba(255, 255, 255, 0.95);
+    --header-border: rgba(36, 64, 99, 0.16);
+    --header-text: #10243f;
+    --header-text-muted: #506178;
+    --footer-bg: rgba(248, 250, 252, 0.98);
+    --footer-text: #506178;
+    --footer-link: #10243f;
+    --btn-secondary-bg: #e2e8f0;
+    --btn-secondary-border: #cbd5e1;
+    --danger-border: #b91c1c;
+    --danger-hover-bg: #fef2f2;
+    --danger-btn-bg: #b91c1c;
+    --danger-btn-text: #fff;
 }
 
 [data-theme="dark"] {
@@ -32,6 +49,23 @@
     --section-tab-bg: rgba(255, 255, 255, 0.08);
     --section-tab-hover: rgba(255, 255, 255, 0.14);
     --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+    --msg-error-bg: rgba(248, 113, 113, 0.18);
+    --msg-error-text: #fca5a5;
+    --msg-success-bg: rgba(34, 197, 94, 0.18);
+    --msg-success-text: #86efac;
+    --header-bg: rgba(15, 20, 25, 0.98);
+    --header-border: rgba(255, 255, 255, 0.12);
+    --header-text: #e6edf3;
+    --header-text-muted: #8b9cb3;
+    --footer-bg: rgba(15, 20, 25, 0.98);
+    --footer-text: #8b9cb3;
+    --footer-link: #e6edf3;
+    --btn-secondary-bg: rgba(255, 255, 255, 0.12);
+    --btn-secondary-border: rgba(255, 255, 255, 0.25);
+    --danger-border: #f87171;
+    --danger-hover-bg: rgba(248, 113, 113, 0.15);
+    --danger-btn-bg: #dc2626;
+    --danger-btn-text: #fff;
 }
 
 * {

@@ -1,0 +1,68 @@
+/**
+ * Admin portal shared styles. Uses theme variables from ../styles.css so dark/light modes work.
+ * Load after ../styles.css and ../frame.css.
+ */
+.admin-login .error,
+.admin-clear .message.error,
+.admin-config .message.error,
+.admin-db .message.error,
+.admin-logs .message.error {
+    background: var(--msg-error-bg);
+    color: var(--msg-error-text);
+}
+.admin-clear .message.success,
+.admin-config .message.success,
+.admin-db .message.success,
+.admin-logs .message.success {
+    background: var(--msg-success-bg);
+    color: var(--msg-success-text);
+}
+/* Secondary / default buttons: visible in both themes */
+.admin-config .actions button:not(.primary),
+.admin-db .toolbar button:not(.primary),
+.admin-db .pagination button {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--line);
+}
+.admin-db .modal-inner input[readonly] {
+    background: var(--input-bg);
+    color: var(--muted);
+}
+.admin-db .modal-actions .cancel,
+.admin-runs .actions button.secondary {
+    background: var(--btn-secondary-bg);
+    color: var(--text);
+    border: 1px solid var(--btn-secondary-border);
+}
+.admin-db .modal-actions .save {
+    background: var(--brand);
+    color: #fff;
+    border: 1px solid var(--brand);
+}
+/* Danger primary button (e.g. Clear data): high contrast in both modes */
+.admin-clear button.primary.danger {
+    background: var(--danger-btn-bg);
+    color: var(--danger-btn-text);
+    border: 1px solid var(--danger-btn-bg);
+}
+.admin-runs .run-item,
+.admin-runs .summary-cell {
+    background: var(--card);
+}
+.admin-runs pre {
+    background: var(--output-bg);
+    color: var(--text);
+    border: 1px solid var(--line);
+}
+.admin-logs .log-actions button.danger {
+    border: 1px solid var(--danger-border);
+    color: var(--msg-error-text);
+    background: transparent;
+}
+.admin-logs .log-actions button.danger:hover {
+    background: var(--danger-hover-bg);
+}
+.admin-config th {
+    background: var(--input-bg);
+}
