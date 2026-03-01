@@ -46,7 +46,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         fetch_event_id,
         run_id,
         run_source
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
       ON CONFLICT(bank_name, collection_date, product_id, lvr_tier, rate_structure, security_purpose, repayment_type, run_source) DO UPDATE SET
         product_code = excluded.product_code,
         product_name = excluded.product_name,
