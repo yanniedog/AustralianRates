@@ -42,6 +42,7 @@
         <div class="actions">
             <button type="button" class="primary" id="run-check-btn">Run check now</button>
             <button type="button" id="refresh-btn">Refresh</button>
+            <button type="button" id="copy-diagnose-btn">Copy diagnose command</button>
             <span id="status-line" class="status-line">Loading status...</span>
         </div>
 
@@ -229,9 +230,11 @@
                     renderIntegrity(data.latest);
                     renderIssues(data.latest);
                     renderHistory(data.history || []);
-                    statusEl.textContent = data.latest
+                    var line = data.latest
                         ? ('Last checked: ' + (data.latest.checked_at || 'n/a'))
                         : 'No health check runs yet.';
+                    if (data.nextCronExpression) line += ' \u00b7 Next: ' + data.nextCronExpression;
+                    statusEl.textContent = line;
                 } catch (err) {
                     statusEl.textContent = 'Failed to load status.';
                     overallEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
@@ -256,6 +259,17 @@
 
             document.getElementById('refresh-btn').addEventListener('click', loadStatus);
             document.getElementById('run-check-btn').addEventListener('click', runNow);
+            document.getElementById('copy-diagnose-btn').addEventListener('click', function () {
+                var cmd = 'npm run diagnose:api';
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(cmd).then(function () {
+                        var btn = document.getElementById('copy-diagnose-btn');
+                        var orig = btn.textContent;
+                        btn.textContent = 'Copied';
+                        setTimeout(function () { btn.textContent = orig; }, 2000);
+                    });
+                }
+            });
             loadStatus();
         })();
     </script>
