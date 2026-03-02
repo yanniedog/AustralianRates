@@ -1,3 +1,7 @@
+import type { FetchRetryEnv, FetchWithTimeoutMeta } from '../../utils/fetch-with-timeout'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../utils/fetch-with-timeout'
+import { log } from '../../utils/logger'
+
 type FetchJsonResult = {
   ok: boolean
   status: number
@@ -6,29 +10,91 @@ type FetchJsonResult = {
   text: string
 }
 
+export type FetchRequestContext = {
+  env?: FetchRetryEnv
+  sourceName?: string
+  runId?: string
+  lenderCode?: string
+}
+
+function fallbackMeta(error: unknown): FetchWithTimeoutMeta {
+  return {
+    attempts: 1,
+    elapsed_ms: 0,
+    timed_out: false,
+    status: null,
+    retry_reasons: [],
+    last_error_class: 'network',
+  }
+}
+
+function logUpstreamRequest(
+  url: string,
+  meta: FetchWithTimeoutMeta,
+  context?: FetchRequestContext,
+  level: 'info' | 'warn' = 'info',
+): void {
+  const sourceName = context?.sourceName || 'cdr_http'
+  const retryReasons = meta.retry_reasons.length > 0 ? meta.retry_reasons.join('|') : 'none'
+  const messageContext =
+    `source=${sourceName} host=${hostFromUrl(url)}` +
+    ` elapsed_ms=${meta.elapsed_ms} upstream_ms=${meta.elapsed_ms}` +
+    ` attempts=${meta.attempts} retry_count=${Math.max(0, meta.attempts - 1)}` +
+    ` timed_out=${meta.timed_out ? 1 : 0} timeout=${meta.timed_out ? 1 : 0}` +
+    ` status=${meta.status ?? 0} last_error_class=${meta.last_error_class}` +
+    ` retry_reasons=${retryReasons}`
+
+  if (level === 'warn') {
+    log.warn('ingest', 'upstream_fetch', {
+      runId: context?.runId,
+      lenderCode: context?.lenderCode,
+      context: messageContext,
+    })
+    return
+  }
+
+  log.info('ingest', 'upstream_fetch', {
+    runId: context?.runId,
+    lenderCode: context?.lenderCode,
+    context: messageContext,
+  })
+}
+
 async function fetchTextWithRetries(
   url: string,
   retries = 2,
   headers: Record<string, string> = { accept: 'application/json' },
+  context?: FetchRequestContext,
 ): Promise<{ ok: boolean; status: number; text: string }> {
-  let lastStatus = 0
-  let lastText = ''
-  for (let i = 0; i <= retries; i += 1) {
-    try {
-      const res = await fetch(url, {
+  try {
+    const { response, meta } = await fetchWithTimeout(
+      url,
+      {
         headers,
-      })
-      const text = await res.text()
-      lastStatus = res.status
-      lastText = text
-      if (res.ok) {
-        return { ok: true, status: res.status, text }
-      }
-    } catch (error) {
-      lastText = (error as Error)?.message || String(error)
+      },
+      {
+        env: context?.env,
+        maxRetries: retries,
+      },
+    )
+    logUpstreamRequest(url, meta, context)
+    const text = await response.text()
+    return {
+      ok: response.ok,
+      status: response.status,
+      text,
+    }
+  } catch (error) {
+    const timeoutError = error instanceof FetchWithTimeoutError ? error : null
+    const meta = timeoutError?.meta ?? fallbackMeta(error)
+    logUpstreamRequest(url, meta, context, 'warn')
+    const message = (error as Error)?.message || String(error)
+    return {
+      ok: false,
+      status: meta.status ?? 500,
+      text: message,
     }
   }
-  return { ok: false, status: lastStatus || 500, text: lastText }
 }
 
 function parseJsonSafe(text: string): unknown {
@@ -39,8 +105,8 @@ function parseJsonSafe(text: string): unknown {
   }
 }
 
-export async function fetchJson(url: string): Promise<FetchJsonResult> {
-  const response = await fetchTextWithRetries(url, 2, { accept: 'application/json' })
+export async function fetchJson(url: string, context?: FetchRequestContext): Promise<FetchJsonResult> {
+  const response = await fetchTextWithRetries(url, 2, { accept: 'application/json' }, context)
   const data = parseJsonSafe(response.text)
   return {
     ok: response.ok && data != null,
@@ -60,7 +126,7 @@ function parseSupportedVersions(body: string): number[] {
     .filter((x) => Number.isFinite(x))
 }
 
-export async function fetchCdrJson(url: string, versions: number[]): Promise<FetchJsonResult> {
+export async function fetchCdrJson(url: string, versions: number[], context?: FetchRequestContext): Promise<FetchJsonResult> {
   const tried = new Set<number>()
   const queue = [...versions]
   while (queue.length > 0) {
@@ -68,61 +134,63 @@ export async function fetchCdrJson(url: string, versions: number[]): Promise<Fet
     if (!Number.isFinite(version) || tried.has(version)) continue
     tried.add(version)
 
-    try {
-      const res = await fetch(url, {
-        headers: {
-          accept: 'application/json',
-          'x-v': String(version),
-          'x-min-v': '1',
-        },
-      })
-      const text = await res.text()
-      const data = parseJsonSafe(text)
-      if (res.ok && data != null) {
-        return {
-          ok: true,
-          status: res.status,
-          url,
-          data,
-          text,
-        }
+    const res = await fetchTextWithRetries(
+      url,
+      2,
+      {
+        accept: 'application/json',
+        'x-v': String(version),
+        'x-min-v': '1',
+      },
+      {
+        ...context,
+        sourceName: context?.sourceName || 'cdr_http',
+      },
+    )
+    const data = parseJsonSafe(res.text)
+    if (res.ok && data != null) {
+      return {
+        ok: true,
+        status: res.status,
+        url,
+        data,
+        text: res.text,
       }
-      if (res.status === 406) {
-        const advertised = parseSupportedVersions(text)
-        for (const x of advertised) {
-          if (!tried.has(x)) queue.push(x)
-        }
+    }
+    if (res.status === 406) {
+      const advertised = parseSupportedVersions(res.text)
+      for (const x of advertised) {
+        if (!tried.has(x)) queue.push(x)
       }
-    } catch {
-      // keep trying alternate versions
     }
   }
 
   for (const fallbackVersion of [1, 2, 3, 4, 5, 6]) {
     if (tried.has(fallbackVersion)) continue
-    try {
-      const res = await fetch(url, {
-        headers: {
-          accept: 'application/json',
-          'x-v': String(fallbackVersion),
-          'x-min-v': '1',
-        },
-      })
-      const text = await res.text()
-      const data = parseJsonSafe(text)
-      if (res.ok && data != null) {
-        return {
-          ok: true,
-          status: res.status,
-          url,
-          data,
-          text,
-        }
+    const res = await fetchTextWithRetries(
+      url,
+      2,
+      {
+        accept: 'application/json',
+        'x-v': String(fallbackVersion),
+        'x-min-v': '1',
+      },
+      {
+        ...context,
+        sourceName: context?.sourceName || 'cdr_http',
+      },
+    )
+    const data = parseJsonSafe(res.text)
+    if (res.ok && data != null) {
+      return {
+        ok: true,
+        status: res.status,
+        url,
+        data,
+        text: res.text,
       }
-    } catch {
-      // continue
     }
   }
 
-  return fetchJson(url)
+  return fetchJson(url, context)
 }

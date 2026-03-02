@@ -1,6 +1,6 @@
 import { CDR_REGISTER_DISCOVERY_URL } from '../constants'
 import { discoverProductsEndpoint } from '../ingest/cdr'
-import type { LenderConfig } from '../types'
+import type { EnvBindings, LenderConfig } from '../types'
 import { nowIso } from '../utils/time'
 
 export async function getCachedEndpoint(
@@ -78,6 +78,7 @@ export async function refreshEndpointCache(
   db: D1Database,
   lenders: LenderConfig[],
   ttlHours = 24,
+  env?: Pick<EnvBindings, 'FETCH_TIMEOUT_MS' | 'FETCH_MAX_RETRIES' | 'FETCH_RETRY_BASE_MS' | 'FETCH_RETRY_CAP_MS'>,
 ): Promise<{ refreshed: number; failed: string[] }> {
   const now = Date.now()
   const expiresAt = new Date(now + ttlHours * 3600 * 1000).toISOString()
@@ -85,7 +86,10 @@ export async function refreshEndpointCache(
   let refreshed = 0
 
   for (const lender of lenders) {
-    const discovered = await discoverProductsEndpoint(lender)
+    const discovered = await discoverProductsEndpoint(lender, {
+      env,
+      lenderCode: lender.code,
+    })
     if (!discovered) {
       failed.push(lender.code)
       continue

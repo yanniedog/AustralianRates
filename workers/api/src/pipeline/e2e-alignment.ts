@@ -1,5 +1,7 @@
 import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from '../constants'
 import type { EnvBindings } from '../types'
+import { FetchWithTimeoutError, fetchJsonWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
 
 export type E2EReasonCode =
@@ -95,17 +97,48 @@ function normalizeOrigin(input: string): string {
   return String(input || '').replace(/\/+$/, '')
 }
 
-async function apiHasTargetDate(origin: string, path: string, targetCollectionDate: string): Promise<boolean> {
+async function apiHasTargetDate(
+  env: EnvBindings,
+  origin: string,
+  path: string,
+  targetCollectionDate: string,
+): Promise<boolean> {
   const url = `${normalizeOrigin(origin)}${path}/latest-all?limit=5&source_mode=scheduled`
-  const res = await fetch(url)
-  if (!res.ok) return false
-  const data = (await res.json().catch(() => null)) as unknown
-  const shape = parseRowsAndTotal(data)
-  if (shape.total <= 0 || shape.rows.length === 0) return false
-  return shape.rows.some((row) => String(row.collection_date || '') === targetCollectionDate)
+  try {
+    const fetched = await fetchJsonWithTimeout(url, undefined, { env })
+    const res = fetched.response
+    log.info('pipeline', 'upstream_fetch', {
+      context:
+        `source=e2e_alignment_probe host=${hostFromUrl(url)}` +
+        ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+        ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+        ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+        ` status=${fetched.meta.status ?? res.status}`,
+    })
+    if (!res.ok) return false
+    const data = fetched.json
+    const shape = parseRowsAndTotal(data)
+    if (shape.total <= 0 || shape.rows.length === 0) return false
+    return shape.rows.some((row) => String(row.collection_date || '') === targetCollectionDate)
+  } catch (error) {
+    const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+    log.warn('pipeline', 'upstream_fetch', {
+      context:
+        `source=e2e_alignment_probe host=${hostFromUrl(url)}` +
+        ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+        ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+        ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+        ` status=${meta?.status ?? 0}`,
+    })
+    return false
+  }
 }
 
-async function evaluateApiCriterion(origin: string | undefined, targetCollectionDate: string | null): Promise<{
+async function evaluateApiCriterion(
+  env: EnvBindings,
+  origin: string | undefined,
+  targetCollectionDate: string | null,
+): Promise<{
   ok: boolean
   detail?: string
 }> {
@@ -118,9 +151,9 @@ async function evaluateApiCriterion(origin: string | undefined, targetCollection
 
   try {
     const [home, savings, td] = await Promise.all([
-      apiHasTargetDate(origin, API_BASE_PATH, targetCollectionDate),
-      apiHasTargetDate(origin, SAVINGS_API_BASE_PATH, targetCollectionDate),
-      apiHasTargetDate(origin, TD_API_BASE_PATH, targetCollectionDate),
+      apiHasTargetDate(env, origin, API_BASE_PATH, targetCollectionDate),
+      apiHasTargetDate(env, origin, SAVINGS_API_BASE_PATH, targetCollectionDate),
+      apiHasTargetDate(env, origin, TD_API_BASE_PATH, targetCollectionDate),
     ])
     const ok = home && savings && td
     return {
@@ -146,7 +179,7 @@ export async function runE2ECheck(
     const [scheduler, hasStuck, apiEval] = await Promise.all([
       hasRecentDailyRun(env.DB),
       hasStuckRun(env.DB),
-      evaluateApiCriterion(options?.origin, targetCollectionDate),
+      evaluateApiCriterion(env, options?.origin, targetCollectionDate),
     ])
     const runsProgress = !hasStuck
     const apiServesLatest = apiEval.ok

@@ -4,6 +4,7 @@ import { persistRawPayload } from '../../../db/raw-payloads'
 import { buildBackfillCursorKey } from '../../../ingest/cdr'
 import { extractLenderRatesFromHtml } from '../../../ingest/html-rate-parser'
 import type { BackfillSnapshotJob, EnvBindings } from '../../../types'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
 import { log } from '../../../utils/logger'
 import { nowIso } from '../../../utils/time'
 import { elapsedMs, mergeSummary, serializeForLog, shortUrlForLog } from '../log-helpers'
@@ -30,7 +31,34 @@ export async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillS
     job.seedUrl,
   )}&from=${from}&to=${to}&output=json&fl=timestamp,original,statuscode,mimetype,digest&filter=statuscode:200&collapse=digest&limit=8`
   const cdxFetchStartedAt = Date.now()
-  const cdxResponse = await fetch(cdxUrl)
+  let cdxResponse: Response
+  try {
+    const fetched = await fetchWithTimeout(cdxUrl, undefined, { env })
+    cdxResponse = fetched.response
+    log.info('consumer', 'upstream_fetch', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context:
+        `source=wayback_cdx host=${hostFromUrl(cdxUrl)}` +
+        ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+        ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+        ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+        ` status=${fetched.meta.status ?? cdxResponse.status}`,
+    })
+  } catch (error) {
+    const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+    log.warn('consumer', 'upstream_fetch', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context:
+        `source=wayback_cdx host=${hostFromUrl(cdxUrl)}` +
+        ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+        ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+        ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+        ` status=${meta?.status ?? 0}`,
+    })
+    throw error
+  }
   const cdxBody = await cdxResponse.text()
   const cdxFetchMs = elapsedMs(cdxFetchStartedAt)
 
@@ -87,7 +115,34 @@ export async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillS
     if (!timestamp) continue
     const snapshotStartedAt = Date.now()
     const snapshotUrl = `https://web.archive.org/web/${timestamp}/${original}`
-    const snapshotResponse = await fetch(snapshotUrl)
+    let snapshotResponse: Response
+    try {
+      const fetched = await fetchWithTimeout(snapshotUrl, undefined, { env })
+      snapshotResponse = fetched.response
+      log.info('consumer', 'upstream_fetch', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `source=wayback_snapshot host=${hostFromUrl(snapshotUrl)}` +
+          ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+          ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+          ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+          ` status=${fetched.meta.status ?? snapshotResponse.status}`,
+      })
+    } catch (error) {
+      const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+      log.warn('consumer', 'upstream_fetch', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `source=wayback_snapshot host=${hostFromUrl(snapshotUrl)}` +
+          ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+          ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+          ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+          ` status=${meta?.status ?? 0}`,
+      })
+      throw error
+    }
     const html = await snapshotResponse.text()
     const snapshotFetchMs = elapsedMs(snapshotStartedAt)
     snapshotFetchMsTotal += snapshotFetchMs

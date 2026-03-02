@@ -211,8 +211,8 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
 
     try {
       log.info('pipeline', `Daily run ${runId} starting: collecting RBA rate and refreshing endpoints`, { runId })
-      const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate)
-      const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS)
+      const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate, env)
+      const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS, 24, env)
 
       const enqueue = await enqueueDailyLenderJobs(env, {
         runId,

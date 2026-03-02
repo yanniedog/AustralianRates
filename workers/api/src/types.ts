@@ -166,6 +166,10 @@ export type EnvBindings = {
   FEATURE_PUBLIC_TRIGGER_RUN_ENABLED?: string
   FEATURE_PUBLIC_HISTORICAL_PULL_ENABLED?: string
   FEATURE_PUBLIC_EXPORT_JOB_ENABLED?: string
+  FETCH_TIMEOUT_MS?: string
+  FETCH_MAX_RETRIES?: string
+  FETCH_RETRY_BASE_MS?: string
+  FETCH_RETRY_CAP_MS?: string
 }
 
 export type SharedIngestTaskKind = IngestTaskKind

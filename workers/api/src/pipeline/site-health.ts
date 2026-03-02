@@ -2,7 +2,8 @@ import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from '../const
 import { runIntegrityChecks } from '../db/integrity-checks'
 import { runE2ECheck } from './e2e-alignment'
 import type { EnvBindings } from '../types'
-import { queryLogs } from '../utils/logger'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import { log, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
 
 type ComponentStatus = {
@@ -30,18 +31,40 @@ function normalizeOrigin(origin: string): string {
   return String(origin || '').replace(/\/+$/, '')
 }
 
-async function requestJson(origin: string, path: string): Promise<{ ok: boolean; status: number; durationMs: number; detail?: string }> {
+async function requestJson(
+  env: EnvBindings,
+  origin: string,
+  path: string,
+): Promise<{ ok: boolean; status: number; durationMs: number; detail?: string }> {
   const url = `${normalizeOrigin(origin)}${path}`
   const startedAt = Date.now()
   try {
-    const res = await fetch(url)
+    const fetched = await fetchWithTimeout(url, undefined, { env })
+    const res = fetched.response
     const durationMs = Date.now() - startedAt
+    log.info('pipeline', 'upstream_fetch', {
+      context:
+        `source=site_health_probe host=${hostFromUrl(url)}` +
+        ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+        ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+        ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+        ` status=${fetched.meta.status ?? res.status}`,
+    })
     if (!res.ok) {
       return { ok: false, status: res.status, durationMs, detail: `HTTP ${res.status}` }
     }
     await res.arrayBuffer()
     return { ok: true, status: res.status, durationMs }
   } catch (error) {
+    const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+    log.warn('pipeline', 'upstream_fetch', {
+      context:
+        `source=site_health_probe host=${hostFromUrl(url)}` +
+        ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+        ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+        ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+        ` status=${meta?.status ?? 0}`,
+    })
     return {
       ok: false,
       status: 0,
@@ -51,11 +74,11 @@ async function requestJson(origin: string, path: string): Promise<{ ok: boolean;
   }
 }
 
-async function checkDataset(origin: string, key: string, basePath: string): Promise<ComponentStatus[]> {
+async function checkDataset(env: EnvBindings, origin: string, key: string, basePath: string): Promise<ComponentStatus[]> {
   const [health, filters, latestAll] = await Promise.all([
-    requestJson(origin, `${basePath}/health`),
-    requestJson(origin, `${basePath}/filters`),
-    requestJson(origin, `${basePath}/latest-all?limit=1&source_mode=all`),
+    requestJson(env, origin, `${basePath}/health`),
+    requestJson(env, origin, `${basePath}/filters`),
+    requestJson(env, origin, `${basePath}/latest-all?limit=1&source_mode=all`),
   ])
   return [
     {
@@ -105,10 +128,10 @@ export async function runSiteHealthChecks(
   }))
 
   const [homeComponents, savingsComponents, tdComponents, homepage, integrity, e2e, logs] = await Promise.all([
-    checkDataset(origin, 'home_loans', API_BASE_PATH),
-    checkDataset(origin, 'savings', SAVINGS_API_BASE_PATH),
-    checkDataset(origin, 'term_deposits', TD_API_BASE_PATH),
-    requestJson(origin, '/'),
+    checkDataset(env, origin, 'home_loans', API_BASE_PATH),
+    checkDataset(env, origin, 'savings', SAVINGS_API_BASE_PATH),
+    checkDataset(env, origin, 'term_deposits', TD_API_BASE_PATH),
+    requestJson(env, origin, '/'),
     integrityPromise,
     runE2ECheck(env, { origin }),
     queryLogs(env.DB, { limit: 200 }),

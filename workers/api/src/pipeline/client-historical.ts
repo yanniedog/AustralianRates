@@ -271,7 +271,11 @@ export async function claimHistoricalPullTask(
   const cached = await getCachedEndpoint(env.DB, lender.code)
   if (cached?.endpointUrl) endpointCandidates.push(cached.endpointUrl)
   if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
-  const discovered = await discoverProductsEndpoint(lender)
+  const discovered = await discoverProductsEndpoint(lender, {
+    env,
+    runId,
+    lenderCode: lender.code,
+  })
   if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
 
   return ok({

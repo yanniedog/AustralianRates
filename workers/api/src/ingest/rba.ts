@@ -1,4 +1,7 @@
 import { upsertRbaCashRate } from '../db/rba-cash-rate'
+import type { EnvBindings } from '../types'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import { log } from '../utils/logger'
 
 const RBA_F1_DATA_URL = 'https://www.rba.gov.au/statistics/tables/csv/f1-data.csv'
 
@@ -64,9 +67,19 @@ function latestPointOnOrBefore(points: RbaPoint[], collectionDate: string): RbaP
 export async function collectRbaCashRateForDate(
   db: D1Database,
   collectionDate: string,
+  env?: Pick<EnvBindings, 'FETCH_TIMEOUT_MS' | 'FETCH_MAX_RETRIES' | 'FETCH_RETRY_BASE_MS' | 'FETCH_RETRY_CAP_MS'>,
 ): Promise<{ ok: boolean; cashRate: number | null; effectiveDate: string | null; sourceUrl: string }> {
   try {
-    const response = await fetch(RBA_F1_DATA_URL)
+    const fetched = await fetchWithTimeout(RBA_F1_DATA_URL, undefined, { env })
+    const response = fetched.response
+    log.info('pipeline', 'upstream_fetch', {
+      context:
+        `source=rba host=${hostFromUrl(RBA_F1_DATA_URL)}` +
+        ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+        ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+        ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+        ` status=${fetched.meta.status ?? response.status}`,
+    })
     const csv = await response.text()
     if (!response.ok) {
       return { ok: false, cashRate: null, effectiveDate: null, sourceUrl: RBA_F1_DATA_URL }
@@ -90,7 +103,16 @@ export async function collectRbaCashRateForDate(
       effectiveDate: nearest.date,
       sourceUrl: RBA_F1_DATA_URL,
     }
-  } catch {
+  } catch (error) {
+    const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+    log.warn('pipeline', 'upstream_fetch', {
+      context:
+        `source=rba host=${hostFromUrl(RBA_F1_DATA_URL)}` +
+        ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+        ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+        ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+        ` status=${meta?.status ?? 0}`,
+    })
     return { ok: false, cashRate: null, effectiveDate: null, sourceUrl: RBA_F1_DATA_URL }
   }
 }

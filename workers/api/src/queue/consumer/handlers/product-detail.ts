@@ -72,6 +72,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         productId: job.productId,
         collectionDate: job.collectionDate,
         cdrVersions: versions,
+        env,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
       })
       fetchStatus = details.rawPayload.status
       const persisted = await persistProductDetailPayload(env, job.runSource, {
@@ -124,6 +127,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         productId: job.productId,
         collectionDate: job.collectionDate,
         cdrVersions: versions,
+        env,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
       })
       fetchStatus = details.rawPayload.status
       const persisted = await persistProductDetailPayload(env, job.runSource, {
@@ -176,6 +182,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         productId: job.productId,
         collectionDate: job.collectionDate,
         cdrVersions: versions,
+        env,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
       })
       fetchStatus = details.rawPayload.status
       const persisted = await persistProductDetailPayload(env, job.runSource, {

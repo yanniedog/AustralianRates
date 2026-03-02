@@ -64,7 +64,7 @@ function isEnabled(value: string | undefined): boolean {
 }
 
 function featureDisabled(code: string, message: string): Response {
-  return jsonNoStore({ ok: false, error: { code, message } }, 403);
+  return jsonNoStore({ ok: false, error: { code, message } }, 404);
 }
 
 /** GET /api/admin/lenders */

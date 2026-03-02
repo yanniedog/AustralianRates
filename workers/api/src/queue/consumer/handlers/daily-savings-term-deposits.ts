@@ -50,7 +50,11 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   const endpointCandidates: string[] = []
   if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
   if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
-  const discovered = await discoverProductsEndpoint(lender)
+  const discovered = await discoverProductsEndpoint(lender, {
+    env,
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+  })
   if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
   const uniqueCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
   const endpointHosts = summarizeEndpointHosts(uniqueCandidates)
@@ -88,8 +92,18 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         ` endpoint=${shortUrlForLog(candidateEndpoint)}`,
     })
     const [savingsProducts, tdProducts] = await Promise.all([
-      fetchSavingsProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions }),
-      fetchTermDepositProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions }),
+      fetchSavingsProductIds(candidateEndpoint, maxCdrProductPages(), {
+        cdrVersions: playbook.cdrVersions,
+        env,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+      }),
+      fetchTermDepositProductIds(candidateEndpoint, maxCdrProductPages(), {
+        cdrVersions: playbook.cdrVersions,
+        env,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+      }),
     ])
     indexPayloads += savingsProducts.rawPayloads.length + tdProducts.rawPayloads.length
     const uniqueSavingsIds = Array.from(new Set(savingsProducts.productIds)).filter(Boolean)

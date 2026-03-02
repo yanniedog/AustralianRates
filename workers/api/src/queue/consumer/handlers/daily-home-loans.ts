@@ -9,6 +9,7 @@ import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../produ
 import { extractLenderRatesFromHtml } from '../../../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import type { DailyLenderJob, EnvBindings } from '../../../types'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
 import { log } from '../../../utils/logger'
 import { nowIso } from '../../../utils/time'
 import { recordDroppedAnomalies } from '../anomalies'
@@ -46,7 +47,11 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   const endpointCandidates: string[] = []
   if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
   if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
-  const discovered = await discoverProductsEndpoint(lender)
+  const discovered = await discoverProductsEndpoint(lender, {
+    env,
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+  })
   if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
   const uniqueCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
   const endpointHosts = summarizeEndpointHosts(uniqueCandidates)
@@ -88,7 +93,12 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         `endpoint_idx=${endpointIndex + 1}/${uniqueCandidates.length}` +
         ` endpoint=${shortUrlForLog(candidateEndpoint)}`,
     })
-    const products = await fetchResidentialMortgageProductIds(candidateEndpoint, maxCdrProductPages(), { cdrVersions: playbook.cdrVersions })
+    const products = await fetchResidentialMortgageProductIds(candidateEndpoint, maxCdrProductPages(), {
+      cdrVersions: playbook.cdrVersions,
+      env,
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+    })
     indexPayloads += products.rawPayloads.length
     const endpointIds = Array.from(new Set(products.productIds)).filter(Boolean)
     const indexStatusSummary = summarizeStatusCodes(products.rawPayloads.map((payload) => payload.status))
@@ -243,8 +253,36 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     for (const seedUrl of lender.seed_rate_urls.slice(0, 2)) {
       const seedStartedAt = Date.now()
       fallbackSeedFetches += 1
-      const response = await fetch(seedUrl)
-      const html = await response.text()
+      let response: Response
+      let html = ''
+      try {
+        const fetched = await fetchWithTimeout(seedUrl, undefined, { env })
+        response = fetched.response
+        html = await response.text()
+        log.info('consumer', 'upstream_fetch', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `source=fallback_seed host=${hostFromUrl(seedUrl)}` +
+            ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+            ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+            ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+            ` status=${fetched.meta.status ?? response.status}`,
+        })
+      } catch (error) {
+        const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+        log.warn('consumer', 'upstream_fetch', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `source=fallback_seed host=${hostFromUrl(seedUrl)}` +
+            ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+            ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+            ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+            ` status=${meta?.status ?? 0}`,
+        })
+        throw error
+      }
       const persisted = await persistRawPayload(env, {
         sourceType: 'wayback_html',
         sourceUrl: seedUrl,

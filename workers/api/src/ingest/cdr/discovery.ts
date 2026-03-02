@@ -1,6 +1,7 @@
 import type { LenderConfig } from '../../types'
 import { safeUrl } from './detail-metadata'
 import { fetchCdrJson, fetchJson } from './http'
+import type { FetchRequestContext } from './http'
 import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives'
 
 type RegisterBrand = {
@@ -50,6 +51,7 @@ function lenderMatchesBrand(lender: LenderConfig, brand: RegisterBrand): boolean
 
 export async function discoverProductsEndpoint(
   lender: LenderConfig,
+  context?: FetchRequestContext,
 ): Promise<{ endpointUrl: string; sourceUrl: string; status: number; notes: string } | null> {
   const registerUrls = [
     'https://api.cdr.gov.au/cdr-register/v1/all/data-holders/brands/summary',
@@ -59,8 +61,14 @@ export async function discoverProductsEndpoint(
 
   for (const registerUrl of registerUrls) {
     const fetched = registerUrl.includes('/all/data-holders/brands/summary')
-      ? await fetchCdrJson(registerUrl, [1, 2, 3, 4, 5, 6])
-      : await fetchJson(registerUrl)
+      ? await fetchCdrJson(registerUrl, [1, 2, 3, 4, 5, 6], {
+          ...context,
+          sourceName: 'cdr_discovery',
+        })
+      : await fetchJson(registerUrl, {
+          ...context,
+          sourceName: 'cdr_discovery',
+        })
     if (!fetched.ok) {
       continue
     }

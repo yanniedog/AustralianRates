@@ -21,7 +21,12 @@ import {
   publishedAtFromDetail,
   type JsonRecord,
 } from './cdr'
-import type { LenderConfig } from '../types'
+import type { EnvBindings, LenderConfig } from '../types'
+
+type FetchEnvBindings = Pick<
+  EnvBindings,
+  'FETCH_TIMEOUT_MS' | 'FETCH_MAX_RETRIES' | 'FETCH_RETRY_BASE_MS' | 'FETCH_RETRY_CAP_MS'
+>
 
 export function isSavingsAccount(product: JsonRecord): boolean {
   const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()
@@ -208,7 +213,7 @@ type ProductListFetchResult = {
 export async function fetchSavingsProductIds(
   endpointUrl: string,
   pageLimit = 20,
-  options?: { cdrVersions?: number[] },
+  options?: { cdrVersions?: number[]; env?: FetchEnvBindings; runId?: string; lenderCode?: string },
 ): Promise<ProductListFetchResult> {
   const ids = new Set<string>()
   const payloads: Array<{ sourceUrl: string; status: number; body: string }> = []
@@ -221,7 +226,12 @@ export async function fetchSavingsProductIds(
     if (visitedUrls.has(url)) break
     visitedUrls.add(url)
     pages += 1
-    const response = await fetchCdrJson(url, versions)
+    const response = await fetchCdrJson(url, versions, {
+      env: options?.env,
+      runId: options?.runId,
+      lenderCode: options?.lenderCode,
+      sourceName: 'cdr_savings_index',
+    })
     payloads.push({ sourceUrl: url, status: response.status, body: response.text })
     if (!response.ok || !response.data) break
 
@@ -251,7 +261,7 @@ export async function fetchSavingsProductIds(
 export async function fetchTermDepositProductIds(
   endpointUrl: string,
   pageLimit = 20,
-  options?: { cdrVersions?: number[] },
+  options?: { cdrVersions?: number[]; env?: FetchEnvBindings; runId?: string; lenderCode?: string },
 ): Promise<ProductListFetchResult> {
   const ids = new Set<string>()
   const payloads: Array<{ sourceUrl: string; status: number; body: string }> = []
@@ -264,7 +274,12 @@ export async function fetchTermDepositProductIds(
     if (visitedUrls.has(url)) break
     visitedUrls.add(url)
     pages += 1
-    const response = await fetchCdrJson(url, versions)
+    const response = await fetchCdrJson(url, versions, {
+      env: options?.env,
+      runId: options?.runId,
+      lenderCode: options?.lenderCode,
+      sourceName: 'cdr_td_index',
+    })
     payloads.push({ sourceUrl: url, status: response.status, body: response.text })
     if (!response.ok || !response.data) break
 
@@ -297,10 +312,18 @@ export async function fetchSavingsProductDetailRows(input: {
   productId: string
   collectionDate: string
   cdrVersions?: number[]
+  env?: FetchEnvBindings
+  runId?: string
+  lenderCode?: string
 }): Promise<{ savingsRows: NormalizedSavingsRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${input.endpointUrl.replace(/\/+$/, '')}/${encodeURIComponent(input.productId)}`
   const versions = input.cdrVersions?.length ? input.cdrVersions : [6, 5, 4, 3]
-  const fetched = await fetchCdrJson(detailUrl, versions)
+  const fetched = await fetchCdrJson(detailUrl, versions, {
+    env: input.env,
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    sourceName: 'cdr_savings_detail',
+  })
   const rawPayload = { sourceUrl: detailUrl, status: fetched.status, body: fetched.text }
 
   if (!fetched.ok || !isRecord(fetched.data)) return { savingsRows: [], rawPayload }
@@ -329,10 +352,18 @@ export async function fetchTdProductDetailRows(input: {
   productId: string
   collectionDate: string
   cdrVersions?: number[]
+  env?: FetchEnvBindings
+  runId?: string
+  lenderCode?: string
 }): Promise<{ tdRows: NormalizedTdRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${input.endpointUrl.replace(/\/+$/, '')}/${encodeURIComponent(input.productId)}`
   const versions = input.cdrVersions?.length ? input.cdrVersions : [6, 5, 4, 3]
-  const fetched = await fetchCdrJson(detailUrl, versions)
+  const fetched = await fetchCdrJson(detailUrl, versions, {
+    env: input.env,
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    sourceName: 'cdr_td_detail',
+  })
   const rawPayload = { sourceUrl: detailUrl, status: fetched.status, body: fetched.text }
 
   if (!fetched.ok || !isRecord(fetched.data)) return { tdRows: [], rawPayload }

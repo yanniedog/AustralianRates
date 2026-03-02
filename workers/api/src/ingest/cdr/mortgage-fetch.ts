@@ -1,10 +1,15 @@
-import type { LenderConfig } from '../../types'
+import type { EnvBindings, LenderConfig } from '../../types'
 import { safeUrl } from './detail-metadata'
 import { extractProducts, nextLink } from './discovery'
 import { fetchCdrJson } from './http'
 import { isRecord, pickText, type JsonRecord } from './primitives'
 import { isResidentialMortgage, parseRatesFromDetail } from './mortgage-parse'
 import type { NormalizedRateRow } from '../normalize'
+
+type FetchEnvBindings = Pick<
+  EnvBindings,
+  'FETCH_TIMEOUT_MS' | 'FETCH_MAX_RETRIES' | 'FETCH_RETRY_BASE_MS' | 'FETCH_RETRY_CAP_MS'
+>
 
 type ProductListFetchResult = {
   productIds: string[]
@@ -17,7 +22,7 @@ type ProductListFetchResult = {
 export async function fetchResidentialMortgageProductIds(
   endpointUrl: string,
   pageLimit = 20,
-  options?: { cdrVersions?: number[] },
+  options?: { cdrVersions?: number[]; env?: FetchEnvBindings; runId?: string; lenderCode?: string },
 ): Promise<ProductListFetchResult> {
   const ids = new Set<string>()
   const payloads: Array<{ sourceUrl: string; status: number; body: string }> = []
@@ -30,7 +35,12 @@ export async function fetchResidentialMortgageProductIds(
     if (visitedUrls.has(url)) break
     visitedUrls.add(url)
     pages += 1
-    const response = await fetchCdrJson(url, versions)
+    const response = await fetchCdrJson(url, versions, {
+      env: options?.env,
+      runId: options?.runId,
+      lenderCode: options?.lenderCode,
+      sourceName: 'cdr_products_index',
+    })
     payloads.push({
       sourceUrl: url,
       status: response.status,
@@ -69,10 +79,18 @@ export async function fetchProductDetailRows(input: {
   productId: string
   collectionDate: string
   cdrVersions?: number[]
+  env?: FetchEnvBindings
+  runId?: string
+  lenderCode?: string
 }): Promise<{ rows: NormalizedRateRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${safeUrl(input.endpointUrl)}/${encodeURIComponent(input.productId)}`
   const versions = input.cdrVersions && input.cdrVersions.length > 0 ? input.cdrVersions : [6, 5, 4, 3]
-  const fetched = await fetchCdrJson(detailUrl, versions)
+  const fetched = await fetchCdrJson(detailUrl, versions, {
+    env: input.env,
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    sourceName: 'cdr_product_detail',
+  })
   const rawPayload = {
     sourceUrl: detailUrl,
     status: fetched.status,

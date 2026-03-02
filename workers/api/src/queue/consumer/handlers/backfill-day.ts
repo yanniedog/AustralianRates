@@ -33,7 +33,11 @@ export async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob
     const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
     if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
     if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
-    const discovered = await discoverProductsEndpoint(lender)
+    const discovered = await discoverProductsEndpoint(lender, {
+      env,
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+    })
     if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
     const uniqueEndpointCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
     const endpointDiscoveryMs = elapsedMs(endpointDiscoveryStartedAt)

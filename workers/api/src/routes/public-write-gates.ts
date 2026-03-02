@@ -16,7 +16,7 @@ type GuardConfig = {
 function guardWrite(c: Context, config: GuardConfig): Response | null {
   if (config.enabled) return null
   withNoStore(c)
-  return jsonError(c, 403, config.code, config.message)
+  return jsonError(c, 404, config.code, config.message)
 }
 
 export function guardPublicTriggerRun(c: Context<AppContext>): Response | null {

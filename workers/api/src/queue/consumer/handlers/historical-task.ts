@@ -78,7 +78,11 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
     const endpoint = await getCachedEndpoint(env.DB, task.lender_code)
     if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
     if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
-    const discovered = await discoverProductsEndpoint(lender)
+    const discovered = await discoverProductsEndpoint(lender, {
+      env,
+      runId: job.runId,
+      lenderCode: task.lender_code,
+    })
     if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
     const uniqueEndpointCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
     const endpointHosts = uniqueEndpointCandidates
