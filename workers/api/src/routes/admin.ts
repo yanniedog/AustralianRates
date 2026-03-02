@@ -5,6 +5,7 @@ import { getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
@@ -199,6 +200,21 @@ adminRoutes.post('/runs/backfill', async (c) => {
     maxSnapshotsPerMonth,
   })
 
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    result,
+  })
+})
+
+adminRoutes.post('/runs/reconcile', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const dryRun = Boolean(body.dry_run ?? body.dryRun)
+  const result = await runLifecycleReconciliation(c.env.DB, {
+    dryRun,
+    idleMinutes: 5,
+    staleRunMinutes: 120,
+  })
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,

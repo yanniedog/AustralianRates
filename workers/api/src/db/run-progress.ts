@@ -49,6 +49,10 @@ type RunProgressRow = {
   per_lender_json: string
 }
 
+function jsonPathForKey(key: string): string {
+  return `$."${String(key).replace(/"/g, '\\"')}"`
+}
+
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   try {
     if (!raw) return fallback
@@ -192,36 +196,60 @@ export async function addRunEnqueuedCounts(
   runId: string,
   perLenderEnqueued: Record<string, number>,
 ): Promise<void> {
-  const row = await getRunReport(db, runId)
-  if (!row) return
-
-  const summary = asPerLenderSummary(parseJson<Record<string, unknown>>(row.per_lender_json, {}))
-  let addedTotal = 0
   const now = nowIso()
 
   for (const [lenderCode, rawCount] of Object.entries(perLenderEnqueued)) {
     const count = Math.max(0, Math.floor(Number(rawCount) || 0))
     if (count <= 0) continue
-    const progress = asLenderProgress(summary[lenderCode])
-    progress.enqueued += count
-    progress.updated_at = now
-    summary[lenderCode] = progress
-    addedTotal += count
-  }
+    const lenderPath = jsonPathForKey(lenderCode)
+    const lenderEnqueuedPath = `${lenderPath}.enqueued`
 
-  if (addedTotal <= 0) return
-
-  summary._meta.enqueued_total += addedTotal
-  summary._meta.updated_at = now
-
-  await db
-    .prepare(
-      `UPDATE run_reports
-       SET per_lender_json = ?1,
+    await db
+      .prepare(
+        `UPDATE run_reports
+         SET
+           per_lender_json = (
+             WITH summary_base AS (
+               SELECT CASE
+                 WHEN json_valid(COALESCE(NULLIF(per_lender_json, ''), '{}'))
+                 THEN COALESCE(NULLIF(per_lender_json, ''), '{}')
+                 ELSE '{}'
+               END AS summary_json
+             ),
+             summary_with_lender AS (
+               SELECT json_set(
+                 summary_json,
+                 ?2,
+                 json_set(
+                   COALESCE(
+                     json_extract(summary_json, ?2),
+                     json_object('enqueued', 0, 'processed', 0, 'failed', 0, 'updated_at', ?3)
+                   ),
+                   '$.enqueued', COALESCE(json_extract(summary_json, ?4), 0) + ?5,
+                   '$.updated_at', ?3
+                 )
+               ) AS summary_json
+               FROM summary_base
+             )
+             SELECT json_set(
+               summary_json,
+               '$._meta',
+               json_set(
+                 COALESCE(
+                   json_extract(summary_json, '$._meta'),
+                   json_object('enqueued_total', 0, 'processed_total', 0, 'failed_total', 0, 'updated_at', ?3)
+                 ),
+                 '$.enqueued_total', COALESCE(json_extract(summary_json, '$._meta.enqueued_total'), 0) + ?5,
+                 '$.updated_at', ?3
+               )
+             )
+             FROM summary_with_lender
+           ),
            status = 'running',
            finished_at = NULL
-       WHERE run_id = ?2`,
-    )
-    .bind(JSON.stringify(summary), runId)
-    .run()
+         WHERE run_id = ?1`,
+      )
+      .bind(runId, lenderPath, now, lenderEnqueuedPath, count)
+      .run()
+  }
 }

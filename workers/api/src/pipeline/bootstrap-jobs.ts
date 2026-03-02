@@ -7,6 +7,7 @@ import { refreshEndpointCache } from '../db/endpoint-cache'
 import {
   buildInitialPerLenderSummary,
   createRunReport,
+  hasRunningDailyRunForCollectionDate,
   markRunFailed,
   setRunEnqueuedSummary,
 } from '../db/run-reports'
@@ -178,6 +179,22 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       runId,
       collectionDate,
       pending: { loans: 0, savings_td: 0 },
+    }
+  }
+
+  if (options.source === 'scheduled' && !options.force) {
+    const hasRunningForDate = await hasRunningDailyRunForCollectionDate(env.DB, collectionDate)
+    if (hasRunningForDate) {
+      if (lockAcquired) {
+        await releaseRunLock(env, { key: lockKey, owner: runId })
+      }
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'existing_run_in_progress_for_date',
+        runId,
+        collectionDate,
+      }
     }
   }
 

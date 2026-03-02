@@ -19,6 +19,10 @@ type PerLenderSummary = {
   [lenderCode: string]: unknown
 }
 
+function jsonPathForKey(key: string): string {
+  return `$."${String(key).replace(/"/g, '\\"')}"`
+}
+
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   try {
     if (!raw) {
@@ -54,26 +58,6 @@ function asPerLenderSummary(input: unknown): PerLenderSummary {
       failed_total: Number(rawMeta.failed_total) || 0,
       updated_at: String(rawMeta.updated_at || now),
     },
-  }
-}
-
-function asLenderProgress(input: unknown): LenderProgress {
-  const now = nowIso()
-  if (!input || typeof input !== 'object') {
-    return {
-      enqueued: 0,
-      processed: 0,
-      failed: 0,
-      updated_at: now,
-    }
-  }
-  const raw = input as Record<string, unknown>
-  return {
-    enqueued: Number(raw.enqueued) || 0,
-    processed: Number(raw.processed) || 0,
-    failed: Number(raw.failed) || 0,
-    last_error: raw.last_error == null ? undefined : String(raw.last_error),
-    updated_at: String(raw.updated_at || now),
   }
 }
 
@@ -221,57 +205,131 @@ export async function recordRunQueueOutcome(
   db: D1Database,
   input: { runId: string; lenderCode: string; success: boolean; errorMessage?: string },
 ): Promise<RunReportRow | null> {
-  const row = await getRunReport(db, input.runId)
-  if (!row) {
-    return null
-  }
-
-  const summary = asPerLenderSummary(parseJson<Record<string, unknown>>(row.per_lender_json, {}))
-  const errors = parseJson<string[]>(row.errors_json, [])
   const now = nowIso()
-
   const lenderCode = input.lenderCode || '_unknown'
-  const progress = asLenderProgress(summary[lenderCode])
-
-  if (input.success) {
-    progress.processed += 1
-    summary._meta.processed_total += 1
-  } else {
-    progress.failed += 1
-    summary._meta.failed_total += 1
-    if (input.errorMessage) {
-      progress.last_error = input.errorMessage
-      errors.push(`[${now}] ${lenderCode}: ${input.errorMessage}`)
-    }
-  }
-
-  progress.updated_at = now
-  summary[lenderCode] = progress
-  summary._meta.updated_at = now
-
-  const completedTotal = summary._meta.processed_total + summary._meta.failed_total
-  const enqueuedTotal = summary._meta.enqueued_total
-
-  let nextStatus = row.status as RunStatus
-  let finishedAt: string | null = row.finished_at
-
-  if (enqueuedTotal > 0 && completedTotal >= enqueuedTotal) {
-    nextStatus = summary._meta.failed_total > 0 ? 'partial' : 'ok'
-    finishedAt = now
-  } else if (!input.success && enqueuedTotal === 0) {
-    nextStatus = 'partial'
-  }
+  const lenderPath = jsonPathForKey(lenderCode)
+  const lenderProcessedPath = `${lenderPath}.processed`
+  const lenderFailedPath = `${lenderPath}.failed`
+  const lenderLastErrorPath = `${lenderPath}.last_error`
+  const processedIncrement = input.success ? 1 : 0
+  const failedIncrement = input.success ? 0 : 1
+  const setLastError = !input.success && Boolean(input.errorMessage)
+  const errorMessage = input.errorMessage ? String(input.errorMessage) : null
+  const errorEntry = setLastError ? `[${now}] ${lenderCode}: ${errorMessage}` : null
 
   await db
     .prepare(
-      `UPDATE run_reports
-       SET per_lender_json = ?1,
-           errors_json = ?2,
-           status = ?3,
-           finished_at = ?4
-       WHERE run_id = ?5`,
+      `WITH snapshot AS (
+         SELECT
+           COALESCE(NULLIF(per_lender_json, ''), '{}') AS summary_raw,
+           COALESCE(NULLIF(errors_json, ''), '[]') AS errors_raw,
+           status AS status_before,
+           finished_at AS finished_before
+         FROM run_reports
+         WHERE run_id = ?1
+       ),
+       summary_base AS (
+         SELECT
+           CASE WHEN json_valid(summary_raw) THEN summary_raw ELSE '{}' END AS summary_json,
+           CASE WHEN json_valid(errors_raw) THEN errors_raw ELSE '[]' END AS errors_json,
+           status_before,
+           finished_before
+         FROM snapshot
+       ),
+       summary_with_lender AS (
+         SELECT
+           json_set(
+             summary_json,
+             ?2,
+             json_set(
+               COALESCE(
+                 json_extract(summary_json, ?2),
+                 json_object('enqueued', 0, 'processed', 0, 'failed', 0, 'updated_at', ?3)
+               ),
+               '$.processed', COALESCE(json_extract(summary_json, ?4), 0) + ?5,
+               '$.failed', COALESCE(json_extract(summary_json, ?6), 0) + ?7,
+               '$.updated_at', ?3
+             )
+           ) AS summary_json,
+           errors_json,
+           status_before,
+           finished_before
+         FROM summary_base
+       ),
+       summary_with_meta AS (
+         SELECT
+           json_set(
+             summary_json,
+             '$._meta',
+             json_set(
+               COALESCE(
+                 json_extract(summary_json, '$._meta'),
+                 json_object('enqueued_total', 0, 'processed_total', 0, 'failed_total', 0, 'updated_at', ?3)
+               ),
+               '$.processed_total', COALESCE(json_extract(summary_json, '$._meta.processed_total'), 0) + ?5,
+               '$.failed_total', COALESCE(json_extract(summary_json, '$._meta.failed_total'), 0) + ?7,
+               '$.updated_at', ?3
+             )
+           ) AS summary_json,
+           errors_json,
+           status_before,
+           finished_before
+         FROM summary_with_lender
+       ),
+       summary_final AS (
+         SELECT
+           CASE WHEN ?8 = 1 THEN json_set(summary_json, ?9, ?10) ELSE summary_json END AS summary_json,
+           CASE WHEN ?8 = 1 THEN json_insert(errors_json, '$[#]', ?11) ELSE errors_json END AS errors_json,
+           status_before,
+           finished_before
+         FROM summary_with_meta
+       )
+       UPDATE run_reports
+       SET
+         per_lender_json = (SELECT summary_json FROM summary_final),
+         errors_json = (SELECT errors_json FROM summary_final),
+         status = (
+           SELECT CASE
+             WHEN COALESCE(json_extract(summary_json, '$._meta.enqueued_total'), 0) > 0
+              AND COALESCE(json_extract(summary_json, '$._meta.processed_total'), 0)
+                + COALESCE(json_extract(summary_json, '$._meta.failed_total'), 0)
+                >= COALESCE(json_extract(summary_json, '$._meta.enqueued_total'), 0)
+             THEN CASE
+               WHEN COALESCE(json_extract(summary_json, '$._meta.failed_total'), 0) > 0 THEN 'partial'
+               ELSE 'ok'
+             END
+             WHEN ?12 = 1 AND COALESCE(json_extract(summary_json, '$._meta.enqueued_total'), 0) = 0 THEN 'partial'
+             ELSE status_before
+           END
+           FROM summary_final
+         ),
+         finished_at = (
+           SELECT CASE
+             WHEN COALESCE(json_extract(summary_json, '$._meta.enqueued_total'), 0) > 0
+              AND COALESCE(json_extract(summary_json, '$._meta.processed_total'), 0)
+                + COALESCE(json_extract(summary_json, '$._meta.failed_total'), 0)
+                >= COALESCE(json_extract(summary_json, '$._meta.enqueued_total'), 0)
+             THEN ?3
+             ELSE finished_before
+           END
+           FROM summary_final
+         )
+       WHERE run_id = ?1`,
     )
-    .bind(JSON.stringify(summary), JSON.stringify(errors.slice(-200)), nextStatus, finishedAt, input.runId)
+    .bind(
+      input.runId,
+      lenderPath,
+      now,
+      lenderProcessedPath,
+      processedIncrement,
+      lenderFailedPath,
+      failedIncrement,
+      setLastError ? 1 : 0,
+      lenderLastErrorPath,
+      errorMessage,
+      errorEntry,
+      input.success ? 0 : 1,
+    )
     .run()
 
   return getRunReport(db, input.runId)
@@ -298,6 +356,23 @@ export async function hasRunningManualRun(db: D1Database): Promise<boolean> {
        ORDER BY started_at DESC
        LIMIT 1`,
     )
+    .first<{ run_id: string }>()
+
+  return Boolean(row?.run_id)
+}
+
+export async function hasRunningDailyRunForCollectionDate(db: D1Database, collectionDate: string): Promise<boolean> {
+  const baseRunId = `daily:${collectionDate}`
+  const row = await db
+    .prepare(
+      `SELECT run_id FROM run_reports
+       WHERE run_type = 'daily'
+         AND status = 'running'
+         AND (run_id = ?1 OR run_id LIKE ?2)
+       ORDER BY started_at DESC
+       LIMIT 1`,
+    )
+    .bind(baseRunId, `${baseRunId}:%`)
     .first<{ run_id: string }>()
 
   return Boolean(row?.run_id)
