@@ -31,6 +31,25 @@ type SeriesDatasetCheck = {
   missing_series_key: number
   mismatched_series_key: number
 }
+type FreshnessMismatchRow = {
+  dataset: string
+  global_latest: string | null
+  scheduled_latest: string | null
+  latest_global_mismatch: number | null
+}
+type RunsNoOutputsRow = {
+  run_id: string
+  run_type: string
+  run_source: string
+  status: string
+  started_at: string
+  home_rows: number
+  savings_rows: number
+  td_rows: number
+}
+type IntegrityOptions = {
+  includeAnomalyProbes?: boolean
+}
 
 function daysBetweenIsoDate(isoDate: string, targetDate: string): number {
   const a = Date.parse(`${isoDate}T00:00:00.000Z`)
@@ -122,7 +141,250 @@ async function runSeriesKeyCheck(
   }
 }
 
-export async function runIntegrityChecks(db: D1Database, timezone = 'Australia/Melbourne'): Promise<IntegritySummary> {
+async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckResult[]): Promise<void> {
+  try {
+    const hasPresence = await tableExists(db, 'product_presence_status')
+    const hasCatalog = await tableExists(db, 'product_catalog')
+    if (!hasPresence || !hasCatalog) {
+      checks.push({
+        name: 'orphan_product_presence_status',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          product_presence_status: hasPresence,
+          product_catalog: hasCatalog,
+        },
+      })
+    } else {
+      const orphanCountRow = await db
+        .prepare(
+          `SELECT COUNT(*) AS n
+           FROM product_presence_status p
+           LEFT JOIN product_catalog c
+             ON c.dataset_kind = p.section
+            AND c.bank_name = p.bank_name
+            AND c.product_id = p.product_id
+           WHERE c.product_id IS NULL`,
+        )
+        .first<NumberRow>()
+      const sampleRows = await db
+        .prepare(
+          `SELECT p.section, p.bank_name, p.product_id, p.last_seen_collection_date, p.last_seen_at
+           FROM product_presence_status p
+           LEFT JOIN product_catalog c
+             ON c.dataset_kind = p.section
+            AND c.bank_name = p.bank_name
+            AND c.product_id = p.product_id
+           WHERE c.product_id IS NULL
+           ORDER BY p.last_seen_at DESC
+           LIMIT 20`,
+        )
+        .all<Record<string, unknown>>()
+
+      checks.push({
+        name: 'orphan_product_presence_status',
+        passed: Number(orphanCountRow?.n ?? 0) === 0,
+        detail: {
+          orphan_count: Number(orphanCountRow?.n ?? 0),
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'orphan_product_presence_status',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const hasPayloads = await tableExists(db, 'raw_payloads')
+    const hasObjects = await tableExists(db, 'raw_objects')
+    if (!hasPayloads || !hasObjects) {
+      checks.push({
+        name: 'orphan_raw_payload_linkage',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          raw_payloads: hasPayloads,
+          raw_objects: hasObjects,
+        },
+      })
+    } else {
+      const orphanCountRow = await db
+        .prepare(
+          `SELECT COUNT(*) AS n
+           FROM raw_payloads rp
+           LEFT JOIN raw_objects ro
+             ON ro.content_hash = rp.content_hash
+           WHERE ro.content_hash IS NULL`,
+        )
+        .first<NumberRow>()
+      const sampleRows = await db
+        .prepare(
+          `SELECT rp.id, rp.source_type, rp.fetched_at, rp.source_url, rp.content_hash, rp.r2_key
+           FROM raw_payloads rp
+           LEFT JOIN raw_objects ro
+             ON ro.content_hash = rp.content_hash
+           WHERE ro.content_hash IS NULL
+           ORDER BY rp.fetched_at DESC
+           LIMIT 20`,
+        )
+        .all<Record<string, unknown>>()
+      checks.push({
+        name: 'orphan_raw_payload_linkage',
+        passed: Number(orphanCountRow?.n ?? 0) === 0,
+        detail: {
+          orphan_count: Number(orphanCountRow?.n ?? 0),
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'orphan_raw_payload_linkage',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const requiredTables = await Promise.all([
+      tableExists(db, 'run_reports'),
+      tableExists(db, 'historical_loan_rates'),
+      tableExists(db, 'historical_savings_rates'),
+      tableExists(db, 'historical_term_deposit_rates'),
+    ])
+    if (requiredTables.some((exists) => !exists)) {
+      checks.push({
+        name: 'runs_with_no_outputs',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          run_reports: requiredTables[0],
+          historical_loan_rates: requiredTables[1],
+          historical_savings_rates: requiredTables[2],
+          historical_term_deposit_rates: requiredTables[3],
+        },
+      })
+    } else {
+      const countRow = await db
+        .prepare(
+          `WITH run_outputs AS (
+             SELECT
+               rr.run_id,
+               (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
+               (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
+               (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
+             FROM run_reports rr
+           )
+           SELECT COUNT(*) AS n
+           FROM run_outputs
+           WHERE (home_rows + savings_rows + td_rows) = 0`,
+        )
+        .first<NumberRow>()
+
+      const sampleRows = await db
+        .prepare(
+          `WITH run_outputs AS (
+             SELECT
+               rr.run_id,
+               rr.run_type,
+               rr.run_source,
+               rr.status,
+               rr.started_at,
+               (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
+               (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
+               (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
+             FROM run_reports rr
+           )
+           SELECT run_id, run_type, run_source, status, started_at, home_rows, savings_rows, td_rows
+           FROM run_outputs
+           WHERE (home_rows + savings_rows + td_rows) = 0
+           ORDER BY started_at DESC
+           LIMIT 20`,
+        )
+        .all<RunsNoOutputsRow>()
+
+      checks.push({
+        name: 'runs_with_no_outputs',
+        passed: Number(countRow?.n ?? 0) === 0,
+        detail: {
+          orphan_run_count: Number(countRow?.n ?? 0),
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'runs_with_no_outputs',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const datasetRows = await db
+      .prepare(
+        `WITH dataset_latest AS (
+           SELECT
+             'home_loans' AS dataset,
+             MAX(collection_date) AS global_latest,
+             MAX(CASE WHEN COALESCE(run_source, 'scheduled') = 'scheduled' THEN collection_date END) AS scheduled_latest
+           FROM historical_loan_rates
+           UNION ALL
+           SELECT
+             'savings' AS dataset,
+             MAX(collection_date) AS global_latest,
+             MAX(CASE WHEN COALESCE(run_source, 'scheduled') = 'scheduled' THEN collection_date END) AS scheduled_latest
+           FROM historical_savings_rates
+           UNION ALL
+           SELECT
+             'term_deposits' AS dataset,
+             MAX(collection_date) AS global_latest,
+             MAX(CASE WHEN COALESCE(run_source, 'scheduled') = 'scheduled' THEN collection_date END) AS scheduled_latest
+           FROM historical_term_deposit_rates
+         )
+         SELECT
+           dataset,
+           global_latest,
+           scheduled_latest,
+           CASE
+             WHEN global_latest IS NULL OR scheduled_latest IS NULL THEN NULL
+             WHEN global_latest = scheduled_latest THEN 0
+             ELSE 1
+           END AS latest_global_mismatch
+         FROM dataset_latest
+         ORDER BY dataset`,
+      )
+      .all<FreshnessMismatchRow>()
+
+    const rows = datasetRows.results ?? []
+    const mismatchCount = rows.filter((row) => Number(row.latest_global_mismatch ?? 0) === 1).length
+    checks.push({
+      name: 'latest_vs_global_freshness_indicator',
+      passed: true,
+      detail: {
+        indicator_only: true,
+        mismatch_dataset_count: mismatchCount,
+        datasets: rows,
+      },
+    })
+  } catch (error) {
+    checks.push({
+      name: 'latest_vs_global_freshness_indicator',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+}
+
+export async function runIntegrityChecks(
+  db: D1Database,
+  timezone = 'Australia/Melbourne',
+  options?: IntegrityOptions,
+): Promise<IntegritySummary> {
   const checkedAt = new Date().toISOString()
   const nowMelbourneDate = getMelbourneNowParts(new Date(), timezone).date
 
@@ -267,6 +529,10 @@ export async function runIntegrityChecks(db: D1Database, timezone = 'Australia/M
       passed: false,
       detail: errorDetail(error),
     })
+  }
+
+  if (options?.includeAnomalyProbes) {
+    await runOptionalAnomalyProbes(db, checks)
   }
 
   return {

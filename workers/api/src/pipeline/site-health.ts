@@ -14,6 +14,11 @@ type ComponentStatus = {
   detail?: string
 }
 
+function isEnabled(value: string | undefined): boolean {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
 export type SiteHealthRunResult = {
   runId: string
   checkedAt: string
@@ -113,19 +118,21 @@ export async function runSiteHealthChecks(
   const runId = `health:${input.triggerSource}:${checkedAt}:${crypto.randomUUID()}`
   const startedAt = Date.now()
   const origin = normalizeOrigin(input.origin)
-  const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne').catch((error) => ({
-    ok: false,
-    checked_at: new Date().toISOString(),
-    checks: [
-      {
-        name: 'integrity_runtime_error',
-        passed: false,
-        detail: {
-          error: (error as Error)?.message || String(error),
+  const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne', {
+    includeAnomalyProbes: isEnabled(env.FEATURE_INTEGRITY_PROBES_ENABLED),
+  }).catch((error) => ({
+      ok: false,
+      checked_at: new Date().toISOString(),
+      checks: [
+        {
+          name: 'integrity_runtime_error',
+          passed: false,
+          detail: {
+            error: (error as Error)?.message || String(error),
+          },
         },
-      },
-    ],
-  }))
+      ],
+    }))
 
   const [homeComponents, savingsComponents, tdComponents, homepage, integrity, e2e, logs] = await Promise.all([
     checkDataset(env, origin, 'home_loans', API_BASE_PATH),
