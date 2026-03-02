@@ -24,11 +24,13 @@
     "pages:set-build": "node set-pages-build-config.js",
     "pages:trigger": "node scripts/trigger-pages-deploy.js",
     "pages:create-full-token": "node create-full-access-token.js",
+    "typecheck:scripts": "npx tsc -p tools/node-scripts/tsconfig.json --noEmit",
     "typecheck:api": "npm run typecheck -w workers/api",
-    "deploy:api": "npm run deploy -w workers/api",
+    "deploy:api": "node scripts/deploy-api.mjs",
     "deploy:archive": "npm run deploy -w workers/archive"
   },
   "devDependencies": {
-    "playwright": "^1.58.2"
+    "playwright": "^1.58.2",
+    "tsx": "^4.21.0"
   }
 }

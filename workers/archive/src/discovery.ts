@@ -4,15 +4,15 @@
  */
 
 import { resolveLenderKey } from "./config/lenders";
+import {
+  CDR_REGISTER_FALLBACK,
+  CDR_REGISTER_PRIMARY,
+  deriveProductsUrl,
+  fetchWithRetry,
+  normalizeBaseUrl,
+} from "./discovery-fetch";
 
-const CDR_REGISTER_PRIMARY =
-  "https://api.cdr.gov.au/cdr-register/v1/banking/register";
-const CDR_REGISTER_FALLBACK =
-  "https://api.cdr.gov.au/cdr-register/v1/banking/data-holders/brands";
 const LOCK_TTL_HOURS = 6;
-const FETCH_TIMEOUT_MS = 20000;
-const MAX_RETRIES_PER_URL = 3;
-const RETRY_DELAY_MS = 1500;
 const FAILURE_PAYLOAD_MAX_CHARS = 50000;
 
 export interface DiscoveryResult {
@@ -45,68 +45,6 @@ interface RegisterBrand {
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-/** Fetch with timeout and optional retries. Returns [response, bodyText] or throws. */
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit & { timeoutMs?: number } = {}
-): Promise<[Response, string]> {
-  const { timeoutMs = FETCH_TIMEOUT_MS, ...fetchOpts } = options;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const resp = await fetch(url, {
-      ...fetchOpts,
-      signal: controller.signal,
-      headers: { Accept: "application/json", ...(fetchOpts.headers as object) },
-    });
-    const text = await resp.text();
-    return [resp, text];
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-/** Try one URL with retries. Returns [response, body, finalUrl] or [null, null, attemptedUrl]. */
-async function fetchWithRetry(
-  url: string
-): Promise<{ resp: Response; body: string; url: string } | null> {
-  for (let attempt = 1; attempt <= MAX_RETRIES_PER_URL; attempt++) {
-    try {
-      const [resp, body] = await fetchWithTimeout(url, { timeoutMs: FETCH_TIMEOUT_MS });
-      return { resp, body, url };
-    } catch (e) {
-      console.error("discoverCdrRegister fetch attempt", { url, attempt, error: (e as Error)?.message });
-      if (attempt < MAX_RETRIES_PER_URL) {
-        await sleep(RETRY_DELAY_MS * attempt);
-      } else {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
-function normalizeBaseUrl(url: string): string {
-  let u = (url || "").trim();
-  if (!u) return "";
-  try {
-    const parsed = new URL(u);
-    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
-    return parsed.origin + parsed.pathname;
-  } catch {
-    return u.replace(/\/+$/, "");
-  }
-}
-
-function deriveProductsUrl(apiBaseUrl: string): string {
-  const base = apiBaseUrl.replace(/\/+$/, "");
-  return base ? `${base}/cds-au/v1/banking/products` : "";
 }
 
 /** Compute run date in Australia/Hobart (YYYY-MM-DD). */

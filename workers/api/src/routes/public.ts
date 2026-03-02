@@ -1,10 +1,9 @@
 import { Hono } from 'hono'
-import { API_BASE_PATH, DEFAULT_PUBLIC_CACHE_SECONDS, MELBOURNE_TIMEZONE } from '../constants'
+import { DEFAULT_PUBLIC_CACHE_SECONDS } from '../constants'
 import type { RatesPaginatedFilters } from '../db/queries'
-import { getFilters, getLenderStaleness, getQualityDiagnostics, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { getFilters, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
-import { queryHomeLoanRateChanges } from '../db/rate-change-log'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
 import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
@@ -14,48 +13,14 @@ import { getLogStats, log, queryLogs } from '../utils/logger'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
-import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { handlePublicRunStatus } from './public-run-status'
 import { registerHomeLoanExportRoutes } from './home-loan-exports'
+import { HOME_LOAN_COMPARISON_RATE_DISCLOSURE } from './home-loan-disclosures'
 import { toCsv } from '../utils/csv'
+import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import { registerPublicCoreRoutes } from './public-core-routes'
 
 export const publicRoutes = new Hono<AppContext>()
-const HOME_LOAN_COMPARISON_RATE_DISCLOSURE = {
-  comparison_rate: {
-    loan_amount_aud: 150000,
-    term_years: 25,
-    statement:
-      'Comparison rates shown are benchmark indicators only and are commonly contextualized on a $150,000 loan over a 25 year term.',
-    limitations: [
-      'Actual cost varies by loan amount, term, and fee structure.',
-      'Ongoing usage-based costs are not fully represented in benchmark disclosure.',
-      'Always confirm current pricing and terms directly with the lender.',
-    ],
-  },
-}
-
-function parseCsvList(value: string | undefined): string[] {
-  if (!value) return []
-  return Array.from(
-    new Set(
-      String(value)
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean),
-    ),
-  )
-}
-
-function parseOptionalNumber(value: string | undefined): number | undefined {
-  if (value == null || String(value).trim() === '') return undefined
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
-
-function parseIncludeRemoved(value: string | undefined): boolean {
-  const normalized = String(value || '').trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes'
-}
 
 publicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
@@ -63,46 +28,7 @@ publicRoutes.use('*', async (c, next) => {
 })
 
 registerHomeLoanExportRoutes(publicRoutes)
-
-publicRoutes.get('/health', async (c) => {
-  withPublicCache(c, 30)
-
-  const melbourne = getMelbourneNowParts(new Date(), c.env.MELBOURNE_TIMEZONE || MELBOURNE_TIMEZONE)
-  const targetHour = parseIntegerEnv(c.env.MELBOURNE_TARGET_HOUR, 6)
-
-  return c.json({
-    ok: true,
-    service: 'australianrates-api',
-    phase: 'phase1',
-    version: c.env.WORKER_VERSION || 'dev',
-    api_base_path: c.env.PUBLIC_API_BASE_PATH || API_BASE_PATH,
-    melbourne,
-    scheduled_target_hour: targetHour,
-    features: {
-      prospective: String(c.env.FEATURE_PROSPECTIVE_ENABLED || 'true').toLowerCase() === 'true',
-      backfill: String(c.env.FEATURE_BACKFILL_ENABLED || 'true').toLowerCase() === 'true',
-      historical_pull: true,
-      public_historical_max_range_days: Math.max(1, parseIntegerEnv(c.env.PUBLIC_HISTORICAL_MAX_RANGE_DAYS, 30)),
-    },
-    bindings: {
-      db: Boolean(c.env.DB),
-      raw_bucket: Boolean(c.env.RAW_BUCKET),
-      ingest_queue: Boolean(c.env.INGEST_QUEUE),
-      run_lock_do: Boolean(c.env.RUN_LOCK_DO),
-    },
-  })
-})
-
-publicRoutes.get('/staleness', async (c) => {
-  withPublicCache(c, 60)
-  const staleness = await getLenderStaleness(c.env.DB)
-  const staleLenders = staleness.filter((l) => l.stale)
-  return c.json({
-    ok: true,
-    stale_count: staleLenders.length,
-    lenders: staleness,
-  })
-})
+registerPublicCoreRoutes(publicRoutes)
 
 publicRoutes.post('/trigger-run', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
@@ -145,28 +71,6 @@ publicRoutes.get('/filters', async (c) => {
   return c.json({
     ok: true,
     filters,
-  })
-})
-
-publicRoutes.get('/quality/diagnostics', async (c) => {
-  const diagnostics = await getQualityDiagnostics(c.env.DB)
-  return c.json({
-    ok: true,
-    diagnostics,
-  })
-})
-
-publicRoutes.get('/changes', async (c) => {
-  withPublicCache(c, 120)
-  const q = c.req.query()
-  const limit = Number(q.limit || 200)
-  const offset = Number(q.offset || 0)
-  const result = await queryHomeLoanRateChanges(c.env.DB, { limit, offset })
-  return c.json({
-    ok: true,
-    count: result.rows.length,
-    total: result.total,
-    rows: result.rows,
   })
 })
 

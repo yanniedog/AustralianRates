@@ -24,31 +24,9 @@ import { handlePublicRunStatus } from './public-run-status'
 import { queryTdRateChanges } from '../db/rate-change-log'
 import { registerTdExportRoutes } from './td-exports'
 import { toCsv } from '../utils/csv'
+import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 
 export const tdPublicRoutes = new Hono<AppContext>()
-
-function parseCsvList(value: string | undefined): string[] {
-  if (!value) return []
-  return Array.from(
-    new Set(
-      String(value)
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean),
-    ),
-  )
-}
-
-function parseOptionalNumber(value: string | undefined): number | undefined {
-  if (value == null || String(value).trim() === '') return undefined
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
-
-function parseIncludeRemoved(value: string | undefined): boolean {
-  const normalized = String(value || '').trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes'
-}
 
 tdPublicRoutes.use('*', async (c, next) => {
   withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)

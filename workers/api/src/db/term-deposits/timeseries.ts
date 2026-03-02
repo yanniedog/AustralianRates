@@ -1,0 +1,102 @@
+import { runSourceWhereClause } from '../../utils/source-mode'
+import { presentTdRow } from '../../utils/row-presentation'
+import { addBankWhere, rows, safeLimit } from '../query-common'
+import {
+  addRateBoundsWhere,
+  MAX_PUBLIC_RATE,
+  MIN_CONFIDENCE,
+  MIN_CONFIDENCE_HISTORICAL,
+  MIN_PUBLIC_RATE,
+  type TdTimeseriesFilters,
+} from './shared'
+
+export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilters) {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+
+  where.push('h.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', input.minRate, input.maxRate)
+  if (input.mode === 'daily') {
+    where.push("h.retrieval_type != 'historical_scrape'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  } else if (input.mode === 'historical') {
+    where.push("h.retrieval_type = 'historical_scrape'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE)
+  }
+
+  addBankWhere(where, binds, 'h.bank_name', input.bank, input.banks)
+  if (input.seriesKey) {
+    where.push('h.series_key = ?')
+    binds.push(input.seriesKey)
+  } else if (input.productKey) {
+    where.push("(h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier) = ?")
+    binds.push(input.productKey)
+  }
+  if (input.termMonths) { where.push('CAST(h.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
+  if (input.depositTier) { where.push('h.deposit_tier = ?'); binds.push(input.depositTier) }
+  if (input.interestPayment) { where.push('h.interest_payment = ?'); binds.push(input.interestPayment) }
+  if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  where.push(runSourceWhereClause('h.run_source', input.sourceMode ?? 'all'))
+  if (input.startDate) { where.push('h.collection_date >= ?'); binds.push(input.startDate) }
+  if (input.endDate) { where.push('h.collection_date <= ?'); binds.push(input.endDate) }
+
+  const limit = safeLimit(input.limit, 500, 2000)
+  const offset = Math.max(0, Math.floor(Number(input.offset) || 0))
+  binds.push(limit, offset)
+
+  const sql = `
+    SELECT
+      h.collection_date,
+      h.bank_name,
+      h.product_id,
+      h.product_code,
+      h.product_name,
+      h.series_key,
+      (h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier) AS product_key,
+      h.term_months,
+      h.interest_rate,
+      h.deposit_tier,
+      h.min_deposit,
+      h.max_deposit,
+      h.interest_payment,
+      h.source_url,
+      h.product_url,
+      h.published_at,
+      h.cdr_product_detail_json,
+      h.data_quality_flag,
+      h.confidence_score,
+      h.retrieval_type,
+      h.parsed_at,
+      h.run_id,
+      h.run_source,
+      MIN(h.parsed_at) OVER (PARTITION BY COALESCE(h.series_key, (h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier || '|' || h.interest_payment))) AS first_retrieved_at,
+      MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
+        PARTITION BY
+          h.bank_name,
+          h.product_id,
+          h.term_months,
+          h.deposit_tier,
+          h.interest_payment,
+          h.interest_rate,
+          h.min_deposit,
+          h.max_deposit
+      ) AS rate_confirmed_at,
+      COALESCE(pps.is_removed, 0) AS is_removed,
+      pps.removed_at
+    FROM historical_term_deposit_rates h
+    LEFT JOIN series_presence_status pps
+      ON pps.dataset_kind = 'term_deposits'
+      AND pps.series_key = h.series_key
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY h.collection_date ASC, h.parsed_at ASC
+    LIMIT ? OFFSET ?
+  `
+  const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
+  return rows(result).map((row) => presentTdRow(row))
+}
