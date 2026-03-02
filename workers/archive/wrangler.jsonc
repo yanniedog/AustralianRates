@@ -15,6 +15,11 @@
 	"env": {
 	  "dev": {
 		"name": "australianrates-archive-dev",
+		"vars": {
+		  "FEATURE_ARCHIVE_QUEUE_TEST_ENABLED": "false",
+		  "FEATURE_ARCHIVE_ADMIN_ENABLED": "false",
+		  "FEATURE_ARCHIVE_DEBUG_ENABLED": "false"
+		},
   
 		"d1_databases": [
 		  {
@@ -50,6 +55,11 @@
   
 	  "prod": {
 		"name": "australianrates-archive-prod",
+		"vars": {
+		  "FEATURE_ARCHIVE_QUEUE_TEST_ENABLED": "false",
+		  "FEATURE_ARCHIVE_ADMIN_ENABLED": "false",
+		  "FEATURE_ARCHIVE_DEBUG_ENABLED": "false"
+		},
   
 		"d1_databases": [
 		  {

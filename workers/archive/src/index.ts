@@ -11,6 +11,9 @@ export interface Env {
   DB: D1Database;
   RAW_BUCKET: R2Bucket;
   COLLECT_QUEUE: Queue;
+  FEATURE_ARCHIVE_QUEUE_TEST_ENABLED?: string;
+  FEATURE_ARCHIVE_ADMIN_ENABLED?: string;
+  FEATURE_ARCHIVE_DEBUG_ENABLED?: string;
 }
 
 const KV_KEY = "last_queue_ping";
@@ -35,8 +38,33 @@ function jsonResponse(body: object, status = 200): Response {
   return Response.json(body, { status });
 }
 
+function setNoStoreHeaders(res: Response): Response {
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.headers.set("Pragma", "no-cache");
+  res.headers.set("Expires", "0");
+  return res;
+}
+
+function jsonNoStore(body: object, status = 200): Response {
+  return setNoStoreHeaders(jsonResponse(body, status));
+}
+
 function errorResponse(errorId: string, error: string, status = 500): Response {
   return jsonResponse({ ok: false, errorId, error }, status);
+}
+
+function isEnabled(value: string | undefined): boolean {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
+}
+
+function featureDisabled(code: string, message: string): Response {
+  return jsonNoStore({ ok: false, error: { code, message } }, 403);
 }
 
 /** GET /api/admin/lenders */
@@ -96,7 +124,7 @@ async function handleAdminCdrDiscover(env: Env): Promise<Response> {
       manual: true,
     };
     await env.COLLECT_QUEUE.send(payload);
-    return jsonResponse({ ok: true, enqueued: payload });
+    return jsonNoStore({ ok: true, enqueued: payload });
   } catch (e: unknown) {
     console.error("FETCH_ERROR", "admin/cdr/discover", (e as Error)?.stack ?? e);
     return errorResponse("admin_cdr_discover", "Internal error");
@@ -153,6 +181,31 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     try {
+      if (
+        url.pathname === "/api/queue-test" &&
+        req.method === "POST" &&
+        !isEnabled(env.FEATURE_ARCHIVE_QUEUE_TEST_ENABLED)
+      ) {
+        return featureDisabled(
+          "ARCHIVE_QUEUE_TEST_DISABLED",
+          "Archive queue test endpoint is disabled in this environment."
+        );
+      }
+
+      if (url.pathname.startsWith("/api/admin/") && !isEnabled(env.FEATURE_ARCHIVE_ADMIN_ENABLED)) {
+        return featureDisabled(
+          "ARCHIVE_ADMIN_DISABLED",
+          "Archive admin endpoints are disabled in this environment."
+        );
+      }
+
+      if (url.pathname.startsWith("/api/debug/") && !isEnabled(env.FEATURE_ARCHIVE_DEBUG_ENABLED)) {
+        return featureDisabled(
+          "ARCHIVE_DEBUG_DISABLED",
+          "Archive debug endpoints are disabled in this environment."
+        );
+      }
+
       if (url.pathname === "/api/health") {
         if (env?.DB == null) {
           console.error("FETCH_ERROR", "env or env.DB missing");
@@ -177,7 +230,7 @@ export default {
       if (url.pathname === "/api/queue-test" && req.method === "POST") {
         const payload = { type: "ping", at: nowIso() };
         await env.COLLECT_QUEUE.send(payload);
-        return jsonResponse({ ok: true, enqueued: payload });
+        return jsonNoStore({ ok: true, enqueued: payload });
       }
 
       if (url.pathname === "/api/queue-test/result" && req.method === "GET") {

@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import { createExportJob, getExportJob, markExportJobProcessing, completeExportJob, failExportJob, type ExportFormat, type ExportScope } from '../db/export-jobs'
 import { queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { guardPublicExportJob } from './public-write-gates'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 import { csvEscape } from '../utils/csv'
@@ -211,6 +212,9 @@ async function runHomeLoanExportJob(
 
 export function registerHomeLoanExportRoutes(publicRoutes: Hono<AppContext>): void {
   publicRoutes.post('/exports', async (c) => {
+    const guard = guardPublicExportJob(c)
+    if (guard) return guard
+
     const payload = {
       ...c.req.query(),
       ...readRequestPayload(await c.req.json<Record<string, unknown>>().catch(() => ({}))),

@@ -131,138 +131,137 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
   const lockTtlSeconds = parseIntegerEnv(env.LOCK_TTL_SECONDS, DEFAULT_LOCK_TTL_SECONDS)
 
   let lockAcquired = false
-  if (!options.force) {
-    const lock = await acquireRunLock(env, {
-      key: lockKey,
-      owner: runId,
-      ttlSeconds: lockTtlSeconds,
-    })
-
-    if (!lock.ok) {
-      return {
-        ok: false,
-        skipped: true,
-        reason: lock.reason || 'lock_unavailable',
-        runId,
-        collectionDate,
-      }
-    }
-
-    if (!lock.acquired) {
-      return {
-        ok: true,
-        skipped: true,
-        reason: 'daily_run_locked',
-        runId,
-        collectionDate,
-      }
-    }
-
-    lockAcquired = true
-  }
-
-  const [doneLoans, doneSavingsTd] = await Promise.all([
-    getCompletedMortgageLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
-    getCompletedSavingsTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
-  ])
-  const pendingLoanLenders = TARGET_LENDERS.filter((x) => !doneLoans.has(x.code))
-  const pendingSavingsLenders = TARGET_LENDERS.filter((x) => !doneSavingsTd.has(x.code))
-
-  if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
-    if (lockAcquired) {
-      await releaseRunLock(env, { key: lockKey, owner: runId })
-    }
-    return {
-      ok: true,
-      skipped: true,
-      reason: 'already_fresh_for_date',
-      runId,
-      collectionDate,
-      pending: { loans: 0, savings_td: 0 },
-    }
-  }
-
-  if (options.source === 'scheduled' && !options.force) {
-    const hasRunningForDate = await hasRunningDailyRunForCollectionDate(env.DB, collectionDate)
-    if (hasRunningForDate) {
-      if (lockAcquired) {
-        await releaseRunLock(env, { key: lockKey, owner: runId })
-      }
-      return {
-        ok: true,
-        skipped: true,
-        reason: 'existing_run_in_progress_for_date',
-        runId,
-        collectionDate,
-      }
-    }
-  }
-
-  const created = await createRunReport(env.DB, {
-    runId,
-    runType: 'daily',
-    runSource: options.source,
-  })
-
-  if (!created.created && !options.force) {
-    if (lockAcquired) {
-      await releaseRunLock(env, { key: lockKey, owner: runId })
-    }
-
-    return {
-      ok: true,
-      skipped: true,
-      reason: 'run_already_exists',
-      runId,
-      collectionDate,
-    }
-  }
-
   try {
-    log.info('pipeline', `Daily run ${runId} starting: collecting RBA rate and refreshing endpoints`, { runId })
-    const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate)
-    const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS)
+    if (!options.force) {
+      const lock = await acquireRunLock(env, {
+        key: lockKey,
+        owner: runId,
+        ttlSeconds: lockTtlSeconds,
+      })
 
-    const enqueue = await enqueueDailyLenderJobs(env, {
+      if (!lock.ok) {
+        return {
+          ok: false,
+          skipped: true,
+          reason: lock.reason || 'lock_unavailable',
+          runId,
+          collectionDate,
+        }
+      }
+
+      if (!lock.acquired) {
+        return {
+          ok: true,
+          skipped: true,
+          reason: 'daily_run_locked',
+          runId,
+          collectionDate,
+        }
+      }
+
+      lockAcquired = true
+    }
+
+    const [doneLoans, doneSavingsTd] = await Promise.all([
+      getCompletedMortgageLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+      getCompletedSavingsTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+    ])
+    const pendingLoanLenders = TARGET_LENDERS.filter((x) => !doneLoans.has(x.code))
+    const pendingSavingsLenders = TARGET_LENDERS.filter((x) => !doneSavingsTd.has(x.code))
+
+    if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'already_fresh_for_date',
+        runId,
+        collectionDate,
+        pending: { loans: 0, savings_td: 0 },
+      }
+    }
+
+    if (options.source === 'scheduled' && !options.force) {
+      const hasRunningForDate = await hasRunningDailyRunForCollectionDate(env.DB, collectionDate)
+      if (hasRunningForDate) {
+        return {
+          ok: true,
+          skipped: true,
+          reason: 'existing_run_in_progress_for_date',
+          runId,
+          collectionDate,
+        }
+      }
+    }
+
+    const created = await createRunReport(env.DB, {
       runId,
+      runType: 'daily',
       runSource: options.source,
-      collectionDate,
-      lenders: pendingLoanLenders,
     })
 
-    const savingsEnqueue = await enqueueDailySavingsLenderJobs(env, {
-      runId,
-      runSource: options.source,
-      collectionDate,
-      lenders: pendingSavingsLenders,
-    })
+    if (!created.created && !options.force) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'run_already_exists',
+        runId,
+        collectionDate,
+      }
+    }
 
-    const summary = buildInitialPerLenderSummary(mergePerLenderCounts(enqueue.perLender, savingsEnqueue.perLender))
-    await setRunEnqueuedSummary(env.DB, runId, summary)
-    const totalEnqueued = enqueue.enqueued + savingsEnqueue.enqueued
-    log.info('pipeline', `Daily run ${runId} enqueued ${totalEnqueued} jobs (${enqueue.enqueued} loan + ${savingsEnqueue.enqueued} savings/td) for ${collectionDate}`, { runId })
+    try {
+      log.info('pipeline', `Daily run ${runId} starting: collecting RBA rate and refreshing endpoints`, { runId })
+      const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate)
+      const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS)
 
+      const enqueue = await enqueueDailyLenderJobs(env, {
+        runId,
+        runSource: options.source,
+        collectionDate,
+        lenders: pendingLoanLenders,
+      })
+
+      const savingsEnqueue = await enqueueDailySavingsLenderJobs(env, {
+        runId,
+        runSource: options.source,
+        collectionDate,
+        lenders: pendingSavingsLenders,
+      })
+
+      const summary = buildInitialPerLenderSummary(mergePerLenderCounts(enqueue.perLender, savingsEnqueue.perLender))
+      await setRunEnqueuedSummary(env.DB, runId, summary)
+      const totalEnqueued = enqueue.enqueued + savingsEnqueue.enqueued
+      log.info('pipeline', `Daily run ${runId} enqueued ${totalEnqueued} jobs (${enqueue.enqueued} loan + ${savingsEnqueue.enqueued} savings/td) for ${collectionDate}`, { runId })
+
+      return {
+        ok: true,
+        skipped: false,
+        runId,
+        collectionDate,
+        enqueued: totalEnqueued,
+        endpoint_refresh: endpointRefresh,
+        rba_collection: rbaCollection,
+        source: options.source,
+      }
+    } catch (error) {
+      log.error('pipeline', `Daily run ${runId} failed: ${(error as Error)?.message || String(error)}`, {
+        code: 'daily_run_failed',
+        runId,
+      })
+      await markRunFailed(env.DB, runId, `daily_run_enqueue_failed: ${(error as Error)?.message || String(error)}`)
+      throw error
+    }
+  } finally {
     if (lockAcquired) {
-      await releaseRunLock(env, { key: lockKey, owner: runId })
+      try {
+        await releaseRunLock(env, { key: lockKey, owner: runId })
+      } catch (error) {
+        log.error('pipeline', `Daily run ${runId} lock release failed: ${(error as Error)?.message || String(error)}`, {
+          code: 'daily_run_lock_release_failed',
+          runId,
+        })
+      }
     }
-
-    return {
-      ok: true,
-      skipped: false,
-      runId,
-      collectionDate,
-      enqueued: totalEnqueued,
-      endpoint_refresh: endpointRefresh,
-      rba_collection: rbaCollection,
-      source: options.source,
-    }
-  } catch (error) {
-    log.error('pipeline', `Daily run ${runId} failed: ${(error as Error)?.message || String(error)}`, {
-      code: 'daily_run_failed',
-      runId,
-    })
-    await markRunFailed(env.DB, runId, `daily_run_enqueue_failed: ${(error as Error)?.message || String(error)}`)
-    throw error
   }
 }
 

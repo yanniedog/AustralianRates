@@ -14,9 +14,10 @@ import {
 import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
+import { guardPublicHistoricalPull, guardPublicTriggerRun } from './public-write-gates'
 import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
-import { jsonError, withPublicCache } from '../utils/http'
+import { jsonError, withNoStore, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
@@ -29,7 +30,9 @@ import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public
 export const savingsPublicRoutes = new Hono<AppContext>()
 
 savingsPublicRoutes.use('*', async (c, next) => {
-  withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
+  const method = c.req.method.toUpperCase()
+  if (method === 'GET' || method === 'HEAD') withPublicCache(c, DEFAULT_PUBLIC_CACHE_SECONDS)
+  else withNoStore(c)
   await next()
 })
 
@@ -67,6 +70,9 @@ savingsPublicRoutes.get('/changes', async (c) => {
 })
 
 savingsPublicRoutes.post('/trigger-run', async (c) => {
+  const guard = guardPublicTriggerRun(c)
+  if (guard) return guard
+
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   if (hasDeprecatedHistoricalTriggerPayload(body)) {
     return jsonError(c, 410, HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE)
@@ -79,6 +85,9 @@ savingsPublicRoutes.post('/trigger-run', async (c) => {
 savingsPublicRoutes.get('/run-status/:runId', handlePublicRunStatus)
 
 savingsPublicRoutes.post('/historical/pull', async (c) => {
+  const guard = guardPublicHistoricalPull(c)
+  if (guard) return guard
+
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const startDate = String(body.start_date ?? body.startDate ?? '').trim()
   const endDate = String(body.end_date ?? body.endDate ?? '').trim()

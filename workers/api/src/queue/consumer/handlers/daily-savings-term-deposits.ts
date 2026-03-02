@@ -144,7 +144,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       })
     }
 
-    for (const payload of [...savingsProducts.rawPayloads, ...tdProducts.rawPayloads]) {
+    for (const payload of savingsProducts.rawPayloads) {
       await persistRawPayload(env, {
         sourceType: 'cdr_products',
         sourceUrl: payload.sourceUrl,
@@ -152,10 +152,24 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         httpStatus: payload.status,
         runId: job.runId,
         lenderCode: job.lenderCode,
-        dataset: uniqueSavingsIds.length > 0 ? 'savings' : 'term_deposits',
+        dataset: 'savings',
         jobKind: 'daily_deposit_index_fetch',
         collectionDate: job.collectionDate,
-        notes: `savings_td_product_index lender=${job.lenderCode}`,
+        notes: `savings_product_index lender=${job.lenderCode}`,
+      })
+    }
+    for (const payload of tdProducts.rawPayloads) {
+      await persistRawPayload(env, {
+        sourceType: 'cdr_products',
+        sourceUrl: payload.sourceUrl,
+        payload: payload.body,
+        httpStatus: payload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        jobKind: 'daily_deposit_index_fetch',
+        collectionDate: job.collectionDate,
+        notes: `term_deposit_product_index lender=${job.lenderCode}`,
       })
     }
 
@@ -257,46 +271,50 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
     })
   }
 
-  await persistRawPayload(env, {
-    sourceType: 'cdr_products',
-    sourceUrl: `summary://${job.lenderCode}/savings-td`,
-    payload: {
-      lenderCode: job.lenderCode,
+  const summaryDatasets: Array<DatasetKind | null> = finalizeDatasets.length > 0 ? [...finalizeDatasets] : [null]
+  for (const summaryDataset of summaryDatasets) {
+    await persistRawPayload(env, {
+      sourceType: 'cdr_products',
+      sourceUrl: `summary://${job.lenderCode}/savings-td/${summaryDataset ?? 'combined'}`,
+      payload: {
+        lenderCode: job.lenderCode,
+        runId: job.runId,
+        collectionDate: job.collectionDate,
+        fetchedAt: nowIso(),
+        summary_dataset: summaryDataset,
+        savings: {
+          discovered: uniqueSavingsProductIds.length,
+          detail_jobs_enqueued: savingsDetailJobsEnqueued,
+          index_succeeded: savingsIndexSucceeded,
+        },
+        term_deposits: {
+          discovered: uniqueTdProductIds.length,
+          detail_jobs_enqueued: tdDetailJobsEnqueued,
+          index_succeeded: tdIndexSucceeded,
+        },
+        collection: {
+          endpointsTried,
+          indexPayloads,
+        },
+        endpointDiagnostics,
+        timing: {
+          endpointDiscoveryMs,
+          collectionMs,
+          totalMs: elapsedMs(startedAt),
+        },
+        source_mix: {
+          [job.runSource ?? 'scheduled']: totalAdditionalJobs,
+        },
+      },
+      httpStatus: finalizeDatasets.length > 0 ? 202 : 204,
       runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: summaryDataset,
+      jobKind: 'daily_deposit_index_fetch',
       collectionDate: job.collectionDate,
-      fetchedAt: nowIso(),
-      savings: {
-        discovered: uniqueSavingsProductIds.length,
-        detail_jobs_enqueued: savingsDetailJobsEnqueued,
-        index_succeeded: savingsIndexSucceeded,
-      },
-      term_deposits: {
-        discovered: uniqueTdProductIds.length,
-        detail_jobs_enqueued: tdDetailJobsEnqueued,
-        index_succeeded: tdIndexSucceeded,
-      },
-      collection: {
-        endpointsTried,
-        indexPayloads,
-      },
-      endpointDiagnostics,
-      timing: {
-        endpointDiscoveryMs,
-        collectionMs,
-        totalMs: elapsedMs(startedAt),
-      },
-      source_mix: {
-        [job.runSource ?? 'scheduled']: totalAdditionalJobs,
-      },
-    },
-    httpStatus: finalizeDatasets.length > 0 ? 202 : 204,
-    runId: job.runId,
-    lenderCode: job.lenderCode,
-    dataset: savingsIndexSucceeded ? 'savings' : 'term_deposits',
-    jobKind: 'daily_deposit_index_fetch',
-    collectionDate: job.collectionDate,
-    notes: `savings_td_index_summary lender=${job.lenderCode}`,
-  })
+      notes: `savings_td_index_summary lender=${job.lenderCode} dataset=${summaryDataset ?? 'combined'}`,
+    })
+  }
 
   if (finalizeDatasets.length === 0) {
     log.warn('consumer', 'daily_savings_lender_fetch empty_result', {

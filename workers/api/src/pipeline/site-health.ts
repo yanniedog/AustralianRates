@@ -90,13 +90,26 @@ export async function runSiteHealthChecks(
   const runId = `health:${input.triggerSource}:${checkedAt}:${crypto.randomUUID()}`
   const startedAt = Date.now()
   const origin = normalizeOrigin(input.origin)
+  const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne').catch((error) => ({
+    ok: false,
+    checked_at: new Date().toISOString(),
+    checks: [
+      {
+        name: 'integrity_runtime_error',
+        passed: false,
+        detail: {
+          error: (error as Error)?.message || String(error),
+        },
+      },
+    ],
+  }))
 
   const [homeComponents, savingsComponents, tdComponents, homepage, integrity, e2e, logs] = await Promise.all([
     checkDataset(origin, 'home_loans', API_BASE_PATH),
     checkDataset(origin, 'savings', SAVINGS_API_BASE_PATH),
     checkDataset(origin, 'term_deposits', TD_API_BASE_PATH),
     requestJson(origin, '/'),
-    runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne'),
+    integrityPromise,
     runE2ECheck(env, { origin }),
     queryLogs(env.DB, { limit: 200 }),
   ])

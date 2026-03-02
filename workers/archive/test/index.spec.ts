@@ -20,12 +20,16 @@ describe('australianrates-archive worker', () => {
 		expect(await response.text()).toBe('Not Found');
 	});
 
-	it('returns JSON with ok and version for /api/debug/version', async () => {
+	it('returns disabled contract for /api/debug/version when debug routes are gated', async () => {
 		const response = await SELF.fetch('https://example.com/api/debug/version');
-		expect(response.status).toBe(200);
-		const data = (await response.json()) as { ok: boolean; version?: string; hasBindings?: object };
-		expect(data.ok).toBe(true);
-		expect(typeof data.version).toBe('string');
-		expect(data.hasBindings).toBeDefined();
+		expect(response.status).toBe(403);
+		expect(response.headers.get('cache-control')).toContain('no-store');
+		const data = (await response.json()) as {
+			ok: boolean;
+			error?: { code?: string; message?: string };
+		};
+		expect(data.ok).toBe(false);
+		expect(data.error?.code).toBe('ARCHIVE_DEBUG_DISABLED');
+		expect(typeof data.error?.message).toBe('string');
 	});
 });
