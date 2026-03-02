@@ -142,6 +142,7 @@ export type EnvBindings = {
   DB: D1Database
   RAW_BUCKET: R2Bucket
   INGEST_QUEUE: Queue<IngestMessage>
+  IDEMPOTENCY_KV?: KVNamespace
   RUN_LOCK_DO: DurableObjectNamespace
   ADMIN_API_TOKEN?: string
   CF_ACCESS_TEAM_DOMAIN?: string
@@ -167,6 +168,8 @@ export type EnvBindings = {
   FEATURE_PUBLIC_HISTORICAL_PULL_ENABLED?: string
   FEATURE_PUBLIC_EXPORT_JOB_ENABLED?: string
   FEATURE_INTEGRITY_PROBES_ENABLED?: string
+  FEATURE_QUEUE_IDEMPOTENCY_ENABLED?: string
+  IDEMPOTENCY_TTL_SECONDS?: string
   FETCH_TIMEOUT_MS?: string
   FETCH_MAX_RETRIES?: string
   FETCH_RETRY_BASE_MS?: string

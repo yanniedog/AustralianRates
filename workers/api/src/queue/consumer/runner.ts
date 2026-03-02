@@ -4,6 +4,7 @@ import type { EnvBindings, IngestMessage } from '../../types'
 import { log } from '../../utils/logger'
 import { parseIntegerEnv } from '../../utils/time'
 import { processMessage } from './dispatch'
+import { claimIdempotency } from './idempotency'
 import { elapsedMs, serializeForLog } from './log-helpers'
 import { extractRunContext, isIngestMessage, isObject } from './message-shape'
 import { calculateRetryDelaySeconds, isNonRetryableErrorMessage } from './retry-config'
@@ -20,6 +21,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
     nonRetryable: 0,
     exhausted: 0,
     invalidShape: 0,
+    duplicates: 0,
   }
   log.info('consumer', `queue_batch received ${batch.messages.length} messages`, {
     context: `max_attempts=${maxAttempts}`,
@@ -52,6 +54,36 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
           context: `${messageContext} body=${serializeForLog(body)}`,
         })
         throw new Error('invalid_queue_message_shape')
+      }
+
+      const claim = await claimIdempotency(env, {
+        kind: body.kind,
+        idempotencyKey,
+        runId: context.runId,
+        lenderCode: context.lenderCode,
+      })
+      if (claim.reason === 'missing_key' || claim.reason === 'kv_missing' || claim.reason === 'kv_error') {
+        log.warn('consumer', 'queue_idempotency_degraded', {
+          runId: context.runId ?? undefined,
+          lenderCode: context.lenderCode ?? undefined,
+          context:
+            `${messageContext} reason=${claim.reason}` +
+            ` key=${claim.key ?? 'none'} ttl=${claim.ttlSeconds}` +
+            `${claim.error ? ` error=${claim.error}` : ''}`,
+        })
+      }
+      if (claim.duplicate) {
+        metrics.duplicates += 1
+        msg.ack()
+        metrics.acked += 1
+        log.info('consumer', 'queue_message_duplicate_ack', {
+          runId: context.runId ?? undefined,
+          lenderCode: context.lenderCode ?? undefined,
+          context:
+            `${messageContext} key=${claim.key ?? 'none'}` +
+            ` ttl=${claim.ttlSeconds} elapsed_ms=${elapsedMs(messageStartedAt)}`,
+        })
+        continue
       }
 
       await processMessage(env, body)
@@ -144,6 +176,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       ` acked=${metrics.acked} retried=${metrics.retried}` +
       ` success=${metrics.success} failed=${metrics.failed}` +
       ` non_retryable=${metrics.nonRetryable} exhausted=${metrics.exhausted}` +
-      ` invalid_shape=${metrics.invalidShape} total_ms=${elapsedMs(startedAt)}`,
+      ` invalid_shape=${metrics.invalidShape} duplicates=${metrics.duplicates}` +
+      ` total_ms=${elapsedMs(startedAt)}`,
   })
 }

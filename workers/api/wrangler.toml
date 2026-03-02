@@ -39,6 +39,11 @@ bucket_name = "australianrates-raw"
 binding = "INGEST_QUEUE"
 queue = "australianrates-ingest"
 
+[[kv_namespaces]]
+binding = "IDEMPOTENCY_KV"
+id = "00000000000000000000000000000000"
+preview_id = "00000000000000000000000000000000"
+
 [[queues.consumers]]
 queue = "australianrates-ingest"
 max_batch_size = 50
@@ -86,6 +91,8 @@ PUBLIC_HISTORICAL_COOLDOWN_SECONDS = "300"
 FEATURE_PUBLIC_TRIGGER_RUN_ENABLED = "false"
 FEATURE_PUBLIC_HISTORICAL_PULL_ENABLED = "false"
 FEATURE_PUBLIC_EXPORT_JOB_ENABLED = "false"
+FEATURE_QUEUE_IDEMPOTENCY_ENABLED = "false"
+IDEMPOTENCY_TTL_SECONDS = "604800"
 CF_ACCESS_TEAM_DOMAIN = ""
 CF_ACCESS_AUD = ""
 

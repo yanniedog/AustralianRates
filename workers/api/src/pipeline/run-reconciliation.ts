@@ -104,6 +104,37 @@ function pushError(target: string[], value: string): void {
   }
 }
 
+function isTransientDbError(error: unknown): boolean {
+  const message = ((error as Error)?.message || String(error)).toLowerCase()
+  return (
+    message.includes('d1_error') ||
+    message.includes('sqlite_busy') ||
+    message.includes('database is locked') ||
+    message.includes('temporarily unavailable') ||
+    message.includes('timed out') ||
+    message.includes('timeout')
+  )
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function runWithTransientRetry<T>(task: () => Promise<T>): Promise<T> {
+  const maxAttempts = 3
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await task()
+    } catch (error) {
+      lastError = error
+      if (!isTransientDbError(error) || attempt >= maxAttempts) break
+      await sleep(50 * attempt)
+    }
+  }
+  throw lastError
+}
+
 export async function reconcileReadyFinalizations(
   db: D1Database,
   options?: { dryRun?: boolean; idleMinutes?: number; maxRows?: number },
@@ -146,23 +177,27 @@ export async function reconcileReadyFinalizations(
     }
 
     try {
-      const marked = await tryMarkLenderDatasetFinalized(db, {
-        runId: row.run_id,
-        lenderCode: row.lender_code,
-        dataset: row.dataset_kind,
-      })
+      await runWithTransientRetry(async () =>
+        finalizePresenceForRun(db, {
+          runId: row.run_id,
+          lenderCode: row.lender_code,
+          dataset: row.dataset_kind,
+          bankName: row.bank_name,
+          collectionDate: row.collection_date,
+        }),
+      )
+
+      const marked = await runWithTransientRetry(async () =>
+        tryMarkLenderDatasetFinalized(db, {
+          runId: row.run_id,
+          lenderCode: row.lender_code,
+          dataset: row.dataset_kind,
+        }),
+      )
       if (!marked) {
         skippedRows += 1
         continue
       }
-
-      await finalizePresenceForRun(db, {
-        runId: row.run_id,
-        lenderCode: row.lender_code,
-        dataset: row.dataset_kind,
-        bankName: row.bank_name,
-        collectionDate: row.collection_date,
-      })
       finalizedRows += 1
     } catch (error) {
       skippedRows += 1
