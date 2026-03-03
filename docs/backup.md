@@ -1,0 +1,54 @@
+# Safe D1 Backups
+
+This project must never commit database exports or backup artifacts.
+
+## Why
+
+- SQL/DB exports can be very large and will break GitHub push limits.
+- Exports may contain sensitive production data and should not live in git history.
+- Backups are operational artifacts, not source code.
+
+## Safe backup command
+
+From repo root:
+
+```bash
+npm run backup:api-db
+```
+
+This runs:
+
+```bash
+node scripts/export-d1-backup.js --db australianrates_api --remote
+```
+
+Behavior:
+
+- Runs a read-only `wrangler d1 export`.
+- Writes output outside the repo by default:
+  - Windows: `%USERPROFILE%\ar-backups\`
+  - macOS/Linux: `~/ar-backups/`
+- Compresses SQL to `.sql.gz` (smaller by default).
+- Prints exact output file path and size when done.
+
+## Optional arguments
+
+```bash
+node scripts/export-d1-backup.js --db australianrates_api --remote --output-dir "C:\Users\<you>\ar-backups"
+```
+
+Writing inside the repo is blocked by default. If you intentionally want that behavior (not recommended), you must pass:
+
+```bash
+--allow-repo-path
+```
+
+## Git hygiene
+
+- `artifacts/` is ignored by git.
+- `artifacts/.gitkeep` is the only file intended to be tracked there.
+- Never force-add backup files (for example with `git add -f`).
+
+## Production safety
+
+- `wrangler d1 export` is read-only and does not mutate production data.

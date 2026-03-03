@@ -12,16 +12,18 @@ site/version.json
 Thumbs.db
 .DS_Store
 tmp/
-artifacts/
 test-screenshots/
 docs/CLOUDFLARE_USAGE.md
 *.log
 logs/
 *australianrates-log*.txt
 
-# Local DB exports / audit artefacts
-artifacts/
-*.sql
-*.db
-*.sqlite
-*.json
+# Local DB exports / audit artefacts (do not commit)
+artifacts/*
+!artifacts/.gitkeep
+artifacts/**/*.sql
+artifacts/**/*.sql.gz
+artifacts/**/*.db
+artifacts/**/*.sqlite
+artifacts/**/*.sqlite3
+artifacts/**/*.json

@@ -26,6 +26,7 @@
     "pages:create-full-token": "node create-full-access-token.js",
     "typecheck:scripts": "npx tsc -p tools/node-scripts/tsconfig.json --noEmit",
     "typecheck:api": "npm run typecheck -w workers/api",
+    "backup:api-db": "node scripts/export-d1-backup.js --db australianrates_api --remote",
     "deploy:api": "node scripts/deploy-api.mjs",
     "deploy:archive": "npm run deploy -w workers/archive"
   },
