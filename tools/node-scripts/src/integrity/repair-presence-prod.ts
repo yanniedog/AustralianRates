@@ -1,6 +1,7 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from 'node:child_process'
 import { isReadOnlySql, startsWithSelectOrWith } from './runbook'
 
 const ALLOWED_DB = 'australianrates_api'
@@ -21,7 +22,7 @@ export type RepairPresenceProdConfig = {
   remote: true
   apply: boolean
   deleteExtras: boolean
-  acknowledgeMutation: true
+  acknowledgeMutation: boolean
   confirmBackup: true
   backupArtifact: string
 }
@@ -42,12 +43,33 @@ type ExecuteCommandResult = {
   payload: WranglerQueryResult[]
 }
 
-function normalizeSql(sql: string): string {
-  return sql.replace(/\s+/g, ' ').trim()
+export type SpawnRunner = (
+  command: string,
+  args: string[],
+  options: SpawnSyncOptionsWithStringEncoding,
+) => SpawnSyncReturns<string>
+
+type RunWranglerResult = {
+  executable: string
+  args: string[]
+  fullCommand?: string
+  exitCode: number
+  stdout: string
+  stderr: string
+  errorMessage?: string
 }
 
-function escapeForCommand(sql: string): string {
-  return normalizeSql(sql).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+type RunD1SqlFileOptions = {
+  spawnRunner?: SpawnRunner
+  wranglerBin?: string
+  tempDir?: string
+  nowMs?: () => number
+  writeFile?: (filePath: string, content: string) => void
+  unlinkFile?: (filePath: string) => void
+}
+
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, ' ').trim()
 }
 
 function parseArgValue(args: string[], key: string): string | undefined {
@@ -89,8 +111,9 @@ export function parseRepairPresenceProdConfig(args: string[]): RepairPresencePro
     throw new Error('Refusing execution: --remote is required for production repair mode.')
   }
 
+  const apply = hasFlag(args, '--apply')
   const acknowledgeMutation = hasFlag(args, '--i-know-this-will-mutate-production')
-  if (!acknowledgeMutation) {
+  if (apply && !acknowledgeMutation) {
     throw new Error('Refusing execution: --i-know-this-will-mutate-production is required.')
   }
 
@@ -112,9 +135,9 @@ export function parseRepairPresenceProdConfig(args: string[]): RepairPresencePro
   return {
     db,
     remote: true,
-    apply: hasFlag(args, '--apply'),
+    apply,
     deleteExtras: hasFlag(args, '--delete-extras'),
-    acknowledgeMutation: true,
+    acknowledgeMutation,
     confirmBackup: true,
     backupArtifact,
   }
@@ -295,34 +318,167 @@ function parseWranglerJsonOutput(stdout: string): WranglerQueryResult[] {
   throw new Error(`Unable to parse wrangler JSON output: ${trimmed.slice(0, 400)}`)
 }
 
-function wranglerCommandString(db: string, sql: string): string {
-  return `wrangler d1 execute ${db} --remote --json --command "${escapeForCommand(sql)}"`
+function tokenizeCommand(command: string): string[] {
+  const tokens: string[] = []
+  const pattern = /"([^"]*)"|'([^']*)'|[^\s]+/g
+  for (const match of command.matchAll(pattern)) {
+    tokens.push(match[1] ?? match[2] ?? match[0])
+  }
+  return tokens
 }
 
-function executeRemoteSql(db: string, sql: string): ExecuteCommandResult {
-  const args = ['wrangler', 'd1', 'execute', db, '--remote', '--json', '--command', sql]
-  const result = spawnSync('npx', args, {
-    encoding: 'utf8',
-    shell: false,
-  })
-
-  if (result.error) {
-    throw new Error(`Failed to run wrangler command: ${result.error.message}`)
+function escapeCmdExeArg(value: string): string {
+  const escaped = String(value).replace(/"/g, '\\"')
+  if (escaped.length === 0 || /[\s&|<>()^%!]/.test(escaped)) {
+    return `"${escaped}"`
   }
+  return escaped
+}
 
-  const exitCode = typeof result.status === 'number' ? result.status : 1
-  if (exitCode !== 0) {
-    throw new Error(
-      `Wrangler command failed (${exitCode}): ${wranglerCommandString(db, sql)}\n${String(result.stderr || '').trim()}`,
-    )
-  }
-
-  const stdout = String(result.stdout || '')
+function parseWranglerBin(raw: string | undefined): { command: string; prefixArgs: string[] } {
+  const tokens = tokenizeCommand(String(raw || '').trim())
+  if (tokens.length === 0) return { command: 'wrangler', prefixArgs: [] }
   return {
-    command: wranglerCommandString(db, sql),
-    exitCode,
-    payload: parseWranglerJsonOutput(stdout),
+    command: tokens[0],
+    prefixArgs: tokens.slice(1),
   }
+}
+
+export function buildCmdExeFallbackCommand(args: string[]): string {
+  return ['npx', 'wrangler', ...args].map(escapeCmdExeArg).join(' ')
+}
+
+function summarizeSql(sqlText: string): string {
+  return normalizeSql(sqlText).slice(0, 200)
+}
+
+function sanitizeLabel(label: string): string {
+  const value = String(label || 'query').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-')
+  return value || 'query'
+}
+
+function invocationFromRun(run: RunWranglerResult): string {
+  return run.fullCommand ? `cmd.exe /d /s /c ${run.fullCommand}` : `${run.executable} ${run.args.join(' ')}`
+}
+
+function runSingleSpawn(
+  spawnRunner: SpawnRunner,
+  executable: string,
+  args: string[],
+  fullCommand?: string,
+): RunWranglerResult {
+  const result = spawnRunner(executable, args, {
+    shell: false,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  })
+  return {
+    executable,
+    args,
+    fullCommand,
+    exitCode: typeof result.status === 'number' ? result.status : 1,
+    stdout: String(result.stdout || ''),
+    stderr: String(result.stderr || ''),
+    errorMessage: result.error?.message,
+  }
+}
+
+function formatRunFailure(prefix: string, run: RunWranglerResult): string {
+  const invocation = run.fullCommand
+    ? `${run.executable} ${run.args.join(' ')}\nfull_cmd=${run.fullCommand}`
+    : `${run.executable} ${run.args.join(' ')}`
+  return `${prefix}\nexecutable=${run.executable}\ninvocation=${invocation}\nexit=${run.exitCode}\nstdout=${run.stdout.trim()}\nstderr=${run.stderr.trim()}\nerror=${run.errorMessage || ''}`
+}
+
+export function runWrangler(
+  args: string[],
+  opts?: {
+    spawnRunner?: SpawnRunner
+    wranglerBin?: string
+  },
+): RunWranglerResult {
+  const spawnRunner = opts?.spawnRunner ?? spawnSync
+  const wranglerBin = opts?.wranglerBin ?? process.env.WRANGLER_BIN
+  const parsed = parseWranglerBin(wranglerBin)
+  const directIsNpx = /^npx(?:\.cmd)?$/i.test(parsed.command)
+  const directArgs = directIsNpx ? [...(parsed.prefixArgs.length > 0 ? parsed.prefixArgs : ['wrangler']), ...args] : [...parsed.prefixArgs, ...args]
+  const directRun = runSingleSpawn(spawnRunner, parsed.command, directArgs)
+  if (directRun.exitCode === 0) return directRun
+
+  const fallbackCmd = buildCmdExeFallbackCommand(args)
+  const fallbackRun = runSingleSpawn(spawnRunner, 'cmd.exe', ['/d', '/s', '/c', fallbackCmd], fallbackCmd)
+  if (fallbackRun.exitCode === 0) return fallbackRun
+
+  throw new Error(
+    `${formatRunFailure('Wrangler direct invocation failed.', directRun)}\n\n${formatRunFailure(
+      'Wrangler cmd.exe fallback failed.',
+      fallbackRun,
+    )}`,
+  )
+}
+
+export function runD1SqlFile(
+  dbName: string,
+  remote: boolean,
+  sqlText: string,
+  label: string,
+  options?: RunD1SqlFileOptions,
+): ExecuteCommandResult {
+  const sql = String(sqlText || '').trim()
+  if (!sql) {
+    throw new Error(`SQL text for ${label} must be non-empty.`)
+  }
+
+  const nowMs = options?.nowMs ?? (() => Date.now())
+  const tempDir = options?.tempDir ?? os.tmpdir()
+  const tempPath = path.join(
+    tempDir,
+    `repair-presence-prod-${sanitizeLabel(label)}-${nowMs()}-${process.pid}.sql`,
+  )
+
+  const writeFile = options?.writeFile ?? ((filePath: string, content: string) => fs.writeFileSync(filePath, content, 'utf8'))
+  const unlinkFile = options?.unlinkFile ?? ((filePath: string) => fs.unlinkSync(filePath))
+  const spawnRunner = options?.spawnRunner ?? spawnSync
+
+  writeFile(tempPath, `${sql}\n`)
+
+  const args = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--json', '--file', tempPath]
+
+  try {
+    const run = runWrangler(args, { spawnRunner, wranglerBin: options?.wranglerBin })
+    return {
+      command: invocationFromRun(run),
+      exitCode: run.exitCode,
+      payload: parseWranglerJsonOutput(run.stdout),
+    }
+  } catch (error) {
+    throw new Error(
+      `${(error as Error)?.message || String(error)}\ntemp_sql_file=${tempPath}\nsql_preview=${summarizeSql(sql)}`,
+    )
+  } finally {
+    try {
+      unlinkFile(tempPath)
+    } catch {
+      // best effort cleanup
+    }
+  }
+}
+
+function executeRemoteSql(db: string, sql: string, label: string, spawnRunner: SpawnRunner = spawnSync): ExecuteCommandResult {
+  const run = runD1SqlFile(db, true, sql, label, { spawnRunner })
+  return {
+    command: run.command,
+    exitCode: run.exitCode,
+    payload: run.payload,
+  }
+}
+
+export function executeRemoteSqlWithFallbackForTest(
+  db: string,
+  sql: string,
+  spawnRunner: SpawnRunner,
+): ExecuteCommandResult {
+  return executeRemoteSql(db, sql, 'test', spawnRunner)
 }
 
 function asNumber(value: unknown): number {
@@ -363,8 +519,8 @@ export function main(args: string[]): void {
     }
   }
 
-  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count)
-  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts)
+  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count')
+  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts')
 
   const currentOrphanRow = firstRow(currentOrphan.payload)
   const plannedCountsRow = firstRow(plannedCounts.payload)
@@ -400,18 +556,18 @@ export function main(args: string[]): void {
   }
 
   if (config.apply) {
-    const insertResult = executeRemoteSql(config.db, applySql.insert_missing)
+    const insertResult = executeRemoteSql(config.db, applySql.insert_missing, 'apply-insert-missing')
     const executedCommands = report.executed_commands as Array<{ command: string; exit_code: number }>
     executedCommands.push({ command: insertResult.command, exit_code: insertResult.exitCode })
 
     let deletedRows = 0
     if (config.deleteExtras) {
-      const deleteResult = executeRemoteSql(config.db, applySql.delete_safe_extras)
+      const deleteResult = executeRemoteSql(config.db, applySql.delete_safe_extras, 'apply-delete-safe-extras')
       deletedRows = changesFromPayload(deleteResult.payload)
       executedCommands.push({ command: deleteResult.command, exit_code: deleteResult.exitCode })
     }
 
-    const postVerify = executeRemoteSql(config.db, planSql.current_orphan_count)
+    const postVerify = executeRemoteSql(config.db, planSql.current_orphan_count, 'post-verify-orphan-count')
     executedCommands.push({ command: postVerify.command, exit_code: postVerify.exitCode })
     const postVerifyRow = firstRow(postVerify.payload)
 

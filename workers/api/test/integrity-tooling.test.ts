@@ -22,11 +22,14 @@ import {
 } from '../../../tools/node-scripts/src/integrity/repair-presence'
 import { DatabaseSync } from 'node:sqlite'
 import {
+  buildCmdExeFallbackCommand,
   buildRepairPresenceProdApplySql,
   buildRepairPresenceProdPlanSql,
+  executeRemoteSqlWithFallbackForTest,
   isSafePlanSql,
   isSafePresenceMutationSql,
   parseRepairPresenceProdConfig,
+  runD1SqlFile,
 } from '../../../tools/node-scripts/src/integrity/repair-presence-prod'
 
 describe('integrity runbook SQL generation', () => {
@@ -221,6 +224,7 @@ describe('repair presence production guardrails', () => {
         '--remote',
         '--db',
         'australianrates_api',
+        '--apply',
         '--confirm-backup',
         '--backup-artifact',
         backup,
@@ -258,6 +262,21 @@ describe('repair presence production guardrails', () => {
     ).toThrow(/only --db australianrates_api is allowed/i)
   })
 
+  it('plan mode does not require dangerous mutation flag', () => {
+    const backup = makeBackupArtifact()
+    const parsed = parseRepairPresenceProdConfig([
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      backup,
+    ])
+
+    expect(parsed.apply).toBe(false)
+    expect(parsed.acknowledgeMutation).toBe(false)
+  })
+
   it('accepts config when all required production guard flags are present', () => {
     const backup = makeBackupArtifact()
     const parsed = parseRepairPresenceProdConfig([
@@ -277,6 +296,98 @@ describe('repair presence production guardrails', () => {
     expect(parsed.apply).toBe(true)
     expect(parsed.deleteExtras).toBe(true)
     expect(parsed.backupArtifact).toBe(path.resolve(backup))
+  })
+})
+
+describe('repair presence production command fallback', () => {
+  it('builds cmd.exe fallback command with --file argument', () => {
+    const cmd = buildCmdExeFallbackCommand([
+      'd1',
+      'execute',
+      'australianrates_api',
+      '--remote',
+      '--json',
+      '--file',
+      'C:\\temp\\repair plan.sql',
+    ])
+
+    expect(cmd).toContain('d1 execute australianrates_api --remote')
+    expect(cmd).toContain('--file "C:\\temp\\repair plan.sql"')
+    expect(cmd).not.toContain('--command')
+  })
+
+  it('falls back from wrangler direct to cmd.exe command string', () => {
+    const calls: Array<{ command: string; args: string[] }> = []
+    let invocation = 0
+
+    const fakeSpawn = ((command: string, args: string[]) => {
+      calls.push({ command, args })
+      invocation += 1
+      if (invocation === 1) {
+        return {
+          pid: 0,
+          output: [],
+          stdout: '',
+          stderr: '',
+          status: 1,
+          signal: null,
+          error: Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }),
+        }
+      }
+      return {
+        pid: 1,
+        output: [],
+        stdout: '[{\"results\":[{\"ok\":1}],\"success\":true,\"meta\":{\"changes\":0}}]',
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof executeRemoteSqlWithFallbackForTest>[2]
+
+    const result = executeRemoteSqlWithFallbackForTest('australianrates_api', 'SELECT 1 AS ok', fakeSpawn)
+    expect(result.exitCode).toBe(0)
+    expect(calls[0]?.command).toBe('wrangler')
+    expect(calls[1]?.command).toBe('cmd.exe')
+    expect(calls[1]?.args.join(' ')).toContain('npx wrangler d1 execute australianrates_api --remote')
+    expect(calls[1]?.args.join(' ')).toContain('--file')
+    expect(calls[1]?.args.join(' ')).not.toContain('--command')
+  })
+
+  it('uses --file execution, writes SQL text, and attempts cleanup in finally', () => {
+    const spawnCalls: Array<{ command: string; args: string[] }> = []
+    const writes: Array<{ filePath: string; content: string }> = []
+    const unlinks: string[] = []
+
+    const fakeSpawn = ((command: string, args: string[]) => {
+      spawnCalls.push({ command, args })
+      return {
+        pid: 1,
+        output: [],
+        stdout: '[{\"results\":[{\"ok\":1}],\"success\":true,\"meta\":{\"changes\":0}}]',
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof executeRemoteSqlWithFallbackForTest>[2]
+
+    const result = runD1SqlFile('australianrates_api', true, 'SELECT 1 AS ok', 'plan-test', {
+      nowMs: () => 1700000000000,
+      tempDir: path.join(os.tmpdir(), 'repair-presence-prod-tests'),
+      writeFile: (filePath, content) => {
+        writes.push({ filePath, content })
+      },
+      unlinkFile: (filePath) => {
+        unlinks.push(filePath)
+      },
+      spawnRunner: fakeSpawn,
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(spawnCalls[0]?.args).toContain('--file')
+    expect(spawnCalls[0]?.args).not.toContain('--command')
+    expect(writes.length).toBe(1)
+    expect(writes[0]?.content.trimStart().startsWith('SELECT')).toBe(true)
+    expect(unlinks).toContain(writes[0]?.filePath as string)
   })
 })
 
