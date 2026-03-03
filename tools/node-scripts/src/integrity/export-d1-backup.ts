@@ -188,7 +188,7 @@ function formatBytes(bytes: number): string {
 }
 
 function runWranglerExport(config: ExportBackupConfig, sqlPath: string): void {
-  const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+  const npxCommand = 'npx'
   const wranglerArgs = ['wrangler', 'd1', 'export', config.dbName]
   if (config.remote) wranglerArgs.push('--remote')
   wranglerArgs.push('--output', sqlPath, ...config.passthroughArgs)
@@ -198,7 +198,7 @@ function runWranglerExport(config: ExportBackupConfig, sqlPath: string): void {
     cwd: repoRoot,
     env: process.env,
     stdio: 'inherit',
-    shell: false,
+    shell: process.platform === 'win32',
   })
 
   if (result.error) {
