@@ -67,6 +67,32 @@
     }
 
     function bindTabListeners() {
+        function getVisibleTabButtons() {
+            return tabBtns.filter(function (btn) {
+                if (!btn) return false;
+                if (btn.hidden) return false;
+                return btn.getAttribute('aria-hidden') !== 'true';
+            });
+        }
+
+        function moveFocusAndActivate(currentBtn, dir) {
+            var visible = getVisibleTabButtons();
+            if (!visible.length) return;
+            var currentIndex = visible.indexOf(currentBtn);
+            if (currentIndex < 0) currentIndex = 0;
+
+            var nextIndex = currentIndex;
+            if (dir === 'first') nextIndex = 0;
+            else if (dir === 'last') nextIndex = visible.length - 1;
+            else if (dir === 'prev') nextIndex = (currentIndex - 1 + visible.length) % visible.length;
+            else if (dir === 'next') nextIndex = (currentIndex + 1) % visible.length;
+
+            var nextBtn = visible[nextIndex];
+            if (!nextBtn) return;
+            nextBtn.focus();
+            activateTab(nextBtn.id.replace('tab-', ''));
+        }
+
         tabBtns.forEach(function (btn) {
             if (!btn) return;
             btn.addEventListener('click', function () {
@@ -76,6 +102,26 @@
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     activateTab(btn.id.replace('tab-', ''));
+                    return;
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    moveFocusAndActivate(btn, 'next');
+                    return;
+                }
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    moveFocusAndActivate(btn, 'prev');
+                    return;
+                }
+                if (e.key === 'Home') {
+                    e.preventDefault();
+                    moveFocusAndActivate(btn, 'first');
+                    return;
+                }
+                if (e.key === 'End') {
+                    e.preventDefault();
+                    moveFocusAndActivate(btn, 'last');
                 }
             });
         });

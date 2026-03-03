@@ -32,7 +32,6 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../vendor/tabulator/tabulator_midnight.min.css">
     <link rel="stylesheet" href="../vendor/pivottable/pivot.min.css">
-    <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
     <link rel="stylesheet" href="../public-theme.css">
     <link rel="stylesheet" href="../public-layout.css">
@@ -94,10 +93,10 @@
 
         <section class="panel mode-panel" aria-label="Workspace mode">
             <div class="mode-switch" role="group" aria-label="Select view mode">
-                <button id="mode-consumer" class="mode-btn active" type="button" aria-pressed="true">Consumer</button>
-                <button id="mode-analyst" class="mode-btn" type="button" aria-pressed="false">Analyst</button>
+                <button id="mode-consumer" class="mode-btn" type="button" aria-pressed="false">Consumer</button>
+                <button id="mode-analyst" class="mode-btn active" type="button" aria-pressed="true">Analyst</button>
             </div>
-            <p class="mode-note">Consumer mode shows guided comparison. Analyst mode exposes full filtering, pivoting, and charting controls.</p>
+            <p class="mode-note">Analyst mode is the default workspace. Switch to Consumer mode for guided comparison only.</p>
         </section>
 
         <section class="panel quick-compare" aria-label="Quick compare summary">
@@ -119,8 +118,12 @@
                 <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
             </nav>
 
-            <details class="filters panel filters-collapsible" id="filter-bar">
+            <details class="filters panel filters-collapsible" id="filter-bar" open>
                 <summary class="filters-toggle" aria-label="Show or hide filter settings">Filters</summary>
+                <div class="filter-state-row">
+                    <span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span>
+                    <div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>
+                </div>
                 <div class="filters-grid">
                     <label>Banks
                         <select id="filter-bank" multiple size="5"></select>
@@ -167,6 +170,7 @@
                     </label>
                     <div class="filter-actions">
                         <button id="apply-filters" class="small" type="button">Apply Filters</button>
+                        <button id="reset-filters" class="small secondary" type="button">Reset</button>
                         <label for="download-format" class="download-label">Download</label>
                         <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
                             <option value="">Download as...</option>
@@ -238,7 +242,7 @@
                         </div>
                     </div>
                     <div id="chart-output" aria-label="Interactive chart"></div>
-                    <p id="chart-status" class="hint">Configure axes and click Draw Chart.</p>
+                    <p id="chart-status" class="hint">Configure axes and click Draw Chart. Loads up to 10,000 rows and renders up to 1,000 points.</p>
                     <div id="chart-point-details" class="chart-point-details" hidden aria-live="polite"></div>
                     <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
                 </div>

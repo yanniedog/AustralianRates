@@ -24,6 +24,9 @@
     var filterFields = sc.filterFields || [];
     var filterApiMap = sc.filterApiMap || {};
     var consumerFilterIds = getConsumerFilterIds();
+    var appliedFilterSignature = '';
+    var latestFilterPayload = null;
+    var interactionBound = false;
 
     function getConsumerFilterIds() {
         if (section === 'savings') {
@@ -42,6 +45,129 @@
             'filter-min-comparison-rate',
             'filter-max-comparison-rate',
         ];
+    }
+
+    function normalizeParamsForSignature(params) {
+        var input = params && typeof params === 'object' ? params : {};
+        var out = {};
+        Object.keys(input).sort().forEach(function (key) {
+            var value = input[key];
+            if (value == null) return;
+            var text = String(value).trim();
+            if (!text) return;
+            out[key] = text;
+        });
+        return JSON.stringify(out);
+    }
+
+    function getCurrentFilterSignature() {
+        return normalizeParamsForSignature(buildFilterParams());
+    }
+
+    function isFilterDirty() {
+        return getCurrentFilterSignature() !== appliedFilterSignature;
+    }
+
+    function findFieldByParam(param) {
+        for (var i = 0; i < filterFields.length; i++) {
+            var field = filterFields[i];
+            if (field.param === param || field.url === param || field.legacyUrl === param) return field;
+        }
+        return null;
+    }
+
+    function toTitleWords(value) {
+        return String(value || '')
+            .split('_')
+            .filter(Boolean)
+            .map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); })
+            .join(' ');
+    }
+
+    function formatChipLabel(field, key) {
+        if (field && field.label) return field.label;
+        if (key === 'start_date') return 'From';
+        if (key === 'end_date') return 'To';
+        if (key === 'mode') return 'Rate Mode';
+        if (key === 'include_manual') return 'Manual Runs';
+        return toTitleWords(key);
+    }
+
+    function renderActiveFilterChips() {
+        if (!els.activeFilterChips) return;
+        var params = buildFilterParams();
+        var chips = [];
+        Object.keys(params).forEach(function (key) {
+            if (key === 'include_removed') return;
+            var value = params[key];
+            if (value == null) return;
+            var text = String(value).trim();
+            if (!text) return;
+            var field = findFieldByParam(key);
+            var label = formatChipLabel(field, key);
+            if (text.indexOf(',') >= 0) {
+                var parts = text.split(',').filter(Boolean).map(function (part) {
+                    return field ? formatFilterValue(field.param, part) : part;
+                });
+                text = parts.join(', ');
+            } else if (field) {
+                text = formatFilterValue(field.param, text);
+            }
+            chips.push('<span class="filter-chip"><strong>' + esc(label) + ':</strong> ' + esc(text) + '</span>');
+        });
+
+        if (!chips.length) {
+            els.activeFilterChips.innerHTML = '<span class="filter-chip filter-chip-empty">No active filters</span>';
+            return;
+        }
+        els.activeFilterChips.innerHTML = chips.join('');
+    }
+
+    function renderDirtyIndicator() {
+        if (!els.filterDirtyIndicator) return;
+        var dirty = isFilterDirty();
+        els.filterDirtyIndicator.classList.toggle('is-dirty', dirty);
+        els.filterDirtyIndicator.textContent = dirty ? 'Unsaved filter changes' : 'Filters applied';
+    }
+
+    function refreshFilterUiState() {
+        renderActiveFilterChips();
+        renderDirtyIndicator();
+    }
+
+    function markFiltersApplied() {
+        appliedFilterSignature = getCurrentFilterSignature();
+        refreshFilterUiState();
+    }
+
+    function bindInteractionListeners() {
+        if (interactionBound) return;
+        interactionBound = true;
+        var controls = [];
+        for (var i = 0; i < filterFields.length; i++) {
+            controls.push(getFilterEl(filterFields[i].id));
+        }
+        controls.push(els.filterStartDate, els.filterEndDate, els.filterMode, els.filterIncludeManual, els.refreshInterval);
+        controls.forEach(function (el) {
+            if (!el) return;
+            el.addEventListener('change', refreshFilterUiState);
+            if (el.tagName === 'INPUT') {
+                el.addEventListener('input', refreshFilterUiState);
+            }
+        });
+    }
+
+    function resetFilters() {
+        for (var i = 0; i < filterFields.length; i++) {
+            var field = filterFields[i];
+            resetFieldValue(getFilterEl(field.id), field);
+        }
+        if (els.filterStartDate) els.filterStartDate.value = '';
+        if (els.filterEndDate) els.filterEndDate.value = '';
+        if (els.filterMode) els.filterMode.value = 'all';
+        if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
+        if (els.refreshInterval) els.refreshInterval.value = '60';
+        refreshFilterUiState();
     }
 
     function readColumnPrefs() {
@@ -186,6 +312,11 @@
         if (els.filterMode) setControlVisible(els.filterMode, analyst);
         if (els.filterIncludeManual) setControlVisible(els.filterIncludeManual, analyst);
         if (els.refreshInterval) setControlVisible(els.refreshInterval, analyst);
+        if (els.filterBar && els.filterBar.tagName === 'DETAILS') {
+            els.filterBar.open = analyst;
+        }
+
+        refreshFilterUiState();
 
         clientLog('info', 'Filter mode applied', {
             uiMode: analyst ? 'analyst' : 'consumer',
@@ -317,34 +448,41 @@
             var data = await r.json();
             if (!data || !data.filters) {
                 clientLog('warn', 'Filter options response missing filters payload');
-                return;
-            }
-            var f = data.filters;
-            for (var filterId in filterApiMap) {
-                if (!Object.prototype.hasOwnProperty.call(filterApiMap, filterId)) continue;
-                var field = null;
-                for (var i = 0; i < filterFields.length; i++) {
-                    if (filterFields[i].id === filterId) {
-                        field = filterFields[i];
-                        break;
+            } else {
+                var f = data.filters;
+                latestFilterPayload = f;
+                for (var filterId in filterApiMap) {
+                    if (!Object.prototype.hasOwnProperty.call(filterApiMap, filterId)) continue;
+                    var field = null;
+                    for (var i = 0; i < filterFields.length; i++) {
+                        if (filterFields[i].id === filterId) {
+                            field = filterFields[i];
+                            break;
+                        }
                     }
+                    if (!field) continue;
+                    var apiKey = filterApiMap[filterId];
+                    var el = getFilterEl(filterId);
+                    if (!el || !Array.isArray(f[apiKey])) continue;
+                    fillSelect(el, f[apiKey], field.param, { multiple: isMultiField(field) });
                 }
-                if (!field) continue;
-                var apiKey = filterApiMap[filterId];
-                var el = getFilterEl(filterId);
-                if (!el || !Array.isArray(f[apiKey])) continue;
-                fillSelect(el, f[apiKey], field.param, { multiple: isMultiField(field) });
+                clientLog('info', 'Filter options loaded', {
+                    keys: Object.keys(f),
+                    bankCount: Array.isArray(f.banks) ? f.banks.length : 0,
+                });
             }
-            clientLog('info', 'Filter options loaded', {
-                keys: Object.keys(f),
-                bankCount: Array.isArray(f.banks) ? f.banks.length : 0,
-            });
             restoreUrlState();
             applyUiMode();
+            bindInteractionListeners();
+            markFiltersApplied();
         } catch (err) {
             clientLog('error', 'Filter options load failed', {
                 message: err && err.message ? err.message : String(err),
             });
+            restoreUrlState();
+            applyUiMode();
+            bindInteractionListeners();
+            markFiltersApplied();
         }
     }
 
@@ -355,8 +493,12 @@
         restoreUrlState: restoreUrlState,
         applyUiMode: applyUiMode,
         loadFilters: loadFilters,
+        resetFilters: resetFilters,
+        refreshFilterUiState: refreshFilterUiState,
+        markFiltersApplied: markFiltersApplied,
+        bindInteractionListeners: bindInteractionListeners,
+        getFiltersPayload: function () { return latestFilterPayload; },
         readColumnPrefs: readColumnPrefs,
         writeColumnPrefs: writeColumnPrefs,
     };
 })();
-

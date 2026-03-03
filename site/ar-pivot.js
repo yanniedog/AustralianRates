@@ -13,6 +13,7 @@
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
+    var MAX_PIVOT_ROWS = 10000;
 
     var pivotFieldLabels = sc.pivotFieldLabels || {};
 
@@ -70,6 +71,7 @@
         var lastPage = 1;
         var total = 0;
         var rows = [];
+        var truncated = false;
         do {
             var params = {};
             Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
@@ -80,17 +82,23 @@
             total = Number(response.total || total || chunk.length || 0);
             lastPage = Math.max(1, Number(response.last_page || 1));
             rows = rows.concat(chunk);
+            if (rows.length >= MAX_PIVOT_ROWS) {
+                rows = rows.slice(0, MAX_PIVOT_ROWS);
+                truncated = true;
+            }
             if (typeof onProgress === 'function') {
                 onProgress({
                     page: page,
                     lastPage: lastPage,
                     loaded: rows.length,
                     total: total,
+                    truncated: truncated,
                 });
             }
+            if (truncated) break;
             page += 1;
         } while (page <= lastPage);
-        return { rows: rows, total: total || rows.length };
+        return { rows: rows, total: total || rows.length, truncated: truncated };
     }
 
     async function loadPivotData() {
@@ -115,12 +123,19 @@
                 return;
             }
             if (els.pivotStatus) {
-                els.pivotStatus.textContent =
-                    'Loaded ' + data.length.toLocaleString() + ' rows across all pages. Drag fields to configure the pivot.';
+                if (payload.truncated) {
+                    els.pivotStatus.textContent =
+                        'Loaded ' + data.length.toLocaleString() + ' of ' + Number(payload.total || data.length).toLocaleString() +
+                        ' rows (capped at 10,000). Narrow filters for full-fidelity pivoting.';
+                } else {
+                    els.pivotStatus.textContent =
+                        'Loaded ' + data.length.toLocaleString() + ' rows across all pages. Drag fields to configure the pivot.';
+                }
             }
             clientLog('info', 'Pivot load completed', {
                 rows: data.length,
                 total: Number(payload.total || data.length),
+                truncated: !!payload.truncated,
             });
 
             var pivotData = data.map(pivotRowFromApi);

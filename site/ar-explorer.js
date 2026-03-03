@@ -453,6 +453,17 @@
         return getLoanColumns();
     }
 
+    function getMobilePreferredFields() {
+        if (isAnalystMode()) return null;
+        if (section === 'savings') {
+            return ['found_at', 'interest_rate', 'bank_name', 'rate_type', 'deposit_tier', 'urls'];
+        }
+        if (section === 'term-deposits') {
+            return ['found_at', 'interest_rate', 'bank_name', 'term_months', 'deposit_tier', 'urls'];
+        }
+        return ['found_at', 'interest_rate', 'comparison_rate', 'bank_name', 'rate_structure', 'urls'];
+    }
+
     function isColumnVisible(field) {
         if (columnPrefs.visible[field] === false) return false;
         if (columnPrefs.visible[field] === true) return true;
@@ -468,6 +479,14 @@
         columns = columns.filter(function (column) {
             return isColumnVisible(column.field);
         });
+        if (isMobile()) {
+            var preferred = getMobilePreferredFields();
+            if (Array.isArray(preferred) && preferred.length) {
+                columns = columns.filter(function (column) {
+                    return preferred.indexOf(column.field) >= 0;
+                });
+            }
+        }
         columns = applyColumnOrder(columns, columnPrefs.columnOrder);
         return columns.length ? columns : getBaseColumns().slice(0, 1);
     }
@@ -482,6 +501,16 @@
     var tableOverlayObserver = null;
 
     function getTableLayout() { return 'fitDataStretch'; }
+
+    function isAbortLikeAjaxError(xhr, textStatus, errorThrown) {
+        var status = xhr && typeof xhr.status === 'number' ? xhr.status : null;
+        var txt = String(textStatus || '').toLowerCase();
+        var msg = String(errorThrown || '').toLowerCase();
+        if (status === 0 && (txt.indexOf('abort') >= 0 || msg.indexOf('abort') >= 0)) return true;
+        if (txt.indexOf('cancel') >= 0 || msg.indexOf('cancel') >= 0) return true;
+        if (msg.indexOf('err_aborted') >= 0 || msg.indexOf('net::err_aborted') >= 0) return true;
+        return false;
+    }
 
     function normalizeSortDir(dir) {
         return String(dir || '').toLowerCase() === 'asc' ? 'asc' : 'desc';
@@ -735,13 +764,21 @@
         var next = !!open;
         els.tableSettingsPopover.hidden = !next;
         els.tableSettingsBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
-        if (next) renderSettingsPopover();
+        if (next) {
+            renderSettingsPopover();
+            var firstInput = els.tableSettingsPopover.querySelector('input, button, [tabindex]');
+            if (firstInput && typeof firstInput.focus === 'function') firstInput.focus();
+        } else {
+            if (typeof els.tableSettingsBtn.focus === 'function') els.tableSettingsBtn.focus();
+        }
     }
 
     function bindSettingsUi() {
         if (settingsBound) return;
         settingsBound = true;
         if (!els.tableSettingsBtn || !els.tableSettingsPopover) return;
+        els.tableSettingsBtn.setAttribute('aria-haspopup', 'dialog');
+        els.tableSettingsPopover.setAttribute('tabindex', '-1');
 
         els.tableSettingsBtn.addEventListener('click', function (event) {
             event.preventDefault();
@@ -817,14 +854,19 @@
         });
 
         var apiBase = (config && config.apiBase) ? config.apiBase : (window.location.origin + (window.AR.sectionConfig && window.AR.sectionConfig.apiPath ? window.AR.sectionConfig.apiPath : '/api/home-loan-rates'));
-        fetch(apiBase + '/filters').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
-            if (!data || !data.filters || !Array.isArray(data.filters.single_value_columns)) return;
-            singleValueColumns = data.filters.single_value_columns;
-            if (rateTable) {
-                applyColumnPreferences();
-                renderSettingsPopover();
-            }
-        }).catch(function () {});
+        var sharedFilters = filters && typeof filters.getFiltersPayload === 'function' ? filters.getFiltersPayload() : null;
+        if (sharedFilters && Array.isArray(sharedFilters.single_value_columns)) {
+            singleValueColumns = sharedFilters.single_value_columns;
+        } else {
+            fetch(apiBase + '/filters').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+                if (!data || !data.filters || !Array.isArray(data.filters.single_value_columns)) return;
+                singleValueColumns = data.filters.single_value_columns;
+                if (rateTable) {
+                    applyColumnPreferences();
+                    renderSettingsPopover();
+                }
+            }).catch(function () {});
+        }
 
         rateTable = new Tabulator('#rate-table', {
             ajaxURL: apiBase + '/rates',
@@ -901,6 +943,10 @@
             },
             ajaxError: function (xhr, textStatus, errorThrown) {
                 var errData = { status: xhr && xhr.status ? xhr.status : null, textStatus: textStatus || null, message: errorThrown ? String(errorThrown) : null };
+                if (isAbortLikeAjaxError(xhr, textStatus, errorThrown)) {
+                    clientLog('info', 'Explorer request aborted (non-fatal)', errData);
+                    return;
+                }
                 clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
                 if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
                 if (rateTable) {

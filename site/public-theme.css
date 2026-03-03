@@ -1,18 +1,24 @@
 /* Public dashboard theme tokens and global primitives (scoped to .ar-public). */
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
 body.ar-public {
     --ar-font-ui: "Space Grotesk", "Segoe UI", sans-serif;
     --ar-font-display: "Merriweather", Georgia, serif;
-    --ar-bg: #edf2f4;
-    --ar-bg-soft: #f7fafc;
-    --ar-surface: rgba(255, 255, 255, 0.88);
+    --ar-bg: #e8eff3;
+    --ar-bg-soft: #f5f8fb;
+    --ar-surface: rgba(255, 255, 255, 0.74);
     --ar-surface-solid: #ffffff;
-    --ar-surface-muted: #f3f6fa;
+    --ar-surface-muted: rgba(241, 246, 251, 0.86);
     --ar-text: #162337;
     --ar-muted: #5b697d;
     --ar-strong: #0e1828;
-    --ar-stroke: rgba(24, 44, 74, 0.18);
-    --ar-stroke-strong: rgba(23, 52, 96, 0.28);
-    --ar-shadow: 0 18px 50px rgba(20, 44, 74, 0.14);
+    --ar-stroke: rgba(24, 44, 74, 0.16);
+    --ar-stroke-strong: rgba(23, 52, 96, 0.26);
+    --ar-shadow: 0 18px 48px rgba(15, 39, 66, 0.18);
     --ar-accent: #14667a;
     --ar-accent-strong: #0f4e63;
     --ar-accent-soft: rgba(20, 102, 122, 0.14);
@@ -22,7 +28,7 @@ body.ar-public {
     --ar-focus: #0b79b2;
     --ar-danger-soft: rgba(185, 28, 28, 0.12);
     --ar-code-bg: rgba(17, 37, 64, 0.07);
-    --ar-header-bg: rgba(241, 246, 252, 0.86);
+    --ar-header-bg: rgba(241, 246, 252, 0.76);
     --ar-footer-bg: rgba(16, 24, 38, 0.96);
     --ar-foot-text: rgba(235, 243, 250, 0.82);
     --ar-foot-line: rgba(225, 236, 249, 0.16);
@@ -39,26 +45,36 @@ body.ar-public {
     --ar-nav-btn-hover-border: rgba(22, 54, 93, 0.3);
     --ar-nav-btn-hover-text: #0f223c;
     --ar-transition: 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    margin: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
     color: var(--ar-text);
     font-family: var(--ar-font-ui);
     background:
-        radial-gradient(circle at 8% 5%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0) 34%),
+        radial-gradient(circle at 8% 5%, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 36%),
+        radial-gradient(circle at 88% 2%, rgba(210, 228, 248, 0.42) 0%, transparent 34%),
         linear-gradient(170deg, var(--ar-bg) 0%, var(--ar-bg-soft) 72%);
     line-height: 1.45;
+}
+
+body.ar-public *,
+body.ar-public *::before,
+body.ar-public *::after {
+    box-sizing: border-box;
 }
 
 [data-theme="dark"] body.ar-public {
     --ar-bg: #101826;
     --ar-bg-soft: #0f1f2c;
-    --ar-surface: rgba(18, 28, 42, 0.9);
+    --ar-surface: rgba(18, 28, 42, 0.8);
     --ar-surface-solid: #182434;
-    --ar-surface-muted: #1a2a3f;
+    --ar-surface-muted: rgba(27, 41, 61, 0.85);
     --ar-text: #e7eef7;
     --ar-muted: #9bafc7;
     --ar-strong: #f6fbff;
     --ar-stroke: rgba(166, 193, 226, 0.17);
     --ar-stroke-strong: rgba(179, 212, 255, 0.32);
-    --ar-shadow: 0 20px 58px rgba(0, 0, 0, 0.45);
+    --ar-shadow: 0 22px 62px rgba(0, 0, 0, 0.48);
     --ar-accent: #54b5c8;
     --ar-accent-strong: #67c7dd;
     --ar-accent-soft: rgba(84, 181, 200, 0.2);
@@ -205,6 +221,11 @@ body.ar-public.ar-section-term-deposits {
 }
 
 .ar-public .skip-link {
+    position: absolute;
+    z-index: 120;
+    padding: 0.36rem 0.62rem;
+    font-size: 0.75rem;
+    text-decoration: none;
     top: -120px;
     left: 12px;
     background: var(--ar-accent-strong);

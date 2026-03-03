@@ -17,6 +17,7 @@
 
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
+    var appInitialized = false;
 
     clientLog('info', 'App init start', {
         section: window.AR.section || 'home-loans',
@@ -36,7 +37,7 @@
     }
 
     function applyUiMode(mode) {
-        var uiMode = String(mode || (state && state.getUiMode ? state.getUiMode() : 'consumer'));
+        var uiMode = String(mode || (state && state.getUiMode ? state.getUiMode() : 'analyst'));
         document.body.classList.toggle('ui-mode-consumer', uiMode !== 'analyst');
         document.body.classList.toggle('ui-mode-analyst', uiMode === 'analyst');
         setModeButtonState(uiMode);
@@ -45,6 +46,8 @@
         if (filters && filters.applyUiMode) filters.applyUiMode();
         if (explorer && explorer.applyUiMode) explorer.applyUiMode();
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
+        if (filters && filters.syncUrlState) filters.syncUrlState();
+        if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
 
         clientLog('info', 'UI mode applied', { mode: uiMode });
     }
@@ -55,7 +58,9 @@
             includeManual: !!(els.filterIncludeManual && els.filterIncludeManual.checked),
         });
         if (filters && filters.syncUrlState) filters.syncUrlState();
+        if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
         if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
+        if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'Filters changed -- click "Load Data for Pivot" to refresh.';
@@ -66,7 +71,39 @@
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
     }
 
+    function applyFiltersShortcut(event) {
+        if (!event || event.defaultPrevented) return;
+        if (!(event.ctrlKey || event.metaKey)) return;
+        if (event.shiftKey || event.altKey) return;
+        if (event.key !== 'Enter') return;
+        var target = event.target;
+        var tag = target && target.tagName ? String(target.tagName).toUpperCase() : '';
+        if (tag === 'TEXTAREA') return;
+        event.preventDefault();
+        applyFilters();
+    }
+
+    function finishAppInit(source) {
+        if (appInitialized) return;
+        appInitialized = true;
+        applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst');
+        if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
+        if (explorer && explorer.initRateTable) explorer.initRateTable();
+        if (hero && hero.loadHeroStats) hero.loadHeroStats();
+        if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
+        clientLog('info', 'App init complete', {
+            activeTab: tabState.activeTab || 'explorer',
+            source: source || 'unknown',
+        });
+    }
+
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
+    if (els.resetFilters) els.resetFilters.addEventListener('click', function (event) {
+        if (event) event.preventDefault();
+        if (filters && filters.resetFilters) filters.resetFilters();
+        applyFilters();
+    });
     if (els.downloadFormat) els.downloadFormat.addEventListener('change', function () {
         var format = String(els.downloadFormat.value || '').trim();
         if (!format) return;
@@ -86,11 +123,16 @@
     if (els.drawChart) els.drawChart.addEventListener('click', function () {
         if (charts && charts.drawChart) charts.drawChart();
     });
-    if (els.filterIncludeManual) els.filterIncludeManual.addEventListener('change', applyFilters);
-    if (els.filterMode) els.filterMode.addEventListener('change', applyFilters);
+    if (els.filterIncludeManual) els.filterIncludeManual.addEventListener('change', function () {
+        if (filters && filters.refreshFilterUiState) filters.refreshFilterUiState();
+    });
+    if (els.filterMode) els.filterMode.addEventListener('change', function () {
+        if (filters && filters.refreshFilterUiState) filters.refreshFilterUiState();
+    });
     if (els.refreshInterval) els.refreshInterval.addEventListener('change', function () {
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
+        if (filters && filters.refreshFilterUiState) filters.refreshFilterUiState();
     });
     if (els.modeConsumer) els.modeConsumer.addEventListener('click', function () {
         if (state && state.setUiMode) state.setUiMode('consumer');
@@ -103,28 +145,20 @@
         var mode = event && event.detail ? event.detail.mode : null;
         applyUiMode(mode);
     });
+    document.addEventListener('keydown', applyFiltersShortcut);
 
     if (tabs && tabs.bindTabListeners) tabs.bindTabListeners();
 
     if (filters && filters.loadFilters) {
         filters.loadFilters().then(function () {
-            applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
-            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
-            clientLog('info', 'App init complete', { activeTab: tabState.activeTab || 'explorer' });
+            finishAppInit('filters-loaded');
         }).catch(function (err) {
             clientLog('error', 'App init failed while loading filters', {
                 message: err && err.message ? err.message : String(err),
             });
-            applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
-            if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
+            finishAppInit('filters-load-failed');
         });
-    } else if (tabs && tabs.activateTab) {
-        applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
-        tabs.activateTab(tabState.activeTab || 'explorer');
-        clientLog('info', 'App init complete (no filter preload)', { activeTab: tabState.activeTab || 'explorer' });
+    } else {
+        finishAppInit('no-filter-module');
     }
-    if (explorer && explorer.initRateTable) explorer.initRateTable();
-    if (hero && hero.loadHeroStats) hero.loadHeroStats();
-    if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
-    if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
 })();

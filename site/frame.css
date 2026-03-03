@@ -36,9 +36,10 @@
 .site-nav {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 8px;
     margin-left: 24px;
     flex: 1;
+    justify-content: flex-end;
 }
 
 .site-nav-theme-btn {
@@ -83,6 +84,51 @@
 .site-nav-refresh-btn:hover {
     color: var(--header-text);
     background: var(--line);
+}
+
+.site-nav-technical {
+    position: relative;
+}
+
+.site-nav-technical-summary {
+    list-style: none;
+    color: var(--header-text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    cursor: pointer;
+    user-select: none;
+    background: var(--header-bg);
+}
+
+.site-nav-technical-summary::-webkit-details-marker {
+    display: none;
+}
+
+.site-nav-technical[open] .site-nav-technical-summary {
+    color: var(--header-text);
+    border-color: var(--header-border);
+}
+
+.site-nav-technical-body {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 80;
+    min-width: 160px;
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    box-shadow: var(--panel-shadow);
+}
+
+.site-nav-technical[open] .site-nav-technical-body {
+    display: grid;
+    gap: 6px;
 }
 
 .site-nav a {
@@ -161,6 +207,42 @@
 
 .footer-sep {
     opacity: 0.25;
+}
+
+.footer-technical {
+    position: relative;
+}
+
+.footer-technical-summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 0.74rem;
+    color: var(--footer-text);
+}
+
+.footer-technical-summary::-webkit-details-marker {
+    display: none;
+}
+
+.footer-technical-body {
+    display: none;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    box-shadow: var(--panel-shadow);
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.footer-technical[open] .footer-technical-body {
+    display: inline-flex;
 }
 
 .footer-operator {
@@ -281,13 +363,15 @@
 
     .site-nav {
         margin-left: 0;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         order: 2;
         width: 100%;
+        justify-content: flex-start;
     }
 
-    .site-nav a {
-        white-space: normal;
+    .site-nav-technical-body {
+        right: auto;
+        left: 0;
     }
 
     .site-footer-inner {
@@ -309,5 +393,9 @@
 
     .footer-legal-links {
         gap: 8px;
+    }
+
+    .footer-technical-body {
+        width: min(300px, calc(100vw - 28px));
     }
 }

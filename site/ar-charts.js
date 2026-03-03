@@ -14,6 +14,7 @@
     var clientLog = utils.clientLog || function () {};
     var esc = window._arEsc;
     var MAX_CHART_POINTS = 1000;
+    var MAX_FETCH_ROWS = 10000;
 
     var yLabels = {
         interest_rate: 'Interest Rate (%)',
@@ -227,6 +228,7 @@
         var lastPage = 1;
         var total = 0;
         var rows = [];
+        var truncated = false;
         do {
             var params = {};
             Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
@@ -237,17 +239,23 @@
             total = Number(response.total || total || chunk.length || 0);
             lastPage = Math.max(1, Number(response.last_page || 1));
             rows = rows.concat(chunk);
+            if (rows.length >= MAX_FETCH_ROWS) {
+                rows = rows.slice(0, MAX_FETCH_ROWS);
+                truncated = true;
+            }
             if (typeof onProgress === 'function') {
                 onProgress({
                     page: page,
                     lastPage: lastPage,
                     loaded: rows.length,
                     total: total,
+                    truncated: truncated,
                 });
             }
+            if (truncated) break;
             page += 1;
         } while (page <= lastPage);
-        return { rows: rows, total: total || rows.length };
+        return { rows: rows, total: total || rows.length, truncated: truncated };
     }
 
     function sampleRows(rows, maxPoints) {
@@ -308,15 +316,22 @@
 
             tabState.chartDrawn = true;
             if (els.chartStatus) {
-                els.chartStatus.textContent = sampled.sampled
-                    ? 'Chart rendered from a ' + data.length.toLocaleString() + '-point sample of ' + total.toLocaleString() + ' rows. Use export for the full dataset.'
-                    : 'Chart rendered (' + data.length.toLocaleString() + ' data points).';
+                if (payload.truncated) {
+                    els.chartStatus.textContent =
+                        'Loaded 10,000-row cap from ' + total.toLocaleString() + ' rows and rendered ' +
+                        data.length.toLocaleString() + ' points. Narrow filters for full-fidelity charting.';
+                } else {
+                    els.chartStatus.textContent = sampled.sampled
+                        ? 'Chart rendered from a ' + data.length.toLocaleString() + '-point sample of ' + total.toLocaleString() + ' rows. Use export for the full dataset.'
+                        : 'Chart rendered (' + data.length.toLocaleString() + ' data points).';
+                }
             }
             clientLog('info', 'Chart load completed', {
                 points: data.length,
                 sampled: sampled.sampled,
                 traceCount: traces.length,
                 total: total,
+                truncated: !!payload.truncated,
             });
         } catch (err) {
             if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);
