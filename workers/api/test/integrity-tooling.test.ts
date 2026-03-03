@@ -21,6 +21,13 @@ import {
   runPresenceRepair,
 } from '../../../tools/node-scripts/src/integrity/repair-presence'
 import { DatabaseSync } from 'node:sqlite'
+import {
+  buildRepairPresenceProdApplySql,
+  buildRepairPresenceProdPlanSql,
+  isSafePlanSql,
+  isSafePresenceMutationSql,
+  parseRepairPresenceProdConfig,
+} from '../../../tools/node-scripts/src/integrity/repair-presence-prod'
 
 describe('integrity runbook SQL generation', () => {
   it('produces read-only SELECT/WITH queries and LIMIT 20 sample queries', () => {
@@ -195,5 +202,100 @@ INSERT INTO product_presence_status (
       'repair_shadow_presence_extra_safe_delete',
       'repair_shadow_presence_missing',
     ])
+  })
+})
+
+describe('repair presence production guardrails', () => {
+  function makeBackupArtifact(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repair-presence-prod-test-'))
+    const backupPath = path.join(dir, 'backup.sql')
+    fs.writeFileSync(backupPath, '-- backup artifact')
+    return backupPath
+  }
+
+  it('refuses when required flags are missing', () => {
+    const backup = makeBackupArtifact()
+    expect(() => parseRepairPresenceProdConfig([])).toThrow(/--remote is required/i)
+    expect(() =>
+      parseRepairPresenceProdConfig([
+        '--remote',
+        '--db',
+        'australianrates_api',
+        '--confirm-backup',
+        '--backup-artifact',
+        backup,
+      ]),
+    ).toThrow(/--i-know-this-will-mutate-production is required/i)
+    expect(() =>
+      parseRepairPresenceProdConfig([
+        '--remote',
+        '--db',
+        'australianrates_api',
+        '--i-know-this-will-mutate-production',
+        '--backup-artifact',
+        backup,
+      ]),
+    ).toThrow(/--confirm-backup is required/i)
+    expect(() =>
+      parseRepairPresenceProdConfig([
+        '--remote',
+        '--db',
+        'australianrates_api',
+        '--i-know-this-will-mutate-production',
+        '--confirm-backup',
+      ]),
+    ).toThrow(/--backup-artifact/i)
+    expect(() =>
+      parseRepairPresenceProdConfig([
+        '--remote',
+        '--db',
+        'other_db',
+        '--i-know-this-will-mutate-production',
+        '--confirm-backup',
+        '--backup-artifact',
+        backup,
+      ]),
+    ).toThrow(/only --db australianrates_api is allowed/i)
+  })
+
+  it('accepts config when all required production guard flags are present', () => {
+    const backup = makeBackupArtifact()
+    const parsed = parseRepairPresenceProdConfig([
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--i-know-this-will-mutate-production',
+      '--confirm-backup',
+      '--backup-artifact',
+      backup,
+      '--apply',
+      '--delete-extras',
+    ])
+
+    expect(parsed.remote).toBe(true)
+    expect(parsed.db).toBe('australianrates_api')
+    expect(parsed.apply).toBe(true)
+    expect(parsed.deleteExtras).toBe(true)
+    expect(parsed.backupArtifact).toBe(path.resolve(backup))
+  })
+})
+
+describe('repair presence production SQL safety', () => {
+  it('plan SQL is read-only SELECT/WITH', () => {
+    const planSql = buildRepairPresenceProdPlanSql()
+    for (const sql of Object.values(planSql)) {
+      expect(startsWithSelectOrWith(sql)).toBe(true)
+      expect(isSafePlanSql(sql)).toBe(true)
+    }
+  })
+
+  it('apply SQL only mutates product_presence_status via INSERT/DELETE', () => {
+    const applySql = buildRepairPresenceProdApplySql()
+    expect(isSafePresenceMutationSql(applySql.insert_missing)).toBe(true)
+    expect(isSafePresenceMutationSql(applySql.delete_safe_extras)).toBe(true)
+    expect(applySql.insert_missing).toMatch(/INSERT OR IGNORE INTO\s+product_presence_status/i)
+    expect(applySql.delete_safe_extras).toMatch(/DELETE FROM\s+product_presence_status/i)
+    expect(applySql.insert_missing).not.toMatch(/INSERT\s+INTO\s+(?!product_presence_status\b)[a-z_][a-z0-9_]*/i)
+    expect(applySql.delete_safe_extras).not.toMatch(/DELETE\s+FROM\s+(?!product_presence_status\b)[a-z_][a-z0-9_]*/i)
   })
 })
