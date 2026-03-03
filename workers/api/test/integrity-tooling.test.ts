@@ -22,7 +22,6 @@ import {
 } from '../../../tools/node-scripts/src/integrity/repair-presence'
 import { DatabaseSync } from 'node:sqlite'
 import {
-  buildCmdExeFallbackCommand,
   buildRepairPresenceProdApplySql,
   buildRepairPresenceProdPlanSql,
   executeRemoteSqlWithFallbackForTest,
@@ -30,8 +29,11 @@ import {
   isSafePresenceMutationSql,
   parseFirstRowFromWranglerJson,
   parseRepairPresenceProdConfig,
+  runWranglerD1Execute,
+  runPlanModeCli,
   runPlanOnlyForTest,
   runD1SqlFile,
+  type SpawnRunner,
 } from '../../../tools/node-scripts/src/integrity/repair-presence-prod'
 
 describe('integrity runbook SQL generation', () => {
@@ -356,61 +358,96 @@ describe('repair presence production guardrails', () => {
     expect(invocation).toContain('--file')
     expect(invocation).toContain('--json')
   })
-})
 
-describe('repair presence production command fallback', () => {
-  it('builds cmd.exe fallback command with --file argument', () => {
-    const cmd = buildCmdExeFallbackCommand([
-      'd1',
-      'execute',
-      'australianrates_api',
+  it('plan mode success prints one JSON line with required fields', () => {
+    const backup = makeBackupArtifact()
+    const args = [
       '--remote',
-      '--json',
-      '--file',
-      'C:\\temp\\repair plan.sql',
-    ])
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      backup,
+    ]
 
-    expect(cmd).toContain('d1 execute australianrates_api --remote')
-    expect(cmd).toContain('--file "C:\\temp\\repair plan.sql"')
-    expect(cmd).not.toContain('--command')
-  })
-
-  it('falls back from wrangler direct to cmd.exe command string', () => {
-    const calls: Array<{ command: string; args: string[] }> = []
-    let invocation = 0
-
-    const fakeSpawn = ((command: string, args: string[]) => {
-      calls.push({ command, args })
-      invocation += 1
-      if (invocation === 1) {
-        return {
-          pid: 0,
-          output: [],
-          stdout: '',
-          stderr: '',
-          status: 1,
-          signal: null,
-          error: Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }),
-        }
-      }
+    const output: string[] = []
+    let callIndex = 0
+    const fakeSpawn = ((_: string, __: string[]) => {
+      callIndex += 1
+      const jsonRows =
+        callIndex === 1
+          ? [{ orphan_presence_count: 12 }]
+          : [{
+              missing_rows: 1,
+              extra_safe_delete_rows: 2,
+              extra_rows: 2,
+              expected_rows: 10,
+              existing_rows: 12,
+            }]
       return {
         pid: 1,
         output: [],
-        stdout: '[{\"results\":[{\"ok\":1}],\"success\":true,\"meta\":{\"changes\":0}}]',
+        stdout: JSON.stringify([{ results: jsonRows, success: true, meta: { changes: 0 } }]),
         stderr: '',
         status: 0,
         signal: null,
       }
-    }) as Parameters<typeof executeRemoteSqlWithFallbackForTest>[2]
+    }) as Parameters<typeof runPlanModeCli>[1]['spawnRunner']
 
-    const result = executeRemoteSqlWithFallbackForTest('australianrates_api', 'SELECT 1 AS ok', fakeSpawn)
-    expect(result.exitCode).toBe(0)
-    expect(calls[0]?.command).toBe('wrangler')
-    expect(calls[1]?.command).toBe('cmd.exe')
-    expect(calls[1]?.args.join(' ')).toContain('npx wrangler d1 execute australianrates_api --remote')
-    expect(calls[1]?.args.join(' ')).toContain('--file')
-    expect(calls[1]?.args.join(' ')).not.toContain('--command')
+    const code = runPlanModeCli(args, {
+      spawnRunner: fakeSpawn,
+      stdoutWrite: (text) => output.push(text),
+      argvForLog: ['node', 'scripts/repair-presence-prod.js', ...args],
+    })
+
+    expect(code).toBe(0)
+    expect(output).toHaveLength(1)
+    const lines = output[0]?.trim().split(/\r?\n/).filter(Boolean) ?? []
+    expect(lines).toHaveLength(1)
+    const parsed = JSON.parse(lines[0] as string)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.phase).toBe('plan')
+    expect(parsed.orphan_before).toBe(12)
+    expect(parsed.missing_count).toBe(1)
+    expect(parsed.extra_safe_delete_count).toBe(2)
+    expect(parsed.exit_code).toBe(0)
   })
+
+  it('plan mode failure prints one JSON line with phase and exit code', () => {
+    const args = [
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      'artifacts\\missing.sql',
+    ]
+
+    const output: string[] = []
+    const code = runPlanModeCli(args, {
+      stdoutWrite: (text) => output.push(text),
+      argvForLog: ['node', 'scripts/repair-presence-prod.js', ...args],
+    })
+
+    expect(code).toBe(1)
+    expect(output).toHaveLength(1)
+    const lines = output[0]?.trim().split(/\r?\n/).filter(Boolean) ?? []
+    expect(lines).toHaveLength(1)
+    const parsed = JSON.parse(lines[0] as string)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.phase).toBe('plan')
+    expect(parsed.exit_code).toBe(1)
+    expect(String(parsed.error || '')).toMatch(/CLI preflight failed/i)
+  })
+})
+
+describe('repair presence production D1 invocation', () => {
+  function makeBackupArtifactLocal(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repair-presence-prod-invoke-'))
+    const backupPath = path.join(dir, 'backup.sql')
+    fs.writeFileSync(backupPath, '-- backup artifact')
+    return backupPath
+  }
 
   it('uses --file execution, writes SQL text, and attempts cleanup in finally', () => {
     const spawnCalls: Array<{ command: string; args: string[] }> = []
@@ -427,7 +464,7 @@ describe('repair presence production command fallback', () => {
         status: 0,
         signal: null,
       }
-    }) as Parameters<typeof executeRemoteSqlWithFallbackForTest>[2]
+    }) as SpawnRunner
 
     const result = runD1SqlFile('australianrates_api', true, 'SELECT 1 AS ok', 'plan-test', {
       nowMs: () => 1700000000000,
@@ -449,14 +486,131 @@ describe('repair presence production command fallback', () => {
     expect(unlinks).toContain(writes[0]?.filePath as string)
   })
 
-  it('retries without --json once when wrangler does not support --json', () => {
+  it('on Windows chooses npx.cmd first with args-array boundaries and no split SQL tokens', () => {
     const spawnCalls: Array<{ command: string; args: string[] }> = []
-    let invocation = 0
     const fakeSpawn = ((command: string, args: string[]) => {
       spawnCalls.push({ command, args })
-      invocation += 1
+      return {
+        pid: 1,
+        output: [],
+        stdout: '[{"results":[{"ok":1}],"success":true,"meta":{"changes":0}}]',
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof runD1SqlFile>[4]['spawnRunner']
 
-      if (invocation <= 2) {
+    const result = runD1SqlFile('australianrates_api', true, 'SELECT 1 AS ok', 'win-npx-cmd', {
+      nowMs: () => 1700000004321,
+      tempDir: path.join(os.tmpdir(), 'repair-presence-prod-tests'),
+      writeFile: () => undefined,
+      unlinkFile: () => undefined,
+      spawnRunner: fakeSpawn,
+      platform: 'win32',
+    })
+
+    expect(result.exitCode).toBe(0)
+    const first = spawnCalls[0]
+    expect(first?.command).toBe('npx.cmd')
+    expect(first?.args).toEqual(expect.arrayContaining([
+      'wrangler',
+      'd1',
+      'execute',
+      'australianrates_api',
+      '--remote',
+      '--file',
+      '--json',
+    ]))
+    expect(first?.args).not.toContain('--command')
+    expect(first?.args).not.toContain('COUNT(*)')
+    expect(first?.args).not.toContain('AS')
+  })
+
+  it('retries summary-only plan output using --command with SQL as a single argument', () => {
+    const backup = makeBackupArtifactLocal()
+    const args = [
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      backup,
+    ]
+
+    const spawnCalls: Array<{ command: string; args: string[] }> = []
+    let callIndex = 0
+    const fakeSpawn = ((command: string, spawnArgs: string[]) => {
+      spawnCalls.push({ command, args: spawnArgs })
+      callIndex += 1
+
+      if (callIndex === 1) {
+        return {
+          pid: 1,
+          output: [],
+          stdout: JSON.stringify([
+            {
+              results: [{ 'Total queries executed': 1, 'Rows read': 10, 'Rows written': 0 }],
+              success: true,
+              meta: { changes: 0 },
+            },
+          ]),
+          stderr: '',
+          status: 0,
+          signal: null,
+        }
+      }
+
+      if (callIndex === 2) {
+        return {
+          pid: 1,
+          output: [],
+          stdout: JSON.stringify([{ results: [{ orphan_presence_count: 138 }], success: true, meta: { changes: 0 } }]),
+          stderr: '',
+          status: 0,
+          signal: null,
+        }
+      }
+
+      return {
+        pid: 1,
+        output: [],
+        stdout: JSON.stringify([
+          {
+            results: [{ missing_rows: 0, extra_safe_delete_rows: 0, extra_rows: 138, expected_rows: 204, existing_rows: 342 }],
+            success: true,
+            meta: { changes: 0 },
+          },
+        ]),
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as SpawnRunner
+
+    const report = runPlanOnlyForTest(args, fakeSpawn)
+    expect(report.orphan_before).toBe(138)
+    expect(report.retry).toMatchObject({
+      reason: 'summary_only_output',
+      first_mode: '--file',
+      retry_mode: '--command',
+      used_json: true,
+    })
+
+    const commandCall = spawnCalls.find((call) => call.args.includes('--command'))
+    expect(commandCall).toBeDefined()
+    const commandFlagIndex = commandCall?.args.indexOf('--command') ?? -1
+    expect(commandFlagIndex).toBeGreaterThan(-1)
+    const sqlArg = commandCall?.args[commandFlagIndex + 1] || ''
+    expect(sqlArg).toContain('SELECT COUNT(*) AS orphan_presence_count')
+    expect(commandCall?.args).not.toContain('COUNT(*)')
+    expect(commandCall?.args).not.toContain('AS')
+  })
+
+  it('retries without --json once when wrangler does not support --json', () => {
+    const spawnCalls: Array<{ command: string; args: string[] }> = []
+    const fakeSpawn = ((command: string, args: string[]) => {
+      spawnCalls.push({ command, args })
+      if (args.includes('--json')) {
         return {
           pid: 0,
           output: [],
@@ -475,7 +629,7 @@ describe('repair presence production command fallback', () => {
         status: 0,
         signal: null,
       }
-    }) as Parameters<typeof executeRemoteSqlWithFallbackForTest>[2]
+    }) as SpawnRunner
 
     const result = runD1SqlFile('australianrates_api', true, 'SELECT COUNT(*) AS orphan_presence_count', 'json-fallback', {
       nowMs: () => 1700000001234,
@@ -491,6 +645,108 @@ describe('repair presence production command fallback', () => {
     expect(withJsonCall).toBeDefined()
     expect(withoutJsonCall).toBeDefined()
     expect(withoutJsonCall?.args).not.toContain('--json')
+  })
+
+  it('plan mode never uses --command in any wrangler invocation', () => {
+    const backup = makeBackupArtifactLocal()
+    const args = [
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      backup,
+    ]
+
+    const spawnCalls: Array<{ command: string; args: string[] }> = []
+    let callIndex = 0
+    const fakeSpawn = ((command: string, spawnArgs: string[]) => {
+      spawnCalls.push({ command, args: spawnArgs })
+      callIndex += 1
+      const rows =
+        callIndex === 1
+          ? [{ orphan_presence_count: 5 }]
+          : [{ missing_rows: 0, extra_safe_delete_rows: 0, extra_rows: 5, expected_rows: 10, existing_rows: 15 }]
+      return {
+        pid: 1,
+        output: [],
+        stdout: JSON.stringify([{ results: rows, success: true, meta: { changes: 0 } }]),
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof runPlanOnlyForTest>[1]
+
+    const report = runPlanOnlyForTest(args, fakeSpawn)
+    expect(report.orphan_before).toBe(5)
+    expect(spawnCalls.length).toBeGreaterThan(0)
+    for (const call of spawnCalls) {
+      expect(call.args).not.toContain('--command')
+      expect(call.args).toContain('--file')
+    }
+  })
+
+  it('apply-mode execution helper never falls back to --command on summary-only output', () => {
+    const calls: Array<{ command: string; args: string[] }> = []
+    const fakeSpawn = ((command: string, args: string[]) => {
+      calls.push({ command, args })
+      return {
+        pid: 1,
+        output: [],
+        stdout: JSON.stringify([
+          {
+            results: [{ 'Total queries executed': 1, 'Rows read': 0, 'Rows written': 0 }],
+            success: true,
+            meta: { changes: 1 },
+          },
+        ]),
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as SpawnRunner
+
+    const result = executeRemoteSqlWithFallbackForTest(
+      'australianrates_api',
+      'INSERT OR IGNORE INTO product_presence_status(section, bank_name, product_id, is_removed, last_seen_at) VALUES (\'x\',\'y\',\'z\',0,CURRENT_TIMESTAMP)',
+      fakeSpawn,
+      { phase: 'apply' },
+    )
+
+    expect(result.exitCode).toBe(0)
+    for (const call of calls) {
+      expect(call.args).not.toContain('--command')
+      expect(call.args).toContain('--file')
+    }
+  })
+
+  it('uses WRANGLER_BIN npx wrapper with args array', () => {
+    const calls: Array<{ command: string; args: string[] }> = []
+    const fakeSpawn = ((command: string, args: string[]) => {
+      calls.push({ command, args })
+      return {
+        pid: 1,
+        output: [],
+        stdout: '[{"results":[{"ok":1}],"success":true}]',
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof runWranglerD1Execute>[0]['spawnRunner']
+
+    const run = runWranglerD1Execute({
+      dbName: 'australianrates_api',
+      remote: true,
+      json: true,
+      filePath: 'C:\\temp\\query.sql',
+      wranglerBin: 'npx',
+      spawnRunner: fakeSpawn,
+      platform: 'win32',
+    })
+
+    expect(run.exitCode).toBe(0)
+    expect(calls[0]?.command).toBe('npx')
+    expect(calls[0]?.args.slice(0, 4)).toEqual(['wrangler', 'd1', 'execute', 'australianrates_api'])
   })
 })
 
@@ -532,6 +788,28 @@ describe('repair presence wrangler JSON parser', () => {
         success: true,
         results: [[138]],
       }),
+    )
+    expect(row.orphan_presence_count).toBe(138)
+  })
+
+  it('skips execution summary rows and returns first actual row set', () => {
+    const row = parseFirstRowFromWranglerJson(
+      JSON.stringify([
+        {
+          results: [
+            {
+              'Total queries executed': 1,
+              'Rows read': 0,
+              'Rows written': 0,
+            },
+          ],
+          success: true,
+        },
+        {
+          results: [{ orphan_presence_count: 138 }],
+          success: true,
+        },
+      ]),
     )
     expect(row.orphan_presence_count).toBe(138)
   })

@@ -41,11 +41,26 @@ type ExecuteCommandResult = {
   command: string
   exitCode: number
   payload: WranglerQueryResult[]
+  attempt: {
+    mode: '--file' | '--command'
+    usedJson: boolean
+    summaryOnly: boolean
+    executable: string
+    args: string[]
+  }
+  retry?: {
+    reason: 'summary_only_output'
+    first_mode: '--file'
+    retry_mode: '--command'
+    used_json: true
+    attempts: Array<{ mode: '--file' | '--command'; executable: string; args_json: string[] }>
+  }
 }
 
 type ParsedWranglerPayload = {
   rows: WranglerQueryRow[]
   changes: number
+  summaryOnly: boolean
 }
 
 export type SpawnRunner = (
@@ -57,7 +72,6 @@ export type SpawnRunner = (
 type RunWranglerResult = {
   executable: string
   args: string[]
-  fullCommand?: string
   exitCode: number
   stdout: string
   stderr: string
@@ -67,6 +81,7 @@ type RunWranglerResult = {
 type RunD1SqlFileOptions = {
   spawnRunner?: SpawnRunner
   wranglerBin?: string
+  platform?: NodeJS.Platform
   tempDir?: string
   nowMs?: () => number
   writeFile?: (filePath: string, content: string) => void
@@ -76,6 +91,7 @@ type RunD1SqlFileOptions = {
 type RunD1SqlOptions = {
   spawnRunner?: SpawnRunner
   wranglerBin?: string
+  platform?: NodeJS.Platform
 }
 
 function normalizeSql(sql: string): string {
@@ -85,6 +101,17 @@ function normalizeSql(sql: string): string {
 function truncateText(value: string, maxChars = 4000): string {
   const text = String(value || '')
   return text.length <= maxChars ? text : `${text.slice(0, maxChars)}...<truncated>`
+}
+
+function tailLines(value: string, maxLines = 30): string {
+  const lines = String(value || '').split(/\r?\n/)
+  return lines.slice(-maxLines).join('\n')
+}
+
+function firstStackLines(error: unknown, maxLines = 20): string {
+  const stack = (error as Error)?.stack
+  if (!stack) return ''
+  return stack.split('\n').slice(0, maxLines).join('\n')
 }
 
 function toFiniteNumberStrict(value: unknown): number | null {
@@ -426,8 +453,7 @@ function parseArrayRowAsOrphanCount(rows: unknown[]): WranglerQueryRow[] {
   return [{ orphan_presence_count: value }]
 }
 
-function parseRowsFromWranglerShape(root: unknown): WranglerQueryRow[] {
-  const rows = extractResultRows(root)
+function parseRowsFromResultArray(rows: unknown[]): WranglerQueryRow[] {
   if (rows.length === 0) return []
 
   const first = rows[0]
@@ -470,6 +496,45 @@ function parseChangesFromWranglerRoot(parsed: unknown, root: unknown): number {
     if (changes !== null) return changes
   }
   return 0
+}
+
+function collectRowSets(node: unknown): WranglerQueryRow[][] {
+  const rowSets: WranglerQueryRow[][] = []
+  const queue: unknown[] = [node]
+  const seen = new Set<unknown>()
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current || typeof current !== 'object') continue
+    if (seen.has(current)) continue
+    seen.add(current)
+
+    if (Array.isArray(current)) {
+      for (const item of current) queue.push(item)
+      continue
+    }
+
+    const resultRows = extractResultRows(current)
+    if (resultRows.length > 0) {
+      if (resultRows.every((entry) => isRecord(entry) && (entry.success !== undefined || entry.results !== undefined || entry.result !== undefined))) {
+        for (const entry of resultRows) queue.push(entry)
+      }
+      try {
+        const parsedRows = parseRowsFromResultArray(resultRows)
+        if (parsedRows.length > 0) {
+          rowSets.push(parsedRows)
+        }
+      } catch {
+        // Continue searching other branches for row sets.
+      }
+    }
+
+    for (const value of Object.values(current)) {
+      queue.push(value)
+    }
+  }
+
+  return rowSets
 }
 
 function extractJsonText(stdout: string): string {
@@ -517,16 +582,35 @@ function parseWranglerJsonPayload(stdout: string): ParsedWranglerPayload {
   const jsonText = extractJsonText(stdout)
   const parsed = JSON.parse(jsonText) as unknown
   const root = unwrapWranglerRoot(parsed)
-  const rows = parseRowsFromWranglerShape(root)
+  const rowSets = collectRowSets(root)
+  const nonSummaryRows = rowSets.find((candidate) => candidate.length > 0 && !candidate.every((row) => isWranglerExecutionSummaryRow(row)))
+  const summaryOnly = rowSets.length > 0 && !nonSummaryRows
+  const rows = nonSummaryRows
+    || []
   const changes = parseChangesFromWranglerRoot(parsed, root)
-  return { rows, changes }
+  return { rows, changes, summaryOnly }
 }
 
-export function parseFirstRowFromWranglerJson(stdout: string): Record<string, any> {
+export function parseFirstRowFromWranglerJson(
+  stdout: string,
+  context?: {
+    stderr?: string
+    executable?: string
+    args?: string[]
+  },
+): Record<string, any> {
   const parsed = parseWranglerJsonPayload(stdout)
   const row = parsed.rows[0]
   if (!row) {
-    throw new Error('Wrangler JSON did not include a result row.')
+    throw new Error(
+      [
+        'Wrangler JSON did not include a result row.',
+        `raw_stdout=${truncateText(stdout, 2000)}`,
+        `raw_stderr=${truncateText(context?.stderr || '', 2000)}`,
+        `executable=${context?.executable || ''}`,
+        `args_json=${JSON.stringify(context?.args || [])}`,
+      ].join('\n'),
+    )
   }
   return row as Record<string, any>
 }
@@ -554,7 +638,8 @@ function parseSingleNumericRowFromNonJson(stdout: string): WranglerQueryRow {
   }
 
   const root = unwrapWranglerRoot(parsed)
-  const rows = parseRowsFromWranglerShape(root)
+  const rowSets = collectRowSets(root)
+  const rows = rowSets.find((candidate) => candidate.length > 0) || []
   if (rows.length !== 1) {
     throw new Error('Fallback output must include exactly one row.')
   }
@@ -578,14 +663,6 @@ function tokenizeCommand(command: string): string[] {
   return tokens
 }
 
-function escapeCmdExeArg(value: string): string {
-  const escaped = String(value).replace(/"/g, '\\"')
-  if (escaped.length === 0 || /[\s&|<>()^%!]/.test(escaped)) {
-    return `"${escaped}"`
-  }
-  return escaped
-}
-
 function parseWranglerBin(raw: string | undefined): { command: string; prefixArgs: string[] } {
   const tokens = tokenizeCommand(String(raw || '').trim())
   if (tokens.length === 0) return { command: 'wrangler', prefixArgs: [] }
@@ -593,10 +670,6 @@ function parseWranglerBin(raw: string | undefined): { command: string; prefixArg
     command: tokens[0],
     prefixArgs: tokens.slice(1),
   }
-}
-
-export function buildCmdExeFallbackCommand(args: string[]): string {
-  return ['npx', 'wrangler', ...args].map(escapeCmdExeArg).join(' ')
 }
 
 function summarizeSql(sqlText: string): string {
@@ -609,7 +682,7 @@ function sanitizeLabel(label: string): string {
 }
 
 function invocationFromRun(run: RunWranglerResult): string {
-  return run.fullCommand ? `cmd.exe /d /s /c ${run.fullCommand}` : `${run.executable} ${run.args.join(' ')}`
+  return `${run.executable} ${run.args.join(' ')}`
 }
 
 function isWranglerExecutionSummaryRow(row: WranglerQueryRow | undefined): boolean {
@@ -623,6 +696,11 @@ function isJsonUnsupportedError(text: string): boolean {
 
 function formatD1FailureDetails(
   label: string,
+  context: {
+    dbName: string
+    usedJson: boolean
+    mode: '--file' | '--command'
+  },
   args: string[],
   runError: unknown,
   tempPath: string,
@@ -631,11 +709,14 @@ function formatD1FailureDetails(
   const errorMessage = runError instanceof Error ? runError.message : String(runError)
   return [
     `D1 execution failed (${label}).`,
-    'executable=wrangler|cmd.exe',
-    `invocation_args=${args.join(' ')}`,
+    `db_name=${context.dbName}`,
+    `used_json=${context.usedJson}`,
+    `mode=${context.mode}`,
+    `invocation_args_json=${JSON.stringify(args)}`,
     `exit_code=non-zero`,
     `stdout=${truncateText(errorMessage)}`,
     `stderr=${truncateText(errorMessage)}`,
+    `stderr_tail=${truncateText(tailLines(errorMessage, 30), 4000)}`,
     `temp_sql_file=${tempPath}`,
     `sql_preview=${summarizeSql(sql)}`,
   ].join('\n')
@@ -644,6 +725,11 @@ function formatD1FailureDetails(
 function formatD1ParseFailureDetails(
   label: string,
   run: RunWranglerResult,
+  context: {
+    dbName: string
+    usedJson: boolean
+    mode: '--file' | '--command'
+  },
   tempPath: string,
   sql: string,
   parseError: unknown,
@@ -651,11 +737,15 @@ function formatD1ParseFailureDetails(
   const parseMessage = parseError instanceof Error ? parseError.message : String(parseError)
   return [
     `D1 output parse failed (${label}).`,
+    `db_name=${context.dbName}`,
+    `used_json=${context.usedJson}`,
+    `mode=${context.mode}`,
     `executable=${run.executable}`,
-    `args=${run.args.join(' ')}`,
+    `args_json=${JSON.stringify(run.args)}`,
     `exit_code=${run.exitCode}`,
     `stdout=${truncateText(run.stdout)}`,
     `stderr=${truncateText(run.stderr)}`,
+    `stderr_tail=${truncateText(tailLines(run.stderr, 30), 4000)}`,
     `temp_sql_file=${tempPath}`,
     `sql_preview=${summarizeSql(sql)}`,
     `parse_error=${parseMessage}`,
@@ -666,7 +756,6 @@ function runSingleSpawn(
   spawnRunner: SpawnRunner,
   executable: string,
   args: string[],
-  fullCommand?: string,
 ): RunWranglerResult {
   const result = spawnRunner(executable, args, {
     shell: false,
@@ -676,7 +765,6 @@ function runSingleSpawn(
   return {
     executable,
     args,
-    fullCommand,
     exitCode: typeof result.status === 'number' ? result.status : 1,
     stdout: String(result.stdout || ''),
     stderr: String(result.stderr || ''),
@@ -685,37 +773,106 @@ function runSingleSpawn(
 }
 
 function formatRunFailure(prefix: string, run: RunWranglerResult): string {
-  const invocation = run.fullCommand
-    ? `${run.executable} ${run.args.join(' ')}\nfull_cmd=${run.fullCommand}`
-    : `${run.executable} ${run.args.join(' ')}`
-  return `${prefix}\nexecutable=${run.executable}\ninvocation=${invocation}\nexit=${run.exitCode}\nstdout=${run.stdout.trim()}\nstderr=${run.stderr.trim()}\nerror=${run.errorMessage || ''}`
+  const invocation = `${run.executable} ${run.args.join(' ')}`
+  return `${prefix}\nexecutable=${run.executable}\nargs_json=${JSON.stringify(run.args)}\ninvocation=${invocation}\nexit=${run.exitCode}\nstdout=${run.stdout.trim()}\nstderr=${run.stderr.trim()}\nerror=${run.errorMessage || ''}`
 }
 
-export function runWrangler(
-  args: string[],
-  opts?: {
-    spawnRunner?: SpawnRunner
-    wranglerBin?: string
-  },
-): RunWranglerResult {
-  const spawnRunner = opts?.spawnRunner ?? spawnSync
-  const wranglerBin = opts?.wranglerBin ?? process.env.WRANGLER_BIN
-  const parsed = parseWranglerBin(wranglerBin)
-  const directIsNpx = /^npx(?:\.cmd)?$/i.test(parsed.command)
-  const directArgs = directIsNpx ? [...(parsed.prefixArgs.length > 0 ? parsed.prefixArgs : ['wrangler']), ...args] : [...parsed.prefixArgs, ...args]
-  const directRun = runSingleSpawn(spawnRunner, parsed.command, directArgs)
-  if (directRun.exitCode === 0) return directRun
+type D1ExecuteInvocation = {
+  executable: string
+  args: string[]
+}
 
-  const fallbackCmd = buildCmdExeFallbackCommand(args)
-  const fallbackRun = runSingleSpawn(spawnRunner, 'cmd.exe', ['/d', '/s', '/c', fallbackCmd], fallbackCmd)
-  if (fallbackRun.exitCode === 0) return fallbackRun
+type D1ExecuteParams = {
+  dbName: string
+  remote: boolean
+  json: boolean
+  filePath?: string
+  commandSql?: string
+  spawnRunner?: SpawnRunner
+  wranglerBin?: string
+  platform?: NodeJS.Platform
+}
 
-  throw new Error(
-    `${formatRunFailure('Wrangler direct invocation failed.', directRun)}\n\n${formatRunFailure(
-      'Wrangler cmd.exe fallback failed.',
-      fallbackRun,
-    )}`,
-  )
+function buildD1ExecuteArgs(params: D1ExecuteParams): string[] {
+  const args = ['d1', 'execute', params.dbName, ...(params.remote ? ['--remote'] : [])]
+  if (params.filePath) {
+    args.push('--file', params.filePath)
+  } else if (params.commandSql) {
+    args.push('--command', params.commandSql)
+  } else {
+    throw new Error('D1 execute requires either filePath or commandSql.')
+  }
+  if (params.json) {
+    args.push('--json')
+  }
+  return args
+}
+
+function buildD1ExecuteCandidates(params: D1ExecuteParams): D1ExecuteInvocation[] {
+  const baseArgs = buildD1ExecuteArgs(params)
+  const wranglerBin = params.wranglerBin ?? process.env.WRANGLER_BIN
+  const parsedBin = parseWranglerBin(wranglerBin)
+  const platform = params.platform ?? process.platform
+  const candidates: D1ExecuteInvocation[] = []
+  const npxCliPath = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js')
+  const hasNpxCli = fs.existsSync(npxCliPath)
+
+  if (wranglerBin && parsedBin.command) {
+    const isNpx = /^npx(?:\.cmd)?$/i.test(parsedBin.command)
+    if (isNpx) {
+      candidates.push({
+        executable: parsedBin.command,
+        args: [...parsedBin.prefixArgs, 'wrangler', ...baseArgs],
+      })
+      if (platform === 'win32' && hasNpxCli) {
+        candidates.push({
+          executable: process.execPath,
+          args: [npxCliPath, ...parsedBin.prefixArgs, 'wrangler', ...baseArgs],
+        })
+      }
+      return candidates
+    }
+    candidates.push({
+      executable: parsedBin.command,
+      args: [...parsedBin.prefixArgs, ...baseArgs],
+    })
+    return candidates
+  }
+
+  if (platform === 'win32') {
+    candidates.push(
+      { executable: 'npx.cmd', args: ['wrangler', ...baseArgs] },
+      { executable: 'npx', args: ['wrangler', ...baseArgs] },
+    )
+    if (hasNpxCli) {
+      candidates.push({
+        executable: process.execPath,
+        args: [npxCliPath, 'wrangler', ...baseArgs],
+      })
+    }
+    return candidates
+  }
+
+  return [
+    { executable: 'npx', args: ['wrangler', ...baseArgs] },
+    { executable: 'wrangler', args: baseArgs },
+  ]
+}
+
+export function runWranglerD1Execute(params: D1ExecuteParams): RunWranglerResult {
+  const spawnRunner = params.spawnRunner ?? spawnSync
+  const attempts = buildD1ExecuteCandidates(params)
+  const failures: string[] = []
+
+  for (const attempt of attempts) {
+    const run = runSingleSpawn(spawnRunner, attempt.executable, attempt.args)
+    if (run.exitCode === 0) {
+      return run
+    }
+    failures.push(formatRunFailure(`Wrangler invocation failed (${attempt.executable}).`, run))
+  }
+
+  throw new Error(failures.join('\n\n'))
 }
 
 export function runD1SqlFile(
@@ -739,44 +896,91 @@ export function runD1SqlFile(
 
   const writeFile = options?.writeFile ?? ((filePath: string, content: string) => fs.writeFileSync(filePath, content, 'utf8'))
   const unlinkFile = options?.unlinkFile ?? ((filePath: string) => fs.unlinkSync(filePath))
-  const spawnRunner = options?.spawnRunner ?? spawnSync
 
   writeFile(tempPath, `${sql}\n`)
-
-  const jsonArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--file', tempPath, '--json']
-  const plainArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--file', tempPath]
 
   try {
     let run: RunWranglerResult
     let usedJson = true
+    const jsonArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--file', tempPath, '--json']
+    const plainArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--file', tempPath]
 
     try {
-      run = runWrangler(jsonArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
+      run = runWranglerD1Execute({
+        dbName,
+        remote,
+        json: true,
+        filePath: tempPath,
+        spawnRunner: options?.spawnRunner,
+        wranglerBin: options?.wranglerBin,
+        platform: options?.platform,
+      })
     } catch (jsonError) {
       const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
       if (!isJsonUnsupportedError(message)) {
-        throw new Error(formatD1FailureDetails(label, jsonArgs, jsonError, tempPath, sql))
+        throw new Error(
+          formatD1FailureDetails(
+            label,
+            { dbName: dbName, usedJson: true, mode: '--file' },
+            jsonArgs,
+            jsonError,
+            tempPath,
+            sql,
+          ),
+        )
       }
       usedJson = false
       try {
-        run = runWrangler(plainArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
+        run = runWranglerD1Execute({
+          dbName,
+          remote,
+          json: false,
+          filePath: tempPath,
+          spawnRunner: options?.spawnRunner,
+          wranglerBin: options?.wranglerBin,
+          platform: options?.platform,
+        })
       } catch (plainError) {
-        throw new Error(formatD1FailureDetails(label, plainArgs, plainError, tempPath, sql))
+        throw new Error(
+          formatD1FailureDetails(
+            label,
+            { dbName: dbName, usedJson: false, mode: '--file' },
+            plainArgs,
+            plainError,
+            tempPath,
+            sql,
+          ),
+        )
       }
     }
 
     let parsedPayload: ParsedWranglerPayload
     try {
       if (usedJson) {
-        parsedPayload = parseWranglerJsonPayload(run.stdout)
+        const parsed = parseWranglerJsonPayload(run.stdout)
+        parsedPayload = {
+          rows: parsed.rows,
+          changes: parsed.changes,
+          summaryOnly: parsed.summaryOnly,
+        }
       } else {
         parsedPayload = {
           rows: [parseSingleNumericRowFromNonJson(run.stdout)],
           changes: 0,
+          summaryOnly: false,
         }
       }
     } catch (parseError) {
-      throw new Error(formatD1ParseFailureDetails(label, run, tempPath, sql, parseError))
+      throw new Error(
+        formatD1ParseFailureDetails(
+          label,
+          run,
+          { dbName: dbName, usedJson, mode: '--file' },
+          tempPath,
+          sql,
+          parseError,
+        ),
+      )
     }
 
     return {
@@ -791,6 +995,13 @@ export function runD1SqlFile(
           },
         },
       ],
+      attempt: {
+        mode: '--file',
+        usedJson,
+        summaryOnly: parsedPayload.summaryOnly,
+        executable: run.executable,
+        args: run.args,
+      },
     }
   } catch (error) {
     throw new Error(`${(error as Error)?.message || String(error)}\ntemp_sql_file=${tempPath}\nsql_preview=${summarizeSql(sql)}`)
@@ -814,89 +1025,189 @@ function runD1SqlCommand(
   if (!sql) {
     throw new Error(`SQL text for ${label} must be non-empty.`)
   }
+  const commandSql = normalizeSql(sql)
 
-  const normalizedSql = normalizeSql(sql)
-  const jsonArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--command', normalizedSql, '--json']
-  const plainArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--command', normalizedSql]
-  const spawnRunner = options?.spawnRunner ?? spawnSync
+  const jsonArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--command', commandSql, '--json']
+  const plainArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--command', commandSql]
+
+  let run: RunWranglerResult
+  let usedJson = true
 
   try {
-    let run: RunWranglerResult
-    let usedJson = true
-
+    run = runWranglerD1Execute({
+      dbName,
+      remote,
+      json: true,
+      commandSql,
+      spawnRunner: options?.spawnRunner,
+      wranglerBin: options?.wranglerBin,
+      platform: options?.platform,
+    })
+  } catch (jsonError) {
+    const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
+    if (!isJsonUnsupportedError(message)) {
+      throw new Error(
+        formatD1FailureDetails(
+          label,
+          { dbName, usedJson: true, mode: '--command' },
+          jsonArgs,
+          jsonError,
+          '<inline>',
+          commandSql,
+        ),
+      )
+    }
+    usedJson = false
     try {
-      run = runWrangler(jsonArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
-    } catch (jsonError) {
-      const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
-      if (!isJsonUnsupportedError(message)) {
-        throw new Error(formatD1FailureDetails(label, jsonArgs, jsonError, '<inline>', sql))
-      }
-      usedJson = false
-      try {
-        run = runWrangler(plainArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
-      } catch (plainError) {
-        throw new Error(formatD1FailureDetails(label, plainArgs, plainError, '<inline>', sql))
+      run = runWranglerD1Execute({
+        dbName,
+        remote,
+        json: false,
+        commandSql,
+        spawnRunner: options?.spawnRunner,
+        wranglerBin: options?.wranglerBin,
+        platform: options?.platform,
+      })
+    } catch (plainError) {
+      throw new Error(
+        formatD1FailureDetails(
+          label,
+          { dbName, usedJson: false, mode: '--command' },
+          plainArgs,
+          plainError,
+          '<inline>',
+            commandSql,
+        ),
+      )
+    }
+  }
+
+  let parsedPayload: ParsedWranglerPayload
+  try {
+    if (usedJson) {
+      parsedPayload = parseWranglerJsonPayload(run.stdout)
+    } else {
+      parsedPayload = {
+        rows: [parseSingleNumericRowFromNonJson(run.stdout)],
+        changes: 0,
+        summaryOnly: false,
       }
     }
-
-    let parsedPayload: ParsedWranglerPayload
-    try {
-      if (usedJson) {
-        parsedPayload = parseWranglerJsonPayload(run.stdout)
-      } else {
-        parsedPayload = {
-          rows: [parseSingleNumericRowFromNonJson(run.stdout)],
-          changes: 0,
-        }
-      }
-    } catch (parseError) {
-      throw new Error(
-        [
-          `D1 output parse failed (${label}).`,
-          `executable=${run.executable}`,
-          `args=${run.args.join(' ')}`,
-          `exit_code=${run.exitCode}`,
-          `stdout=${truncateText(run.stdout)}`,
-          `stderr=${truncateText(run.stderr)}`,
-          `sql_preview=${summarizeSql(sql)}`,
-          `parse_error=${parseError instanceof Error ? parseError.message : String(parseError)}`,
-        ].join('\n'),
+  } catch (parseError) {
+    throw new Error(
+      formatD1ParseFailureDetails(
+        label,
+        run,
+        { dbName, usedJson, mode: '--command' },
+        '<inline>',
+        commandSql,
+        parseError,
+      ),
       )
     }
 
-    return {
-      command: invocationFromRun(run),
-      exitCode: run.exitCode,
-      payload: [
-        {
-          results: parsedPayload.rows,
-          success: true,
-          meta: {
-            changes: parsedPayload.changes,
-          },
+  return {
+    command: invocationFromRun(run),
+    exitCode: run.exitCode,
+    payload: [
+      {
+        results: parsedPayload.rows,
+        success: true,
+        meta: {
+          changes: parsedPayload.changes,
         },
-      ],
-    }
-  } catch (error) {
-    throw new Error(`${(error as Error)?.message || String(error)}\nsql_preview=${summarizeSql(sql)}`)
+      },
+    ],
+    attempt: {
+      mode: '--command',
+      usedJson,
+      summaryOnly: parsedPayload.summaryOnly,
+      executable: run.executable,
+      args: run.args,
+    },
   }
 }
 
-function executeRemoteSql(db: string, sql: string, label: string, spawnRunner: SpawnRunner = spawnSync): ExecuteCommandResult {
-  const fileRun = runD1SqlFile(db, true, sql, label, { spawnRunner })
-  const first = firstRow(fileRun.payload)
-  if (isWranglerExecutionSummaryRow(first) && startsWithSelectOrWith(sql)) {
-    return runD1SqlCommand(db, true, sql, `${label}-command-fallback`, { spawnRunner })
+type ExecuteRemoteSqlOptions = {
+  spawnRunner?: SpawnRunner
+  phase?: 'plan' | 'apply'
+  expectedAlias?: string
+}
+
+function executeRemoteSql(db: string, sql: string, label: string, options?: ExecuteRemoteSqlOptions): ExecuteCommandResult {
+  const spawnRunner = options?.spawnRunner ?? spawnSync
+  const initial = runD1SqlFile(db, true, sql, label, { spawnRunner })
+
+  const isPlanRetryEligible = options?.phase === 'plan'
+    && startsWithSelectOrWith(sql)
+    && isReadOnlySql(sql)
+    && Boolean(options?.expectedAlias)
+
+  if (!isPlanRetryEligible || !initial.attempt.summaryOnly) {
+    return initial
   }
-  return fileRun
+
+  const retry = runD1SqlCommand(db, true, sql, `${label}-summary-only-retry`, { spawnRunner })
+  if (retry.attempt.summaryOnly) {
+    throw new Error(
+      [
+        `Wrangler returned execution summary without rowset for both --file and --command (${label}).`,
+        'retry_reason=summary_only_output',
+        `first_mode=${initial.attempt.mode}`,
+        `retry_mode=${retry.attempt.mode}`,
+        'used_json=true',
+        `first_executable=${initial.attempt.executable}`,
+        `first_args_json=${JSON.stringify(initial.attempt.args)}`,
+        `retry_executable=${retry.attempt.executable}`,
+        `retry_args_json=${JSON.stringify(retry.attempt.args)}`,
+      ].join('\n'),
+    )
+  }
+
+  const retryRow = firstRow(retry.payload)
+  const expectedAlias = String(options?.expectedAlias || '')
+  if (!(expectedAlias in retryRow)) {
+    throw new Error(
+      [
+        `Retry row missing expected alias "${expectedAlias}" (${label}).`,
+        'retry_reason=summary_only_output',
+        `first_mode=${initial.attempt.mode}`,
+        `retry_mode=${retry.attempt.mode}`,
+        'used_json=true',
+        `first_executable=${initial.attempt.executable}`,
+        `first_args_json=${JSON.stringify(initial.attempt.args)}`,
+        `retry_executable=${retry.attempt.executable}`,
+        `retry_args_json=${JSON.stringify(retry.attempt.args)}`,
+        `retry_row=${JSON.stringify(retryRow)}`,
+      ].join('\n'),
+    )
+  }
+
+  return {
+    ...retry,
+    retry: {
+      reason: 'summary_only_output',
+      first_mode: '--file',
+      retry_mode: '--command',
+      used_json: true,
+      attempts: [
+        { mode: '--file', executable: initial.attempt.executable, args_json: initial.attempt.args },
+        { mode: '--command', executable: retry.attempt.executable, args_json: retry.attempt.args },
+      ],
+    },
+  }
 }
 
 export function executeRemoteSqlWithFallbackForTest(
   db: string,
   sql: string,
   spawnRunner: SpawnRunner,
+  options?: {
+    phase?: 'plan' | 'apply'
+    expectedAlias?: string
+  },
 ): ExecuteCommandResult {
-  return executeRemoteSql(db, sql, 'test', spawnRunner)
+  return executeRemoteSql(db, sql, 'test', { spawnRunner, phase: options?.phase, expectedAlias: options?.expectedAlias })
 }
 
 function asNumber(value: unknown): number {
@@ -947,23 +1258,73 @@ export function runPlanOnlyForTest(args: string[], spawnRunner: SpawnRunner): Re
     }
   }
 
-  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count', spawnRunner)
-  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts', spawnRunner)
+  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count', {
+    spawnRunner,
+    phase: 'plan',
+    expectedAlias: 'orphan_presence_count',
+  })
+  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts', {
+    spawnRunner,
+    phase: 'plan',
+    expectedAlias: 'missing_rows',
+  })
   const currentOrphanRow = firstRow(currentOrphan.payload)
   const plannedCountsRow = firstRow(plannedCounts.payload)
+  const orphanBefore = readOrphanPresenceCount(currentOrphanRow, 'current_orphan_count')
+  const missingCount = requiredNumberField(plannedCountsRow, 'missing_rows', 'planned_counts')
+  const extraSafeDeleteCount = requiredNumberField(plannedCountsRow, 'extra_safe_delete_rows', 'planned_counts')
 
   return {
-    orphan_before: readOrphanPresenceCount(currentOrphanRow, 'current_orphan_count'),
-    missing_count: requiredNumberField(plannedCountsRow, 'missing_rows', 'planned_counts'),
-    extra_safe_delete_count: requiredNumberField(plannedCountsRow, 'extra_safe_delete_rows', 'planned_counts'),
+    orphan_before: orphanBefore,
+    missing_count: missingCount,
+    extra_safe_delete_count: extraSafeDeleteCount,
+    ok: true,
+    phase: 'plan',
+    exit_code: 0,
     executed_commands: [
       { command: currentOrphan.command, exit_code: currentOrphan.exitCode },
       { command: plannedCounts.command, exit_code: plannedCounts.exitCode },
     ],
+    retry: currentOrphan.retry || plannedCounts.retry || null,
+  }
+}
+
+type PlanCliOptions = {
+  spawnRunner?: SpawnRunner
+  stdoutWrite?: (text: string) => void
+  argvForLog?: string[]
+}
+
+export function runPlanModeCli(args: string[], options?: PlanCliOptions): number {
+  const stdoutWrite = options?.stdoutWrite ?? ((text: string) => process.stdout.write(text))
+  const spawnRunner = options?.spawnRunner ?? spawnSync
+  const argvForLog = options?.argvForLog ?? process.argv
+
+  try {
+    const report = runPlanOnlyForTest(args, spawnRunner)
+    stdoutWrite(`${JSON.stringify(report)}\n`)
+    return 0
+  } catch (error) {
+    const message = (error as Error)?.message || String(error)
+    const failure = {
+      ok: false,
+      phase: 'plan',
+      error: message,
+      stack: firstStackLines(error, 20),
+      command_line: argvForLog.join(' '),
+      exit_code: 1,
+    }
+    stdoutWrite(`${JSON.stringify(failure)}\n`)
+    return 1
   }
 }
 
 export function main(args: string[]): void {
+  if (!args.includes('--apply')) {
+    process.exitCode = runPlanModeCli(args)
+    return
+  }
+
   const rawArgv = [...process.argv]
   const config = parseRepairPresenceProdConfig(args)
 
@@ -981,8 +1342,14 @@ export function main(args: string[]): void {
     }
   }
 
-  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count')
-  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts')
+  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count', {
+    phase: 'plan',
+    expectedAlias: 'orphan_presence_count',
+  })
+  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts', {
+    phase: 'plan',
+    expectedAlias: 'missing_rows',
+  })
 
   const currentOrphanRow = firstRow(currentOrphan.payload)
   const plannedCountsRow = firstRow(plannedCounts.payload)
@@ -1026,21 +1393,25 @@ export function main(args: string[]): void {
       { command: currentOrphan.command, exit_code: currentOrphan.exitCode },
       { command: plannedCounts.command, exit_code: plannedCounts.exitCode },
     ],
+    retry: currentOrphan.retry || plannedCounts.retry || null,
   }
 
   if (config.apply) {
-    const insertResult = executeRemoteSql(config.db, applySql.insert_missing, 'apply-insert-missing')
+    const insertResult = executeRemoteSql(config.db, applySql.insert_missing, 'apply-insert-missing', { phase: 'apply' })
     const executedCommands = report.executed_commands as Array<{ command: string; exit_code: number }>
     executedCommands.push({ command: insertResult.command, exit_code: insertResult.exitCode })
 
     let deletedRows = 0
     if (config.deleteExtras) {
-      const deleteResult = executeRemoteSql(config.db, applySql.delete_safe_extras, 'apply-delete-safe-extras')
+      const deleteResult = executeRemoteSql(config.db, applySql.delete_safe_extras, 'apply-delete-safe-extras', { phase: 'apply' })
       deletedRows = changesFromPayload(deleteResult.payload)
       executedCommands.push({ command: deleteResult.command, exit_code: deleteResult.exitCode })
     }
 
-    const postVerify = executeRemoteSql(config.db, planSql.current_orphan_count, 'post-verify-orphan-count')
+    const postVerify = executeRemoteSql(config.db, planSql.current_orphan_count, 'post-verify-orphan-count', {
+      phase: 'plan',
+      expectedAlias: 'orphan_presence_count',
+    })
     executedCommands.push({ command: postVerify.command, exit_code: postVerify.exitCode })
     const postVerifyRow = firstRow(postVerify.payload)
 
@@ -1052,6 +1423,7 @@ export function main(args: string[]): void {
   }
 
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+  process.exitCode = 0
 }
 
 if (typeof require !== 'undefined' && require.main === module) {
@@ -1059,12 +1431,8 @@ if (typeof require !== 'undefined' && require.main === module) {
     main(process.argv.slice(2))
   } catch (error) {
     const message = (error as Error)?.message || String(error)
-    if (message.startsWith('CLI preflight failed:')) {
-      process.stderr.write(`${message}\n`)
-    } else {
-      process.stderr.write(`[repair-presence-prod] command_line=${process.argv.join(' ')}\n`)
-      process.stderr.write(`${message}\n`)
-    }
+    process.stderr.write(`[repair-presence-prod] command_line=${process.argv.join(' ')}\n`)
+    process.stderr.write(`${message}\n`)
     process.exitCode = 1
   }
 }
