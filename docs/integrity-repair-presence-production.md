@@ -8,13 +8,13 @@ This runbook is for the guarded production one-shot repair tool.
 
 ## Preconditions
 
-The tool will refuse to run unless all guard flags are present:
+The tool enforces these guard flags:
 
 - `--remote`
 - `--db australianrates_api`
-- `--i-know-this-will-mutate-production`
 - `--confirm-backup`
 - `--backup-artifact <path>` (must exist)
+- `--i-know-this-will-mutate-production` (required only when `--apply` is set)
 
 ## 1) Create backup/export artifact first
 
@@ -28,7 +28,6 @@ npx wrangler d1 export australianrates_api --remote --output artifacts/api-prod-
 node scripts/repair-presence-prod.js \
   --remote \
   --db australianrates_api \
-  --i-know-this-will-mutate-production \
   --confirm-backup \
   --backup-artifact artifacts/api-prod-pre-presence-repair.sql
 ```
@@ -65,6 +64,12 @@ node scripts/repair-presence-prod.js \
 ```
 
 After `--apply`, the tool automatically reruns orphan presence count and prints `orphan_presence_count_after_apply`.
+
+## Known Wrangler behavior
+
+- `wrangler d1 execute --remote --file <sql> --json` can return summary-only rows (for example `Total queries executed`, `Rows read`) without a SELECT rowset.
+- In **plan mode only**, the tool retries read-only SQL via `--command` when this summary-only condition is detected.
+- In **apply mode**, the tool stays `--file` only and never retries via `--command`.
 
 ## 5) Post-run verification commands
 

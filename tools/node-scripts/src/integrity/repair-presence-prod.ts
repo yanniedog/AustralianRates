@@ -63,6 +63,8 @@ type ParsedWranglerPayload = {
   summaryOnly: boolean
 }
 
+type LineLogger = (line: string) => void
+
 export type SpawnRunner = (
   command: string,
   args: string[],
@@ -86,12 +88,14 @@ type RunD1SqlFileOptions = {
   nowMs?: () => number
   writeFile?: (filePath: string, content: string) => void
   unlinkFile?: (filePath: string) => void
+  logLine?: LineLogger
 }
 
 type RunD1SqlOptions = {
   spawnRunner?: SpawnRunner
   wranglerBin?: string
   platform?: NodeJS.Platform
+  logLine?: LineLogger
 }
 
 function normalizeSql(sql: string): string {
@@ -112,6 +116,16 @@ function firstStackLines(error: unknown, maxLines = 20): string {
   const stack = (error as Error)?.stack
   if (!stack) return ''
   return stack.split('\n').slice(0, maxLines).join('\n')
+}
+
+function defaultLogLine(line: string): void {
+  process.stderr.write(`${line}\n`)
+}
+
+function emitStartBanner(config: RepairPresenceProdConfig, mode: 'plan' | 'apply', logLine: LineLogger): void {
+  logLine(
+    `[repair-presence-prod] start db=${config.db} backup_artifact=${config.backupArtifact} mode=${mode} delete_extras=${config.deleteExtras ? 'on' : 'off'}`,
+  )
 }
 
 function toFiniteNumberStrict(value: unknown): number | null {
@@ -791,6 +805,7 @@ type D1ExecuteParams = {
   spawnRunner?: SpawnRunner
   wranglerBin?: string
   platform?: NodeJS.Platform
+  logLine?: LineLogger
 }
 
 function buildD1ExecuteArgs(params: D1ExecuteParams): string[] {
@@ -865,6 +880,9 @@ export function runWranglerD1Execute(params: D1ExecuteParams): RunWranglerResult
   const failures: string[] = []
 
   for (const attempt of attempts) {
+    params.logLine?.(
+      `[repair-presence-prod] wrangler_command="${attempt.executable} ${attempt.args.join(' ')}" args_json=${JSON.stringify(attempt.args)}`,
+    )
     const run = runSingleSpawn(spawnRunner, attempt.executable, attempt.args)
     if (run.exitCode === 0) {
       return run
@@ -914,6 +932,7 @@ export function runD1SqlFile(
         spawnRunner: options?.spawnRunner,
         wranglerBin: options?.wranglerBin,
         platform: options?.platform,
+        logLine: options?.logLine,
       })
     } catch (jsonError) {
       const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
@@ -939,6 +958,7 @@ export function runD1SqlFile(
           spawnRunner: options?.spawnRunner,
           wranglerBin: options?.wranglerBin,
           platform: options?.platform,
+          logLine: options?.logLine,
         })
       } catch (plainError) {
         throw new Error(
@@ -1042,6 +1062,7 @@ function runD1SqlCommand(
       spawnRunner: options?.spawnRunner,
       wranglerBin: options?.wranglerBin,
       platform: options?.platform,
+      logLine: options?.logLine,
     })
   } catch (jsonError) {
     const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
@@ -1067,6 +1088,7 @@ function runD1SqlCommand(
         spawnRunner: options?.spawnRunner,
         wranglerBin: options?.wranglerBin,
         platform: options?.platform,
+        logLine: options?.logLine,
       })
     } catch (plainError) {
       throw new Error(
@@ -1132,11 +1154,16 @@ type ExecuteRemoteSqlOptions = {
   spawnRunner?: SpawnRunner
   phase?: 'plan' | 'apply'
   expectedAlias?: string
+  logLine?: LineLogger
 }
 
 function executeRemoteSql(db: string, sql: string, label: string, options?: ExecuteRemoteSqlOptions): ExecuteCommandResult {
   const spawnRunner = options?.spawnRunner ?? spawnSync
-  const initial = runD1SqlFile(db, true, sql, label, { spawnRunner })
+  const initial = runD1SqlFile(db, true, sql, label, { spawnRunner, logLine: options?.logLine })
+
+  if (options?.phase === 'apply' && initial.attempt.mode !== '--file') {
+    throw new Error(`Apply mode invariant violated for ${label}: expected --file execution only.`)
+  }
 
   const isPlanRetryEligible = options?.phase === 'plan'
     && startsWithSelectOrWith(sql)
@@ -1147,7 +1174,11 @@ function executeRemoteSql(db: string, sql: string, label: string, options?: Exec
     return initial
   }
 
-  const retry = runD1SqlCommand(db, true, sql, `${label}-summary-only-retry`, { spawnRunner })
+  options?.logLine?.('[repair-presence-prod] retry_reason=summary_only_output first_mode=--file retry_mode=--command')
+  const retry = runD1SqlCommand(db, true, sql, `${label}-summary-only-retry`, {
+    spawnRunner,
+    logLine: options?.logLine,
+  })
   if (retry.attempt.summaryOnly) {
     throw new Error(
       [
@@ -1245,7 +1276,11 @@ function changesFromPayload(payload: WranglerQueryResult[]): number {
   return asNumber(firstResult?.meta?.changes)
 }
 
-export function runPlanOnlyForTest(args: string[], spawnRunner: SpawnRunner): Record<string, unknown> {
+export function runPlanOnlyForTest(
+  args: string[],
+  spawnRunner: SpawnRunner,
+  options?: { logLine?: LineLogger },
+): Record<string, unknown> {
   const config = parseRepairPresenceProdConfig(args)
   if (config.apply) {
     throw new Error('runPlanOnlyForTest only supports plan mode.')
@@ -1262,11 +1297,13 @@ export function runPlanOnlyForTest(args: string[], spawnRunner: SpawnRunner): Re
     spawnRunner,
     phase: 'plan',
     expectedAlias: 'orphan_presence_count',
+    logLine: options?.logLine,
   })
   const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts', {
     spawnRunner,
     phase: 'plan',
     expectedAlias: 'missing_rows',
+    logLine: options?.logLine,
   })
   const currentOrphanRow = firstRow(currentOrphan.payload)
   const plannedCountsRow = firstRow(plannedCounts.payload)
@@ -1293,15 +1330,19 @@ type PlanCliOptions = {
   spawnRunner?: SpawnRunner
   stdoutWrite?: (text: string) => void
   argvForLog?: string[]
+  logLine?: LineLogger
 }
 
 export function runPlanModeCli(args: string[], options?: PlanCliOptions): number {
   const stdoutWrite = options?.stdoutWrite ?? ((text: string) => process.stdout.write(text))
   const spawnRunner = options?.spawnRunner ?? spawnSync
   const argvForLog = options?.argvForLog ?? process.argv
+  const logLine = options?.logLine ?? defaultLogLine
 
   try {
-    const report = runPlanOnlyForTest(args, spawnRunner)
+    const config = parseRepairPresenceProdConfig(args)
+    emitStartBanner(config, 'plan', logLine)
+    const report = runPlanOnlyForTest(args, spawnRunner, { logLine })
     stdoutWrite(`${JSON.stringify(report)}\n`)
     return 0
   } catch (error) {
@@ -1327,6 +1368,8 @@ export function main(args: string[]): void {
 
   const rawArgv = [...process.argv]
   const config = parseRepairPresenceProdConfig(args)
+  const logLine = defaultLogLine
+  emitStartBanner(config, 'apply', logLine)
 
   const planSql = buildRepairPresenceProdPlanSql()
   const applySql = buildRepairPresenceProdApplySql()
@@ -1345,10 +1388,12 @@ export function main(args: string[]): void {
   const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count', {
     phase: 'plan',
     expectedAlias: 'orphan_presence_count',
+    logLine,
   })
   const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts', {
     phase: 'plan',
     expectedAlias: 'missing_rows',
+    logLine,
   })
 
   const currentOrphanRow = firstRow(currentOrphan.payload)
@@ -1397,13 +1442,19 @@ export function main(args: string[]): void {
   }
 
   if (config.apply) {
-    const insertResult = executeRemoteSql(config.db, applySql.insert_missing, 'apply-insert-missing', { phase: 'apply' })
+    const insertResult = executeRemoteSql(config.db, applySql.insert_missing, 'apply-insert-missing', {
+      phase: 'apply',
+      logLine,
+    })
     const executedCommands = report.executed_commands as Array<{ command: string; exit_code: number }>
     executedCommands.push({ command: insertResult.command, exit_code: insertResult.exitCode })
 
     let deletedRows = 0
     if (config.deleteExtras) {
-      const deleteResult = executeRemoteSql(config.db, applySql.delete_safe_extras, 'apply-delete-safe-extras', { phase: 'apply' })
+      const deleteResult = executeRemoteSql(config.db, applySql.delete_safe_extras, 'apply-delete-safe-extras', {
+        phase: 'apply',
+        logLine,
+      })
       deletedRows = changesFromPayload(deleteResult.payload)
       executedCommands.push({ command: deleteResult.command, exit_code: deleteResult.exitCode })
     }
@@ -1411,6 +1462,7 @@ export function main(args: string[]): void {
     const postVerify = executeRemoteSql(config.db, planSql.current_orphan_count, 'post-verify-orphan-count', {
       phase: 'plan',
       expectedAlias: 'orphan_presence_count',
+      logLine,
     })
     executedCommands.push({ command: postVerify.command, exit_code: postVerify.exitCode })
     const postVerifyRow = firstRow(postVerify.payload)
