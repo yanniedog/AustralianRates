@@ -30,6 +30,7 @@ import {
   isSafePresenceMutationSql,
   parseFirstRowFromWranglerJson,
   parseRepairPresenceProdConfig,
+  runPlanOnlyForTest,
   runD1SqlFile,
 } from '../../../tools/node-scripts/src/integrity/repair-presence-prod'
 
@@ -297,6 +298,63 @@ describe('repair presence production guardrails', () => {
     expect(parsed.apply).toBe(true)
     expect(parsed.deleteExtras).toBe(true)
     expect(parsed.backupArtifact).toBe(path.resolve(backup))
+  })
+
+  it('parses Windows-style backup path and runs plan mode SQL without positional args', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repair-presence-prod-windows-'))
+    const backupPath = path.join(dir, 'api-prod-20260303T003407Z.sql')
+    fs.writeFileSync(backupPath, '-- backup artifact')
+    const windowsPath = backupPath.replaceAll('/', '\\')
+    const args = [
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      windowsPath,
+    ]
+
+    const spawnCalls: Array<{ command: string; args: string[] }> = []
+    let callIndex = 0
+    const fakeSpawn = ((command: string, spawnArgs: string[]) => {
+      spawnCalls.push({ command, args: spawnArgs })
+      callIndex += 1
+
+      const jsonRows =
+        callIndex === 1
+          ? [{ orphan_presence_count: 138 }]
+          : [{
+              missing_rows: 0,
+              extra_safe_delete_rows: 0,
+              extra_rows: 138,
+              expected_rows: 204,
+              existing_rows: 342,
+            }]
+
+      return {
+        pid: 1,
+        output: [],
+        stdout: JSON.stringify([{ results: jsonRows, success: true, meta: { changes: 0 } }]),
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof runPlanOnlyForTest>[1]
+
+    const parsed = parseRepairPresenceProdConfig(args)
+    expect(parsed.apply).toBe(false)
+    expect(parsed.backupArtifact).toBe(path.resolve(backupPath))
+
+    const report = runPlanOnlyForTest(args, fakeSpawn)
+    expect(report.orphan_before).toBe(138)
+    expect(report.missing_count).toBe(0)
+    expect(report.extra_safe_delete_count).toBe(0)
+
+    expect(spawnCalls.length).toBeGreaterThan(0)
+    const invocation = spawnCalls[0]?.args.join(' ') || ''
+    expect(invocation).toContain('d1 execute australianrates_api --remote')
+    expect(invocation).toContain('--file')
+    expect(invocation).toContain('--json')
   })
 })
 

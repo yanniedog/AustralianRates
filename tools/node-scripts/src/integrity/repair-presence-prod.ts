@@ -73,6 +73,11 @@ type RunD1SqlFileOptions = {
   unlinkFile?: (filePath: string) => void
 }
 
+type RunD1SqlOptions = {
+  spawnRunner?: SpawnRunner
+  wranglerBin?: string
+}
+
 function normalizeSql(sql: string): string {
   return sql.replace(/\s+/g, ' ').trim()
 }
@@ -95,21 +100,84 @@ function toFiniteNumberStrict(value: unknown): number | null {
   return null
 }
 
-function parseArgValue(args: string[], key: string): string | undefined {
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i]
-    if (arg === key) {
-      return args[i + 1]
-    }
-    if (arg.startsWith(`${key}=`)) {
-      return arg.slice(`${key}=`.length)
-    }
-  }
-  return undefined
+const BOOLEAN_OPTIONS = new Set([
+  '--remote',
+  '--apply',
+  '--delete-extras',
+  '--i-know-this-will-mutate-production',
+  '--confirm-backup',
+])
+
+const VALUE_OPTIONS = new Set([
+  '--db',
+  '--backup-artifact',
+])
+
+type ParsedCliArgs = {
+  flags: Set<string>
+  values: Map<string, string>
+  positionals: string[]
 }
 
-function hasFlag(args: string[], key: string): boolean {
-  return args.includes(key)
+function parseBooleanValue(value: string): boolean {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  throw new Error(`invalid boolean value "${value}"`)
+}
+
+function parseCliArgs(args: string[]): ParsedCliArgs {
+  const flags = new Set<string>()
+  const values = new Map<string, string>()
+  const positionals: string[] = []
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i]
+    if (!token.startsWith('--')) {
+      positionals.push(token)
+      continue
+    }
+
+    const equalIndex = token.indexOf('=')
+    const key = equalIndex >= 0 ? token.slice(0, equalIndex) : token
+    const inlineValue = equalIndex >= 0 ? token.slice(equalIndex + 1) : undefined
+
+    if (BOOLEAN_OPTIONS.has(key)) {
+      if (inlineValue === undefined) {
+        flags.add(key)
+      } else if (parseBooleanValue(inlineValue)) {
+        flags.add(key)
+      } else {
+        flags.delete(key)
+      }
+      continue
+    }
+
+    if (VALUE_OPTIONS.has(key)) {
+      let value = inlineValue
+      if (value === undefined) {
+        value = args[i + 1]
+        i += 1
+      }
+      if (!value || value.startsWith('--')) {
+        throw new Error(`option ${key} requires a value`)
+      }
+      values.set(key, value)
+      continue
+    }
+
+    throw new Error(`unknown option ${key}`)
+  }
+
+  return { flags, values, positionals }
+}
+
+function exampleCommand(): string {
+  return 'node scripts/repair-presence-prod.js --remote --db australianrates_api --confirm-backup --backup-artifact artifacts\\api-prod-YYYYMMDDTHHMMSSZ.sql'
+}
+
+function formatCliErrorMessage(reason: string, args: string[]): string {
+  return `CLI preflight failed: ${reason}; received_argv=${JSON.stringify(args)}; example="${exampleCommand()}"`
 }
 
 function resolveBackupArtifact(value: string | undefined): string {
@@ -129,37 +197,53 @@ function resolveBackupArtifact(value: string | undefined): string {
 }
 
 export function parseRepairPresenceProdConfig(args: string[]): RepairPresenceProdConfig {
-  const remote = hasFlag(args, '--remote')
+  let parsed: ParsedCliArgs
+  try {
+    parsed = parseCliArgs(args)
+  } catch (error) {
+    throw new Error(formatCliErrorMessage((error as Error)?.message || 'invalid arguments', args))
+  }
+
+  if (parsed.positionals.length > 0) {
+    throw new Error(formatCliErrorMessage(`unexpected positional arguments: ${parsed.positionals.join(' ')}`, args))
+  }
+
+  const remote = parsed.flags.has('--remote')
   if (!remote) {
-    throw new Error('Refusing execution: --remote is required for production repair mode.')
+    throw new Error(formatCliErrorMessage('--remote is required for production repair mode', args))
   }
 
-  const apply = hasFlag(args, '--apply')
-  const acknowledgeMutation = hasFlag(args, '--i-know-this-will-mutate-production')
+  const apply = parsed.flags.has('--apply')
+  const acknowledgeMutation = parsed.flags.has('--i-know-this-will-mutate-production')
   if (apply && !acknowledgeMutation) {
-    throw new Error('Refusing execution: --i-know-this-will-mutate-production is required.')
+    throw new Error(formatCliErrorMessage('--i-know-this-will-mutate-production is required when --apply is set', args))
   }
 
-  const confirmBackup = hasFlag(args, '--confirm-backup')
+  const confirmBackup = parsed.flags.has('--confirm-backup')
   if (!confirmBackup) {
-    throw new Error('Refusing execution: --confirm-backup is required.')
+    throw new Error(formatCliErrorMessage('--confirm-backup is required', args))
   }
 
-  const db = String(parseArgValue(args, '--db') || '').trim()
+  const db = String(parsed.values.get('--db') || '').trim()
   if (!db) {
-    throw new Error('Refusing execution: --db <name> is required.')
+    throw new Error(formatCliErrorMessage('--db <name> is required', args))
   }
   if (db !== ALLOWED_DB) {
-    throw new Error(`Refusing execution: only --db ${ALLOWED_DB} is allowed.`)
+    throw new Error(formatCliErrorMessage(`only --db ${ALLOWED_DB} is allowed`, args))
   }
 
-  const backupArtifact = resolveBackupArtifact(parseArgValue(args, '--backup-artifact'))
+  let backupArtifact: string
+  try {
+    backupArtifact = resolveBackupArtifact(parsed.values.get('--backup-artifact'))
+  } catch (error) {
+    throw new Error(formatCliErrorMessage((error as Error)?.message || 'invalid --backup-artifact', args))
+  }
 
   return {
     db,
     remote: true,
     apply,
-    deleteExtras: hasFlag(args, '--delete-extras'),
+    deleteExtras: parsed.flags.has('--delete-extras'),
     acknowledgeMutation,
     confirmBackup: true,
     backupArtifact,
@@ -388,9 +472,50 @@ function parseChangesFromWranglerRoot(parsed: unknown, root: unknown): number {
   return 0
 }
 
+function extractJsonText(stdout: string): string {
+  const text = String(stdout || '').trim()
+  if (!text) {
+    throw new Error('Wrangler output is empty.')
+  }
+
+  try {
+    JSON.parse(text)
+    return text
+  } catch {
+    // try extracting trailing JSON payload from mixed progress + JSON output
+  }
+
+  const startIndices = [text.indexOf('['), text.indexOf('{')]
+    .filter((value) => value >= 0)
+    .sort((a, b) => a - b)
+
+  for (const start of startIndices) {
+    const candidate = text.slice(start).trim()
+    try {
+      JSON.parse(candidate)
+      return candidate
+    } catch {
+      // continue
+    }
+
+    const closing = candidate.startsWith('[') ? candidate.lastIndexOf(']') : candidate.lastIndexOf('}')
+    if (closing > 0) {
+      const bounded = candidate.slice(0, closing + 1)
+      try {
+        JSON.parse(bounded)
+        return bounded
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  throw new Error(`Unable to locate JSON payload in wrangler output: ${truncateText(text, 500)}`)
+}
+
 function parseWranglerJsonPayload(stdout: string): ParsedWranglerPayload {
-  const trimmed = String(stdout || '').trim()
-  const parsed = JSON.parse(trimmed) as unknown
+  const jsonText = extractJsonText(stdout)
+  const parsed = JSON.parse(jsonText) as unknown
   const root = unwrapWranglerRoot(parsed)
   const rows = parseRowsFromWranglerShape(root)
   const changes = parseChangesFromWranglerRoot(parsed, root)
@@ -485,6 +610,11 @@ function sanitizeLabel(label: string): string {
 
 function invocationFromRun(run: RunWranglerResult): string {
   return run.fullCommand ? `cmd.exe /d /s /c ${run.fullCommand}` : `${run.executable} ${run.args.join(' ')}`
+}
+
+function isWranglerExecutionSummaryRow(row: WranglerQueryRow | undefined): boolean {
+  if (!row) return false
+  return 'Total queries executed' in row && 'Rows read' in row
 }
 
 function isJsonUnsupportedError(text: string): boolean {
@@ -673,13 +803,92 @@ export function runD1SqlFile(
   }
 }
 
-function executeRemoteSql(db: string, sql: string, label: string, spawnRunner: SpawnRunner = spawnSync): ExecuteCommandResult {
-  const run = runD1SqlFile(db, true, sql, label, { spawnRunner })
-  return {
-    command: run.command,
-    exitCode: run.exitCode,
-    payload: run.payload,
+function runD1SqlCommand(
+  dbName: string,
+  remote: boolean,
+  sqlText: string,
+  label: string,
+  options?: RunD1SqlOptions,
+): ExecuteCommandResult {
+  const sql = String(sqlText || '').trim()
+  if (!sql) {
+    throw new Error(`SQL text for ${label} must be non-empty.`)
   }
+
+  const normalizedSql = normalizeSql(sql)
+  const jsonArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--command', normalizedSql, '--json']
+  const plainArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--command', normalizedSql]
+  const spawnRunner = options?.spawnRunner ?? spawnSync
+
+  try {
+    let run: RunWranglerResult
+    let usedJson = true
+
+    try {
+      run = runWrangler(jsonArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
+    } catch (jsonError) {
+      const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
+      if (!isJsonUnsupportedError(message)) {
+        throw new Error(formatD1FailureDetails(label, jsonArgs, jsonError, '<inline>', sql))
+      }
+      usedJson = false
+      try {
+        run = runWrangler(plainArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
+      } catch (plainError) {
+        throw new Error(formatD1FailureDetails(label, plainArgs, plainError, '<inline>', sql))
+      }
+    }
+
+    let parsedPayload: ParsedWranglerPayload
+    try {
+      if (usedJson) {
+        parsedPayload = parseWranglerJsonPayload(run.stdout)
+      } else {
+        parsedPayload = {
+          rows: [parseSingleNumericRowFromNonJson(run.stdout)],
+          changes: 0,
+        }
+      }
+    } catch (parseError) {
+      throw new Error(
+        [
+          `D1 output parse failed (${label}).`,
+          `executable=${run.executable}`,
+          `args=${run.args.join(' ')}`,
+          `exit_code=${run.exitCode}`,
+          `stdout=${truncateText(run.stdout)}`,
+          `stderr=${truncateText(run.stderr)}`,
+          `sql_preview=${summarizeSql(sql)}`,
+          `parse_error=${parseError instanceof Error ? parseError.message : String(parseError)}`,
+        ].join('\n'),
+      )
+    }
+
+    return {
+      command: invocationFromRun(run),
+      exitCode: run.exitCode,
+      payload: [
+        {
+          results: parsedPayload.rows,
+          success: true,
+          meta: {
+            changes: parsedPayload.changes,
+          },
+        },
+      ],
+    }
+  } catch (error) {
+    throw new Error(`${(error as Error)?.message || String(error)}\nsql_preview=${summarizeSql(sql)}`)
+  }
+}
+
+function executeRemoteSql(db: string, sql: string, label: string, spawnRunner: SpawnRunner = spawnSync): ExecuteCommandResult {
+  const fileRun = runD1SqlFile(db, true, sql, label, { spawnRunner })
+  const first = firstRow(fileRun.payload)
+  if (isWranglerExecutionSummaryRow(first) && startsWithSelectOrWith(sql)) {
+    return runD1SqlCommand(db, true, sql, `${label}-command-fallback`, { spawnRunner })
+  }
+  return fileRun
 }
 
 export function executeRemoteSqlWithFallbackForTest(
@@ -725,7 +934,37 @@ function changesFromPayload(payload: WranglerQueryResult[]): number {
   return asNumber(firstResult?.meta?.changes)
 }
 
+export function runPlanOnlyForTest(args: string[], spawnRunner: SpawnRunner): Record<string, unknown> {
+  const config = parseRepairPresenceProdConfig(args)
+  if (config.apply) {
+    throw new Error('runPlanOnlyForTest only supports plan mode.')
+  }
+
+  const planSql = buildRepairPresenceProdPlanSql()
+  for (const [name, sql] of Object.entries(planSql)) {
+    if (!isSafePlanSql(sql)) {
+      throw new Error(`Plan SQL failed safety check (${name}).`)
+    }
+  }
+
+  const currentOrphan = executeRemoteSql(config.db, planSql.current_orphan_count, 'plan-current-orphan-count', spawnRunner)
+  const plannedCounts = executeRemoteSql(config.db, planSql.planned_counts, 'plan-counts', spawnRunner)
+  const currentOrphanRow = firstRow(currentOrphan.payload)
+  const plannedCountsRow = firstRow(plannedCounts.payload)
+
+  return {
+    orphan_before: readOrphanPresenceCount(currentOrphanRow, 'current_orphan_count'),
+    missing_count: requiredNumberField(plannedCountsRow, 'missing_rows', 'planned_counts'),
+    extra_safe_delete_count: requiredNumberField(plannedCountsRow, 'extra_safe_delete_rows', 'planned_counts'),
+    executed_commands: [
+      { command: currentOrphan.command, exit_code: currentOrphan.exitCode },
+      { command: plannedCounts.command, exit_code: plannedCounts.exitCode },
+    ],
+  }
+}
+
 export function main(args: string[]): void {
+  const rawArgv = [...process.argv]
   const config = parseRepairPresenceProdConfig(args)
 
   const planSql = buildRepairPresenceProdPlanSql()
@@ -747,10 +986,17 @@ export function main(args: string[]): void {
 
   const currentOrphanRow = firstRow(currentOrphan.payload)
   const plannedCountsRow = firstRow(plannedCounts.payload)
+  const orphanBefore = readOrphanPresenceCount(currentOrphanRow, 'current_orphan_count')
+  const missingCount = requiredNumberField(plannedCountsRow, 'missing_rows', 'planned_counts')
+  const extraSafeDeleteCount = requiredNumberField(plannedCountsRow, 'extra_safe_delete_rows', 'planned_counts')
 
   const report: Record<string, unknown> = {
     ok: true,
     mode: config.apply ? 'apply' : 'plan_only',
+    invocation: {
+      argv: rawArgv,
+      command_line: rawArgv.join(' '),
+    },
     target_db: config.db,
     backup_artifact: config.backupArtifact,
     flags: {
@@ -761,13 +1007,17 @@ export function main(args: string[]): void {
       confirm_backup: config.confirmBackup,
     },
     planned_counts: {
-      orphan_presence_count: readOrphanPresenceCount(currentOrphanRow, 'current_orphan_count'),
-      missing_rows: requiredNumberField(plannedCountsRow, 'missing_rows', 'planned_counts'),
-      extra_safe_delete_rows: requiredNumberField(plannedCountsRow, 'extra_safe_delete_rows', 'planned_counts'),
+      orphan_presence_count: orphanBefore,
+      missing_rows: missingCount,
+      extra_safe_delete_rows: extraSafeDeleteCount,
       extra_rows: requiredNumberField(plannedCountsRow, 'extra_rows', 'planned_counts'),
       expected_rows: requiredNumberField(plannedCountsRow, 'expected_rows', 'planned_counts'),
       existing_rows: requiredNumberField(plannedCountsRow, 'existing_rows', 'planned_counts'),
     },
+    orphan_before: orphanBefore,
+    missing_count: missingCount,
+    extra_safe_delete_count: extraSafeDeleteCount,
+    exit_code: 0,
     sql: {
       plan: planSql,
       apply: applySql,
@@ -808,7 +1058,13 @@ if (typeof require !== 'undefined' && require.main === module) {
   try {
     main(process.argv.slice(2))
   } catch (error) {
-    process.stderr.write(`${(error as Error)?.message || String(error)}\n`)
+    const message = (error as Error)?.message || String(error)
+    if (message.startsWith('CLI preflight failed:')) {
+      process.stderr.write(`${message}\n`)
+    } else {
+      process.stderr.write(`[repair-presence-prod] command_line=${process.argv.join(' ')}\n`)
+      process.stderr.write(`${message}\n`)
+    }
     process.exitCode = 1
   }
 }
