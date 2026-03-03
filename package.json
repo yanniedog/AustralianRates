@@ -24,6 +24,7 @@
     "pages:set-build": "node set-pages-build-config.js",
     "pages:trigger": "node scripts/trigger-pages-deploy.js",
     "pages:create-full-token": "node create-full-access-token.js",
+    "check:public-assets": "node scripts/check-public-assets.js",
     "typecheck:scripts": "npx tsc -p tools/node-scripts/tsconfig.json --noEmit",
     "typecheck:api": "npm run typecheck -w workers/api",
     "backup:api-db": "node scripts/export-d1-backup.js --db australianrates_api --remote",

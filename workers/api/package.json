@@ -7,18 +7,21 @@
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --exclude test/integration/** && npm run test:policy",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "test:policy": "node ../../scripts/enforce-api-test-policy.js"
   },
   "dependencies": {
     "hono": "^4.7.2",
     "jose": "^5.9.6"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.18",
     "@cloudflare/workers-types": "^4.20260207.0",
     "@types/node": "^22.13.10",
     "tsx": "^4.20.5",
     "typescript": "^5.7.3",
-    "vitest": "^4.0.18",
+    "vitest": "~3.2.4",
     "wrangler": "^4.67.0"
   }
 }

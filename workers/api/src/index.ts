@@ -28,8 +28,8 @@ app.use(
   secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://cdn.jsdelivr.net', 'https://cdn.plot.ly'],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'", 'https://api.github.com'],
@@ -58,8 +58,9 @@ app.route(TD_API_BASE_PATH, tdPublicRoutes)
 app.notFound((c) => c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404))
 
 app.onError((error, c) => {
-  log.error('api', `Unhandled error: ${(error as Error)?.message || String(error)}`, {
-    context: (error as Error)?.stack,
+  const errorType = (error as Error)?.name || 'Error'
+  log.error('api', 'Unhandled internal error', {
+    context: JSON.stringify({ error_type: errorType }),
   })
   return c.json({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } }, 500)
 })

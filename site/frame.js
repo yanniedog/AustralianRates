@@ -3,7 +3,6 @@
     var GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/commits?per_page=1';
     var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
     var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
-    var LOG_API_BASE = window.location.origin + '/api/home-loan-rates';
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
     var timeUtils = (window.AR && window.AR.time) ? window.AR.time : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
@@ -11,7 +10,6 @@
     /* Session log (client-side buffer for this tab) */
     var SESSION_LOG_MAX = 500;
     var _sessionLog = [];
-    var _systemLogCount = null;
 
     function addSessionLog(level, message, detail) {
         _sessionLog.push({
@@ -48,9 +46,8 @@
     function updateLogLinkText() {
         var el = document.getElementById('footer-log-link-text');
         if (!el) return;
-        var xx = _systemLogCount != null ? _systemLogCount.toLocaleString() : '...';
         var yy = _sessionLog.length.toLocaleString();
-        el.textContent = 'log ' + xx + '/' + yy;
+        el.textContent = 'log private/' + yy;
     }
 
     function downloadClientLog() {
@@ -192,9 +189,8 @@
                 '<span id="footer-commit">Loading commit info...</span>' +
                 '<span class="footer-sep">|</span>' +
                 '<span id="footer-log-info" class="footer-log-wrap">' +
-                    '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log .../0</span></a>' +
+                    '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log private/0</span></a>' +
                     '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
-                        '<a href="' + esc(LOG_API_BASE + '/logs') + '" id="footer-log-download-system" class="footer-log-popup-item" download>Download system log</a>' +
                         '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
                     '</div>' +
                 '</span>' +
@@ -212,7 +208,6 @@
 
         var logLink = document.getElementById('footer-log-link');
         var popup = document.getElementById('footer-log-popup');
-        var downloadSystem = document.getElementById('footer-log-download-system');
         var downloadClient = document.getElementById('footer-log-download-client');
 
         if (logLink && popup) {
@@ -221,8 +216,7 @@
                 var wasHidden = popup.hidden;
                 popup.hidden = !wasHidden;
                 if (wasHidden) {
-                    loadLogStats();
-                    downloadSystem.focus();
+                    downloadClient.focus();
                 }
             });
         }
@@ -230,11 +224,6 @@
             downloadClient.addEventListener('click', function () {
                 downloadClientLog();
                 if (popup) popup.hidden = true;
-            });
-        }
-        if (downloadSystem && popup) {
-            downloadSystem.addEventListener('click', function () {
-                popup.hidden = true;
             });
         }
         document.addEventListener('click', function (e) {
@@ -345,37 +334,13 @@
         });
     }
 
-    function loadLogStats() {
-        fetch(LOG_API_BASE + '/logs/stats')
-            .then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /logs/stats');
-                return r.json();
-            })
-            .then(function (data) {
-                if (data && typeof data.count === 'number') {
-                    _systemLogCount = data.count;
-                    addSessionLog('info', 'System log stats loaded', { count: data.count });
-                } else {
-                    _systemLogCount = 0;
-                    addSessionLog('info', 'System log stats (no count)', { data: !!data });
-                }
-                updateLogLinkText();
-            })
-            .catch(function (err) {
-                _systemLogCount = 0;
-                addSessionLog('warn', 'System log stats fetch failed', { message: err && err.message });
-                updateLogLinkText();
-            });
-    }
-
-    window.refreshSystemLogCount = loadLogStats;
+    window.refreshSystemLogCount = function () { return null; };
 
     addSessionLog('info', 'Frame loaded', {
         sectionApiBase: SECTION_API_BASE,
-        logApiBase: LOG_API_BASE,
+        systemLogsPublic: false,
     });
     buildNav();
     buildFooter();
     loadCommitInfo();
-    loadLogStats();
 })();

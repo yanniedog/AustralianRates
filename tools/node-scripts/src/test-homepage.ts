@@ -108,16 +108,16 @@ async function runTests() {
     }
 
     async function verifyFooterLogControls(label) {
-        const systemHref = await page.getAttribute('#footer-log-download-system', 'href').catch(() => '');
-        if (systemHref && systemHref.includes('/api/home-loan-rates/logs')) {
-            results.passed.push(`âœ“ ${label}: system log endpoint uses /api/home-loan-rates/logs`);
+        const systemActionCount = await page.locator('#footer-log-download-system').count().catch(() => 0);
+        if (systemActionCount === 0) {
+            results.passed.push(`PASS ${label}: public system log download is disabled`);
         } else {
-            results.failed.push(`âœ— ${label}: system log endpoint is incorrect (${systemHref || 'missing'})`);
+            results.failed.push(`FAIL ${label}: public system log download should be disabled`);
         }
 
         const linkVisible = await page.locator('#footer-log-link').isVisible().catch(() => false);
         if (!linkVisible) {
-            results.failed.push(`âœ— ${label}: footer log link not visible`);
+            results.failed.push(`FAIL ${label}: footer log link not visible`);
             return;
         }
 
@@ -129,9 +129,9 @@ async function runTests() {
         }).catch(() => false);
         const clientItemText = await page.textContent('#footer-log-download-client').catch(() => '');
         if (popupVisible && clientItemText && clientItemText.includes('Download client log')) {
-            results.passed.push(`âœ“ ${label}: footer popup includes "Download client log"`);
+            results.passed.push(`PASS ${label}: footer popup includes "Download client log"`);
         } else {
-            results.failed.push(`âœ— ${label}: footer popup missing client log download action`);
+            results.failed.push(`FAIL ${label}: footer popup missing client log download action`);
         }
 
         await page.click('body', { position: { x: 1, y: 1 } }).catch(() => {});
@@ -372,7 +372,7 @@ async function runTests() {
             }
         } else {
             results.warnings = results.warnings.filter((msg) => !msg.includes(legacyConsoleWarningToken));
-            results.warnings.push(`Console/runtime/network issues detected during load: ${loadIssueCount}`);
+            results.failed.push(`Console/runtime/network issues detected during load: ${loadIssueCount}`);
             if (actionableConsoleErrors.length > 0) console.log('  Console errors:', actionableConsoleErrors);
             if (pageErrors.length > 0) console.log('  Page errors:', pageErrors);
             if (actionableRequestFailures.length > 0) console.log('  Request failures:', actionableRequestFailures);
@@ -1184,6 +1184,8 @@ runTests().catch(error => {
     console.error('Failed to run tests:', error);
     process.exit(1);
 });
+
+
 
 
 

@@ -9,8 +9,7 @@ import { guardPublicHistoricalPull, guardPublicTriggerRun } from './public-write
 import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore, withPublicCache } from '../utils/http'
-import type { LogLevel } from '../utils/logger'
-import { getLogStats, log, queryLogs } from '../utils/logger'
+import { log } from '../utils/logger'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
@@ -359,42 +358,29 @@ publicRoutes.get('/coverage', async (c) => {
 })
 
 publicRoutes.get('/logs/stats', async (c) => {
-  withPublicCache(c, 30)
-  const stats = await getLogStats(c.env.DB)
-  return c.json({ ok: true, ...stats })
+  withNoStore(c)
+  return jsonError(
+    c,
+    403,
+    'PUBLIC_LOGS_DISABLED',
+    'Public system log access is disabled. Use admin log endpoints with admin authentication.',
+    {
+      admin_path: '/api/home-loan-rates/admin/logs/system/stats',
+    },
+  )
 })
 
 publicRoutes.get('/logs', async (c) => {
-  withPublicCache(c, 15)
-  const query = c.req.query()
-  const level = query.level as LogLevel | undefined
-  const source = query.source
-  const limit = Number(query.limit || 5000)
-  const offset = Number(query.offset || 0)
-  const format = String(query.format || 'text').toLowerCase()
-
-  const { entries, total } = await queryLogs(c.env.DB, { level, source, limit, offset })
-
-  if (format === 'json') {
-    return c.json({ ok: true, total, count: entries.length, entries })
-  }
-
-  const lines = entries.map((e) => {
-    const parts = [
-      String(e.ts ?? ''),
-      `[${String(e.level ?? 'info').toUpperCase()}]`,
-      `[${String(e.source ?? 'api')}]`,
-      String(e.message ?? ''),
-    ]
-    if (e.run_id) parts.push(`run=${e.run_id}`)
-    if (e.lender_code) parts.push(`lender=${e.lender_code}`)
-    if (e.context) parts.push(String(e.context))
-    return parts.join(' ')
-  })
-
-  c.header('Content-Type', 'text/plain; charset=utf-8')
-  c.header('Content-Disposition', 'attachment; filename="australianrates-log.txt"')
-  return c.body(`# AustralianRates Global Log (${total} entries total, showing ${entries.length})\n# Downloaded at ${new Date().toISOString()}\n\n${lines.join('\n')}\n`)
+  withNoStore(c)
+  return jsonError(
+    c,
+    403,
+    'PUBLIC_LOGS_DISABLED',
+    'Public system log access is disabled. Use admin log endpoints with admin authentication.',
+    {
+      admin_path: '/api/home-loan-rates/admin/logs/system',
+    },
+  )
 })
 
 publicRoutes.get('/export.csv', async (c) => {

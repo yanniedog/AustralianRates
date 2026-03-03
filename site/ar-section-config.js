@@ -4,7 +4,9 @@
 
     var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
     var sectionFromPath = (path.indexOf('/savings') !== -1) ? 'savings' : (path.indexOf('/term-deposits') !== -1) ? 'term-deposits' : null;
-    var section = window.AR_SECTION || sectionFromPath || 'home-loans';
+    var bodyEl = (typeof document !== 'undefined' && document.body) ? document.body : null;
+    var sectionFromBody = bodyEl ? bodyEl.getAttribute('data-ar-section') : null;
+    var section = sectionFromBody || window.AR_SECTION || sectionFromPath || 'home-loans';
 
     var sections = {
         'home-loans': {

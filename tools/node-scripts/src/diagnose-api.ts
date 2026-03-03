@@ -6,6 +6,12 @@ const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.co
 const ORIGIN = new URL(DEFAULT_TEST_URL).origin;
 const BENCH_N = Math.max(1, Math.floor(Number(process.env.DIAG_BENCH_N || 10)));
 const P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_P95_TARGET_MS || 500)));
+const EXPORT_P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_EXPORT_P95_TARGET_MS || 4000)));
+const DATASET_P95_OVERRIDES: Record<string, { default: number; exportJson: number }> = {
+  'home-loans': { default: P95_TARGET_MS, exportJson: Math.max(P95_TARGET_MS, 1800) },
+  savings: { default: P95_TARGET_MS, exportJson: Math.max(P95_TARGET_MS, 1200) },
+  'term-deposits': { default: P95_TARGET_MS, exportJson: EXPORT_P95_TARGET_MS },
+};
 
 const DATASETS = [
   { key: 'home-loans', base: '/api/home-loan-rates' },
@@ -104,11 +110,19 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   out.checks.push({ name: 'latest', status: latest.status, ms: latest.durationMs });
   if (latest.status !== 200 || !latest.json) out.failures.push(`latest status ${latest.status}`);
   const latestShape = inferRowsAndTotal(latest.json);
+  if (latest.status === 200 && latestShape.rows.length > 0) {
+    const first = latestShape.rows[0] as Record<string, unknown>;
+    if (!first || !first.collection_date) out.failures.push('latest shape missing collection_date');
+    if (!first || !first.product_key) out.failures.push('latest shape missing product_key');
+  }
 
   const latestAll = await requestJson(`${base}/latest-all?limit=50&source_mode=all`);
   out.checks.push({ name: 'latest-all', status: latestAll.status, ms: latestAll.durationMs });
   if (latestAll.status !== 200 || !latestAll.json) out.failures.push(`latest-all status ${latestAll.status}`);
   const latestAllShape = inferRowsAndTotal(latestAll.json);
+  if (latestAll.status === 200 && !Array.isArray(latestAllShape.rows)) {
+    out.failures.push('latest-all rows is not an array');
+  }
 
   const productKey = (latestShape.rows[0] && latestShape.rows[0].product_key) || null;
   if (productKey) {
@@ -116,6 +130,14 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     const timeseries = await requestJson(`${base}/timeseries?product_key=${encoded}&limit=5&source_mode=all`);
     out.checks.push({ name: 'timeseries', status: timeseries.status, ms: timeseries.durationMs });
     if (timeseries.status !== 200) out.failures.push(`timeseries status ${timeseries.status}`);
+    const timeseriesShape = inferRowsAndTotal(timeseries.json);
+    for (const row of timeseriesShape.rows) {
+      const record = row as Record<string, unknown>;
+      if (record.product_key && String(record.product_key) !== String(productKey)) {
+        out.failures.push('timeseries returned mixed product_key values');
+        break;
+      }
+    }
   }
 
   const exportJson = await requestJson(`${base}/export?format=json&source_mode=all`);
@@ -125,6 +147,12 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
 
   if (ratesShape.total === 0 && exportShape.total > 0) {
     out.failures.push(`contradiction: rates total=0 but export total=${exportShape.total}`);
+  }
+  if (rates.status === 200 && rates.json && !Array.isArray((rates.json as any).data)) {
+    out.failures.push('rates response missing data array');
+  }
+  if (rates.status === 200 && rates.json && typeof (rates.json as any).last_page !== 'number') {
+    out.failures.push('rates response missing numeric last_page');
   }
   if (!Array.isArray(latestShape.rows)) out.failures.push('latest response shape invalid');
   if (!Array.isArray(latestAllShape.rows)) out.failures.push('latest-all response shape invalid');
@@ -137,12 +165,16 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     `${base}/latest?limit=200&source_mode=all`,
     `${base}/latest-all?limit=200&source_mode=all`,
     `${base}/filters`,
+    `${base}/export?format=json&source_mode=all&limit=500`,
   ];
   for (const pathname of benchTargets) {
     const stats = await benchmark(pathname, BENCH_N);
-    const pass = stats.non200 === 0 && stats.p95Ms <= P95_TARGET_MS;
+    const thresholds = DATASET_P95_OVERRIDES[dataset.key] || { default: P95_TARGET_MS, exportJson: EXPORT_P95_TARGET_MS };
+    const isExportPath = pathname.includes('/export?format=json');
+    const threshold = isExportPath ? thresholds.exportJson : thresholds.default;
+    const pass = stats.non200 === 0 && stats.p95Ms <= threshold;
     out.benchmark.push({ path: pathname, ...stats, pass });
-    if (!pass) out.failures.push(`benchmark failed for ${pathname} (p95=${stats.p95Ms}ms, non200=${stats.non200})`);
+    if (!pass) out.failures.push(`benchmark failed for ${pathname} (p95=${stats.p95Ms}ms, target=${threshold}ms, non200=${stats.non200})`);
   }
 
   return out;
