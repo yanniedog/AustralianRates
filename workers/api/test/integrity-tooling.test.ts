@@ -15,6 +15,12 @@ import {
   looksLikeD1BindingName,
   parseRepairPreviewConfig,
 } from '../../../tools/node-scripts/src/integrity/repair-preview'
+import {
+  buildRepairPresencePreviewSqls,
+  parseRepairPresenceConfig,
+  runPresenceRepair,
+} from '../../../tools/node-scripts/src/integrity/repair-presence'
+import { DatabaseSync } from 'node:sqlite'
 
 describe('integrity runbook SQL generation', () => {
   it('produces read-only SELECT/WITH queries and LIMIT 20 sample queries', () => {
@@ -73,5 +79,121 @@ describe('repair preview remote guard', () => {
     const parsed = parseRepairPreviewConfig([dbPath])
     expect(parsed.dbPath).toBe(path.resolve(dbPath))
     expect(parsed.apply).toBe(false)
+  })
+})
+
+describe('repair presence tooling', () => {
+  it('generates read-only SELECT/WITH preview SQL', () => {
+    const sqlMap = buildRepairPresencePreviewSqls('product_catalog')
+    for (const sql of Object.values(sqlMap)) {
+      expect(startsWithSelectOrWith(sql)).toBe(true)
+      expect(isReadOnlySql(sql)).toBe(true)
+    }
+  })
+
+  it('refuses parse when remote flag is provided', () => {
+    expect(() => parseRepairPresenceConfig(['--remote', './clone.sqlite'])).toThrow(/--remote is not allowed/i)
+  })
+
+  it('apply mode only mutates product_presence_status and repair_shadow_* tables on a local db', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repair-presence-test-'))
+    const dbPath = path.join(dir, 'clone.sqlite')
+    const db = new DatabaseSync(dbPath)
+    db.exec(`
+CREATE TABLE product_catalog (
+  dataset_kind TEXT NOT NULL,
+  bank_name TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  is_removed INTEGER,
+  removed_at TEXT,
+  last_seen_collection_date TEXT,
+  last_seen_at TEXT,
+  last_successful_run_id TEXT
+);
+CREATE TABLE product_presence_status (
+  section TEXT NOT NULL,
+  bank_name TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  is_removed INTEGER NOT NULL,
+  removed_at TEXT,
+  last_seen_collection_date TEXT,
+  last_seen_at TEXT NOT NULL,
+  last_seen_run_id TEXT,
+  PRIMARY KEY (section, bank_name, product_id)
+);
+CREATE TABLE historical_loan_rates (bank_name TEXT, product_id TEXT);
+CREATE TABLE historical_savings_rates (bank_name TEXT, product_id TEXT);
+CREATE TABLE historical_term_deposit_rates (bank_name TEXT, product_id TEXT);
+INSERT INTO product_catalog (
+  dataset_kind, bank_name, product_id, is_removed, removed_at,
+  last_seen_collection_date, last_seen_at, last_successful_run_id
+) VALUES (
+  'savings', 'catalog_bank', 'catalog_product', 0, NULL,
+  '2026-03-03', '2026-03-03T00:00:00Z', 'run-catalog'
+);
+INSERT INTO product_presence_status (
+  section, bank_name, product_id, is_removed, removed_at,
+  last_seen_collection_date, last_seen_at, last_seen_run_id
+) VALUES (
+  'savings', 'orphan_bank', 'orphan_product', 0, NULL,
+  '2026-03-01', '2026-03-01T00:00:00Z', 'run-orphan'
+);
+`)
+
+    const beforeCatalog = db.prepare(`SELECT COUNT(*) AS n FROM product_catalog`).get() as { n: number }
+    const beforeLoan = db.prepare(`SELECT COUNT(*) AS n FROM historical_loan_rates`).get() as { n: number }
+    const beforeSavings = db.prepare(`SELECT COUNT(*) AS n FROM historical_savings_rates`).get() as { n: number }
+    const beforeTd = db.prepare(`SELECT COUNT(*) AS n FROM historical_term_deposit_rates`).get() as { n: number }
+    db.close()
+
+    const result = runPresenceRepair({ dbPath, apply: true, deleteSafeExtras: true })
+    expect(result.ok).toBe(true)
+    expect(result.mode).toBe('apply_local')
+    expect(result.before.counts.missing_rows).toBe(1)
+    expect(result.before.counts.extra_rows).toBe(1)
+    expect(result.after.counts.missing_rows).toBe(0)
+    expect(result.after.counts.extra_rows).toBe(0)
+    expect(result.apply_actions.inserted_missing_rows).toBe(1)
+    expect(result.apply_actions.deleted_extra_rows).toBe(1)
+
+    const verifyDb = new DatabaseSync(dbPath, { readOnly: true })
+    const afterCatalog = verifyDb.prepare(`SELECT COUNT(*) AS n FROM product_catalog`).get() as { n: number }
+    const afterLoan = verifyDb.prepare(`SELECT COUNT(*) AS n FROM historical_loan_rates`).get() as { n: number }
+    const afterSavings = verifyDb.prepare(`SELECT COUNT(*) AS n FROM historical_savings_rates`).get() as { n: number }
+    const afterTd = verifyDb.prepare(`SELECT COUNT(*) AS n FROM historical_term_deposit_rates`).get() as { n: number }
+    const afterPresence = verifyDb.prepare(`SELECT COUNT(*) AS n FROM product_presence_status`).get() as { n: number }
+    const orphanPresence = verifyDb
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM product_presence_status p
+         LEFT JOIN product_catalog c
+           ON c.dataset_kind = p.section
+          AND c.bank_name = p.bank_name
+          AND c.product_id = p.product_id
+         WHERE c.product_id IS NULL`,
+      )
+      .get() as { n: number }
+    const shadowTables = verifyDb
+      .prepare(
+        `SELECT name
+         FROM sqlite_master
+         WHERE type='table' AND name LIKE 'repair_shadow_presence_%'
+         ORDER BY name`,
+      )
+      .all() as Array<{ name: string }>
+    verifyDb.close()
+
+    expect(afterCatalog.n).toBe(beforeCatalog.n)
+    expect(afterLoan.n).toBe(beforeLoan.n)
+    expect(afterSavings.n).toBe(beforeSavings.n)
+    expect(afterTd.n).toBe(beforeTd.n)
+    expect(afterPresence.n).toBe(1)
+    expect(orphanPresence.n).toBe(0)
+    expect(shadowTables.map((row) => row.name)).toEqual([
+      'repair_shadow_presence_expected',
+      'repair_shadow_presence_extra',
+      'repair_shadow_presence_extra_safe_delete',
+      'repair_shadow_presence_missing',
+    ])
   })
 })
