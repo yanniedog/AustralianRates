@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentSavingsRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
@@ -97,7 +98,8 @@ export async function queryLatestSavingsRates(db: D1Database, filters: LatestSav
     LIMIT ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentSavingsRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentSavingsRow(row))
 }
 
 /** Count of current products matching the same filters as queryLatestSavingsRates. */
@@ -196,6 +198,7 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: Latest
         h.source_url,
         h.product_url,
         h.published_at,
+        h.cdr_product_detail_hash,
         h.data_quality_flag,
         h.confidence_score,
         h.retrieval_type,
@@ -241,6 +244,7 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: Latest
       ranked.source_url,
       ranked.product_url,
       ranked.published_at,
+      ranked.cdr_product_detail_hash,
       ranked.data_quality_flag,
       ranked.confidence_score,
       ranked.retrieval_type,
@@ -263,5 +267,6 @@ export async function queryLatestAllSavingsRates(db: D1Database, filters: Latest
   `
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentSavingsRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentSavingsRow(row))
 }

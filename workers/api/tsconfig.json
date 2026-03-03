@@ -10,5 +10,6 @@
     "types": ["@cloudflare/workers-types", "vitest/globals", "node"],
     "lib": ["ES2022", "WebWorker"]
   },
-  "include": ["src", "test", "config"]
+  "include": ["src", "test", "config"],
+  "exclude": ["test/integration"]
 }

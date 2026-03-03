@@ -29,7 +29,7 @@ Configuration:
 | Filters | Filter controls and download selector are visible | Assert required selectors exist |
 | Table | Tabulator renders and rows load | Wait for table and rows |
 | Pivot/charts | Controls and output containers render | Assert panel controls and content containers |
-| Footer | Disclaimer plus legal links visible | Assert disclaimer text and `About/Privacy/Terms/Contact` links |
+| Footer | Disclaimer plus legal links visible; client-log download available; no public system-log download | Assert disclaimer text, legal links, and footer log popup actions |
 | Admin isolation | No discoverable public admin links/shortcuts | Assert no admin links in public headers/footers/disclaimers |
 | Legal pages | Each legal page is reachable and distinct | Visit `/about/`, `/privacy/`, `/terms/`, `/contact/` and check title/content |
 | No-JS fallback | Noscript helper blocks exist in HTML | Fetch raw HTML and assert noscript + API link presence |
@@ -38,6 +38,7 @@ Scripts:
 
 - `npm run test:homepage`
 - `npm run verify:prod-hosting`
+- `npm run check:public-assets`
 
 ## 2. Interaction checks
 
@@ -102,4 +103,5 @@ Automated checks are in `test-homepage.js`. Manual screen reader checks remain r
 | `npm run test:homepage` | Playwright UI checks (layout, interactions, legal links, noscript presence checks). |
 | `npm run diagnose:api` | API diagnostics and performance checks across all datasets, including `latest-all`. |
 | `npm run verify:prod-hosting` | DNS, TLS, homepage, and API health verification for both apex and `www` production hosts. |
+| `npm run check:public-assets` | Fails if public section pages include disallowed external script/style URLs or miss required vendored assets. |
 | `npm run test:site` | Runs homepage then API diagnostics. |

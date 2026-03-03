@@ -79,7 +79,7 @@ export const SORT_COLUMNS: Record<string, string> = {
   source_url: 'h.source_url',
   product_url: 'h.product_url',
   published_at: 'h.published_at',
-  cdr_product_detail_json: 'h.cdr_product_detail_json',
+  cdr_product_detail_json: 'h.cdr_product_detail_hash',
 }
 
 export function addRateBoundsWhere(

@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
@@ -88,7 +89,8 @@ export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilter
     LIMIT ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentTdRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentTdRow(row))
 }
 
 /** Count of current products matching the same filters as queryLatestTdRates. */
@@ -185,6 +187,7 @@ export async function queryLatestAllTdRates(db: D1Database, filters: LatestTdFil
         h.source_url,
         h.product_url,
         h.published_at,
+        h.cdr_product_detail_hash,
         h.data_quality_flag,
         h.confidence_score,
         h.retrieval_type,
@@ -226,6 +229,7 @@ export async function queryLatestAllTdRates(db: D1Database, filters: LatestTdFil
       ranked.source_url,
       ranked.product_url,
       ranked.published_at,
+      ranked.cdr_product_detail_hash,
       ranked.data_quality_flag,
       ranked.confidence_score,
       ranked.retrieval_type,
@@ -248,5 +252,6 @@ export async function queryLatestAllTdRates(db: D1Database, filters: LatestTdFil
   `
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentTdRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentTdRow(row))
 }

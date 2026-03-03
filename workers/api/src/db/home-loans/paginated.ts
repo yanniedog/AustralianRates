@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentCoreRowFields, presentHomeLoanRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, addRateBoundsWhere, rows } from '../query-common'
 import {
   EXPORT_MAX_ROWS,
@@ -118,7 +119,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
       h.source_url,
       h.product_url,
       h.published_at,
-      h.cdr_product_detail_json,
+      h.cdr_product_detail_hash,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -185,7 +186,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
       h.source_url,
       h.product_url,
       h.published_at,
-      h.cdr_product_detail_json,
+      h.cdr_product_detail_hash,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -274,7 +275,8 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     else scheduled += Number(row.n)
   }
 
-  const data = rows(dataResult).map((row) => presentHomeLoanRow(row))
+  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
+  const data = hydratedData.map((row) => presentHomeLoanRow(row))
 
   return {
     last_page: lastPage,
@@ -392,7 +394,7 @@ export async function queryRatesForExport(
       h.source_url,
       h.product_url,
       h.published_at,
-      h.cdr_product_detail_json,
+      h.cdr_product_detail_hash,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -450,7 +452,7 @@ export async function queryRatesForExport(
       h.source_url,
       h.product_url,
       h.published_at,
-      h.cdr_product_detail_json,
+      h.cdr_product_detail_hash,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -517,8 +519,9 @@ export async function queryRatesForExport(
     if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
+  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
   return {
-    data: rows(dataResult).map((row) => presentCoreRowFields(row)),
+    data: hydratedData.map((row) => presentCoreRowFields(row)),
     total,
     source_mix: { scheduled, manual },
   }

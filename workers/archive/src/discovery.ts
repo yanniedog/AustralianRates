@@ -14,6 +14,7 @@ import {
 
 const LOCK_TTL_HOURS = 6;
 const FAILURE_PAYLOAD_MAX_CHARS = 50000;
+const D1_ROW_LIMIT_BYTES = 2_000_000;
 
 export interface DiscoveryResult {
   ok: boolean;
@@ -45,6 +46,60 @@ interface RegisterBrand {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function bytesToStream(bytes: Uint8Array): ReadableStream<BufferSource> {
+  return new ReadableStream<BufferSource>({
+    start(controller) {
+      const payload = new Uint8Array(bytes.byteLength);
+      payload.set(bytes);
+      controller.enqueue(payload);
+      controller.close();
+    },
+  });
+}
+
+async function streamToBytes(stream: ReadableStream<BufferSource>): Promise<Uint8Array> {
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
+async function gzipCompressText(text: string): Promise<Uint8Array> {
+  const input = new TextEncoder().encode(text);
+  const compressed = bytesToStream(input).pipeThrough(new CompressionStream("gzip"));
+  return streamToBytes(compressed);
+}
+
+async function sha256HexFromText(text: string): Promise<string> {
+  const input = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", input);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function storeRawPayloadBlob(
+  db: D1Database,
+  payloadJson: string
+): Promise<string> {
+  const payloadHash = await sha256HexFromText(payloadJson);
+  const uncompressedBytes = new TextEncoder().encode(payloadJson).byteLength;
+  const compressedPayload = await gzipCompressText(payloadJson);
+  const compressedBytes = compressedPayload.byteLength;
+  if (compressedBytes > D1_ROW_LIMIT_BYTES) {
+    throw new Error(
+      `compressed_payload_exceeds_row_limit hash=${payloadHash} bytes=${compressedBytes} limit=${D1_ROW_LIMIT_BYTES}`
+    );
+  }
+
+  await db
+    .prepare(
+      "INSERT OR IGNORE INTO raw_payload_store (payload_hash, encoding, payload_blob, uncompressed_bytes, compressed_bytes) VALUES (?, 'gzip', ?, ?, ?)"
+    )
+    .bind(payloadHash, compressedPayload, uncompressedBytes, compressedBytes)
+    .run();
+
+  return payloadHash;
 }
 
 /** Compute run date in Australia/Hobart (YYYY-MM-DD). */
@@ -109,24 +164,19 @@ async function saveRawPayload(
   sourceUrl: string
 ): Promise<string> {
   const id = `cdr_register_${fetchedAt.replace(/[:.]/g, "-")}`;
-  const encoder = new TextEncoder();
-  const data = encoder.encode(payloadJson);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashHex = Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const payloadHash = await storeRawPayloadBlob(db, payloadJson);
 
   try {
     await db
       .prepare(
-        "INSERT INTO raw_payloads (id, source_type, fetched_at, source_url, content_hash, payload_json) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO raw_payloads (id, source_type, fetched_at, source_url, content_hash, payload_hash) VALUES (?, ?, ?, ?, ?, ?)"
       )
-      .bind(id, "cdr_register", fetchedAt, sourceUrl, hashHex, payloadJson)
+      .bind(id, "cdr_register", fetchedAt, sourceUrl, payloadHash, payloadHash)
       .run();
   } catch (e) {
     console.error("saveRawPayload", e);
   }
-  return hashHex;
+  return payloadHash;
 }
 
 /** Persist failure response for debugging. */
@@ -145,18 +195,20 @@ async function saveFailurePayload(
       ? bodyText.slice(0, FAILURE_PAYLOAD_MAX_CHARS) + "\n...[truncated]"
       : bodyText;
   try {
+    const payloadHash = await storeRawPayloadBlob(db, truncated);
     await db
       .prepare(
-        "INSERT INTO raw_payloads (id, source_type, fetched_at, source_url, http_status, notes, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO raw_payloads (id, source_type, fetched_at, source_url, content_hash, payload_hash, http_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .bind(
         id,
         "cdr_register_failure",
         fetchedAt,
         sourceUrl,
+        payloadHash,
+        payloadHash,
         httpStatus,
-        errorMessage.slice(0, 500),
-        truncated
+        errorMessage.slice(0, 500)
       )
       .run();
   } catch (e) {

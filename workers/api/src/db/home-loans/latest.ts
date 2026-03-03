@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentHomeLoanRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, addRateBoundsWhere, rows, safeLimit } from '../query-common'
 import {
   type LatestFilters,
@@ -78,6 +79,20 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
       v.source_url,
       v.product_url,
       v.published_at,
+      (
+        SELECT h.cdr_product_detail_hash
+        FROM historical_loan_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.security_purpose = v.security_purpose
+          AND h.repayment_type = v.repayment_type
+          AND h.rate_structure = v.rate_structure
+          AND h.lvr_tier = v.lvr_tier
+          AND h.collection_date = v.collection_date
+          AND h.parsed_at = v.parsed_at
+          AND h.run_source = v.run_source
+        LIMIT 1
+      ) AS cdr_product_detail_hash,
       v.data_quality_flag,
       v.confidence_score,
       v.retrieval_type,
@@ -150,6 +165,20 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
       v.source_url,
       v.product_url,
       v.published_at,
+      (
+        SELECT h.cdr_product_detail_hash
+        FROM historical_loan_rates h
+        WHERE h.bank_name = v.bank_name
+          AND h.product_id = v.product_id
+          AND h.security_purpose = v.security_purpose
+          AND h.repayment_type = v.repayment_type
+          AND h.rate_structure = v.rate_structure
+          AND h.lvr_tier = v.lvr_tier
+          AND h.collection_date = v.collection_date
+          AND h.parsed_at = v.parsed_at
+          AND h.run_source = v.run_source
+        LIMIT 1
+      ) AS cdr_product_detail_hash,
       v.data_quality_flag,
       v.confidence_score,
       v.retrieval_type,
@@ -203,10 +232,12 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters) {
 
   try {
     const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-    return rows(result).map((row) => presentHomeLoanRow(row))
+    const hydrated = await hydrateCdrDetailJson(db, rows(result))
+    return hydrated.map((row) => presentHomeLoanRow(row))
   } catch {
     const result = await db.prepare(sqlNoPps).bind(...binds).all<Record<string, unknown>>()
-    return rows(result).map((row) => presentHomeLoanRow(row))
+    const hydrated = await hydrateCdrDetailJson(db, rows(result))
+    return hydrated.map((row) => presentHomeLoanRow(row))
   }
 }
 
@@ -351,6 +382,7 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
         h.source_url,
         h.product_url,
         h.published_at,
+        h.cdr_product_detail_hash,
         h.data_quality_flag,
         h.confidence_score,
         h.retrieval_type,
@@ -395,6 +427,7 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
       ranked.source_url,
       ranked.product_url,
       ranked.published_at,
+      ranked.cdr_product_detail_hash,
       ranked.data_quality_flag,
       ranked.confidence_score,
       ranked.retrieval_type,
@@ -441,6 +474,7 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
         h.source_url,
         h.product_url,
         h.published_at,
+        h.cdr_product_detail_hash,
         h.data_quality_flag,
         h.confidence_score,
         h.retrieval_type,
@@ -485,6 +519,7 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
       ranked.source_url,
       ranked.product_url,
       ranked.published_at,
+      ranked.cdr_product_detail_hash,
       ranked.data_quality_flag,
       ranked.confidence_score,
       ranked.retrieval_type,
@@ -510,9 +545,11 @@ export async function queryLatestAllRates(db: D1Database, filters: LatestFilters
 
   try {
     const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-    return rows(result).map((row) => presentHomeLoanRow(row))
+    const hydrated = await hydrateCdrDetailJson(db, rows(result))
+    return hydrated.map((row) => presentHomeLoanRow(row))
   } catch {
     const result = await db.prepare(sqlNoPps).bind(...binds).all<Record<string, unknown>>()
-    return rows(result).map((row) => presentHomeLoanRow(row))
+    const hydrated = await hydrateCdrDetailJson(db, rows(result))
+    return hydrated.map((row) => presentHomeLoanRow(row))
   }
 }

@@ -30,8 +30,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.css">
+    <link rel="stylesheet" href="../vendor/tabulator/tabulator_midnight.min.css">
+    <link rel="stylesheet" href="../vendor/pivottable/pivot.min.css">
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../frame.css">
     <link rel="stylesheet" href="../public-theme.css">
@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="../public-widgets.css">
     <script src="../theme.js"></script>
 </head>
-<body class="ar-public ar-section-savings">
+<body class="ar-public ar-section-savings" data-ar-section="savings">
     <a href="#main-content" class="skip-link">Skip to content</a>
     <header class="site-header">
         <div class="site-header-inner">
@@ -254,14 +254,13 @@
         Always confirm rates directly with the institution before making financial decisions.
     </p>
 
-    <script>window.AR_SECTION = 'savings';</script>
-    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/plotly_renderers.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="../vendor/tabulator/tabulator.min.js"></script>
+    <script src="../vendor/jquery/jquery.min.js"></script>
+    <script src="../vendor/jquery-ui/jquery-ui.min.js"></script>
+    <script src="../vendor/pivottable/pivot.min.js"></script>
+    <script src="../vendor/plotly/plotly-basic-2.35.2.min.js"></script>
+    <script src="../vendor/pivottable/plotly_renderers.min.js"></script>
+    <script src="../vendor/sheetjs/xlsx.full.min.js"></script>
     <script src="../ar-utils.js"></script>
     <script src="../ar-time.js"></script>
     <script src="../ar-section-config.js"></script>

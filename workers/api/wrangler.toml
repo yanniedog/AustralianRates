@@ -98,3 +98,66 @@ CF_ACCESS_AUD = ""
 
 # Set secrets via Wrangler:
 # wrangler secret put ADMIN_API_TOKEN
+
+[env.test]
+name = "australianrates-api-test"
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "australianrates_api_test"
+database_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
+[[env.test.r2_buckets]]
+binding = "RAW_BUCKET"
+bucket_name = "australianrates-raw-test"
+
+[[env.test.queues.producers]]
+binding = "INGEST_QUEUE"
+queue = "australianrates-ingest-test"
+
+[[env.test.kv_namespaces]]
+binding = "IDEMPOTENCY_KV"
+id = "11111111111111111111111111111111"
+preview_id = "11111111111111111111111111111111"
+
+[[env.test.queues.consumers]]
+queue = "australianrates-ingest-test"
+max_batch_size = 50
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "australianrates-ingest-dlq-test"
+
+[[env.test.durable_objects.bindings]]
+name = "RUN_LOCK_DO"
+class_name = "RunLockDO"
+
+[[env.test.migrations]]
+tag = "v1"
+new_sqlite_classes = ["RunLockDO"]
+
+[env.test.vars]
+WORKER_VERSION = "test"
+PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
+MELBOURNE_TIMEZONE = "Australia/Melbourne"
+MELBOURNE_TARGET_HOUR = "6"
+MANUAL_RUN_COOLDOWN_SECONDS = "60"
+LOCK_TTL_SECONDS = "7200"
+MAX_QUEUE_ATTEMPTS = "3"
+MAX_PRODUCTS_PER_LENDER = "20000"
+PERSIST_SUCCESSFUL_PRODUCT_DETAILS = "false"
+FEATURE_PROSPECTIVE_ENABLED = "true"
+FEATURE_BACKFILL_ENABLED = "true"
+AUTO_BACKFILL_DAILY_QUEUE_CAP = "16"
+PUBLIC_HISTORICAL_MAX_RANGE_DAYS = "30"
+ADMIN_HISTORICAL_MAX_RANGE_DAYS = "365"
+HISTORICAL_TASK_CLAIM_TTL_SECONDS = "900"
+HISTORICAL_MAX_BATCH_ROWS = "50"
+PUBLIC_HISTORICAL_COOLDOWN_SECONDS = "300"
+FEATURE_PUBLIC_TRIGGER_RUN_ENABLED = "false"
+FEATURE_PUBLIC_HISTORICAL_PULL_ENABLED = "false"
+FEATURE_PUBLIC_EXPORT_JOB_ENABLED = "false"
+FEATURE_QUEUE_IDEMPOTENCY_ENABLED = "false"
+IDEMPOTENCY_TTL_SECONDS = "604800"
+CF_ACCESS_TEAM_DOMAIN = ""
+CF_ACCESS_AUD = ""
+ADMIN_API_TOKEN = "test-admin-token"
