@@ -15,7 +15,7 @@ type HomeRow = {
   sourceUrl: string
   productUrl?: string | null
   publishedAt?: string | null
-  cdrProductDetailJson?: string | null
+  cdrProductDetailHash?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType: string
@@ -45,7 +45,7 @@ type SavingsRow = {
   sourceUrl: string
   productUrl?: string | null
   publishedAt?: string | null
-  cdrProductDetailJson?: string | null
+  cdrProductDetailHash?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType: string
@@ -73,7 +73,7 @@ type TdRow = {
   sourceUrl: string
   productUrl?: string | null
   publishedAt?: string | null
-  cdrProductDetailJson?: string | null
+  cdrProductDetailHash?: string | null
   dataQualityFlag: string
   confidenceScore: number
   retrievalType: string
@@ -92,7 +92,7 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
       `INSERT INTO latest_home_loan_series (
          series_key, product_key, bank_name, collection_date, product_id, product_code, product_name,
          security_purpose, repayment_type, rate_structure, lvr_tier, feature_set, interest_rate, comparison_rate, annual_fee,
-         source_url, product_url, published_at, cdr_product_detail_json, data_quality_flag, confidence_score, retrieval_type,
+         source_url, product_url, published_at, cdr_product_detail_hash, data_quality_flag, confidence_score, retrieval_type,
          parsed_at, run_id, run_source, is_removed, removed_at
        ) VALUES (
          ?1, ?2, ?3, ?4, ?5, ?6, ?7,
@@ -118,7 +118,7 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
          source_url = excluded.source_url,
          product_url = excluded.product_url,
          published_at = excluded.published_at,
-         cdr_product_detail_json = excluded.cdr_product_detail_json,
+         cdr_product_detail_hash = excluded.cdr_product_detail_hash,
          data_quality_flag = excluded.data_quality_flag,
          confidence_score = excluded.confidence_score,
          retrieval_type = excluded.retrieval_type,
@@ -147,7 +147,7 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
       row.sourceUrl,
       row.productUrl ?? null,
       row.publishedAt ?? null,
-      row.cdrProductDetailJson ?? null,
+      row.cdrProductDetailHash ?? null,
       row.dataQualityFlag,
       row.confidenceScore,
       row.retrievalType,
@@ -166,7 +166,7 @@ export async function upsertLatestSavingsSeries(db: D1Database, row: SavingsRow)
       `INSERT INTO latest_savings_series (
          series_key, product_key, bank_name, collection_date, product_id, product_code, product_name,
          account_type, rate_type, interest_rate, deposit_tier, min_balance, max_balance, conditions, monthly_fee,
-         source_url, product_url, published_at, cdr_product_detail_json, data_quality_flag, confidence_score, retrieval_type,
+         source_url, product_url, published_at, cdr_product_detail_hash, data_quality_flag, confidence_score, retrieval_type,
          parsed_at, run_id, run_source, is_removed, removed_at
        ) VALUES (
          ?1, ?2, ?3, ?4, ?5, ?6, ?7,
@@ -192,7 +192,7 @@ export async function upsertLatestSavingsSeries(db: D1Database, row: SavingsRow)
          source_url = excluded.source_url,
          product_url = excluded.product_url,
          published_at = excluded.published_at,
-         cdr_product_detail_json = excluded.cdr_product_detail_json,
+         cdr_product_detail_hash = excluded.cdr_product_detail_hash,
          data_quality_flag = excluded.data_quality_flag,
          confidence_score = excluded.confidence_score,
          retrieval_type = excluded.retrieval_type,
@@ -221,7 +221,7 @@ export async function upsertLatestSavingsSeries(db: D1Database, row: SavingsRow)
       row.sourceUrl,
       row.productUrl ?? null,
       row.publishedAt ?? null,
-      row.cdrProductDetailJson ?? null,
+      row.cdrProductDetailHash ?? null,
       row.dataQualityFlag,
       row.confidenceScore,
       row.retrievalType,
@@ -240,7 +240,7 @@ export async function upsertLatestTdSeries(db: D1Database, row: TdRow): Promise<
       `INSERT INTO latest_td_series (
          series_key, product_key, bank_name, collection_date, product_id, product_code, product_name,
          term_months, interest_rate, deposit_tier, min_deposit, max_deposit, interest_payment,
-         source_url, product_url, published_at, cdr_product_detail_json, data_quality_flag, confidence_score, retrieval_type,
+         source_url, product_url, published_at, cdr_product_detail_hash, data_quality_flag, confidence_score, retrieval_type,
          parsed_at, run_id, run_source, is_removed, removed_at
        ) VALUES (
          ?1, ?2, ?3, ?4, ?5, ?6, ?7,
@@ -264,7 +264,7 @@ export async function upsertLatestTdSeries(db: D1Database, row: TdRow): Promise<
          source_url = excluded.source_url,
          product_url = excluded.product_url,
          published_at = excluded.published_at,
-         cdr_product_detail_json = excluded.cdr_product_detail_json,
+         cdr_product_detail_hash = excluded.cdr_product_detail_hash,
          data_quality_flag = excluded.data_quality_flag,
          confidence_score = excluded.confidence_score,
          retrieval_type = excluded.retrieval_type,
@@ -291,7 +291,7 @@ export async function upsertLatestTdSeries(db: D1Database, row: TdRow): Promise<
       row.sourceUrl,
       row.productUrl ?? null,
       row.publishedAt ?? null,
-      row.cdrProductDetailJson ?? null,
+      row.cdrProductDetailHash ?? null,
       row.dataQualityFlag,
       row.confidenceScore,
       row.retrievalType,

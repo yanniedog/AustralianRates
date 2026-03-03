@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentHomeLoanRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, addRateBoundsWhere, rows, safeLimit } from '../query-common'
 import {
   MAX_PUBLIC_RATE,
@@ -85,6 +86,20 @@ export async function queryTimeseries(db: D1Database, input: TimeseriesFilters) 
       t.source_url,
       t.product_url,
       t.published_at,
+      (
+        SELECT h.cdr_product_detail_hash
+        FROM historical_loan_rates h
+        WHERE h.bank_name = t.bank_name
+          AND h.product_id = t.product_id
+          AND h.security_purpose = t.security_purpose
+          AND h.repayment_type = t.repayment_type
+          AND h.rate_structure = t.rate_structure
+          AND h.lvr_tier = t.lvr_tier
+          AND h.collection_date = t.collection_date
+          AND h.parsed_at = t.parsed_at
+          AND h.run_source = t.run_source
+        LIMIT 1
+      ) AS cdr_product_detail_hash,
       t.parsed_at,
       MIN(t.parsed_at) OVER (PARTITION BY t.product_key) AS first_retrieved_at,
       MAX(CASE WHEN t.data_quality_flag LIKE 'cdr_live%' THEN t.parsed_at END) OVER (
@@ -121,5 +136,6 @@ export async function queryTimeseries(db: D1Database, input: TimeseriesFilters) 
   `
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentHomeLoanRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentHomeLoanRow(row))
 }

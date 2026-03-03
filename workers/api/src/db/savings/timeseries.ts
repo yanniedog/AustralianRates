@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentSavingsRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
@@ -73,5 +74,6 @@ export async function querySavingsTimeseries(db: D1Database, input: SavingsTimes
     LIMIT ? OFFSET ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentSavingsRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentSavingsRow(row))
 }

@@ -1,4 +1,5 @@
 import { presentCoreRowFields, presentSavingsRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { rows } from '../query-common'
 import { buildWhere, type SavingsPaginatedFilters, SORT_COLUMNS } from './shared'
 
@@ -36,7 +37,7 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.account_type, h.rate_type, h.interest_rate, h.deposit_tier,
       h.min_balance, h.max_balance, h.conditions, h.monthly_fee,
-      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_json, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_hash, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
       MIN(h.parsed_at) OVER (
@@ -81,7 +82,8 @@ export async function querySavingsRatesPaginated(db: D1Database, filters: Saving
     if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
-  const data = rows(dataResult).map((row) => presentSavingsRow(row))
+  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
+  const data = hydratedData.map((row) => presentSavingsRow(row))
 
   return {
     last_page: Math.max(1, Math.ceil(total / size)),
@@ -121,7 +123,7 @@ export async function querySavingsForExport(db: D1Database, filters: SavingsPagi
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.account_type, h.rate_type, h.interest_rate, h.deposit_tier,
       h.min_balance, h.max_balance, h.conditions, h.monthly_fee,
-      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_json, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_hash, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
       MIN(h.parsed_at) OVER (
@@ -166,8 +168,9 @@ export async function querySavingsForExport(db: D1Database, filters: SavingsPagi
     if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
+  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
   return {
-    data: rows(dataResult).map((row) => presentCoreRowFields(row)),
+    data: hydratedData.map((row) => presentCoreRowFields(row)),
     total: Number(countResult?.total ?? 0),
     source_mix: { scheduled, manual },
   }

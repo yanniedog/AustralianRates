@@ -1,5 +1,6 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
@@ -68,7 +69,7 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
       h.source_url,
       h.product_url,
       h.published_at,
-      h.cdr_product_detail_json,
+      h.cdr_product_detail_hash,
       h.data_quality_flag,
       h.confidence_score,
       h.retrieval_type,
@@ -98,5 +99,6 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
     LIMIT ? OFFSET ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return rows(result).map((row) => presentTdRow(row))
+  const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  return hydrated.map((row) => presentTdRow(row))
 }

@@ -3,6 +3,7 @@ import { log } from '../utils/logger'
 import { deriveRetrievalType } from '../utils/retrieval-type'
 import { homeLoanDimensionJson, homeLoanSeriesKey, legacyProductKey } from '../utils/series-identity'
 import { upsertProductCatalog, upsertSeriesCatalog } from './catalog'
+import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestHomeLoanSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { nowIso } from '../utils/time'
@@ -17,6 +18,10 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
   const seriesKey = homeLoanSeriesKey(row)
   const productCode = row.productId
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
+  const cdrProductDetailHash =
+    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
+      ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
+      : null
 
   await db
     .prepare(
@@ -38,7 +43,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url,
         product_url,
         published_at,
-        cdr_product_detail_json,
+        cdr_product_detail_hash,
         data_quality_flag,
         confidence_score,
         retrieval_type,
@@ -58,7 +63,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         source_url = excluded.source_url,
         product_url = excluded.product_url,
         published_at = excluded.published_at,
-        cdr_product_detail_json = excluded.cdr_product_detail_json,
+        cdr_product_detail_hash = excluded.cdr_product_detail_hash,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
         retrieval_type = excluded.retrieval_type,
@@ -84,7 +89,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
       row.sourceUrl,
       row.productUrl ?? row.sourceUrl,
       row.publishedAt ?? null,
-      row.cdrProductDetailJson ?? null,
+      cdrProductDetailHash,
       row.dataQualityFlag,
       row.confidenceScore,
       retrievalType,
@@ -154,7 +159,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
     sourceUrl: row.sourceUrl,
     productUrl: row.productUrl ?? row.sourceUrl,
     publishedAt: row.publishedAt ?? null,
-    cdrProductDetailJson: row.cdrProductDetailJson ?? null,
+    cdrProductDetailHash,
     dataQualityFlag: row.dataQualityFlag,
     confidenceScore: row.confidenceScore,
     retrievalType,

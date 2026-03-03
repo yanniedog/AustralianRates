@@ -3,6 +3,7 @@ import { log } from '../utils/logger'
 import { deriveRetrievalType } from '../utils/retrieval-type'
 import { tdDimensionJson, tdSeriesKey, legacyProductKey } from '../utils/series-identity'
 import { upsertProductCatalog, upsertSeriesCatalog } from './catalog'
+import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestTdSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { nowIso } from '../utils/time'
@@ -17,6 +18,10 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
   const seriesKey = tdSeriesKey(row)
   const productCode = row.productId
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
+  const cdrProductDetailHash =
+    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
+      ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
+      : null
 
   await db
     .prepare(
@@ -24,7 +29,7 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         bank_name, collection_date, product_id, product_code, product_name,
         series_key, term_months, interest_rate, deposit_tier,
         min_deposit, max_deposit, interest_payment,
-        source_url, product_url, published_at, cdr_product_detail_json, data_quality_flag, confidence_score,
+        source_url, product_url, published_at, cdr_product_detail_hash, data_quality_flag, confidence_score,
         retrieval_type,
         parsed_at, fetch_event_id, run_id, run_source
       ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)
@@ -39,7 +44,7 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         source_url = excluded.source_url,
         product_url = excluded.product_url,
         published_at = excluded.published_at,
-        cdr_product_detail_json = excluded.cdr_product_detail_json,
+        cdr_product_detail_hash = excluded.cdr_product_detail_hash,
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
         retrieval_type = excluded.retrieval_type,
@@ -63,7 +68,7 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
       row.sourceUrl,
       row.productUrl ?? row.sourceUrl,
       row.publishedAt ?? null,
-      row.cdrProductDetailJson ?? null,
+      cdrProductDetailHash,
       row.dataQualityFlag,
       row.confidenceScore,
       retrievalType,
@@ -130,7 +135,7 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
     sourceUrl: row.sourceUrl,
     productUrl: row.productUrl ?? row.sourceUrl,
     publishedAt: row.publishedAt ?? null,
-    cdrProductDetailJson: row.cdrProductDetailJson ?? null,
+    cdrProductDetailHash,
     dataQualityFlag: row.dataQualityFlag,
     confidenceScore: row.confidenceScore,
     retrievalType,

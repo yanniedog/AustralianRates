@@ -1,4 +1,5 @@
 import { presentCoreRowFields, presentTdRow } from '../../utils/row-presentation'
+import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { rows } from '../query-common'
 import { buildWhere, SORT_COLUMNS, type TdPaginatedFilters } from './shared'
 
@@ -26,7 +27,7 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
-      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_json, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_hash, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
       MIN(h.parsed_at) OVER (
@@ -68,7 +69,8 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
     if (String((row as Record<string, unknown>).run_source ?? 'scheduled').toLowerCase() === 'manual') manual += 1
     else scheduled += 1
   }
-  const data = rows(dataResult).map((row) => presentTdRow(row))
+  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
+  const data = hydratedData.map((row) => presentTdRow(row))
 
   return {
     last_page: Math.max(1, Math.ceil(total / size)),
@@ -98,7 +100,7 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
       h.bank_name, h.collection_date, h.product_id, h.product_name,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
-      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_json, h.data_quality_flag, h.confidence_score,
+      h.source_url, h.product_url, h.published_at, h.cdr_product_detail_hash, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
       MIN(h.parsed_at) OVER (
@@ -140,8 +142,9 @@ FROM historical_term_deposit_rates h
     if (String((row as Record<string, unknown>).run_source ?? 'scheduled').toLowerCase() === 'manual') manual += 1
     else scheduled += 1
   }
+  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
   return {
-    data: rows(dataResult).map((row) => presentCoreRowFields(row)),
+    data: hydratedData.map((row) => presentCoreRowFields(row)),
     total: Number(countResult?.total ?? 0),
     source_mix: { scheduled, manual },
   }
