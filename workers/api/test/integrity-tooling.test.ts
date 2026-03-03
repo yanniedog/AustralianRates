@@ -28,6 +28,7 @@ import {
   executeRemoteSqlWithFallbackForTest,
   isSafePlanSql,
   isSafePresenceMutationSql,
+  parseFirstRowFromWranglerJson,
   parseRepairPresenceProdConfig,
   runD1SqlFile,
 } from '../../../tools/node-scripts/src/integrity/repair-presence-prod'
@@ -389,9 +390,108 @@ describe('repair presence production command fallback', () => {
     expect(writes[0]?.content.trimStart().startsWith('SELECT')).toBe(true)
     expect(unlinks).toContain(writes[0]?.filePath as string)
   })
+
+  it('retries without --json once when wrangler does not support --json', () => {
+    const spawnCalls: Array<{ command: string; args: string[] }> = []
+    let invocation = 0
+    const fakeSpawn = ((command: string, args: string[]) => {
+      spawnCalls.push({ command, args })
+      invocation += 1
+
+      if (invocation <= 2) {
+        return {
+          pid: 0,
+          output: [],
+          stdout: '',
+          stderr: 'Unexpected argument: --json',
+          status: 1,
+          signal: null,
+        }
+      }
+
+      return {
+        pid: 1,
+        output: [],
+        stdout: '[{"results":[{"orphan_presence_count":138}],"success":true,"meta":{"changes":0}}]',
+        stderr: '',
+        status: 0,
+        signal: null,
+      }
+    }) as Parameters<typeof executeRemoteSqlWithFallbackForTest>[2]
+
+    const result = runD1SqlFile('australianrates_api', true, 'SELECT COUNT(*) AS orphan_presence_count', 'json-fallback', {
+      nowMs: () => 1700000001234,
+      tempDir: path.join(os.tmpdir(), 'repair-presence-prod-tests'),
+      writeFile: () => undefined,
+      unlinkFile: () => undefined,
+      spawnRunner: fakeSpawn,
+    })
+
+    expect(result.exitCode).toBe(0)
+    const withJsonCall = spawnCalls.find((call) => call.args.includes('--json'))
+    const withoutJsonCall = spawnCalls.find((call) => !call.args.includes('--json') && call.args.includes('--file'))
+    expect(withJsonCall).toBeDefined()
+    expect(withoutJsonCall).toBeDefined()
+    expect(withoutJsonCall?.args).not.toContain('--json')
+  })
+})
+
+describe('repair presence wrangler JSON parser', () => {
+  it('parses object result shape', () => {
+    const row = parseFirstRowFromWranglerJson(
+      JSON.stringify({
+        success: true,
+        result: [{ orphan_presence_count: 138 }],
+      }),
+    )
+    expect(row.orphan_presence_count).toBe(138)
+  })
+
+  it('parses object results shape', () => {
+    const row = parseFirstRowFromWranglerJson(
+      JSON.stringify({
+        success: true,
+        results: [{ orphan_presence_count: 138 }],
+      }),
+    )
+    expect(row.orphan_presence_count).toBe(138)
+  })
+
+  it('parses object with meta + result shape', () => {
+    const row = parseFirstRowFromWranglerJson(
+      JSON.stringify({
+        success: true,
+        meta: { changes: 0 },
+        result: [{ orphan_presence_count: 138 }],
+      }),
+    )
+    expect(row.orphan_presence_count).toBe(138)
+  })
+
+  it('parses array-of-arrays single row/single column shape', () => {
+    const row = parseFirstRowFromWranglerJson(
+      JSON.stringify({
+        success: true,
+        results: [[138]],
+      }),
+    )
+    expect(row.orphan_presence_count).toBe(138)
+  })
 })
 
 describe('repair presence production SQL safety', () => {
+  it('orphan query matches canonical product_presence_status -> product_catalog definition', () => {
+    const planSql = buildRepairPresenceProdPlanSql()
+    const orphanSql = planSql.current_orphan_count
+    expect(orphanSql).toContain('AS orphan_presence_count')
+    expect(orphanSql).toContain('FROM product_presence_status pps')
+    expect(orphanSql).toContain('LEFT JOIN product_catalog pc')
+    expect(orphanSql).toContain('pc.dataset_kind = pps.section')
+    expect(orphanSql).toContain('pc.bank_name = pps.bank_name')
+    expect(orphanSql).toContain('pc.product_id = pps.product_id')
+    expect(orphanSql).toContain('WHERE pc.product_id IS NULL')
+  })
+
   it('plan SQL is read-only SELECT/WITH', () => {
     const planSql = buildRepairPresenceProdPlanSql()
     for (const sql of Object.values(planSql)) {

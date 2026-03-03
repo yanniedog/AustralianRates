@@ -43,6 +43,11 @@ type ExecuteCommandResult = {
   payload: WranglerQueryResult[]
 }
 
+type ParsedWranglerPayload = {
+  rows: WranglerQueryRow[]
+  changes: number
+}
+
 export type SpawnRunner = (
   command: string,
   args: string[],
@@ -70,6 +75,24 @@ type RunD1SqlFileOptions = {
 
 function normalizeSql(sql: string): string {
   return sql.replace(/\s+/g, ' ').trim()
+}
+
+function truncateText(value: string, maxChars = 4000): string {
+  const text = String(value || '')
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars)}...<truncated>`
+}
+
+function toFiniteNumberStrict(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'bigint') {
+    const asNumber = Number(value)
+    return Number.isFinite(asNumber) ? asNumber : null
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 function parseArgValue(args: string[], key: string): string | undefined {
@@ -157,48 +180,48 @@ WITH expected AS (
     last_successful_run_id AS last_seen_run_id
   FROM product_catalog
 ),
+orphan_presence AS (
+  SELECT
+    pps.section,
+    pps.bank_name,
+    pps.product_id
+  FROM product_presence_status pps
+  LEFT JOIN product_catalog pc
+    ON pc.dataset_kind = pps.section
+   AND pc.bank_name = pps.bank_name
+   AND pc.product_id = pps.product_id
+  WHERE pc.product_id IS NULL
+),
 missing AS (
-  SELECT e.*
+  SELECT
+    e.section,
+    e.bank_name,
+    e.product_id,
+    e.is_removed,
+    e.removed_at,
+    e.last_seen_collection_date,
+    e.last_seen_at,
+    e.last_seen_run_id
   FROM expected e
-  LEFT JOIN product_presence_status p
-    ON p.section = e.section
-   AND p.bank_name = e.bank_name
-   AND p.product_id = e.product_id
-  WHERE p.product_id IS NULL
+  LEFT JOIN product_presence_status pps
+    ON pps.section = e.section
+   AND pps.bank_name = e.bank_name
+   AND pps.product_id = e.product_id
+  WHERE pps.product_id IS NULL
 ),
 extra AS (
-  SELECT p.*
-  FROM product_presence_status p
-  LEFT JOIN expected e
-    ON e.section = p.section
-   AND e.bank_name = p.bank_name
-   AND e.product_id = p.product_id
-  WHERE e.product_id IS NULL
-),
-historical_products AS (
-  SELECT section, bank_name, product_id
-  FROM (
-    SELECT 'home_loans' AS section, bank_name, product_id
-    FROM historical_loan_rates
-    GROUP BY bank_name, product_id
-    UNION
-    SELECT 'savings' AS section, bank_name, product_id
-    FROM historical_savings_rates
-    GROUP BY bank_name, product_id
-    UNION
-    SELECT 'term_deposits' AS section, bank_name, product_id
-    FROM historical_term_deposit_rates
-    GROUP BY bank_name, product_id
-  ) historical_union
+  SELECT
+    op.section,
+    op.bank_name,
+    op.product_id
+  FROM orphan_presence op
 ),
 extra_safe_delete AS (
-  SELECT x.*
-  FROM extra x
-  LEFT JOIN historical_products h
-    ON h.section = x.section
-   AND h.bank_name = x.bank_name
-   AND h.product_id = x.product_id
-  WHERE h.product_id IS NULL
+  SELECT
+    op.section,
+    op.bank_name,
+    op.product_id
+  FROM orphan_presence op
 )
 `
 }
@@ -208,12 +231,12 @@ export function buildRepairPresenceProdPlanSql(): PresenceRepairProdPlanSql {
   return {
     current_orphan_count: `
 SELECT COUNT(*) AS orphan_presence_count
-FROM product_presence_status p
-LEFT JOIN product_catalog c
-  ON c.dataset_kind = p.section
- AND c.bank_name = p.bank_name
- AND c.product_id = p.product_id
-WHERE c.product_id IS NULL
+FROM product_presence_status pps
+LEFT JOIN product_catalog pc
+  ON pc.dataset_kind = pps.section
+ AND pc.bank_name = pps.bank_name
+ AND pc.product_id = pps.product_id
+WHERE pc.product_id IS NULL;
 `,
     planned_counts: `
 ${cte}
@@ -293,29 +316,132 @@ export function isSafePresenceMutationSql(sql: string): boolean {
   return true
 }
 
-function parseWranglerJsonOutput(stdout: string): WranglerQueryResult[] {
-  const trimmed = stdout.trim()
-  const tryParse = (candidate: string): WranglerQueryResult[] | null => {
-    try {
-      const parsed = JSON.parse(candidate) as unknown
-      if (!Array.isArray(parsed)) return null
-      return parsed as WranglerQueryResult[]
-    } catch {
-      return null
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function extractResultRows(container: unknown): unknown[] {
+  if (!isRecord(container)) return []
+  if (Array.isArray(container.result)) return container.result
+  if (Array.isArray(container.results)) return container.results
+  return []
+}
+
+function parseArrayRowAsOrphanCount(rows: unknown[]): WranglerQueryRow[] {
+  if (rows.length !== 1) {
+    throw new Error('Array-row result requires exactly one row.')
+  }
+  const first = rows[0]
+  if (!Array.isArray(first) || first.length !== 1) {
+    throw new Error('Array-row result requires exactly one column.')
+  }
+  const value = toFiniteNumberStrict(first[0])
+  if (value === null) {
+    throw new Error('Array-row result must contain a numeric value.')
+  }
+  return [{ orphan_presence_count: value }]
+}
+
+function parseRowsFromWranglerShape(root: unknown): WranglerQueryRow[] {
+  const rows = extractResultRows(root)
+  if (rows.length === 0) return []
+
+  const first = rows[0]
+  if (Array.isArray(first)) {
+    return parseArrayRowAsOrphanCount(rows)
+  }
+
+  if (isRecord(first)) {
+    return rows.map((row) => {
+      if (!isRecord(row)) {
+        throw new Error('Mixed wrangler result shape encountered.')
+      }
+      return row
+    })
+  }
+
+  const asNumber = toFiniteNumberStrict(first)
+  if (rows.length === 1 && asNumber !== null) {
+    return [{ orphan_presence_count: asNumber }]
+  }
+
+  throw new Error('Unsupported wrangler row shape.')
+}
+
+function unwrapWranglerRoot(parsed: unknown): unknown {
+  if (Array.isArray(parsed) && parsed.length === 1 && isRecord(parsed[0])) {
+    return parsed[0]
+  }
+  return parsed
+}
+
+function parseChangesFromWranglerRoot(parsed: unknown, root: unknown): number {
+  if (isRecord(root)) {
+    const changes = toFiniteNumberStrict(root.meta && isRecord(root.meta) ? root.meta.changes : undefined)
+    if (changes !== null) return changes
+  }
+  if (Array.isArray(parsed) && isRecord(parsed[0])) {
+    const firstMeta = parsed[0].meta
+    const changes = toFiniteNumberStrict(isRecord(firstMeta) ? firstMeta.changes : undefined)
+    if (changes !== null) return changes
+  }
+  return 0
+}
+
+function parseWranglerJsonPayload(stdout: string): ParsedWranglerPayload {
+  const trimmed = String(stdout || '').trim()
+  const parsed = JSON.parse(trimmed) as unknown
+  const root = unwrapWranglerRoot(parsed)
+  const rows = parseRowsFromWranglerShape(root)
+  const changes = parseChangesFromWranglerRoot(parsed, root)
+  return { rows, changes }
+}
+
+export function parseFirstRowFromWranglerJson(stdout: string): Record<string, any> {
+  const parsed = parseWranglerJsonPayload(stdout)
+  const row = parsed.rows[0]
+  if (!row) {
+    throw new Error('Wrangler JSON did not include a result row.')
+  }
+  return row as Record<string, any>
+}
+
+function parseSingleNumericRowFromNonJson(stdout: string): WranglerQueryRow {
+  const trimmed = String(stdout || '').trim()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    const arrayStart = trimmed.indexOf('[')
+    const arrayEnd = trimmed.lastIndexOf(']')
+    const objectStart = trimmed.indexOf('{')
+    const objectEnd = trimmed.lastIndexOf('}')
+    const candidate =
+      arrayStart >= 0 && arrayEnd > arrayStart
+        ? trimmed.slice(arrayStart, arrayEnd + 1)
+        : objectStart >= 0 && objectEnd > objectStart
+          ? trimmed.slice(objectStart, objectEnd + 1)
+          : ''
+    if (!candidate) {
+      throw new Error('No JSON payload found in non-JSON fallback output.')
     }
+    parsed = JSON.parse(candidate)
   }
 
-  const direct = tryParse(trimmed)
-  if (direct) return direct
-
-  const start = trimmed.indexOf('[')
-  const end = trimmed.lastIndexOf(']')
-  if (start >= 0 && end > start) {
-    const sliced = tryParse(trimmed.slice(start, end + 1))
-    if (sliced) return sliced
+  const root = unwrapWranglerRoot(parsed)
+  const rows = parseRowsFromWranglerShape(root)
+  if (rows.length !== 1) {
+    throw new Error('Fallback output must include exactly one row.')
   }
-
-  throw new Error(`Unable to parse wrangler JSON output: ${trimmed.slice(0, 400)}`)
+  const entries = Object.entries(rows[0] || {})
+  if (entries.length !== 1) {
+    throw new Error('Fallback output must include exactly one numeric column.')
+  }
+  const numeric = toFiniteNumberStrict(entries[0]?.[1])
+  if (numeric === null) {
+    throw new Error('Fallback output column is not numeric.')
+  }
+  return { orphan_presence_count: numeric }
 }
 
 function tokenizeCommand(command: string): string[] {
@@ -359,6 +485,51 @@ function sanitizeLabel(label: string): string {
 
 function invocationFromRun(run: RunWranglerResult): string {
   return run.fullCommand ? `cmd.exe /d /s /c ${run.fullCommand}` : `${run.executable} ${run.args.join(' ')}`
+}
+
+function isJsonUnsupportedError(text: string): boolean {
+  return /unknown option\s+--json/i.test(text) || /Unexpected argument:\s*--json/i.test(text)
+}
+
+function formatD1FailureDetails(
+  label: string,
+  args: string[],
+  runError: unknown,
+  tempPath: string,
+  sql: string,
+): string {
+  const errorMessage = runError instanceof Error ? runError.message : String(runError)
+  return [
+    `D1 execution failed (${label}).`,
+    'executable=wrangler|cmd.exe',
+    `invocation_args=${args.join(' ')}`,
+    `exit_code=non-zero`,
+    `stdout=${truncateText(errorMessage)}`,
+    `stderr=${truncateText(errorMessage)}`,
+    `temp_sql_file=${tempPath}`,
+    `sql_preview=${summarizeSql(sql)}`,
+  ].join('\n')
+}
+
+function formatD1ParseFailureDetails(
+  label: string,
+  run: RunWranglerResult,
+  tempPath: string,
+  sql: string,
+  parseError: unknown,
+): string {
+  const parseMessage = parseError instanceof Error ? parseError.message : String(parseError)
+  return [
+    `D1 output parse failed (${label}).`,
+    `executable=${run.executable}`,
+    `args=${run.args.join(' ')}`,
+    `exit_code=${run.exitCode}`,
+    `stdout=${truncateText(run.stdout)}`,
+    `stderr=${truncateText(run.stderr)}`,
+    `temp_sql_file=${tempPath}`,
+    `sql_preview=${summarizeSql(sql)}`,
+    `parse_error=${parseMessage}`,
+  ].join('\n')
 }
 
 function runSingleSpawn(
@@ -442,19 +613,57 @@ export function runD1SqlFile(
 
   writeFile(tempPath, `${sql}\n`)
 
-  const args = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--json', '--file', tempPath]
+  const jsonArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--file', tempPath, '--json']
+  const plainArgs = ['d1', 'execute', dbName, ...(remote ? ['--remote'] : []), '--file', tempPath]
 
   try {
-    const run = runWrangler(args, { spawnRunner, wranglerBin: options?.wranglerBin })
+    let run: RunWranglerResult
+    let usedJson = true
+
+    try {
+      run = runWrangler(jsonArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
+    } catch (jsonError) {
+      const message = jsonError instanceof Error ? jsonError.message : String(jsonError)
+      if (!isJsonUnsupportedError(message)) {
+        throw new Error(formatD1FailureDetails(label, jsonArgs, jsonError, tempPath, sql))
+      }
+      usedJson = false
+      try {
+        run = runWrangler(plainArgs, { spawnRunner, wranglerBin: options?.wranglerBin })
+      } catch (plainError) {
+        throw new Error(formatD1FailureDetails(label, plainArgs, plainError, tempPath, sql))
+      }
+    }
+
+    let parsedPayload: ParsedWranglerPayload
+    try {
+      if (usedJson) {
+        parsedPayload = parseWranglerJsonPayload(run.stdout)
+      } else {
+        parsedPayload = {
+          rows: [parseSingleNumericRowFromNonJson(run.stdout)],
+          changes: 0,
+        }
+      }
+    } catch (parseError) {
+      throw new Error(formatD1ParseFailureDetails(label, run, tempPath, sql, parseError))
+    }
+
     return {
       command: invocationFromRun(run),
       exitCode: run.exitCode,
-      payload: parseWranglerJsonOutput(run.stdout),
+      payload: [
+        {
+          results: parsedPayload.rows,
+          success: true,
+          meta: {
+            changes: parsedPayload.changes,
+          },
+        },
+      ],
     }
   } catch (error) {
-    throw new Error(
-      `${(error as Error)?.message || String(error)}\ntemp_sql_file=${tempPath}\nsql_preview=${summarizeSql(sql)}`,
-    )
+    throw new Error(`${(error as Error)?.message || String(error)}\ntemp_sql_file=${tempPath}\nsql_preview=${summarizeSql(sql)}`)
   } finally {
     try {
       unlinkFile(tempPath)
@@ -486,6 +695,20 @@ function asNumber(value: unknown): number {
   if (typeof value === 'bigint') return Number(value)
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function requiredNumberField(row: WranglerQueryRow, key: string, context: string): number {
+  if (!(key in row)) {
+    throw new Error(`Expected field "${key}" missing in ${context}. row=${JSON.stringify(row)}`)
+  }
+  return asNumber(row[key])
+}
+
+function readOrphanPresenceCount(row: WranglerQueryRow, context: string): number {
+  if (!('orphan_presence_count' in row)) {
+    throw new Error(`Expected field "orphan_presence_count" missing in ${context}. row=${JSON.stringify(row)}`)
+  }
+  return asNumber(row['orphan_presence_count'])
 }
 
 function firstRow(payload: WranglerQueryResult[]): WranglerQueryRow {
@@ -538,12 +761,12 @@ export function main(args: string[]): void {
       confirm_backup: config.confirmBackup,
     },
     planned_counts: {
-      orphan_presence_count: asNumber(currentOrphanRow.orphan_presence_count),
-      missing_rows: asNumber(plannedCountsRow.missing_rows),
-      extra_safe_delete_rows: asNumber(plannedCountsRow.extra_safe_delete_rows),
-      extra_rows: asNumber(plannedCountsRow.extra_rows),
-      expected_rows: asNumber(plannedCountsRow.expected_rows),
-      existing_rows: asNumber(plannedCountsRow.existing_rows),
+      orphan_presence_count: readOrphanPresenceCount(currentOrphanRow, 'current_orphan_count'),
+      missing_rows: requiredNumberField(plannedCountsRow, 'missing_rows', 'planned_counts'),
+      extra_safe_delete_rows: requiredNumberField(plannedCountsRow, 'extra_safe_delete_rows', 'planned_counts'),
+      extra_rows: requiredNumberField(plannedCountsRow, 'extra_rows', 'planned_counts'),
+      expected_rows: requiredNumberField(plannedCountsRow, 'expected_rows', 'planned_counts'),
+      existing_rows: requiredNumberField(plannedCountsRow, 'existing_rows', 'planned_counts'),
     },
     sql: {
       plan: planSql,
@@ -574,7 +797,7 @@ export function main(args: string[]): void {
     report.apply_result = {
       inserted_missing_rows: changesFromPayload(insertResult.payload),
       deleted_safe_extra_rows: deletedRows,
-      orphan_presence_count_after_apply: asNumber(postVerifyRow.orphan_presence_count),
+      orphan_presence_count_after_apply: readOrphanPresenceCount(postVerifyRow, 'post_apply_orphan_count'),
     }
   }
 
