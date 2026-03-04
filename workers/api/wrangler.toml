@@ -41,8 +41,8 @@ queue = "australianrates-ingest"
 
 [[kv_namespaces]]
 binding = "IDEMPOTENCY_KV"
-id = "00000000000000000000000000000000"
-preview_id = "00000000000000000000000000000000"
+id = "6b34fb3979c3480ab74ae80c65749ae2"
+preview_id = "004d7a0f3e26440f9aeee889d27e48ca"
 
 [[queues.consumers]]
 queue = "australianrates-ingest"
