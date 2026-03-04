@@ -19,10 +19,6 @@
     height: 100%;
     display: block;
     pointer-events: none;
-    background: linear-gradient(to left, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0));
-}
-
-[data-theme="dark"] .ar-public #rate-table::after {
     background: linear-gradient(to left, rgba(24, 36, 52, 0.94), rgba(24, 36, 52, 0));
 }
 
@@ -216,10 +212,6 @@
 }
 
 .ar-public .tabulator .tabulator-row:nth-child(2n) {
-    background: rgba(17, 37, 64, 0.03) !important;
-}
-
-[data-theme="dark"] .ar-public .tabulator .tabulator-row:nth-child(2n) {
     background: rgba(137, 175, 220, 0.05) !important;
 }
 
@@ -394,18 +386,124 @@
     max-width: 100%;
 }
 
+.ar-public .executive-summary {
+    display: grid;
+    gap: 10px;
+}
+
+.ar-public .executive-summary-sections {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ar-public .exec-card {
+    border: 1px solid var(--ar-stroke);
+    border-radius: 12px;
+    background: var(--ar-surface-solid);
+    padding: 10px 11px;
+    display: grid;
+    gap: 6px;
+}
+
+.ar-public .exec-card h3 {
+    margin: 0;
+    font-size: 0.96rem;
+}
+
+.ar-public .exec-window {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.74rem;
+}
+
+.ar-public .exec-metric-line,
+.ar-public .exec-narrative {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--ar-text);
+    line-height: 1.45;
+}
+
+.ar-public .exec-narrative {
+    color: var(--ar-muted);
+    border-top: 1px solid var(--ar-stroke);
+    padding-top: 6px;
+}
+
+.ar-public .exec-empty {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.82rem;
+}
+
 .ar-public .rate-change-log {
     display: grid;
     gap: 8px;
 }
 
+.ar-public .rate-change-details {
+    border: 1px solid var(--ar-stroke);
+    border-radius: 12px;
+    background: var(--ar-surface-solid);
+    overflow: hidden;
+}
+
+.ar-public .rate-change-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    color: var(--ar-muted);
+    background: var(--ar-surface-muted);
+}
+
+.ar-public .rate-change-summary::-webkit-details-marker {
+    display: none;
+}
+
+.ar-public .rate-change-summary-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--ar-strong);
+}
+
+.ar-public .rate-change-headline {
+    color: var(--ar-muted);
+    text-align: right;
+    font-size: 0.76rem;
+}
+
+.ar-public .rate-change-details[open] .rate-change-summary {
+    border-bottom: 1px solid var(--ar-stroke);
+}
+
+.ar-public .rate-change-details.is-stale .rate-change-headline {
+    color: #fca5a5;
+}
+
+.ar-public .rate-change-warning {
+    margin: 8px 10px 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    background: rgba(248, 113, 113, 0.16);
+    color: #ffd2d2;
+    font-size: 0.77rem;
+    line-height: 1.4;
+}
+
 .ar-public .rate-change-log .hint {
-    margin: 0;
+    margin: 8px 10px 0;
 }
 
 .ar-public .rate-change-list {
     list-style: none;
-    margin: 0;
+    margin: 8px 10px 10px;
     padding: 0;
     border: 1px solid var(--ar-stroke);
     border-radius: 12px;
@@ -552,6 +650,10 @@
 }
 
 @media (max-width: 760px) {
+    .ar-public .executive-summary-sections {
+        grid-template-columns: 1fr;
+    }
+
     .ar-public #rate-table::after {
         width: 20px;
     }

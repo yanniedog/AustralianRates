@@ -39,9 +39,10 @@
 
         <section>
             <h2>System log</h2>
-            <p class="hint">Server-side log (global_log). Download returns up to 10,000 entries as text.</p>
+            <p class="hint">Server-side log (global_log). JSONL includes full structured debug context and traceback for warn/error entries.</p>
             <div class="log-actions">
-                <button type="button" class="primary" id="download-system-btn">Download system log</button>
+                <button type="button" class="primary" id="download-system-jsonl-btn">Download system log (JSONL)</button>
+                <button type="button" id="download-system-text-btn">Download system log (text)</button>
                 <button type="button" class="danger" id="wipe-system-btn">Wipe system log</button>
             </div>
             <div class="log-stats" id="system-stats">Loading...</div>
@@ -78,21 +79,24 @@
                 clientStatsEl.textContent = entries.length + ' entries in this tab';
             }
 
-            function downloadSystemLog() {
-                var url = portal.apiBase() + '/admin/logs/system?limit=10000';
+            function downloadSystemLog(format) {
+                var normalizedFormat = (format === 'jsonl') ? 'jsonl' : 'text';
+                var url = portal.apiBase() + '/admin/logs/system?limit=10000' + (normalizedFormat === 'jsonl' ? '&format=jsonl' : '');
                 fetch(url, { headers: portal.authHeaders() })
                     .then(function (r) {
                         if (!r.ok) throw new Error('HTTP ' + r.status);
                         return r.text();
                     })
                     .then(function (text) {
-                        var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                        var blob = new Blob([text], { type: (normalizedFormat === 'jsonl') ? 'application/x-ndjson;charset=utf-8' : 'text/plain;charset=utf-8' });
                         var a = document.createElement('a');
                         a.href = URL.createObjectURL(blob);
-                        a.download = 'australianrates-system-log.txt';
+                        a.download = (normalizedFormat === 'jsonl')
+                            ? 'australianrates-system-log.jsonl'
+                            : 'australianrates-system-log.txt';
                         a.click();
                         URL.revokeObjectURL(a.href);
-                        showMsg('System log downloaded.', false);
+                        showMsg('System log downloaded (' + normalizedFormat.toUpperCase() + ').', false);
                     })
                     .catch(function (e) {
                         showMsg(e && e.message ? e.message : 'Download failed', true);
@@ -168,7 +172,8 @@
                 }
             }
 
-            document.getElementById('download-system-btn').addEventListener('click', downloadSystemLog);
+            document.getElementById('download-system-jsonl-btn').addEventListener('click', function () { downloadSystemLog('jsonl'); });
+            document.getElementById('download-system-text-btn').addEventListener('click', function () { downloadSystemLog('text'); });
             document.getElementById('wipe-system-btn').addEventListener('click', wipeSystemLog);
             document.getElementById('download-client-btn').addEventListener('click', downloadClientLog);
             document.getElementById('wipe-client-btn').addEventListener('click', wipeClientLog);

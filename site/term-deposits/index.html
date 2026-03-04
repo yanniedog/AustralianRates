@@ -104,11 +104,17 @@
         </section>
 
         <section class="panel rate-change-log" aria-label="Rate change log">
-            <h2>Rate Change Log</h2>
-            <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
-            <ul id="rate-change-list" class="rate-change-list">
-                <li class="rate-change-item-empty">Loading...</li>
-            </ul>
+            <details id="rate-change-details" class="rate-change-details">
+                <summary id="rate-change-summary" class="rate-change-summary">
+                    <span class="rate-change-summary-title">Rate Change Log</span>
+                    <span id="rate-change-headline" class="rate-change-headline">Loading latest rate changes...</span>
+                </summary>
+                <p id="rate-change-warning" class="rate-change-warning" hidden></p>
+                <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
+                <ul id="rate-change-list" class="rate-change-list">
+                    <li class="rate-change-item-empty">Loading...</li>
+                </ul>
+            </details>
         </section>
 
         <section class="workspace" aria-label="Interactive data workspace">

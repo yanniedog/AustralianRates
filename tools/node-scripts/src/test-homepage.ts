@@ -517,6 +517,47 @@ async function runTests() {
         await verifyNoScriptFallback(TEST_URL, 'Homepage', '/api/home-loan-rates');
         await verifyNoPublicAdminSurface('Homepage');
 
+        // Test 4e: Dark-only theme and no theme toggle
+        console.log('\nTest 4e: Checking dark-only theme...');
+        const dataTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme')).catch(() => null);
+        if (dataTheme === 'dark') {
+            results.passed.push('PASS Dark-only theme is enforced (data-theme="dark")');
+        } else {
+            results.failed.push('FAIL Theme is not forced to dark mode');
+        }
+        const themeToggleCount = await page.locator('#theme-toggle').count().catch(() => 0);
+        if (themeToggleCount === 0) {
+            results.passed.push('PASS Theme toggle is absent in dark-only mode');
+        } else {
+            results.failed.push('FAIL Theme toggle should not be present in dark-only mode');
+        }
+
+        // Test 4f: Rate change log collapsed with summary headline
+        console.log('\nTest 4f: Checking rate change log collapsed state...');
+        await page.waitForFunction(() => {
+            var headline = document.getElementById('rate-change-headline');
+            return !!(headline && String(headline.textContent || '').trim().length > 0 && !String(headline.textContent).includes('Loading'));
+        }, { timeout: 20000 }).catch(() => null);
+        const rateChangeClosed = await page.locator('#rate-change-details').evaluate((el) => !el.open).catch(() => false);
+        const rateChangeHeadline = await page.textContent('#rate-change-headline').catch(() => '');
+        if (rateChangeClosed && rateChangeHeadline && rateChangeHeadline.trim().length > 0) {
+            results.passed.push('PASS Rate Change Log is collapsed by default with headline summary');
+        } else {
+            results.failed.push('FAIL Rate Change Log should be collapsed by default with a visible headline');
+        }
+
+        // Test 4g: Executive summary renders all three sections
+        console.log('\nTest 4g: Checking executive summary...');
+        await page.waitForFunction(() => document.querySelectorAll('#executive-summary-sections .exec-card').length >= 3, { timeout: 25000 }).catch(() => null);
+        const executiveCards = await page.locator('#executive-summary-sections .exec-card').count().catch(() => 0);
+        const executiveHeadings = await page.locator('#executive-summary-sections .exec-card h3').allTextContents().catch(() => []);
+        const hasAllExecutiveSections = ['Home Loans', 'Savings', 'Term Deposits'].every((name) => executiveHeadings.includes(name));
+        if (executiveCards >= 3 && hasAllExecutiveSections) {
+            results.passed.push('PASS Executive summary renders Home Loans, Savings, and Term Deposits sections');
+        } else {
+            results.failed.push('FAIL Executive summary missing one or more required sections');
+        }
+
         // Test 5: Tab buttons
         console.log('\nTest 5: Checking tab buttons...');
         
@@ -1082,6 +1123,32 @@ async function runTests() {
                 results.passed.push('PASS ' + name + ': public trigger button removed');
             } else {
                 results.failed.push('FAIL ' + name + ': public trigger button still present');
+            }
+
+            const sectionTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme')).catch(() => null);
+            if (sectionTheme === 'dark') {
+                results.passed.push('PASS ' + name + ': dark-only theme remains enforced');
+            } else {
+                results.failed.push('FAIL ' + name + ': theme is not forced to dark mode');
+            }
+
+            const sectionThemeToggleCount = await page.locator('#theme-toggle').count().catch(() => 0);
+            if (sectionThemeToggleCount === 0) {
+                results.passed.push('PASS ' + name + ': theme toggle is absent');
+            } else {
+                results.failed.push('FAIL ' + name + ': theme toggle should be absent');
+            }
+
+            await page.waitForFunction(() => {
+                var headline = document.getElementById('rate-change-headline');
+                return !!(headline && String(headline.textContent || '').trim().length > 0);
+            }, { timeout: 20000 }).catch(() => null);
+            const sectionRateChangeClosed = await page.locator('#rate-change-details').evaluate((el) => !el.open).catch(() => false);
+            const sectionRateChangeHeadline = await page.textContent('#rate-change-headline').catch(() => '');
+            if (sectionRateChangeClosed && sectionRateChangeHeadline && sectionRateChangeHeadline.trim().length > 0) {
+                results.passed.push('PASS ' + name + ': rate change log is collapsed with headline summary');
+            } else {
+                results.failed.push('FAIL ' + name + ': rate change log collapsed headline state is incorrect');
             }
 
             const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);

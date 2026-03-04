@@ -29,31 +29,39 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       context: `scheduled_time=${scheduledIso}`,
     })
     const origin = 'https://www.australianrates.com'
-    const result = await runSiteHealthChecks(env, {
-      triggerSource: 'scheduled',
-      origin,
-    })
-    await insertHealthCheckRun(env.DB, {
-      runId: result.runId,
-      checkedAt: result.checkedAt,
-      triggerSource: 'scheduled',
-      overallOk: result.overallOk,
-      durationMs: result.durationMs,
-      componentsJson: JSON.stringify(result.components),
-      integrityJson: JSON.stringify(result.integrity),
-      e2eAligned: result.e2e.aligned,
-      e2eReasonCode: result.e2e.reasonCode,
-      e2eReasonDetail: result.e2e.reasonDetail ?? null,
-      actionableJson: JSON.stringify(result.actionableIssues),
-      failuresJson: JSON.stringify(result.failures),
-    })
-    return {
-      ok: true,
-      skipped: false,
-      kind: 'site_health',
-      run_id: result.runId,
-      overall_ok: result.overallOk,
-      failures: result.failures.length,
+    try {
+      const result = await runSiteHealthChecks(env, {
+        triggerSource: 'scheduled',
+        origin,
+      })
+      await insertHealthCheckRun(env.DB, {
+        runId: result.runId,
+        checkedAt: result.checkedAt,
+        triggerSource: 'scheduled',
+        overallOk: result.overallOk,
+        durationMs: result.durationMs,
+        componentsJson: JSON.stringify(result.components),
+        integrityJson: JSON.stringify(result.integrity),
+        e2eAligned: result.e2e.aligned,
+        e2eReasonCode: result.e2e.reasonCode,
+        e2eReasonDetail: result.e2e.reasonDetail ?? null,
+        actionableJson: JSON.stringify(result.actionableIssues),
+        failuresJson: JSON.stringify(result.failures),
+      })
+      return {
+        ok: true,
+        skipped: false,
+        kind: 'site_health',
+        run_id: result.runId,
+        overall_ok: result.overallOk,
+        failures: result.failures.length,
+      }
+    } catch (error) {
+      log.error('scheduler', 'Site health cron dispatch failed', {
+        error,
+        context: `scheduled_time=${scheduledIso} cron=${cron}`,
+      })
+      throw error
     }
   }
 

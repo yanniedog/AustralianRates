@@ -22,7 +22,7 @@ import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/re
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
-import { querySavingsRateChanges } from '../db/rate-change-log'
+import { querySavingsRateChangeIntegrity, querySavingsRateChanges } from '../db/rate-change-log'
 import { registerSavingsExportRoutes } from './savings-exports'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
@@ -60,12 +60,16 @@ savingsPublicRoutes.get('/changes', async (c) => {
   const q = c.req.query()
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
-  const result = await querySavingsRateChanges(c.env.DB, { limit, offset })
+  const [result, integrity] = await Promise.all([
+    querySavingsRateChanges(c.env.DB, { limit, offset }),
+    querySavingsRateChangeIntegrity(c.env.DB),
+  ])
   return c.json({
     ok: true,
     count: result.rows.length,
     total: result.total,
     rows: result.rows,
+    integrity,
   })
 })
 

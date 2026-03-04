@@ -141,12 +141,24 @@
             <div id="quick-compare-cards" class="quick-compare-cards"></div>
         </section>
 
+        <section class="panel executive-summary" id="executive-summary-panel" aria-label="Executive summary">
+            <h2>Executive Summary (Last 30 Days)</h2>
+            <p id="executive-summary-status" class="hint">Loading executive summary...</p>
+            <div id="executive-summary-sections" class="executive-summary-sections"></div>
+        </section>
+
         <section class="panel rate-change-log" aria-label="Rate change log">
-            <h2>Rate Change Log</h2>
-            <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
-            <ul id="rate-change-list" class="rate-change-list">
-                <li class="rate-change-item-empty">Loading...</li>
-            </ul>
+            <details id="rate-change-details" class="rate-change-details">
+                <summary id="rate-change-summary" class="rate-change-summary">
+                    <span class="rate-change-summary-title">Rate Change Log</span>
+                    <span id="rate-change-headline" class="rate-change-headline">Loading latest rate changes...</span>
+                </summary>
+                <p id="rate-change-warning" class="rate-change-warning" hidden></p>
+                <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
+                <ul id="rate-change-list" class="rate-change-list">
+                    <li class="rate-change-item-empty">Loading...</li>
+                </ul>
+            </details>
         </section>
 
         <section class="panel" aria-label="Comparison rate disclosure">
@@ -342,6 +354,7 @@
     <script src="ar-refresh.js"></script>
     <script src="ar-export.js"></script>
     <script src="ar-rate-changes.js"></script>
+    <script src="ar-executive-summary.js"></script>
     <script src="app.js"></script>
     <script src="frame.js"></script>
 </body>

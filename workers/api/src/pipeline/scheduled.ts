@@ -15,6 +15,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   } catch (error) {
     log.error('scheduler', 'Failed to ensure app_config schema', {
       code: 'app_config_unavailable',
+      error,
       context: (error as Error)?.message || String(error),
     })
     return {
@@ -47,6 +48,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   } catch (error) {
     log.error('scheduler', 'Run lifecycle reconciliation failed', {
       code: 'run_lifecycle_reconciliation_failed',
+      error,
       context: (error as Error)?.message || String(error),
     })
   }

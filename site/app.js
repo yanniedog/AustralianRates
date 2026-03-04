@@ -11,6 +11,7 @@
     var refresh = window.AR.refresh;
     var exportModule = window.AR.export;
     var rateChanges = window.AR.rateChanges;
+    var executiveSummary = window.AR.executiveSummary;
     var hero = window.AR.hero;
     var utils = window.AR.utils;
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
@@ -91,6 +92,9 @@
         if (explorer && explorer.initRateTable) explorer.initRateTable();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
+            executiveSummary.loadExecutiveSummary();
+        }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
         clientLog('info', 'App init complete', {
             activeTab: tabState.activeTab || 'explorer',

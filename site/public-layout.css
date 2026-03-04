@@ -25,8 +25,7 @@
 
 .ar-public .site-nav { margin-left: 22px; gap: 6px; }
 .ar-public .site-nav a,
-.ar-public .site-nav-refresh-btn,
-.ar-public .site-nav-theme-btn { color: var(--ar-muted); border: 1px solid transparent; }
+.ar-public .site-nav-refresh-btn { color: var(--ar-muted); border: 1px solid transparent; }
 
 .ar-public .site-nav-technical-summary {
     color: var(--ar-muted);
@@ -45,30 +44,26 @@
     background: var(--ar-surface-solid);
 }
 
-.ar-public .site-nav-refresh-btn,
-.ar-public .site-nav-theme-btn {
+.ar-public .site-nav-refresh-btn {
     background: var(--ar-nav-btn-bg);
     border-color: var(--ar-nav-btn-border);
     color: var(--ar-nav-btn-text);
 }
 
-.ar-public .site-nav-refresh-btn:focus-visible,
-.ar-public .site-nav-theme-btn:focus-visible {
+.ar-public .site-nav-refresh-btn:focus-visible {
     outline: 2px solid var(--ar-focus);
     outline-offset: 2px;
 }
 
 .ar-public .site-nav a:hover,
 .ar-public .site-nav a.active,
-.ar-public .site-nav-refresh-btn:hover,
-.ar-public .site-nav-theme-btn:hover {
+.ar-public .site-nav-refresh-btn:hover {
     color: var(--ar-strong);
     background: var(--ar-pill-bg);
     border-color: var(--ar-pill-border);
 }
 
-.ar-public .site-nav-refresh-btn:hover,
-.ar-public .site-nav-theme-btn:hover {
+.ar-public .site-nav-refresh-btn:hover {
     color: var(--ar-nav-btn-hover-text);
     background: var(--ar-nav-btn-hover-bg);
     border-color: var(--ar-nav-btn-hover-border);
@@ -293,7 +288,7 @@
     gap: 8px;
     padding: 12px;
     border: 1px solid var(--ar-stroke-strong);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.42), var(--ar-surface));
+    background: linear-gradient(145deg, rgba(35, 50, 79, 0.72), var(--ar-surface));
 }
 
 .ar-public .tab-btn {
@@ -364,12 +359,6 @@
 }
 
 .ar-public .filter-dirty-indicator.is-dirty {
-    color: #9a321e;
-    border-color: rgba(196, 96, 58, 0.42);
-    background: rgba(255, 234, 224, 0.88);
-}
-
-[data-theme="dark"] .ar-public .filter-dirty-indicator.is-dirty {
     color: #ffd0be;
     border-color: rgba(244, 153, 127, 0.42);
     background: rgba(112, 39, 27, 0.5);
@@ -436,10 +425,6 @@
 }
 
 .ar-public select {
-    color-scheme: light;
-}
-
-[data-theme="dark"] .ar-public select {
     color-scheme: dark;
 }
 

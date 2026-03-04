@@ -58,9 +58,13 @@ app.route(TD_API_BASE_PATH, tdPublicRoutes)
 app.notFound((c) => c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404))
 
 app.onError((error, c) => {
-  const errorType = (error as Error)?.name || 'Error'
   log.error('api', 'Unhandled internal error', {
-    context: JSON.stringify({ error_type: errorType }),
+    error,
+    context: JSON.stringify({
+      error_type: (error as Error)?.name || 'Error',
+      method: c.req.method,
+      path: new URL(c.req.url).pathname,
+    }),
   })
   return c.json({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } }, 500)
 })
@@ -74,15 +78,38 @@ const worker: ExportedHandler<EnvBindings, IngestMessage> = {
     initLogger(env.DB)
     const cron = String((event as ScheduledController & { cron?: string }).cron || '')
     log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()} (${cron || 'unknown'})`)
-    const result = await dispatchScheduledEvent(event, env)
-    log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
-    await flushBufferedLogs()
+    try {
+      const result = await dispatchScheduledEvent(event, env)
+      log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
+    } catch (error) {
+      log.error('scheduler', 'Scheduled run failed', {
+        error,
+        context: JSON.stringify({
+          scheduled_time: new Date(event.scheduledTime).toISOString(),
+          cron: cron || 'unknown',
+        }),
+      })
+      throw error
+    } finally {
+      await flushBufferedLogs()
+    }
   },
 
   async queue(batch, env): Promise<void> {
     initLogger(env.DB)
-    await consumeIngestQueue(batch, env)
-    await flushBufferedLogs()
+    try {
+      await consumeIngestQueue(batch, env)
+    } catch (error) {
+      log.error('consumer', 'Queue batch processing failed', {
+        error,
+        context: JSON.stringify({
+          messages: batch.messages.length,
+        }),
+      })
+      throw error
+    } finally {
+      await flushBufferedLogs()
+    }
   },
 }
 

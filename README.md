@@ -103,11 +103,14 @@ Update IDs/names in:
 
 Comprehensive tests for the site and API:
 
-- **Homepage (Playwright):** `npm run test:homepage` — page load, hero, tabs, filters, table, download (`#download-format`), Apply Filters, Pivot load, Chart draw, Check Rates Now, URL state, viewports, accessibility (skip link, tab roles). Screenshots in `test-screenshots/`.
-- **API diagnostics:** `npm run diagnose:api` — health, filters, rates, latest, latest-all, timeseries, export.csv, homepage.
-- **Full site:** `npm run test:site` — runs test:homepage then diagnose:api; exits with failure if either fails.
+- **Homepage (Playwright):** `npm run test:homepage` - page load, hero, tabs, filters, table, download (`#download-format`), Apply Filters, Pivot load, Chart draw, Check Rates Now, URL state, viewports, accessibility (skip link, tab roles). Screenshots in `test-screenshots/`.
+- **Admin portal (Playwright, read-only):** `npm run test:admin-portal` - login/auth checks, admin guard redirects, non-mutating page/component checks (status, database selection, clear scope toggles, config/env render, runs realtime refresh, logs downloads, logout), and admin API auth checks.
+- **API diagnostics:** `npm run diagnose:api` - health, filters, rates, latest, latest-all, timeseries, export.csv, homepage.
+- **Full site:** `npm run test:site` - runs test:homepage then diagnose:api; exits with failure if either fails.
 
-**Configuration:** `TEST_URL` (e.g. `TEST_URL=http://localhost:8788/`) for frontend and API base; `API_BASE` to override API only; `HEADLESS=0` to show browser.
+**Configuration:** `TEST_URL` (e.g. `TEST_URL=http://localhost:8788/`) for frontend and API base; `API_BASE` to override API only; `HEADLESS=0` to show browser; `ADMIN_TEST_TOKEN` for `npm run test:admin-portal`.
+
+`npm run test:admin-portal` is intentionally production read-only and must not trigger mutating admin actions (run trigger, clear data, wipe logs, config save/delete, backfill, historical pull).
 
 See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (rendering, interaction, content, a11y, API) and manual checklist.
 

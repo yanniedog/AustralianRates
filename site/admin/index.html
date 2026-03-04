@@ -57,7 +57,7 @@
                 errEl.classList.remove('visible');
                 errEl.textContent = '';
                 btn.disabled = true;
-                btn.textContent = 'Checking…';
+                btn.textContent = 'Checking...';
 
                 fetch(apiBase + '/admin/runs?limit=1', { headers: { Authorization: 'Bearer ' + token } })
                     .then(function (r) {

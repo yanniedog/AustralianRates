@@ -18,6 +18,18 @@
         return (els && els.rateChangeList) || document.getElementById('rate-change-list');
     }
 
+    function getDetailsEl() {
+        return (els && els.rateChangeDetails) || document.getElementById('rate-change-details');
+    }
+
+    function getHeadlineEl() {
+        return (els && els.rateChangeHeadline) || document.getElementById('rate-change-headline');
+    }
+
+    function getWarningEl() {
+        return (els && els.rateChangeWarning) || document.getElementById('rate-change-warning');
+    }
+
     function ymd(value) {
         var raw = String(value == null ? '' : value).trim();
         if (!raw) return '-';
@@ -101,6 +113,37 @@
         listEl.innerHTML = html;
     }
 
+    function integrityText(integrity) {
+        if (!integrity || typeof integrity !== 'object') return 'Integrity unknown';
+        if (integrity.ok === true) return 'Integrity OK';
+        var status = String(integrity.status || 'warn').toUpperCase();
+        return 'Integrity ' + status;
+    }
+
+    function renderHeadline(rows, total, integrity) {
+        var headlineEl = getHeadlineEl();
+        if (!headlineEl) return;
+        var latestDate = (Array.isArray(rows) && rows.length > 0)
+            ? ymd(rows[0].collection_date || rows[0].changed_at)
+            : 'n/a';
+        var integrityLabel = integrityText(integrity);
+        headlineEl.textContent = 'Latest: ' + latestDate + ' | ' + total + ' tracked changes | ' + integrityLabel;
+    }
+
+    function renderIntegrityWarning(integrity) {
+        var warningEl = getWarningEl();
+        var detailsEl = getDetailsEl();
+        if (detailsEl) detailsEl.classList.toggle('is-stale', !!(integrity && integrity.ok === false));
+        if (!warningEl) return;
+        if (integrity && integrity.ok === false) {
+            warningEl.hidden = false;
+            warningEl.textContent = 'Integrity warning: ' + String(integrity.summary || 'Potential omissions, mismatches, or collisions detected. Data is marked stale for review.');
+        } else {
+            warningEl.hidden = true;
+            warningEl.textContent = '';
+        }
+    }
+
     async function loadRateChanges() {
         var listEl = getListEl();
         var statusEl = getStatusEl();
@@ -118,14 +161,19 @@
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
             var rows = Array.isArray(data && data.rows) ? data.rows : [];
+            var integrity = data && data.integrity ? data.integrity : null;
+            var total = Number(data && data.total) || rows.length;
             renderRows(rows);
+            renderHeadline(rows, total, integrity);
+            renderIntegrityWarning(integrity);
             if (statusEl) {
-                var total = Number(data && data.total) || rows.length;
-                statusEl.textContent = 'Showing latest ' + rows.length + ' changes (' + total + ' total tracked).';
+                statusEl.textContent = 'Showing latest ' + rows.length + ' changes (' + total + ' total tracked). ' + integrityText(integrity) + '.';
             }
         } catch (err) {
             if (statusEl) statusEl.textContent = 'Rate change log unavailable right now.';
             renderRows([]);
+            renderHeadline([], 0, null);
+            renderIntegrityWarning(null);
             clientLog('error', 'Rate change log load failed', {
                 message: err && err.message ? err.message : String(err),
             });

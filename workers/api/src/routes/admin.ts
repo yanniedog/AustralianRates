@@ -4,6 +4,7 @@ import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
 import { getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
+import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
 import { adminClearRoutes } from './admin-clear'
@@ -30,6 +31,37 @@ adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)
+
+adminRoutes.get('/cdr-audit', async (c) => {
+  let report = getCachedCdrAuditReport()
+  if (!report) {
+    report = await runCdrPipelineAudit(c.env)
+  }
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    report,
+  })
+})
+
+adminRoutes.post('/cdr-audit/run', async (c) => {
+  try {
+    const report = await runCdrPipelineAudit(c.env)
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      report,
+    })
+  } catch (error) {
+    log.error('admin', 'cdr_audit_run_failed', {
+      error,
+      context: JSON.stringify({
+        route: '/admin/cdr-audit/run',
+      }),
+    })
+    return jsonError(c, 500, 'CDR_AUDIT_FAILED', 'CDR pipeline audit failed to execute.')
+  }
+})
 
 adminRoutes.get('/runs', async (c) => {
   const limit = Number(c.req.query('limit') || 25)

@@ -148,6 +148,15 @@
                 });
             }
 
+            function syncSelectionButtons() {
+                var selectedCount = 0;
+                if (tabulator && typeof tabulator.getSelectedRows === 'function') {
+                    selectedCount = tabulator.getSelectedRows().length;
+                }
+                editBtn.disabled = selectedCount === 0;
+                deleteBtn.disabled = selectedCount === 0;
+            }
+
             function renderPagination() {
                 var pages = Math.ceil(totalRows / limit) || 1;
                 var page = Math.floor(offset / limit) + 1;
@@ -190,12 +199,10 @@
                         data: rows,
                         columns: buildColumns(),
                         layout: 'fitColumns',
-                        selectable: 1,
-                        rowSelected: function () { editBtn.disabled = false; deleteBtn.disabled = false; },
-                        rowDeselected: function () {
-                            if (!tabulator.getSelectedRows().length) { editBtn.disabled = true; deleteBtn.disabled = true; }
-                        },
+                        selectableRows: 1,
+                        rowSelectionChanged: syncSelectionButtons,
                     });
+                    syncSelectionButtons();
                     renderPagination();
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Load failed', true); });
             }

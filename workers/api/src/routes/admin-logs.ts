@@ -7,7 +7,7 @@ import { Hono } from 'hono'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
-import { CODE_FILTER_UNSUPPORTED_MESSAGE, getLogStats, queryLogs } from '../utils/logger'
+import { CODE_FILTER_UNSUPPORTED_MESSAGE, extractTraceback, getLogStats, parseLogContext, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
 
 export const adminLogRoutes = new Hono<AppContext>()
@@ -19,6 +19,7 @@ adminLogRoutes.get('/logs/system', async (c) => {
   const level = query.level as LogLevel | undefined
   const source = query.source
   const code = query.code
+  const format = String(query.format || 'text').toLowerCase()
   const limit = Math.min(Number(query.limit || 5000) || 5000, 10000)
   const offset = Math.max(Number(query.offset || 0) || 0, 0)
 
@@ -36,6 +37,26 @@ adminLogRoutes.get('/logs/system', async (c) => {
       })
     }
     throw err
+  }
+
+  if (format === 'jsonl') {
+    const lines = entries.map((entry) =>
+      JSON.stringify({
+        id: entry.id ?? null,
+        ts: entry.ts ?? null,
+        level: entry.level ?? null,
+        source: entry.source ?? null,
+        message: entry.message ?? null,
+        code: entry.code ?? null,
+        run_id: entry.run_id ?? null,
+        lender_code: entry.lender_code ?? null,
+        context: parseLogContext(entry.context),
+        traceback: extractTraceback(entry.context),
+      }),
+    )
+    c.header('Content-Type', 'application/x-ndjson; charset=utf-8')
+    c.header('Content-Disposition', 'attachment; filename="australianrates-system-log.jsonl"')
+    return c.body(`${lines.join('\n')}\n`)
   }
 
   const lines = entries.map((e: Record<string, unknown>) => {

@@ -17,6 +17,7 @@ Configuration:
 - `TEST_URL`: site base URL (default `https://www.australianrates.com/`)
 - `API_BASE`: optional API base override for diagnostics
 - `HEADLESS=0`: run Playwright in headed mode
+- `ADMIN_TEST_TOKEN`: required for authenticated admin portal audit (`npm run test:admin-portal`)
 
 ## 1. Rendering and layout
 
@@ -87,20 +88,40 @@ Scripts:
 
 Automated checks are in `test-homepage.js`. Manual screen reader checks remain recommended.
 
+## 5. Admin portal (read-only) audit
+
+`npm run test:admin-portal` runs production-safe checks and must not invoke mutating admin actions.
+
+Coverage:
+
+- Auth contract: unauthenticated admin API probes return `401 UNAUTHORIZED`, invalid token login shows error, valid token login succeeds.
+- Guard contract: direct navigation to `/admin/{page}` without session redirects to `/admin/`.
+- Non-mutating UI checks: dashboard nav, status refresh, database row selection enables edit/delete controls, clear-page scope toggles, config/env render, runs realtime refresh, logs downloads, logout.
+- Runtime safety: no console errors/page errors and no `4xx/5xx` responses on authenticated admin API requests during read-only flow.
+
+Explicitly out of scope in this audit command:
+
+- Triggering runs (`/runs/daily`, `/runs/backfill`, `/historical/pull`, health run).
+- Data mutation (`/db/clear`, DB add/edit/delete rows).
+- Config mutation (`PUT/DELETE /admin/config`).
+- Log wipe (`POST /admin/logs/system/wipe`).
+
 ## One-page checklist
 
 1. Run `npm run test:homepage`.
-2. Run `npm run diagnose:api`.
-3. Run `npm run verify:prod-hosting`.
-4. Optionally run `npm run test:site`.
-5. Review screenshots under `test-screenshots/`.
-6. Validate keyboard navigation and visible focus.
+2. Run `npm run test:admin-portal` with `ADMIN_TEST_TOKEN` set.
+3. Run `npm run diagnose:api`.
+4. Run `npm run verify:prod-hosting`.
+5. Optionally run `npm run test:site`.
+6. Review screenshots under `test-screenshots/`.
+7. Validate keyboard navigation and visible focus.
 
 ## Commands summary
 
 | Command | Description |
 |---------|-------------|
 | `npm run test:homepage` | Playwright UI checks (layout, interactions, legal links, noscript presence checks). |
+| `npm run test:admin-portal` | Playwright admin read-only audit (auth, redirects, non-mutating page/component checks, runtime/network error checks). |
 | `npm run diagnose:api` | API diagnostics and performance checks across all datasets, including `latest-all`. |
 | `npm run verify:prod-hosting` | DNS, TLS, homepage, and API health verification for both apex and `www` production hosts. |
 | `npm run check:public-assets` | Fails if public section pages include disallowed external script/style URLs or miss required vendored assets. |

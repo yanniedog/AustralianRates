@@ -5,21 +5,103 @@ export type LogEntry = {
   source: string
   message: string
   code?: string
-  context?: string
+  context?: unknown
+  traceback?: string
+  error?: unknown
   runId?: string
   lenderCode?: string
 }
 
+type PersistedLogEntry = Omit<LogEntry, 'context' | 'error'> & {
+  context?: string
+}
+
 let _db: D1Database | null = null
-const _buffer: LogEntry[] = []
+const _buffer: PersistedLogEntry[] = []
 const _pendingWrites = new Set<Promise<void>>()
 const MAX_BUFFER = 200
+const MAX_CONTEXT_CHARS = 32000
 
 export function initLogger(db: D1Database): void {
   _db = db
 }
 
-function formatConsole(entry: LogEntry): string {
+function errorMetadata(error: unknown): { name: string; message: string; stack: string | null } | null {
+  if (!(error instanceof Error)) return null
+  return {
+    name: error.name || 'Error',
+    message: error.message || 'Unknown error',
+    stack: error.stack || null,
+  }
+}
+
+function fallbackTraceback(level: LogLevel, source: string, message: string): string | undefined {
+  if (level !== 'warn' && level !== 'error') return undefined
+  const stack = new Error(`[${source}] ${message}`).stack
+  return stack || undefined
+}
+
+function serializeContext(context: unknown): string | undefined {
+  if (context == null) return undefined
+  if (typeof context === 'string') return context
+  try {
+    return JSON.stringify(context)
+  } catch {
+    return String(context)
+  }
+}
+
+export function parseLogContext(rawContext: unknown): unknown {
+  if (typeof rawContext !== 'string') return rawContext
+  const trimmed = rawContext.trim()
+  if (!trimmed) return null
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return rawContext
+  }
+}
+
+export function extractTraceback(rawContext: unknown): string | null {
+  const parsed = parseLogContext(rawContext)
+  if (parsed && typeof parsed === 'object' && 'traceback' in parsed && typeof parsed.traceback === 'string') {
+    return parsed.traceback
+  }
+  return null
+}
+
+export function normalizeLogEntryForStorage(entry: LogEntry): PersistedLogEntry {
+  const errMeta = errorMetadata(entry.error)
+  const traceback = entry.traceback || errMeta?.stack || fallbackTraceback(entry.level, entry.source, entry.message)
+  let contextToPersist: unknown = entry.context
+
+  if (entry.level === 'warn' || entry.level === 'error') {
+    const enrichedContext: Record<string, unknown> = {}
+    if (entry.context != null) enrichedContext.context = entry.context
+    if (errMeta) {
+      enrichedContext.error = {
+        name: errMeta.name,
+        message: errMeta.message,
+      }
+    }
+    if (traceback) enrichedContext.traceback = traceback
+    contextToPersist = enrichedContext
+  }
+
+  const serializedContext = serializeContext(contextToPersist)
+  return {
+    level: entry.level,
+    source: entry.source,
+    message: entry.message,
+    code: entry.code,
+    context: serializedContext,
+    traceback,
+    runId: entry.runId,
+    lenderCode: entry.lenderCode,
+  }
+}
+
+function formatConsole(entry: PersistedLogEntry): string {
   const parts = [`[${entry.level.toUpperCase()}] [${entry.source}]`, entry.message]
   if (entry.code) parts.push(`code=${entry.code}`)
   if (entry.runId) parts.push(`run=${entry.runId}`)
@@ -28,7 +110,7 @@ function formatConsole(entry: LogEntry): string {
   return parts.join(' ')
 }
 
-async function persist(entry: LogEntry): Promise<void> {
+async function persist(entry: PersistedLogEntry): Promise<void> {
   if (!_db) return
   try {
     await _db
@@ -41,7 +123,7 @@ async function persist(entry: LogEntry): Promise<void> {
         entry.source,
         entry.message.slice(0, 2000),
         entry.code ? entry.code.slice(0, 100) : null,
-        entry.context ? entry.context.slice(0, 4000) : null,
+        entry.context ? entry.context.slice(0, MAX_CONTEXT_CHARS) : null,
         entry.runId ?? null,
         entry.lenderCode ?? null,
       )
@@ -58,7 +140,7 @@ async function persist(entry: LogEntry): Promise<void> {
           entry.level,
           entry.source,
           entry.message.slice(0, 2000),
-          entry.context ? entry.context.slice(0, 4000) : null,
+          entry.context ? entry.context.slice(0, MAX_CONTEXT_CHARS) : null,
           entry.runId ?? null,
           entry.lenderCode ?? null,
         )
@@ -70,21 +152,22 @@ async function persist(entry: LogEntry): Promise<void> {
 }
 
 function emit(entry: LogEntry): void {
-  const line = formatConsole(entry)
-  if (entry.level === 'error') {
+  const normalized = normalizeLogEntryForStorage(entry)
+  const line = formatConsole(normalized)
+  if (normalized.level === 'error') {
     console.error(line)
-  } else if (entry.level === 'warn') {
+  } else if (normalized.level === 'warn') {
     console.warn(line)
   } else {
     console.log(line)
   }
 
   if (_db) {
-    const p = persist(entry)
+    const p = persist(normalized)
     _pendingWrites.add(p)
     p.finally(() => _pendingWrites.delete(p))
-  } else {
-    if (_buffer.length < MAX_BUFFER) _buffer.push(entry)
+  } else if (_buffer.length < MAX_BUFFER) {
+    _buffer.push(normalized)
   }
 }
 
@@ -96,17 +179,19 @@ export async function flushBufferedLogs(): Promise<void> {
   await Promise.all(entries.map((entry) => persist(entry)))
 }
 
+type LogContextInput = Partial<Omit<LogEntry, 'level' | 'source' | 'message'>>
+
 export const log = {
-  debug(source: string, message: string, ctx?: Partial<Omit<LogEntry, 'level' | 'source' | 'message'>>): void {
+  debug(source: string, message: string, ctx?: LogContextInput): void {
     emit({ level: 'debug', source, message, ...ctx })
   },
-  info(source: string, message: string, ctx?: Partial<Omit<LogEntry, 'level' | 'source' | 'message'>>): void {
+  info(source: string, message: string, ctx?: LogContextInput): void {
     emit({ level: 'info', source, message, ...ctx })
   },
-  warn(source: string, message: string, ctx?: Partial<Omit<LogEntry, 'level' | 'source' | 'message'>>): void {
+  warn(source: string, message: string, ctx?: LogContextInput): void {
     emit({ level: 'warn', source, message, ...ctx })
   },
-  error(source: string, message: string, ctx?: Partial<Omit<LogEntry, 'level' | 'source' | 'message'>>): void {
+  error(source: string, message: string, ctx?: LogContextInput): void {
     emit({ level: 'error', source, message, ...ctx })
   },
 }

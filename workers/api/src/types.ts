@@ -30,6 +30,74 @@ export type RunSource = 'scheduled' | 'manual'
 export type RetrievalType = 'historical_scrape' | 'present_scrape_same_date'
 export type HistoricalProductScope = 'all' | 'mortgage' | 'savings' | 'term_deposits'
 
+export type AuditStage = 'retrieved' | 'processed' | 'stored' | 'archived' | 'tracked'
+
+export type AuditCheckResult = {
+  id: string
+  stage: AuditStage
+  title: string
+  passed: boolean
+  severity: 'info' | 'warn' | 'error'
+  summary: string
+  metrics: Record<string, number | string | boolean | null>
+  sample_rows: Array<Record<string, unknown>>
+  debug: Record<string, unknown>
+  traceback: string | null
+}
+
+export type CdrAuditReport = {
+  run_id: string
+  generated_at: string
+  ok: boolean
+  totals: {
+    checks: number
+    failed: number
+    errors: number
+    warns: number
+  }
+  stages: Record<AuditStage, AuditCheckResult[]>
+  failures: Array<{
+    id: string
+    stage: AuditStage
+    severity: 'info' | 'warn' | 'error'
+    summary: string
+  }>
+}
+
+export type ExecutiveSummarySection = {
+  dataset: 'home_loans' | 'savings' | 'term_deposits'
+  title: 'Home Loans' | 'Savings' | 'Term Deposits'
+  window_days: number
+  window_start: string
+  window_end: string
+  partial: boolean
+  metrics: {
+    total_changes: number
+    lender_coverage: number
+    up_count: number
+    down_count: number
+    unchanged_count: number
+    mean_move_bps: number | null
+    median_move_bps: number | null
+  }
+  concentration: {
+    top_lender: { bank_name: string; change_count: number; share_pct: number } | null
+    top_lenders: Array<{ bank_name: string; change_count: number; share_pct: number }>
+    top3_share_pct: number
+  }
+  standouts: {
+    largest_increase: Record<string, unknown> | null
+    largest_decrease: Record<string, unknown> | null
+  }
+  narrative: string
+}
+
+export type ExecutiveSummaryReport = {
+  generated_at: string
+  window_days: number
+  sections: [ExecutiveSummarySection, ExecutiveSummarySection, ExecutiveSummarySection]
+}
+
 export type DailyLenderJob = {
   kind: 'daily_lender_fetch'
   runId: string

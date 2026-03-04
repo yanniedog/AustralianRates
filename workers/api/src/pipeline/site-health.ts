@@ -63,6 +63,7 @@ async function requestJson(
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
     log.warn('pipeline', 'upstream_fetch', {
+      error,
       context:
         `source=site_health_probe host=${hostFromUrl(url)}` +
         ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +

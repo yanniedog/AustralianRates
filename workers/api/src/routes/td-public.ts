@@ -22,7 +22,7 @@ import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/re
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
-import { queryTdRateChanges } from '../db/rate-change-log'
+import { queryTdRateChangeIntegrity, queryTdRateChanges } from '../db/rate-change-log'
 import { registerTdExportRoutes } from './td-exports'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
@@ -60,12 +60,16 @@ tdPublicRoutes.get('/changes', async (c) => {
   const q = c.req.query()
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
-  const result = await queryTdRateChanges(c.env.DB, { limit, offset })
+  const [result, integrity] = await Promise.all([
+    queryTdRateChanges(c.env.DB, { limit, offset }),
+    queryTdRateChangeIntegrity(c.env.DB),
+  ])
   return c.json({
     ok: true,
     count: result.rows.length,
     total: result.total,
     rows: result.rows,
+    integrity,
   })
 })
 

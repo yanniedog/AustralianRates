@@ -1,7 +1,8 @@
 import type { Hono } from 'hono'
 import { API_BASE_PATH, MELBOURNE_TIMEZONE } from '../constants'
+import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { getLenderStaleness, getQualityDiagnostics } from '../db/queries'
-import { queryHomeLoanRateChanges } from '../db/rate-change-log'
+import { queryHomeLoanRateChangeIntegrity, queryHomeLoanRateChanges } from '../db/rate-change-log'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -55,17 +56,33 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
     })
   })
 
+  publicRoutes.get('/executive-summary', async (c) => {
+    withPublicCache(c, 120)
+    const requestedWindowDays = Number(c.req.query('window_days') || 30)
+    const report = await queryExecutiveSummaryReport(c.env.DB, {
+      windowDays: requestedWindowDays,
+    })
+    return c.json({
+      ok: true,
+      ...report,
+    })
+  })
+
   publicRoutes.get('/changes', async (c) => {
     withPublicCache(c, 120)
     const q = c.req.query()
     const limit = Number(q.limit || 200)
     const offset = Number(q.offset || 0)
-    const result = await queryHomeLoanRateChanges(c.env.DB, { limit, offset })
+    const [result, integrity] = await Promise.all([
+      queryHomeLoanRateChanges(c.env.DB, { limit, offset }),
+      queryHomeLoanRateChangeIntegrity(c.env.DB),
+    ])
     return c.json({
       ok: true,
       count: result.rows.length,
       total: result.total,
       rows: result.rows,
+      integrity,
     })
   })
 }

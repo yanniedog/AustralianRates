@@ -1,35 +1,37 @@
-const MIN_HOME_LOAN_RATE = 0.5
-const MAX_HOME_LOAN_RATE = 25
-const MIN_HOME_LOAN_CONFIDENCE = 0.85
-
-const MIN_SAVINGS_RATE = 0
-const MAX_SAVINGS_RATE = 15
-const MIN_SAVINGS_CONFIDENCE = 0.85
-
-const MIN_TD_RATE = 0
-const MAX_TD_RATE = 15
-const MIN_TD_CONFIDENCE = 0.85
-
-type RateChangeQueryInput = {
-  limit?: number
-  offset?: number
-}
-
-function safeLimit(limit: number | undefined, fallback: number, max = 1000): number {
-  if (!Number.isFinite(limit)) return fallback
-  return Math.min(max, Math.max(1, Math.floor(limit as number)))
-}
-
-function safeOffset(offset: number | undefined): number {
-  if (!Number.isFinite(offset)) return 0
-  return Math.max(0, Math.floor(offset as number))
-}
+import { getRateChangeDatasetConfig, type RateChangeDataset } from './rate-changes/config'
+import { queryRateChangeIntegrity, type RateChangeIntegrity } from './rate-changes/integrity'
+import { buildRateChangeCountSql, buildRateChangeDataSql, type RateChangeQueryInput } from './rate-changes/sql'
 
 function rows<T>(result: D1Result<T>): T[] {
   return result.results ?? []
 }
 
-type HomeLoanRateChangeRow = {
+async function queryRateChangesByDataset<T>(
+  db: D1Database,
+  dataset: RateChangeDataset,
+  input: RateChangeQueryInput,
+): Promise<{ total: number; rows: T[] }> {
+  const config = getRateChangeDatasetConfig(dataset)
+  const countQuery = buildRateChangeCountSql(config, input.windowStartDate)
+  const dataQuery = buildRateChangeDataSql(config, input)
+
+  const [countResult, dataResult] = await Promise.all([
+    db.prepare(countQuery.sql).bind(...countQuery.bindings).first<{ total: number }>(),
+    db.prepare(dataQuery.sql).bind(...dataQuery.bindings).all<T>(),
+  ])
+
+  return {
+    total: Number(countResult?.total ?? 0),
+    rows: rows(dataResult),
+  }
+}
+
+async function queryChangeIntegrityByDataset(db: D1Database, dataset: RateChangeDataset): Promise<RateChangeIntegrity> {
+  const config = getRateChangeDatasetConfig(dataset)
+  return queryRateChangeIntegrity(db, config)
+}
+
+export type HomeLoanRateChangeRow = {
   changed_at: string
   previous_changed_at: string | null
   collection_date: string
@@ -47,88 +49,7 @@ type HomeLoanRateChangeRow = {
   run_source: string | null
 }
 
-export async function queryHomeLoanRateChanges(db: D1Database, input: RateChangeQueryInput) {
-  const limit = safeLimit(input.limit, 200, 1000)
-  const offset = safeOffset(input.offset)
-
-  const cte = `
-    WITH base AS (
-      SELECT
-        h.collection_date,
-        h.parsed_at,
-        h.bank_name,
-        h.product_name,
-        h.security_purpose,
-        h.repayment_type,
-        h.lvr_tier,
-        h.rate_structure,
-        h.interest_rate,
-        h.run_source,
-        h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure AS product_key
-      FROM historical_loan_rates h
-      WHERE h.interest_rate BETWEEN ?1 AND ?2
-        AND h.confidence_score >= ?3
-    ),
-    ordered AS (
-      SELECT
-        b.*,
-        LAG(b.interest_rate) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_rate,
-        LAG(b.parsed_at) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_changed_at,
-        LAG(b.collection_date) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_collection_date
-      FROM base b
-    ),
-    changed AS (
-      SELECT
-        o.parsed_at AS changed_at,
-        o.previous_changed_at,
-        o.collection_date,
-        o.previous_collection_date,
-        o.bank_name,
-        o.product_name,
-        o.product_key,
-        o.security_purpose,
-        o.repayment_type,
-        o.lvr_tier,
-        o.rate_structure,
-        o.previous_rate,
-        o.interest_rate AS new_rate,
-        ROUND((o.interest_rate - o.previous_rate) * 100, 3) AS delta_bps,
-        o.run_source
-      FROM ordered o
-      WHERE o.previous_rate IS NOT NULL
-        AND o.interest_rate != o.previous_rate
-    )
-  `
-
-  const countSql = `${cte} SELECT COUNT(*) AS total FROM changed`
-  const dataSql = `${cte}
-    SELECT *
-    FROM changed
-    ORDER BY changed_at DESC
-    LIMIT ?4 OFFSET ?5
-  `
-
-  const [countResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(MIN_HOME_LOAN_RATE, MAX_HOME_LOAN_RATE, MIN_HOME_LOAN_CONFIDENCE).first<{ total: number }>(),
-    db.prepare(dataSql).bind(MIN_HOME_LOAN_RATE, MAX_HOME_LOAN_RATE, MIN_HOME_LOAN_CONFIDENCE, limit, offset).all<HomeLoanRateChangeRow>(),
-  ])
-
-  return {
-    total: Number(countResult?.total ?? 0),
-    rows: rows(dataResult),
-  }
-}
-
-type SavingsRateChangeRow = {
+export type SavingsRateChangeRow = {
   changed_at: string
   previous_changed_at: string | null
   collection_date: string
@@ -145,86 +66,7 @@ type SavingsRateChangeRow = {
   run_source: string | null
 }
 
-export async function querySavingsRateChanges(db: D1Database, input: RateChangeQueryInput) {
-  const limit = safeLimit(input.limit, 200, 1000)
-  const offset = safeOffset(input.offset)
-
-  const cte = `
-    WITH base AS (
-      SELECT
-        h.collection_date,
-        h.parsed_at,
-        h.bank_name,
-        h.product_name,
-        h.account_type,
-        h.rate_type,
-        h.deposit_tier,
-        h.interest_rate,
-        h.run_source,
-        h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier AS product_key
-      FROM historical_savings_rates h
-      WHERE h.interest_rate BETWEEN ?1 AND ?2
-        AND h.confidence_score >= ?3
-    ),
-    ordered AS (
-      SELECT
-        b.*,
-        LAG(b.interest_rate) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_rate,
-        LAG(b.parsed_at) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_changed_at,
-        LAG(b.collection_date) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_collection_date
-      FROM base b
-    ),
-    changed AS (
-      SELECT
-        o.parsed_at AS changed_at,
-        o.previous_changed_at,
-        o.collection_date,
-        o.previous_collection_date,
-        o.bank_name,
-        o.product_name,
-        o.product_key,
-        o.account_type,
-        o.rate_type,
-        o.deposit_tier,
-        o.previous_rate,
-        o.interest_rate AS new_rate,
-        ROUND((o.interest_rate - o.previous_rate) * 100, 3) AS delta_bps,
-        o.run_source
-      FROM ordered o
-      WHERE o.previous_rate IS NOT NULL
-        AND o.interest_rate != o.previous_rate
-    )
-  `
-
-  const countSql = `${cte} SELECT COUNT(*) AS total FROM changed`
-  const dataSql = `${cte}
-    SELECT *
-    FROM changed
-    ORDER BY changed_at DESC
-    LIMIT ?4 OFFSET ?5
-  `
-
-  const [countResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(MIN_SAVINGS_RATE, MAX_SAVINGS_RATE, MIN_SAVINGS_CONFIDENCE).first<{ total: number }>(),
-    db.prepare(dataSql).bind(MIN_SAVINGS_RATE, MAX_SAVINGS_RATE, MIN_SAVINGS_CONFIDENCE, limit, offset).all<SavingsRateChangeRow>(),
-  ])
-
-  return {
-    total: Number(countResult?.total ?? 0),
-    rows: rows(dataResult),
-  }
-}
-
-type TdRateChangeRow = {
+export type TdRateChangeRow = {
   changed_at: string
   previous_changed_at: string | null
   collection_date: string
@@ -232,7 +74,7 @@ type TdRateChangeRow = {
   bank_name: string
   product_name: string
   product_key: string
-  term_months: string
+  term_months: number
   deposit_tier: string
   interest_payment: string
   previous_rate: number
@@ -241,81 +83,47 @@ type TdRateChangeRow = {
   run_source: string | null
 }
 
+export async function queryHomeLoanRateChanges(db: D1Database, input: RateChangeQueryInput) {
+  return queryRateChangesByDataset<HomeLoanRateChangeRow>(db, 'home_loans', input)
+}
+
+export async function querySavingsRateChanges(db: D1Database, input: RateChangeQueryInput) {
+  return queryRateChangesByDataset<SavingsRateChangeRow>(db, 'savings', input)
+}
+
 export async function queryTdRateChanges(db: D1Database, input: RateChangeQueryInput) {
-  const limit = safeLimit(input.limit, 200, 1000)
-  const offset = safeOffset(input.offset)
+  return queryRateChangesByDataset<TdRateChangeRow>(db, 'term_deposits', input)
+}
 
-  const cte = `
-    WITH base AS (
-      SELECT
-        h.collection_date,
-        h.parsed_at,
-        h.bank_name,
-        h.product_name,
-        h.term_months,
-        h.deposit_tier,
-        h.interest_payment,
-        h.interest_rate,
-        h.run_source,
-        h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key
-      FROM historical_term_deposit_rates h
-      WHERE h.interest_rate BETWEEN ?1 AND ?2
-        AND h.confidence_score >= ?3
-    ),
-    ordered AS (
-      SELECT
-        b.*,
-        LAG(b.interest_rate) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_rate,
-        LAG(b.parsed_at) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_changed_at,
-        LAG(b.collection_date) OVER (
-          PARTITION BY b.product_key
-          ORDER BY b.collection_date ASC, b.parsed_at ASC
-        ) AS previous_collection_date
-      FROM base b
-    ),
-    changed AS (
-      SELECT
-        o.parsed_at AS changed_at,
-        o.previous_changed_at,
-        o.collection_date,
-        o.previous_collection_date,
-        o.bank_name,
-        o.product_name,
-        o.product_key,
-        o.term_months,
-        o.deposit_tier,
-        o.interest_payment,
-        o.previous_rate,
-        o.interest_rate AS new_rate,
-        ROUND((o.interest_rate - o.previous_rate) * 100, 3) AS delta_bps,
-        o.run_source
-      FROM ordered o
-      WHERE o.previous_rate IS NOT NULL
-        AND o.interest_rate != o.previous_rate
-    )
-  `
+export async function queryHomeLoanRateChangeIntegrity(db: D1Database) {
+  return queryChangeIntegrityByDataset(db, 'home_loans')
+}
 
-  const countSql = `${cte} SELECT COUNT(*) AS total FROM changed`
-  const dataSql = `${cte}
-    SELECT *
-    FROM changed
-    ORDER BY changed_at DESC
-    LIMIT ?4 OFFSET ?5
-  `
+export async function querySavingsRateChangeIntegrity(db: D1Database) {
+  return queryChangeIntegrityByDataset(db, 'savings')
+}
 
-  const [countResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(MIN_TD_RATE, MAX_TD_RATE, MIN_TD_CONFIDENCE).first<{ total: number }>(),
-    db.prepare(dataSql).bind(MIN_TD_RATE, MAX_TD_RATE, MIN_TD_CONFIDENCE, limit, offset).all<TdRateChangeRow>(),
-  ])
+export async function queryTdRateChangeIntegrity(db: D1Database) {
+  return queryChangeIntegrityByDataset(db, 'term_deposits')
+}
 
-  return {
-    total: Number(countResult?.total ?? 0),
-    rows: rows(dataResult),
-  }
+export async function queryHomeLoanRateChangesForWindow(
+  db: D1Database,
+  input: Omit<RateChangeQueryInput, 'maxLimit'> & { limit?: number },
+) {
+  return queryRateChangesByDataset<HomeLoanRateChangeRow>(db, 'home_loans', { ...input, maxLimit: 50000 })
+}
+
+export async function querySavingsRateChangesForWindow(
+  db: D1Database,
+  input: Omit<RateChangeQueryInput, 'maxLimit'> & { limit?: number },
+) {
+  return queryRateChangesByDataset<SavingsRateChangeRow>(db, 'savings', { ...input, maxLimit: 50000 })
+}
+
+export async function queryTdRateChangesForWindow(
+  db: D1Database,
+  input: Omit<RateChangeQueryInput, 'maxLimit'> & { limit?: number },
+) {
+  return queryRateChangesByDataset<TdRateChangeRow>(db, 'term_deposits', { ...input, maxLimit: 50000 })
 }

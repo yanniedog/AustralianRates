@@ -108,6 +108,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       metrics.failed += 1
       const errorMessage = (error as Error)?.message || String(error)
       log.error('consumer', `queue_message_failed attempt=${attempts}/${maxAttempts}: ${errorMessage}`, {
+        error,
         runId: context.runId ?? undefined,
         lenderCode: context.lenderCode ?? undefined,
         context: `${messageContext} elapsed_ms=${elapsedMs(messageStartedAt)}`,
@@ -136,6 +137,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       if (attempts >= maxAttempts) {
         metrics.exhausted += 1
         log.error('consumer', `queue_message_exhausted max_attempts=${maxAttempts}`, {
+          error,
           runId: context.runId ?? undefined,
           lenderCode: context.lenderCode ?? undefined,
           context: `${messageContext} error=${errorMessage}`,
