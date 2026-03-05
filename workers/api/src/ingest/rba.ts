@@ -5,7 +5,7 @@ import { log } from '../utils/logger'
 
 const RBA_F1_DATA_URL = 'https://www.rba.gov.au/statistics/tables/csv/f1-data.csv'
 
-type RbaPoint = {
+export type RbaPoint = {
   date: string
   cashRate: number
 }
@@ -33,7 +33,7 @@ function toIsoDate(value: string): string | null {
   return `${m[3]}-${month}-${m[1]}`
 }
 
-function parseCsvLines(csv: string): RbaPoint[] {
+export function parseCsvLines(csv: string): RbaPoint[] {
   const lines = csv.split(/\r?\n/)
   const points: RbaPoint[] = []
   for (const line of lines) {
@@ -44,7 +44,7 @@ function parseCsvLines(csv: string): RbaPoint[] {
     const isoDate = toIsoDate(parts[0])
     if (!isoDate) continue
     const cashRate = Number(parts[1])
-    if (!Number.isFinite(cashRate)) continue
+    if (!Number.isFinite(cashRate) || cashRate <= 0) continue
     points.push({
       date: isoDate,
       cashRate,

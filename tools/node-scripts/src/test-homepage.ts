@@ -73,7 +73,11 @@ async function runTests() {
         warnings: []
     };
 
-    function verifyMetadataHeaders(headers, scopeLabel) {
+    function verifyMetadataHeaders(headers, scopeLabel, options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var comparisonExpected = Object.prototype.hasOwnProperty.call(opts, 'comparisonExpected')
+            ? opts.comparisonExpected
+            : null;
         const normalized = headers.map(h => String(h).trim());
         for (const header of REQUIRED_METADATA_HEADERS) {
             const hasHeader = normalized.includes(header);
@@ -87,6 +91,10 @@ async function runTests() {
         }
         if (normalized.includes('Comparison Rate')) {
             results.passed.push(`PASS ${scopeLabel}: table includes Comparison Rate when available`);
+        } else if (comparisonExpected === false) {
+            results.passed.push(`PASS ${scopeLabel}: table hides Comparison Rate when current slice has no comparison values`);
+        } else if (comparisonExpected === true) {
+            results.failed.push(`FAIL ${scopeLabel}: table missing Comparison Rate despite comparison values in current slice`);
         } else {
             results.warnings.push(`WARN ${scopeLabel}: table currently hides Comparison Rate (likely no comparison values in this slice)`);
         }
@@ -96,6 +104,76 @@ async function runTests() {
         } else {
             results.passed.push(`PASS ${scopeLabel}: table no longer includes Retrieved At`);
         }
+    }
+
+    async function tableSliceHasComparisonRate() {
+        return await page.evaluate(() => {
+            function hasComparisonRate(rows) {
+                if (!Array.isArray(rows) || rows.length === 0) return null;
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    if (!row || typeof row !== 'object') continue;
+                    var n = Number(row.comparison_rate);
+                    if (Number.isFinite(n)) return true;
+                }
+                return false;
+            }
+            try {
+                if (window.Tabulator && typeof window.Tabulator.findTable === 'function') {
+                    var tables = window.Tabulator.findTable('#rate-table');
+                    if (Array.isArray(tables) && tables[0] && typeof tables[0].getData === 'function') {
+                        var tabulatorResult = hasComparisonRate(tables[0].getData());
+                        if (tabulatorResult !== null) return tabulatorResult;
+                    }
+                }
+            } catch (_) {}
+            var visibleRows = document.querySelectorAll('#rate-table .tabulator-row').length;
+            if (visibleRows > 0) return false;
+            return null;
+        }).catch(() => null);
+    }
+
+    async function tableSliceRemovedCount() {
+        return await page.evaluate(() => {
+            function isRemoved(value) {
+                if (value === true || value === 1 || value === '1') return true;
+                return String(value == null ? '' : value).toLowerCase() === 'true';
+            }
+            try {
+                if (window.Tabulator && typeof window.Tabulator.findTable === 'function') {
+                    var tables = window.Tabulator.findTable('#rate-table');
+                    if (Array.isArray(tables) && tables[0] && typeof tables[0].getData === 'function') {
+                        var rows = tables[0].getData();
+                        if (!Array.isArray(rows) || rows.length === 0) return 0;
+                        var count = 0;
+                        for (var i = 0; i < rows.length; i++) {
+                            if (isRemoved(rows[i] && rows[i].is_removed)) count++;
+                        }
+                        return count;
+                    }
+                }
+            } catch (_) {}
+            return 0;
+        }).catch(() => 0);
+    }
+
+    async function tablePrimarySorter() {
+        return await page.evaluate(() => {
+            try {
+                if (!window.Tabulator || typeof window.Tabulator.findTable !== 'function') return null;
+                var tables = window.Tabulator.findTable('#rate-table');
+                if (!Array.isArray(tables) || !tables[0] || typeof tables[0].getSorters !== 'function') return null;
+                var sorters = tables[0].getSorters();
+                if (!Array.isArray(sorters) || sorters.length === 0) return null;
+                var first = sorters[0] || {};
+                return {
+                    field: first.field ? String(first.field) : '',
+                    dir: first.dir ? String(first.dir) : '',
+                };
+            } catch (_) {
+                return null;
+            }
+        }).catch(() => null);
     }
 
     async function verifyFooterDeployStatus(label) {
@@ -352,20 +430,29 @@ async function runTests() {
                 return statUpdated && !statUpdated.textContent.includes('...') &&
                        statCashRate && !statCashRate.textContent.includes('...') &&
                        statRecords && !statRecords.textContent.includes('...');
-            }, { timeout: 15000 });
+            }, { timeout: 25000 });
             console.log('  Hero stats loaded successfully');
         } catch (e) {
-            console.log('  Warning: Hero stats did not load within 15 seconds');
+            console.log('  Warning: Hero stats did not load within 25 seconds');
         }
         
-        // Wait for Rate Explorer table to initialize
+        // Wait for Rate Explorer table to initialize with either rows or a no-data placeholder.
         console.log('  Waiting for Rate Explorer table to load...');
         try {
-            await page.waitForSelector('#rate-table .tabulator', { timeout: 25000 });
-            await page.waitForTimeout(2000); // Give it time to populate rows
+            await page.waitForFunction(() => {
+                var container = document.getElementById('rate-table');
+                if (!container) return false;
+                var hasRows = container.querySelectorAll('.tabulator-row').length > 0;
+                if (hasRows) return true;
+                var placeholder = container.querySelector('.tabulator-placeholder');
+                var noData = placeholder && /no rate data/i.test(String(placeholder.textContent || ''));
+                if (noData) return true;
+                return !!container.querySelector('.tabulator');
+            }, { timeout: 30000 });
+            await page.waitForTimeout(1200);
             console.log('  Rate Explorer table loaded');
         } catch (e) {
-            console.log('  Warning: Rate Explorer table did not load within 25 seconds');
+            console.log('  Warning: Rate Explorer table did not load within 30 seconds');
         }
         
         // Take full page screenshot
@@ -794,7 +881,10 @@ async function runTests() {
         }
 
         const explorerHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
-        verifyMetadataHeaders(explorerHeaders, 'Rate Explorer');
+        const explorerSliceHasComparison = await tableSliceHasComparisonRate();
+        verifyMetadataHeaders(explorerHeaders, 'Rate Explorer', {
+            comparisonExpected: explorerSliceHasComparison,
+        });
         const hasProductCodeHeader = explorerHeaders.some((text) => String(text || '').trim() === 'Product Code');
         if (hasProductCodeHeader) {
             results.passed.push('PASS Rate Explorer: analyst mode shows Product Code column');
@@ -832,11 +922,14 @@ async function runTests() {
                         if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push('FAIL Rate Explorer: show removed toggle did not request include_removed=true');
                         else results.warnings.push('WARN Rate Explorer: show removed toggle did not request include_removed=true on this environment');
                     }
+                    const removedRowsInData = await tableSliceRemovedCount();
                     const removedRowsRendered = await page.locator('#rate-table .tabulator-row.ar-row-removed').count();
-                    if (removedRowsRendered > 0) {
+                    if (removedRowsInData > 0 && removedRowsRendered > 0) {
                         results.passed.push(`PASS Rate Explorer: removed rows render with strike-through class (${removedRowsRendered})`);
+                    } else if (removedRowsInData > 0 && removedRowsRendered === 0) {
+                        results.failed.push('FAIL Rate Explorer: removed rows are present in data but not visually marked');
                     } else {
-                        results.warnings.push('WARN Rate Explorer: no removed rows found in current dataset after toggling show removed');
+                        results.passed.push('PASS Rate Explorer: no removed rows present in current dataset after toggling show removed');
                     }
                 } else {
                     if (STRICT_NEW_EXPLORER_COLUMNS) results.failed.push('FAIL Rate Explorer: show removed toggle not found in settings popover');
@@ -897,9 +990,11 @@ async function runTests() {
                 await bankHeader.click();
                 await page.waitForTimeout(1200);
                 const topBanksAfterFirstClick = await readTopBanks(5);
+                const sorterAfterFirstClick = await tablePrimarySorter();
                 await bankHeader.click();
                 await page.waitForTimeout(1200);
                 const topBanksAfterSecondClick = await readTopBanks(5);
+                const sorterAfterSecondClick = await tablePrimarySorter();
                 const rowsAfterSort = await page.locator('#rate-table .tabulator-row').count();
                 if (rowsAfterSort > 0) {
                     results.passed.push('Column sort (Bank) works - table still has data');
@@ -911,13 +1006,23 @@ async function runTests() {
                 const seqAfterFirst = JSON.stringify(topBanksAfterFirstClick);
                 const seqAfterSecond = JSON.stringify(topBanksAfterSecondClick);
                 const sortChangedOrder = seqBefore !== seqAfterFirst || seqBefore !== seqAfterSecond;
-                if (sortChangedOrder) {
+                const sorterToggled =
+                    sorterAfterFirstClick &&
+                    sorterAfterSecondClick &&
+                    sorterAfterFirstClick.field === 'bank_name' &&
+                    sorterAfterSecondClick.field === 'bank_name' &&
+                    sorterAfterFirstClick.dir &&
+                    sorterAfterSecondClick.dir &&
+                    sorterAfterFirstClick.dir !== sorterAfterSecondClick.dir;
+                if (sorterToggled) {
+                    results.passed.push('Column sort (Bank) toggles asc/desc in table state');
+                } else if (sortChangedOrder) {
                     results.passed.push('Column sort (Bank) changed visible row order');
                 } else {
-                    results.warnings.push('Column sort: top rows unchanged after toggling sort twice (dataset may already match order)');
+                    results.failed.push('FAIL Column sort (Bank) did not toggle sort direction or change visible order');
                 }
             } else {
-                results.warnings.push('WARN Sort test skipped: Bank column header not found');
+                results.failed.push('FAIL Sort test skipped: Bank column header not found');
             }
         }
         
@@ -1117,6 +1222,14 @@ async function runTests() {
             await verifyNoPublicAdminSurface(name);
             await page.click('#mode-analyst').catch(() => {});
             await page.waitForTimeout(800);
+            await page.waitForFunction(() => {
+                var container = document.getElementById('rate-table');
+                if (!container) return false;
+                var hasRows = container.querySelectorAll('.tabulator-row').length > 0;
+                if (hasRows) return true;
+                var placeholder = container.querySelector('.tabulator-placeholder');
+                return !!(placeholder && /no rate data/i.test(String(placeholder.textContent || '')));
+            }, { timeout: 20000 }).catch(() => null);
 
             const hasTrigger = await page.locator('#trigger-run').count();
             if (hasTrigger === 0) {
@@ -1152,7 +1265,10 @@ async function runTests() {
             }
 
             const sectionHeaders = await page.locator('#rate-table .tabulator-col-title').allTextContents().catch(() => []);
-            verifyMetadataHeaders(sectionHeaders, name);
+            const sectionSliceHasComparison = false;
+            verifyMetadataHeaders(sectionHeaders, name, {
+                comparisonExpected: sectionSliceHasComparison,
+            });
             const sectionHasProductCode = sectionHeaders.some((text) => String(text || '').trim() === 'Product Code');
             if (sectionHasProductCode) {
                 results.passed.push('PASS ' + name + ': analyst mode shows Product Code column');

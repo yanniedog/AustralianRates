@@ -1,4 +1,5 @@
 export type ProductPresenceSection = 'home_loans' | 'savings' | 'term_deposits'
+const UPDATE_BATCH_SIZE = 80
 
 function uniqueProductIds(productIds: string[]): string[] {
   const seen = new Set<string>()
@@ -10,6 +11,14 @@ function uniqueProductIds(productIds: string[]): string[] {
     out.push(id)
   }
   return out
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size))
+  }
+  return chunks
 }
 
 export async function markProductsSeen(
@@ -63,22 +72,60 @@ export async function markMissingProductsRemoved(
   },
 ): Promise<number> {
   const activeIds = uniqueProductIds(input.activeProductIds)
-  let sql = `UPDATE product_presence_status
-    SET
-      is_removed = 1,
-      removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
-    WHERE
-      section = ?1
-      AND bank_name = ?2
-      AND is_removed = 0`
-
-  const binds: Array<string | number> = [input.section, input.bankName]
-  if (activeIds.length > 0) {
-    const placeholders = activeIds.map((_v, idx) => `?${idx + 3}`).join(', ')
-    sql += ` AND product_id NOT IN (${placeholders})`
-    for (const id of activeIds) binds.push(id)
+  if (activeIds.length === 0) {
+    const result = await db
+      .prepare(
+        `UPDATE product_presence_status
+         SET
+           is_removed = 1,
+           removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
+         WHERE
+           section = ?1
+           AND bank_name = ?2
+           AND is_removed = 0`,
+      )
+      .bind(input.section, input.bankName)
+      .run()
+    return Number(result.meta?.changes ?? 0)
   }
 
-  const result = await db.prepare(sql).bind(...binds).run()
-  return Number(result.meta?.changes ?? 0)
+  const activeSet = new Set(activeIds)
+  const currentResult = await db
+    .prepare(
+      `SELECT product_id
+       FROM product_presence_status
+       WHERE section = ?1
+         AND bank_name = ?2
+         AND is_removed = 0`,
+    )
+    .bind(input.section, input.bankName)
+    .all<{ product_id: string }>()
+
+  const missingIds = (currentResult.results ?? [])
+    .map((row) => String(row.product_id || '').trim())
+    .filter((id) => id.length > 0 && !activeSet.has(id))
+
+  if (missingIds.length === 0) return 0
+
+  let removed = 0
+  for (const batch of chunkValues(missingIds, UPDATE_BATCH_SIZE)) {
+    const placeholders = batch.map((_v, idx) => `?${idx + 3}`).join(', ')
+    const result = await db
+      .prepare(
+        `UPDATE product_presence_status
+         SET
+           is_removed = 1,
+           removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
+         WHERE
+           section = ?1
+           AND bank_name = ?2
+           AND is_removed = 0
+           AND product_id IN (${placeholders})`,
+      )
+      .bind(input.section, input.bankName, ...batch)
+      .run()
+    removed += Number(result.meta?.changes ?? 0)
+  }
+
+  return removed
 }

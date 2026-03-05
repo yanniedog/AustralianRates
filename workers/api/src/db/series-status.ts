@@ -1,4 +1,5 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
+const UPDATE_BATCH_SIZE = 80
 
 function uniqueSeriesKeys(rows: string[]): string[] {
   const seen = new Set<string>()
@@ -10,6 +11,14 @@ function uniqueSeriesKeys(rows: string[]): string[] {
     out.push(key)
   }
   return out
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size))
+  }
+  return chunks
 }
 
 export async function markSeriesSeen(
@@ -62,22 +71,60 @@ export async function markMissingSeriesRemoved(
   },
 ): Promise<number> {
   const keys = uniqueSeriesKeys(input.activeSeriesKeys)
-  let sql = `UPDATE series_presence_status
-    SET
-      is_removed = 1,
-      removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
-    WHERE
-      dataset_kind = ?1
-      AND bank_name = ?2
-      AND is_removed = 0`
-
-  const binds: Array<string> = [input.dataset, input.bankName]
-  if (keys.length > 0) {
-    const placeholders = keys.map((_v, idx) => `?${idx + 3}`).join(', ')
-    sql += ` AND series_key NOT IN (${placeholders})`
-    for (const key of keys) binds.push(key)
+  if (keys.length === 0) {
+    const result = await db
+      .prepare(
+        `UPDATE series_presence_status
+         SET
+           is_removed = 1,
+           removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
+         WHERE
+           dataset_kind = ?1
+           AND bank_name = ?2
+           AND is_removed = 0`,
+      )
+      .bind(input.dataset, input.bankName)
+      .run()
+    return Number(result.meta?.changes ?? 0)
   }
 
-  const result = await db.prepare(sql).bind(...binds).run()
-  return Number(result.meta?.changes ?? 0)
+  const activeSet = new Set(keys)
+  const currentResult = await db
+    .prepare(
+      `SELECT series_key
+       FROM series_presence_status
+       WHERE dataset_kind = ?1
+         AND bank_name = ?2
+         AND is_removed = 0`,
+    )
+    .bind(input.dataset, input.bankName)
+    .all<{ series_key: string }>()
+
+  const missingKeys = (currentResult.results ?? [])
+    .map((row) => String(row.series_key || '').trim())
+    .filter((seriesKey) => seriesKey.length > 0 && !activeSet.has(seriesKey))
+
+  if (missingKeys.length === 0) return 0
+
+  let removed = 0
+  for (const batch of chunkValues(missingKeys, UPDATE_BATCH_SIZE)) {
+    const placeholders = batch.map((_v, idx) => `?${idx + 3}`).join(', ')
+    const result = await db
+      .prepare(
+        `UPDATE series_presence_status
+         SET
+           is_removed = 1,
+           removed_at = COALESCE(removed_at, CURRENT_TIMESTAMP)
+         WHERE
+           dataset_kind = ?1
+           AND bank_name = ?2
+           AND is_removed = 0
+           AND series_key IN (${placeholders})`,
+      )
+      .bind(input.dataset, input.bankName, ...batch)
+      .run()
+    removed += Number(result.meta?.changes ?? 0)
+  }
+
+  return removed
 }

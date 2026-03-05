@@ -72,6 +72,7 @@ export async function enqueueProductDetailJobs(
     dataset: DatasetKind
     collectionDate: string
     productIds: string[]
+    endpointUrlByProductId?: Record<string, string>
   },
 ): Promise<{ enqueued: number }> {
   const productIds = Array.from(new Set(input.productIds)).filter(Boolean)
@@ -83,6 +84,7 @@ export async function enqueueProductDetailJobs(
     lenderCode: input.lenderCode,
     dataset: input.dataset,
     productId,
+    endpointUrl: input.endpointUrlByProductId?.[productId] || undefined,
     collectionDate: input.collectionDate,
     attempt: 0,
     idempotencyKey: buildProductDetailIdempotencyKey(input.runId, input.lenderCode, input.dataset, productId),

@@ -1,0 +1,77 @@
+import { describe, expect, it } from 'vitest'
+import { brandMatchScore, selectBestMatchingBrand, type RegisterBrand } from '../src/ingest/cdr/discovery'
+import type { LenderConfig } from '../src/types'
+
+function lender(overrides?: Partial<LenderConfig>): LenderConfig {
+  return {
+    code: 'ing',
+    name: 'ING',
+    canonical_bank_name: 'ING',
+    register_brand_name: 'ING',
+    products_endpoint: 'https://id.ob.ing.com.au/cds-au/v1/banking/products',
+    seed_rate_urls: [],
+    ...overrides,
+  }
+}
+
+describe('CDR discovery brand matching', () => {
+  it('does not match substring-only token collisions (ING vs banking)', () => {
+    const ing = lender()
+    const unrelated: RegisterBrand = {
+      brandName: 'Banking Services',
+      legalEntityName: 'Australian Banking Group Pty Ltd',
+      endpointUrl: 'https://public.ob.business.hsbc.com.au/cds-au/v1/banking/products',
+    }
+    const direct: RegisterBrand = {
+      brandName: 'ING',
+      legalEntityName: 'ING Bank (Australia) Limited',
+      endpointUrl: 'https://id.ob.ing.com.au/cds-au/v1/banking/products',
+    }
+
+    expect(brandMatchScore(ing, unrelated)).toBe(0)
+    expect(brandMatchScore(ing, direct)).toBeGreaterThan(0)
+    expect(selectBestMatchingBrand(ing, [unrelated, direct])?.endpointUrl).toBe(direct.endpointUrl)
+  })
+
+  it('prefers register hits on the configured endpoint host when multiple brands match', () => {
+    const cba = lender({
+      code: 'cba',
+      name: 'CBA',
+      canonical_bank_name: 'Commonwealth Bank of Australia',
+      register_brand_name: 'Commonwealth Bank of Australia',
+      products_endpoint: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
+    })
+    const brands: RegisterBrand[] = [
+      {
+        brandName: 'Commonwealth Bank of Australia',
+        legalEntityName: 'Commonwealth Bank of Australia',
+        endpointUrl: 'https://cdr.commbiz.api.commbank.com.au/cbzpublic/cds-au/v1/banking/products',
+      },
+      {
+        brandName: 'Commonwealth Bank of Australia',
+        legalEntityName: 'Commonwealth Bank of Australia',
+        endpointUrl: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
+      },
+    ]
+
+    const selected = selectBestMatchingBrand(cba, brands)
+    expect(selected?.endpointUrl).toBe('https://api.commbank.com.au/public/cds-au/v1/banking/products')
+  })
+
+  it('does not use short lender codes as standalone brand matches', () => {
+    const cba = lender({
+      code: 'cba',
+      name: 'CBA',
+      canonical_bank_name: 'Commonwealth Bank of Australia',
+      register_brand_name: 'Commonwealth Bank of Australia',
+      products_endpoint: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
+    })
+    const commbizOnly: RegisterBrand = {
+      brandName: 'CBA - CommBiz',
+      legalEntityName: 'CommBiz',
+      endpointUrl: 'https://cdr.commbiz.api.commbank.com.au/cbzpublic/cds-au/v1/banking/products',
+    }
+
+    expect(brandMatchScore(cba, commbizOnly)).toBe(0)
+  })
+})

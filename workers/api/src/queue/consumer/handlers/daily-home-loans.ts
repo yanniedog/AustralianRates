@@ -18,6 +18,22 @@ import { maxCdrProductPages } from '../retry-config'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun } from '../series-tracking'
 import { splitValidatedRows } from '../validation'
 
+function hasOnlyNon2xxStatuses(statuses: number[]): boolean {
+  return statuses.length > 0 && statuses.every((status) => status < 200 || status >= 300)
+}
+
+export function shouldSoftFailNoSignals(input: {
+  lenderCode: string
+  successfulIndexFetch: boolean
+  observedUpstreamStatuses: number[]
+}): boolean {
+  return (
+    input.lenderCode === 'ubank' &&
+    !input.successfulIndexFetch &&
+    hasOnlyNon2xxStatuses(input.observedUpstreamStatuses)
+  )
+}
+
 export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
   const jobStartedAt = Date.now()
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
@@ -63,9 +79,10 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   let endpointsTried = 0
   let indexPayloads = 0
   let detailJobsEnqueued = 0
-  const discoveredProductIds = new Set<string>()
+  const discoveredProductEndpointMap = new Map<string, string>()
   let successfulIndexFetch = false
   let fallbackSeedFetches = 0
+  const observedUpstreamStatuses: number[] = []
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   const seedDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
@@ -99,6 +116,9 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       runId: job.runId,
       lenderCode: job.lenderCode,
     })
+    for (const payload of products.rawPayloads) {
+      observedUpstreamStatuses.push(payload.status)
+    }
     indexPayloads += products.rawPayloads.length
     const endpointIds = Array.from(new Set(products.productIds)).filter(Boolean)
     const indexStatusSummary = summarizeStatusCodes(products.rawPayloads.map((payload) => payload.status))
@@ -106,7 +126,9 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       products.rawPayloads.length > 0 && products.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
     if (indexFetchSucceeded) {
       successfulIndexFetch = true
-      for (const productId of endpointIds) discoveredProductIds.add(productId)
+      for (const productId of endpointIds) {
+        discoveredProductEndpointMap.set(productId, candidateEndpoint)
+      }
       await markProductsSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -170,7 +192,10 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   collectionMs = elapsedMs(collectionStartedAt)
 
   if (successfulIndexFetch) {
-    const productIds = Array.from(discoveredProductIds)
+    const productIds = Array.from(discoveredProductEndpointMap.keys())
+    const endpointUrlByProductId = Object.fromEntries(
+      Array.from(discoveredProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
+    )
     await setLenderDatasetExpectedDetails(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -188,6 +213,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
             dataset: 'home_loans',
             collectionDate: job.collectionDate,
             productIds,
+            endpointUrlByProductId,
           })
         : { enqueued: 0 }
     const finalizerEnqueue = await enqueueLenderFinalizeJobs(env, {
@@ -259,6 +285,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         const fetched = await fetchWithTimeout(seedUrl, undefined, { env })
         response = fetched.response
         html = await response.text()
+        observedUpstreamStatuses.push(response.status)
         log.info('consumer', 'upstream_fetch', {
           runId: job.runId,
           lenderCode: job.lenderCode,
@@ -363,7 +390,12 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   }
   const hadMortgageSignals = collectedRows.length > 0 || inspectedHtml > 0 || droppedByParser > 0
   if (accepted.length === 0) {
-    const noMortgageSignals = !hadMortgageSignals
+    const ubankSoftFailNoSignal = shouldSoftFailNoSignals({
+      lenderCode: job.lenderCode,
+      successfulIndexFetch,
+      observedUpstreamStatuses,
+    })
+    const noMortgageSignals = !hadMortgageSignals || ubankSoftFailNoSignal
     await persistRawPayload(env, {
       sourceType: 'cdr_products',
       sourceUrl: sourceUrl || `fallback://${job.lenderCode}`,
@@ -378,6 +410,8 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         inspectedHtml,
         droppedByParser,
         hadMortgageSignals,
+        ubankSoftFailNoSignal,
+        observedUpstreamStatuses,
         collection: {
           endpointsTried,
           indexPayloads,
@@ -410,6 +444,8 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         context:
           `collected=0 inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
           ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+          ` ubank_soft_fail=${ubankSoftFailNoSignal ? 1 : 0}` +
+          ` statuses=${serializeForLog(observedUpstreamStatuses)}` +
           ` detail_jobs=${detailJobsEnqueued}` +
           ` seed_fetches=${fallbackSeedFetches} timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},total=${elapsedMs(jobStartedAt)}`,
       })

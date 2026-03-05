@@ -407,7 +407,8 @@ export async function runIntegrityChecks(
       runSeriesKeyCheck(db, {
         dataset: 'term_deposits',
         table: 'historical_term_deposit_rates',
-        expectedExpr: `bank_name || '|' || product_id || '|' || CAST(term_months AS TEXT) || '|' || deposit_tier`,
+        expectedExpr:
+          `bank_name || '|' || product_id || '|' || CAST(term_months AS TEXT) || '|' || deposit_tier || '|' || interest_payment`,
       }),
     ])
 

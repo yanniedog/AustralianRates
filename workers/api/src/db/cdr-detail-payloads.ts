@@ -1,7 +1,8 @@
 import { gzipCompressText, gzipDecompressToText } from '../utils/compression'
 import { sha256HexFromText } from '../utils/hash'
 
-const HASH_BATCH_SIZE = 200
+// Keep SQL bind count safely below D1's variable cap (currently 100).
+const HASH_BATCH_SIZE = 80
 const D1_ROW_LIMIT_BYTES = 2_000_000
 
 type HydratableRow = Record<string, unknown>
@@ -48,8 +49,12 @@ async function loadPayloadMap(db: D1Database, hashes: string[]): Promise<Map<str
       const encoding = String(row.encoding ?? '').trim().toLowerCase()
       if (encoding !== 'gzip') continue
 
-      const jsonText = await gzipDecompressToText(bytes)
-      out.set(payloadHash, jsonText)
+      try {
+        const jsonText = await gzipDecompressToText(bytes)
+        out.set(payloadHash, jsonText)
+      } catch {
+        continue
+      }
     }
   }
   return out

@@ -16,11 +16,22 @@ import { persistProductDetailPayload } from '../retry-config'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
 
+export function resolveProductDetailEndpoint(
+  job: Pick<ProductDetailJob, 'endpointUrl'>,
+  cachedEndpoint: { endpointUrl: string } | null,
+): { endpointUrl: string; endpointSource: 'job_override' | 'cache' | 'none' } {
+  const endpointUrl = job.endpointUrl || cachedEndpoint?.endpointUrl || ''
+  if (job.endpointUrl) return { endpointUrl, endpointSource: 'job_override' }
+  if (cachedEndpoint) return { endpointUrl, endpointSource: 'cache' }
+  return { endpointUrl, endpointSource: 'none' }
+}
+
 export async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): Promise<void> {
   const startedAt = Date.now()
-  const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
+  const cachedEndpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
-  if (!endpoint || !lender) {
+  const { endpointUrl, endpointSource } = resolveProductDetailEndpoint(job, cachedEndpoint)
+  if (!endpointUrl || !lender) {
     await markDetailProcessedAndFinalize(env, {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -33,7 +44,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
       lenderCode: job.lenderCode,
       context:
         `dataset=${job.dataset} product=${job.productId} date=${job.collectionDate}` +
-        ` has_endpoint=${endpoint ? 1 : 0} has_lender=${lender ? 1 : 0}`,
+        ` has_endpoint=${endpointUrl ? 1 : 0} has_lender=${lender ? 1 : 0}`,
     })
     throw new Error(`product_detail_missing_context:${job.lenderCode}:${job.dataset}:${job.productId}`)
   }
@@ -49,7 +60,8 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     runId: job.runId,
     lenderCode: job.lenderCode,
     context:
-      `dataset=${job.dataset} date=${job.collectionDate} endpoint=${endpoint.endpointUrl}` +
+      `dataset=${job.dataset} date=${job.collectionDate} endpoint=${endpointUrl}` +
+      ` endpoint_source=${endpointSource}` +
       ` run_source=${job.runSource ?? 'scheduled'} attempt=${job.attempt}`,
   })
 
@@ -68,7 +80,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     if (job.dataset === 'home_loans') {
       const details = await fetchProductDetailRows({
         lender,
-        endpointUrl: endpoint.endpointUrl,
+        endpointUrl,
         productId: job.productId,
         collectionDate: job.collectionDate,
         cdrVersions: versions,
@@ -123,7 +135,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     } else if (job.dataset === 'savings') {
       const details = await fetchSavingsProductDetailRows({
         lender,
-        endpointUrl: endpoint.endpointUrl,
+        endpointUrl,
         productId: job.productId,
         collectionDate: job.collectionDate,
         cdrVersions: versions,
@@ -178,7 +190,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     } else {
       const details = await fetchTdProductDetailRows({
         lender,
-        endpointUrl: endpoint.endpointUrl,
+        endpointUrl,
         productId: job.productId,
         collectionDate: job.collectionDate,
         cdrVersions: versions,

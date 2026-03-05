@@ -32,9 +32,21 @@ type RowShape = { rows: Array<Record<string, unknown>>; total: number }
 const SCHEDULER_MAX_AGE_HOURS = 25
 const RUN_STUCK_MAX_AGE_HOURS = 2
 
+function tryParseObjectString(payload: unknown): unknown {
+  if (typeof payload !== 'string') return payload
+  const text = payload.trim()
+  if (!text) return payload
+  try {
+    return JSON.parse(text)
+  } catch {
+    return payload
+  }
+}
+
 function parseRowsAndTotal(payload: unknown): RowShape {
-  if (!payload || typeof payload !== 'object') return { rows: [], total: 0 }
-  const raw = payload as Record<string, unknown>
+  const parsedPayload = tryParseObjectString(payload)
+  if (!parsedPayload || typeof parsedPayload !== 'object') return { rows: [], total: 0 }
+  const raw = parsedPayload as Record<string, unknown>
   const rows = Array.isArray(raw.rows)
     ? (raw.rows as Array<Record<string, unknown>>)
     : Array.isArray(raw.data)
@@ -97,41 +109,75 @@ function normalizeOrigin(input: string): string {
   return String(input || '').replace(/\/+$/, '')
 }
 
+function normalizeIsoDateLike(value: unknown): string {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : text
+}
+
+type ApiProbeResult = {
+  ok: boolean
+  dates: string[]
+}
+
+async function fetchLatestAllProbe(
+  env: EnvBindings,
+  url: string,
+  source: 'e2e_alignment_probe' | 'e2e_alignment_probe_retry',
+  init?: RequestInit,
+): Promise<ApiProbeResult> {
+  try {
+    const fetched = await fetchJsonWithTimeout(url, init, { env })
+    const res = fetched.response
+    log.info('pipeline', 'upstream_fetch', {
+      context:
+        `source=${source} host=${hostFromUrl(url)}` +
+        ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
+        ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
+        ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
+        ` status=${fetched.meta.status ?? res.status}`,
+    })
+    if (!res.ok) return { ok: false, dates: [] }
+
+    const shape = parseRowsAndTotal(fetched.json)
+    const dates = shape.rows.map((row) => normalizeIsoDateLike(row.collection_date)).filter(Boolean)
+    return { ok: true, dates }
+  } catch (error) {
+    const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+    log.warn('pipeline', 'upstream_fetch', {
+      context:
+        `source=${source} host=${hostFromUrl(url)}` +
+        ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
+        ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
+        ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
+        ` status=${meta?.status ?? 0}`,
+    })
+    return { ok: false, dates: [] }
+  }
+}
+
 async function apiHasTargetDate(
   env: EnvBindings,
   origin: string,
   path: string,
   targetCollectionDate: string,
 ): Promise<boolean> {
-  const url = `${normalizeOrigin(origin)}${path}/latest-all?limit=5&source_mode=scheduled`
-  try {
-    const fetched = await fetchJsonWithTimeout(url, undefined, { env })
-    const res = fetched.response
-    log.info('pipeline', 'upstream_fetch', {
-      context:
-        `source=e2e_alignment_probe host=${hostFromUrl(url)}` +
-        ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
-        ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
-        ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
-        ` status=${fetched.meta.status ?? res.status}`,
-    })
-    if (!res.ok) return false
-    const data = fetched.json
-    const shape = parseRowsAndTotal(data)
-    if (shape.total <= 0 || shape.rows.length === 0) return false
-    return shape.rows.some((row) => String(row.collection_date || '') === targetCollectionDate)
-  } catch (error) {
-    const meta = error instanceof FetchWithTimeoutError ? error.meta : null
-    log.warn('pipeline', 'upstream_fetch', {
-      context:
-        `source=e2e_alignment_probe host=${hostFromUrl(url)}` +
-        ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
-        ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
-        ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
-        ` status=${meta?.status ?? 0}`,
-    })
-    return false
-  }
+  const baseUrl = `${normalizeOrigin(origin)}${path}/latest-all?limit=25&source_mode=scheduled`
+  const normalizedTarget = normalizeIsoDateLike(targetCollectionDate)
+  const first = await fetchLatestAllProbe(env, baseUrl, 'e2e_alignment_probe')
+  if (!first.ok) return false
+  if (first.dates.includes(normalizedTarget)) return true
+
+  const retryUrl = `${baseUrl}&cache_bust=${Date.now()}`
+  const retry = await fetchLatestAllProbe(
+    env,
+    retryUrl,
+    'e2e_alignment_probe_retry',
+    { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } },
+  )
+  if (!retry.ok) return false
+  return retry.dates.includes(normalizedTarget)
 }
 
 async function evaluateApiCriterion(
@@ -160,7 +206,7 @@ async function evaluateApiCriterion(
       ok,
       detail: ok
         ? undefined
-        : `Target date ${targetCollectionDate} missing in one or more dataset latest-all responses.`,
+        : `Target date ${targetCollectionDate} missing in latest-all responses (home=${home}, savings=${savings}, term_deposits=${td}).`,
     }
   } catch (error) {
     return { ok: false, detail: (error as Error)?.message || String(error) }

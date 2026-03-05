@@ -4,7 +4,7 @@ import { fetchCdrJson, fetchJson } from './http'
 import type { FetchRequestContext } from './http'
 import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives'
 
-type RegisterBrand = {
+export type RegisterBrand = {
   brandName: string
   legalEntityName: string
   endpointUrl: string
@@ -37,16 +37,85 @@ function extractBrands(payload: unknown): RegisterBrand[] {
   return out
 }
 
-function lenderMatchesBrand(lender: LenderConfig, brand: RegisterBrand): boolean {
-  const haystack = `${brand.brandName} ${brand.legalEntityName}`.toLowerCase()
-  const needles = [lender.register_brand_name, lender.canonical_bank_name, lender.name]
+function tokenizeText(value: string): string[] {
+  return getText(value)
+    .toLowerCase()
+    .match(/[a-z0-9]+/g) ?? []
+}
+
+function hostFromEndpoint(endpointUrl: string): string {
+  try {
+    return new URL(endpointUrl).host.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function registrableHost(host: string): string {
+  const parts = host.split('.').filter(Boolean)
+  if (parts.length < 2) return host
+  return `${parts[parts.length - 2]}.${parts[parts.length - 1]}`
+}
+
+function hostAffinityScore(candidateEndpoint: string, configuredEndpoint?: string): number {
+  if (!configuredEndpoint) return 0
+  const candidateHost = hostFromEndpoint(candidateEndpoint)
+  const configuredHost = hostFromEndpoint(configuredEndpoint)
+  if (!candidateHost || !configuredHost) return 0
+  if (candidateHost === configuredHost) return 1000
+  if (candidateHost.endsWith(`.${configuredHost}`) || configuredHost.endsWith(`.${candidateHost}`)) return 400
+  if (registrableHost(candidateHost) === registrableHost(configuredHost)) return 200
+  return 0
+}
+
+export function brandMatchScore(lender: LenderConfig, brand: RegisterBrand): number {
+  const haystackTokens = tokenizeText(`${brand.brandName} ${brand.legalEntityName}`)
+  if (haystackTokens.length === 0) return 0
+  const haystackTokenSet = new Set(haystackTokens)
+  const haystackPhrase = ` ${haystackTokens.join(' ')} `
+  const needles = [lender.register_brand_name, lender.canonical_bank_name]
+  const lenderNameTokens = tokenizeText(lender.name)
+  if (lenderNameTokens.length > 1 || lenderNameTokens.some((token) => token.length >= 4)) {
+    needles.push(lender.name)
+  }
+
+  let best = 0
   for (const needle of needles) {
-    const n = getText(needle).toLowerCase()
-    if (n && haystack.includes(n)) {
-      return true
+    const needleTokens = tokenizeText(needle)
+    if (needleTokens.length === 0) continue
+
+    const needlePhrase = ` ${needleTokens.join(' ')} `
+    const phraseExact = haystackPhrase.includes(needlePhrase)
+    const allTokensPresent = needleTokens.every((token) => haystackTokenSet.has(token))
+    const singleTokenExact = needleTokens.length === 1 && haystackTokenSet.has(needleTokens[0])
+
+    if (phraseExact) {
+      best = Math.max(best, 100 + needleTokens.length * 5)
+      continue
+    }
+    if (singleTokenExact) {
+      best = Math.max(best, 60)
+      continue
+    }
+    if (allTokensPresent && needleTokens.length > 1) {
+      best = Math.max(best, 40 + needleTokens.length * 3)
     }
   }
-  return false
+
+  return best
+}
+
+export function selectBestMatchingBrand(lender: LenderConfig, brands: RegisterBrand[]): RegisterBrand | null {
+  let best: { brand: RegisterBrand; score: number } | null = null
+  for (const brand of brands) {
+    const matchScore = brandMatchScore(lender, brand)
+    if (matchScore <= 0) continue
+    const score = matchScore + hostAffinityScore(brand.endpointUrl, lender.products_endpoint)
+    if (!best || score > best.score) {
+      best = { brand, score }
+    }
+  }
+  return best?.brand ?? null
 }
 
 export async function discoverProductsEndpoint(
@@ -73,7 +142,7 @@ export async function discoverProductsEndpoint(
       continue
     }
     const brands = extractBrands(fetched.data)
-    const hit = brands.find((brand) => lenderMatchesBrand(lender, brand))
+    const hit = selectBestMatchingBrand(lender, brands)
     if (hit) {
       return {
         endpointUrl: hit.endpointUrl,

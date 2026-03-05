@@ -105,11 +105,20 @@ function parseJsonSafe(text: string): unknown {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasCdrErrors(data: unknown): boolean {
+  if (!isRecord(data)) return false
+  return Array.isArray(data.errors) && data.errors.length > 0
+}
+
 export async function fetchJson(url: string, context?: FetchRequestContext): Promise<FetchJsonResult> {
   const response = await fetchTextWithRetries(url, 2, { accept: 'application/json' }, context)
   const data = parseJsonSafe(response.text)
   return {
-    ok: response.ok && data != null,
+    ok: response.ok && data != null && !hasCdrErrors(data),
     status: response.status,
     url,
     data,
@@ -148,7 +157,7 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
       },
     )
     const data = parseJsonSafe(res.text)
-    if (res.ok && data != null) {
+    if (res.ok && data != null && !hasCdrErrors(data)) {
       return {
         ok: true,
         status: res.status,
@@ -181,7 +190,7 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
       },
     )
     const data = parseJsonSafe(res.text)
-    if (res.ok && data != null) {
+    if (res.ok && data != null && !hasCdrErrors(data)) {
       return {
         ok: true,
         status: res.status,

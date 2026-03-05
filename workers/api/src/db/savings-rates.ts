@@ -32,7 +32,7 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
         source_url, product_url, published_at, cdr_product_detail_hash, data_quality_flag, confidence_score,
         retrieval_type,
         parsed_at, fetch_event_id, run_id, run_source
-      ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)
+      ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)
       ON CONFLICT(bank_name, collection_date, product_id, account_type, rate_type, deposit_tier, run_source) DO UPDATE SET
         product_code = excluded.product_code,
         product_name = excluded.product_name,

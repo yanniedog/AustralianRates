@@ -64,8 +64,8 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   let indexPayloads = 0
   let savingsDetailJobsEnqueued = 0
   let tdDetailJobsEnqueued = 0
-  const savingsProductIds = new Set<string>()
-  const tdProductIds = new Set<string>()
+  const savingsProductEndpointMap = new Map<string, string>()
+  const tdProductEndpointMap = new Map<string, string>()
   let savingsIndexSucceeded = false
   let tdIndexSucceeded = false
   const endpointDiagnostics: Array<Record<string, unknown>> = []
@@ -115,7 +115,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       savingsProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
     if (savingsIndexFetchSucceeded) {
       savingsIndexSucceeded = true
-      for (const productId of uniqueSavingsIds) savingsProductIds.add(productId)
+      for (const productId of uniqueSavingsIds) savingsProductEndpointMap.set(productId, candidateEndpoint)
       await markProductsSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -129,7 +129,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       tdProducts.rawPayloads.length > 0 && tdProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
     if (tdIndexFetchSucceeded) {
       tdIndexSucceeded = true
-      for (const productId of uniqueTdIds) tdProductIds.add(productId)
+      for (const productId of uniqueTdIds) tdProductEndpointMap.set(productId, candidateEndpoint)
       await markProductsSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -215,8 +215,14 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   }
   collectionMs = elapsedMs(collectStartedAt)
 
-  const uniqueSavingsProductIds = Array.from(savingsProductIds)
-  const uniqueTdProductIds = Array.from(tdProductIds)
+  const uniqueSavingsProductIds = Array.from(savingsProductEndpointMap.keys())
+  const uniqueTdProductIds = Array.from(tdProductEndpointMap.keys())
+  const savingsEndpointUrlByProductId = Object.fromEntries(
+    Array.from(savingsProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
+  )
+  const tdEndpointUrlByProductId = Object.fromEntries(
+    Array.from(tdProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
+  )
 
   if (savingsIndexSucceeded) {
     await setLenderDatasetExpectedDetails(env.DB, {
@@ -248,6 +254,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
           dataset: 'savings',
           collectionDate: job.collectionDate,
           productIds: uniqueSavingsProductIds,
+          endpointUrlByProductId: savingsEndpointUrlByProductId,
         })
       : { enqueued: 0 }
   const tdDetailEnqueue =
@@ -259,6 +266,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
           dataset: 'term_deposits',
           collectionDate: job.collectionDate,
           productIds: uniqueTdProductIds,
+          endpointUrlByProductId: tdEndpointUrlByProductId,
         })
       : { enqueued: 0 }
   const finalizeDatasets: DatasetKind[] = []

@@ -71,7 +71,7 @@ async function getCompletedMortgageLenders(
   return completed
 }
 
-async function getCompletedSavingsTdLenders(
+async function getCompletedSavingsLenders(
   db: D1Database,
   lenders: LenderConfig[],
   collectionDate: string,
@@ -80,9 +80,34 @@ async function getCompletedSavingsTdLenders(
   const where = sourceWhere(runSource)
   const result = await db
     .prepare(
-      `SELECT bank_name FROM historical_savings_rates WHERE collection_date = ?1 AND ${where}
-       UNION
-       SELECT bank_name FROM historical_term_deposit_rates WHERE collection_date = ?1 AND ${where}`,
+      `SELECT DISTINCT bank_name
+       FROM historical_savings_rates
+       WHERE collection_date = ?1 AND ${where}`,
+    )
+    .bind(collectionDate)
+    .all<{ bank_name: string }>()
+
+  const bankToCode = lenderCodeByBankName(lenders)
+  const completed = new Set<string>()
+  for (const row of result.results ?? []) {
+    const code = bankToCode.get(row.bank_name)
+    if (code) completed.add(code)
+  }
+  return completed
+}
+
+async function getCompletedTdLenders(
+  db: D1Database,
+  lenders: LenderConfig[],
+  collectionDate: string,
+  runSource: 'scheduled' | 'manual',
+): Promise<Set<string>> {
+  const where = sourceWhere(runSource)
+  const result = await db
+    .prepare(
+      `SELECT DISTINCT bank_name
+       FROM historical_term_deposit_rates
+       WHERE collection_date = ?1 AND ${where}`,
     )
     .bind(collectionDate)
     .all<{ bank_name: string }>()
@@ -113,6 +138,14 @@ function mergePerLenderCounts(
     merged[code] = (merged[code] || 0) + count
   }
   return merged
+}
+
+export function pendingSavingsTdLenders(
+  lenders: LenderConfig[],
+  completedSavings: ReadonlySet<string>,
+  completedTd: ReadonlySet<string>,
+): LenderConfig[] {
+  return lenders.filter((lender) => !completedSavings.has(lender.code) || !completedTd.has(lender.code))
 }
 
 function isMonthCursor(value: string | undefined): value is string {
@@ -162,12 +195,13 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       lockAcquired = true
     }
 
-    const [doneLoans, doneSavingsTd] = await Promise.all([
+    const [doneLoans, doneSavings, doneTd] = await Promise.all([
       getCompletedMortgageLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
-      getCompletedSavingsTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+      getCompletedSavingsLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+      getCompletedTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
     ])
     const pendingLoanLenders = TARGET_LENDERS.filter((x) => !doneLoans.has(x.code))
-    const pendingSavingsLenders = TARGET_LENDERS.filter((x) => !doneSavingsTd.has(x.code))
+    const pendingSavingsLenders = pendingSavingsTdLenders(TARGET_LENDERS, doneSavings, doneTd)
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
       return {

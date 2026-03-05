@@ -115,6 +115,7 @@ export type ProductDetailJob = {
   lenderCode: string
   dataset: DatasetKind
   productId: string
+  endpointUrl?: string
   collectionDate: string
   attempt: number
   idempotencyKey: string
