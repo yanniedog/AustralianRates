@@ -23,6 +23,10 @@ describe('product detail queue producer', () => {
         'p-1': 'https://id.ob.ing.com.au/cds-au/v1/banking/products',
         'p-2': 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
       },
+      fallbackFetchEventIdByProductId: {
+        'p-1': 101,
+        'p-2': 202,
+      },
     })
 
     expect(result.enqueued).toBe(2)
@@ -33,11 +37,13 @@ describe('product detail queue producer', () => {
           kind: 'product_detail_fetch',
           productId: 'p-1',
           endpointUrl: 'https://id.ob.ing.com.au/cds-au/v1/banking/products',
+          fallbackFetchEventId: 101,
         }),
         expect.objectContaining({
           kind: 'product_detail_fetch',
           productId: 'p-2',
           endpointUrl: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
+          fallbackFetchEventId: 202,
         }),
       ]),
     )

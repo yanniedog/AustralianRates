@@ -116,6 +116,7 @@ export type ProductDetailJob = {
   dataset: DatasetKind
   productId: string
   endpointUrl?: string
+  fallbackFetchEventId?: number | null
   collectionDate: string
   attempt: number
   idempotencyKey: string

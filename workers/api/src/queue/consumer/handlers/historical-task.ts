@@ -12,6 +12,7 @@ import type { EnvBindings, HistoricalTaskExecuteJob } from '../../../types'
 import { log } from '../../../utils/logger'
 import { nowIso, parseIntegerEnv } from '../../../utils/time'
 import { asHistoricalScope, rowsWrittenForScope, scopeCoverageDataset } from '../historical-scope'
+import { assignFetchEventIdsBySourceUrl } from '../lineage'
 import { elapsedMs, serializeForLog, summarizeStatusCodes } from '../log-helpers'
 import { maxProductsPerLender } from '../retry-config'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
@@ -73,6 +74,7 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
   })
 
   try {
+    const payloadFetchEventIdBySourceUrl = new Map<string, number>()
     const endpointDiscoveryStartedAt = Date.now()
     const endpointCandidates: string[] = []
     const endpoint = await getCachedEndpoint(env.DB, task.lender_code)
@@ -131,13 +133,16 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
 
     const payloadPersistStartedAt = Date.now()
     for (const payload of collected.payloads) {
-      await persistRawPayload(env, {
+      const persisted = await persistRawPayload(env, {
         sourceType: 'wayback_html',
         sourceUrl: payload.sourceUrl,
         payload: payload.payload,
         httpStatus: payload.status,
         notes: `${payload.notes} run=${job.runId} task=${task.task_id} scope=${scope}`,
       })
+      if (persisted.fetchEventId != null) {
+        payloadFetchEventIdBySourceUrl.set(payload.sourceUrl, persisted.fetchEventId)
+      }
     }
     const payloadPersistMs = elapsedMs(payloadPersistStartedAt)
 
@@ -160,6 +165,9 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
       row.runSource = run.run_source
       row.retrievalType = 'historical_scrape'
     }
+    assignFetchEventIdsBySourceUrl(mortgageRows, payloadFetchEventIdBySourceUrl)
+    assignFetchEventIdsBySourceUrl(savingsRows, payloadFetchEventIdBySourceUrl)
+    assignFetchEventIdsBySourceUrl(tdRows, payloadFetchEventIdBySourceUrl)
 
     const validateStartedAt = Date.now()
     const { accepted: mortgageAccepted, dropped: mortgageDropped } = splitValidatedRows(mortgageRows)

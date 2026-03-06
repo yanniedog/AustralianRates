@@ -1,8 +1,11 @@
 import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from '../constants'
 import type { EnvBindings } from '../types'
-import { FetchWithTimeoutError, fetchJsonWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
+import { captureProbePayload } from './probe-capture'
+import { extractCollectionDates, normalizeIsoDateLike, parseJsonText, parseRowsPayload } from './probe-payloads'
+import { detectUpstreamBlock } from '../utils/upstream-block'
 
 export type E2EReasonCode =
   | 'e2e_ok'
@@ -10,7 +13,10 @@ export type E2EReasonCode =
   | 'run_stuck'
   | 'api_no_recent_data'
   | 'api_unreachable'
+  | 'api_invalid_payload'
   | 'e2e_check_error'
+
+type ApiFailureCode = 'api_no_recent_data' | 'api_unreachable' | 'api_invalid_payload'
 
 export type E2EResult = {
   aligned: boolean
@@ -27,34 +33,34 @@ export type E2EResult = {
 
 type DateRow = { latest: string | null }
 type RunningRow = { n: number }
-type RowShape = { rows: Array<Record<string, unknown>>; total: number }
+
+type PathProbeResult = {
+  code: 'ok' | ApiFailureCode
+  status: number
+  detail?: string
+  fetchEventId: number | null
+}
+
+type DatasetApiProbeResult = {
+  dataset: 'home_loans' | 'savings' | 'term_deposits'
+  ok: boolean
+  failureCode: ApiFailureCode | null
+  detail?: string
+  fetchEventIds: number[]
+}
 
 const SCHEDULER_MAX_AGE_HOURS = 25
 const RUN_STUCK_MAX_AGE_HOURS = 2
 
-function tryParseObjectString(payload: unknown): unknown {
-  if (typeof payload !== 'string') return payload
-  const text = payload.trim()
-  if (!text) return payload
-  try {
-    return JSON.parse(text)
-  } catch {
-    return payload
-  }
+function formatFetchEventIds(ids: number[]): string {
+  if (ids.length === 0) return 'none'
+  return ids.join('|')
 }
 
-function parseRowsAndTotal(payload: unknown): RowShape {
-  const parsedPayload = tryParseObjectString(payload)
-  if (!parsedPayload || typeof parsedPayload !== 'object') return { rows: [], total: 0 }
-  const raw = parsedPayload as Record<string, unknown>
-  const rows = Array.isArray(raw.rows)
-    ? (raw.rows as Array<Record<string, unknown>>)
-    : Array.isArray(raw.data)
-      ? (raw.data as Array<Record<string, unknown>>)
-      : []
-  const totalRaw = raw.total ?? raw.count ?? rows.length
-  const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : rows.length
-  return { rows, total }
+function strongestApiFailureCode(codes: ApiFailureCode[]): ApiFailureCode {
+  if (codes.includes('api_invalid_payload')) return 'api_invalid_payload'
+  if (codes.includes('api_no_recent_data')) return 'api_no_recent_data'
+  return 'api_unreachable'
 }
 
 async function getTargetCollectionDate(db: D1Database): Promise<string | null> {
@@ -109,75 +115,221 @@ function normalizeOrigin(input: string): string {
   return String(input || '').replace(/\/+$/, '')
 }
 
-function normalizeIsoDateLike(value: unknown): string {
-  const text = String(value ?? '').trim()
-  if (!text) return ''
-  const match = text.match(/^(\d{4}-\d{2}-\d{2})/)
-  return match ? match[1] : text
-}
-
-type ApiProbeResult = {
-  ok: boolean
-  dates: string[]
-}
-
 async function fetchLatestAllProbe(
   env: EnvBindings,
-  url: string,
-  source: 'e2e_alignment_probe' | 'e2e_alignment_probe_retry',
-  init?: RequestInit,
-): Promise<ApiProbeResult> {
+  input: {
+    url: string
+    targetCollectionDate: string
+    sourceType: 'probe_e2e_alignment_latest_all' | 'probe_e2e_alignment_latest_all_retry'
+    init?: RequestInit
+  },
+): Promise<PathProbeResult> {
+  const startedAt = Date.now()
   try {
-    const fetched = await fetchJsonWithTimeout(url, init, { env })
+    const fetched = await fetchWithTimeout(input.url, input.init, { env })
     const res = fetched.response
+    const bodyText = await res.text()
+
     log.info('pipeline', 'upstream_fetch', {
       context:
-        `source=${source} host=${hostFromUrl(url)}` +
+        `source=${input.sourceType} host=${hostFromUrl(input.url)}` +
         ` elapsed_ms=${fetched.meta.elapsed_ms} upstream_ms=${fetched.meta.elapsed_ms}` +
         ` attempts=${fetched.meta.attempts} retry_count=${Math.max(0, fetched.meta.attempts - 1)}` +
         ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
         ` status=${fetched.meta.status ?? res.status}`,
     })
-    if (!res.ok) return { ok: false, dates: [] }
 
-    const shape = parseRowsAndTotal(fetched.json)
-    const dates = shape.rows.map((row) => normalizeIsoDateLike(row.collection_date)).filter(Boolean)
-    return { ok: true, dates }
+    if (!res.ok) {
+      const captured = await captureProbePayload(env, {
+        sourceType: input.sourceType,
+        sourceUrl: input.url,
+        reason: 'api_unreachable',
+        payload: bodyText,
+        status: res.status,
+        headers: res.headers,
+        durationMs: fetched.meta.elapsed_ms,
+        note: 'e2e_latest_all non_2xx',
+      })
+      return {
+        code: 'api_unreachable',
+        status: res.status,
+        detail: `HTTP ${res.status}`,
+        fetchEventId: captured.fetchEventId,
+      }
+    }
+
+    const parsed = parseJsonText(bodyText)
+    if (!parsed.ok) {
+      const block = detectUpstreamBlock({
+        status: res.status,
+        body: bodyText,
+        headers: res.headers,
+      })
+      const captured = await captureProbePayload(env, {
+        sourceType: input.sourceType,
+        sourceUrl: input.url,
+        reason: 'api_invalid_payload',
+        payload: bodyText,
+        status: res.status,
+        headers: res.headers,
+        durationMs: fetched.meta.elapsed_ms,
+        note: `e2e_latest_all ${parsed.reason}`,
+      })
+      return {
+        code: 'api_invalid_payload',
+        status: res.status,
+        detail: `invalid_payload:${parsed.reason}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
+        fetchEventId: captured.fetchEventId,
+      }
+    }
+
+    const rowsResult = parseRowsPayload(parsed.value)
+    if (!rowsResult.ok) {
+      const block = detectUpstreamBlock({
+        status: res.status,
+        body: bodyText,
+        headers: res.headers,
+      })
+      const captured = await captureProbePayload(env, {
+        sourceType: input.sourceType,
+        sourceUrl: input.url,
+        reason: 'api_invalid_payload',
+        payload: bodyText,
+        status: res.status,
+        headers: res.headers,
+        durationMs: fetched.meta.elapsed_ms,
+        note: `e2e_latest_all ${rowsResult.reason}`,
+      })
+      return {
+        code: 'api_invalid_payload',
+        status: res.status,
+        detail: `invalid_payload:${rowsResult.reason}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
+        fetchEventId: captured.fetchEventId,
+      }
+    }
+
+    const targetDate = normalizeIsoDateLike(input.targetCollectionDate)
+    const dates = extractCollectionDates(rowsResult.rows)
+    if (dates.includes(targetDate)) {
+      const captured = await captureProbePayload(env, {
+        sourceType: input.sourceType,
+        sourceUrl: input.url,
+        reason: 'success',
+        payload: bodyText,
+        status: res.status,
+        headers: res.headers,
+        durationMs: fetched.meta.elapsed_ms,
+        note: 'e2e_latest_all target_found',
+      })
+      return { code: 'ok', status: res.status, fetchEventId: captured.fetchEventId }
+    }
+
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.url,
+      reason: 'api_no_recent_data',
+      payload: bodyText,
+      status: res.status,
+      headers: res.headers,
+      durationMs: fetched.meta.elapsed_ms,
+      note: `e2e_latest_all target_missing=${targetDate}`,
+    })
+    return {
+      code: 'api_no_recent_data',
+      status: res.status,
+      detail: `target_missing:${targetDate}`,
+      fetchEventId: captured.fetchEventId,
+    }
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+    const errorMessage = (error as Error)?.message || String(error)
     log.warn('pipeline', 'upstream_fetch', {
+      error,
       context:
-        `source=${source} host=${hostFromUrl(url)}` +
+        `source=${input.sourceType} host=${hostFromUrl(input.url)}` +
         ` elapsed_ms=${meta?.elapsed_ms ?? 0} upstream_ms=${meta?.elapsed_ms ?? 0}` +
         ` attempts=${meta?.attempts ?? 1} retry_count=${Math.max(0, (meta?.attempts ?? 1) - 1)}` +
         ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
         ` status=${meta?.status ?? 0}`,
     })
-    return { ok: false, dates: [] }
+
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.url,
+      reason: 'api_unreachable',
+      payload: {
+        error: errorMessage,
+        source: input.sourceType,
+        url: input.url,
+      },
+      status: meta?.status ?? null,
+      durationMs: meta?.elapsed_ms ?? Date.now() - startedAt,
+      note: 'e2e_latest_all fetch_error',
+    })
+    return {
+      code: 'api_unreachable',
+      status: meta?.status ?? 0,
+      detail: errorMessage,
+      fetchEventId: captured.fetchEventId,
+    }
   }
 }
 
 async function apiHasTargetDate(
   env: EnvBindings,
   origin: string,
+  dataset: 'home_loans' | 'savings' | 'term_deposits',
   path: string,
   targetCollectionDate: string,
-): Promise<boolean> {
+): Promise<DatasetApiProbeResult> {
   const baseUrl = `${normalizeOrigin(origin)}${path}/latest-all?limit=25&source_mode=scheduled`
-  const normalizedTarget = normalizeIsoDateLike(targetCollectionDate)
-  const first = await fetchLatestAllProbe(env, baseUrl, 'e2e_alignment_probe')
-  if (!first.ok) return false
-  if (first.dates.includes(normalizedTarget)) return true
+  const first = await fetchLatestAllProbe(env, {
+    url: baseUrl,
+    targetCollectionDate,
+    sourceType: 'probe_e2e_alignment_latest_all',
+  })
+  if (first.code === 'ok') {
+    return {
+      dataset,
+      ok: true,
+      failureCode: null,
+      fetchEventIds: first.fetchEventId == null ? [] : [first.fetchEventId],
+    }
+  }
 
-  const retryUrl = `${baseUrl}&cache_bust=${Date.now()}`
-  const retry = await fetchLatestAllProbe(
-    env,
-    retryUrl,
-    'e2e_alignment_probe_retry',
-    { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } },
-  )
-  if (!retry.ok) return false
-  return retry.dates.includes(normalizedTarget)
+  const retry = await fetchLatestAllProbe(env, {
+    url: `${baseUrl}&cache_bust=${Date.now()}`,
+    targetCollectionDate,
+    sourceType: 'probe_e2e_alignment_latest_all_retry',
+    init: {
+      headers: {
+        Accept: 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+    },
+  })
+  if (retry.code === 'ok') {
+    const ids = [first.fetchEventId, retry.fetchEventId].filter((id): id is number => id != null)
+    return {
+      dataset,
+      ok: true,
+      failureCode: null,
+      fetchEventIds: Array.from(new Set(ids)),
+    }
+  }
+
+  const ids = [first.fetchEventId, retry.fetchEventId].filter((id): id is number => id != null)
+  const failureCode = strongestApiFailureCode([first.code, retry.code])
+  return {
+    dataset,
+    ok: false,
+    failureCode,
+    fetchEventIds: Array.from(new Set(ids)),
+    detail:
+      `attempts(first=${first.code}:${first.status},retry=${retry.code}:${retry.status})` +
+      ` fetch_event_ids=${formatFetchEventIds(Array.from(new Set(ids)))}` +
+      ` detail(first=${first.detail || 'none'},retry=${retry.detail || 'none'})`,
+  }
 }
 
 async function evaluateApiCriterion(
@@ -186,30 +338,48 @@ async function evaluateApiCriterion(
   targetCollectionDate: string | null,
 ): Promise<{
   ok: boolean
+  failureCode: ApiFailureCode | null
   detail?: string
 }> {
   if (!targetCollectionDate) {
-    return { ok: false, detail: 'No target collection date available in database.' }
+    return { ok: false, failureCode: 'api_unreachable', detail: 'No target collection date available in database.' }
   }
   if (!origin) {
-    return { ok: false, detail: 'No origin configured for E2E API validation.' }
+    return { ok: false, failureCode: 'api_unreachable', detail: 'No origin configured for E2E API validation.' }
   }
 
   try {
     const [home, savings, td] = await Promise.all([
-      apiHasTargetDate(env, origin, API_BASE_PATH, targetCollectionDate),
-      apiHasTargetDate(env, origin, SAVINGS_API_BASE_PATH, targetCollectionDate),
-      apiHasTargetDate(env, origin, TD_API_BASE_PATH, targetCollectionDate),
+      apiHasTargetDate(env, origin, 'home_loans', API_BASE_PATH, targetCollectionDate),
+      apiHasTargetDate(env, origin, 'savings', SAVINGS_API_BASE_PATH, targetCollectionDate),
+      apiHasTargetDate(env, origin, 'term_deposits', TD_API_BASE_PATH, targetCollectionDate),
     ])
-    const ok = home && savings && td
+    const results = [home, savings, td]
+    if (results.every((result) => result.ok)) {
+      return {
+        ok: true,
+        failureCode: null,
+      }
+    }
+
+    const failed = results.filter((result) => !result.ok)
+    const failureCode = strongestApiFailureCode(
+      failed.map((item) => item.failureCode).filter((code): code is ApiFailureCode => Boolean(code)),
+    )
+    const detail = failed
+      .map((item) => `${item.dataset}=${item.failureCode}:${item.detail || 'no_detail'}`)
+      .join('; ')
     return {
-      ok,
-      detail: ok
-        ? undefined
-        : `Target date ${targetCollectionDate} missing in latest-all responses (home=${home}, savings=${savings}, term_deposits=${td}).`,
+      ok: false,
+      failureCode,
+      detail: `target=${targetCollectionDate} ${detail}`,
     }
   } catch (error) {
-    return { ok: false, detail: (error as Error)?.message || String(error) }
+    return {
+      ok: false,
+      failureCode: 'api_unreachable',
+      detail: (error as Error)?.message || String(error),
+    }
   }
 }
 
@@ -240,7 +410,7 @@ export async function runE2ECheck(
       reasonCode = 'run_stuck'
       reasonDetail = `At least one running run is older than ${RUN_STUCK_MAX_AGE_HOURS} hours.`
     } else if (!apiServesLatest) {
-      reasonCode = options?.origin ? 'api_no_recent_data' : 'api_unreachable'
+      reasonCode = apiEval.failureCode ?? (options?.origin ? 'api_no_recent_data' : 'api_unreachable')
       reasonDetail = apiEval.detail
     }
 

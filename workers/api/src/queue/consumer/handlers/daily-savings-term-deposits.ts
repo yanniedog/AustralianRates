@@ -9,6 +9,7 @@ import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../producer'
 import type { DailySavingsLenderJob, EnvBindings } from '../../../types'
 import { log } from '../../../utils/logger'
+import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { nowIso } from '../../../utils/time'
 import type { DatasetKind } from '../../../../../../packages/shared/src'
 import { elapsedMs, serializeForLog, shortUrlForLog, summarizeEndpointHosts, summarizeProductSample, summarizeStatusCodes } from '../log-helpers'
@@ -66,8 +67,11 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   let tdDetailJobsEnqueued = 0
   const savingsProductEndpointMap = new Map<string, string>()
   const tdProductEndpointMap = new Map<string, string>()
+  const savingsFallbackFetchEventIdByProductId = new Map<string, number>()
+  const tdFallbackFetchEventIdByProductId = new Map<string, number>()
   let savingsIndexSucceeded = false
   let tdIndexSucceeded = false
+  const observedUpstreamBlocks: Array<{ sourceUrl: string; status: number; reasonCode: string; fetchEventId: number | null }> = []
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
 
@@ -113,32 +117,8 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
     const savingsIndexFetchSucceeded =
       savingsProducts.rawPayloads.length > 0 &&
       savingsProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
-    if (savingsIndexFetchSucceeded) {
-      savingsIndexSucceeded = true
-      for (const productId of uniqueSavingsIds) savingsProductEndpointMap.set(productId, candidateEndpoint)
-      await markProductsSeenForRun(env.DB, {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        dataset: 'savings',
-        bankName,
-        collectionDate: job.collectionDate,
-        productIds: uniqueSavingsIds,
-      })
-    }
     const tdIndexFetchSucceeded =
       tdProducts.rawPayloads.length > 0 && tdProducts.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
-    if (tdIndexFetchSucceeded) {
-      tdIndexSucceeded = true
-      for (const productId of uniqueTdIds) tdProductEndpointMap.set(productId, candidateEndpoint)
-      await markProductsSeenForRun(env.DB, {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        dataset: 'term_deposits',
-        bankName,
-        collectionDate: job.collectionDate,
-        productIds: uniqueTdIds,
-      })
-    }
     if (savingsProducts.pageLimitHit) {
       log.error('consumer', 'daily_savings_lender_fetch savings_index_page_limit_hit', {
         runId: job.runId,
@@ -158,8 +138,14 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       })
     }
 
+    let savingsEndpointFallbackFetchEventId: number | null = null
+    let tdEndpointFallbackFetchEventId: number | null = null
     for (const payload of savingsProducts.rawPayloads) {
-      await persistRawPayload(env, {
+      const upstreamBlock = detectUpstreamBlock({
+        status: payload.status,
+        body: payload.body,
+      })
+      const persisted = await persistRawPayload(env, {
         sourceType: 'cdr_products',
         sourceUrl: payload.sourceUrl,
         payload: payload.body,
@@ -169,11 +155,37 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         dataset: 'savings',
         jobKind: 'daily_deposit_index_fetch',
         collectionDate: job.collectionDate,
-        notes: `savings_product_index lender=${job.lenderCode}`,
+        notes:
+          `savings_product_index lender=${job.lenderCode}` +
+          (upstreamBlock.reasonCode ? ` reason=${upstreamBlock.reasonCode}` : ''),
       })
+      if (savingsEndpointFallbackFetchEventId == null && persisted.fetchEventId != null) {
+        savingsEndpointFallbackFetchEventId = persisted.fetchEventId
+      }
+      if (upstreamBlock.reasonCode) {
+        observedUpstreamBlocks.push({
+          sourceUrl: payload.sourceUrl,
+          status: payload.status,
+          reasonCode: upstreamBlock.reasonCode,
+          fetchEventId: persisted.fetchEventId ?? null,
+        })
+        log.warn('consumer', 'daily_savings_lender_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `dataset=savings endpoint=${shortUrlForLog(candidateEndpoint)}` +
+            ` source=${shortUrlForLog(payload.sourceUrl)} status=${payload.status}` +
+            ` reason=${upstreamBlock.reasonCode} marker=${upstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${persisted.fetchEventId ?? 'none'}`,
+        })
+      }
     }
     for (const payload of tdProducts.rawPayloads) {
-      await persistRawPayload(env, {
+      const upstreamBlock = detectUpstreamBlock({
+        status: payload.status,
+        body: payload.body,
+      })
+      const persisted = await persistRawPayload(env, {
         sourceType: 'cdr_products',
         sourceUrl: payload.sourceUrl,
         payload: payload.body,
@@ -183,7 +195,64 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         dataset: 'term_deposits',
         jobKind: 'daily_deposit_index_fetch',
         collectionDate: job.collectionDate,
-        notes: `term_deposit_product_index lender=${job.lenderCode}`,
+        notes:
+          `term_deposit_product_index lender=${job.lenderCode}` +
+          (upstreamBlock.reasonCode ? ` reason=${upstreamBlock.reasonCode}` : ''),
+      })
+      if (tdEndpointFallbackFetchEventId == null && persisted.fetchEventId != null) {
+        tdEndpointFallbackFetchEventId = persisted.fetchEventId
+      }
+      if (upstreamBlock.reasonCode) {
+        observedUpstreamBlocks.push({
+          sourceUrl: payload.sourceUrl,
+          status: payload.status,
+          reasonCode: upstreamBlock.reasonCode,
+          fetchEventId: persisted.fetchEventId ?? null,
+        })
+        log.warn('consumer', 'daily_savings_lender_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `dataset=term_deposits endpoint=${shortUrlForLog(candidateEndpoint)}` +
+            ` source=${shortUrlForLog(payload.sourceUrl)} status=${payload.status}` +
+            ` reason=${upstreamBlock.reasonCode} marker=${upstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${persisted.fetchEventId ?? 'none'}`,
+        })
+      }
+    }
+
+    if (savingsIndexFetchSucceeded) {
+      savingsIndexSucceeded = true
+      for (const productId of uniqueSavingsIds) {
+        savingsProductEndpointMap.set(productId, candidateEndpoint)
+        if (savingsEndpointFallbackFetchEventId != null) {
+          savingsFallbackFetchEventIdByProductId.set(productId, savingsEndpointFallbackFetchEventId)
+        }
+      }
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: uniqueSavingsIds,
+      })
+    }
+    if (tdIndexFetchSucceeded) {
+      tdIndexSucceeded = true
+      for (const productId of uniqueTdIds) {
+        tdProductEndpointMap.set(productId, candidateEndpoint)
+        if (tdEndpointFallbackFetchEventId != null) {
+          tdFallbackFetchEventIdByProductId.set(productId, tdEndpointFallbackFetchEventId)
+        }
+      }
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: uniqueTdIds,
       })
     }
 
@@ -193,6 +262,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       td_index_payloads: tdProducts.rawPayloads.length,
       savings_index_statuses: savingsIndexStatuses,
       td_index_statuses: tdIndexStatuses,
+      upstream_blocks: observedUpstreamBlocks.filter((item) => item.sourceUrl.startsWith(candidateEndpoint)).length,
       savings_ids_discovered: uniqueSavingsIds.length,
       td_ids_discovered: uniqueTdIds.length,
       savings_ids_sample: summarizeProductSample(uniqueSavingsIds),
@@ -208,6 +278,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         ` endpoint=${shortUrlForLog(candidateEndpoint)}` +
         ` index_payloads(s=${savingsProducts.rawPayloads.length},td=${tdProducts.rawPayloads.length})` +
         ` index_statuses(s=${serializeForLog(savingsIndexStatuses)},td=${serializeForLog(tdIndexStatuses)})` +
+        ` upstream_blocks=${endpointSummary.upstream_blocks}` +
         ` product_ids(s=${uniqueSavingsIds.length},td=${uniqueTdIds.length})` +
         ` elapsed_ms=${endpointSummary.elapsed_ms}`,
     })
@@ -222,6 +293,12 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   )
   const tdEndpointUrlByProductId = Object.fromEntries(
     Array.from(tdProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
+  )
+  const savingsFallbackFetchEventMap = Object.fromEntries(
+    Array.from(savingsFallbackFetchEventIdByProductId.entries()).map(([productId, fetchEventId]) => [productId, fetchEventId]),
+  )
+  const tdFallbackFetchEventMap = Object.fromEntries(
+    Array.from(tdFallbackFetchEventIdByProductId.entries()).map(([productId, fetchEventId]) => [productId, fetchEventId]),
   )
 
   if (savingsIndexSucceeded) {
@@ -255,6 +332,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
           collectionDate: job.collectionDate,
           productIds: uniqueSavingsProductIds,
           endpointUrlByProductId: savingsEndpointUrlByProductId,
+          fallbackFetchEventIdByProductId: savingsFallbackFetchEventMap,
         })
       : { enqueued: 0 }
   const tdDetailEnqueue =
@@ -267,6 +345,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
           collectionDate: job.collectionDate,
           productIds: uniqueTdProductIds,
           endpointUrlByProductId: tdEndpointUrlByProductId,
+          fallbackFetchEventIdByProductId: tdFallbackFetchEventMap,
         })
       : { enqueued: 0 }
   const finalizeDatasets: DatasetKind[] = []
@@ -318,6 +397,11 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
           endpointsTried,
           indexPayloads,
         },
+        upstreamBlocks: {
+          count: observedUpstreamBlocks.length,
+          fetchEventIds: observedUpstreamBlocks.map((item) => item.fetchEventId).filter((id) => id != null),
+          reasons: Array.from(new Set(observedUpstreamBlocks.map((item) => item.reasonCode))),
+        },
         endpointDiagnostics,
         timing: {
           endpointDiscoveryMs,
@@ -344,6 +428,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       lenderCode: job.lenderCode,
       context:
         `date=${job.collectionDate} endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+        ` upstream_blocks=${serializeForLog(observedUpstreamBlocks)}` +
         ` endpoint_diagnostics=${serializeForLog(endpointDiagnostics)}` +
         ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(startedAt)}`,
     })
@@ -357,6 +442,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       `products(s=${uniqueSavingsProductIds.length},td=${uniqueTdProductIds.length})` +
       ` detail_jobs(s=${savingsDetailJobsEnqueued},td=${tdDetailJobsEnqueued})` +
       ` finalizer_jobs=${finalizerEnqueue.enqueued}` +
+      ` upstream_blocks=${observedUpstreamBlocks.length}` +
       ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(startedAt)}`,
   })
 }

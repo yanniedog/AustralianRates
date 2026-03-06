@@ -87,7 +87,30 @@ export async function finalizeLenderDataset(
 
   const expected = Number(run.expected_detail_count || 0)
   if (expected <= 0) {
-    return false
+    const marked = await runWithTransientRetry(
+      {
+        runId: input.runId,
+        lenderCode: input.lenderCode,
+        dataset: input.dataset,
+        operation: 'mark_dataset_finalized_zero_expected',
+      },
+      async () =>
+        deps.tryMarkLenderDatasetFinalized(env.DB, {
+          runId: input.runId,
+          lenderCode: input.lenderCode,
+          dataset: input.dataset,
+        }),
+    )
+    if (!marked) return false
+    log.info('consumer', 'lender_finalize completed', {
+      runId: input.runId,
+      lenderCode: input.lenderCode,
+      context:
+        `dataset=${input.dataset} expected=0` +
+        ` completed=${run.completed_detail_count} failed=${run.failed_detail_count}` +
+        ` presence_skipped=1`,
+    })
+    return true
   }
   const detailProcessed = Number(run.completed_detail_count || 0) + Number(run.failed_detail_count || 0)
   if (detailProcessed < expected) {

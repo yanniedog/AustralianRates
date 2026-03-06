@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
 import { requireAdmin } from '../auth/admin'
 import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
-import { getRecentFetchEvents } from '../db/fetch-events'
+import { getFetchEventById, getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
@@ -102,13 +103,68 @@ adminRoutes.get('/runs/:runId', async (c) => {
 adminRoutes.get('/diagnostics/fetch-events', async (c) => {
   const dataset = c.req.query('dataset') as DatasetKind | undefined
   const lenderCode = c.req.query('lender_code') || undefined
+  const sourceType = c.req.query('source_type') || undefined
+  const sourceTypePrefix = c.req.query('source_type_prefix') || undefined
+  const probeOnly = String(c.req.query('probe_only') || '').toLowerCase()
   const limit = Number(c.req.query('limit') || 100)
-  const events = await getRecentFetchEvents(c.env.DB, { dataset, lenderCode, limit })
+  const events = await getRecentFetchEvents(c.env.DB, {
+    dataset,
+    lenderCode,
+    sourceType,
+    sourceTypePrefix: sourceTypePrefix || (probeOnly === '1' || probeOnly === 'true' ? 'probe_' : undefined),
+    limit,
+  })
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
     count: events.length,
     events,
+  })
+})
+
+adminRoutes.get('/diagnostics/fetch-events/:fetchEventId/payload', async (c) => {
+  const fetchEventId = Number(c.req.param('fetchEventId'))
+  if (!Number.isFinite(fetchEventId) || fetchEventId <= 0) {
+    return jsonError(c, 400, 'INVALID_REQUEST', 'fetchEventId must be a positive integer.')
+  }
+  const event = await getFetchEventById(c.env.DB, fetchEventId)
+  if (!event) {
+    return jsonError(c, 404, 'NOT_FOUND', `Fetch event not found: ${fetchEventId}`)
+  }
+  if (!event.r2Key) {
+    return jsonError(c, 404, 'PAYLOAD_NOT_FOUND', `No raw payload object found for fetch event: ${fetchEventId}`)
+  }
+
+  const object = await c.env.RAW_BUCKET.get(event.r2Key)
+  if (!object) {
+    return jsonError(c, 404, 'PAYLOAD_NOT_FOUND', `Raw payload object missing from storage for fetch event: ${fetchEventId}`)
+  }
+
+  const rawMode = (() => {
+    const value = String(c.req.query('raw') || '').trim().toLowerCase()
+    return value === '1' || value === 'true' || value === 'yes'
+  })()
+  const bodyText = await object.text()
+
+  if (rawMode) {
+    return new Response(bodyText, {
+      status: 200,
+      headers: {
+        'content-type': event.contentType || 'text/plain; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    })
+  }
+
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    event,
+    payload: {
+      body: bodyText,
+      content_type: event.contentType || 'text/plain; charset=utf-8',
+      body_bytes: bodyText.length,
+    },
   })
 })
 
@@ -246,6 +302,21 @@ adminRoutes.post('/runs/reconcile', async (c) => {
     dryRun,
     idleMinutes: 5,
     staleRunMinutes: 120,
+  })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    result,
+  })
+})
+
+adminRoutes.post('/runs/repair-lineage', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const dryRun = Boolean(body.dry_run ?? body.dryRun)
+  const lookbackDays = Number(body.lookback_days ?? body.lookbackDays ?? 120)
+  const result = await repairMissingFetchEventLineage(c.env.DB, {
+    dryRun,
+    lookbackDays,
   })
   return c.json({
     ok: true,

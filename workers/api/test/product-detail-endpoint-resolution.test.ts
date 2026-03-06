@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveProductDetailEndpoint } from '../src/queue/consumer/handlers/product-detail'
+import { resolveProductDetailEndpoint, resolveRowFetchEventId } from '../src/queue/consumer/handlers/product-detail'
 
 describe('product detail endpoint resolution', () => {
   it('prefers explicit job endpoint over cached endpoint', () => {
@@ -24,5 +24,25 @@ describe('product detail endpoint resolution', () => {
       endpointUrl: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
       endpointSource: 'cache',
     })
+  })
+
+  it('prefers detail fetch event id over fallback lineage id', () => {
+    expect(
+      resolveRowFetchEventId({
+        detailFetchEventId: 555,
+        fallbackFetchEventId: 111,
+        rowFetchEventId: null,
+      }),
+    ).toBe(555)
+  })
+
+  it('uses fallback lineage id when detail payload is not persisted', () => {
+    expect(
+      resolveRowFetchEventId({
+        detailFetchEventId: null,
+        fallbackFetchEventId: 111,
+        rowFetchEventId: null,
+      }),
+    ).toBe(111)
   })
 })

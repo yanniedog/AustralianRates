@@ -38,6 +38,7 @@ export type SeriesKeyParts = {
 }
 
 export type FetchEvent = {
+  id?: number
   runId?: string | null
   lenderCode?: string | null
   dataset?: DatasetKind | null

@@ -148,7 +148,7 @@ export async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillS
     snapshotFetchMsTotal += snapshotFetchMs
     snapshotStatusSummary[String(snapshotResponse.status)] = (snapshotStatusSummary[String(snapshotResponse.status)] || 0) + 1
 
-    await persistRawPayload(env, {
+    const persistedSnapshotPayload = await persistRawPayload(env, {
       sourceType: 'wayback_html',
       sourceUrl: snapshotUrl,
       payload: html,
@@ -175,6 +175,7 @@ export async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillS
     for (const row of accepted) {
       row.runId = job.runId
       row.runSource = job.runSource ?? 'scheduled'
+      row.fetchEventId = row.fetchEventId ?? persistedSnapshotPayload.fetchEventId ?? null
     }
     const droppedReasons: Record<string, number> = {}
     for (const item of dropped) droppedReasons[item.reason] = (droppedReasons[item.reason] || 0) + 1

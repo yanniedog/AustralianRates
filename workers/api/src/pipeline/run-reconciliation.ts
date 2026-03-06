@@ -161,8 +161,10 @@ export async function reconcileReadyFinalizations(
          updated_at
        FROM lender_dataset_runs
        WHERE finalized_at IS NULL
-         AND expected_detail_count > 0
-         AND (completed_detail_count + failed_detail_count) >= expected_detail_count
+         AND (
+           expected_detail_count <= 0
+           OR (completed_detail_count + failed_detail_count) >= expected_detail_count
+         )
          AND updated_at <= ?1
        ORDER BY updated_at ASC
        LIMIT ?2`,
@@ -177,15 +179,18 @@ export async function reconcileReadyFinalizations(
     }
 
     try {
-      await runWithTransientRetry(async () =>
-        finalizePresenceForRun(db, {
-          runId: row.run_id,
-          lenderCode: row.lender_code,
-          dataset: row.dataset_kind,
-          bankName: row.bank_name,
-          collectionDate: row.collection_date,
-        }),
-      )
+      const expected = Number(row.expected_detail_count || 0)
+      if (expected > 0) {
+        await runWithTransientRetry(async () =>
+          finalizePresenceForRun(db, {
+            runId: row.run_id,
+            lenderCode: row.lender_code,
+            dataset: row.dataset_kind,
+            bankName: row.bank_name,
+            collectionDate: row.collection_date,
+          }),
+        )
+      }
 
       const marked = await runWithTransientRetry(async () =>
         tryMarkLenderDatasetFinalized(db, {

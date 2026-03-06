@@ -11,6 +11,7 @@ import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import type { DailyLenderJob, EnvBindings } from '../../../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
 import { log } from '../../../utils/logger'
+import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { nowIso } from '../../../utils/time'
 import { recordDroppedAnomalies } from '../anomalies'
 import { elapsedMs, serializeForLog, shortUrlForLog, summarizeDropReasons, summarizeEndpointHosts, summarizeProductSample, summarizeStatusCodes } from '../log-helpers'
@@ -80,9 +81,11 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   let indexPayloads = 0
   let detailJobsEnqueued = 0
   const discoveredProductEndpointMap = new Map<string, string>()
+  const discoveredProductFallbackFetchEventIdMap = new Map<string, number>()
   let successfulIndexFetch = false
   let fallbackSeedFetches = 0
   const observedUpstreamStatuses: number[] = []
+  const observedUpstreamBlocks: Array<{ sourceUrl: string; status: number; reasonCode: string; fetchEventId: number | null }> = []
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   const seedDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
@@ -124,10 +127,63 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     const indexStatusSummary = summarizeStatusCodes(products.rawPayloads.map((payload) => payload.status))
     const indexFetchSucceeded =
       products.rawPayloads.length > 0 && products.rawPayloads.every((payload) => payload.status >= 200 && payload.status < 400)
+    if (products.pageLimitHit) {
+      log.error('consumer', 'daily_lender_fetch index_page_limit_hit', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `endpoint=${shortUrlForLog(candidateEndpoint)} pages=${products.pagesFetched}` +
+          ` next=${products.nextUrl || 'none'} discovered=${products.productIds.length}`,
+      })
+    }
+    let endpointFallbackFetchEventId: number | null = null
+    for (const payload of products.rawPayloads) {
+      const upstreamBlock = detectUpstreamBlock({
+        status: payload.status,
+        body: payload.body,
+      })
+      const persisted = await persistRawPayload(env, {
+        sourceType: 'cdr_products',
+        sourceUrl: payload.sourceUrl,
+        payload: payload.body,
+        httpStatus: payload.status,
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        jobKind: 'daily_home_index_fetch',
+        collectionDate: job.collectionDate,
+        notes:
+          `daily_product_index lender=${job.lenderCode}` +
+          (upstreamBlock.reasonCode ? ` reason=${upstreamBlock.reasonCode}` : ''),
+      })
+      if (endpointFallbackFetchEventId == null && persisted.fetchEventId != null) {
+        endpointFallbackFetchEventId = persisted.fetchEventId
+      }
+      if (upstreamBlock.reasonCode) {
+        observedUpstreamBlocks.push({
+          sourceUrl: payload.sourceUrl,
+          status: payload.status,
+          reasonCode: upstreamBlock.reasonCode,
+          fetchEventId: persisted.fetchEventId ?? null,
+        })
+        log.warn('consumer', 'daily_lender_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `endpoint=${shortUrlForLog(candidateEndpoint)} source=${shortUrlForLog(payload.sourceUrl)}` +
+            ` status=${payload.status} reason=${upstreamBlock.reasonCode}` +
+            ` marker=${upstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${persisted.fetchEventId ?? 'none'}`,
+        })
+      }
+    }
     if (indexFetchSucceeded) {
       successfulIndexFetch = true
       for (const productId of endpointIds) {
         discoveredProductEndpointMap.set(productId, candidateEndpoint)
+        if (endpointFallbackFetchEventId != null) {
+          discoveredProductFallbackFetchEventIdMap.set(productId, endpointFallbackFetchEventId)
+        }
       }
       await markProductsSeenForRun(env.DB, {
         runId: job.runId,
@@ -138,34 +194,12 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         productIds: endpointIds,
       })
     }
-    if (products.pageLimitHit) {
-      log.error('consumer', 'daily_lender_fetch index_page_limit_hit', {
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        context:
-          `endpoint=${shortUrlForLog(candidateEndpoint)} pages=${products.pagesFetched}` +
-          ` next=${products.nextUrl || 'none'} discovered=${products.productIds.length}`,
-      })
-    }
-    for (const payload of products.rawPayloads) {
-      await persistRawPayload(env, {
-        sourceType: 'cdr_products',
-        sourceUrl: payload.sourceUrl,
-        payload: payload.body,
-        httpStatus: payload.status,
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        dataset: 'home_loans',
-        jobKind: 'daily_home_index_fetch',
-        collectionDate: job.collectionDate,
-        notes: `daily_product_index lender=${job.lenderCode}`,
-      })
-    }
     const endpointElapsedMs = elapsedMs(endpointStartedAt)
     const endpointSummary = {
       endpoint: candidateEndpoint,
       index_payloads: products.rawPayloads.length,
       index_statuses: indexStatusSummary,
+      upstream_blocks: observedUpstreamBlocks.filter((item) => item.sourceUrl.startsWith(candidateEndpoint)).length,
       product_ids_discovered: endpointIds.length,
       product_ids_sample: summarizeProductSample(endpointIds),
       detail_jobs_planned: endpointIds.length,
@@ -179,6 +213,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         `endpoint_idx=${endpointIndex + 1}/${uniqueCandidates.length}` +
         ` endpoint=${shortUrlForLog(candidateEndpoint)}` +
         ` index_payloads=${products.rawPayloads.length} index_statuses=${serializeForLog(indexStatusSummary)}` +
+        ` upstream_blocks=${endpointSummary.upstream_blocks}` +
         ` discovered=${endpointIds.length}` +
         ` sample_products=${summarizeProductSample(endpointIds)}` +
         ` detail_jobs_planned=${endpointIds.length}` +
@@ -195,6 +230,9 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     const productIds = Array.from(discoveredProductEndpointMap.keys())
     const endpointUrlByProductId = Object.fromEntries(
       Array.from(discoveredProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
+    )
+    const fallbackFetchEventIdByProductId = Object.fromEntries(
+      Array.from(discoveredProductFallbackFetchEventIdMap.entries()).map(([productId, fetchEventId]) => [productId, fetchEventId]),
     )
     await setLenderDatasetExpectedDetails(env.DB, {
       runId: job.runId,
@@ -214,6 +252,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
             collectionDate: job.collectionDate,
             productIds,
             endpointUrlByProductId,
+            fallbackFetchEventIdByProductId,
           })
         : { enqueued: 0 }
     const finalizerEnqueue = await enqueueLenderFinalizeJobs(env, {
@@ -243,6 +282,11 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
           endpointsTried,
           indexPayloads,
         },
+        upstreamBlocks: {
+          count: observedUpstreamBlocks.length,
+          fetchEventIds: observedUpstreamBlocks.map((item) => item.fetchEventId).filter((id) => id != null),
+          reasons: Array.from(new Set(observedUpstreamBlocks.map((item) => item.reasonCode))),
+        },
         endpointDiagnostics,
         timings: {
           endpointDiscoveryMs,
@@ -265,6 +309,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         `products=${productIds.length} detail_jobs=${detailEnqueue.enqueued}` +
         ` finalizer_jobs=${finalizerEnqueue.enqueued}` +
         ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+        ` upstream_blocks=${observedUpstreamBlocks.length}` +
         ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(jobStartedAt)}`,
     })
     return
@@ -310,6 +355,11 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         })
         throw error
       }
+      const seedUpstreamBlock = detectUpstreamBlock({
+        status: response.status,
+        body: html,
+        headers: response.headers,
+      })
       const persisted = await persistRawPayload(env, {
         sourceType: 'wayback_html',
         sourceUrl: seedUrl,
@@ -320,8 +370,24 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         dataset: 'home_loans',
         jobKind: 'daily_home_index_fetch',
         collectionDate: job.collectionDate,
-        notes: `fallback_scrape lender=${job.lenderCode}`,
+        notes: `fallback_scrape lender=${job.lenderCode}` + (seedUpstreamBlock.reasonCode ? ` reason=${seedUpstreamBlock.reasonCode}` : ''),
       })
+      if (seedUpstreamBlock.reasonCode) {
+        observedUpstreamBlocks.push({
+          sourceUrl: seedUrl,
+          status: response.status,
+          reasonCode: seedUpstreamBlock.reasonCode,
+          fetchEventId: persisted.fetchEventId ?? null,
+        })
+        log.warn('consumer', 'daily_lender_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `fallback_seed=${shortUrlForLog(seedUrl)} status=${response.status}` +
+            ` reason=${seedUpstreamBlock.reasonCode} marker=${seedUpstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${persisted.fetchEventId ?? 'none'}`,
+        })
+      }
       const parsed = extractLenderRatesFromHtml({
         lender,
         html,
@@ -412,6 +478,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         hadMortgageSignals,
         ubankSoftFailNoSignal,
         observedUpstreamStatuses,
+        upstreamBlocks: observedUpstreamBlocks,
         collection: {
           endpointsTried,
           indexPayloads,
@@ -435,7 +502,9 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       dataset: 'home_loans',
       jobKind: 'daily_home_index_fetch',
       collectionDate: job.collectionDate,
-      notes: noMortgageSignals ? `daily_no_data lender=${job.lenderCode}` : `daily_quality_rejected lender=${job.lenderCode}`,
+      notes:
+        (noMortgageSignals ? `daily_no_data lender=${job.lenderCode}` : `daily_quality_rejected lender=${job.lenderCode}`) +
+        (observedUpstreamBlocks.length > 0 ? ` upstream_blocks=${observedUpstreamBlocks.length}` : ''),
     })
     if (noMortgageSignals) {
       log.info('consumer', `daily_lender_fetch completed: 0 written, no mortgage signals`, {
@@ -446,6 +515,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
           ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
           ` ubank_soft_fail=${ubankSoftFailNoSignal ? 1 : 0}` +
           ` statuses=${serializeForLog(observedUpstreamStatuses)}` +
+          ` upstream_blocks=${serializeForLog(observedUpstreamBlocks)}` +
           ` detail_jobs=${detailJobsEnqueued}` +
           ` seed_fetches=${fallbackSeedFetches} timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},total=${elapsedMs(jobStartedAt)}`,
       })
@@ -459,6 +529,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         ` reasons=${JSON.stringify(droppedReasons)}` +
         ` inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
         ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+        ` upstream_blocks=${serializeForLog(observedUpstreamBlocks)}` +
         ` detail_jobs=${detailJobsEnqueued}` +
         ` seed_fetches=${fallbackSeedFetches}` +
         ` endpoint_diagnostics=${serializeForLog(endpointDiagnostics)}` +
@@ -479,6 +550,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       ` reasons=${JSON.stringify(droppedReasons)}` +
       ` inspected_html=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
       ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+      ` upstream_blocks=${observedUpstreamBlocks.length}` +
       ` detail_jobs=${detailJobsEnqueued}` +
       ` seed_fetches=${fallbackSeedFetches}` +
       ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(jobStartedAt)}`,
@@ -498,6 +570,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       droppedReasons,
       inspectedHtml,
       droppedByParser,
+      upstreamBlocks: observedUpstreamBlocks,
       collection: {
         endpointsTried,
         indexPayloads,

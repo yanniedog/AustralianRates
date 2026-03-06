@@ -9,6 +9,7 @@ import { fetchSavingsProductDetailRows, fetchTdProductDetailRows } from '../../.
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import type { EnvBindings, ProductDetailJob } from '../../../types'
 import { log } from '../../../utils/logger'
+import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { recordDroppedAnomalies } from '../anomalies'
 import { markDetailProcessedAndFinalize } from '../finalization'
 import { elapsedMs, serializeForLog } from '../log-helpers'
@@ -24,6 +25,17 @@ export function resolveProductDetailEndpoint(
   if (job.endpointUrl) return { endpointUrl, endpointSource: 'job_override' }
   if (cachedEndpoint) return { endpointUrl, endpointSource: 'cache' }
   return { endpointUrl, endpointSource: 'none' }
+}
+
+export function resolveRowFetchEventId(input: {
+  detailFetchEventId?: number | null
+  fallbackFetchEventId?: number | null
+  rowFetchEventId?: number | null
+}): number | null {
+  if (input.detailFetchEventId != null) return input.detailFetchEventId
+  if (input.fallbackFetchEventId != null) return input.fallbackFetchEventId
+  if (input.rowFetchEventId != null) return input.rowFetchEventId
+  return null
 }
 
 export async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): Promise<void> {
@@ -75,6 +87,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     let validationMs = 0
     let fetchStatus = 0
     let fetchEventId: number | null | undefined
+    const fallbackFetchEventId = job.fallbackFetchEventId ?? null
     let droppedReasons: Record<string, number> = {}
 
     if (job.dataset === 'home_loans') {
@@ -104,7 +117,28 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         notes: `direct_product_detail lender=${job.lenderCode} product=${job.productId}`,
       })
       fetchEventId = persisted?.fetchEventId
-      for (const row of details.rows) row.fetchEventId = fetchEventId ?? row.fetchEventId ?? null
+      const upstreamBlock = detectUpstreamBlock({
+        status: details.rawPayload.status,
+        body: details.rawPayload.body,
+      })
+      if (upstreamBlock.blocked) {
+        log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `dataset=${job.dataset} product=${job.productId} status=${details.rawPayload.status}` +
+            ` reason=${upstreamBlock.reasonCode}` +
+            ` marker=${upstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${fetchEventId ?? 'none'}`,
+        })
+      }
+      for (const row of details.rows) {
+        row.fetchEventId = resolveRowFetchEventId({
+          detailFetchEventId: fetchEventId ?? null,
+          fallbackFetchEventId,
+          rowFetchEventId: row.fetchEventId ?? null,
+        })
+      }
       fetchedRows = details.rows.length
       await markHomeLoanSeriesSeenForRun(env.DB, {
         runId: job.runId,
@@ -159,7 +193,28 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         notes: `savings_product_detail lender=${job.lenderCode} product=${job.productId}`,
       })
       fetchEventId = persisted?.fetchEventId
-      for (const row of details.savingsRows) row.fetchEventId = fetchEventId ?? row.fetchEventId ?? null
+      const upstreamBlock = detectUpstreamBlock({
+        status: details.rawPayload.status,
+        body: details.rawPayload.body,
+      })
+      if (upstreamBlock.blocked) {
+        log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `dataset=${job.dataset} product=${job.productId} status=${details.rawPayload.status}` +
+            ` reason=${upstreamBlock.reasonCode}` +
+            ` marker=${upstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${fetchEventId ?? 'none'}`,
+        })
+      }
+      for (const row of details.savingsRows) {
+        row.fetchEventId = resolveRowFetchEventId({
+          detailFetchEventId: fetchEventId ?? null,
+          fallbackFetchEventId,
+          rowFetchEventId: row.fetchEventId ?? null,
+        })
+      }
       fetchedRows = details.savingsRows.length
       await markSavingsSeriesSeenForRun(env.DB, {
         runId: job.runId,
@@ -214,7 +269,28 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         notes: `td_product_detail lender=${job.lenderCode} product=${job.productId}`,
       })
       fetchEventId = persisted?.fetchEventId
-      for (const row of details.tdRows) row.fetchEventId = fetchEventId ?? row.fetchEventId ?? null
+      const upstreamBlock = detectUpstreamBlock({
+        status: details.rawPayload.status,
+        body: details.rawPayload.body,
+      })
+      if (upstreamBlock.blocked) {
+        log.warn('consumer', 'product_detail_fetch upstream_block_detected', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `dataset=${job.dataset} product=${job.productId} status=${details.rawPayload.status}` +
+            ` reason=${upstreamBlock.reasonCode}` +
+            ` marker=${upstreamBlock.marker || 'none'}` +
+            ` fetch_event_id=${fetchEventId ?? 'none'}`,
+        })
+      }
+      for (const row of details.tdRows) {
+        row.fetchEventId = resolveRowFetchEventId({
+          detailFetchEventId: fetchEventId ?? null,
+          fallbackFetchEventId,
+          rowFetchEventId: row.fetchEventId ?? null,
+        })
+      }
       fetchedRows = details.tdRows.length
       await markTdSeriesSeenForRun(env.DB, {
         runId: job.runId,
@@ -255,6 +331,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
       lenderCode: job.lenderCode,
       context:
         `dataset=${job.dataset} product=${job.productId} status=${fetchStatus}` +
+        ` lineage(detail=${fetchEventId ?? 'none'},fallback=${fallbackFetchEventId ?? 'none'})` +
         ` fetched=${fetchedRows} accepted=${acceptedRows} written=${written}` +
         ` dropped_reasons=${serializeForLog(droppedReasons)}` +
         ` timings(ms):validate=${validationMs},total=${elapsedMs(startedAt)}`,

@@ -10,6 +10,7 @@ import { collectHistoricalDayFromWayback } from '../../../ingest/wayback-histori
 import type { BackfillDayJob, EnvBindings } from '../../../types'
 import { log } from '../../../utils/logger'
 import { nowIso } from '../../../utils/time'
+import { assignFetchEventIdsBySourceUrl } from '../lineage'
 import { elapsedMs, serializeForLog, summarizeEndpointHosts, summarizeStatusCodes } from '../log-helpers'
 import { maxProductsPerLender } from '../retry-config'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
@@ -28,6 +29,7 @@ export async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob
 
   let hadSignals = false
   try {
+    const payloadFetchEventIdBySourceUrl = new Map<string, number>()
     const endpointDiscoveryStartedAt = Date.now()
     const endpointCandidates: string[] = []
     const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
@@ -74,13 +76,16 @@ export async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob
     })
 
     for (const payload of collected.payloads) {
-      await persistRawPayload(env, {
+      const persisted = await persistRawPayload(env, {
         sourceType: 'wayback_html',
         sourceUrl: payload.sourceUrl,
         payload: payload.payload,
         httpStatus: payload.status,
         notes: payload.notes,
       })
+      if (persisted.fetchEventId != null) {
+        payloadFetchEventIdBySourceUrl.set(payload.sourceUrl, persisted.fetchEventId)
+      }
     }
 
     const mortgageRows = collected.mortgageRows
@@ -102,6 +107,9 @@ export async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob
       row.runSource = job.runSource ?? 'scheduled'
       row.retrievalType = 'historical_scrape'
     }
+    assignFetchEventIdsBySourceUrl(mortgageRows, payloadFetchEventIdBySourceUrl)
+    assignFetchEventIdsBySourceUrl(savingsRows, payloadFetchEventIdBySourceUrl)
+    assignFetchEventIdsBySourceUrl(tdRows, payloadFetchEventIdBySourceUrl)
 
     const validateStartedAt = Date.now()
     const { accepted: mortgageAccepted, dropped: mortgageDropped } = splitValidatedRows(mortgageRows)

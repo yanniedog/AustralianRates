@@ -73,6 +73,7 @@ export async function enqueueProductDetailJobs(
     collectionDate: string
     productIds: string[]
     endpointUrlByProductId?: Record<string, string>
+    fallbackFetchEventIdByProductId?: Record<string, number | null | undefined>
   },
 ): Promise<{ enqueued: number }> {
   const productIds = Array.from(new Set(input.productIds)).filter(Boolean)
@@ -85,6 +86,7 @@ export async function enqueueProductDetailJobs(
     dataset: input.dataset,
     productId,
     endpointUrl: input.endpointUrlByProductId?.[productId] || undefined,
+    fallbackFetchEventId: input.fallbackFetchEventIdByProductId?.[productId] ?? null,
     collectionDate: input.collectionDate,
     attempt: 0,
     idempotencyKey: buildProductDetailIdempotencyKey(input.runId, input.lenderCode, input.dataset, productId),

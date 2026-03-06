@@ -34,6 +34,12 @@ export type PersistFetchResult = {
   bodyBytes: number
 }
 
+export type FetchEventRecord = FetchEvent & {
+  id: number
+  r2Key?: string | null
+  contentType?: string | null
+}
+
 function contentTypeForSource(sourceType: string): string {
   return sourceType === 'wayback_html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8'
 }
@@ -142,7 +148,13 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
 
 export async function getRecentFetchEvents(
   db: D1Database,
-  input: { dataset?: DatasetKind; lenderCode?: string; limit?: number } = {},
+  input: {
+    dataset?: DatasetKind
+    lenderCode?: string
+    sourceType?: string
+    sourceTypePrefix?: string
+    limit?: number
+  } = {},
 ): Promise<FetchEvent[]> {
   const where: string[] = []
   const binds: Array<string | number> = []
@@ -154,11 +166,19 @@ export async function getRecentFetchEvents(
     where.push('lender_code = ?')
     binds.push(input.lenderCode)
   }
+  if (input.sourceType) {
+    where.push('source_type = ?')
+    binds.push(input.sourceType)
+  }
+  if (input.sourceTypePrefix) {
+    where.push('source_type LIKE ?')
+    binds.push(`${input.sourceTypePrefix}%`)
+  }
   const limit = Math.max(1, Math.min(1000, Math.floor(Number(input.limit) || 100)))
   binds.push(limit)
 
   const sql = `SELECT
-      run_id, lender_code, dataset_kind, job_kind, source_type, source_url, collection_date, fetched_at,
+      id, run_id, lender_code, dataset_kind, job_kind, source_type, source_url, collection_date, fetched_at,
       http_status, content_hash, body_bytes, response_headers_json, duration_ms, product_id, raw_object_created, notes
     FROM fetch_events
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
@@ -166,7 +186,12 @@ export async function getRecentFetchEvents(
     LIMIT ?`
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return (result.results ?? []).map((row) => ({
+  return (result.results ?? []).map(mapFetchEventRow)
+}
+
+function mapFetchEventRow(row: Record<string, unknown>): FetchEventRecord {
+  return {
+    id: Number(row.id ?? 0),
     runId: row.run_id == null ? null : String(row.run_id),
     lenderCode: row.lender_code == null ? null : String(row.lender_code),
     dataset: row.dataset_kind == null ? null : (String(row.dataset_kind) as DatasetKind),
@@ -183,5 +208,45 @@ export async function getRecentFetchEvents(
     productId: row.product_id == null ? null : String(row.product_id),
     rawObjectCreated: String(row.raw_object_created ?? '0') === '1' || row.raw_object_created === 1,
     notes: row.notes == null ? null : String(row.notes),
-  }))
+    r2Key: row.r2_key == null ? null : String(row.r2_key),
+    contentType: row.content_type == null ? null : String(row.content_type),
+  }
+}
+
+export async function getFetchEventById(
+  db: D1Database,
+  fetchEventId: number,
+): Promise<FetchEventRecord | null> {
+  const row = await db
+    .prepare(
+      `SELECT
+         fe.id,
+         fe.run_id,
+         fe.lender_code,
+         fe.dataset_kind,
+         fe.job_kind,
+         fe.source_type,
+         fe.source_url,
+         fe.collection_date,
+         fe.fetched_at,
+         fe.http_status,
+         fe.content_hash,
+         fe.body_bytes,
+         fe.response_headers_json,
+         fe.duration_ms,
+         fe.product_id,
+         fe.raw_object_created,
+         fe.notes,
+         ro.r2_key,
+         ro.content_type
+       FROM fetch_events fe
+       LEFT JOIN raw_objects ro
+         ON ro.content_hash = fe.content_hash
+       WHERE fe.id = ?1
+       LIMIT 1`,
+    )
+    .bind(Math.max(1, Math.floor(fetchEventId)))
+    .first<Record<string, unknown>>()
+  if (!row) return null
+  return mapFetchEventRow(row)
 }
