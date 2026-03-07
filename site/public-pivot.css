@@ -1,0 +1,123 @@
+#pivot-output .pvtUi {
+    width: 100%;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+#pivot-output .pvtUi > tbody,
+#pivot-output .pvtUi > tbody > tr {
+    display: contents;
+}
+
+#pivot-output .pvtUi > tbody > tr > td {
+    min-width: 0;
+    vertical-align: top;
+}
+
+#pivot-output .pvtUi .pvtUiCell:first-child {
+    grid-area: renderer;
+}
+
+#pivot-output .pvtUi .pvtVals {
+    grid-area: vals;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
+}
+
+#pivot-output .pvtUi .pvtCols {
+    grid-area: cols;
+}
+
+#pivot-output .pvtUi .pvtUnused {
+    grid-area: unused;
+}
+
+#pivot-output .pvtUi .pvtRows {
+    grid-area: rows;
+}
+
+#pivot-output .pvtUi .pvtRendererArea {
+    grid-area: output;
+    min-width: 0;
+    overflow: auto;
+}
+
+#pivot-output .pvtUi .pvtVals br {
+    display: none;
+}
+
+#pivot-output .pvtUi .pvtAttrDropdown {
+    grid-column: 1 / -1;
+}
+
+#pivot-output .pvtUi .pvtRenderer,
+#pivot-output .pvtUi .pvtAggregator,
+#pivot-output .pvtUi .pvtAttrDropdown {
+    width: 100% !important;
+    min-width: 180px;
+}
+
+#pivot-output .pvtUi .pvtRowOrder,
+#pivot-output .pvtUi .pvtColOrder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+#pivot-output .pvtFilterBox,
+#pivot-output .pvtUi .pvtFilterBox {
+    z-index: 25;
+}
+
+@media (max-width: 979px) {
+    #pivot-output .pvtUi {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "renderer"
+            "vals"
+            "cols"
+            "rows"
+            "unused"
+            "output";
+        gap: 12px;
+    }
+
+    #pivot-output .pvtUi .pvtVals {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: stretch;
+    }
+
+    #pivot-output .pvtUi .pvtRowOrder,
+    #pivot-output .pvtUi .pvtColOrder {
+        justify-self: start;
+    }
+
+    #pivot-output .pvtFilterBox,
+    #pivot-output .pvtUi .pvtFilterBox {
+        left: 0 !important;
+        right: auto !important;
+        width: min(300px, calc(100vw - 48px));
+        max-width: calc(100vw - 48px);
+        max-height: min(420px, 60vh);
+        overflow: auto;
+    }
+}
+
+@media (min-width: 980px) {
+    #pivot-output .pvtUi {
+        display: grid;
+        grid-template-columns: minmax(210px, 0.85fr) minmax(210px, 1fr) minmax(0, 2.2fr);
+        grid-template-areas:
+            "renderer vals cols"
+            "unused rows output";
+        gap: 12px;
+        align-items: start;
+    }
+}
