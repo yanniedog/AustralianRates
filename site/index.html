@@ -69,6 +69,7 @@
     <link rel="stylesheet" href="public-shell.css">
     <link rel="stylesheet" href="public-workspace.css">
     <link rel="stylesheet" href="public-data-widgets.css">
+    <link rel="stylesheet" href="public-charts.css">
     <script src="theme.js"></script>
 </head>
 <body class="ar-public ar-section-home-loans" data-ar-section="home-loans">
@@ -249,49 +250,91 @@
 
                 <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
                     <div class="panel panel-wide">
-                        <div class="chart-controls">
-                            <label>X axis
-                                <select id="chart-x">
-                                    <option value="collection_date">Date</option>
-                                    <option value="bank_name">Bank</option>
-                                    <option value="rate_structure">Structure</option>
-                                    <option value="lvr_tier">LVR</option>
-                                    <option value="feature_set">Feature</option>
-                                </select>
-                            </label>
-                            <label>Y axis
-                                <select id="chart-y">
-                                    <option value="interest_rate">Interest rate</option>
-                                    <option value="comparison_rate">Comparison rate</option>
-                                    <option value="annual_fee">Annual fee</option>
-                                    <option value="rba_cash_rate">Cash rate</option>
-                                </select>
-                            </label>
-                            <label>Group by
-                                <select id="chart-group">
-                                    <option value="">None</option>
-                                    <option value="product_key" selected>Product</option>
-                                    <option value="bank_name">Bank</option>
-                                    <option value="security_purpose">Purpose</option>
-                                    <option value="rate_structure">Structure</option>
-                                    <option value="lvr_tier">LVR</option>
-                                    <option value="feature_set">Feature</option>
-                                    <option value="repayment_type">Repayment</option>
-                                </select>
-                            </label>
-                            <label>Chart type
-                                <select id="chart-type">
-                                    <option value="scatter">Line / Scatter</option>
-                                    <option value="bar">Bar</option>
-                                    <option value="box">Box Plot</option>
-                                </select>
-                            </label>
-                            <div class="filter-actions">
-                                <button id="draw-chart" type="button" class="small">Draw chart</button>
+                        <div class="chart-shell">
+                            <div class="chart-hero">
+                                <div class="chart-hero-copy">
+                                    <p class="chart-kicker">Analysis workspace</p>
+                                    <h2>Interactive rate lab</h2>
+                                    <p class="chart-hero-note">Switch between trend, comparison, and distribution views without losing longitudinal product tracking.</p>
+                                </div>
+                                <div class="chart-presets" role="group" aria-label="Chart presets">
+                                    <button class="chart-preset is-active" data-chart-preset="trend" type="button" aria-pressed="true">Trend</button>
+                                    <button class="chart-preset" data-chart-preset="compare" type="button" aria-pressed="false">Compare</button>
+                                    <button class="chart-preset" data-chart-preset="distribution" type="button" aria-pressed="false">Distribution</button>
+                                </div>
+                            </div>
+                            <div class="chart-controls">
+                                <label>X axis
+                                    <select id="chart-x">
+                                        <option value="collection_date">Date</option>
+                                        <option value="bank_name">Bank</option>
+                                        <option value="rate_structure">Structure</option>
+                                        <option value="lvr_tier">LVR</option>
+                                        <option value="feature_set">Feature</option>
+                                    </select>
+                                </label>
+                                <label>Y axis
+                                    <select id="chart-y">
+                                        <option value="interest_rate">Interest rate</option>
+                                        <option value="comparison_rate">Comparison rate</option>
+                                        <option value="annual_fee">Annual fee</option>
+                                        <option value="rba_cash_rate">Cash rate</option>
+                                    </select>
+                                </label>
+                                <label>Group by
+                                    <select id="chart-group">
+                                        <option value="">None</option>
+                                        <option value="product_key" selected>Product</option>
+                                        <option value="bank_name">Bank</option>
+                                        <option value="security_purpose">Purpose</option>
+                                        <option value="rate_structure">Structure</option>
+                                        <option value="lvr_tier">LVR</option>
+                                        <option value="feature_set">Feature</option>
+                                        <option value="repayment_type">Repayment</option>
+                                    </select>
+                                </label>
+                                <label>Chart type
+                                    <select id="chart-type">
+                                        <option value="scatter">Line / Scatter</option>
+                                        <option value="bar">Bar</option>
+                                        <option value="box">Box Plot</option>
+                                    </select>
+                                </label>
+                                <label>Visible series
+                                    <select id="chart-series-limit">
+                                        <option value="8">8</option>
+                                        <option value="12" selected>12</option>
+                                        <option value="20">20</option>
+                                        <option value="all">All</option>
+                                    </select>
+                                </label>
+                                <div class="chart-actions">
+                                    <button id="draw-chart" type="button" class="small">Draw chart</button>
+                                </div>
+                            </div>
+                            <div class="chart-meta">
+                                <p id="chart-guidance" class="chart-guidance">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
+                                <div id="chart-summary" class="chart-summary" aria-live="polite">
+                                    <span class="chart-summary-pill">Awaiting first render</span>
+                                </div>
+                            </div>
+                            <div class="chart-canvas-shell">
+                                <div id="chart-output" aria-label="Interactive chart"></div>
+                                <aside class="chart-series-rail" aria-label="Visible chart series">
+                                    <div class="chart-series-rail-header">
+                                        <div>
+                                            <p class="chart-series-kicker">Series spotlight</p>
+                                            <h3>Visible lines</h3>
+                                        </div>
+                                        <p id="chart-series-note" class="chart-series-note">Draw a chart to inspect the series currently on screen.</p>
+                                    </div>
+                                    <div id="chart-series-list" class="chart-series-list">
+                                        <p class="chart-series-empty">Preset-driven views and focused series cards will appear here after the first render.</p>
+                                    </div>
+                                </aside>
                             </div>
                         </div>
-                        <div id="chart-output" aria-label="Interactive chart"></div>
-                        <p id="chart-status" class="hint">Choose axes, then draw.</p>
+                        <p id="chart-status" class="hint">Choose a preset or customise the axes, then draw.</p>
                         <div id="chart-point-details" class="chart-point-details" hidden aria-live="polite"></div>
                     </div>
                 </section>
@@ -354,6 +397,8 @@
     <script src="ar-hero.js"></script>
     <script src="ar-explorer.js"></script>
     <script src="ar-pivot.js"></script>
+    <script src="ar-chart-ui.js"></script>
+    <script src="ar-chart-renderer.js"></script>
     <script src="ar-charts.js"></script>
     <script src="ar-refresh.js"></script>
     <script src="ar-export.js"></script>

@@ -6,41 +6,48 @@
     var config = window.AR.config;
     var filters = window.AR.filters;
     var state = window.AR.state;
+    var chartUi = window.AR.chartUi || {};
+    var chartRenderer = window.AR.chartRenderer || {};
     var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
-    var esc = window._arEsc;
+    var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
     var MAX_CHART_POINTS = 1000;
     var MAX_FETCH_ROWS = 10000;
-
-    var yLabels = {
-        interest_rate: 'Interest Rate (%)',
-        comparison_rate: 'Comparison Rate (%)',
-        annual_fee: 'Annual Fee ($)',
-        rba_cash_rate: 'RBA Cash Rate (%)',
-    };
-    var xLabels = {
-        collection_date: 'Date',
-        bank_name: 'Bank',
-        rate_structure: 'Structure',
-        lvr_tier: 'LVR',
-        feature_set: 'Feature',
+    var chartState = {
+        focusedTraceIndex: -1,
+        traceCount: 0,
     };
 
-    function getChartFieldValues() {
-        return {
-            xField: els.chartX ? els.chartX.value : 'collection_date',
-            yField: els.chartY ? els.chartY.value : 'interest_rate',
-            groupField: els.chartGroup ? els.chartGroup.value : '',
-            chartType: els.chartType ? els.chartType.value : 'scatter',
-        };
+    function getChartFields() {
+        return chartUi && chartUi.getChartFields
+            ? chartUi.getChartFields()
+            : {
+                xField: els.chartX ? els.chartX.value : 'collection_date',
+                yField: els.chartY ? els.chartY.value : 'interest_rate',
+                groupField: els.chartGroup ? els.chartGroup.value : '',
+                chartType: els.chartType ? els.chartType.value : 'scatter',
+                seriesLimit: els.chartSeriesLimit ? els.chartSeriesLimit.value : '12',
+            };
     }
 
-    function safeEsc(value) {
-        return typeof esc === 'function' ? esc(value) : String(value || '');
+    function labelFor(field) {
+        return chartUi && chartUi.fieldLabel ? chartUi.fieldLabel(field) : String(field || '');
+    }
+
+    function formatValue(field, value) {
+        return chartUi && chartUi.formatFieldValue
+            ? chartUi.formatFieldValue(field, value)
+            : String(value == null ? '' : value);
+    }
+
+    function formatMetric(field, value) {
+        return chartUi && chartUi.formatMetricValue
+            ? chartUi.formatMetricValue(field, value)
+            : String(value == null ? '' : value);
     }
 
     function safeHref(value) {
@@ -50,31 +57,28 @@
     function pickPointUrl(row) {
         if (!row || typeof row !== 'object') return '';
         var productUrl = String(row.product_url || '').trim();
-        if (/^https?:\/\//i.test(productUrl)) return productUrl;
-        return '';
+        return /^https?:\/\//i.test(productUrl) ? productUrl : '';
     }
 
-    function pointDetailHtml(row) {
+    function pointDetailHtml(row, fields) {
         if (!row) return '';
-        var productName = String(row.product_name || '').trim() || 'Unknown product';
-        var bankName = String(row.bank_name || '').trim() || 'Unknown bank';
-        var collectionDate = String(row.collection_date || '').trim() || 'Unknown date';
-        var rateVal = Number(row.interest_rate);
-        var comparisonVal = Number(row.comparison_rate);
+        var name = String(row.product_name || row.account_name || '').trim() || 'Unknown product';
+        var bank = String(row.bank_name || '').trim() || 'Unknown bank';
         var url = pickPointUrl(row);
-        var lines = [
-            '<strong>' + safeEsc(productName) + '</strong>',
-            '<span>' + safeEsc(bankName) + '</span>',
-            '<span>Date: ' + safeEsc(collectionDate) + '</span>',
-            '<span>Interest: ' + (Number.isFinite(rateVal) ? safeEsc(rateVal.toFixed(3) + '%') : '\u2014') + '</span>',
-            '<span>Comparison: ' + (Number.isFinite(comparisonVal) ? safeEsc(comparisonVal.toFixed(3) + '%') : '\u2014') + '</span>',
-        ];
-        if (url) {
-            lines.push('<a class="chart-point-link" href="' + safeHref(url) + '" target="_blank" rel="noopener noreferrer">Open product page</a>');
-        } else {
-            lines.push('<span>No URL available for this point.</span>');
+        var extraMetric = '';
+        if (fields.yField !== 'comparison_rate' && Number.isFinite(Number(row.comparison_rate))) {
+            extraMetric = '<span>' + esc(labelFor('comparison_rate')) + ': ' + esc(formatMetric('comparison_rate', row.comparison_rate)) + '</span>';
         }
-        return lines.join('');
+        return [
+            '<strong>' + esc(name) + '</strong>',
+            '<span>' + esc(bank) + '</span>',
+            '<span>' + esc(labelFor(fields.xField)) + ': ' + esc(formatValue(fields.xField, row[fields.xField])) + '</span>',
+            '<span>' + esc(labelFor(fields.yField)) + ': ' + esc(formatMetric(fields.yField, row[fields.yField])) + '</span>',
+            extraMetric,
+            url
+                ? '<a class="chart-point-link" href="' + safeHref(url) + '" target="_blank" rel="noopener noreferrer">Open product page</a>'
+                : '<span>No product page is available for this point.</span>',
+        ].filter(Boolean).join('');
     }
 
     function clearPointDetails() {
@@ -83,144 +87,35 @@
         els.chartPointDetails.innerHTML = '';
     }
 
-    function bindChartPointClick(rowsByTrace) {
-        if (!els.chartOutput || !els.chartPointDetails) return;
+    function resetChartOutputEvents() {
+        if (!els.chartOutput || typeof els.chartOutput.removeAllListeners !== 'function') return;
+        els.chartOutput.removeAllListeners('plotly_click');
+    }
 
-        els.chartOutput.on('plotly_click', function (ev) {
-            var points = ev && ev.points ? ev.points : [];
+    function bindChartPointClick(rowsByTrace, fields) {
+        if (!els.chartOutput || typeof els.chartOutput.on !== 'function') return;
+        resetChartOutputEvents();
+        els.chartOutput.on('plotly_click', function (event) {
+            var points = event && event.points ? event.points : [];
             if (!points.length) return;
-
             var point = points[0];
-            var curveIndex = Number(point.curveNumber);
-            var pointIndex = Number(point.pointNumber);
-            if (!Number.isFinite(pointIndex) && point.pointIndex != null) {
-                pointIndex = Number(point.pointIndex);
-            }
-            if (!Number.isFinite(pointIndex) && Array.isArray(point.pointNumber) && point.pointNumber.length) {
-                pointIndex = Number(point.pointNumber[0]);
-            }
-            var traceRows = rowsByTrace[curveIndex] || [];
-            var row = traceRows[pointIndex] || null;
+            var traceRows = rowsByTrace[Number(point.curveNumber)] || [];
+            var row = traceRows[Number(point.pointNumber)] || null;
             if (!row) {
                 clearPointDetails();
                 return;
             }
-
-            els.chartPointDetails.innerHTML = pointDetailHtml(row);
+            els.chartPointDetails.innerHTML = pointDetailHtml(row, fields);
             els.chartPointDetails.hidden = false;
         });
     }
 
-    function buildGroupedTraces(data, xField, yField, groupField, chartType) {
-        var groups = {};
-        data.forEach(function (row) {
-            var key = String(row[groupField] || 'Unknown');
-            if (!groups[key]) {
-                groups[key] = { points: [], firstRow: null };
-            }
-            groups[key].points.push({
-                x: row[xField],
-                y: Number(row[yField]),
-                row: row,
-            });
-            if (!groups[key].firstRow) groups[key].firstRow = row;
-        });
-
-        var traces = [];
-        var rowsByTrace = [];
-        Object.keys(groups).sort().forEach(function (key) {
-            var g = groups[key];
-            var points = g.points.slice();
-            points.sort(function (a, b) {
-                var ax = a.x;
-                var bx = b.x;
-                if (ax === bx) return 0;
-                if (typeof ax === 'number' && typeof bx === 'number') return ax - bx;
-                return String(ax).localeCompare(String(bx));
-            });
-
-            var x = points.map(function (p) { return p.x; });
-            var y = points.map(function (p) { return p.y; });
-
-            var traceName = key;
-            if (groupField === 'product_key' && g.firstRow) {
-                var r = g.firstRow;
-                traceName = [r.bank_name, r.product_name, r.lvr_tier, r.rate_structure].filter(Boolean).join(' | ');
-            }
-
-            var trace = { x: x, y: y, name: traceName, type: chartType };
-            if (chartType === 'scatter') {
-                trace.mode = 'lines+markers';
-                trace.marker = { size: 4 };
-            }
-            traces.push(trace);
-            rowsByTrace.push(points.map(function (p) { return p.row; }));
-        });
-
-        return { traces: traces, rowsByTrace: rowsByTrace };
-    }
-
-    function buildUngroupedTrace(data, xField, yField, chartType) {
-        var points = data.map(function (r) {
-            return { x: r[xField], y: Number(r[yField]), row: r };
-        });
-
-        points.sort(function (a, b) {
-            var ax = a.x;
-            var bx = b.x;
-            if (ax === bx) return 0;
-            if (typeof ax === 'number' && typeof bx === 'number') return ax - bx;
-            return String(ax).localeCompare(String(bx));
-        });
-
-        var trace = {
-            x: points.map(function (p) { return p.x; }),
-            y: points.map(function (p) { return p.y; }),
-            type: chartType,
-            name: yField,
-        };
-        if (chartType === 'scatter') {
-            trace.mode = 'lines+markers';
-            trace.marker = { size: 4 };
-        }
-
-        return { traces: [trace], rowsByTrace: [points.map(function (p) { return p.row; })] };
-    }
-
-    function buildTraces(data, xField, yField, groupField, chartType) {
-        if (groupField) {
-            return buildGroupedTraces(data, xField, yField, groupField, chartType);
-        }
-        return buildUngroupedTrace(data, xField, yField, chartType);
-    }
-
-    function buildLayout(xField, yField) {
-        var yLabel = yLabels[yField] || yField;
-        var xLabel = xLabels[xField] || xField;
-        var narrow = window.innerWidth <= 760;
-        var chartHeight = Math.max(280, Math.min(500, window.innerHeight - 200));
-        return {
-            title: narrow ? '' : (yLabel + ' by ' + xLabel),
-            xaxis: { title: narrow ? '' : xLabel },
-            yaxis: { title: narrow ? '' : yLabel },
-            hovermode: 'closest',
-            legend: narrow
-                ? { orientation: 'h', y: -0.25, font: { size: 10 } }
-                : { orientation: 'h', y: -0.2 },
-            margin: narrow
-                ? { t: 20, l: 40, r: 10, b: 60 }
-                : { t: 50, l: 60, r: 20, b: 80 },
-            height: chartHeight,
-        };
-    }
-
     function fetchRatesPage(params) {
         var query = new URLSearchParams(params || {});
-        return fetch(apiBase + '/rates?' + query.toString())
-            .then(function (response) {
-                if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
-                return response.json();
-            });
+        return fetch(apiBase + '/rates?' + query.toString()).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
+            return response.json();
+        });
     }
 
     async function fetchAllRateRows(baseParams, onProgress) {
@@ -229,20 +124,26 @@
         var total = 0;
         var rows = [];
         var truncated = false;
+
         do {
             var params = {};
-            Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
+            Object.keys(baseParams || {}).forEach(function (key) {
+                params[key] = baseParams[key];
+            });
             params.page = String(page);
             params.size = '1000';
+
             var response = await fetchRatesPage(params);
             var chunk = Array.isArray(response.data) ? response.data : [];
             total = Number(response.total || total || chunk.length || 0);
             lastPage = Math.max(1, Number(response.last_page || 1));
             rows = rows.concat(chunk);
+
             if (rows.length >= MAX_FETCH_ROWS) {
                 rows = rows.slice(0, MAX_FETCH_ROWS);
                 truncated = true;
             }
+
             if (typeof onProgress === 'function') {
                 onProgress({
                     page: page,
@@ -252,37 +153,63 @@
                     truncated: truncated,
                 });
             }
+
             if (truncated) break;
             page += 1;
         } while (page <= lastPage);
+
         return { rows: rows, total: total || rows.length, truncated: truncated };
     }
 
-    function sampleRows(rows, maxPoints) {
-        if (!Array.isArray(rows) || rows.length <= maxPoints) {
-            return { rows: Array.isArray(rows) ? rows : [], sampled: false };
+    function buildStatusText(payload, meta) {
+        var parts = [];
+        parts.push(payload.truncated
+            ? 'Loaded the 10,000-row chart cap from ' + payload.total.toLocaleString() + ' rows.'
+            : 'Loaded ' + payload.total.toLocaleString() + ' rows.');
+        if (meta.totalSeries > 1) {
+            parts.push('Showing ' + meta.visibleSeries.toLocaleString() + ' of ' + meta.totalSeries.toLocaleString() + ' series.');
         }
-        var step = rows.length / maxPoints;
-        var sampled = [];
-        for (var i = 0; i < maxPoints; i++) {
-            var idx = Math.min(rows.length - 1, Math.floor(i * step));
-            sampled.push(rows[idx]);
+        parts.push(meta.sampled
+            ? 'Rendered ' + meta.renderedPoints.toLocaleString() + ' sampled points from ' + meta.sourcePoints.toLocaleString() + ' visible points.'
+            : 'Rendered ' + meta.renderedPoints.toLocaleString() + ' points.');
+        return parts.join(' ');
+    }
+
+    function applyTraceFocus(traceIndex) {
+        if (!els.chartOutput || !els.chartOutput.data || !els.chartOutput.data.length) return;
+        var nextFocus = Number(traceIndex) === chartState.focusedTraceIndex ? -1 : Number(traceIndex);
+        var opacity = [];
+        var lineWidths = [];
+        var markerSizes = [];
+        var markerLineWidths = [];
+
+        chartState.focusedTraceIndex = nextFocus;
+        for (var i = 0; i < chartState.traceCount; i++) {
+            var focused = nextFocus === -1 || i === nextFocus;
+            opacity.push(focused ? 0.98 : 0.16);
+            lineWidths.push(focused ? 4 : 2.6);
+            markerSizes.push(focused ? 8 : 6);
+            markerLineWidths.push(focused ? 1.4 : 0.8);
         }
-        var lastRow = rows[rows.length - 1];
-        if (sampled[sampled.length - 1] !== lastRow) {
-            sampled[sampled.length - 1] = lastRow;
-        }
-        return { rows: sampled, sampled: true };
+
+        Plotly.restyle(els.chartOutput, {
+            opacity: opacity,
+            'line.width': lineWidths,
+            'marker.size': markerSizes,
+            'marker.line.width': markerLineWidths,
+        });
+        if (chartUi && chartUi.setFocusedSeries) chartUi.setFocusedSeries(nextFocus);
     }
 
     async function drawChart() {
         if (!els.chartOutput) return;
-        if (els.chartStatus) els.chartStatus.textContent = 'Checking chart point count...';
+        if (chartUi && chartUi.setPendingState) chartUi.setPendingState('Checking chart point count...');
+        else if (els.chartStatus) els.chartStatus.textContent = 'Checking chart point count...';
         clearPointDetails();
         clientLog('info', 'Chart load started');
 
         try {
-            var fields = getChartFieldValues();
+            var fields = getChartFields();
             var baseParams = buildFilterParams();
             baseParams.sort = fields.xField || 'collection_date';
             baseParams.dir = 'asc';
@@ -295,52 +222,77 @@
                     progress.total.toLocaleString() + ' rows (' +
                     progress.page + '/' + progress.lastPage + ' pages).';
             });
+
             var total = Number(payload.total || 0);
             var fullRows = payload.rows || [];
             if (!Number.isFinite(total) || total <= 0 || fullRows.length === 0) {
-                if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
                 Plotly.purge(els.chartOutput);
                 clearPointDetails();
+                if (els.chartStatus) els.chartStatus.textContent = 'No data to chart. Adjust filters or date range.';
+                if (chartUi && chartUi.renderSummary) chartUi.renderSummary(null, fields);
+                if (chartUi && chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, -1);
                 clientLog('warn', 'Chart load returned no data');
                 return;
             }
 
-            var sampled = sampleRows(fullRows, MAX_CHART_POINTS);
-            var data = sampled.rows;
-            var chartData = buildTraces(data, fields.xField, fields.yField, fields.groupField, fields.chartType);
-            var traces = chartData.traces || [];
-            var layout = buildLayout(fields.xField, fields.yField);
-            await Plotly.newPlot(els.chartOutput, traces, layout, { responsive: true });
-            bindChartPointClick(chartData.rowsByTrace || []);
+            var chartData = chartRenderer && chartRenderer.buildChart
+                ? chartRenderer.buildChart(fullRows, fields, MAX_CHART_POINTS)
+                : { traces: [], rowsByTrace: [], meta: null };
+
+            if (!chartData.traces.length) {
+                Plotly.purge(els.chartOutput);
+                clearPointDetails();
+                if (els.chartStatus) els.chartStatus.textContent = 'No numeric values are available for this chart configuration.';
+                if (chartUi && chartUi.renderSummary) chartUi.renderSummary(null, fields);
+                if (chartUi && chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, -1);
+                clientLog('warn', 'Chart load produced no traceable numeric points');
+                return;
+            }
+
+            chartData.meta.payloadTruncated = !!payload.truncated;
+            chartState.focusedTraceIndex = -1;
+            chartState.traceCount = chartData.traces.length;
+
+            await Plotly.newPlot(
+                els.chartOutput,
+                chartData.traces,
+                chartRenderer.buildLayout(fields, chartData),
+                chartRenderer.buildPlotConfig()
+            );
+
+            bindChartPointClick(chartData.rowsByTrace, fields);
             clearPointDetails();
+            if (chartUi && chartUi.renderSummary) chartUi.renderSummary(chartData.meta, fields);
+            if (chartUi && chartUi.renderSeriesRail) chartUi.renderSeriesRail(chartData.meta, -1);
 
             tabState.chartDrawn = true;
-            if (els.chartStatus) {
-                if (payload.truncated) {
-                    els.chartStatus.textContent =
-                        'Loaded 10,000-row cap from ' + total.toLocaleString() + ' rows and rendered ' +
-                        data.length.toLocaleString() + ' points. Narrow filters for full-fidelity charting.';
-                } else {
-                    els.chartStatus.textContent = sampled.sampled
-                        ? 'Chart rendered from a ' + data.length.toLocaleString() + '-point sample of ' + total.toLocaleString() + ' rows. Use export for the full dataset.'
-                        : 'Chart rendered (' + data.length.toLocaleString() + ' data points).';
-                }
-            }
+            if (els.chartStatus) els.chartStatus.textContent = buildStatusText(payload, chartData.meta);
+
             clientLog('info', 'Chart load completed', {
-                points: data.length,
-                sampled: sampled.sampled,
-                traceCount: traces.length,
+                points: chartData.meta.renderedPoints,
+                sampled: chartData.meta.sampled,
+                traceCount: chartData.traces.length,
                 total: total,
+                hiddenSeries: chartData.meta.hiddenSeries,
                 truncated: !!payload.truncated,
             });
-        } catch (err) {
-            if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(err.message || err);
+        } catch (error) {
             clearPointDetails();
+            Plotly.purge(els.chartOutput);
+            if (els.chartStatus) els.chartStatus.textContent = 'Error: ' + String(error && error.message ? error.message : error);
+            if (chartUi && chartUi.renderSummary) chartUi.renderSummary(null, getChartFields());
+            if (chartUi && chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, -1);
             clientLog('error', 'Chart load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: error && error.message ? error.message : String(error),
             });
         }
     }
 
-    window.AR.charts = { drawChart: drawChart };
+    if (chartUi && chartUi.bindUi) chartUi.bindUi(drawChart, applyTraceFocus);
+    if (chartUi && chartUi.setIdleState) chartUi.setIdleState();
+    if (chartUi && chartUi.syncPresetButtons) chartUi.syncPresetButtons(getChartFields());
+
+    window.AR.charts = {
+        drawChart: drawChart,
+    };
 })();
