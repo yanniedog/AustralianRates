@@ -42,6 +42,7 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
         durationMs: result.durationMs,
         componentsJson: JSON.stringify(result.components),
         integrityJson: JSON.stringify(result.integrity),
+        e2eJson: JSON.stringify(result.e2e),
         e2eAligned: result.e2e.aligned,
         e2eReasonCode: result.e2e.reasonCode,
         e2eReasonDetail: result.e2e.reasonDetail ?? null,

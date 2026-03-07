@@ -46,12 +46,12 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
         source_url = excluded.source_url,
         product_url = excluded.product_url,
         published_at = excluded.published_at,
-        cdr_product_detail_hash = excluded.cdr_product_detail_hash,
+        cdr_product_detail_hash = COALESCE(excluded.cdr_product_detail_hash, historical_savings_rates.cdr_product_detail_hash),
         data_quality_flag = excluded.data_quality_flag,
         confidence_score = excluded.confidence_score,
         retrieval_type = excluded.retrieval_type,
         parsed_at = excluded.parsed_at,
-        fetch_event_id = excluded.fetch_event_id,
+        fetch_event_id = COALESCE(excluded.fetch_event_id, historical_savings_rates.fetch_event_id),
         run_id = excluded.run_id`,
     )
     .bind(

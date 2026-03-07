@@ -55,9 +55,13 @@ afterEach(() => {
 
 describe('e2e alignment API classification', () => {
   it('passes when all latest-all payloads are valid and include the target date', async () => {
+    var urls: string[] = []
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ rows: [{ collection_date: '2026-03-06' }] }), { status: 200 })),
+      vi.fn(async (url: string) => {
+        urls.push(String(url))
+        return new Response(JSON.stringify({ rows: [{ collection_date: '2026-03-06' }] }), { status: 200 })
+      }),
     )
 
     const result = await runE2ECheck(makeEnv(makeDb()), {
@@ -66,6 +70,9 @@ describe('e2e alignment API classification', () => {
 
     expect(result.reasonCode).toBe('e2e_ok')
     expect(result.aligned).toBe(true)
+    expect(result.sourceMode).toBe('all')
+    expect(result.datasets).toHaveLength(3)
+    expect(urls.every((url) => url.includes('source_mode=all'))).toBe(true)
   })
 
   it('returns api_invalid_payload for 200 HTML/challenge responses', async () => {

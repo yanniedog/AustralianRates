@@ -1,9 +1,9 @@
-import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from '../constants'
 import type { EnvBindings } from '../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
-import { captureProbePayload } from './probe-capture'
+import { buildLatestAllProbePath, LATEST_ALL_DATASETS, LATEST_ALL_PROBE_SOURCE_MODE } from './latest-all-probe'
+import { captureProbePayload, type ProbeCapturePolicy } from './probe-capture'
 import { extractCollectionDates, normalizeIsoDateLike, parseJsonText, parseRowsPayload } from './probe-payloads'
 import { detectUpstreamBlock } from '../utils/upstream-block'
 
@@ -18,12 +18,22 @@ export type E2EReasonCode =
 
 type ApiFailureCode = 'api_no_recent_data' | 'api_unreachable' | 'api_invalid_payload'
 
+export type E2EDatasetProbeResult = {
+  dataset: 'home_loans' | 'savings' | 'term_deposits'
+  ok: boolean
+  failureCode: ApiFailureCode | null
+  detail?: string
+  fetchEventIds: number[]
+}
+
 export type E2EResult = {
   aligned: boolean
   reasonCode: E2EReasonCode
   reasonDetail?: string
   checkedAt: string
   targetCollectionDate: string | null
+  sourceMode: typeof LATEST_ALL_PROBE_SOURCE_MODE
+  datasets: E2EDatasetProbeResult[]
   criteria: {
     scheduler: boolean
     runsProgress: boolean
@@ -39,14 +49,6 @@ type PathProbeResult = {
   status: number
   detail?: string
   fetchEventId: number | null
-}
-
-type DatasetApiProbeResult = {
-  dataset: 'home_loans' | 'savings' | 'term_deposits'
-  ok: boolean
-  failureCode: ApiFailureCode | null
-  detail?: string
-  fetchEventIds: number[]
 }
 
 const SCHEDULER_MAX_AGE_HOURS = 25
@@ -121,6 +123,7 @@ async function fetchLatestAllProbe(
     url: string
     targetCollectionDate: string
     sourceType: 'probe_e2e_alignment_latest_all' | 'probe_e2e_alignment_latest_all_retry'
+    capturePolicy: ProbeCapturePolicy
     init?: RequestInit
   },
 ): Promise<PathProbeResult> {
@@ -144,6 +147,7 @@ async function fetchLatestAllProbe(
         sourceType: input.sourceType,
         sourceUrl: input.url,
         reason: 'api_unreachable',
+        policy: input.capturePolicy,
         payload: bodyText,
         status: res.status,
         headers: res.headers,
@@ -169,6 +173,7 @@ async function fetchLatestAllProbe(
         sourceType: input.sourceType,
         sourceUrl: input.url,
         reason: 'api_invalid_payload',
+        policy: input.capturePolicy,
         payload: bodyText,
         status: res.status,
         headers: res.headers,
@@ -194,6 +199,7 @@ async function fetchLatestAllProbe(
         sourceType: input.sourceType,
         sourceUrl: input.url,
         reason: 'api_invalid_payload',
+        policy: input.capturePolicy,
         payload: bodyText,
         status: res.status,
         headers: res.headers,
@@ -215,6 +221,7 @@ async function fetchLatestAllProbe(
         sourceType: input.sourceType,
         sourceUrl: input.url,
         reason: 'success',
+        policy: input.capturePolicy,
         payload: bodyText,
         status: res.status,
         headers: res.headers,
@@ -228,6 +235,7 @@ async function fetchLatestAllProbe(
       sourceType: input.sourceType,
       sourceUrl: input.url,
       reason: 'api_no_recent_data',
+      policy: input.capturePolicy,
       payload: bodyText,
       status: res.status,
       headers: res.headers,
@@ -257,6 +265,7 @@ async function fetchLatestAllProbe(
       sourceType: input.sourceType,
       sourceUrl: input.url,
       reason: 'api_unreachable',
+      policy: input.capturePolicy,
       payload: {
         error: errorMessage,
         source: input.sourceType,
@@ -278,19 +287,26 @@ async function fetchLatestAllProbe(
 async function apiHasTargetDate(
   env: EnvBindings,
   origin: string,
-  dataset: 'home_loans' | 'savings' | 'term_deposits',
-  path: string,
-  targetCollectionDate: string,
-): Promise<DatasetApiProbeResult> {
-  const baseUrl = `${normalizeOrigin(origin)}${path}/latest-all?limit=25&source_mode=scheduled`
+  input: {
+    dataset: 'home_loans' | 'savings' | 'term_deposits'
+    basePath: string
+    targetCollectionDate: string
+    capturePolicy: ProbeCapturePolicy
+  },
+): Promise<E2EDatasetProbeResult> {
+  const baseUrl = `${normalizeOrigin(origin)}${buildLatestAllProbePath(input.basePath, {
+    limit: 25,
+    sourceMode: LATEST_ALL_PROBE_SOURCE_MODE,
+  })}`
   const first = await fetchLatestAllProbe(env, {
     url: baseUrl,
-    targetCollectionDate,
+    targetCollectionDate: input.targetCollectionDate,
     sourceType: 'probe_e2e_alignment_latest_all',
+    capturePolicy: input.capturePolicy,
   })
   if (first.code === 'ok') {
     return {
-      dataset,
+      dataset: input.dataset,
       ok: true,
       failureCode: null,
       fetchEventIds: first.fetchEventId == null ? [] : [first.fetchEventId],
@@ -299,8 +315,9 @@ async function apiHasTargetDate(
 
   const retry = await fetchLatestAllProbe(env, {
     url: `${baseUrl}&cache_bust=${Date.now()}`,
-    targetCollectionDate,
+    targetCollectionDate: input.targetCollectionDate,
     sourceType: 'probe_e2e_alignment_latest_all_retry',
+    capturePolicy: input.capturePolicy,
     init: {
       headers: {
         Accept: 'application/json',
@@ -311,7 +328,7 @@ async function apiHasTargetDate(
   if (retry.code === 'ok') {
     const ids = [first.fetchEventId, retry.fetchEventId].filter((id): id is number => id != null)
     return {
-      dataset,
+      dataset: input.dataset,
       ok: true,
       failureCode: null,
       fetchEventIds: Array.from(new Set(ids)),
@@ -321,7 +338,7 @@ async function apiHasTargetDate(
   const ids = [first.fetchEventId, retry.fetchEventId].filter((id): id is number => id != null)
   const failureCode = strongestApiFailureCode([first.code, retry.code])
   return {
-    dataset,
+    dataset: input.dataset,
     ok: false,
     failureCode,
     fetchEventIds: Array.from(new Set(ids)),
@@ -336,29 +353,46 @@ async function evaluateApiCriterion(
   env: EnvBindings,
   origin: string | undefined,
   targetCollectionDate: string | null,
+  capturePolicy: ProbeCapturePolicy,
 ): Promise<{
   ok: boolean
   failureCode: ApiFailureCode | null
   detail?: string
+  datasets: E2EDatasetProbeResult[]
 }> {
   if (!targetCollectionDate) {
-    return { ok: false, failureCode: 'api_unreachable', detail: 'No target collection date available in database.' }
+    return {
+      ok: false,
+      failureCode: 'api_unreachable',
+      detail: 'No target collection date available in database.',
+      datasets: [],
+    }
   }
   if (!origin) {
-    return { ok: false, failureCode: 'api_unreachable', detail: 'No origin configured for E2E API validation.' }
+    return {
+      ok: false,
+      failureCode: 'api_unreachable',
+      detail: 'No origin configured for E2E API validation.',
+      datasets: [],
+    }
   }
 
   try {
-    const [home, savings, td] = await Promise.all([
-      apiHasTargetDate(env, origin, 'home_loans', API_BASE_PATH, targetCollectionDate),
-      apiHasTargetDate(env, origin, 'savings', SAVINGS_API_BASE_PATH, targetCollectionDate),
-      apiHasTargetDate(env, origin, 'term_deposits', TD_API_BASE_PATH, targetCollectionDate),
-    ])
-    const results = [home, savings, td]
+    const results = await Promise.all(
+      LATEST_ALL_DATASETS.map((config) =>
+        apiHasTargetDate(env, origin, {
+          dataset: config.dataset,
+          basePath: config.basePath,
+          targetCollectionDate,
+          capturePolicy,
+        }),
+      ),
+    )
     if (results.every((result) => result.ok)) {
       return {
         ok: true,
         failureCode: null,
+        datasets: results,
       }
     }
 
@@ -366,26 +400,26 @@ async function evaluateApiCriterion(
     const failureCode = strongestApiFailureCode(
       failed.map((item) => item.failureCode).filter((code): code is ApiFailureCode => Boolean(code)),
     )
-    const detail = failed
-      .map((item) => `${item.dataset}=${item.failureCode}:${item.detail || 'no_detail'}`)
-      .join('; ')
+    const detail = failed.map((item) => `${item.dataset}=${item.failureCode}:${item.detail || 'no_detail'}`).join('; ')
     return {
       ok: false,
       failureCode,
       detail: `target=${targetCollectionDate} ${detail}`,
+      datasets: results,
     }
   } catch (error) {
     return {
       ok: false,
       failureCode: 'api_unreachable',
       detail: (error as Error)?.message || String(error),
+      datasets: [],
     }
   }
 }
 
 export async function runE2ECheck(
   env: EnvBindings,
-  options?: { origin?: string },
+  options?: { origin?: string; capturePolicy?: ProbeCapturePolicy },
 ): Promise<E2EResult> {
   const checkedAt = new Date().toISOString()
   const melbourneDate = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne').date
@@ -395,7 +429,7 @@ export async function runE2ECheck(
     const [scheduler, hasStuck, apiEval] = await Promise.all([
       hasRecentDailyRun(env.DB),
       hasStuckRun(env.DB),
-      evaluateApiCriterion(env, options?.origin, targetCollectionDate),
+      evaluateApiCriterion(env, options?.origin, targetCollectionDate, options?.capturePolicy ?? 'sample_success'),
     ])
     const runsProgress = !hasStuck
     const apiServesLatest = apiEval.ok
@@ -420,6 +454,8 @@ export async function runE2ECheck(
       reasonDetail,
       checkedAt,
       targetCollectionDate,
+      sourceMode: LATEST_ALL_PROBE_SOURCE_MODE,
+      datasets: apiEval.datasets,
       criteria: {
         scheduler,
         runsProgress,
@@ -433,6 +469,8 @@ export async function runE2ECheck(
       reasonDetail: (error as Error)?.message || String(error),
       checkedAt,
       targetCollectionDate: melbourneDate,
+      sourceMode: LATEST_ALL_PROBE_SOURCE_MODE,
+      datasets: [],
       criteria: {
         scheduler: false,
         runsProgress: false,

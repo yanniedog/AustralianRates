@@ -1,11 +1,11 @@
-import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from '../constants'
 import { runIntegrityChecks } from '../db/integrity-checks'
+import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
 import type { EnvBindings } from '../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
-import { captureProbePayload } from './probe-capture'
+import { captureProbePayload, type ProbeCapturePolicy } from './probe-capture'
 import { isJsonObject, parseJsonText, parseRowsPayload } from './probe-payloads'
 import { detectUpstreamBlock } from '../utils/upstream-block'
 
@@ -49,6 +49,7 @@ async function requestProbe(
     path: string
     sourceType: string
     validation: ProbeValidation
+    capturePolicy: ProbeCapturePolicy
   },
 ): Promise<{ ok: boolean; status: number; durationMs: number; detail?: string; fetchEventId: number | null }> {
   const url = `${normalizeOrigin(input.origin)}${input.path}`
@@ -72,6 +73,7 @@ async function requestProbe(
         sourceType: input.sourceType,
         sourceUrl: url,
         reason: 'api_unreachable',
+        policy: input.capturePolicy,
         payload: bodyText,
         status: res.status,
         headers: res.headers,
@@ -110,6 +112,7 @@ async function requestProbe(
         sourceType: input.sourceType,
         sourceUrl: url,
         reason: 'api_invalid_payload',
+        policy: input.capturePolicy,
         payload: bodyText,
         status: res.status,
         headers: res.headers,
@@ -129,6 +132,7 @@ async function requestProbe(
       sourceType: input.sourceType,
       sourceUrl: url,
       reason: 'success',
+      policy: input.capturePolicy,
       payload: bodyText,
       status: res.status,
       headers: res.headers,
@@ -157,6 +161,7 @@ async function requestProbe(
       sourceType: input.sourceType,
       sourceUrl: url,
       reason: 'api_unreachable',
+      policy: input.capturePolicy,
       payload: {
         error: (error as Error)?.message || String(error),
         path: input.path,
@@ -181,25 +186,34 @@ function withProbeDetail(input: { detail?: string; fetchEventId: number | null }
   return `${input.detail || 'probe_captured'} fetch_event_id=${input.fetchEventId}`
 }
 
-async function checkDataset(env: EnvBindings, origin: string, key: string, basePath: string): Promise<ComponentStatus[]> {
+async function checkDataset(
+  env: EnvBindings,
+  origin: string,
+  key: string,
+  basePath: string,
+  capturePolicy: ProbeCapturePolicy,
+): Promise<ComponentStatus[]> {
   const [health, filters, latestAll] = await Promise.all([
     requestProbe(env, {
       origin,
       path: `${basePath}/health`,
       sourceType: 'probe_site_health_dataset_health',
       validation: 'json_object',
+      capturePolicy,
     }),
     requestProbe(env, {
       origin,
       path: `${basePath}/filters`,
       sourceType: 'probe_site_health_dataset_filters',
       validation: 'json_object',
+      capturePolicy,
     }),
     requestProbe(env, {
       origin,
-      path: `${basePath}/latest-all?limit=1&source_mode=all`,
+      path: buildLatestAllProbePath(basePath, { limit: 1 }),
       sourceType: 'probe_site_health_dataset_latest_all',
       validation: 'rows_payload',
+      capturePolicy,
     }),
   ])
   return [
@@ -238,6 +252,7 @@ export async function runSiteHealthChecks(
   const runId = `health:${input.triggerSource}:${checkedAt}:${crypto.randomUUID()}`
   const startedAt = Date.now()
   const origin = normalizeOrigin(input.origin)
+  const capturePolicy: ProbeCapturePolicy = input.triggerSource === 'manual' ? 'always' : 'sample_success'
   const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne', {
     includeAnomalyProbes: isEnabled(env.FEATURE_INTEGRITY_PROBES_ENABLED),
   }).catch((error) => ({
@@ -254,25 +269,26 @@ export async function runSiteHealthChecks(
       ],
     }))
 
-  const [homeComponents, savingsComponents, tdComponents, homepage, integrity, e2e, logs] = await Promise.all([
-    checkDataset(env, origin, 'home_loans', API_BASE_PATH),
-    checkDataset(env, origin, 'savings', SAVINGS_API_BASE_PATH),
-    checkDataset(env, origin, 'term_deposits', TD_API_BASE_PATH),
+  const [datasetComponents, homepage, integrity, e2e, logs] = await Promise.all([
+    Promise.all(
+      LATEST_ALL_DATASETS.map((dataset) =>
+        checkDataset(env, origin, dataset.dataset, dataset.basePath, capturePolicy),
+      ),
+    ),
     requestProbe(env, {
       origin,
       path: '/',
       sourceType: 'probe_site_health_homepage',
       validation: 'none',
+      capturePolicy,
     }),
     integrityPromise,
-    runE2ECheck(env, { origin }),
+    runE2ECheck(env, { origin, capturePolicy }),
     queryLogs(env.DB, { limit: 200 }),
   ])
 
   const components: ComponentStatus[] = [
-    ...homeComponents,
-    ...savingsComponents,
-    ...tdComponents,
+    ...datasetComponents.flat(),
     {
       key: 'homepage',
       ok: homepage.ok,

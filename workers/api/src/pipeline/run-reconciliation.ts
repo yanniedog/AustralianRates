@@ -43,6 +43,10 @@ export type ReadyFinalizationReconciliation = {
   skipped_rows: number
   errors: string[]
   dry_run: boolean
+  pass_count?: number
+  passes?: Array<ReadyFinalizationReconciliation & { pass: number }>
+  stopped_reason?: 'dry_run' | 'exhausted' | 'max_passes'
+  stalled?: boolean
 }
 
 export type StaleRunClosureReconciliation = {
@@ -308,11 +312,43 @@ export async function runLifecycleReconciliation(
   const startedAt = Date.now()
   const dryRun = Boolean(options?.dryRun)
   const checkedAt = nowIso()
-  const readyFinalizations = await reconcileReadyFinalizations(db, {
-    dryRun,
-    idleMinutes: options?.idleMinutes,
-    maxRows: options?.maxRows,
-  })
+  const maxPasses = dryRun ? 1 : 10
+  const readyPasses: Array<ReadyFinalizationReconciliation & { pass: number }> = []
+  for (let pass = 1; pass <= maxPasses; pass += 1) {
+    const result = await reconcileReadyFinalizations(db, {
+      dryRun,
+      idleMinutes: options?.idleMinutes,
+      maxRows: options?.maxRows,
+    })
+    readyPasses.push({
+      ...result,
+      pass,
+    })
+    if (dryRun || result.scanned_rows === 0) {
+      break
+    }
+  }
+
+  const readyFinalizations: ReadyFinalizationReconciliation = {
+    cutoff_iso: readyPasses[readyPasses.length - 1]?.cutoff_iso || checkedAt,
+    idle_minutes: readyPasses[0]?.idle_minutes || Math.max(1, Math.floor(Number(options?.idleMinutes) || 5)),
+    scanned_rows: readyPasses.reduce((sum, pass) => sum + pass.scanned_rows, 0),
+    finalized_rows: readyPasses.reduce((sum, pass) => sum + pass.finalized_rows, 0),
+    skipped_rows: readyPasses.reduce((sum, pass) => sum + pass.skipped_rows, 0),
+    errors: readyPasses.flatMap((pass) => pass.errors).slice(-20),
+    dry_run: dryRun,
+    pass_count: readyPasses.length,
+    passes: readyPasses,
+    stopped_reason: dryRun
+      ? 'dry_run'
+      : readyPasses[readyPasses.length - 1]?.scanned_rows === 0
+        ? 'exhausted'
+        : 'max_passes',
+    stalled:
+      !dryRun &&
+      readyPasses.reduce((sum, pass) => sum + pass.scanned_rows, 0) > 0 &&
+      readyPasses.reduce((sum, pass) => sum + pass.finalized_rows, 0) === 0,
+  }
   const staleRuns = await closeStaleRunningRuns(db, {
     dryRun,
     staleRunMinutes: options?.staleRunMinutes,

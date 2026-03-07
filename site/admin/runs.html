@@ -16,7 +16,15 @@
         .admin-runs .back a { color: var(--brand); text-decoration: none; }
         .admin-runs .actions { margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
         .admin-runs .actions button { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
-        .admin-runs .actions input[type="date"] { padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--input-bg); color: var(--text); }
+        .admin-runs .actions input[type="date"],
+        .admin-runs .actions input[type="number"] {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--input-bg);
+            color: var(--text);
+        }
+        .admin-runs .actions input[type="number"] { width: 120px; }
         .admin-runs .actions button.primary { background: var(--brand); color: #fff; }
         .admin-runs .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
         .admin-runs .status { margin-left: 0.5rem; font-size: 0.9rem; color: var(--muted); min-height: 1.2rem; }
@@ -30,6 +38,7 @@
             box-shadow: var(--panel-shadow);
         }
         .admin-runs h2 { margin: 0 0 0.75rem; font-size: 1.05rem; }
+        .admin-runs h3 { margin: 0 0 0.6rem; font-size: 0.95rem; }
         .admin-runs .run-grid { display: grid; gap: 0.75rem; }
         .admin-runs .run-item { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
         .admin-runs .run-item .head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-weight: 600; margin-bottom: 0.35rem; }
@@ -38,6 +47,7 @@
         .admin-runs .summary-cell { border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem; }
         .admin-runs .summary-cell .label { color: var(--muted); font-size: 0.8rem; }
         .admin-runs .summary-cell .value { font-size: 1.05rem; font-weight: 700; margin-top: 0.15rem; }
+        .admin-runs .backlog-block + .backlog-block { margin-top: 1rem; }
         .admin-runs table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
         .admin-runs th, .admin-runs td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.4rem; text-align: left; vertical-align: top; }
         .admin-runs th { color: var(--muted); font-weight: 600; }
@@ -99,6 +109,25 @@
         </section>
 
         <section class="section-card">
+            <h2>Operations Backlog</h2>
+            <div class="actions">
+                <button type="button" class="secondary" id="refresh-backlog">Refresh backlog</button>
+                <button type="button" class="secondary" id="dry-run-reconcile">Dry-run reconcile</button>
+                <button type="button" class="primary" id="run-reconcile">Run reconcile</button>
+                <input type="number" id="lineage-lookback-days" min="1" max="3650" value="365" title="Lineage repair lookback days">
+                <button type="button" class="secondary" id="dry-run-lineage">Dry-run lineage repair</button>
+                <button type="button" class="primary" id="run-lineage">Run lineage repair</button>
+            </div>
+            <div id="backlog-summary" class="summary-grid"></div>
+            <div class="status" id="backlog-status"></div>
+            <div id="backlog-tables"></div>
+            <details>
+                <summary>Show latest reconcile/repair payload</summary>
+                <pre id="backlog-output">No backlog action run yet.</pre>
+            </details>
+        </section>
+
+        <section class="section-card">
             <h2>Recent Completed Runs</h2>
             <div id="recent-runs" class="run-grid"></div>
         </section>
@@ -127,15 +156,26 @@
             var recentRuns = document.getElementById('recent-runs');
             var historicalSummary = document.getElementById('historical-summary');
             var historicalRows = document.getElementById('historical-rows');
+            var backlogSummary = document.getElementById('backlog-summary');
+            var backlogStatus = document.getElementById('backlog-status');
+            var backlogTables = document.getElementById('backlog-tables');
+            var backlogOutput = document.getElementById('backlog-output');
             var dailyBtn = document.getElementById('trigger-daily');
             var backfillBtn = document.getElementById('trigger-backfill');
             var historicalBtn = document.getElementById('trigger-historical');
             var historicalStart = document.getElementById('historical-start-date');
             var historicalEnd = document.getElementById('historical-end-date');
             var refreshBtn = document.getElementById('refresh-now');
+            var refreshBacklogBtn = document.getElementById('refresh-backlog');
+            var dryRunReconcileBtn = document.getElementById('dry-run-reconcile');
+            var runReconcileBtn = document.getElementById('run-reconcile');
+            var lineageLookbackDays = document.getElementById('lineage-lookback-days');
+            var dryRunLineageBtn = document.getElementById('dry-run-lineage');
+            var runLineageBtn = document.getElementById('run-lineage');
             var inFlight = false;
             var pollTimer = null;
             var pollIntervalMs = 10000;
+            var backlogButtons = [refreshBacklogBtn, dryRunReconcileBtn, runReconcileBtn, dryRunLineageBtn, runLineageBtn];
 
             function isoDate(daysAgo) {
                 var d = new Date();
@@ -158,9 +198,32 @@
             }
 
             function fmtTs(value) {
-                if (!value) return '—';
+                if (!value) return '--';
                 if (!timeUtils.formatCheckedAt) return String(value);
                 return timeUtils.formatCheckedAt(value).text || String(value);
+            }
+
+            function datasetLabel(value) {
+                var map = {
+                    home_loans: 'Home loans',
+                    savings: 'Savings',
+                    term_deposits: 'Term deposits'
+                };
+                return map[value] || String(value || '');
+            }
+
+            function lenderLabel(row) {
+                return row && (row.lender_code || row.bank_name) ? (row.lender_code || row.bank_name) : '--';
+            }
+
+            function renderSummaryGrid(target, cells) {
+                target.innerHTML = '';
+                cells.forEach(function (cell) {
+                    target.insertAdjacentHTML(
+                        'beforeend',
+                        '<div class="summary-cell"><div class="label">' + esc(cell.label) + '</div><div class="value">' + esc(cell.value) + '</div></div>'
+                    );
+                });
             }
 
             function renderRunList(target, runs, emptyText) {
@@ -173,7 +236,7 @@
                     var pct = Number(run.progress_pct || 0);
                     if (!isFinite(pct)) pct = 0;
                     var started = fmtTs(run.started_at);
-                    var finished = run.finished_at ? fmtTs(run.finished_at) : '—';
+                    var finished = run.finished_at ? fmtTs(run.finished_at) : '--';
                     var html = ''
                         + '<div class="run-item">'
                         + '  <div class="head"><span class="mono">' + esc(run.run_id || '') + '</span><span>' + esc(run.status || '') + '</span></div>'
@@ -191,21 +254,14 @@
                 var summary = snapshot && snapshot.summary ? snapshot.summary : {};
                 var rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
 
-                var cells = [
+                renderSummaryGrid(historicalSummary, [
                     { label: 'Datasets', value: asInt(summary.datasets_total) },
                     { label: 'Active', value: asInt(summary.active_datasets) },
                     { label: 'Pending', value: asInt(summary.pending_datasets) },
                     { label: 'Completed', value: asInt(summary.completed_datasets) },
-                    { label: 'Earliest Cursor', value: summary.earliest_cursor_date || '—' },
-                    { label: 'Latest Cursor', value: summary.latest_cursor_date || '—' }
-                ];
-                historicalSummary.innerHTML = '';
-                cells.forEach(function (cell) {
-                    historicalSummary.insertAdjacentHTML(
-                        'beforeend',
-                        '<div class="summary-cell"><div class="label">' + esc(cell.label) + '</div><div class="value">' + esc(cell.value) + '</div></div>'
-                    );
-                });
+                    { label: 'Earliest Cursor', value: summary.earliest_cursor_date || '--' },
+                    { label: 'Latest Cursor', value: summary.latest_cursor_date || '--' }
+                ]);
 
                 historicalRows.innerHTML = '';
                 if (rows.length === 0) {
@@ -218,17 +274,105 @@
                         'beforeend',
                         '<tr>'
                         + '<td class="mono">' + esc(row.dataset_key || '') + '</td>'
-                        + '<td>' + esc(row.first_coverage_date || '—') + '</td>'
-                        + '<td>' + esc(row.cursor_date || '—') + '</td>'
+                        + '<td>' + esc(row.first_coverage_date || '--') + '</td>'
+                        + '<td>' + esc(row.cursor_date || '--') + '</td>'
                         + '<td>' + esc(row.status || '') + '</td>'
                         + '<td>' + asInt(row.empty_streak) + '</td>'
-                        + '<td>' + esc(row.last_tick_status || '—') + '</td>'
-                        + '<td class="mono">' + esc(row.last_tick_run_id || '—') + '</td>'
-                        + '<td>' + esc(row.last_tick_message || '—') + '</td>'
+                        + '<td>' + esc(row.last_tick_status || '--') + '</td>'
+                        + '<td class="mono">' + esc(row.last_tick_run_id || '--') + '</td>'
+                        + '<td>' + esc(row.last_tick_message || '--') + '</td>'
                         + '<td>' + esc(updated) + '</td>'
                         + '</tr>'
                     );
                 });
+            }
+
+            function renderBacklogTable(title, data, oldestKey, newestKey) {
+                var rows = data && Array.isArray(data.rows) ? data.rows : [];
+                if (!rows.length) {
+                    return '<div class="backlog-block"><h3>' + esc(title) + '</h3><div class="run-item"><div class="meta">No rows.</div></div></div>';
+                }
+                return '<div class="backlog-block"><h3>' + esc(title) + '</h3><div style="overflow:auto;"><table><thead><tr><th>Dataset</th><th>Lender</th><th>Count</th><th>Oldest</th><th>Newest</th></tr></thead><tbody>'
+                    + rows.map(function (row) {
+                        return '<tr>'
+                            + '<td>' + esc(datasetLabel(row.dataset_kind)) + '</td>'
+                            + '<td>' + esc(lenderLabel(row)) + '</td>'
+                            + '<td>' + esc(asInt(row.count)) + '</td>'
+                            + '<td class="mono">' + esc(row[oldestKey] || '--') + '</td>'
+                            + '<td class="mono">' + esc(row[newestKey] || '--') + '</td>'
+                            + '</tr>';
+                    }).join('')
+                    + '</tbody></table></div></div>';
+            }
+
+            function renderBacklog(backlog) {
+                var ready = backlog && backlog.ready_finalizations ? backlog.ready_finalizations : { total: 0, rows: [] };
+                var stale = backlog && backlog.stale_running_runs ? backlog.stale_running_runs : { total: 0, rows: [] };
+                var missing = backlog && backlog.missing_fetch_event_lineage ? backlog.missing_fetch_event_lineage : { total: 0, rows: [] };
+
+                renderSummaryGrid(backlogSummary, [
+                    { label: 'Ready finalizations', value: asInt(ready.total) },
+                    { label: 'Stale running rows', value: asInt(stale.total) },
+                    { label: 'Missing lineage rows', value: asInt(missing.total) },
+                    { label: 'Lineage lookback days', value: missing.lookback_days || (lineageLookbackDays && lineageLookbackDays.value) || 365 },
+                    { label: 'Ready cutoff', value: ready.cutoff_iso || '--' },
+                    { label: 'Stale cutoff', value: stale.cutoff_iso || '--' }
+                ]);
+
+                backlogTables.innerHTML = [
+                    renderBacklogTable('Ready to finalize', ready, 'oldest_updated_at', 'newest_updated_at'),
+                    renderBacklogTable('Stale running runs', stale, 'oldest_updated_at', 'newest_updated_at'),
+                    renderBacklogTable('Missing fetch_event lineage', missing, 'oldest_collection_date', 'newest_collection_date')
+                ].join('');
+            }
+
+            function setBacklogButtonsDisabled(disabled) {
+                backlogButtons.forEach(function (button) {
+                    if (button) button.disabled = disabled;
+                });
+                if (lineageLookbackDays) lineageLookbackDays.disabled = disabled;
+            }
+
+            function loadBacklog() {
+                backlogStatus.textContent = 'Loading backlog...';
+                var lookbackDays = Math.max(1, asInt(lineageLookbackDays && lineageLookbackDays.value || 365));
+                return portal.fetchAdmin('/diagnostics/backlog?lookback_days=' + encodeURIComponent(lookbackDays), { cache: 'no-store' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || !d.ok) throw new Error('Backlog response invalid');
+                        renderBacklog(d.backlog || {});
+                        backlogStatus.textContent = 'Backlog refreshed.';
+                    })
+                    .catch(function (e) {
+                        var msg = e && e.message ? e.message : 'Failed to load backlog';
+                        backlogStatus.textContent = msg;
+                        backlogTables.innerHTML = '<div class="mono">' + esc(msg) + '</div>';
+                    });
+            }
+
+            function runBacklogAction(path, payload, pendingText, successText) {
+                setBacklogButtonsDisabled(true);
+                backlogStatus.textContent = pendingText;
+                return portal.fetchAdmin(path, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || !d.ok) {
+                            throw new Error(d && d.error && d.error.message ? d.error.message : 'Action failed');
+                        }
+                        backlogOutput.textContent = JSON.stringify(d.result || d, null, 2);
+                        backlogStatus.textContent = successText;
+                        return Promise.all([loadBacklog(), loadRealtime()]);
+                    })
+                    .catch(function (e) {
+                        backlogStatus.textContent = e && e.message ? e.message : 'Action failed';
+                    })
+                    .finally(function () {
+                        setBacklogButtonsDisabled(false);
+                    });
             }
 
             function scheduleNextPoll(delayMs) {
@@ -237,9 +381,9 @@
             }
 
             function loadRealtime() {
-                if (inFlight) return;
+                if (inFlight) return Promise.resolve();
                 inFlight = true;
-                portal.fetchAdmin('/runs/realtime?limit=15').then(function (r) { return r.json(); }).then(function (d) {
+                return portal.fetchAdmin('/runs/realtime?limit=15').then(function (r) { return r.json(); }).then(function (d) {
                     runsOutput.textContent = JSON.stringify(d, null, 2);
                     if (!d || !d.ok) throw new Error('Realtime response invalid');
 
@@ -273,7 +417,7 @@
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         runStatus.textContent = d.ok ? 'Daily run started.' : (d.error && d.error.message ? d.error.message : 'Failed');
-                        loadRealtime();
+                        return Promise.all([loadRealtime(), loadBacklog()]);
                     })
                     .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
                     .finally(function () { dailyBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
@@ -286,7 +430,7 @@
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         runStatus.textContent = d.ok ? 'Backfill started.' : (d.error && d.error.message ? d.error.message : 'Failed');
-                        loadRealtime();
+                        return Promise.all([loadRealtime(), loadBacklog()]);
                     })
                     .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
                     .finally(function () { backfillBtn.disabled = false; setTimeout(function () { runStatus.textContent = ''; }, 5000); });
@@ -310,26 +454,54 @@
                     .then(function (d) {
                         if (!d || !d.ok) {
                             runStatus.textContent = (d && d.error && d.error.message) ? d.error.message : 'Failed';
-                            return;
+                            return Promise.resolve();
                         }
                         runStatus.textContent = 'Historical pull queued: ' + String(d.run_id || '')
                             + ' (' + String(d.tasks_queued || 0) + ' tasks)';
-                        loadRealtime();
+                        return Promise.all([loadRealtime(), loadBacklog()]);
                     })
                     .catch(function (e) { runStatus.textContent = e && e.message ? e.message : 'Error'; })
                     .finally(function () {
                         historicalBtn.disabled = false;
-                        setTimeout(function () {
-                            if (runStatus.textContent.indexOf('Historical pull started') !== 0) runStatus.textContent = '';
-                        }, 7000);
+                        setTimeout(function () { runStatus.textContent = ''; }, 7000);
                     });
             });
 
             refreshBtn.addEventListener('click', function () {
-                loadRealtime();
+                Promise.all([loadRealtime(), loadBacklog()]);
             });
 
-            loadRealtime();
+            refreshBacklogBtn.addEventListener('click', function () {
+                loadBacklog();
+            });
+
+            dryRunReconcileBtn.addEventListener('click', function () {
+                runBacklogAction('/runs/reconcile', { dry_run: true }, 'Running reconciliation dry-run...', 'Reconciliation dry-run completed.');
+            });
+
+            runReconcileBtn.addEventListener('click', function () {
+                runBacklogAction('/runs/reconcile', { dry_run: false }, 'Running reconciliation...', 'Reconciliation completed.');
+            });
+
+            dryRunLineageBtn.addEventListener('click', function () {
+                runBacklogAction(
+                    '/runs/repair-lineage',
+                    { dry_run: true, lookback_days: Math.max(1, asInt(lineageLookbackDays && lineageLookbackDays.value || 365)) },
+                    'Running lineage repair dry-run...',
+                    'Lineage repair dry-run completed.'
+                );
+            });
+
+            runLineageBtn.addEventListener('click', function () {
+                runBacklogAction(
+                    '/runs/repair-lineage',
+                    { dry_run: false, lookback_days: Math.max(1, asInt(lineageLookbackDays && lineageLookbackDays.value || 365)) },
+                    'Running lineage repair...',
+                    'Lineage repair completed.'
+                );
+            });
+
+            Promise.all([loadRealtime(), loadBacklog()]);
         })();
     </script>
 </body>

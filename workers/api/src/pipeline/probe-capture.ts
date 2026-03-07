@@ -11,14 +11,20 @@ export type ProbeCaptureReason =
   | 'api_no_recent_data'
   | 'api_unreachable'
 
+export type ProbeCapturePolicy = 'sample_success' | 'always'
+
 export type ProbeCaptureResult = {
   captured: boolean
   sampledSuccess: boolean
   fetchEventId: number | null
 }
 
-function shouldCapture(reason: ProbeCaptureReason): { capture: boolean; sampledSuccess: boolean } {
+function shouldCapture(
+  reason: ProbeCaptureReason,
+  policy: ProbeCapturePolicy,
+): { capture: boolean; sampledSuccess: boolean } {
   if (reason !== 'success') return { capture: true, sampledSuccess: false }
+  if (policy === 'always') return { capture: true, sampledSuccess: false }
   const sampled = Math.random() < SUCCESS_SAMPLE_RATE
   return { capture: sampled, sampledSuccess: sampled }
 }
@@ -48,6 +54,7 @@ export async function captureProbePayload(
     sourceType: string
     sourceUrl: string
     reason: ProbeCaptureReason
+    policy?: ProbeCapturePolicy
     payload: unknown
     status?: number | null
     headers?: Headers | Record<string, string> | null
@@ -55,7 +62,7 @@ export async function captureProbePayload(
     note?: string | null
   },
 ): Promise<ProbeCaptureResult> {
-  const decision = shouldCapture(input.reason)
+  const decision = shouldCapture(input.reason, input.policy ?? 'sample_success')
   if (!decision.capture) {
     return { captured: false, sampledSuccess: false, fetchEventId: null }
   }

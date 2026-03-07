@@ -6,6 +6,7 @@ export type HealthCheckRunRow = {
   duration_ms: number
   components_json: string
   integrity_json: string
+  e2e_json?: string | null
   e2e_aligned: number
   e2e_reason_code: string | null
   e2e_reason_detail: string | null
@@ -21,6 +22,7 @@ export type InsertHealthCheckRunInput = {
   durationMs: number
   componentsJson: string
   integrityJson: string
+  e2eJson: string
   e2eAligned: boolean
   e2eReasonCode: string | null
   e2eReasonDetail: string | null
@@ -29,6 +31,17 @@ export type InsertHealthCheckRunInput = {
 }
 
 const HEALTH_RUN_RETENTION_DAYS = 7
+
+function legacyE2EDetailPayload(input: InsertHealthCheckRunInput): string | null {
+  try {
+    return JSON.stringify({
+      reason_detail: input.e2eReasonDetail,
+      e2e: JSON.parse(input.e2eJson),
+    })
+  } catch {
+    return input.e2eReasonDetail
+  }
+}
 
 /**
  * Prune health_check_runs: delete rows older than HEALTH_RUN_RETENTION_DAYS.
@@ -52,29 +65,56 @@ export async function pruneHealthCheckRuns(db: D1Database): Promise<void> {
  */
 export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCheckRunInput): Promise<void> {
   try {
-    await db
-      .prepare(
-        `INSERT INTO health_check_runs (
-           run_id, checked_at, trigger_source, overall_ok, duration_ms,
-           components_json, integrity_json, e2e_aligned, e2e_reason_code, e2e_reason_detail,
-           actionable_json, failures_json
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
-      )
-      .bind(
-        input.runId,
-        input.checkedAt,
-        input.triggerSource,
-        input.overallOk ? 1 : 0,
-        input.durationMs,
-        input.componentsJson,
-        input.integrityJson,
-        input.e2eAligned ? 1 : 0,
-        input.e2eReasonCode,
-        input.e2eReasonDetail,
-        input.actionableJson,
-        input.failuresJson,
-      )
-      .run()
+    try {
+      await db
+        .prepare(
+          `INSERT INTO health_check_runs (
+             run_id, checked_at, trigger_source, overall_ok, duration_ms,
+             components_json, integrity_json, e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail,
+             actionable_json, failures_json
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+        )
+        .bind(
+          input.runId,
+          input.checkedAt,
+          input.triggerSource,
+          input.overallOk ? 1 : 0,
+          input.durationMs,
+          input.componentsJson,
+          input.integrityJson,
+          input.e2eJson,
+          input.e2eAligned ? 1 : 0,
+          input.e2eReasonCode,
+          input.e2eReasonDetail,
+          input.actionableJson,
+          input.failuresJson,
+        )
+        .run()
+    } catch {
+      await db
+        .prepare(
+          `INSERT INTO health_check_runs (
+             run_id, checked_at, trigger_source, overall_ok, duration_ms,
+             components_json, integrity_json, e2e_aligned, e2e_reason_code, e2e_reason_detail,
+             actionable_json, failures_json
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+        )
+        .bind(
+          input.runId,
+          input.checkedAt,
+          input.triggerSource,
+          input.overallOk ? 1 : 0,
+          input.durationMs,
+          input.componentsJson,
+          input.integrityJson,
+          input.e2eAligned ? 1 : 0,
+          input.e2eReasonCode,
+          legacyE2EDetailPayload(input),
+          input.actionableJson,
+          input.failuresJson,
+        )
+        .run()
+    }
     await pruneHealthCheckRuns(db)
   } catch {
     // Table may not exist if migration 0019_health_checks_and_log_codes.sql not yet applied.
@@ -87,16 +127,29 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
  */
 export async function getLatestHealthCheckRun(db: D1Database): Promise<HealthCheckRunRow | null> {
   try {
-    const row = await db
-      .prepare(
-        `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
-                e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
-         FROM health_check_runs
-         ORDER BY checked_at DESC
-         LIMIT 1`,
-      )
-      .first<HealthCheckRunRow>()
-    return row ?? null
+    try {
+      const row = await db
+        .prepare(
+          `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
+                  e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+           FROM health_check_runs
+           ORDER BY checked_at DESC
+           LIMIT 1`,
+        )
+        .first<HealthCheckRunRow>()
+      return row ?? null
+    } catch {
+      const row = await db
+        .prepare(
+          `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
+                  e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+           FROM health_check_runs
+           ORDER BY checked_at DESC
+           LIMIT 1`,
+        )
+        .first<HealthCheckRunRow>()
+      return row ?? null
+    }
   } catch {
     return null
   }
@@ -108,17 +161,31 @@ export async function getLatestHealthCheckRun(db: D1Database): Promise<HealthChe
 export async function listHealthCheckRuns(db: D1Database, limit = 48): Promise<HealthCheckRunRow[]> {
   try {
     const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)))
-    const rows = await db
-      .prepare(
-        `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
-                e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
-         FROM health_check_runs
-         ORDER BY checked_at DESC
-         LIMIT ?1`,
-      )
-      .bind(safeLimit)
-      .all<HealthCheckRunRow>()
-    return rows.results ?? []
+    try {
+      const rows = await db
+        .prepare(
+          `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
+                  e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+           FROM health_check_runs
+           ORDER BY checked_at DESC
+           LIMIT ?1`,
+        )
+        .bind(safeLimit)
+        .all<HealthCheckRunRow>()
+      return rows.results ?? []
+    } catch {
+      const rows = await db
+        .prepare(
+          `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
+                  e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+           FROM health_check_runs
+           ORDER BY checked_at DESC
+           LIMIT ?1`,
+        )
+        .bind(safeLimit)
+        .all<HealthCheckRunRow>()
+      return rows.results ?? []
+    }
   } catch {
     return []
   }

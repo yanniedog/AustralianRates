@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { SITE_HEALTH_CRON_EXPRESSION } from '../constants'
 import { getLatestHealthCheckRun, insertHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
+import type { E2EResult } from '../pipeline/e2e-alignment'
 import { runSiteHealthChecks } from '../pipeline/site-health'
 import type { AppContext } from '../types'
 import { withNoStore } from '../utils/http'
@@ -15,11 +16,7 @@ type ParsedHealthRun = {
   duration_ms: number
   components: unknown
   integrity: unknown
-  e2e: {
-    aligned: boolean
-    reasonCode: string | null
-    reasonDetail: string | null
-  }
+  e2e: E2EResult
   actionable: unknown
   failures: unknown
 }
@@ -34,6 +31,27 @@ function parseJsonSafe(raw: string | null | undefined, fallback: unknown): unkno
 
 function mapHealthRow(row: Awaited<ReturnType<typeof getLatestHealthCheckRun>>): ParsedHealthRun | null {
   if (!row) return null
+  const legacyE2EEnvelope = parseJsonSafe(row.e2e_reason_detail, null) as
+    | { reason_detail?: string | null; e2e?: E2EResult }
+    | null
+  const legacyE2E = legacyE2EEnvelope && legacyE2EEnvelope.e2e ? legacyE2EEnvelope.e2e : null
+  const fallbackE2E: E2EResult = {
+    aligned: Number(row.e2e_aligned || 0) === 1,
+    reasonCode: (row.e2e_reason_code as E2EResult['reasonCode']) || 'e2e_check_error',
+    reasonDetail:
+      (legacyE2EEnvelope && typeof legacyE2EEnvelope.reason_detail === 'string'
+        ? legacyE2EEnvelope.reason_detail
+        : row.e2e_reason_detail) || undefined,
+    checkedAt: row.checked_at,
+    targetCollectionDate: null,
+    sourceMode: 'all',
+    datasets: [],
+    criteria: {
+      scheduler: Number(row.e2e_aligned || 0) === 1,
+      runsProgress: Number(row.e2e_aligned || 0) === 1,
+      apiServesLatest: Number(row.e2e_aligned || 0) === 1,
+    },
+  }
   return {
     run_id: row.run_id,
     checked_at: row.checked_at,
@@ -42,11 +60,7 @@ function mapHealthRow(row: Awaited<ReturnType<typeof getLatestHealthCheckRun>>):
     duration_ms: Number(row.duration_ms || 0),
     components: parseJsonSafe(row.components_json, []),
     integrity: parseJsonSafe(row.integrity_json, { ok: false, checks: [] }),
-    e2e: {
-      aligned: Number(row.e2e_aligned || 0) === 1,
-      reasonCode: row.e2e_reason_code,
-      reasonDetail: row.e2e_reason_detail,
-    },
+    e2e: legacyE2E || (parseJsonSafe(row.e2e_json, fallbackE2E) as E2EResult),
     actionable: parseJsonSafe(row.actionable_json, []),
     failures: parseJsonSafe(row.failures_json, []),
   }
@@ -84,6 +98,7 @@ adminHealthRoutes.post('/health/run', async (c) => {
     durationMs: result.durationMs,
     componentsJson: JSON.stringify(result.components),
     integrityJson: JSON.stringify(result.integrity),
+    e2eJson: JSON.stringify(result.e2e),
     e2eAligned: result.e2e.aligned,
     e2eReasonCode: result.e2e.reasonCode,
     e2eReasonDetail: result.e2e.reasonDetail ?? null,

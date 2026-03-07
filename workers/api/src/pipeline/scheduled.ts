@@ -9,6 +9,10 @@ import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
 import { buildScheduledRunId } from '../utils/idempotency'
 
+function compactErrorSample(values: string[], max = 3): string[] {
+  return values.slice(0, Math.max(1, max))
+}
+
 export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {
   try {
     await ensureAppConfigTable(env.DB)
@@ -39,12 +43,28 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       idleMinutes: 5,
       staleRunMinutes: 120,
     })
-    log.info('scheduler', 'Run lifecycle reconciliation completed', {
-      context:
-        `ready_finalized=${reconciliation.ready_finalizations.finalized_rows}` +
-        ` stale_closed=${reconciliation.stale_runs.closed_runs}` +
-        ` duration_ms=${reconciliation.duration_ms}`,
+    const ready = reconciliation.ready_finalizations
+    const stale = reconciliation.stale_runs
+    const context = JSON.stringify({
+      scanned_rows: ready.scanned_rows,
+      finalized_rows: ready.finalized_rows,
+      skipped_rows: ready.skipped_rows,
+      ready_passes: ready.pass_count ?? 1,
+      ready_stop: ready.stopped_reason ?? null,
+      closed_runs: stale.closed_runs,
+      stale_scanned_runs: stale.scanned_runs,
+      error_sample: compactErrorSample([...ready.errors, ...stale.errors]),
+      duration_ms: reconciliation.duration_ms,
     })
+    log.info('scheduler', 'Run lifecycle reconciliation completed', {
+      context,
+    })
+    if (ready.scanned_rows > 0 && ready.finalized_rows === 0) {
+      log.error('scheduler', 'Run lifecycle reconciliation stalled', {
+        code: 'run_lifecycle_reconciliation_stalled',
+        context,
+      })
+    }
   } catch (error) {
     log.error('scheduler', 'Run lifecycle reconciliation failed', {
       code: 'run_lifecycle_reconciliation_failed',

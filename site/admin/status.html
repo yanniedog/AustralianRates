@@ -29,6 +29,9 @@
         .admin-status .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
         .admin-status .hint-links a { margin-right: 0.75rem; color: var(--brand); text-decoration: none; }
         .admin-status .audit-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+        .admin-status .payload-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+        .admin-status .link-btn { border: 0; background: none; color: var(--brand); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+        .admin-status pre { margin: 0; padding: 1rem; border-radius: 8px; background: rgba(0,0,0,0.04); overflow: auto; max-height: 420px; }
     </style>
 </head>
 <body>
@@ -59,6 +62,11 @@
         </section>
 
         <section class="card">
+            <h2>E2E dataset probes</h2>
+            <div id="e2e-datasets-wrap"></div>
+        </section>
+
+        <section class="card">
             <h2>Component checks</h2>
             <div id="components-wrap"></div>
         </section>
@@ -85,6 +93,17 @@
                 <a href="runs.html">Runs</a>
                 <a href="config.html">Configuration</a>
             </div>
+        </section>
+
+        <section class="card">
+            <h2>Probe payloads</h2>
+            <div id="probe-payloads-wrap"></div>
+        </section>
+
+        <section class="card">
+            <h2>Payload viewer</h2>
+            <div id="payload-viewer-status" class="status-line">Select a fetch_event_id to inspect its payload.</div>
+            <pre id="payload-viewer-wrap" class="mono">No payload selected.</pre>
         </section>
 
         <section class="card">

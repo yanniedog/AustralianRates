@@ -27,7 +27,7 @@ function blobToBytes(value: unknown): Uint8Array | null {
   return null
 }
 
-async function loadPayloadMap(db: D1Database, hashes: string[]): Promise<Map<string, string>> {
+export async function loadCdrDetailPayloadMap(db: D1Database, hashes: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   for (const batch of chunkValues(hashes, HASH_BATCH_SIZE)) {
     if (batch.length === 0) continue
@@ -96,7 +96,7 @@ export async function hydrateCdrDetailJson<T extends HydratableRow>(db: D1Databa
     if (!hasInline) hashes.add(hash)
   }
 
-  const payloadMap = hashes.size > 0 ? await loadPayloadMap(db, Array.from(hashes)) : new Map<string, string>()
+  const payloadMap = hashes.size > 0 ? await loadCdrDetailPayloadMap(db, Array.from(hashes)) : new Map<string, string>()
 
   return rows.map((row) => {
     const next = { ...row } as Record<string, unknown>
