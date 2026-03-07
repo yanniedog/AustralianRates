@@ -61,6 +61,7 @@
             var editBtn = document.getElementById('edit-btn');
             var deleteBtn = document.getElementById('delete-btn');
             var refreshBtn = document.getElementById('refresh-btn');
+            var dbGrid = document.getElementById('db-grid');
             var paginationEl = document.getElementById('pagination');
             var msgEl = document.getElementById('msg');
             var modal = document.getElementById('row-modal');
@@ -174,6 +175,9 @@
                         layout: 'fitColumns',
                         selectableRows: 1,
                         rowSelectionChanged: syncSelectionButtons,
+                        rowClick: function () {
+                            setTimeout(syncSelectionButtons, 0);
+                        },
                     });
                     syncSelectionButtons();
                     renderPagination();
@@ -226,6 +230,12 @@
             tableSelect.addEventListener('change', function () {
                 selectTable((tableSelect.value || '').trim() || '');
             });
+
+            if (dbGrid) {
+                dbGrid.addEventListener('click', function () {
+                    setTimeout(syncSelectionButtons, 0);
+                });
+            }
 
             addBtn.addEventListener('click', function () {
                 openModal('add', null);

@@ -36,11 +36,27 @@ export function isBearerTokenAuthorized(providedToken: string | null, expectedTo
   return mismatch === 0
 }
 
+export function getExpectedBearerTokens(input: {
+  ADMIN_API_TOKEN?: string
+  ADMIN_API_TOKENS?: string
+}): string[] {
+  const single = String(input.ADMIN_API_TOKEN ?? '').trim()
+  const many = String(input.ADMIN_API_TOKENS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return Array.from(new Set([single, ...many].filter(Boolean)))
+}
+
+export function isAnyBearerTokenAuthorized(providedToken: string | null, expectedTokens: string[]): boolean {
+  return expectedTokens.some((expectedToken) => isBearerTokenAuthorized(providedToken, expectedToken))
+}
+
 export async function evaluateAdminAuth(c: Parameters<MiddlewareHandler<AppContext>>[0]): Promise<AdminAuthState> {
   const bearerToken = parseBearerToken(c.req.header('Authorization'))
-  const expectedToken = c.env.ADMIN_API_TOKEN
+  const expectedTokens = getExpectedBearerTokens(c.env)
 
-  if (isBearerTokenAuthorized(bearerToken, expectedToken)) {
+  if (isAnyBearerTokenAuthorized(bearerToken, expectedTokens)) {
     return {
       ok: true,
       mode: 'bearer',
@@ -72,15 +88,14 @@ export async function evaluateAdminAuth(c: Parameters<MiddlewareHandler<AppConte
   }
 
   if (bearerToken) {
-    const expected = String(expectedToken ?? '').trim()
-    if (!expected) {
+    if (expectedTokens.length === 0) {
       return {
         ok: false,
         mode: null,
         reason: 'admin_token_not_configured',
       }
     }
-    if (!isBearerTokenAuthorized(bearerToken, expectedToken)) {
+    if (!isAnyBearerTokenAuthorized(bearerToken, expectedTokens)) {
       return {
         ok: false,
         mode: null,

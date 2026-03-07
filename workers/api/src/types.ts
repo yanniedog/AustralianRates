@@ -217,6 +217,7 @@ export type EnvBindings = {
   IDEMPOTENCY_KV?: KVNamespace
   RUN_LOCK_DO: DurableObjectNamespace
   ADMIN_API_TOKEN?: string
+  ADMIN_API_TOKENS?: string
   CF_ACCESS_TEAM_DOMAIN?: string
   CF_ACCESS_AUD?: string
   WORKER_VERSION?: string

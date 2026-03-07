@@ -11,6 +11,7 @@ const ADMIN_TEST_TOKEN = String(process.env.ADMIN_TEST_TOKEN || '').trim();
 const ORIGIN = new URL(TEST_URL).origin;
 const ADMIN_BASE = `${ORIGIN}/admin`;
 const ADMIN_API_BASE = `${ORIGIN}/api/home-loan-rates/admin`;
+const CLOUDFLARE_INSIGHTS_BEACON = 'https://static.cloudflareinsights.com/beacon.min.js';
 
 const PAGE_PATHS = ['dashboard', 'status', 'database', 'clear', 'config', 'runs', 'logs'];
 
@@ -111,11 +112,24 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   const adminNetworkFailures: Array<{ status: number; url: string }> = [];
+  let ignoredInsightsConsoleErrorBudget = 0;
 
   page.on('console', (msg: { type: () => string; text: () => string }) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text());
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (text === 'Failed to load resource: net::ERR_NAME_NOT_RESOLVED' && ignoredInsightsConsoleErrorBudget > 0) {
+      ignoredInsightsConsoleErrorBudget -= 1;
+      return;
+    }
+    consoleErrors.push(text);
   });
   page.on('pageerror', (err: Error) => pageErrors.push(String(err && err.message ? err.message : err)));
+  page.on('requestfailed', (req: { url: () => string; failure: () => { errorText?: string } | null }) => {
+    const failure = req.failure();
+    if (req.url().startsWith(CLOUDFLARE_INSIGHTS_BEACON) && failure?.errorText === 'net::ERR_NAME_NOT_RESOLVED') {
+      ignoredInsightsConsoleErrorBudget += 1;
+    }
+  });
   page.on('response', (res: { url: () => string; status: () => number }) => {
     const url = res.url();
     if (url.includes('/api/home-loan-rates/admin') && res.status() >= 400) {
@@ -144,7 +158,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
 
     await runStep('dashboard navigation cards render', async () => {
       await page.goto(`${ADMIN_BASE}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      const navTexts = await page.$$eval('main.admin-dash nav a', (nodes: HTMLElement[]) =>
+      const navTexts = await page.$$eval('main.admin-dash .admin-nav-card-title', (nodes: HTMLElement[]) =>
         nodes.map((n) => (n.textContent || '').trim()),
       );
       const required = ['Status', 'Database', 'Clear data', 'Configuration', 'Runs', 'Logs'];
