@@ -11,6 +11,18 @@ function normalizeValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
 }
 
+function isHistoricalNoSignalNoise(entry: Record<string, unknown>, source: string, message: string): boolean {
+  if (source !== 'consumer') return false
+  const context = normalizeValue(entry.context)
+  if (message === 'historical_task_execute completed') {
+    return context.includes('completion=warn_no_writes') && context.includes('signals(wayback=0,final=0)')
+  }
+  if (message === 'historical_task_execute empty_result') {
+    return context.includes('had_wayback_signals=0') || context.includes('signals(wayback=0,final=0)')
+  }
+  return false
+}
+
 export function shouldIgnoreStatusActionableLog(
   entry: Record<string, unknown>,
   pauseMode: IngestPauseMode,
@@ -24,6 +36,9 @@ export function shouldIgnoreStatusActionableLog(
 
   const lenderCode = normalizeValue(entry.lender_code ?? entry.lenderCode)
   if (source === 'admin' && KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message)) {
+    return true
+  }
+  if (isHistoricalNoSignalNoise(entry, source, message)) {
     return true
   }
   return lenderCode === 'ubank' && source === 'consumer' && KNOWN_UBANK_NOISE_MESSAGES.has(message)

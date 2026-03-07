@@ -41,6 +41,20 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores no-signal historical task warnings in status summaries', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'consumer',
+          message: 'historical_task_execute completed',
+          context:
+            '{"context":"task_id=5488 signals(wayback=0,final=0) completion=warn_no_writes","traceback":"Error"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('keeps the same warning actionable for other lenders', () => {
     expect(
       shouldIgnoreStatusActionableLog(

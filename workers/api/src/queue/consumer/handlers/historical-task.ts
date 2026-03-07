@@ -276,10 +276,12 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
 
     const historicalParsedTotal = mortgageRows.length + savingsRows.length + tdRows.length
     const historicalWrittenTotal = mortgageWritten + savingsWritten + tdWritten
-    const historicalShouldWarn = historicalWrittenTotal === 0
+    const noSignalEmptyHistoricalTask = historicalParsedTotal === 0 && historicalWrittenTotal === 0 && !hadSignals
+    const historicalShouldWarn = historicalWrittenTotal === 0 && !noSignalEmptyHistoricalTask
 
     if (historicalParsedTotal === 0 && historicalWrittenTotal === 0) {
-      log.warn('consumer', 'historical_task_execute empty_result', {
+      const emptyResultLog = noSignalEmptyHistoricalTask ? log.info : log.warn
+      emptyResultLog('consumer', 'historical_task_execute empty_result', {
         runId: job.runId,
         lenderCode: task.lender_code,
         context:
