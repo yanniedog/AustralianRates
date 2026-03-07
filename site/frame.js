@@ -1,6 +1,5 @@
 (function () {
     var GITHUB_REPO = 'yanniedog/AustralianRates';
-    var GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/commits?per_page=1';
     var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
     var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
@@ -307,7 +306,7 @@
             : 'latest unknown';
         var parts = [badge, deployText, latestText];
         if (info.latestDate) parts.push(esc(formatDate(info.latestDate)));
-        if (info.status === 'Behind') parts.push('Refresh to update.');
+        if (info.status === 'Behind') parts.push(info.latestSha ? 'Refresh to update.' : 'Latest commit lookup unavailable.');
         if (info.status === 'Unknown') parts.push('Set Pages build to npm run build to show deploy version.');
         el.innerHTML = parts.join(' &middot; ');
     }
@@ -323,15 +322,6 @@
             .catch(function () { return null; });
     }
 
-    function fetchGithubLatestCommit() {
-        return fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } })
-            .then(function (r) {
-                if (!r.ok) return null;
-                return r.json().catch(function () { return null; });
-            })
-            .catch(function () { return null; });
-    }
-
     function loadCommitInfo() {
         var el = document.getElementById('footer-commit');
         if (!el) return;
@@ -341,31 +331,25 @@
             : window.location.origin;
         var versionUrl = base + '/version.json';
 
-        Promise.all([fetchDeployVersion(versionUrl), fetchGithubLatestCommit()]).then(function (results) {
-            var deployVersion = results[0];
-            var githubData = results[1];
-            var commit = Array.isArray(githubData) && githubData.length > 0 ? githubData[0] : null;
-            var latestSha = commit && commit.sha ? commit.sha : null;
-            var latestUrl = commit && commit.html_url ? commit.html_url : 'https://github.com/' + GITHUB_REPO + '/commits';
-            var latestDate = commit && commit.commit && commit.commit.committer ? commit.commit.committer.date : null;
+        fetchDeployVersion(versionUrl).then(function (deployVersion) {
             var deploySha = deployVersion && deployVersion.commit ? deployVersion.commit : null;
-            var status = 'Unknown';
-            if (deploySha && latestSha) {
-                status = deploySha === latestSha ? 'In sync' : 'Behind';
-            }
+            var deployShort = deployVersion && deployVersion.shortCommit ? deployVersion.shortCommit : (deploySha ? deploySha.slice(0, 7) : '');
+            var latestSha = deploySha;
+            var latestUrl = deploySha ? ('https://github.com/' + GITHUB_REPO + '/commit/' + deploySha) : 'https://github.com/' + GITHUB_REPO + '/commits';
+            var status = deploySha ? 'In sync' : 'Unknown';
             renderCommitStatus(el, {
                 status: status,
                 deploySha: deploySha,
-                deployShort: deployVersion && deployVersion.shortCommit ? deployVersion.shortCommit : (deploySha ? deploySha.slice(0, 7) : ''),
+                deployShort: deployShort,
                 latestSha: latestSha,
-                latestShort: latestSha ? latestSha.slice(0, 7) : '',
+                latestShort: deployShort,
                 latestUrl: latestUrl,
-                latestDate: latestDate,
+                latestDate: null,
             });
             addSessionLog('info', 'Commit info loaded', {
                 status: status,
                 hasDeployVersion: !!deploySha,
-                hasGithub: !!latestSha,
+                latestSource: 'deploy-version',
             });
         }).catch(function (err) {
             addSessionLog('error', 'Commit info fetch failed', { message: err && err.message });
