@@ -5,90 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Admin Runs | AustralianRates</title>
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
-    <link rel="stylesheet" href="admin-common.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="admin-layout.css">
+    <link rel="stylesheet" href="admin-pages.css">
     <script src="../theme.js"></script>
-    <style>
-        .admin-runs { max-width: 1100px; margin: 0 auto; padding: 2rem; }
-        .admin-runs h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
-        .admin-runs .back { margin-bottom: 1rem; }
-        .admin-runs .back a { color: var(--brand); text-decoration: none; }
-        .admin-runs .actions { margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-        .admin-runs .actions button { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
-        .admin-runs .actions input[type="date"],
-        .admin-runs .actions input[type="number"] {
-            padding: 8px;
-            border-radius: 8px;
-            border: 1px solid var(--line);
-            background: var(--input-bg);
-            color: var(--text);
-        }
-        .admin-runs .actions input[type="number"] { width: 120px; }
-        .admin-runs .actions button.primary { background: var(--brand); color: #fff; }
-        .admin-runs .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .admin-runs .status { margin-left: 0.5rem; font-size: 0.9rem; color: var(--muted); min-height: 1.2rem; }
-        .admin-runs .live-meta { margin-bottom: 1rem; color: var(--muted); font-size: 0.9rem; }
-        .admin-runs .section-card {
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            box-shadow: var(--panel-shadow);
-        }
-        .admin-runs h2 { margin: 0 0 0.75rem; font-size: 1.05rem; }
-        .admin-runs h3 { margin: 0 0 0.6rem; font-size: 0.95rem; }
-        .admin-runs .run-grid { display: grid; gap: 0.75rem; }
-        .admin-runs .run-item { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
-        .admin-runs .run-item .head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-weight: 600; margin-bottom: 0.35rem; }
-        .admin-runs .run-item .meta { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
-        .admin-runs .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem; }
-        .admin-runs .summary-cell { border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem; }
-        .admin-runs .summary-cell .label { color: var(--muted); font-size: 0.8rem; }
-        .admin-runs .summary-cell .value { font-size: 1.05rem; font-weight: 700; margin-top: 0.15rem; }
-        .admin-runs .backlog-block + .backlog-block { margin-top: 1rem; }
-        .admin-runs table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        .admin-runs th, .admin-runs td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.4rem; text-align: left; vertical-align: top; }
-        .admin-runs th { color: var(--muted); font-weight: 600; }
-        .admin-runs .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
-        .admin-runs details { margin-top: 0.5rem; }
-        .admin-runs pre { padding: 1rem; border-radius: 8px; overflow: auto; max-height: 380px; font-size: 0.8rem; }
-        @media (max-width: 760px) {
-            .admin-runs { padding: 1rem; }
-            .admin-runs table { font-size: 0.82rem; }
-        }
-    </style>
 </head>
-<body>
+<body class="ar-admin">
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
         </div>
     </header>
-    <main class="admin-runs" id="main-content" tabindex="-1">
-        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
-        <h1>Runs</h1>
-        <div class="actions">
+    <main class="admin-shell admin-shell--wide admin-runs" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Run orchestration</p>
+            <h1>Runs</h1>
+            <p class="admin-subtitle">Trigger ingestion workflows, inspect live progress, and manage backlog repair actions.</p>
+        </div>
+        <div class="actions admin-actions">
             <button type="button" class="primary" id="trigger-daily">Trigger daily run</button>
             <button type="button" class="secondary" id="trigger-backfill">Trigger backfill</button>
             <input type="date" id="historical-start-date" title="Historical start date">
             <input type="date" id="historical-end-date" title="Historical end date">
             <button type="button" class="secondary" id="trigger-historical">Trigger historical pull</button>
             <button type="button" class="secondary" id="refresh-now">Refresh now</button>
-            <span class="status" id="run-status"></span>
+            <span class="status admin-status-line" id="run-status"></span>
         </div>
-        <div class="live-meta" id="live-meta">Loading realtime snapshot...</div>
+        <div class="live-meta admin-status-line" id="live-meta">Loading realtime snapshot...</div>
 
-        <section class="section-card">
+        <section class="section-card admin-card">
             <h2>Active Runs</h2>
             <div id="active-runs" class="run-grid"></div>
         </section>
 
-        <section class="section-card">
+        <section class="section-card admin-card">
             <h2>Historical Collection</h2>
-            <div id="historical-summary" class="summary-grid"></div>
-            <div style="overflow:auto; margin-top: 0.8rem;">
+            <div id="historical-summary" class="summary-grid admin-summary-grid"></div>
+            <div class="admin-table-wrap">
                 <table>
                     <thead>
                         <tr>
@@ -108,9 +66,9 @@
             </div>
         </section>
 
-        <section class="section-card">
+        <section class="section-card admin-card">
             <h2>Operations Backlog</h2>
-            <div class="actions">
+            <div class="actions admin-actions">
                 <button type="button" class="secondary" id="refresh-backlog">Refresh backlog</button>
                 <button type="button" class="secondary" id="dry-run-reconcile">Dry-run reconcile</button>
                 <button type="button" class="primary" id="run-reconcile">Run reconcile</button>
@@ -118,8 +76,8 @@
                 <button type="button" class="secondary" id="dry-run-lineage">Dry-run lineage repair</button>
                 <button type="button" class="primary" id="run-lineage">Run lineage repair</button>
             </div>
-            <div id="backlog-summary" class="summary-grid"></div>
-            <div class="status" id="backlog-status"></div>
+            <div id="backlog-summary" class="summary-grid admin-summary-grid"></div>
+            <div class="status admin-status-line" id="backlog-status"></div>
             <div id="backlog-tables"></div>
             <details>
                 <summary>Show latest reconcile/repair payload</summary>
@@ -127,12 +85,12 @@
             </details>
         </section>
 
-        <section class="section-card">
+        <section class="section-card admin-card">
             <h2>Recent Completed Runs</h2>
             <div id="recent-runs" class="run-grid"></div>
         </section>
 
-        <section class="section-card">
+        <section class="section-card admin-card">
             <h2>Debug</h2>
             <details>
                 <summary>Show raw realtime payload</summary>

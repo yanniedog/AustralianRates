@@ -32,10 +32,10 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../vendor/tabulator/tabulator_midnight.min.css">
     <link rel="stylesheet" href="../vendor/pivottable/pivot.min.css">
-    <link rel="stylesheet" href="../frame.css">
-    <link rel="stylesheet" href="../public-theme.css">
-    <link rel="stylesheet" href="../public-layout.css">
-    <link rel="stylesheet" href="../public-widgets.css">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="../public-workspace.css">
+    <link rel="stylesheet" href="../public-data-widgets.css">
     <script src="../theme.js"></script>
 </head>
 <body class="ar-public ar-section-term-deposits" data-ar-section="term-deposits">
@@ -53,206 +53,234 @@
         <a href="/term-deposits/" class="section-link active" aria-current="page">Term Deposits</a>
     </nav>
 
-    <main class="shell" id="main-content" tabindex="-1">
-        <header class="hero panel">
-            <div class="hero-copy">
-                <p class="eyebrow">Australian Term Deposit Rate Tracker</p>
-                <h1>Compare term deposit rates from major banks</h1>
-                <p class="subtitle">
-                    Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates across all banks.
-                </p>
-            </div>
-            <div class="hero-meta">
-                <div class="hero-stats" id="hero-stats">
-                    <span class="hero-stat" id="stat-updated" title="When rates were last collected">Last updated: <strong>...</strong></span>
-                    <span class="hero-stat" id="stat-cash-rate"></span>
-                    <span class="hero-stat" id="stat-records" title="Total term deposit rate records">Records: <strong>...</strong></span>
+    <main class="shell shell-public" id="main-content" tabindex="-1">
+        <section class="page-intro">
+            <header class="hero panel">
+                <div class="hero-copy">
+                    <p class="eyebrow">Australian Term Deposit Rate Tracker</p>
+                    <h1>Compare term deposit rates from major banks</h1>
+                    <p class="subtitle">
+                        Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates across all banks.
+                    </p>
                 </div>
-                <p class="hero-note">Track term and tier movements with product-level time series anchored by <code>product_key</code>.</p>
-            </div>
-        </header>
-
-        <noscript>
-            <section class="panel noscript-panel" aria-label="No JavaScript fallback">
-                <p>JavaScript is disabled. Access core term-deposit data directly:</p>
-                <div class="noscript-links">
-                    <a href="/api/term-deposit-rates/export.csv" target="_blank" rel="noopener">Download CSV</a>
-                    <a href="/api/term-deposit-rates/filters" target="_blank" rel="noopener">View filters JSON</a>
-                    <a href="/api/term-deposit-rates/health" target="_blank" rel="noopener">API health</a>
-                </div>
-            </section>
-        </noscript>
-
-        <section class="seo-summary" aria-label="About this data">
-            <p>Compare term deposit interest rates from Australia's major banks including
-            Commonwealth Bank (CBA), Westpac, NAB, ANZ, Macquarie, Bendigo Bank, Suncorp, Bankwest, ING, AMP,
-            HSBC, UBank, St. George, Bank of Melbourne, Bank of Queensland (BOQ), and Great Southern Bank.
-            Rates are collected daily from official Consumer Data Right (CDR) feeds and cover terms from
-            1 month to 5 years across different deposit amounts and interest payment frequencies.</p>
-        </section>
-
-        <section class="panel mode-panel" aria-label="Workspace mode">
-            <div class="mode-switch" role="group" aria-label="Select view mode">
-                <button id="mode-consumer" class="mode-btn" type="button" aria-pressed="false">Consumer</button>
-                <button id="mode-analyst" class="mode-btn active" type="button" aria-pressed="true">Analyst</button>
-            </div>
-            <p class="mode-note">Analyst mode is the default workspace. Switch to Consumer mode for guided comparison only.</p>
-        </section>
-
-        <section class="panel quick-compare" aria-label="Quick compare summary">
-            <div id="quick-compare-cards" class="quick-compare-cards"></div>
-        </section>
-
-        <section class="panel rate-change-log" aria-label="Rate change log">
-            <details id="rate-change-details" class="rate-change-details">
-                <summary id="rate-change-summary" class="rate-change-summary">
-                    <span class="rate-change-summary-title">Rate Change Log</span>
-                    <span id="rate-change-headline" class="rate-change-headline">Loading latest rate changes...</span>
-                </summary>
-                <p id="rate-change-warning" class="rate-change-warning" hidden></p>
-                <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
-                <ul id="rate-change-list" class="rate-change-list">
-                    <li class="rate-change-item-empty">Loading...</li>
-                </ul>
-            </details>
-        </section>
-
-        <section class="workspace" aria-label="Interactive data workspace">
-            <nav class="tabs panel" role="tablist" aria-label="Data views">
-                <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
-                <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot Table</button>
-                <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
-            </nav>
-
-            <details class="filters panel filters-collapsible" id="filter-bar" open>
-                <summary class="filters-toggle" aria-label="Show or hide filter settings">Filters</summary>
-                <div class="filter-state-row">
-                    <span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span>
-                    <div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>
-                </div>
-                <div class="filters-grid">
-                    <label>Banks
-                        <select id="filter-bank" multiple size="5"></select>
-                    </label>
-                    <label title="Term length in months">Term
-                        <select id="filter-term-months"><option value="">All</option></select>
-                    </label>
-                    <label title="Minimum deposit range">Deposit Tier
-                        <select id="filter-deposit-tier"><option value="">All</option></select>
-                    </label>
-                    <label title="Interest payment frequency">Payment
-                        <select id="filter-interest-payment"><option value="">All</option></select>
-                    </label>
-                    <label title="Minimum headline interest rate">Min Headline %
-                        <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="e.g. 2.00">
-                    </label>
-                    <label title="Maximum headline interest rate">Max Headline %
-                        <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="e.g. 6.00">
-                    </label>
-                    <label>From
-                        <input id="filter-start-date" type="date">
-                    </label>
-                    <label>To
-                        <input id="filter-end-date" type="date">
-                    </label>
-                    <label title="Show all, daily-only, or historical-only rows">Rate Mode
-                        <select id="filter-mode">
-                            <option value="all" selected>All</option>
-                            <option value="daily">Daily only</option>
-                            <option value="historical">Historical only</option>
-                        </select>
-                    </label>
-                    <label class="toggle-label" title="Show data from manually triggered runs">
-                        <input id="filter-include-manual" type="checkbox"> Include manual runs
-                    </label>
-                    <label title="How often to auto-refresh data (minutes, 0 = off)">Auto-refresh
-                        <select id="refresh-interval">
-                            <option value="0">Off</option>
-                            <option value="15">15 min</option>
-                            <option value="30">30 min</option>
-                            <option value="60" selected>1 hour</option>
-                            <option value="120">2 hours</option>
-                        </select>
-                    </label>
-                    <div class="filter-actions">
-                        <button id="apply-filters" class="small" type="button">Apply Filters</button>
-                        <button id="reset-filters" class="small secondary" type="button">Reset</button>
-                        <label for="download-format" class="download-label">Download</label>
-                        <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
-                            <option value="">Download as...</option>
-                            <option value="csv">CSV</option>
-                            <option value="xls">XLS</option>
-                            <option value="json">JSON</option>
-                        </select>
-                        <span id="last-refreshed" class="hint"></span>
+                <div class="hero-meta">
+                    <div class="hero-stats" id="hero-stats">
+                        <div class="hero-stat" id="stat-updated" title="When rates were last collected">
+                            <span class="hero-stat-label">Last updated:</span>
+                            <strong class="hero-stat-value">...</strong>
+                        </div>
+                        <div class="hero-stat" id="stat-cash-rate">
+                            <span class="hero-stat-label">Series tracking:</span>
+                            <strong class="hero-stat-value">product_key continuity</strong>
+                        </div>
+                        <div class="hero-stat" id="stat-records" title="Total term deposit rate records">
+                            <span class="hero-stat-label">Records:</span>
+                            <strong class="hero-stat-value">...</strong>
+                        </div>
                     </div>
+                    <p class="hero-note">Track term and tier movements with product-level time series anchored by <code>product_key</code>.</p>
                 </div>
-            </details>
+            </header>
 
-            <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
-                <div class="panel panel-wide">
-                    <div class="explorer-toolbar">
-                        <button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button>
-                        <div id="table-settings-popover" class="table-settings-popover" hidden></div>
+            <noscript>
+                <section class="panel noscript-panel" aria-label="No JavaScript fallback">
+                    <p>JavaScript is disabled. Access core term-deposit data directly:</p>
+                    <div class="noscript-links">
+                        <a href="/api/term-deposit-rates/export.csv" target="_blank" rel="noopener">Download CSV</a>
+                        <a href="/api/term-deposit-rates/filters" target="_blank" rel="noopener">View filters JSON</a>
+                        <a href="/api/term-deposit-rates/health" target="_blank" rel="noopener">API health</a>
                     </div>
-                    <div id="rate-table"></div>
-                </div>
+                </section>
+            </noscript>
+
+            <section class="seo-summary" aria-label="About this data">
+                <p>Compare term deposit interest rates from Australia's major banks including
+                Commonwealth Bank (CBA), Westpac, NAB, ANZ, Macquarie, Bendigo Bank, Suncorp, Bankwest, ING, AMP,
+                HSBC, UBank, St. George, Bank of Melbourne, Bank of Queensland (BOQ), and Great Southern Bank.
+                Rates are collected daily from official Consumer Data Right (CDR) feeds and cover terms from
+                1 month to 5 years across different deposit amounts and interest payment frequencies.</p>
             </section>
 
-            <section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>
-                <div class="panel panel-wide">
-                    <div class="pivot-controls">
-                        <button id="load-pivot" type="button" class="small">Load Data for Pivot</button>
-                        <span id="pivot-status" class="hint">Select filters and a date range, then click Load. Max 10,000 rows.</span>
-                    </div>
-                    <div id="pivot-output"></div>
+            <section class="market-brief" aria-label="Market briefing">
+                <div class="market-brief-main">
+                    <section class="panel quick-compare brief-panel" aria-label="Quick compare summary">
+                        <h2>Market Snapshot</h2>
+                        <p class="hint">Consumer mode surfaces the strongest visible rates, median pricing, and the number of tracked products behind the filter set.</p>
+                        <div id="quick-compare-cards" class="quick-compare-cards"></div>
+                    </section>
+                </div>
+
+                <div class="market-brief-side">
+                    <section class="panel rate-change-log brief-panel" aria-label="Rate change log">
+                        <details id="rate-change-details" class="rate-change-details">
+                            <summary id="rate-change-summary" class="rate-change-summary">
+                                <span class="rate-change-summary-title">Rate Change Log</span>
+                                <span id="rate-change-headline" class="rate-change-headline">Loading latest rate changes...</span>
+                            </summary>
+                            <p id="rate-change-warning" class="rate-change-warning" hidden></p>
+                            <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
+                            <ul id="rate-change-list" class="rate-change-list">
+                                <li class="rate-change-item-empty">Loading...</li>
+                            </ul>
+                        </details>
+                    </section>
+
+                    <section class="panel brief-panel" aria-label="Series continuity">
+                        <h2>Series Continuity</h2>
+                        <p class="comparison-rate-disclosure">Every timeseries chart remains grouped by canonical <code>product_key</code>, so one line represents one term-deposit product tracked through time.</p>
+                    </section>
                 </div>
             </section>
+        </section>
 
-            <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
-                <div class="panel panel-wide">
-                    <div class="chart-controls">
-                        <label>X Axis
-                            <select id="chart-x">
-                                <option value="collection_date">Date</option>
-                                <option value="bank_name">Bank</option>
-                                <option value="term_months">Term (months)</option>
-                                <option value="deposit_tier">Deposit Tier</option>
-                                <option value="interest_payment">Payment</option>
+        <section class="workspace workspace-grid" aria-label="Interactive data workspace">
+            <aside class="workspace-rail">
+                <section class="panel mode-panel" aria-label="Workspace mode">
+                    <div class="mode-switch" role="group" aria-label="Select view mode">
+                        <button id="mode-consumer" class="mode-btn" type="button" aria-pressed="false">Consumer</button>
+                        <button id="mode-analyst" class="mode-btn active" type="button" aria-pressed="true">Analyst</button>
+                    </div>
+                    <p class="mode-note">Analyst mode is the default workspace. Switch to Consumer mode for guided comparison only.</p>
+                </section>
+
+                <nav class="tabs panel" role="tablist" aria-label="Data views">
+                    <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
+                    <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot Table</button>
+                    <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
+                </nav>
+
+                <details class="filters panel filters-collapsible" id="filter-bar" open>
+                    <summary class="filters-toggle" aria-label="Show or hide filter settings">Filters</summary>
+                    <div class="filter-state-row">
+                        <span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span>
+                        <div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>
+                    </div>
+                    <div class="filters-grid">
+                        <label>Banks
+                            <select id="filter-bank" multiple size="5"></select>
+                        </label>
+                        <label title="Term length in months">Term
+                            <select id="filter-term-months"><option value="">All</option></select>
+                        </label>
+                        <label title="Minimum deposit range">Deposit Tier
+                            <select id="filter-deposit-tier"><option value="">All</option></select>
+                        </label>
+                        <label title="Interest payment frequency">Payment
+                            <select id="filter-interest-payment"><option value="">All</option></select>
+                        </label>
+                        <label title="Minimum headline interest rate">Min Headline %
+                            <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="e.g. 2.00">
+                        </label>
+                        <label title="Maximum headline interest rate">Max Headline %
+                            <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="e.g. 6.00">
+                        </label>
+                        <label>From
+                            <input id="filter-start-date" type="date">
+                        </label>
+                        <label>To
+                            <input id="filter-end-date" type="date">
+                        </label>
+                        <label title="Show all, daily-only, or historical-only rows">Rate Mode
+                            <select id="filter-mode">
+                                <option value="all" selected>All</option>
+                                <option value="daily">Daily only</option>
+                                <option value="historical">Historical only</option>
                             </select>
                         </label>
-                        <label>Y Axis
-                            <select id="chart-y">
-                                <option value="interest_rate">Interest Rate</option>
-                            </select>
+                        <label class="toggle-label" title="Show data from manually triggered runs">
+                            <input id="filter-include-manual" type="checkbox"> Include manual runs
                         </label>
-                        <label>Group By
-                            <select id="chart-group">
-                                <option value="">None</option>
-                                <option value="product_key" selected>Product</option>
-                                <option value="bank_name">Bank</option>
-                                <option value="term_months">Term</option>
-                                <option value="deposit_tier">Deposit Tier</option>
-                                <option value="interest_payment">Payment</option>
-                            </select>
-                        </label>
-                        <label>Chart Type
-                            <select id="chart-type">
-                                <option value="scatter">Line / Scatter</option>
-                                <option value="bar">Bar</option>
-                                <option value="box">Box Plot</option>
+                        <label title="How often to auto-refresh data (minutes, 0 = off)">Auto-refresh
+                            <select id="refresh-interval">
+                                <option value="0">Off</option>
+                                <option value="15">15 min</option>
+                                <option value="30">30 min</option>
+                                <option value="60" selected>1 hour</option>
+                                <option value="120">2 hours</option>
                             </select>
                         </label>
                         <div class="filter-actions">
-                            <button id="draw-chart" type="button" class="small">Draw Chart</button>
+                            <button id="apply-filters" class="small" type="button">Apply Filters</button>
+                            <button id="reset-filters" class="small secondary" type="button">Reset</button>
+                            <label for="download-format" class="download-label">Download</label>
+                            <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
+                                <option value="">Download as...</option>
+                                <option value="csv">CSV</option>
+                                <option value="xls">XLS</option>
+                                <option value="json">JSON</option>
+                            </select>
+                            <span id="last-refreshed" class="hint"></span>
                         </div>
                     </div>
-                    <div id="chart-output" aria-label="Interactive chart"></div>
-                    <p id="chart-status" class="hint">Configure axes and click Draw Chart. Loads up to 10,000 rows and renders up to 1,000 points.</p>
-                    <div id="chart-point-details" class="chart-point-details" hidden aria-live="polite"></div>
-                    <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
-                </div>
-            </section>
+                </details>
+            </aside>
+
+            <div class="workspace-stage">
+                <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
+                    <div class="panel panel-wide">
+                        <div class="explorer-toolbar">
+                            <button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button>
+                            <div id="table-settings-popover" class="table-settings-popover" hidden></div>
+                        </div>
+                        <div id="rate-table"></div>
+                    </div>
+                </section>
+
+                <section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>
+                    <div class="panel panel-wide">
+                        <div class="pivot-controls">
+                            <button id="load-pivot" type="button" class="small">Load Data for Pivot</button>
+                            <span id="pivot-status" class="hint">Select filters and a date range, then click Load. Max 10,000 rows.</span>
+                        </div>
+                        <div id="pivot-output"></div>
+                    </div>
+                </section>
+
+                <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
+                    <div class="panel panel-wide">
+                        <div class="chart-controls">
+                            <label>X Axis
+                                <select id="chart-x">
+                                    <option value="collection_date">Date</option>
+                                    <option value="bank_name">Bank</option>
+                                    <option value="term_months">Term (months)</option>
+                                    <option value="deposit_tier">Deposit Tier</option>
+                                    <option value="interest_payment">Payment</option>
+                                </select>
+                            </label>
+                            <label>Y Axis
+                                <select id="chart-y">
+                                    <option value="interest_rate">Interest Rate</option>
+                                </select>
+                            </label>
+                            <label>Group By
+                                <select id="chart-group">
+                                    <option value="">None</option>
+                                    <option value="product_key" selected>Product</option>
+                                    <option value="bank_name">Bank</option>
+                                    <option value="term_months">Term</option>
+                                    <option value="deposit_tier">Deposit Tier</option>
+                                    <option value="interest_payment">Payment</option>
+                                </select>
+                            </label>
+                            <label>Chart Type
+                                <select id="chart-type">
+                                    <option value="scatter">Line / Scatter</option>
+                                    <option value="bar">Bar</option>
+                                    <option value="box">Box Plot</option>
+                                </select>
+                            </label>
+                            <div class="filter-actions">
+                                <button id="draw-chart" type="button" class="small">Draw Chart</button>
+                            </div>
+                        </div>
+                        <div id="chart-output" aria-label="Interactive chart"></div>
+                        <p id="chart-status" class="hint">Configure axes and click Draw Chart. Loads up to 10,000 rows and renders up to 1,000 points.</p>
+                        <div id="chart-point-details" class="chart-point-details" hidden aria-live="polite"></div>
+                        <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
+                    </div>
+                </section>
+            </div>
         </section>
     </main>
 

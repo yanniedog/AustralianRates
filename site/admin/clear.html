@@ -5,41 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Clear data | Admin | AustralianRates</title>
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
-    <link rel="stylesheet" href="admin-common.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="admin-layout.css">
+    <link rel="stylesheet" href="admin-pages.css">
     <script src="../theme.js"></script>
-    <style>
-        .admin-clear { max-width: 640px; margin: 0 auto; padding: 2rem; }
-        .admin-clear h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
-        .admin-clear .back { margin-bottom: 1rem; }
-        .admin-clear .back a { color: var(--brand); text-decoration: none; }
-        .admin-clear label { display: block; margin-top: 1rem; margin-bottom: 0.25rem; font-weight: 500; color: var(--muted); }
-        .admin-clear select, .admin-clear input[type="text"], .admin-clear input[type="number"], .admin-clear textarea {
-            width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; font-size: 1rem; background: var(--input-bg); color: var(--text);
-        }
-        .admin-clear textarea { min-height: 120px; font-family: monospace; }
-        .admin-clear .panel { margin-top: 1rem; padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: 8px; display: none; }
-        .admin-clear .panel.visible { display: block; }
-        .admin-clear .key-row { margin-bottom: 0.5rem; }
-        .admin-clear button.primary { margin-top: 1rem; padding: 10px 20px; background: var(--brand); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-        .admin-clear button.primary:hover { opacity: 0.9; }
-        .admin-clear .message { margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
-        .admin-clear .message.visible { display: block; }
-        .admin-clear .hint { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
-    </style>
 </head>
-<body>
+<body class="ar-admin">
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
         </div>
     </header>
-    <main class="admin-clear" id="main-content" tabindex="-1">
-        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
-        <h1>Clear data</h1>
-        <p style="color: var(--muted);">Delete rate data by scope and product type. Use with care.</p>
-        <div class="message" id="msg"></div>
+    <main class="admin-shell admin-shell--narrow admin-clear" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Danger zone</p>
+            <h1>Clear data</h1>
+            <p class="admin-subtitle">Delete rate data by scope and product type. Use with care.</p>
+        </div>
+        <div class="admin-message" id="msg"></div>
 
         <label for="product-type">Product type</label>
         <select id="product-type">
@@ -57,13 +45,13 @@
             <option value="entire">Entire table(s)</option>
         </select>
 
-        <div id="panel-individual" class="panel">
+        <div id="panel-individual" class="panel admin-card">
             <h3>Key (one row)</h3>
-            <p class="hint">Fill every key field for the selected product type.</p>
+            <p class="admin-hint">Fill every key field for the selected product type.</p>
             <div id="key-fields"></div>
         </div>
 
-        <div id="panel-group" class="panel">
+        <div id="panel-group" class="panel admin-card">
             <h3>Group by</h3>
             <label for="group-by">Column</label>
             <select id="group-by">
@@ -76,17 +64,17 @@
             <input type="text" id="group-value" placeholder="e.g. 2026-02-24 or scheduled">
         </div>
 
-        <div id="panel-multiselect" class="panel">
+        <div id="panel-multiselect" class="panel admin-card">
             <h3>Keys (JSON array)</h3>
-            <p class="hint">Paste a JSON array of key objects. Each object must include all key columns for the selected product type.</p>
+            <p class="admin-hint">Paste a JSON array of key objects. Each object must include all key columns for the selected product type.</p>
             <textarea id="multiselect-keys" placeholder='[{"bank_name":"ANZ","collection_date":"2026-02-24",...}, ...]'></textarea>
         </div>
 
-        <div id="panel-entire" class="panel">
+        <div id="panel-entire" class="panel admin-card">
             <p>This will delete <strong>all</strong> rows in the selected table(s). Cannot be undone.</p>
         </div>
 
-        <button type="button" class="primary" id="submit-btn">Clear data</button>
+        <button type="button" class="primary danger" id="submit-btn">Clear data</button>
     </main>
     <script src="admin-portal.js"></script>
     <script src="../frame.js"></script>
@@ -107,7 +95,7 @@
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
-                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
             }
 
             function getScope() { return (scopeSelect.value || 'individual').trim(); }
@@ -141,7 +129,6 @@
                 cols.forEach(function (col) {
                     var label = document.createElement('label');
                     label.textContent = col;
-                    label.style.marginTop = '0.5rem';
                     var input = document.createElement('input');
                     input.type = 'text';
                     input.id = 'key-' + col;

@@ -9,12 +9,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="../legal.css">
     <script src="../theme.js"></script>
 </head>
-<body>
+<body class="ar-legal">
     <a href="#main-content" class="skip-link">Skip to content</a>
     <header class="site-header">
         <div class="site-header-inner">
@@ -29,41 +30,67 @@
         <a href="/term-deposits/" class="section-link">Term Deposits</a>
     </nav>
 
-    <main class="shell legal-main" id="main-content" tabindex="-1">
-        <section class="panel legal-panel">
-            <p class="eyebrow">Terms</p>
-            <h1>Terms of use</h1>
-            <p class="subtitle">By using AustralianRates, you agree to these terms and the limits described below.</p>
+    <main class="shell legal-shell" id="main-content" tabindex="-1">
+        <section class="panel legal-hero">
+            <div class="legal-hero-copy">
+                <p class="eyebrow">Terms</p>
+                <h1>Terms of use</h1>
+                <p class="subtitle">By using AustralianRates, you agree to these terms and the limits described below.</p>
+                <div class="legal-badge-row">
+                    <span class="legal-badge">General information only</span>
+                    <span class="legal-badge">Independent operator</span>
+                    <span class="legal-badge">Public-source data</span>
+                </div>
+            </div>
         </section>
 
-        <section class="panel legal-panel">
-            <h2>General information only</h2>
-            <p>AustralianRates provides general information and does not provide personal financial advice, credit assistance, or brokerage services.</p>
-            <p>Rates and product attributes can change. Confirm all details directly with the institution before acting.</p>
-        </section>
+        <section class="legal-grid">
+            <div class="legal-stack">
+                <section class="panel legal-panel">
+                    <h2>General information only</h2>
+                    <p>AustralianRates provides general information and does not provide personal financial advice, credit assistance, or brokerage services.</p>
+                    <p>Rates and product attributes can change. Confirm all details directly with the institution before acting.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Comparison rate notice (home loans)</h2>
-            <p>Where shown, home-loan comparison rates follow lender-disclosed values and a standard benchmark context of <strong>$150,000</strong> over a <strong>25 year</strong> term.</p>
-            <p>Comparison-rate benchmarks do not capture every scenario. Your own loan amount, term, fees, and usage can materially change total borrowing cost.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>Comparison rate notice (home loans)</h2>
+                    <p>Where shown, home-loan comparison rates follow lender-disclosed values and a standard benchmark context of <strong>$150,000</strong> over a <strong>25 year</strong> term.</p>
+                    <p>Comparison-rate benchmarks do not capture every scenario. Your own loan amount, term, fees, and usage can materially change total borrowing cost.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Data usage and availability</h2>
-            <p>Data is sourced from public feeds and may include both scheduled and manual verification runs.</p>
-            <p>We aim for reliability but do not guarantee uninterrupted availability, completeness, or fitness for any specific use case.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>Data usage and availability</h2>
+                    <p>Data is sourced from public feeds and may include both scheduled and manual verification runs.</p>
+                    <p>We aim for reliability but do not guarantee uninterrupted availability, completeness, or fitness for any specific use case.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Independence and affiliations</h2>
-            <p>AustralianRates is independently operated and is not a lender, lender representative, or loan broker.</p>
-            <p>No institution listed on the platform is implied to endorse this service.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>Independence and affiliations</h2>
+                    <p>AustralianRates is independently operated and is not a lender, lender representative, or loan broker.</p>
+                    <p>No institution listed on the platform is implied to endorse this service.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Contact</h2>
-            <p>Operator reference: <a href="https://github.com/yanniedog" target="_blank" rel="noopener">yanniedog</a>.</p>
-            <p>Support and corrections: <a href="mailto:support@australianrates.com">support@australianrates.com</a>.</p>
+                <section class="panel legal-panel">
+                    <h2>Contact</h2>
+                    <p>Operator reference: <a href="https://github.com/yanniedog" target="_blank" rel="noopener">yanniedog</a>.</p>
+                    <p>Support and corrections: <a href="mailto:support@australianrates.com">support@australianrates.com</a>.</p>
+                </section>
+            </div>
+
+            <aside class="legal-side">
+                <section class="panel legal-support-card">
+                    <h2>Usage reminder</h2>
+                    <p>Always confirm rates, product conditions, eligibility, and fees directly with the institution before making financial decisions.</p>
+                </section>
+
+                <section class="panel legal-support-card">
+                    <h2>Support</h2>
+                    <div class="legal-callout">
+                        <p class="legal-callout-title">Corrections and support</p>
+                        <p><a href="mailto:support@australianrates.com">support@australianrates.com</a></p>
+                    </div>
+                </section>
+            </aside>
         </section>
     </main>
 

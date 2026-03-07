@@ -128,18 +128,44 @@
         runClearThenReload();
     }
 
+    function getPageContext() {
+        var body = document.body;
+        if (!body) return { section: 'home-loans', admin: false, legal: false };
+        return {
+            section: body.getAttribute('data-ar-section') || (window.AR && window.AR.section) || 'home-loans',
+            admin: body.classList.contains('ar-admin'),
+            legal: body.classList.contains('ar-legal'),
+        };
+    }
+
+    function getHeaderTagline(context) {
+        if (context.admin) return 'Production admin portal';
+        if (context.legal) return 'Open-source rate intelligence';
+        if (context.section === 'savings') return 'Savings market monitor';
+        if (context.section === 'term-deposits') return 'Term deposit market monitor';
+        return 'Mortgage market monitor';
+    }
+
     function buildNav() {
         var header = document.querySelector('.site-header');
         if (!header) return;
 
         var inner = header.querySelector('.site-header-inner');
         if (!inner) return;
+        var context = getPageContext();
+        var technicalLabel = context.admin ? 'Admin tools' : 'Technical';
 
         inner.innerHTML =
-            '<h1 class="site-brand"><a href="/">AustralianRates</a></h1>' +
-            '<nav class="site-nav">' +
+            '<div class="site-brand-lockup">' +
+                '<span class="site-brand-mark" aria-hidden="true">AR</span>' +
+                '<div class="site-brand-copy">' +
+                    '<h1 class="site-brand"><a href="/">AustralianRates</a></h1>' +
+                    '<p class="site-brand-tag">' + esc(getHeaderTagline(context)) + '</p>' +
+                '</div>' +
+            '</div>' +
+            '<nav class="site-nav" aria-label="Technical shortcuts">' +
                 '<details class="site-nav-technical" id="site-nav-technical">' +
-                    '<summary class="site-nav-technical-summary">Technical</summary>' +
+                    '<summary class="site-nav-technical-summary">' + esc(technicalLabel) + '</summary>' +
                     '<div class="site-nav-technical-body">' +
                         '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
                         '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
@@ -160,32 +186,46 @@
     function buildFooter() {
         var existing = document.querySelector('.site-footer');
         if (existing) existing.remove();
+        var context = getPageContext();
+        var footerBlurb = context.admin
+            ? 'Operations, diagnostics, and data stewardship for the AustralianRates production stack.'
+            : 'Daily CDR-derived rate intelligence across mortgages, savings, and term deposits.';
 
         var footer = document.createElement('footer');
         footer.className = 'site-footer';
         footer.innerHTML =
             '<div class="site-footer-inner">' +
-                '<details class="footer-technical" id="footer-technical">' +
-                    '<summary class="footer-technical-summary">Technical</summary>' +
-                    '<div class="footer-technical-body">' +
-                        '<span id="footer-commit">Loading commit info...</span>' +
-                        '<span class="footer-sep">|</span>' +
-                        '<span id="footer-log-info" class="footer-log-wrap">' +
-                            '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log private/0</span></a>' +
-                            '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
-                                '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
-                            '</div>' +
-                        '</span>' +
+                '<div class="site-footer-copy">' +
+                    '<div class="site-brand-lockup">' +
+                        '<span class="site-brand-mark" aria-hidden="true">AR</span>' +
+                        '<div class="site-brand-copy">' +
+                            '<strong class="site-brand">AustralianRates</strong>' +
+                            '<span class="footer-label">' + esc(getHeaderTagline(context)) + '</span>' +
+                        '</div>' +
                     '</div>' +
-                '</details>' +
-                '<span class="footer-legal-links">' +
-                    '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
-                    '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
-                    '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
-                    '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
-                '</span>' +
-                '<span class="footer-spacer"></span>' +
-                '<span class="footer-operator">Operator: AustralianRates open-source project &middot; Support: <a href="mailto:support@australianrates.com">support@australianrates.com</a></span>' +
+                    '<p class="footer-blurb">' + esc(footerBlurb) + '</p>' +
+                    '<p class="footer-operator">Operator: AustralianRates open-source project &middot; Support: <a href="mailto:support@australianrates.com">support@australianrates.com</a></p>' +
+                '</div>' +
+                '<div class="site-footer-actions">' +
+                    '<details class="footer-technical" id="footer-technical">' +
+                        '<summary class="footer-technical-summary">Technical</summary>' +
+                        '<div class="footer-technical-body">' +
+                            '<span id="footer-commit">Loading commit info...</span>' +
+                            '<span id="footer-log-info" class="footer-log-wrap">' +
+                                '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log private/0</span></a>' +
+                                '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
+                                    '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
+                                '</div>' +
+                            '</span>' +
+                        '</div>' +
+                    '</details>' +
+                    '<span class="footer-legal-links">' +
+                        '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
+                        '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
+                        '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
+                        '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
+                    '</span>' +
+                '</div>' +
             '</div>';
         document.body.appendChild(footer);
 

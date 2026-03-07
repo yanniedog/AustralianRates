@@ -27,6 +27,15 @@
         return label + ': ' + esc(example.bank_name || '') + ' - ' + esc(example.product_name || '') + ' (' + fmt(example.delta_bps, 2) + ' bps)';
     }
 
+    function renderMetric(label, value) {
+        return (
+            '<div class="exec-metric">' +
+                '<div class="exec-metric-label">' + esc(label) + '</div>' +
+                '<div class="exec-metric-value">' + esc(value) + '</div>' +
+            '</div>'
+        );
+    }
+
     function renderSections(sections) {
         var container = getContainerEl();
         if (!container) return;
@@ -42,16 +51,22 @@
             var topLenderText = topLender
                 ? (esc(topLender.bank_name || '') + ' (' + fmt(topLender.change_count, 0) + ', ' + fmt(topLender.share_pct, 1) + '%)')
                 : 'none';
+            var metricGrid = [
+                renderMetric('Total changes', fmt(metrics.total_changes, 0)),
+                renderMetric('Lenders touched', fmt(metrics.lender_coverage, 0)),
+                renderMetric('Up / Down', fmt(metrics.up_count, 0) + ' / ' + fmt(metrics.down_count, 0)),
+                renderMetric('Mean / Median move', fmt(metrics.mean_move_bps, 2) + ' bps / ' + fmt(metrics.median_move_bps, 2) + ' bps')
+            ].join('');
             return (
                 '<article class="exec-card">' +
-                    '<h3>' + esc(section.title || '') + '</h3>' +
-                    '<p class="exec-window">Window: ' + esc(section.window_start || '') + ' to ' + esc(section.window_end || '') + '</p>' +
-                    '<p class="exec-metric-line"><strong>' + fmt(metrics.total_changes, 0) + '</strong> changes across <strong>' + fmt(metrics.lender_coverage, 0) + '</strong> lenders.</p>' +
-                    '<p class="exec-metric-line">Up/Down split: ' + fmt(metrics.up_count, 0) + ' / ' + fmt(metrics.down_count, 0) + '</p>' +
-                    '<p class="exec-metric-line">Mean/Median move: ' + fmt(metrics.mean_move_bps, 2) + ' bps / ' + fmt(metrics.median_move_bps, 2) + ' bps</p>' +
-                    '<p class="exec-metric-line">Top lender concentration: ' + topLenderText + '</p>' +
-                    '<p class="exec-metric-line">' + standoutText(standouts.largest_increase, 'Largest increase') + '</p>' +
-                    '<p class="exec-metric-line">' + standoutText(standouts.largest_decrease, 'Largest decrease') + '</p>' +
+                    '<div class="exec-kicker">' +
+                        '<h3>' + esc(section.title || '') + '</h3>' +
+                        '<p class="exec-window">' + esc(section.window_start || '') + ' to ' + esc(section.window_end || '') + '</p>' +
+                    '</div>' +
+                    '<div class="exec-metric-grid">' + metricGrid + '</div>' +
+                    '<p class="exec-standouts">Top lender concentration: ' + topLenderText + '</p>' +
+                    '<p class="exec-standouts">' + standoutText(standouts.largest_increase, 'Largest increase') + '</p>' +
+                    '<p class="exec-standouts">' + standoutText(standouts.largest_decrease, 'Largest decrease') + '</p>' +
                     '<p class="exec-narrative">' + esc(section.narrative || '') + '</p>' +
                 '</article>'
             );

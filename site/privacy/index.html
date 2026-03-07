@@ -9,12 +9,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="../legal.css">
     <script src="../theme.js"></script>
 </head>
-<body>
+<body class="ar-legal">
     <a href="#main-content" class="skip-link">Skip to content</a>
     <header class="site-header">
         <div class="site-header-inner">
@@ -29,35 +30,61 @@
         <a href="/term-deposits/" class="section-link">Term Deposits</a>
     </nav>
 
-    <main class="shell legal-main" id="main-content" tabindex="-1">
-        <section class="panel legal-panel">
-            <p class="eyebrow">Privacy</p>
-            <h1>Privacy policy</h1>
-            <p class="subtitle">This page explains what information AustralianRates may process and how to contact us.</p>
+    <main class="shell legal-shell" id="main-content" tabindex="-1">
+        <section class="panel legal-hero">
+            <div class="legal-hero-copy">
+                <p class="eyebrow">Privacy</p>
+                <h1>Privacy policy</h1>
+                <p class="subtitle">This page explains what information AustralianRates may process and how to contact us.</p>
+                <div class="legal-badge-row">
+                    <span class="legal-badge">Public browsing first</span>
+                    <span class="legal-badge">Technical logs only</span>
+                    <span class="legal-badge">No personal profiling</span>
+                </div>
+            </div>
         </section>
 
-        <section class="panel legal-panel">
-            <h2>Data we may process</h2>
-            <p>AustralianRates is designed to publish product-reference rate data. We do not require account creation for public browsing.</p>
-            <p>Operational logs may include technical request metadata such as timestamp, endpoint path, and error context needed for reliability and abuse prevention.</p>
-        </section>
+        <section class="legal-grid">
+            <div class="legal-stack">
+                <section class="panel legal-panel">
+                    <h2>Data we may process</h2>
+                    <p>AustralianRates is designed to publish product-reference rate data. We do not require account creation for public browsing.</p>
+                    <p>Operational logs may include technical request metadata such as timestamp, endpoint path, and error context needed for reliability and abuse prevention.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>How data is used</h2>
-            <p>Technical logs are used for monitoring uptime, debugging ingestion/API issues, and maintaining service integrity.</p>
-            <p>No personal financial profiling or tailored lending recommendations are provided by this site.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>How data is used</h2>
+                    <p>Technical logs are used for monitoring uptime, debugging ingestion/API issues, and maintaining service integrity.</p>
+                    <p>No personal financial profiling or tailored lending recommendations are provided by this site.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Data minimization and public content</h2>
-            <p>The platform is built around public product-reference feeds, not consumer bank-account access. Public pages are intended to remain usable without account sign-up.</p>
-            <p>Published rate datasets focus on lender product attributes rather than personal borrower records.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>Data minimization and public content</h2>
+                    <p>The platform is built around public product-reference feeds, not consumer bank-account access. Public pages are intended to remain usable without account sign-up.</p>
+                    <p>Published rate datasets focus on lender product attributes rather than personal borrower records.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Contact and requests</h2>
-            <p>For privacy questions or correction requests, email <a href="mailto:support@australianrates.com">support@australianrates.com</a>.</p>
-            <p>Project operator: <a href="https://github.com/yanniedog" target="_blank" rel="noopener">yanniedog</a>.</p>
+                <section class="panel legal-panel">
+                    <h2>Contact and requests</h2>
+                    <p>For privacy questions or correction requests, email <a href="mailto:support@australianrates.com">support@australianrates.com</a>.</p>
+                    <p>Project operator: <a href="https://github.com/yanniedog" target="_blank" rel="noopener">yanniedog</a>.</p>
+                </section>
+            </div>
+
+            <aside class="legal-side">
+                <section class="panel legal-support-card">
+                    <h2>Privacy posture</h2>
+                    <p>AustralianRates is designed to stay useful without account creation and without storing personal financial data for public browsing flows.</p>
+                </section>
+
+                <section class="panel legal-support-card">
+                    <h2>Questions or requests</h2>
+                    <div class="legal-callout">
+                        <p class="legal-callout-title">Privacy contact</p>
+                        <p><a href="mailto:support@australianrates.com">support@australianrates.com</a></p>
+                    </div>
+                </section>
+            </aside>
         </section>
     </main>
 

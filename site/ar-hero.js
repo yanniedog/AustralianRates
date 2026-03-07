@@ -20,6 +20,14 @@
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
     var QUICK_COMPARE_LIMIT = 1000;
 
+    function renderHeroStat(el, label, value, title) {
+        if (!el) return;
+        el.innerHTML =
+            '<span class="hero-stat-label">' + esc(label) + '</span>' +
+            '<strong class="hero-stat-value">' + esc(value) + '</strong>';
+        if (title) el.setAttribute('title', title);
+    }
+
     async function loadHeroStats() {
         clientLog('info', 'Hero stats load started', { section: section });
         try {
@@ -32,24 +40,19 @@
             var ratesRes = await fetch(apiBase + '/rates?' + query.toString());
             if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
             var ratesData = await ratesRes.json();
-                if (ratesData && ratesData.total != null) {
+            if (ratesData && ratesData.total != null) {
                 var total = Number(ratesData.total || 0);
-                if (els.statRecords) {
-                    els.statRecords.innerHTML = 'Records: <strong>' + total.toLocaleString() + '</strong>';
-                }
+                renderHeroStat(els.statRecords, 'Records:', total.toLocaleString(), 'Total rate records in database');
                 if (ratesData.data && ratesData.data.length > 0) {
                     var latest = ratesData.data[0];
                     if (els.statUpdated && latest.collection_date) {
                         var renderedDate = timeUtils.formatSourceDateWithLocal
                             ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
                             : { text: String(latest.collection_date) };
-                        els.statUpdated.innerHTML = 'Last updated: <strong>' + esc(renderedDate.text) + '</strong>';
-                        if (renderedDate.title) {
-                            els.statUpdated.setAttribute('title', renderedDate.title);
-                        }
+                        renderHeroStat(els.statUpdated, 'Last updated:', renderedDate.text, renderedDate.title || 'When rates were last collected');
                     }
                     if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
-                        els.statCashRate.innerHTML = 'RBA Cash Rate: <strong>' + pct(latest.rba_cash_rate) + '</strong>';
+                        renderHeroStat(els.statCashRate, 'RBA Cash Rate:', pct(latest.rba_cash_rate), 'Current RBA official cash rate');
                     }
                     clientLog('info', 'Hero stats loaded', {
                         total: total,

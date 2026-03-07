@@ -5,53 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Logs | Admin | AustralianRates</title>
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
-    <link rel="stylesheet" href="admin-common.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="admin-layout.css">
+    <link rel="stylesheet" href="admin-pages.css">
     <script src="../theme.js"></script>
-    <style>
-        .admin-logs { max-width: 640px; margin: 0 auto; padding: 2rem; }
-        .admin-logs h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
-        .admin-logs .back { margin-bottom: 1rem; }
-        .admin-logs .back a { color: var(--brand); text-decoration: none; }
-        .admin-logs section { margin-bottom: 2rem; padding: 1rem; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
-        .admin-logs h2 { font-size: 1.1rem; margin: 0 0 0.75rem; color: var(--muted); }
-        .admin-logs .log-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-        .admin-logs .log-actions button { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
-        .admin-logs .log-actions button.primary { background: var(--brand); color: #fff; border: none; }
-        .admin-logs .log-stats { font-size: 0.9rem; color: var(--muted); margin-top: 0.5rem; }
-        .admin-logs .hint { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
-        .admin-logs .message { margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.9rem; display: none; }
-        .admin-logs .message.visible { display: block; }
-    </style>
 </head>
-<body>
+<body class="ar-admin">
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
         </div>
     </header>
-    <main class="admin-logs" id="main-content" tabindex="-1">
-        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
-        <h1>Logs</h1>
-        <p style="color: var(--muted);">Download or wipe the system log (server) and client log (this browser tab).</p>
-        <div class="message" id="msg"></div>
+    <main class="admin-shell admin-shell--narrow admin-logs" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Logs</p>
+            <h1>Logs</h1>
+            <p class="admin-subtitle">Download or wipe the system log (server) and client log (this browser tab).</p>
+        </div>
+        <div class="admin-message" id="msg"></div>
 
-        <section>
+        <section class="admin-card">
             <h2>System log</h2>
-            <p class="hint">Server-side log (global_log). JSONL includes full structured debug context and traceback for warn/error entries.</p>
-            <div class="log-actions">
+            <p class="admin-hint">Server-side log (global_log). JSONL includes full structured debug context and traceback for warn/error entries.</p>
+            <div class="admin-log-actions log-actions">
                 <button type="button" class="primary" id="download-system-jsonl-btn">Download system log (JSONL)</button>
-                <button type="button" id="download-system-text-btn">Download system log (text)</button>
+                <button type="button" class="secondary" id="download-system-text-btn">Download system log (text)</button>
                 <button type="button" class="danger" id="wipe-system-btn">Wipe system log</button>
             </div>
             <div class="log-stats" id="system-stats">Loading...</div>
         </section>
 
-        <section>
+        <section class="admin-card">
             <h2>Client log</h2>
-            <p class="hint">In-browser session log for this tab. If you opened this page from the main site, the client log may include earlier entries from that session.</p>
-            <div class="log-actions">
+            <p class="admin-hint">In-browser session log for this tab. If you opened this page from the main site, the client log may include earlier entries from that session.</p>
+            <div class="admin-log-actions log-actions">
                 <button type="button" class="primary" id="download-client-btn">Download client log</button>
                 <button type="button" class="danger" id="wipe-client-btn">Wipe client log</button>
             </div>
@@ -71,7 +63,7 @@
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
-                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
             }
 
             function updateClientStats() {

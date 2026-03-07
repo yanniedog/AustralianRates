@@ -1,0 +1,212 @@
+.admin-login-card form,
+.admin-clear,
+.admin-config section,
+.admin-logs,
+.admin-runs,
+.admin-status {
+    display: grid;
+    gap: 16px;
+}
+
+.admin-login-card label {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ar-muted);
+}
+
+.admin-login-card button {
+    width: 100%;
+}
+
+.admin-dash nav {
+    display: grid;
+    gap: 12px;
+}
+
+.admin-status .grid,
+.admin-status #overall-grid,
+.admin-status #e2e-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.admin-status .hint-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin-top: 12px;
+}
+
+.admin-status .payload-actions,
+.admin-status .audit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-status .link-btn {
+    border: 0;
+    background: transparent;
+    color: var(--ar-accent);
+    padding: 0;
+    box-shadow: none;
+    text-decoration: underline;
+}
+
+.admin-status pre,
+.admin-runs pre {
+    margin: 0;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    overflow: auto;
+    max-height: 420px;
+}
+
+.admin-db #db-grid {
+    min-height: 320px;
+}
+
+.admin-db .pagination {
+    margin: 0.5rem 0 0;
+    color: var(--ar-muted);
+    font-size: 0.88rem;
+}
+
+.admin-db .pagination button {
+    margin-left: 6px;
+    padding: 0.45rem 0.72rem;
+}
+
+.admin-db .modal-inner label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ar-muted);
+}
+
+.admin-clear .panel {
+    display: none;
+}
+
+.admin-clear .panel.visible {
+    display: block;
+}
+
+.admin-clear textarea {
+    min-height: 150px;
+}
+
+.admin-clear #key-fields {
+    display: grid;
+    gap: 8px;
+}
+
+.admin-clear #key-fields label {
+    margin-top: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ar-muted);
+}
+
+.admin-config .add-row,
+.admin-config .rate-check-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-config .add-row input {
+    flex: 1 1 220px;
+}
+
+.admin-config .actions {
+    white-space: nowrap;
+}
+
+.admin-config .rate-check-label {
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ar-muted);
+}
+
+.admin-config .actions button {
+    margin-right: 6px;
+    padding: 0.45rem 0.7rem;
+}
+
+.admin-config .env-table .value,
+.admin-runs .mono {
+    font-family: "JetBrains Mono", Consolas, monospace;
+}
+
+.admin-runs .run-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.admin-runs .run-item {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-runs .run-item .head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.admin-runs .run-item .meta {
+    color: var(--ar-muted);
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+.admin-runs .backlog-block + .backlog-block {
+    margin-top: 14px;
+}
+
+.admin-runs details {
+    margin-top: 8px;
+}
+
+.admin-logs .log-stats {
+    color: var(--ar-muted);
+    font-size: 0.88rem;
+}
+
+.admin-logs .danger,
+.admin-clear .danger {
+    border-color: rgba(255, 146, 143, 0.34);
+    color: #ffd7d5;
+    background: rgba(255, 146, 143, 0.12);
+}
+
+@media (max-width: 760px) {
+    .admin-status .grid,
+    .admin-status #overall-grid,
+    .admin-status #e2e-grid,
+    .admin-dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}

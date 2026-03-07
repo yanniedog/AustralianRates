@@ -1,0 +1,394 @@
+#rate-table {
+    position: relative;
+    width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--ar-line);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.explorer-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.table-settings-btn {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--ar-pill-border);
+    color: var(--ar-muted);
+    box-shadow: none;
+}
+
+.table-settings-popover {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    z-index: 20;
+    width: min(320px, 92vw);
+    max-height: 380px;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 18px;
+    border: 1px solid var(--ar-line);
+    background: var(--ar-surface-strong);
+    box-shadow: var(--ar-shadow);
+}
+
+.table-settings-section {
+    display: grid;
+    gap: 8px;
+}
+
+.table-settings-section + .table-settings-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ar-line);
+}
+
+.table-settings-title {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ar-muted);
+}
+
+.table-settings-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.84rem;
+}
+
+.table-settings-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--ar-accent);
+}
+
+.tabulator {
+    border: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: transparent !important;
+    color: var(--ar-text) !important;
+    font-family: var(--ar-font-ui) !important;
+    font-size: 0.85rem !important;
+}
+
+.tabulator .tabulator-header {
+    border-bottom: 1px solid var(--ar-line) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.tabulator .tabulator-col {
+    background: transparent !important;
+    border-right: 1px solid var(--ar-line) !important;
+    color: var(--ar-strong) !important;
+}
+
+.tabulator .tabulator-col:last-child,
+.tabulator .tabulator-cell:last-child {
+    border-right: 0 !important;
+}
+
+.tabulator .tabulator-col .tabulator-col-content,
+.tabulator .tabulator-cell {
+    padding: 10px 9px !important;
+}
+
+.tabulator .tabulator-col .tabulator-col-title,
+.tabulator .tabulator-col .ar-move-col-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.tabulator .tabulator-row {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    background: transparent !important;
+}
+
+.tabulator .tabulator-row:nth-child(2n) {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.tabulator .tabulator-row:hover {
+    background: var(--ar-accent-soft) !important;
+}
+
+.tabulator .tabulator-cell a,
+.chart-point-link {
+    color: var(--ar-accent);
+}
+
+.tabulator .tabulator-footer {
+    border-top: 1px solid var(--ar-line) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: var(--ar-muted) !important;
+}
+
+#rate-table .tabulator-tableholder {
+    overflow: auto !important;
+}
+
+.tabulator .tabulator-page {
+    min-width: 34px;
+    min-height: 34px;
+    border-radius: 10px !important;
+    border: 1px solid var(--ar-pill-border) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: var(--ar-muted) !important;
+}
+
+.tabulator .tabulator-page.active {
+    color: #09111d !important;
+    border-color: transparent !important;
+    background: linear-gradient(135deg, var(--ar-accent), var(--ar-accent-2)) !important;
+}
+
+#pivot-output,
+#chart-output {
+    border: 1px solid var(--ar-line);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    overflow: auto;
+}
+
+#pivot-output {
+    padding: 12px;
+}
+
+#chart-output {
+    min-height: 320px;
+}
+
+.pivot-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pvtUi,
+.pvtTable {
+    color: var(--ar-text) !important;
+    font-family: var(--ar-font-ui) !important;
+}
+
+.pvtUi select,
+.pvtUi input[type="text"] {
+    border-radius: 12px !important;
+    border-color: var(--ar-line) !important;
+    background: rgba(10, 15, 25, 0.9) !important;
+    color: var(--ar-text) !important;
+}
+
+.pvtAxisContainer,
+.pvtVals,
+.pvtFilterBox {
+    border-color: var(--ar-line) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.pvtTable th,
+.pvtTable td {
+    border-color: var(--ar-line) !important;
+    background: transparent !important;
+    color: var(--ar-text) !important;
+}
+
+.exec-card {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.exec-kicker {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.exec-kicker h3 {
+    font-size: 1rem;
+}
+
+.exec-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.exec-metric {
+    padding: 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.exec-metric-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ar-muted);
+}
+
+.exec-metric-value {
+    margin-top: 0.3rem;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: var(--ar-strong);
+}
+
+.exec-standouts,
+.exec-narrative {
+    margin: 0;
+    font-size: 0.84rem;
+}
+
+.rate-change-details {
+    overflow: hidden;
+    border-radius: 20px;
+    border: 1px solid var(--ar-line);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.rate-change-summary {
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 16px 18px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.rate-change-summary::-webkit-details-marker {
+    display: none;
+}
+
+.rate-change-summary-title {
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ar-muted);
+}
+
+.rate-change-headline {
+    text-align: right;
+    font-size: 0.82rem;
+}
+
+.rate-change-warning,
+.chart-point-details {
+    margin: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+}
+
+.rate-change-warning {
+    border: 1px solid rgba(255, 146, 143, 0.38);
+    background: rgba(255, 146, 143, 0.12);
+    color: #ffd6d4;
+}
+
+.rate-change-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 12px 12px;
+    display: grid;
+    gap: 10px;
+}
+
+.rate-change-item {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.rate-change-main,
+.rate-change-sub {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.rate-change-bank,
+.rate-change-product {
+    color: var(--ar-strong);
+}
+
+.rate-change-delta {
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.rate-change-delta.up {
+    color: #ffd6d4;
+    background: rgba(255, 146, 143, 0.12);
+}
+
+.rate-change-delta.down {
+    color: #d7ffe4;
+    background: rgba(102, 209, 150, 0.14);
+}
+
+.rate-change-delta.flat {
+    color: var(--ar-muted);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.rate-change-list.section-savings .rate-change-delta.up,
+.rate-change-list.section-term-deposits .rate-change-delta.up {
+    color: #d7ffe4;
+    background: rgba(102, 209, 150, 0.14);
+}
+
+.rate-change-list.section-savings .rate-change-delta.down,
+.rate-change-list.section-term-deposits .rate-change-delta.down {
+    color: #ffd6d4;
+    background: rgba(255, 146, 143, 0.12);
+}
+
+.chart-point-details {
+    border: 1px solid var(--ar-line);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 760px) {
+    .exec-metric-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #chart-output {
+        min-height: 220px;
+    }
+
+    .tabulator .tabulator-col .tabulator-col-content,
+    .tabulator .tabulator-cell {
+        padding: 8px 7px !important;
+    }
+}

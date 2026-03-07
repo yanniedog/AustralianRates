@@ -9,12 +9,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="../legal.css">
     <script src="../theme.js"></script>
 </head>
-<body>
+<body class="ar-legal">
     <a href="#main-content" class="skip-link">Skip to content</a>
     <header class="site-header">
         <div class="site-header-inner">
@@ -29,35 +30,66 @@
         <a href="/term-deposits/" class="section-link">Term Deposits</a>
     </nav>
 
-    <main class="shell legal-main" id="main-content" tabindex="-1">
-        <section class="panel legal-panel">
-            <p class="eyebrow">Contact</p>
-            <h1>Get in touch</h1>
-            <p class="subtitle">Use the details below to report issues, request corrections, or ask project questions.</p>
+    <main class="shell legal-shell" id="main-content" tabindex="-1">
+        <section class="panel legal-hero">
+            <div class="legal-hero-copy">
+                <p class="eyebrow">Contact</p>
+                <h1>Get in touch</h1>
+                <p class="subtitle">Use the details below to report issues, request corrections, or ask project questions.</p>
+                <div class="legal-badge-row">
+                    <span class="legal-badge">Corrections welcome</span>
+                    <span class="legal-badge">Project inquiries</span>
+                    <span class="legal-badge">Privacy questions</span>
+                </div>
+            </div>
         </section>
 
-        <section class="panel legal-panel">
-            <h2>Email</h2>
-            <p><a href="mailto:support@australianrates.com">support@australianrates.com</a></p>
-            <p>Please include the page URL, product/bank context, and date when reporting a data issue.</p>
-        </section>
+        <section class="legal-grid">
+            <div class="legal-stack">
+                <section class="panel legal-panel">
+                    <h2>Email</h2>
+                    <p><a href="mailto:support@australianrates.com">support@australianrates.com</a></p>
+                    <p>Please include the page URL, product/bank context, and date when reporting a data issue.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Correction policy</h2>
-            <p>Data correction requests are assessed against source feeds and capture logs. Validated issues are queued for fix in the next ingestion cycle.</p>
-            <p>For urgent corrections, include screenshots or source URLs so the issue can be verified faster.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>Correction policy</h2>
+                    <p>Data correction requests are assessed against source feeds and capture logs. Validated issues are queued for fix in the next ingestion cycle.</p>
+                    <p>For urgent corrections, include screenshots or source URLs so the issue can be verified faster.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Scope and limitations</h2>
-            <p>AustralianRates provides general product-reference information and does not offer personal lending advice, credit assistance, or broker representation.</p>
-            <p>Always confirm pricing, eligibility, and fees directly with the institution before acting.</p>
-        </section>
+                <section class="panel legal-panel">
+                    <h2>Scope and limitations</h2>
+                    <p>AustralianRates provides general product-reference information and does not offer personal lending advice, credit assistance, or broker representation.</p>
+                    <p>Always confirm pricing, eligibility, and fees directly with the institution before acting.</p>
+                </section>
 
-        <section class="panel legal-panel">
-            <h2>Project profile</h2>
-            <p>Open-source repository and issue tracking are maintained at <a href="https://github.com/yanniedog/AustralianRates" target="_blank" rel="noopener">github.com/yanniedog/AustralianRates</a>.</p>
-            <p>Operator reference: <a href="https://github.com/yanniedog" target="_blank" rel="noopener">yanniedog</a>.</p>
+                <section class="panel legal-panel">
+                    <h2>Project profile</h2>
+                    <p>Open-source repository and issue tracking are maintained at <a href="https://github.com/yanniedog/AustralianRates" target="_blank" rel="noopener">github.com/yanniedog/AustralianRates</a>.</p>
+                    <p>Operator reference: <a href="https://github.com/yanniedog" target="_blank" rel="noopener">yanniedog</a>.</p>
+                </section>
+            </div>
+
+            <aside class="legal-side">
+                <section class="panel legal-support-card">
+                    <h2>What helps most</h2>
+                    <ul class="legal-list">
+                        <li>The exact page URL where you saw the issue.</li>
+                        <li>The bank, product name, and collection date involved.</li>
+                        <li>A screenshot or source URL when available.</li>
+                    </ul>
+                </section>
+
+                <section class="panel legal-support-card">
+                    <h2>Response workflow</h2>
+                    <p>Issues are reviewed against source feeds and capture logs. When verified, fixes are queued into the next ingestion cycle.</p>
+                    <div class="legal-callout">
+                        <p class="legal-callout-title">Primary contact</p>
+                        <p><a href="mailto:support@australianrates.com">support@australianrates.com</a></p>
+                    </div>
+                </section>
+            </aside>
         </section>
     </main>
 

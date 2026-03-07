@@ -5,48 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Admin Config | AustralianRates</title>
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
-    <link rel="stylesheet" href="admin-common.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="admin-layout.css">
+    <link rel="stylesheet" href="admin-pages.css">
     <script src="../theme.js"></script>
-    <style>
-        .admin-config { max-width: 900px; margin: 0 auto; padding: 2rem; }
-        .admin-config h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
-        .admin-config .back { margin-bottom: 1rem; }
-        .admin-config .back a { color: var(--brand); text-decoration: none; }
-        .admin-config section { margin-bottom: 2rem; }
-        .admin-config h2 { font-size: 1.1rem; margin: 0 0 0.75rem; color: var(--muted); }
-        .admin-config table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; box-shadow: var(--panel-shadow); }
-        .admin-config th, .admin-config td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
-        .admin-config .actions { white-space: nowrap; }
-        .admin-config .actions button { margin-right: 6px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
-        .admin-config .actions button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
-        .admin-config .add-row { margin-top: 1rem; }
-        .admin-config .add-row input { padding: 8px 12px; margin-right: 8px; border: 1px solid var(--line); border-radius: 6px; width: 180px; background: var(--input-bg); color: var(--text); }
-        .admin-config .add-row button { padding: 8px 16px; background: var(--brand); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-        .admin-config .env-table .value { font-family: monospace; font-size: 0.9rem; }
-        .admin-config .message { padding: 10px; border-radius: 8px; margin-bottom: 1rem; display: none; }
-        .admin-config .message.visible { display: block; }
-        .admin-config .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
-        .admin-config .rate-check-row { margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-        .admin-config .rate-check-row label { min-width: 140px; }
-        .admin-config .rate-check-row input[type="number"] { width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--input-bg); color: var(--text); }
-        .admin-config .rate-check-label { min-width: 140px; color: var(--muted); }
-    </style>
 </head>
-<body>
+<body class="ar-admin">
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
         </div>
     </header>
-    <main class="admin-config" id="main-content" tabindex="-1">
-        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
-        <h1>Configuration</h1>
-        <div class="message" id="msg"></div>
-        <section id="rate-check-section">
+    <main class="admin-shell admin-shell--wide admin-config" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Configuration</p>
+            <h1>Configuration</h1>
+            <p class="admin-subtitle">Manage schedule defaults, key-value config overrides, and read-only worker environment values.</p>
+        </div>
+        <div class="admin-message" id="msg"></div>
+        <section class="admin-card" id="rate-check-section">
             <h2>Rate check schedule</h2>
-            <p class="admin-config hint">Server checks mortgage, savings and term deposit rates on this interval. Minimum is 360 minutes (6 hours). Last run is shown in your local timezone.</p>
+            <p class="admin-hint">Server checks mortgage, savings and term deposit rates on this interval. Minimum is 360 minutes (6 hours). Last run is shown in your local timezone.</p>
             <div class="rate-check-row">
                 <label for="rate-check-interval">Interval (minutes)</label>
                 <input type="number" id="rate-check-interval" min="360" max="10080" step="1" value="360">
@@ -57,7 +41,7 @@
                 <span id="rate-check-last-run">-</span>
             </div>
         </section>
-        <section>
+        <section class="admin-card">
             <h2>App config (key-value overrides)</h2>
             <table id="config-table">
                 <thead><tr><th>Key</th><th>Value</th><th class="actions">Actions</th></tr></thead>
@@ -69,7 +53,7 @@
                 <button type="button" id="add-config-btn">Add</button>
             </div>
         </section>
-        <section>
+        <section class="admin-card">
             <h2>Worker env (read-only)</h2>
             <table class="env-table" id="env-table">
                 <thead><tr><th>Variable</th><th>Value</th></tr></thead>
@@ -92,7 +76,7 @@
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
-                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
                 setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
             }
 
@@ -132,7 +116,7 @@
                     configTbody.innerHTML = '';
                     d.config.forEach(function (row) {
                         var tr = document.createElement('tr');
-                        tr.innerHTML = '<td>' + escapeHtml(row.key) + '</td><td><input type="text" data-key="' + escapeHtml(row.key) + '" value="' + escapeHtml(row.value || '') + '" style="width:100%;padding:6px;border:1px solid var(--line);border-radius:4px;"></td><td class="actions"><button class="primary save-btn">Save</button><button class="del-btn">Delete</button></td>';
+                        tr.innerHTML = '<td>' + escapeHtml(row.key) + '</td><td><input type="text" data-key="' + escapeHtml(row.key) + '" value="' + escapeHtml(row.value || '') + '"></td><td class="actions"><button class="primary save-btn">Save</button><button class="secondary del-btn">Delete</button></td>';
                         configTbody.appendChild(tr);
                         tr.querySelector('.save-btn').addEventListener('click', function () { saveConfig(row.key, tr.querySelector('input').value); });
                         tr.querySelector('.del-btn').addEventListener('click', function () { deleteConfig(row.key); });
@@ -143,7 +127,7 @@
             function saveConfig(key, value) {
                 portal.fetchAdmin('/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key, value: value }) })
                     .then(function (r) { return r.json(); })
-                    .then(function (d) { if (d.ok) { showMsg('Saved.'); loadConfig(); } else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); } })
+                    .then(function (d) { if (d.ok) { showMsg('Saved.', false); loadConfig(); } else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); } })
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
             }
 
@@ -151,7 +135,7 @@
                 if (!confirm('Remove key "' + key + '"?')) return;
                 portal.fetchAdmin('/config', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key }) })
                     .then(function (r) { return r.json(); })
-                    .then(function (d) { if (d.ok) { showMsg('Deleted.'); loadConfig(); } else { showMsg('Delete failed', true); } })
+                    .then(function (d) { if (d.ok) { showMsg('Deleted.', false); loadConfig(); } else { showMsg('Delete failed', true); } })
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Delete failed', true); });
             }
 

@@ -68,6 +68,13 @@
         ].filter(Boolean).join(' | ');
     }
 
+    function changeTone(delta) {
+        if (!Number.isFinite(delta)) return 'flat';
+        if (delta > 0) return 'up';
+        if (delta < 0) return 'down';
+        return 'flat';
+    }
+
     function renderRows(rows) {
         var listEl = getListEl();
         if (!listEl) return;
@@ -93,18 +100,18 @@
             var date = ymd(row.collection_date || row.changed_at);
             var detail = esc(detailText(row));
             var delta = Number(row.delta_bps);
-            var dirClass = Number.isFinite(delta) ? (delta > 0 ? 'up' : (delta < 0 ? 'down' : 'flat')) : 'flat';
+            var dirClass = changeTone(delta);
             var deltaText = Number.isFinite(delta) ? ((delta > 0 ? '+' : '') + delta.toFixed(1) + ' bps') : '';
             return (
                 '<li class="rate-change-item">' +
                     '<div class="rate-change-main">' +
                         '<span class="rate-change-date">' + esc(date) + '</span>' +
                         '<span class="rate-change-bank">' + bank + '</span>' +
-                        '<span class="rate-change-product">' + product + '</span>' +
+                        (deltaText ? '<span class="rate-change-delta ' + dirClass + '">' + esc(deltaText) + '</span>' : '') +
                     '</div>' +
                     '<div class="rate-change-sub">' +
+                        '<span class="rate-change-product">' + product + '</span>' +
                         '<span class="rate-change-rates">' + esc(fromRate) + ' -> ' + esc(toRate) + '</span>' +
-                        (deltaText ? '<span class="rate-change-delta ' + dirClass + '">' + esc(deltaText) + '</span>' : '') +
                         (detail ? '<span class="rate-change-detail">' + detail + '</span>' : '') +
                     '</div>' +
                 '</li>'
@@ -127,15 +134,16 @@
             ? ymd(rows[0].collection_date || rows[0].changed_at)
             : 'n/a';
         var integrityLabel = integrityText(integrity);
-        headlineEl.textContent = 'Latest: ' + latestDate + ' | ' + total + ' tracked changes | ' + integrityLabel;
+        headlineEl.textContent = 'Latest ' + latestDate + ' | ' + total + ' tracked changes | ' + integrityLabel;
     }
 
     function renderIntegrityWarning(integrity) {
         var warningEl = getWarningEl();
         var detailsEl = getDetailsEl();
-        if (detailsEl) detailsEl.classList.toggle('is-stale', !!(integrity && integrity.ok === false));
+        var isStale = !!(integrity && integrity.ok === false);
+        if (detailsEl) detailsEl.classList.toggle('is-stale', isStale);
         if (!warningEl) return;
-        if (integrity && integrity.ok === false) {
+        if (isStale) {
             warningEl.hidden = false;
             warningEl.textContent = 'Integrity warning: ' + String(integrity.summary || 'Potential omissions, mismatches, or collisions detected. Data is marked stale for review.');
         } else {

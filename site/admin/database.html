@@ -5,65 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Admin Database | AustralianRates</title>
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="../frame.css">
-    <link rel="stylesheet" href="admin-common.css">
-    <script src="../theme.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css">
+    <link rel="stylesheet" href="../public-shell.css">
+    <link rel="stylesheet" href="admin-layout.css">
+    <link rel="stylesheet" href="admin-pages.css">
     <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css">
-    <style>
-        .admin-db { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-        .admin-db h1 { margin: 0 0 0.5rem; font-size: 1.5rem; }
-        .admin-db .back { margin-bottom: 1rem; }
-        .admin-db .back a { color: var(--brand); text-decoration: none; }
-        .admin-db .toolbar { margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-        .admin-db .toolbar select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 200px; background: var(--input-bg); color: var(--text); }
-        .admin-db .toolbar button { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; font-weight: 500; }
-        .admin-db .toolbar button.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
-        .admin-db .toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .admin-db .pagination { margin: 0.75rem 0; font-size: 0.9rem; color: var(--muted); }
-        .admin-db .pagination button { margin: 0 4px; padding: 4px 10px; cursor: pointer; border-radius: 4px; }
-        .admin-db #db-grid { min-height: 300px; }
-        .admin-db .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
-        .admin-db .modal.visible { display: flex; }
-        .admin-db .modal-inner { background: var(--card); border-radius: 12px; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; padding: 1.5rem; box-shadow: var(--panel-shadow); }
-        .admin-db .modal-inner h3 { margin: 0 0 1rem; }
-        .admin-db .modal-inner label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--muted); }
-        .admin-db .modal-inner input, .admin-db .modal-inner textarea { width: 100%; padding: 8px 10px; margin-bottom: 0.75rem; border: 1px solid var(--line); border-radius: 6px; box-sizing: border-box; background: var(--input-bg); color: var(--text); }
-        .admin-db .modal-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
-        .admin-db .modal-actions button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; }
-        .admin-db .modal-actions .save { background: var(--brand); color: #fff; }
-        .admin-db .message { padding: 10px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; display: none; }
-        .admin-db .message.visible { display: block; }
-    </style>
+    <script src="../theme.js"></script>
 </head>
-<body>
+<body class="ar-admin">
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
         </div>
     </header>
-    <main class="admin-db" id="main-content" tabindex="-1">
-        <div class="back"><a href="dashboard.html">Back to dashboard</a></div>
-        <h1>Database</h1>
-        <div class="message" id="msg"></div>
-        <div class="toolbar">
+    <main class="admin-shell admin-shell--wide admin-db" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Data access</p>
+            <h1>Database</h1>
+            <p class="admin-subtitle">Inspect and manage row-level data for production tables.</p>
+        </div>
+        <div class="admin-message" id="msg"></div>
+        <div class="admin-toolbar">
             <select id="table-select">
                 <option value="">Select table</option>
             </select>
             <button type="button" class="primary" id="add-btn" disabled>Add row</button>
-            <button type="button" id="edit-btn" disabled>Edit selected</button>
-            <button type="button" id="delete-btn" disabled>Delete selected</button>
-            <button type="button" id="refresh-btn" disabled>Refresh</button>
+            <button type="button" class="secondary" id="edit-btn" disabled>Edit selected</button>
+            <button type="button" class="secondary" id="delete-btn" disabled>Delete selected</button>
+            <button type="button" class="secondary" id="refresh-btn" disabled>Refresh</button>
         </div>
-        <div class="pagination" id="pagination" style="display:none;"></div>
+        <div class="pagination" id="pagination"></div>
         <div id="db-grid"></div>
-        <div class="modal" id="row-modal">
-            <div class="modal-inner">
+        <div class="admin-modal" id="row-modal">
+            <div class="admin-modal-inner modal-inner">
                 <h3 id="modal-title">Row</h3>
-                <div id="modal-fields"></div>
-                <div class="modal-actions">
+                <div id="modal-fields" class="admin-form-grid"></div>
+                <div class="admin-modal-actions modal-actions">
                     <button type="button" class="save" id="modal-save">Save</button>
-                    <button type="button" class="cancel" id="modal-cancel">Cancel</button>
+                    <button type="button" class="secondary cancel" id="modal-cancel">Cancel</button>
                 </div>
             </div>
         </div>
@@ -99,15 +82,8 @@
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
-                msgEl.className = 'message visible ' + (isError ? 'error' : 'success');
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
                 setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
-            }
-
-            function escapeHtml(s) {
-                if (s == null) return '';
-                var div = document.createElement('div');
-                div.textContent = s;
-                return div.innerHTML;
             }
 
             function loadTables() {
@@ -276,7 +252,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(keyBody),
                 }).then(function (r) { return r.json(); }).then(function (d) {
-                    if (d.ok) { showMsg('Deleted.'); selectTable(currentTable); } else { showMsg(d.error && d.error.message ? d.error.message : 'Delete failed', true); }
+                    if (d.ok) { showMsg('Deleted.', false); selectTable(currentTable); } else { showMsg(d.error && d.error.message ? d.error.message : 'Delete failed', true); }
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Delete failed', true); });
             });
 
@@ -290,7 +266,7 @@
                 portal.fetchAdmin(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d.ok) { closeModal(); showMsg('Saved.'); selectTable(currentTable); } else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); }
+                        if (d.ok) { closeModal(); showMsg('Saved.', false); selectTable(currentTable); } else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); }
                     })
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
             });
