@@ -14,9 +14,19 @@ type WorkerCacheStorage = CacheStorage & {
   default?: Cache
 }
 
+const INTERNAL_PROBE_HOST = 'internal.australianrates.test'
+
 function truthyQuery(value: string | undefined): boolean {
   const normalized = String(value ?? '').trim().toLowerCase()
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function isInternalProbeRequest(c: Context<AppContext>): boolean {
+  try {
+    return new URL(c.req.url).hostname === INTERNAL_PROBE_HOST
+  } catch {
+    return false
+  }
 }
 
 function scheduleBackgroundTask(context: unknown, task: Promise<unknown>): boolean {
@@ -44,6 +54,7 @@ export async function shouldEnableAdminDebugTiming(c: Context<AppContext>): Prom
 
 export function shouldBypassLatestCache(c: Context<AppContext>, debugTiming: boolean): boolean {
   if (debugTiming) return true
+  if (isInternalProbeRequest(c)) return true
   if (truthyQuery(c.req.query('cache_bust'))) return true
   return Boolean(c.req.header('Authorization') || c.req.header('Cf-Access-Jwt-Assertion'))
 }

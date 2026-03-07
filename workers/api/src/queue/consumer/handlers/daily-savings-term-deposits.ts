@@ -16,15 +16,17 @@ import { log } from '../../../utils/logger'
 import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { nowIso } from '../../../utils/time'
 import type { DatasetKind } from '../../../../../../packages/shared/src'
+import { finalizeLenderDatasetIfReady } from '../finalization'
 import { elapsedMs, serializeForLog, shortUrlForLog, summarizeEndpointHosts, summarizeProductSample, summarizeStatusCodes } from '../log-helpers'
 import { maxCdrProductPages } from '../retry-config'
 import { bankNameForLender, markProductsSeenForRun } from '../series-tracking'
+import { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 
 export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLenderJob): Promise<void> {
   const startedAt = Date.now()
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!lender) throw new Error(`unknown_lender_code:${job.lenderCode}`)
-  const selectedDatasets = new Set(job.datasets?.length ? job.datasets : ['savings', 'term_deposits'])
+  const selectedDatasets = new Set<DatasetKind>(job.datasets?.length ? job.datasets : ['savings', 'term_deposits'])
   const shouldFetchSavings = selectedDatasets.has('savings')
   const shouldFetchTd = selectedDatasets.has('term_deposits')
   log.info('consumer', `daily_savings_lender_fetch started`, {
@@ -86,6 +88,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   const tdFallbackFetchEventIdByProductId = new Map<string, number>()
   let savingsIndexSucceeded = false
   let tdIndexSucceeded = false
+  const observedUpstreamStatuses: number[] = []
   const observedUpstreamBlocks: Array<{ sourceUrl: string; status: number; reasonCode: string; fetchEventId: number | null }> = []
   const endpointDiagnostics: Array<Record<string, unknown>> = []
   let collectionMs = 0
@@ -140,6 +143,12 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
             nextUrl: null as string | null,
           }),
     ])
+    for (const payload of savingsProducts.rawPayloads) {
+      observedUpstreamStatuses.push(payload.status)
+    }
+    for (const payload of tdProducts.rawPayloads) {
+      observedUpstreamStatuses.push(payload.status)
+    }
     indexPayloads += savingsProducts.rawPayloads.length + tdProducts.rawPayloads.length
     const uniqueSavingsIds = Array.from(new Set(savingsProducts.productIds)).filter(Boolean)
     const uniqueTdIds = Array.from(new Set(tdProducts.productIds)).filter(Boolean)
@@ -392,6 +401,11 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   const finalizeDatasets: DatasetKind[] = []
   if (shouldFetchSavings && savingsIndexSucceeded) finalizeDatasets.push('savings')
   if (shouldFetchTd && tdIndexSucceeded) finalizeDatasets.push('term_deposits')
+  const softFailNoSignals = shouldSoftFailNoSignals({
+    lenderCode: job.lenderCode,
+    successfulIndexFetch: finalizeDatasets.length > 0,
+    observedUpstreamStatuses,
+  })
   const finalizerEnqueue =
     finalizeDatasets.length > 0
       ? await enqueueLenderFinalizeJobs(env, {
@@ -438,6 +452,8 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
           endpointsTried,
           indexPayloads,
         },
+        observedUpstreamStatuses,
+        softFailNoSignals,
         upstreamBlocks: {
           count: observedUpstreamBlocks.length,
           fetchEventIds: observedUpstreamBlocks.map((item) => item.fetchEventId).filter((id) => id != null),
@@ -464,6 +480,27 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   }
 
   if (finalizeDatasets.length === 0) {
+    if (softFailNoSignals) {
+      for (const dataset of selectedDatasets) {
+        await finalizeLenderDatasetIfReady(env, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset,
+        })
+      }
+      log.info('consumer', 'daily_savings_lender_fetch completed: 0 written, no deposit signals', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `date=${job.collectionDate} endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
+          ` selected_datasets=${serializeForLog(Array.from(selectedDatasets))}` +
+          ` statuses=${serializeForLog(observedUpstreamStatuses)}` +
+          ` upstream_blocks=${serializeForLog(observedUpstreamBlocks)}` +
+          ` endpoint_diagnostics=${serializeForLog(endpointDiagnostics)}` +
+          ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(startedAt)}`,
+      })
+      return
+    }
     log.warn('consumer', 'daily_savings_lender_fetch empty_result', {
       runId: job.runId,
       lenderCode: job.lenderCode,

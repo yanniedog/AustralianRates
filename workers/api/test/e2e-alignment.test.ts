@@ -65,7 +65,7 @@ describe('e2e alignment API classification', () => {
     )
 
     const result = await runE2ECheck(makeEnv(makeDb()), {
-      origin: 'https://www.australianrates.com',
+      origin: 'https://probe.example.com',
     })
 
     expect(result.reasonCode).toBe('e2e_ok')
@@ -87,7 +87,7 @@ describe('e2e alignment API classification', () => {
     )
 
     const result = await runE2ECheck(makeEnv(makeDb()), {
-      origin: 'https://www.australianrates.com',
+      origin: 'https://probe.example.com',
     })
 
     expect(result.reasonCode).toBe('api_invalid_payload')
@@ -107,7 +107,7 @@ describe('e2e alignment API classification', () => {
     )
 
     const result = await runE2ECheck(makeEnv(makeDb()), {
-      origin: 'https://www.australianrates.com',
+      origin: 'https://probe.example.com',
     })
 
     expect(result.reasonCode).toBe('api_unreachable')

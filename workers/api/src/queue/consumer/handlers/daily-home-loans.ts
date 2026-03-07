@@ -18,26 +18,14 @@ import { log } from '../../../utils/logger'
 import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { nowIso } from '../../../utils/time'
 import { recordDroppedAnomalies } from '../anomalies'
+import { finalizeLenderDatasetIfReady } from '../finalization'
 import { elapsedMs, serializeForLog, shortUrlForLog, summarizeDropReasons, summarizeEndpointHosts, summarizeProductSample, summarizeStatusCodes } from '../log-helpers'
 import { maxCdrProductPages } from '../retry-config'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun } from '../series-tracking'
+import { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 import { splitValidatedRows } from '../validation'
 
-function hasOnlyNon2xxStatuses(statuses: number[]): boolean {
-  return statuses.length > 0 && statuses.every((status) => status < 200 || status >= 300)
-}
-
-export function shouldSoftFailNoSignals(input: {
-  lenderCode: string
-  successfulIndexFetch: boolean
-  observedUpstreamStatuses: number[]
-}): boolean {
-  return (
-    input.lenderCode === 'ubank' &&
-    !input.successfulIndexFetch &&
-    hasOnlyNon2xxStatuses(input.observedUpstreamStatuses)
-  )
-}
+export { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 
 export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
   const jobStartedAt = Date.now()
@@ -516,6 +504,11 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         (observedUpstreamBlocks.length > 0 ? ` upstream_blocks=${observedUpstreamBlocks.length}` : ''),
     })
     if (noMortgageSignals) {
+      await finalizeLenderDatasetIfReady(env, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+      })
       log.info('consumer', `daily_lender_fetch completed: 0 written, no mortgage signals`, {
         runId: job.runId,
         lenderCode: job.lenderCode,

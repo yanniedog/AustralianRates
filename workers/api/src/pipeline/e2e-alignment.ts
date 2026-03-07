@@ -2,6 +2,7 @@ import type { EnvBindings } from '../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts } from '../utils/time'
+import { dispatchInternalPublicApiRequest } from './internal-public-api-request'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS, LATEST_ALL_PROBE_SOURCE_MODE } from './latest-all-probe'
 import { captureProbePayload, type ProbeCapturePolicy } from './probe-capture'
 import { extractCollectionDates, normalizeIsoDateLike, parseJsonText, parseRowsPayload } from './probe-payloads'
@@ -117,6 +118,127 @@ function normalizeOrigin(input: string): string {
   return String(input || '').replace(/\/+$/, '')
 }
 
+async function finalizeLatestAllProbeResponse(
+  env: EnvBindings,
+  input: {
+    url: string
+    targetCollectionDate: string
+    sourceType: 'probe_e2e_alignment_latest_all' | 'probe_e2e_alignment_latest_all_retry'
+    capturePolicy: ProbeCapturePolicy
+  },
+  response: Response,
+  durationMs: number,
+): Promise<PathProbeResult> {
+  const bodyText = await response.text()
+
+  if (!response.ok) {
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.url,
+      reason: 'api_unreachable',
+      policy: input.capturePolicy,
+      payload: bodyText,
+      status: response.status,
+      headers: response.headers,
+      durationMs,
+      note: 'e2e_latest_all non_2xx',
+    })
+    return {
+      code: 'api_unreachable',
+      status: response.status,
+      detail: `HTTP ${response.status}`,
+      fetchEventId: captured.fetchEventId,
+    }
+  }
+
+  const parsed = parseJsonText(bodyText)
+  if (!parsed.ok) {
+    const block = detectUpstreamBlock({
+      status: response.status,
+      body: bodyText,
+      headers: response.headers,
+    })
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.url,
+      reason: 'api_invalid_payload',
+      policy: input.capturePolicy,
+      payload: bodyText,
+      status: response.status,
+      headers: response.headers,
+      durationMs,
+      note: `e2e_latest_all ${parsed.reason}`,
+    })
+    return {
+      code: 'api_invalid_payload',
+      status: response.status,
+      detail: `invalid_payload:${parsed.reason}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
+      fetchEventId: captured.fetchEventId,
+    }
+  }
+
+  const rowsResult = parseRowsPayload(parsed.value)
+  if (!rowsResult.ok) {
+    const block = detectUpstreamBlock({
+      status: response.status,
+      body: bodyText,
+      headers: response.headers,
+    })
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.url,
+      reason: 'api_invalid_payload',
+      policy: input.capturePolicy,
+      payload: bodyText,
+      status: response.status,
+      headers: response.headers,
+      durationMs,
+      note: `e2e_latest_all ${rowsResult.reason}`,
+    })
+    return {
+      code: 'api_invalid_payload',
+      status: response.status,
+      detail: `invalid_payload:${rowsResult.reason}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
+      fetchEventId: captured.fetchEventId,
+    }
+  }
+
+  const targetDate = normalizeIsoDateLike(input.targetCollectionDate)
+  const dates = extractCollectionDates(rowsResult.rows)
+  if (dates.includes(targetDate)) {
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.url,
+      reason: 'success',
+      policy: input.capturePolicy,
+      payload: bodyText,
+      status: response.status,
+      headers: response.headers,
+      durationMs,
+      note: 'e2e_latest_all target_found',
+    })
+    return { code: 'ok', status: response.status, fetchEventId: captured.fetchEventId }
+  }
+
+  const captured = await captureProbePayload(env, {
+    sourceType: input.sourceType,
+    sourceUrl: input.url,
+    reason: 'api_no_recent_data',
+    policy: input.capturePolicy,
+    payload: bodyText,
+    status: response.status,
+    headers: response.headers,
+    durationMs,
+    note: `e2e_latest_all target_missing=${targetDate}`,
+  })
+  return {
+    code: 'api_no_recent_data',
+    status: response.status,
+    detail: `target_missing:${targetDate}`,
+    fetchEventId: captured.fetchEventId,
+  }
+}
+
 async function fetchLatestAllProbe(
   env: EnvBindings,
   input: {
@@ -129,9 +251,21 @@ async function fetchLatestAllProbe(
 ): Promise<PathProbeResult> {
   const startedAt = Date.now()
   try {
+    const internalResponse = await dispatchInternalPublicApiRequest({
+      url: input.url,
+      env,
+      init: input.init,
+    })
+    if (internalResponse) {
+      const durationMs = Date.now() - startedAt
+      log.info('pipeline', 'internal_probe', {
+        context: `source=${input.sourceType} path=${new URL(input.url).pathname} elapsed_ms=${durationMs} status=${internalResponse.status}`,
+      })
+      return finalizeLatestAllProbeResponse(env, input, internalResponse, durationMs)
+    }
+
     const fetched = await fetchWithTimeout(input.url, input.init, { env })
     const res = fetched.response
-    const bodyText = await res.text()
 
     log.info('pipeline', 'upstream_fetch', {
       context:
@@ -141,113 +275,7 @@ async function fetchLatestAllProbe(
         ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
         ` status=${fetched.meta.status ?? res.status}`,
     })
-
-    if (!res.ok) {
-      const captured = await captureProbePayload(env, {
-        sourceType: input.sourceType,
-        sourceUrl: input.url,
-        reason: 'api_unreachable',
-        policy: input.capturePolicy,
-        payload: bodyText,
-        status: res.status,
-        headers: res.headers,
-        durationMs: fetched.meta.elapsed_ms,
-        note: 'e2e_latest_all non_2xx',
-      })
-      return {
-        code: 'api_unreachable',
-        status: res.status,
-        detail: `HTTP ${res.status}`,
-        fetchEventId: captured.fetchEventId,
-      }
-    }
-
-    const parsed = parseJsonText(bodyText)
-    if (!parsed.ok) {
-      const block = detectUpstreamBlock({
-        status: res.status,
-        body: bodyText,
-        headers: res.headers,
-      })
-      const captured = await captureProbePayload(env, {
-        sourceType: input.sourceType,
-        sourceUrl: input.url,
-        reason: 'api_invalid_payload',
-        policy: input.capturePolicy,
-        payload: bodyText,
-        status: res.status,
-        headers: res.headers,
-        durationMs: fetched.meta.elapsed_ms,
-        note: `e2e_latest_all ${parsed.reason}`,
-      })
-      return {
-        code: 'api_invalid_payload',
-        status: res.status,
-        detail: `invalid_payload:${parsed.reason}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
-        fetchEventId: captured.fetchEventId,
-      }
-    }
-
-    const rowsResult = parseRowsPayload(parsed.value)
-    if (!rowsResult.ok) {
-      const block = detectUpstreamBlock({
-        status: res.status,
-        body: bodyText,
-        headers: res.headers,
-      })
-      const captured = await captureProbePayload(env, {
-        sourceType: input.sourceType,
-        sourceUrl: input.url,
-        reason: 'api_invalid_payload',
-        policy: input.capturePolicy,
-        payload: bodyText,
-        status: res.status,
-        headers: res.headers,
-        durationMs: fetched.meta.elapsed_ms,
-        note: `e2e_latest_all ${rowsResult.reason}`,
-      })
-      return {
-        code: 'api_invalid_payload',
-        status: res.status,
-        detail: `invalid_payload:${rowsResult.reason}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
-        fetchEventId: captured.fetchEventId,
-      }
-    }
-
-    const targetDate = normalizeIsoDateLike(input.targetCollectionDate)
-    const dates = extractCollectionDates(rowsResult.rows)
-    if (dates.includes(targetDate)) {
-      const captured = await captureProbePayload(env, {
-        sourceType: input.sourceType,
-        sourceUrl: input.url,
-        reason: 'success',
-        policy: input.capturePolicy,
-        payload: bodyText,
-        status: res.status,
-        headers: res.headers,
-        durationMs: fetched.meta.elapsed_ms,
-        note: 'e2e_latest_all target_found',
-      })
-      return { code: 'ok', status: res.status, fetchEventId: captured.fetchEventId }
-    }
-
-    const captured = await captureProbePayload(env, {
-      sourceType: input.sourceType,
-      sourceUrl: input.url,
-      reason: 'api_no_recent_data',
-      policy: input.capturePolicy,
-      payload: bodyText,
-      status: res.status,
-      headers: res.headers,
-      durationMs: fetched.meta.elapsed_ms,
-      note: `e2e_latest_all target_missing=${targetDate}`,
-    })
-    return {
-      code: 'api_no_recent_data',
-      status: res.status,
-      detail: `target_missing:${targetDate}`,
-      fetchEventId: captured.fetchEventId,
-    }
+    return finalizeLatestAllProbeResponse(env, input, res, fetched.meta.elapsed_ms)
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
     const errorMessage = (error as Error)?.message || String(error)

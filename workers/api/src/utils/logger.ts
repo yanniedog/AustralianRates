@@ -202,7 +202,7 @@ export const CODE_FILTER_UNSUPPORTED_MESSAGE =
 
 export async function queryLogs(
   db: D1Database,
-  opts: { level?: LogLevel; source?: string; code?: string; limit?: number; offset?: number } = {},
+  opts: { level?: LogLevel; source?: string; code?: string; sinceTs?: string; limit?: number; offset?: number } = {},
 ): Promise<{ entries: Array<Record<string, unknown>>; total: number }> {
   const whereBase: string[] = []
   const baseBinds: Array<string | number> = []
@@ -214,6 +214,10 @@ export async function queryLogs(
   if (opts.source) {
     whereBase.push('source = ?')
     baseBinds.push(opts.source)
+  }
+  if (opts.sinceTs) {
+    whereBase.push('ts >= ?')
+    baseBinds.push(opts.sinceTs)
   }
   const whereBaseClause = whereBase.length ? `WHERE ${whereBase.join(' AND ')}` : ''
   const whereWithCodeClause =
@@ -257,11 +261,18 @@ export async function queryLogs(
       throw new Error(CODE_FILTER_UNSUPPORTED_MESSAGE, { cause: err })
     }
   } else {
-    const dataSqlLegacy = `SELECT id, ts, level, source, message, context, run_id, lender_code FROM global_log ${whereBaseClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
-    dataResult = await db
-      .prepare(dataSqlLegacy)
-      .bind(...baseBinds, limit, offset)
-      .all<Record<string, unknown>>()
+    try {
+      dataResult = await db
+        .prepare(dataSqlWithCode)
+        .bind(...baseBinds, limit, offset)
+        .all<Record<string, unknown>>()
+    } catch {
+      const dataSqlLegacy = `SELECT id, ts, level, source, message, context, run_id, lender_code FROM global_log ${whereBaseClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
+      dataResult = await db
+        .prepare(dataSqlLegacy)
+        .bind(...baseBinds, limit, offset)
+        .all<Record<string, unknown>>()
+    }
   }
 
   return { entries: dataResult.results ?? [], total }

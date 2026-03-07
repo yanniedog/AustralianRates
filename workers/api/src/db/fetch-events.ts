@@ -68,15 +68,11 @@ function headersJson(headers: Headers | Record<string, string> | null | undefine
   return JSON.stringify(entries)
 }
 
-export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): Promise<PersistFetchResult> {
-  const fetchedAtIso = input.fetchedAtIso || nowIso()
-  const payloadText = serializePayload(input.payload)
-  const payloadBytes = new TextEncoder().encode(payloadText)
-  const bodyBytes = payloadBytes.byteLength
-  const contentHash = await sha256HexFromBytes(payloadBytes)
-  const contentType = contentTypeForSource(input.sourceType)
-
-  const existingObject = await env.DB
+async function getRawObjectByHash(
+  db: D1Database,
+  contentHash: string,
+): Promise<{ content_hash: string; r2_key: string } | null> {
+  return db
     .prepare(
       `SELECT content_hash, r2_key
        FROM raw_objects
@@ -85,12 +81,22 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
     )
     .bind(contentHash)
     .first<{ content_hash: string; r2_key: string }>()
+}
 
-  const r2Key = existingObject?.r2_key || buildRawR2Key(input.sourceType, fetchedAtIso, contentHash)
-  const rawObjectCreated = !existingObject
+export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): Promise<PersistFetchResult> {
+  const fetchedAtIso = input.fetchedAtIso || nowIso()
+  const payloadText = serializePayload(input.payload)
+  const payloadBytes = new TextEncoder().encode(payloadText)
+  const bodyBytes = payloadBytes.byteLength
+  const contentHash = await sha256HexFromBytes(payloadBytes)
+  const contentType = contentTypeForSource(input.sourceType)
+  const generatedR2Key = buildRawR2Key(input.sourceType, fetchedAtIso, contentHash)
 
-  if (!existingObject) {
-    await env.RAW_BUCKET.put(r2Key, payloadText, {
+  let rawObject = await getRawObjectByHash(env.DB, contentHash)
+  let rawObjectCreated = false
+
+  if (!rawObject) {
+    await env.RAW_BUCKET.put(generatedR2Key, payloadText, {
       httpMetadata: { contentType },
       customMetadata: {
         source_type: input.sourceType,
@@ -99,15 +105,30 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
       },
     })
 
-    await env.DB
+    const insertedRawObject = await env.DB
       .prepare(
-        `INSERT INTO raw_objects (
+        `INSERT OR IGNORE INTO raw_objects (
            content_hash, source_type, first_source_url, body_bytes, content_type, r2_key, created_at
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
       )
-      .bind(contentHash, input.sourceType, input.sourceUrl, bodyBytes, contentType, r2Key, fetchedAtIso)
+      .bind(contentHash, input.sourceType, input.sourceUrl, bodyBytes, contentType, generatedR2Key, fetchedAtIso)
       .run()
+
+    rawObjectCreated = Number(insertedRawObject.meta?.changes || 0) > 0
+    if (rawObjectCreated) {
+      rawObject = {
+        content_hash: contentHash,
+        r2_key: generatedR2Key,
+      }
+    } else {
+      rawObject = await getRawObjectByHash(env.DB, contentHash)
+      if (!rawObject) {
+        throw new Error(`raw_object_persist_failed:${contentHash}`)
+      }
+    }
   }
+
+  const r2Key = rawObject.r2_key
 
   const inserted = await env.DB
     .prepare(

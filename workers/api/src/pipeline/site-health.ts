@@ -1,10 +1,13 @@
 import { runIntegrityChecks } from '../db/integrity-checks'
+import { getIngestPauseConfig } from '../db/app-config'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
+import { dispatchInternalPublicApiRequest } from './internal-public-api-request'
 import type { EnvBindings } from '../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
+import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
 import { captureProbePayload, type ProbeCapturePolicy } from './probe-capture'
 import { isJsonObject, parseJsonText, parseRowsPayload } from './probe-payloads'
 import { detectUpstreamBlock } from '../utils/upstream-block'
@@ -19,6 +22,7 @@ type ComponentStatus = {
 }
 
 type ProbeValidation = 'none' | 'json_object' | 'rows_payload'
+const ACTIONABLE_LOG_LOOKBACK_MINUTES = 30
 
 function isEnabled(value: string | undefined): boolean {
   const normalized = String(value || '').trim().toLowerCase()
@@ -42,6 +46,99 @@ function normalizeOrigin(origin: string): string {
   return String(origin || '').replace(/\/+$/, '')
 }
 
+async function finalizeProbeResponse(
+  env: EnvBindings,
+  input: {
+    path: string
+    sourceType: string
+    sourceUrl: string
+    validation: ProbeValidation
+    capturePolicy: ProbeCapturePolicy
+  },
+  response: Response,
+  durationMs: number,
+): Promise<{ ok: boolean; status: number; durationMs: number; detail?: string; fetchEventId: number | null }> {
+  const bodyText = await response.text()
+
+  if (!response.ok) {
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.sourceUrl,
+      reason: 'api_unreachable',
+      policy: input.capturePolicy,
+      payload: bodyText,
+      status: response.status,
+      headers: response.headers,
+      durationMs,
+      note: `site_health_probe non_2xx path=${input.path}`,
+    })
+    return {
+      ok: false,
+      status: response.status,
+      durationMs,
+      detail: `HTTP ${response.status}`,
+      fetchEventId: captured.fetchEventId,
+    }
+  }
+
+  let validationError: string | null = null
+  if (input.validation !== 'none') {
+    const parsed = parseJsonText(bodyText)
+    if (!parsed.ok) {
+      validationError = parsed.reason
+    } else if (input.validation === 'json_object' && !isJsonObject(parsed.value)) {
+      validationError = 'payload_not_object'
+    } else if (input.validation === 'rows_payload') {
+      const rowsResult = parseRowsPayload(parsed.value)
+      if (!rowsResult.ok) validationError = rowsResult.reason
+    }
+  }
+
+  if (validationError) {
+    const block = detectUpstreamBlock({
+      status: response.status,
+      body: bodyText,
+      headers: response.headers,
+    })
+    const captured = await captureProbePayload(env, {
+      sourceType: input.sourceType,
+      sourceUrl: input.sourceUrl,
+      reason: 'api_invalid_payload',
+      policy: input.capturePolicy,
+      payload: bodyText,
+      status: response.status,
+      headers: response.headers,
+      durationMs,
+      note: `site_health_probe invalid_payload path=${input.path} reason=${validationError}`,
+    })
+    return {
+      ok: false,
+      status: response.status,
+      durationMs,
+      detail: `invalid_payload:${validationError}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
+      fetchEventId: captured.fetchEventId,
+    }
+  }
+
+  const captured = await captureProbePayload(env, {
+    sourceType: input.sourceType,
+    sourceUrl: input.sourceUrl,
+    reason: 'success',
+    policy: input.capturePolicy,
+    payload: bodyText,
+    status: response.status,
+    headers: response.headers,
+    durationMs,
+    note: `site_health_probe ok path=${input.path}`,
+  })
+  return {
+    ok: true,
+    status: response.status,
+    durationMs,
+    fetchEventId: captured.fetchEventId,
+  }
+}
+
 async function requestProbe(
   env: EnvBindings,
   input: {
@@ -55,10 +152,32 @@ async function requestProbe(
   const url = `${normalizeOrigin(input.origin)}${input.path}`
   const startedAt = Date.now()
   try {
+    const internalResponse = await dispatchInternalPublicApiRequest({
+      url,
+      env,
+    })
+    if (internalResponse) {
+      const durationMs = Date.now() - startedAt
+      log.info('pipeline', 'internal_probe', {
+        context: `source=${input.sourceType} path=${input.path} elapsed_ms=${durationMs} status=${internalResponse.status}`,
+      })
+      return finalizeProbeResponse(
+        env,
+        {
+          path: input.path,
+          sourceType: input.sourceType,
+          sourceUrl: url,
+          validation: input.validation,
+          capturePolicy: input.capturePolicy,
+        },
+        internalResponse,
+        durationMs,
+      )
+    }
+
     const fetched = await fetchWithTimeout(url, undefined, { env })
     const res = fetched.response
     const durationMs = Date.now() - startedAt
-    const bodyText = await res.text()
     log.info('pipeline', 'upstream_fetch', {
       context:
         `source=${input.sourceType} host=${hostFromUrl(url)}` +
@@ -67,84 +186,18 @@ async function requestProbe(
         ` timed_out=${fetched.meta.timed_out ? 1 : 0} timeout=${fetched.meta.timed_out ? 1 : 0}` +
         ` status=${fetched.meta.status ?? res.status}`,
     })
-
-    if (!res.ok) {
-      const captured = await captureProbePayload(env, {
+    return finalizeProbeResponse(
+      env,
+      {
+        path: input.path,
         sourceType: input.sourceType,
         sourceUrl: url,
-        reason: 'api_unreachable',
-        policy: input.capturePolicy,
-        payload: bodyText,
-        status: res.status,
-        headers: res.headers,
-        durationMs,
-        note: `site_health_probe non_2xx path=${input.path}`,
-      })
-      return {
-        ok: false,
-        status: res.status,
-        durationMs,
-        detail: `HTTP ${res.status}`,
-        fetchEventId: captured.fetchEventId,
-      }
-    }
-
-    let validationError: string | null = null
-    if (input.validation !== 'none') {
-      const parsed = parseJsonText(bodyText)
-      if (!parsed.ok) {
-        validationError = parsed.reason
-      } else if (input.validation === 'json_object' && !isJsonObject(parsed.value)) {
-        validationError = 'payload_not_object'
-      } else if (input.validation === 'rows_payload') {
-        const rowsResult = parseRowsPayload(parsed.value)
-        if (!rowsResult.ok) validationError = rowsResult.reason
-      }
-    }
-
-    if (validationError) {
-      const block = detectUpstreamBlock({
-        status: res.status,
-        body: bodyText,
-        headers: res.headers,
-      })
-      const captured = await captureProbePayload(env, {
-        sourceType: input.sourceType,
-        sourceUrl: url,
-        reason: 'api_invalid_payload',
-        policy: input.capturePolicy,
-        payload: bodyText,
-        status: res.status,
-        headers: res.headers,
-        durationMs,
-        note: `site_health_probe invalid_payload path=${input.path} reason=${validationError}`,
-      })
-      return {
-        ok: false,
-        status: res.status,
-        durationMs,
-        detail: `invalid_payload:${validationError}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
-        fetchEventId: captured.fetchEventId,
-      }
-    }
-
-    const captured = await captureProbePayload(env, {
-      sourceType: input.sourceType,
-      sourceUrl: url,
-      reason: 'success',
-      policy: input.capturePolicy,
-      payload: bodyText,
-      status: res.status,
-      headers: res.headers,
+        validation: input.validation,
+        capturePolicy: input.capturePolicy,
+      },
+      res,
       durationMs,
-      note: `site_health_probe ok path=${input.path}`,
-    })
-    return {
-      ok: true,
-      status: res.status,
-      durationMs,
-      fetchEventId: captured.fetchEventId,
-    }
+    )
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
     const durationMs = Date.now() - startedAt
@@ -253,6 +306,8 @@ export async function runSiteHealthChecks(
   const startedAt = Date.now()
   const origin = normalizeOrigin(input.origin)
   const capturePolicy: ProbeCapturePolicy = input.triggerSource === 'manual' ? 'always' : 'sample_success'
+  const actionableSinceTs = new Date(Date.parse(checkedAt) - ACTIONABLE_LOG_LOOKBACK_MINUTES * 60 * 1000).toISOString()
+  const pauseConfigPromise = getIngestPauseConfig(env.DB).catch(() => ({ mode: 'active' as const, reason: null }))
   const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne', {
     includeAnomalyProbes: isEnabled(env.FEATURE_INTEGRITY_PROBES_ENABLED),
   }).catch((error) => ({
@@ -269,7 +324,7 @@ export async function runSiteHealthChecks(
       ],
     }))
 
-  const [datasetComponents, homepage, integrity, e2e, logs] = await Promise.all([
+  const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig] = await Promise.all([
     Promise.all(
       LATEST_ALL_DATASETS.map((dataset) =>
         checkDataset(env, origin, dataset.dataset, dataset.basePath, capturePolicy),
@@ -284,7 +339,8 @@ export async function runSiteHealthChecks(
     }),
     integrityPromise,
     runE2ECheck(env, { origin, capturePolicy }),
-    queryLogs(env.DB, { limit: 200 }),
+    queryLogs(env.DB, { sinceTs: actionableSinceTs, limit: 200 }),
+    pauseConfigPromise,
   ])
 
   const components: ComponentStatus[] = [
@@ -309,7 +365,9 @@ export async function runSiteHealthChecks(
   const actionableIssues = toActionableIssueSummaries(
     logs.entries.filter((entry) => {
       const level = String(entry.level || '').toLowerCase()
-      return level === 'warn' || level === 'error'
+      if (level !== 'warn' && level !== 'error') return false
+      if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
+      return true
     }),
   )
 
