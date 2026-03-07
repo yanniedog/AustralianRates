@@ -98,7 +98,7 @@
                 yField: defaultMetric,
                 groupField: 'product_key',
                 chartType: 'scatter',
-                seriesLimit: '12',
+                seriesLimit: '8',
             },
             compare: {
                 xField: 'bank_name',
@@ -123,7 +123,7 @@
             yField: els.chartY ? els.chartY.value : getDefaultMetricField(),
             groupField: els.chartGroup ? els.chartGroup.value : '',
             chartType: els.chartType ? els.chartType.value : 'scatter',
-            seriesLimit: els.chartSeriesLimit ? els.chartSeriesLimit.value : '12',
+            seriesLimit: els.chartSeriesLimit ? els.chartSeriesLimit.value : '8',
         };
     }
 
@@ -265,9 +265,12 @@
                 ? ((delta > 0 ? '+' : '') + formatMetricValue(summary.metricField, delta))
                 : 'No delta';
             html.push(
-                '<button class="chart-series-card' + (isActive ? ' is-active' : '') + '" type="button" data-trace-index="' + esc(summary.traceIndex) + '">' +
+                '<button class="chart-series-card' + (isActive ? ' is-active' : '') + '" style="--series-accent:' + esc(summary.color || '#0f5bd8') + ';" type="button" data-trace-index="' + esc(summary.traceIndex) + '">' +
                     '<span class="chart-series-topline">' +
-                        '<span class="chart-series-name">' + esc(summary.name) + '</span>' +
+                        '<span class="chart-series-name-wrap">' +
+                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                            '<span class="chart-series-name">' + esc(summary.name) + '</span>' +
+                        '</span>' +
                         '<span class="chart-series-value">' + esc(formatMetricValue(summary.metricField, summary.latestValue)) + '</span>' +
                     '</span>' +
                     '<span class="chart-series-meta">' +

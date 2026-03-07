@@ -30,7 +30,7 @@
                 yField: els.chartY ? els.chartY.value : 'interest_rate',
                 groupField: els.chartGroup ? els.chartGroup.value : '',
                 chartType: els.chartType ? els.chartType.value : 'scatter',
-                seriesLimit: els.chartSeriesLimit ? els.chartSeriesLimit.value : '12',
+                seriesLimit: els.chartSeriesLimit ? els.chartSeriesLimit.value : '8',
             };
     }
 
@@ -253,12 +253,21 @@
             chartState.focusedTraceIndex = -1;
             chartState.traceCount = chartData.traces.length;
 
-            await Plotly.newPlot(
-                els.chartOutput,
-                chartData.traces,
-                chartRenderer.buildLayout(fields, chartData),
-                chartRenderer.buildPlotConfig()
-            );
+            if (typeof Plotly.react === 'function' && els.chartOutput.data) {
+                await Plotly.react(
+                    els.chartOutput,
+                    chartData.traces,
+                    chartRenderer.buildLayout(fields, chartData),
+                    chartRenderer.buildPlotConfig()
+                );
+            } else {
+                await Plotly.newPlot(
+                    els.chartOutput,
+                    chartData.traces,
+                    chartRenderer.buildLayout(fields, chartData),
+                    chartRenderer.buildPlotConfig()
+                );
+            }
 
             bindChartPointClick(chartData.rowsByTrace, fields);
             clearPointDetails();
