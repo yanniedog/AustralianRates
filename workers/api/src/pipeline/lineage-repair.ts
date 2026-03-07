@@ -1,5 +1,6 @@
 import { loadCdrDetailPayloadMap } from '../db/cdr-detail-payloads'
 import { persistRawPayload } from '../db/raw-payloads'
+import { repairMissingFetchEventLineageByBaseUrl } from './lineage-repair-base-url'
 import type { EnvBindings } from '../types'
 
 type DatasetKind = 'home_loans' | 'savings' | 'term_deposits'
@@ -106,13 +107,25 @@ async function updateByRunSeenProductIndex(
          JOIN fetch_events fe
            ON fe.run_id = rsp.run_id
           AND fe.lender_code = rsp.lender_code
-          AND fe.dataset_kind = rsp.dataset_kind
           AND fe.source_type = 'cdr_products'
+          AND (
+            fe.dataset_kind = rsp.dataset_kind
+            OR (rsp.dataset_kind = 'term_deposits' AND fe.dataset_kind = 'savings')
+          )
          WHERE rsp.run_id = rates.run_id
            AND rsp.dataset_kind = ?2
            AND rsp.bank_name = rates.bank_name
            AND rsp.product_id = rates.product_id
-         ORDER BY fe.fetched_at DESC, fe.id DESC
+         ORDER BY
+           CASE WHEN COALESCE(fe.http_status, 0) BETWEEN 200 AND 299 THEN 0 ELSE 1 END ASC,
+           CASE
+             WHEN fe.dataset_kind = rsp.dataset_kind THEN 0
+             WHEN rsp.dataset_kind = 'term_deposits' AND fe.dataset_kind = 'savings' THEN 1
+             ELSE 2
+           END ASC,
+           CASE WHEN fe.source_url LIKE 'summary://%' THEN 1 ELSE 0 END ASC,
+           fe.fetched_at DESC,
+           fe.id DESC
          LIMIT 1
        )
        WHERE rates.fetch_event_id IS NULL
@@ -125,8 +138,11 @@ async function updateByRunSeenProductIndex(
            JOIN fetch_events fe
              ON fe.run_id = rsp.run_id
             AND fe.lender_code = rsp.lender_code
-            AND fe.dataset_kind = rsp.dataset_kind
             AND fe.source_type = 'cdr_products'
+            AND (
+              fe.dataset_kind = rsp.dataset_kind
+              OR (rsp.dataset_kind = 'term_deposits' AND fe.dataset_kind = 'savings')
+            )
            WHERE rsp.run_id = rates.run_id
              AND rsp.dataset_kind = ?2
              AND rsp.bank_name = rates.bank_name
@@ -349,10 +365,25 @@ export async function repairMissingFetchEventLineage(
     const syntheticRows = await createSyntheticDetailFetchEvents(env, target, cutoffDate, dryRun)
     strategyCounts.push({ dataset: target.dataset, strategy: 'synthetic_detail_payload', rows: syntheticRows })
 
-    if (dryRun) continue
+    if (!dryRun) {
+      const byHashRows = await updateByDetailHash(env.DB, target.table, cutoffDate)
+      strategyCounts.push({ dataset: target.dataset, strategy: 'detail_hash', rows: byHashRows })
 
-    const byHashRows = await updateByDetailHash(env.DB, target.table, cutoffDate)
-    strategyCounts.push({ dataset: target.dataset, strategy: 'detail_hash', rows: byHashRows })
+      const byRunSourceRows = await updateByRunIdAndSourceUrl(env.DB, target.table, cutoffDate)
+      strategyCounts.push({ dataset: target.dataset, strategy: 'run_id_source_url', rows: byRunSourceRows })
+
+      const bySourceIdentityRows = await updateBySourceIdentity(env.DB, {
+        dataset: target.dataset,
+        table: target.table,
+        cutoffDate,
+      })
+      strategyCounts.push({ dataset: target.dataset, strategy: 'source_identity', rows: bySourceIdentityRows })
+    }
+
+    const byBaseUrlRows = await repairMissingFetchEventLineageByBaseUrl(env, target, cutoffDate, dryRun)
+    strategyCounts.push({ dataset: target.dataset, strategy: 'base_url_cdr_products', rows: byBaseUrlRows })
+
+    if (dryRun) continue
 
     const byRunSeenRows = await updateByRunSeenProductIndex(env.DB, {
       dataset: target.dataset,
@@ -360,16 +391,6 @@ export async function repairMissingFetchEventLineage(
       cutoffDate,
     })
     strategyCounts.push({ dataset: target.dataset, strategy: 'run_seen_products_index', rows: byRunSeenRows })
-
-    const byRunSourceRows = await updateByRunIdAndSourceUrl(env.DB, target.table, cutoffDate)
-    strategyCounts.push({ dataset: target.dataset, strategy: 'run_id_source_url', rows: byRunSourceRows })
-
-    const bySourceIdentityRows = await updateBySourceIdentity(env.DB, {
-      dataset: target.dataset,
-      table: target.table,
-      cutoffDate,
-    })
-    strategyCounts.push({ dataset: target.dataset, strategy: 'source_identity', rows: bySourceIdentityRows })
   }
 
   const missingAfter = dryRun ? missingBefore : await countMissingFetchEventRows(env.DB, cutoffDate)

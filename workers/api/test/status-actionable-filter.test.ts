@@ -29,6 +29,18 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores cdr audit gaps in status summaries because the audit has its own panel', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'admin',
+          message: 'cdr_audit_detected_gaps',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('keeps the same warning actionable for other lenders', () => {
     expect(
       shouldIgnoreStatusActionableLog(
