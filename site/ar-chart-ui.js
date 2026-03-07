@@ -7,184 +7,40 @@
     var sectionConfig = window.AR.sectionConfig || {};
     var state = window.AR.state;
     var utils = window.AR.utils || {};
+    var chartConfig = window.AR.chartConfig || {};
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
-    var formatFilterValue = utils.formatFilterValue || function (_field, value) { return String(value == null ? '' : value); };
-    var pct = utils.pct || function (value) { return String(value == null ? '' : value); };
-    var money = utils.money || function (value) { return String(value == null ? '' : value); };
     var uiBound = false;
-    var traceFocusHandler = null;
 
-    function buildFieldLabels() {
-        var labels = {};
-        var seed = sectionConfig && sectionConfig.pivotFieldLabels ? sectionConfig.pivotFieldLabels : {};
-        Object.keys(seed).forEach(function (key) {
-            labels[key] = seed[key];
-        });
-        labels.collection_date = labels.collection_date || 'Date';
-        labels.bank_name = labels.bank_name || 'Bank';
-        labels.product_key = labels.product_key || 'Product';
-        labels.product_name = labels.product_name || 'Product';
-        labels.interest_rate = labels.interest_rate || 'Interest Rate (%)';
-        labels.comparison_rate = labels.comparison_rate || 'Comparison Rate (%)';
-        labels.annual_fee = labels.annual_fee || 'Annual Fee ($)';
-        labels.monthly_fee = labels.monthly_fee || 'Monthly Fee ($)';
-        labels.rba_cash_rate = labels.rba_cash_rate || 'Cash Rate (%)';
-        return labels;
+    function activeViewButton() {
+        return document.querySelector('[data-chart-view].is-active') || document.querySelector('[data-chart-view="surface"]');
     }
 
-    var fieldLabels = buildFieldLabels();
-
-    function titleCase(value) {
-        return String(value || '')
-            .split('_')
-            .filter(Boolean)
-            .map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); })
-            .join(' ');
+    function activeView() {
+        var button = activeViewButton();
+        return button ? String(button.getAttribute('data-chart-view') || 'surface') : 'surface';
     }
 
-    function fieldLabel(field) {
-        return fieldLabels[field] || titleCase(field);
-    }
-
-    function isDateField(field) {
-        return /date|_at$/i.test(String(field || ''));
-    }
-
-    function isMoneyField(field) {
-        return /fee|deposit/i.test(String(field || ''));
-    }
-
-    function isPercentField(field) {
-        return /rate/i.test(String(field || ''));
-    }
-
-    function formatNumeric(field, value) {
-        var num = Number(value);
-        if (!Number.isFinite(num)) return String(value == null ? '' : value);
-        if (isMoneyField(field)) return money(num);
-        if (isPercentField(field)) return pct(num);
-        return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-    }
-
-    function formatFieldValue(field, value) {
-        if (value == null || value === '') return '-';
-        if (typeof value === 'number' || /^-?\d+(?:\.\d+)?$/.test(String(value))) {
-            return formatNumeric(field, value);
+    function setActiveView(view) {
+        var buttons = document.querySelectorAll('[data-chart-view]');
+        for (var i = 0; i < buttons.length; i++) {
+            var isActive = String(buttons[i].getAttribute('data-chart-view') || '') === String(view || 'surface');
+            buttons[i].classList.toggle('is-active', isActive);
+            buttons[i].setAttribute('aria-pressed', String(isActive));
         }
-        if (isDateField(field)) return String(value);
-        return formatFilterValue(field, value) || String(value);
-    }
-
-    function formatMetricValue(field, value) {
-        return formatFieldValue(field, value);
-    }
-
-    function getDefaultMetricField() {
-        if (!els.chartY || !els.chartY.options || !els.chartY.options.length) return 'interest_rate';
-        for (var i = 0; i < els.chartY.options.length; i++) {
-            var option = els.chartY.options[i];
-            if (String(option.value || '') === 'interest_rate') return 'interest_rate';
-        }
-        return String(els.chartY.options[0].value || 'interest_rate');
-    }
-
-    function getPresetDefinitions() {
-        var defaultMetric = getDefaultMetricField();
-        return {
-            trend: {
-                xField: 'collection_date',
-                yField: defaultMetric,
-                groupField: 'product_key',
-                chartType: 'scatter',
-                seriesLimit: '8',
-            },
-            compare: {
-                xField: 'bank_name',
-                yField: defaultMetric,
-                groupField: '',
-                chartType: 'bar',
-                seriesLimit: 'all',
-            },
-            distribution: {
-                xField: 'bank_name',
-                yField: defaultMetric,
-                groupField: 'bank_name',
-                chartType: 'box',
-                seriesLimit: 'all',
-            },
-        };
     }
 
     function getChartFields() {
+        var defaults = chartConfig.defaultFields ? chartConfig.defaultFields() : {};
         return {
-            xField: els.chartX ? els.chartX.value : 'collection_date',
-            yField: els.chartY ? els.chartY.value : getDefaultMetricField(),
-            groupField: els.chartGroup ? els.chartGroup.value : '',
-            chartType: els.chartType ? els.chartType.value : 'scatter',
-            seriesLimit: els.chartSeriesLimit ? els.chartSeriesLimit.value : '8',
+            view: activeView(),
+            xField: els.chartX ? els.chartX.value : defaults.xField || 'collection_date',
+            yField: els.chartY ? els.chartY.value : defaults.yField || 'interest_rate',
+            groupField: els.chartGroup ? els.chartGroup.value : defaults.groupField || 'product_key',
+            chartType: els.chartType ? els.chartType.value : defaults.chartType || 'scatter',
+            density: els.chartSeriesLimit ? els.chartSeriesLimit.value : defaults.density || 'standard',
         };
-    }
-
-    function parseSeriesLimit(value) {
-        var raw = String(value || '').trim().toLowerCase();
-        if (!raw || raw === 'all') return Number.POSITIVE_INFINITY;
-        var count = Number(raw);
-        return Number.isFinite(count) && count > 0 ? count : 12;
-    }
-
-    function setSelectValue(selectEl, value) {
-        if (!selectEl) return;
-        for (var i = 0; i < selectEl.options.length; i++) {
-            if (String(selectEl.options[i].value) === String(value)) {
-                selectEl.value = String(value);
-                return;
-            }
-        }
-    }
-
-    function isPresetMatch(preset, fields) {
-        return preset &&
-            preset.xField === fields.xField &&
-            preset.yField === fields.yField &&
-            preset.groupField === fields.groupField &&
-            preset.chartType === fields.chartType &&
-            String(preset.seriesLimit) === String(fields.seriesLimit);
-    }
-
-    function getActivePresetName(fields) {
-        var current = fields || getChartFields();
-        var presets = getPresetDefinitions();
-        var names = Object.keys(presets);
-        for (var i = 0; i < names.length; i++) {
-            if (isPresetMatch(presets[names[i]], current)) return names[i];
-        }
-        return '';
-    }
-
-    function syncPresetButtons(fields) {
-        var active = getActivePresetName(fields);
-        var buttons = document.querySelectorAll('[data-chart-preset]');
-        for (var i = 0; i < buttons.length; i++) {
-            var button = buttons[i];
-            var isActive = String(button.getAttribute('data-chart-preset') || '') === active;
-            button.classList.toggle('is-active', isActive);
-            button.setAttribute('aria-pressed', String(isActive));
-        }
-        return active;
-    }
-
-    function applyPreset(name) {
-        var presets = getPresetDefinitions();
-        var preset = presets[name];
-        if (!preset) return '';
-        setSelectValue(els.chartX, preset.xField);
-        setSelectValue(els.chartY, preset.yField);
-        setSelectValue(els.chartGroup, preset.groupField);
-        setSelectValue(els.chartType, preset.chartType);
-        setSelectValue(els.chartSeriesLimit, preset.seriesLimit);
-        return syncPresetButtons(preset);
     }
 
     function getSelectedBankCount() {
@@ -197,183 +53,222 @@
         return raw.split(',').filter(Boolean).length;
     }
 
-    function buildGuidance(fields, meta) {
+    function guidance(fields, model, stale) {
         var notes = [];
-        var defaultHint = sectionConfig && sectionConfig.chartHint ? sectionConfig.chartHint : '';
-        if (defaultHint) notes.push(defaultHint);
-        if (fields.groupField === 'product_key' && isDateField(fields.xField) && getSelectedBankCount() !== 1) {
-            notes.push('Filter to one bank for the cleanest product-level trend lines.');
+        if (sectionConfig.chartHint) notes.push(sectionConfig.chartHint);
+        if (fields.view === 'surface') {
+            notes.push('Surface view maps collection date across the x-axis and product_key series down the y-axis.');
+            if (getSelectedBankCount() !== 1) notes.push('Filter to one bank for the cleanest longitudinal surface.');
         }
-        if (meta && meta.hiddenSeries > 0) {
-            notes.push('Showing the most complete series first to keep the chart readable.');
+        if (fields.view === 'compare') notes.push('Compare view animates only the selected spotlight series.');
+        if (fields.view === 'distribution') notes.push('Distribution groups the current filter set into category-level boxplots.');
+        if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) {
+            notes.push('Visible rows are limited by the chosen density preset.');
         }
-        if (meta && meta.sampled) {
-            notes.push('Dense views are sampled only inside the visible series. Export remains full fidelity.');
-        }
+        if (stale) notes.push('Filters changed. Redraw to fetch fresh rows.');
         return notes.filter(Boolean).join(' ');
     }
 
-    function renderSummary(meta, fields) {
-        if (els.chartGuidance) {
-            els.chartGuidance.textContent = buildGuidance(fields || getChartFields(), meta || null);
+    function summaryPills(model, fields, payloadMeta, stale) {
+        if (!model) {
+            return '' +
+                '<span class="chart-summary-pill">Awaiting first render</span>' +
+                (stale ? '<span class="chart-summary-pill is-warning">Stale after filter change</span>' : '');
         }
-
-        if (!els.chartSummary) return;
-        if (!meta) {
-            els.chartSummary.innerHTML = '<span class="chart-summary-pill">Awaiting first render</span>';
-            return;
-        }
-
         var pills = [];
-        var presetName = syncPresetButtons(fields);
-        if (presetName) {
-            pills.push('<span class="chart-summary-pill is-emphasis">' + esc(titleCase(presetName)) + ' preset</span>');
+        pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
+        pills.push('<span class="chart-summary-pill">' + esc(chartConfig.fieldLabel(fields.yField)) + '</span>');
+        pills.push('<span class="chart-summary-pill">' + esc(model.meta.visibleSeries) + ' visible series</span>');
+        pills.push('<span class="chart-summary-pill">' + esc(model.meta.densityLabel) + ' density</span>');
+        if (payloadMeta && Number.isFinite(Number(payloadMeta.totalRows))) {
+            pills.push('<span class="chart-summary-pill">' + esc(Number(payloadMeta.totalRows).toLocaleString()) + ' rows loaded</span>');
         }
-        pills.push('<span class="chart-summary-pill">' + esc(meta.renderedPoints.toLocaleString()) + ' plotted points</span>');
-        if (meta.totalSeries > 1) {
-            pills.push('<span class="chart-summary-pill">' + esc(meta.visibleSeries.toLocaleString()) + ' of ' + esc(meta.totalSeries.toLocaleString()) + ' series visible</span>');
-        }
-        pills.push('<span class="chart-summary-pill">' + esc(fieldLabel(fields.yField)) + '</span>');
-        if (meta.sampled) {
-            pills.push('<span class="chart-summary-pill is-warning">Sampled from ' + esc(meta.sourcePoints.toLocaleString()) + ' visible points</span>');
-        }
-        if (meta.payloadTruncated) {
+        if (payloadMeta && payloadMeta.truncated) {
             pills.push('<span class="chart-summary-pill is-warning">10,000-row fetch cap reached</span>');
         }
-        els.chartSummary.innerHTML = pills.join('');
+        if (stale) {
+            pills.push('<span class="chart-summary-pill is-warning">Stale after filter change</span>');
+        }
+        return pills.join('');
     }
 
-    function renderSeriesRail(meta, focusedTraceIndex) {
+    function renderSummary(model, fields, payloadMeta, stale) {
+        if (els.chartGuidance) {
+            els.chartGuidance.textContent = guidance(fields || getChartFields(), model || null, !!stale);
+        }
+        if (els.chartSummary) {
+            els.chartSummary.innerHTML = summaryPills(model || null, fields || getChartFields(), payloadMeta || null, !!stale);
+        }
+    }
+
+    function surfaceSeriesNote(model) {
+        if (!model || !model.visibleSeries.length) return 'Draw a chart to activate the rate surface.';
+        return 'Click cards to include series in Compare. Click the surface to move the spotlight.';
+    }
+
+    function renderSeriesRail(model, selectionState) {
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
-        var summaries = meta && Array.isArray(meta.traceSummaries) ? meta.traceSummaries : [];
-        if (!summaries.length) {
-            els.chartSeriesNote.textContent = 'Draw a chart to inspect the series currently on screen.';
-            els.chartSeriesList.innerHTML = '<p class="chart-series-empty">Preset-driven views and focused series cards will appear here after the first render.</p>';
+        if (!model || !model.visibleSeries.length) {
+            els.chartSeriesNote.textContent = 'Draw a chart to activate the rate surface.';
+            els.chartSeriesList.innerHTML = '<p class="chart-series-empty">Visible products and selected comparison lines will appear here.</p>';
             return;
         }
 
-        els.chartSeriesNote.textContent = meta.hiddenSeries > 0
-            ? 'Showing the most complete ' + meta.visibleSeries + ' series. Click a card to isolate it.'
-            : 'Click a card to isolate a visible series.';
+        var selected = selectionState && Array.isArray(selectionState.selectedSeriesKeys)
+            ? selectionState.selectedSeriesKeys
+            : [];
 
-        var html = [];
-        for (var i = 0; i < summaries.length; i++) {
-            var summary = summaries[i];
-            var isActive = Number(summary.traceIndex) === Number(focusedTraceIndex);
-            var delta = Number(summary.delta);
-            var deltaText = Number.isFinite(delta)
-                ? ((delta > 0 ? '+' : '') + formatMetricValue(summary.metricField, delta))
-                : 'No delta';
-            html.push(
-                '<button class="chart-series-card' + (isActive ? ' is-active' : '') + '" style="--series-accent:' + esc(summary.color || '#0f5bd8') + ';" type="button" data-trace-index="' + esc(summary.traceIndex) + '">' +
+        els.chartSeriesNote.textContent = surfaceSeriesNote(model);
+        els.chartSeriesList.innerHTML = model.visibleSeries.map(function (series) {
+            var isSelected = selected.indexOf(series.key) >= 0;
+            var isSpotlight = selectionState && selectionState.spotlightSeriesKey === series.key;
+            var color = chartConfig.palette()[series.colorIndex % chartConfig.palette().length];
+            return '' +
+                '<button class="chart-series-card' + (isSelected ? ' is-selected' : '') + (isSpotlight ? ' is-active' : '') + '"' +
+                    ' style="--series-accent:' + esc(color) + ';" type="button" data-series-key="' + esc(series.key) + '">' +
                     '<span class="chart-series-topline">' +
                         '<span class="chart-series-name-wrap">' +
                             '<span class="chart-series-swatch" aria-hidden="true"></span>' +
-                            '<span class="chart-series-name">' + esc(summary.name) + '</span>' +
+                            '<span class="chart-series-name">' + esc(series.name) + '</span>' +
                         '</span>' +
-                        '<span class="chart-series-value">' + esc(formatMetricValue(summary.metricField, summary.latestValue)) + '</span>' +
+                        '<span class="chart-series-value">' + esc(chartConfig.formatMetricValue(getChartFields().yField, series.latestValue)) + '</span>' +
                     '</span>' +
                     '<span class="chart-series-meta">' +
-                        '<span class="chart-series-delta">' + esc(deltaText) + '</span>' +
-                        '<span class="chart-series-points">' + esc(summary.pointCount.toLocaleString()) + ' pts</span>' +
+                        '<span class="chart-series-delta">' + esc(Number.isFinite(Number(series.delta)) ? chartConfig.formatMetricValue(getChartFields().yField, series.delta) : 'No delta') + '</span>' +
+                        '<span class="chart-series-points">' + esc(series.pointCount.toLocaleString()) + ' pts</span>' +
                     '</span>' +
-                '</button>'
-            );
-        }
-        els.chartSeriesList.innerHTML = html.join('');
+                '</button>';
+        }).join('');
     }
 
-    function setFocusedSeries(index) {
-        if (!els.chartSeriesList) return;
-        var buttons = els.chartSeriesList.querySelectorAll('[data-trace-index]');
-        for (var i = 0; i < buttons.length; i++) {
-            var button = buttons[i];
-            var isActive = Number(button.getAttribute('data-trace-index')) === Number(index);
-            button.classList.toggle('is-active', isActive);
+    function productLink(row) {
+        var href = row && /^https?:\/\//i.test(String(row.product_url || '')) ? String(row.product_url) : '';
+        if (!href) return '<span class="chart-spotlight-link is-muted">No product page available for this series.</span>';
+        return '<a class="chart-point-link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">Open product page</a>';
+    }
+
+    function renderSpotlight(model, fields) {
+        if (!els.chartPointDetails) return;
+        if (!model || !model.spotlight || !model.spotlight.series) {
+            els.chartPointDetails.hidden = false;
+            els.chartPointDetails.innerHTML =
+                '<div class="chart-spotlight-empty">' +
+                    '<strong>Spotlight inactive</strong>' +
+                    '<span>Select a visible product from the surface or side rail to inspect its detail trend.</span>' +
+                '</div>';
+            return;
+        }
+
+        var spotlight = model.spotlight;
+        var row = spotlight.row || {};
+        els.chartPointDetails.hidden = false;
+        els.chartPointDetails.innerHTML = '' +
+            '<div class="chart-spotlight-card">' +
+                '<div class="chart-spotlight-copy">' +
+                    '<p class="chart-series-kicker">Series spotlight</p>' +
+                    '<strong>' + esc(spotlight.series.name) + '</strong>' +
+                    '<span class="chart-spotlight-subtitle">' + esc(spotlight.series.subtitle || 'Canonical product_key trend') + '</span>' +
+                '</div>' +
+                '<div class="chart-spotlight-metrics">' +
+                    '<span class="chart-summary-pill is-emphasis">' + esc(chartConfig.formatMetricValue(fields.yField, spotlight.value)) + '</span>' +
+                    '<span class="chart-summary-pill">' + esc(chartConfig.formatFieldValue('collection_date', spotlight.date, row)) + '</span>' +
+                    '<span class="chart-summary-pill">' + esc(spotlight.series.pointCount.toLocaleString()) + ' observations</span>' +
+                '</div>' +
+                '<div class="chart-spotlight-grid">' +
+                    '<span><strong>Bank</strong> ' + esc(row.bank_name || '-') + '</span>' +
+                    '<span><strong>Product</strong> ' + esc(row.product_name || '-') + '</span>' +
+                    '<span><strong>Delta</strong> ' + esc(Number.isFinite(Number(spotlight.series.delta)) ? chartConfig.formatMetricValue(fields.yField, spotlight.series.delta) : '-') + '</span>' +
+                    '<span><strong>product_key</strong> ' + esc(String(row.product_key || spotlight.series.key || '-')) + '</span>' +
+                '</div>' +
+                '<div class="chart-spotlight-link-row">' + productLink(row) + '</div>' +
+            '</div>';
+    }
+
+    function setStatus(message) {
+        if (els.chartStatus) els.chartStatus.textContent = String(message || '');
+    }
+
+    function setCanvasPlaceholder(message) {
+        if (els.chartOutput) {
+            els.chartOutput.removeAttribute('data-chart-rendered');
+            els.chartOutput.removeAttribute('data-chart-engine');
+            els.chartOutput.removeAttribute('data-chart-view');
+            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Draw a chart to render the rate surface.') + '</div>';
+        }
+        if (els.chartDetailOutput) {
+            els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'Select a series to inspect its detail trend.') + '</div>';
         }
     }
 
     function setIdleState() {
-        syncPresetButtons();
-        renderSummary(null, getChartFields());
-        renderSeriesRail(null, -1);
+        setActiveView('surface');
+        renderSummary(null, getChartFields(), null, false);
+        renderSeriesRail(null, null);
+        renderSpotlight(null, getChartFields());
+        setCanvasPlaceholder('Draw a chart to render the rate surface.');
+        setStatus('Choose a view, adjust the metric or density, then draw.');
     }
 
     function setPendingState(message) {
-        if (els.chartStatus) els.chartStatus.textContent = String(message || 'Loading chart data...');
-        if (els.chartSummary) {
-            els.chartSummary.innerHTML = '<span class="chart-summary-pill is-emphasis">Loading chart data</span>';
-        }
-        if (els.chartGuidance) {
-            els.chartGuidance.textContent = buildGuidance(getChartFields(), null);
-        }
+        renderSummary(null, getChartFields(), null, false);
+        setStatus(message || 'Loading chart data...');
+        setCanvasPlaceholder('Loading chart data...');
     }
 
-    function markChartStale() {
-        if (!tabState.chartDrawn || !els.chartStatus) return;
-        els.chartStatus.textContent = 'Chart settings changed - redraw to apply.';
+    function markStale(message) {
+        if (!tabState.chartDrawn) return;
+        renderSummary(null, getChartFields(), null, true);
+        setStatus(message || 'Filters changed. Redraw to fetch fresh chart rows.');
     }
 
-    function bindUi(onDraw, onTraceFocus) {
+    function bindUi(handlers) {
         if (uiBound) return;
         uiBound = true;
-        traceFocusHandler = typeof onTraceFocus === 'function' ? onTraceFocus : null;
 
-        var buttons = document.querySelectorAll('[data-chart-preset]');
+        var controlHandler = function (reason) {
+            if (!handlers || typeof handlers.onControlChange !== 'function') return;
+            handlers.onControlChange(reason || 'controls');
+        };
+
+        var buttons = document.querySelectorAll('[data-chart-view]');
         for (var i = 0; i < buttons.length; i++) {
             buttons[i].addEventListener('click', function (event) {
                 var button = event.currentTarget;
-                var presetName = button ? button.getAttribute('data-chart-preset') : '';
-                applyPreset(presetName);
-                if (typeof onDraw === 'function') onDraw();
+                var view = button ? button.getAttribute('data-chart-view') : 'surface';
+                setActiveView(view);
+                if (handlers && typeof handlers.onViewChange === 'function') handlers.onViewChange(view);
             });
         }
 
         [els.chartX, els.chartY, els.chartGroup, els.chartType, els.chartSeriesLimit].forEach(function (control) {
             if (!control) return;
             control.addEventListener('change', function () {
-                syncPresetButtons();
-                if (els.chartGuidance) {
-                    els.chartGuidance.textContent = buildGuidance(getChartFields(), null);
-                }
-                if (els.chartSummary && tabState.chartDrawn) {
-                    els.chartSummary.innerHTML = '<span class="chart-summary-pill is-warning">Settings changed - redraw to apply</span>';
-                }
-                markChartStale();
+                controlHandler('advanced');
             });
         });
 
         if (els.chartSeriesList) {
             els.chartSeriesList.addEventListener('click', function (event) {
-                if (!traceFocusHandler) return;
-                var button = event.target && event.target.closest
-                    ? event.target.closest('[data-trace-index]')
-                    : null;
+                var button = event.target && event.target.closest ? event.target.closest('[data-series-key]') : null;
                 if (!button) return;
-                var traceIndex = Number(button.getAttribute('data-trace-index'));
-                if (!Number.isFinite(traceIndex)) return;
-                traceFocusHandler(traceIndex);
+                if (handlers && typeof handlers.onSeriesToggle === 'function') {
+                    handlers.onSeriesToggle(String(button.getAttribute('data-series-key') || ''));
+                }
             });
         }
     }
 
     window.AR.chartUi = {
-        applyPreset: applyPreset,
         bindUi: bindUi,
-        fieldLabel: fieldLabel,
-        formatFieldValue: formatFieldValue,
-        formatMetricValue: formatMetricValue,
-        getActivePresetName: getActivePresetName,
         getChartFields: getChartFields,
-        isDateField: isDateField,
-        isMoneyField: isMoneyField,
-        isPercentField: isPercentField,
-        parseSeriesLimit: parseSeriesLimit,
+        markStale: markStale,
         renderSeriesRail: renderSeriesRail,
+        renderSpotlight: renderSpotlight,
         renderSummary: renderSummary,
-        setFocusedSeries: setFocusedSeries,
+        setActiveView: setActiveView,
+        setCanvasPlaceholder: setCanvasPlaceholder,
         setIdleState: setIdleState,
         setPendingState: setPendingState,
-        syncPresetButtons: syncPresetButtons,
+        setStatus: setStatus,
     };
 })();

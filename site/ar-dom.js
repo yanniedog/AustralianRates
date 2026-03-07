@@ -54,6 +54,7 @@
         chartSeriesList: document.getElementById('chart-series-list'),
         chartSeriesNote: document.getElementById('chart-series-note'),
         chartPointDetails: document.getElementById('chart-point-details'),
+        chartDetailOutput: document.getElementById('chart-detail-output'),
         statUpdated:   document.getElementById('stat-updated'),
         statCashRate:  document.getElementById('stat-cash-rate'),
         statRecords:   document.getElementById('stat-records'),

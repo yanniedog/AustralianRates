@@ -37,7 +37,8 @@
         }
     }
 
-    function applyUiMode(mode) {
+    function applyUiMode(mode, options) {
+        var opts = options || {};
         var uiMode = String(mode || (state && state.getUiMode ? state.getUiMode() : 'consumer'));
         document.body.classList.toggle('ui-mode-consumer', uiMode !== 'analyst');
         document.body.classList.toggle('ui-mode-analyst', uiMode === 'analyst');
@@ -46,9 +47,11 @@
         if (tabs && tabs.applyUiMode) tabs.applyUiMode();
         if (filters && filters.applyUiMode) filters.applyUiMode();
         if (explorer && explorer.applyUiMode) explorer.applyUiMode();
-        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
-        if (filters && filters.syncUrlState) filters.syncUrlState();
-        if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
+        if (!opts.skipRefresh) {
+            if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
+            if (filters && filters.syncUrlState) filters.syncUrlState();
+            if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
+        }
 
         clientLog('info', 'UI mode applied', { mode: uiMode });
     }
@@ -66,7 +69,9 @@
         if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'Filters changed -- click "Load Data for Pivot" to refresh.';
         }
-        if (tabState.chartDrawn && els.chartStatus) {
+        if (charts && charts.markStale) {
+            charts.markStale('Filters changed. Redraw to fetch fresh chart rows.');
+        } else if (tabState.chartDrawn && els.chartStatus) {
             els.chartStatus.textContent = 'Filters changed -- click "Draw Chart" to refresh.';
         }
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
@@ -152,6 +157,7 @@
     document.addEventListener('keydown', applyFiltersShortcut);
 
     if (tabs && tabs.bindTabListeners) tabs.bindTabListeners();
+    applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer', { skipRefresh: true });
 
     if (filters && filters.loadFilters) {
         filters.loadFilters().then(function () {

@@ -23,6 +23,7 @@ const requiredVendorSnippets = [
   'vendor/pivottable/pivot.min.js',
   'vendor/plotly/plotly-basic-2.35.2.min.js',
   'vendor/pivottable/plotly_renderers.min.js',
+  'vendor/echarts/echarts.min.js',
   'vendor/sheetjs/xlsx.full.min.js',
 ];
 

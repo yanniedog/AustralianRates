@@ -1251,12 +1251,59 @@ async function runTests() {
         await page.click('#tab-charts');
         await page.waitForTimeout(500);
         await page.click('#draw-chart');
-        await page.waitForTimeout(5000);
-        const chartHasContent = await page.locator('#chart-output').evaluate(el => el.children.length > 0 || el.querySelector('.plotly'));
-        if (chartHasContent) {
-            results.passed.push('PASS Draw Chart populates chart output');
+        await page.waitForTimeout(6000);
+        const chartHasContent = await page.locator('#chart-output').evaluate(el => {
+            const engine = el.getAttribute('data-chart-engine');
+            return engine === 'echarts' || !!el.querySelector('canvas') || !!el.querySelector('svg');
+        });
+        const surfaceViewActive = await page.locator('#chart-output').evaluate(el => el.getAttribute('data-chart-view') === 'surface');
+        if (chartHasContent && surfaceViewActive) {
+            results.passed.push('PASS Draw Chart renders ECharts surface output');
         } else {
-            results.warnings.push('WARN Chart output empty after Draw (may need data)');
+            results.warnings.push('WARN Chart output did not render the expected ECharts surface');
+        }
+
+        const chartBox = await page.locator('#chart-output').boundingBox().catch(() => null);
+        if (chartBox) {
+            await page.mouse.click(chartBox.x + chartBox.width * 0.42, chartBox.y + chartBox.height * 0.46);
+            await page.waitForTimeout(1200);
+            const spotlightUpdated = await page.locator('#chart-point-details').evaluate(el => {
+                return /Series spotlight|Bank|Product/i.test(String(el.textContent || ''));
+            }).catch(() => false);
+            if (spotlightUpdated) {
+                results.passed.push('PASS Surface cell click updates spotlight panel');
+            } else {
+                results.warnings.push('WARN Surface click did not update spotlight panel');
+            }
+        }
+
+        let compareViewRequests = 0;
+        const onCompareViewRequest = (req) => {
+            const u = req.url();
+            if (u.includes('/api/home-loan-rates/rates')) compareViewRequests += 1;
+        };
+        context.on('request', onCompareViewRequest);
+        await page.click('[data-chart-view="compare"]');
+        await page.waitForTimeout(1500);
+        context.off('request', onCompareViewRequest);
+        const compareViewActive = await page.locator('#chart-output').evaluate(el => el.getAttribute('data-chart-view') === 'compare');
+        if (compareViewActive && compareViewRequests === 0) {
+            results.passed.push('PASS Compare view re-renders from cached rows without refetch');
+        } else if (compareViewActive) {
+            results.warnings.push('WARN Compare view switched but triggered an unexpected refetch');
+        } else {
+            results.failed.push('FAIL Compare view did not activate after switching');
+        }
+
+        await page.click('#apply-filters');
+        await page.waitForTimeout(1000);
+        const chartMarkedStale = await page.locator('#chart-status').evaluate(el => {
+            return /redraw|fresh chart rows|filters changed/i.test(String(el.textContent || ''));
+        }).catch(() => false);
+        if (chartMarkedStale) {
+            results.passed.push('PASS Chart status becomes stale after global filter changes');
+        } else {
+            results.failed.push('FAIL Chart status did not indicate stale state after filters changed');
         }
         
         // Test 10h: Download (export) - select CSV triggers request
@@ -1314,6 +1361,19 @@ async function runTests() {
                 results.passed.push('PASS ' + name + ': public trigger button removed');
             } else {
                 results.failed.push('FAIL ' + name + ': public trigger button still present');
+            }
+
+            await page.click('#tab-charts');
+            await page.waitForTimeout(500);
+            await page.click('#draw-chart');
+            await page.waitForTimeout(5000);
+            const sectionChartRendered = await page.locator('#chart-output').evaluate(el => {
+                return el.getAttribute('data-chart-engine') === 'echarts' || !!el.querySelector('canvas') || !!el.querySelector('svg');
+            }).catch(() => false);
+            if (sectionChartRendered) {
+                results.passed.push('PASS ' + name + ': ECharts chart surface renders');
+            } else {
+                results.warnings.push('WARN ' + name + ': chart surface did not render');
             }
 
             const sectionTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme')).catch(() => null);
@@ -1466,10 +1526,11 @@ async function runTests() {
         const drawChartVisible = await page.locator('#draw-chart').isVisible();
         const chartOutputVisible = await page.locator('#chart-output').isVisible();
         const chartStatusVisible = await page.locator('#chart-status').isVisible();
-        if (drawChartVisible && chartOutputVisible && chartStatusVisible) {
-            results.passed.push('PASS Chart panel: Draw Chart, chart output and status visible');
+        const chartDetailVisible = await page.locator('#chart-detail-output').isVisible().catch(() => false);
+        if (drawChartVisible && chartOutputVisible && chartStatusVisible && chartDetailVisible) {
+            results.passed.push('PASS Chart panel: draw action, chart output, detail chart, and status visible');
         } else {
-            results.failed.push('FAIL Chart panel: Draw Chart or chart output/status not visible');
+            results.failed.push('FAIL Chart panel: chart workspace controls or surfaces not visible');
         }
         await page.click('#tab-explorer');
         await page.waitForTimeout(500);

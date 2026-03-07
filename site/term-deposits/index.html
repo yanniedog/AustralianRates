@@ -207,83 +207,90 @@
                             <div class="chart-hero">
                                 <div class="chart-hero-copy">
                                     <p class="chart-kicker">Analysis workspace</p>
-                                    <h2>Interactive rate lab</h2>
-                                    <p class="chart-hero-note">Switch between trend, comparison, and distribution views without losing longitudinal product tracking.</p>
+                                    <h2>Rate surface lab</h2>
+                                    <p class="chart-hero-note">Scan a heatmap-style surface, spotlight one product, then compare or distribute the same filtered term-deposit set without leaving the chart tab.</p>
                                 </div>
-                                <div class="chart-presets" role="group" aria-label="Chart presets">
-                                    <button class="chart-preset is-active" data-chart-preset="trend" type="button" aria-pressed="true">Trend</button>
-                                    <button class="chart-preset" data-chart-preset="compare" type="button" aria-pressed="false">Compare</button>
-                                    <button class="chart-preset" data-chart-preset="distribution" type="button" aria-pressed="false">Distribution</button>
+                                <div class="chart-presets" role="group" aria-label="Chart views">
+                                    <button class="chart-preset is-active" data-chart-view="surface" type="button" aria-pressed="true">Surface</button>
+                                    <button class="chart-preset" data-chart-view="compare" type="button" aria-pressed="false">Compare</button>
+                                    <button class="chart-preset" data-chart-view="distribution" type="button" aria-pressed="false">Distribution</button>
                                 </div>
                             </div>
                             <div class="chart-controls">
-                                <label>X axis
-                                    <select id="chart-x">
-                                        <option value="collection_date">Date</option>
-                                        <option value="bank_name">Bank</option>
-                                        <option value="term_months">Term (months)</option>
-                                        <option value="deposit_tier">Deposit tier</option>
-                                        <option value="interest_payment">Payment</option>
-                                    </select>
-                                </label>
-                                <label>Y axis
+                                <label>Metric
                                     <select id="chart-y">
                                         <option value="interest_rate">Interest rate</option>
                                     </select>
                                 </label>
-                                <label>Group by
-                                    <select id="chart-group">
-                                        <option value="">None</option>
-                                        <option value="product_key" selected>Product</option>
-                                        <option value="bank_name">Bank</option>
-                                        <option value="term_months">Term</option>
-                                        <option value="deposit_tier">Deposit tier</option>
-                                        <option value="interest_payment">Payment</option>
-                                    </select>
-                                </label>
-                                <label>Chart type
-                                    <select id="chart-type">
-                                        <option value="scatter">Line / Scatter</option>
-                                        <option value="bar">Bar</option>
-                                        <option value="box">Box Plot</option>
-                                    </select>
-                                </label>
-                                <label>Visible series
+                                <label>Density
                                     <select id="chart-series-limit">
-                                        <option value="8" selected>8</option>
-                                        <option value="12">12</option>
-                                        <option value="20">20</option>
-                                        <option value="all">All</option>
+                                        <option value="compact">Compact</option>
+                                        <option value="standard" selected>Standard</option>
+                                        <option value="expanded">Expanded</option>
                                     </select>
                                 </label>
                                 <div class="chart-actions">
                                     <button id="draw-chart" type="button" class="small">Draw chart</button>
                                 </div>
                             </div>
+                            <details class="chart-advanced">
+                                <summary>Advanced controls</summary>
+                                <div class="chart-advanced-grid">
+                                    <label>X axis
+                                        <select id="chart-x">
+                                            <option value="collection_date">Date</option>
+                                            <option value="bank_name">Bank</option>
+                                            <option value="term_months">Term (months)</option>
+                                            <option value="deposit_tier">Deposit tier</option>
+                                            <option value="interest_payment">Payment</option>
+                                        </select>
+                                    </label>
+                                    <label>Group by
+                                        <select id="chart-group">
+                                            <option value="">None</option>
+                                            <option value="product_key" selected>Product</option>
+                                            <option value="bank_name">Bank</option>
+                                            <option value="term_months">Term</option>
+                                            <option value="deposit_tier">Deposit tier</option>
+                                            <option value="interest_payment">Payment</option>
+                                        </select>
+                                    </label>
+                                    <label>Chart type
+                                        <select id="chart-type">
+                                            <option value="scatter" selected>Trend lines</option>
+                                            <option value="bar">Ranking bars</option>
+                                            <option value="box">Box summary</option>
+                                        </select>
+                                    </label>
+                                </div>
+                            </details>
                             <div class="chart-meta">
-                                <p id="chart-guidance" class="chart-guidance">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
+                                <p id="chart-guidance" class="chart-guidance">Surface view maps collection date across the x-axis and canonical product_key series down the y-axis.</p>
                                 <div id="chart-summary" class="chart-summary" aria-live="polite">
                                     <span class="chart-summary-pill">Awaiting first render</span>
                                 </div>
                             </div>
                             <div class="chart-canvas-shell">
-                                <div id="chart-output" aria-label="Interactive chart"></div>
+                                <div class="chart-main-stage">
+                                    <div id="chart-output" aria-label="Interactive chart"></div>
+                                </div>
                                 <aside class="chart-series-rail" aria-label="Visible chart series">
                                     <div class="chart-series-rail-header">
                                         <div>
                                             <p class="chart-series-kicker">Series spotlight</p>
-                                            <h3>Visible lines</h3>
+                                            <h3>Selected products</h3>
                                         </div>
-                                        <p id="chart-series-note" class="chart-series-note">Draw a chart to inspect the series currently on screen.</p>
+                                        <p id="chart-series-note" class="chart-series-note">Draw a chart to activate the rate surface.</p>
                                     </div>
+                                    <div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>
+                                    <div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div>
                                     <div id="chart-series-list" class="chart-series-list">
-                                        <p class="chart-series-empty">Preset-driven views and focused series cards will appear here after the first render.</p>
+                                        <p class="chart-series-empty">Visible products and selected comparison lines will appear here.</p>
                                     </div>
                                 </aside>
                             </div>
                         </div>
-                        <p id="chart-status" class="hint">Choose a preset or customise the axes, then draw.</p>
-                        <div id="chart-point-details" class="chart-point-details" hidden aria-live="polite"></div>
+                        <p id="chart-status" class="hint">Choose a view, adjust the metric or density, then draw.</p>
                     </div>
                 </section>
 
@@ -327,6 +334,7 @@
     <script src="../vendor/pivottable/pivot.min.js"></script>
     <script src="../vendor/plotly/plotly-basic-2.35.2.min.js"></script>
     <script src="../vendor/pivottable/plotly_renderers.min.js"></script>
+    <script src="../vendor/echarts/echarts.min.js"></script>
     <script src="../vendor/sheetjs/xlsx.full.min.js"></script>
     <script src="../ar-utils.js"></script>
     <script src="../ar-time.js"></script>
@@ -339,8 +347,10 @@
     <script src="../ar-hero.js"></script>
     <script src="../ar-explorer.js"></script>
     <script src="../ar-pivot.js"></script>
+    <script src="../ar-chart-config.js"></script>
+    <script src="../ar-chart-data.js"></script>
+    <script src="../ar-chart-echarts.js"></script>
     <script src="../ar-chart-ui.js"></script>
-    <script src="../ar-chart-renderer.js"></script>
     <script src="../ar-charts.js"></script>
     <script src="../ar-refresh.js"></script>
     <script src="../ar-export.js"></script>
