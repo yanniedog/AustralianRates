@@ -34,6 +34,15 @@
     align-items: center;
 }
 
+.admin-status .grid > div,
+.admin-status #overall-grid > div,
+.admin-status #e2e-grid > div,
+.admin-status #cdr-audit-overview > div,
+.summary-cell,
+.admin-summary-cell {
+    min-width: 0;
+}
+
 .admin-status .link-btn {
     border: 0;
     padding: 0;
@@ -51,6 +60,40 @@
     border-radius: 18px;
     background: var(--ar-surface-soft);
     max-height: 420px;
+}
+
+.admin-status #e2e-datasets-wrap,
+.admin-status #components-wrap,
+.admin-status #integrity-wrap,
+.admin-status #issues-wrap,
+.admin-status #probe-payloads-wrap,
+.admin-status #history-wrap,
+.admin-status #cdr-audit-overview,
+.admin-status #cdr-audit-wrap,
+.admin-runs #backlog-tables {
+    min-width: 0;
+    max-width: 100%;
+    overflow: auto;
+}
+
+.admin-status table,
+.admin-runs table,
+.admin-config table,
+.admin-logs table {
+    table-layout: fixed;
+}
+
+.admin-status th,
+.admin-status td,
+.admin-runs th,
+.admin-runs td,
+.admin-config th,
+.admin-config td,
+.admin-logs th,
+.admin-logs td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .admin-db #db-grid {
@@ -105,8 +148,22 @@
     align-items: center;
 }
 
+.admin-config .add-row > *,
+.admin-config .rate-check-row > *,
+.admin-runs .actions > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
 .admin-config .add-row input {
     flex: 1 1 220px;
+}
+
+.admin-runs .actions input[type="date"],
+.admin-runs .actions input[type="number"],
+.admin-config .rate-check-row input[type="number"] {
+    width: min(100%, 180px);
+    flex: 0 1 180px;
 }
 
 .admin-config .actions {
@@ -146,11 +203,19 @@
     font-weight: 600;
 }
 
+.admin-runs .run-item .head > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .admin-runs .run-item .meta,
 .admin-logs .log-stats {
     color: var(--ar-muted);
     font-size: 0.86rem;
     line-height: 1.55;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .admin-runs .backlog-block + .backlog-block {

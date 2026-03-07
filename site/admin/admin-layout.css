@@ -5,6 +5,7 @@ body.ar-admin .site-header {
 .admin-shell {
     display: grid;
     gap: 16px;
+    min-width: 0;
     max-width: 1100px;
     margin: 0 auto;
     padding: 28px 24px 40px;
@@ -23,6 +24,11 @@ body.ar-admin .site-header {
     gap: 6px;
 }
 
+.admin-shell > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
 .admin-page-head h1 {
     font-size: clamp(1.9rem, 3vw, 2.6rem);
 }
@@ -37,6 +43,8 @@ body.ar-admin .site-header {
 .admin-shell .status,
 .admin-shell .live-meta {
     color: var(--ar-muted);
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .admin-back {
@@ -114,6 +122,35 @@ body.ar-admin .site-header {
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-actions > *,
+.actions > *,
+.admin-toolbar > *,
+.toolbar > *,
+.admin-log-actions > *,
+.admin-modal-actions > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.admin-actions input,
+.actions input,
+.admin-toolbar input,
+.toolbar input,
+.admin-actions select,
+.actions select,
+.admin-toolbar select,
+.toolbar select {
+    width: auto;
+    flex: 0 1 auto;
+}
+
+.admin-status-line {
+    flex: 1 1 260px;
+    min-width: 0;
 }
 
 .admin-message {
@@ -142,6 +179,8 @@ body.ar-admin .site-header {
 
 .admin-table-wrap,
 .admin-shell pre {
+    min-width: 0;
+    max-width: 100%;
     overflow: auto;
 }
 
@@ -270,6 +309,9 @@ body.ar-admin .site-header {
 .admin-runs .mono,
 .admin-status .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .pagination:empty {
