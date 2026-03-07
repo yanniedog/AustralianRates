@@ -381,6 +381,75 @@ async function runTests() {
             }
         }
     }
+
+    async function verifyResponsivePivotLayout(viewport) {
+        const label = `Pivot ${viewport.name}`;
+        await page.setViewportSize({ width: viewport.w, height: viewport.h });
+        await page.goto(withSharedQuery('/'), { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForSelector('#main-content', { timeout: 8000 });
+        await page.click('#mode-analyst');
+        await page.waitForTimeout(400);
+        await page.click('#tab-pivot');
+        await page.waitForTimeout(400);
+        await page.click('#load-pivot');
+
+        const pivotReady = await page.waitForFunction(() => {
+            const root = document.querySelector('#pivot-output .pvtUi');
+            return !!root && root.querySelectorAll('select').length >= 3;
+        }, { timeout: 20000 }).catch(() => null);
+
+        if (!pivotReady) {
+            results.failed.push(`FAIL ${label}: pivot UI did not finish rendering`);
+            return;
+        }
+
+        const controls = await page.evaluate(() => {
+            const viewportWidth = window.innerWidth;
+            const selectInfo = Array.from(document.querySelectorAll('#pivot-output select')).map((el) => {
+                const rect = el.getBoundingClientRect();
+                return {
+                    className: String(el.className || ''),
+                    width: rect.width,
+                    left: rect.left,
+                    right: rect.right,
+                };
+            });
+            return { viewportWidth, selectInfo };
+        });
+
+        const pivotControlMinWidth = 180;
+        const controlsReadable = controls.selectInfo.every((info) =>
+            info.left >= 0 &&
+            info.right <= controls.viewportWidth - 8 &&
+            info.width >= pivotControlMinWidth
+        );
+        if (controlsReadable) {
+            results.passed.push(`PASS ${label}: pivot controls stay readable within the viewport`);
+        } else {
+            results.failed.push(`FAIL ${label}: pivot controls collapse or overflow on narrow screens`);
+        }
+
+        await page.locator('#pivot-output .pvtUnused .pvtTriangle').first().click();
+        await page.waitForTimeout(300);
+        const filterBox = await page.evaluate(() => {
+            const openBox = Array.from(document.querySelectorAll('#pivot-output .pvtFilterBox')).find((box) =>
+                getComputedStyle(box).display !== 'none'
+            );
+            if (!openBox) return null;
+            const rect = openBox.getBoundingClientRect();
+            return {
+                left: rect.left,
+                right: rect.right,
+                viewportWidth: window.innerWidth,
+            };
+        });
+
+        if (filterBox && filterBox.left >= 0 && filterBox.right <= filterBox.viewportWidth - 8) {
+            results.passed.push(`PASS ${label}: pivot filter menu stays on-screen`);
+        } else {
+            results.failed.push(`FAIL ${label}: pivot filter menu opens off-screen`);
+        }
+    }
     
     try {
         // Test 1: Page loads without errors
@@ -1374,6 +1443,9 @@ async function runTests() {
         });
         console.log('  Screenshot saved: 07-tablet-view.png');
         results.passed.push('PASS Tablet viewport (768x1024) rendered');
+
+        await verifyResponsivePivotLayout({ w: 375, h: 667, name: 'mobile' });
+        await verifyResponsivePivotLayout({ w: 768, h: 1024, name: 'tablet' });
         
         await page.setViewportSize({ width: 1920, height: 1080 });
         await page.waitForTimeout(1000);

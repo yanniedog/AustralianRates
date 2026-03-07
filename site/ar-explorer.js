@@ -499,8 +499,25 @@
     var comparisonAvailable = true;
     var settingsBound = false;
     var tableOverlayObserver = null;
+    var resizeBound = false;
+    var resizeTimer = null;
 
-    function getTableLayout() { return 'fitDataStretch'; }
+    function getTableLayout() {
+        return isMobile() ? 'fitDataTable' : 'fitDataStretch';
+    }
+
+    function handleResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+            if (!rateTable) return;
+            var narrow = isMobile();
+            if (narrow !== lastMobileState) {
+                initRateTable();
+                return;
+            }
+            if (rateTable.redraw) rateTable.redraw(true);
+        }, 250);
+    }
 
     function isAbortLikeAjaxError(xhr, textStatus, errorThrown) {
         var status = xhr && typeof xhr.status === 'number' ? xhr.status : null;
@@ -1063,18 +1080,10 @@
         });
         rateTable.on('pageLoaded', scheduleHideTableLoader);
         clientLog('info', 'Explorer table init complete');
-
-        var resizeTimer;
-        window.addEventListener('resize', function () {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(function () {
-                if (!rateTable) return;
-                var narrow = isMobile();
-                if (narrow === lastMobileState) return;
-                lastMobileState = narrow;
-                applyColumnPreferences();
-            }, 250);
-        });
+        if (!resizeBound) {
+            window.addEventListener('resize', handleResize);
+            resizeBound = true;
+        }
     }
 
     function applyUiMode() {

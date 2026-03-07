@@ -79,4 +79,13 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('ADD COLUMN detail_fetch_event_count')
     expect(sql).toContain('ADD COLUMN lineage_error_count')
   })
+
+  it('includes term-deposit product_key repair migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0025_td_product_key_interest_payment.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('UPDATE latest_td_series')
+    expect(sql).toContain('interest_payment AS product_key')
+    expect(sql).toContain('CREATE VIEW vw_latest_td_rates AS')
+    expect(sql).toContain('CREATE VIEW vw_td_timeseries AS')
+  })
 })

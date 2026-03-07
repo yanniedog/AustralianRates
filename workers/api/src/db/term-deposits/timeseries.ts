@@ -2,6 +2,7 @@ import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, rows, safeLimit } from '../query-common'
+import { tdProductKeySql, tdSeriesKeySql } from './identity'
 import {
   addRateBoundsWhere,
   MAX_PUBLIC_RATE,
@@ -36,7 +37,7 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
     where.push('h.series_key = ?')
     binds.push(input.seriesKey)
   } else if (input.productKey) {
-    where.push("(h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier) = ?")
+    where.push(`(${tdProductKeySql('h')}) = ?`)
     binds.push(input.productKey)
   }
   if (input.termMonths) { where.push('CAST(h.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
@@ -59,7 +60,7 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
       h.product_code,
       h.product_name,
       h.series_key,
-      (h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier) AS product_key,
+      ${tdProductKeySql('h')} AS product_key,
       h.term_months,
       h.interest_rate,
       h.deposit_tier,
@@ -76,7 +77,7 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
       h.parsed_at,
       h.run_id,
       h.run_source,
-      MIN(h.parsed_at) OVER (PARTITION BY COALESCE(h.series_key, (h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier || '|' || h.interest_payment))) AS first_retrieved_at,
+      MIN(h.parsed_at) OVER (PARTITION BY ${tdSeriesKeySql('h')}) AS first_retrieved_at,
       MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
         PARTITION BY
           h.bank_name,

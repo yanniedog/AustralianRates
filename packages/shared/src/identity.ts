@@ -53,14 +53,6 @@ export function buildSeriesKey(parts: SeriesKeyParts): string {
 }
 
 export function buildLegacyProductKey(parts: SeriesKeyParts): string {
-  if (parts.dataset === 'term_deposits') {
-    return [
-      required(parts.bankName, 'bank_name'),
-      required(parts.productId, 'product_id'),
-      required(parts.termMonths, 'term_months'),
-      required(parts.depositTier, 'deposit_tier'),
-    ].join('|')
-  }
   return buildSeriesKey(parts)
 }
 

@@ -8,7 +8,7 @@ describe('term deposit rate-change identity', () => {
 
     expect(config.keyDimensions).toContain('interest_payment')
     expect(config.seriesKeyExpression).toContain('interest_payment')
-    expect(config.productKeyExpression).not.toContain('interest_payment')
+    expect(config.productKeyExpression).toContain('interest_payment')
     expect(buildMissingKeyClause(config, 'h')).toContain('h.interest_payment')
   })
 

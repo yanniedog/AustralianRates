@@ -1,3 +1,5 @@
+import { tdProductKeySql, tdSeriesKeySql } from '../term-deposits/identity'
+
 export type RateChangeDataset = 'home_loans' | 'savings' | 'term_deposits'
 
 export type RateChangeDatasetConfig = {
@@ -49,9 +51,8 @@ const termDepositConfig: RateChangeDatasetConfig = {
   maxRate: 15,
   minConfidence: 0.85,
   keyDimensions: ['bank_name', 'product_id', 'term_months', 'deposit_tier', 'interest_payment'],
-  productKeyExpression: "h.bank_name || '|' || h.product_id || '|' || CAST(h.term_months AS TEXT) || '|' || h.deposit_tier",
-  seriesKeyExpression:
-    "COALESCE(NULLIF(TRIM(h.series_key), ''), h.bank_name || '|' || h.product_id || '|' || CAST(h.term_months AS TEXT) || '|' || h.deposit_tier || '|' || h.interest_payment)",
+  productKeyExpression: tdProductKeySql('h'),
+  seriesKeyExpression: tdSeriesKeySql('h'),
   detailColumns: ['term_months', 'deposit_tier', 'interest_payment'],
   detailSelect: ['o.term_months', 'o.deposit_tier', 'o.interest_payment'],
 }

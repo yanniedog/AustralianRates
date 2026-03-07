@@ -1,6 +1,7 @@
 import { presentCoreRowFields, presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { rows } from '../query-common'
+import { tdProductKeySql, tdSeriesKeySql } from './identity'
 import { buildWhere, SORT_COLUMNS, type TdPaginatedFilters } from './shared'
 
 export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginatedFilters) {
@@ -24,14 +25,14 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
   `
   const dataSql = `
     SELECT
-      h.bank_name, h.collection_date, h.product_id, h.product_name,
+      h.bank_name, h.collection_date, h.product_id, h.product_name, h.series_key,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
       h.source_url, h.product_url, h.published_at, h.cdr_product_detail_hash, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
       MIN(h.parsed_at) OVER (
-        PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
+        PARTITION BY ${tdSeriesKeySql('h')}
       ) AS first_retrieved_at,
       MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
         PARTITION BY
@@ -45,7 +46,7 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
           h.max_deposit
       ) AS rate_confirmed_at,
       h.run_id, h.run_source,
-      h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key,
+      ${tdProductKeySql('h')} AS product_key,
       COALESCE(pps.is_removed, 0) AS is_removed,
       pps.removed_at
     FROM historical_term_deposit_rates h
@@ -97,14 +98,14 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
   `
   const dataSql = `
     SELECT
-      h.bank_name, h.collection_date, h.product_id, h.product_name,
+      h.bank_name, h.collection_date, h.product_id, h.product_name, h.series_key,
       h.term_months, h.interest_rate, h.deposit_tier,
       h.min_deposit, h.max_deposit, h.interest_payment,
       h.source_url, h.product_url, h.published_at, h.cdr_product_detail_hash, h.data_quality_flag, h.confidence_score,
       h.retrieval_type,
       h.parsed_at,
       MIN(h.parsed_at) OVER (
-        PARTITION BY h.bank_name, h.product_id, h.term_months, h.deposit_tier
+        PARTITION BY ${tdSeriesKeySql('h')}
       ) AS first_retrieved_at,
       MAX(CASE WHEN h.data_quality_flag LIKE 'cdr_live%' THEN h.parsed_at END) OVER (
         PARTITION BY
@@ -118,7 +119,7 @@ export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilte
           h.max_deposit
       ) AS rate_confirmed_at,
       h.run_id, h.run_source,
-      h.bank_name || '|' || h.product_id || '|' || h.term_months || '|' || h.deposit_tier AS product_key,
+      ${tdProductKeySql('h')} AS product_key,
       COALESCE(pps.is_removed, 0) AS is_removed,
       pps.removed_at
 FROM historical_term_deposit_rates h
