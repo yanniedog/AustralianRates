@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from 'node:child_process'
+import { resolveCliPath } from './cli-path'
 import { isReadOnlySql, startsWithSelectOrWith } from './runbook'
 
 const ALLOWED_DB = 'australianrates_api'
@@ -227,7 +228,7 @@ function resolveBackupArtifact(value: string | undefined): string {
     throw new Error('Refusing execution: --backup-artifact <path> is required.')
   }
 
-  const resolved = path.resolve(raw)
+  const resolved = resolveCliPath(raw)
   if (!fs.existsSync(resolved)) {
     throw new Error(`Refusing execution: backup artifact does not exist at ${resolved}`)
   }

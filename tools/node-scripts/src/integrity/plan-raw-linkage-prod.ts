@@ -1,11 +1,11 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import {
   executeRemoteSqlWithFallbackForTest,
   isSafePlanSql,
   type SpawnRunner,
 } from './repair-presence-prod'
+import { resolveCliPath } from './cli-path'
 
 const ALLOWED_DB = 'australianrates_api'
 const MUTATION_FLAGS = [
@@ -86,7 +86,7 @@ function resolveBackupArtifact(input: string | undefined): string {
   if (!raw) {
     throw new Error('--backup-artifact <path> is required')
   }
-  const resolved = path.resolve(raw)
+  const resolved = resolveCliPath(raw)
   if (!fs.existsSync(resolved)) {
     throw new Error(`backup artifact does not exist at ${resolved}`)
   }

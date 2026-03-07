@@ -1244,6 +1244,21 @@ describe('raw linkage production plan-only tooling', () => {
     ).toThrow(/mutation flags are forbidden/i)
   })
 
+  it('accepts Windows-style backup path separators in plan-only config', () => {
+    const backup = makeBackupArtifactForRawLinkage()
+    const windowsPath = backup.replaceAll('/', '\\')
+    const parsed = parseRawLinkagePlanProdConfig([
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      windowsPath,
+    ])
+
+    expect(parsed.backupArtifact).toBe(path.resolve(backup))
+  })
+
   it('builds read-only production plan SQL', () => {
     const sql = buildRawLinkageProdPlanSql()
     for (const query of Object.values(sql)) {
@@ -1498,6 +1513,21 @@ describe('raw linkage production repair tooling (PR10)', () => {
         '--apply',
       ]),
     ).toThrow(/--i-know-this-will-mutate-production is required/i)
+  })
+
+  it('accepts Windows-style backup path separators in repair config', () => {
+    const backup = makeBackupArtifactForRawLinkageRepair()
+    const windowsPath = backup.replaceAll('/', '\\')
+    const parsed = parseRepairRawLinkageProdConfig([
+      '--remote',
+      '--db',
+      'australianrates_api',
+      '--confirm-backup',
+      '--backup-artifact',
+      windowsPath,
+    ])
+
+    expect(parsed.backupArtifact).toBe(path.resolve(backup))
   })
 
   it('plan-only emits a single JSON line and includes required fields', () => {
