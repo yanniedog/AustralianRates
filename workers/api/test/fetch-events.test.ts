@@ -95,4 +95,99 @@ CREATE TABLE fetch_events (
     expect(fetchEvent.content_hash).toBe(result.contentHash)
     sqlite.close()
   })
+
+  it('recovers fetchEventId when D1 insert metadata omits last_row_id', async () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(`
+CREATE TABLE raw_objects (
+  content_hash TEXT PRIMARY KEY,
+  source_type TEXT NOT NULL,
+  first_source_url TEXT NOT NULL,
+  body_bytes INTEGER NOT NULL,
+  content_type TEXT NOT NULL,
+  r2_key TEXT NOT NULL,
+  created_at TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE fetch_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT,
+  lender_code TEXT,
+  dataset_kind TEXT,
+  job_kind TEXT,
+  source_type TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  collection_date TEXT,
+  fetched_at TEXT NOT NULL,
+  http_status INTEGER,
+  content_hash TEXT NOT NULL,
+  body_bytes INTEGER NOT NULL,
+  response_headers_json TEXT,
+  duration_ms INTEGER,
+  product_id TEXT,
+  raw_object_created INTEGER NOT NULL DEFAULT 0,
+  notes TEXT
+);
+`)
+
+    const db = {
+      prepare(sql: string) {
+        let args: Array<string | number | Uint8Array | null> = []
+        return {
+          bind(...values: unknown[]) {
+            args = values as Array<string | number | Uint8Array | null>
+            return this
+          },
+          async first<T>() {
+            return (sqlite.prepare(sql).get(...args) as T | undefined) ?? null
+          },
+          async all<T>() {
+            return { results: sqlite.prepare(sql).all(...args) as T[] }
+          },
+          async run() {
+            const result = sqlite.prepare(sql).run(...args)
+            const hideInsertId = sql.includes('INSERT INTO fetch_events')
+            return {
+              meta: {
+                changes: Number(result.changes ?? 0),
+                last_row_id: hideInsertId ? 0 : Number(result.lastInsertRowid ?? 0),
+              },
+            }
+          },
+        }
+      },
+    } as unknown as D1Database
+
+    const result = await persistFetchEvent(
+      {
+        DB: db,
+        RAW_BUCKET: {
+          async put() {},
+        } as unknown as R2Bucket,
+      },
+      {
+        sourceType: 'cdr_product_detail',
+        sourceUrl: 'https://api.example.test/products/abc',
+        payload: { data: { productId: 'abc', name: 'Example Saver' } },
+        fetchedAtIso: '2026-03-07T10:00:00.000Z',
+        httpStatus: 200,
+        runId: 'run-123',
+        lenderCode: 'example-bank',
+        dataset: 'savings',
+        jobKind: 'product_detail_fetch',
+        collectionDate: '2026-03-07',
+        productId: 'abc',
+      },
+    )
+
+    const stored = sqlite.prepare(`SELECT id, source_url, content_hash FROM fetch_events LIMIT 1`).get() as {
+      id: number
+      source_url: string
+      content_hash: string
+    }
+
+    expect(stored.source_url).toBe('https://api.example.test/products/abc')
+    expect(stored.content_hash).toBe(result.contentHash)
+    expect(result.fetchEventId).toBe(stored.id)
+    sqlite.close()
+  })
 })

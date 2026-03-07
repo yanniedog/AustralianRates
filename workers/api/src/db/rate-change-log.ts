@@ -38,6 +38,7 @@ export type HomeLoanRateChangeRow = {
   previous_collection_date: string | null
   bank_name: string
   product_name: string
+  series_key: string
   product_key: string
   security_purpose: string
   repayment_type: string
@@ -56,6 +57,7 @@ export type SavingsRateChangeRow = {
   previous_collection_date: string | null
   bank_name: string
   product_name: string
+  series_key: string
   product_key: string
   account_type: string
   rate_type: string
@@ -73,6 +75,7 @@ export type TdRateChangeRow = {
   previous_collection_date: string | null
   bank_name: string
   product_name: string
+  series_key: string
   product_key: string
   term_months: number
   deposit_tier: string

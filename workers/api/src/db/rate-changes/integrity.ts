@@ -104,8 +104,8 @@ export async function queryRateChangeIntegrity(
     sample_rows: rows(missingSamplesResult),
     detail:
       missingKeyCount === 0
-        ? 'All rows required for product_key construction are present.'
-        : 'One or more rows are missing required product_key dimensions and were excluded from change derivation.',
+        ? 'All rows required for change-series identity are present.'
+        : 'One or more rows are missing required change-series dimensions and were excluded from change derivation.',
   }
 
   const excludedRowResult = await db
@@ -185,12 +185,13 @@ export async function queryRateChangeIntegrity(
         `${includedCte.cte},
          collisions AS (
            SELECT
-             product_key,
-             collection_date,
+             series_key,
+             run_id,
+             MAX(collection_date) AS collection_date,
              COUNT(*) AS row_count,
              COUNT(DISTINCT interest_rate) AS distinct_rates
            FROM included
-           GROUP BY product_key, collection_date
+           GROUP BY series_key, run_id
            HAVING COUNT(DISTINCT interest_rate) > 1
          )
          SELECT
@@ -205,34 +206,39 @@ export async function queryRateChangeIntegrity(
         `${includedCte.cte},
          collisions AS (
            SELECT
-             product_key,
-             collection_date,
+             series_key,
+             run_id,
+             MAX(collection_date) AS collection_date,
              COUNT(*) AS row_count,
              COUNT(DISTINCT interest_rate) AS distinct_rates
            FROM included
-           GROUP BY product_key, collection_date
+           GROUP BY series_key, run_id
            HAVING COUNT(DISTINCT interest_rate) > 1
          ),
          ranked_samples AS (
            SELECT
-             c.product_key,
+             c.series_key,
+             c.run_id,
              c.collection_date,
              c.row_count,
              c.distinct_rates,
+             i.product_key,
              i.bank_name,
              i.product_name,
              i.interest_rate,
              i.parsed_at,
              ROW_NUMBER() OVER (
-               PARTITION BY c.product_key, c.collection_date
+               PARTITION BY c.series_key, c.run_id
                ORDER BY i.parsed_at DESC
              ) AS sample_rank
            FROM collisions c
            JOIN included i
-             ON i.product_key = c.product_key
-            AND i.collection_date = c.collection_date
+             ON i.series_key = c.series_key
+            AND i.run_id = c.run_id
          )
          SELECT
+           series_key,
+           run_id,
            product_key,
            collection_date,
            row_count,
@@ -254,7 +260,7 @@ export async function queryRateChangeIntegrity(
   const collisionRows = num(collisionCountResult?.collision_rows)
   const collisionCheck: RateChangeIntegrityCheck = {
     id: 'identity_collisions',
-    title: 'Identity collisions (product_key + collection_date)',
+    title: 'Identity collisions within a single run (series_key + run_id)',
     passed: collisionGroups === 0,
     severity: 'error',
     metrics: {
@@ -264,8 +270,8 @@ export async function queryRateChangeIntegrity(
     sample_rows: rows(collisionSamplesResult),
     detail:
       collisionGroups === 0
-        ? 'No product_key/date identity collisions with conflicting rates were detected.'
-        : 'At least one product_key/date combination resolves to multiple rate values.',
+        ? 'No same-run series collisions with conflicting rates were detected.'
+        : 'At least one single-run change series resolves to multiple rate values.',
   }
 
   const changedCte = buildRateChangeCte(config)
@@ -275,13 +281,13 @@ export async function queryRateChangeIntegrity(
         `${changedCte.cte},
          duplicate_transitions AS (
            SELECT
-             product_key,
+             series_key,
              collection_date,
              previous_rate,
              new_rate,
              COUNT(*) AS transition_count
            FROM changed
-           GROUP BY product_key, collection_date, previous_rate, new_rate
+           GROUP BY series_key, collection_date, previous_rate, new_rate
            HAVING COUNT(*) > 1
          )
          SELECT
@@ -296,45 +302,47 @@ export async function queryRateChangeIntegrity(
         `${changedCte.cte},
          duplicate_transitions AS (
            SELECT
-             product_key,
+             series_key,
              collection_date,
              previous_rate,
              new_rate,
              COUNT(*) AS transition_count
            FROM changed
-           GROUP BY product_key, collection_date, previous_rate, new_rate
+           GROUP BY series_key, collection_date, previous_rate, new_rate
            HAVING COUNT(*) > 1
          ),
          ranked_samples AS (
            SELECT
-             d.product_key,
+             d.series_key,
              d.collection_date,
              d.previous_rate,
              d.new_rate,
              d.transition_count,
+             c.product_key,
              c.bank_name,
              c.product_name,
              c.changed_at,
              ROW_NUMBER() OVER (
-               PARTITION BY d.product_key, d.collection_date, d.previous_rate, d.new_rate
+               PARTITION BY d.series_key, d.collection_date, d.previous_rate, d.new_rate
                ORDER BY c.changed_at DESC
              ) AS sample_rank
            FROM duplicate_transitions d
            JOIN changed c
-             ON c.product_key = d.product_key
+             ON c.series_key = d.series_key
             AND c.collection_date = d.collection_date
             AND c.previous_rate = d.previous_rate
             AND c.new_rate = d.new_rate
          )
          SELECT
+           series_key,
            product_key,
            collection_date,
            previous_rate,
            new_rate,
            transition_count,
-           bank_name,
-           product_name,
-           changed_at
+            bank_name,
+            product_name,
+            changed_at
          FROM ranked_samples
          WHERE sample_rank <= 3
          ORDER BY collection_date DESC, changed_at DESC
@@ -348,7 +356,7 @@ export async function queryRateChangeIntegrity(
   const duplicateRows = num(duplicateCountResult?.duplicate_rows)
   const duplicateTransitionCheck: RateChangeIntegrityCheck = {
     id: 'duplicate_transitions',
-    title: 'Duplicate transitions (same key/date/rate pair)',
+    title: 'Duplicate transitions (same series/date/rate pair)',
     passed: duplicateGroups === 0,
     severity: 'warn',
     metrics: {
@@ -359,7 +367,7 @@ export async function queryRateChangeIntegrity(
     detail:
       duplicateGroups === 0
         ? 'No duplicate transition rows were detected.'
-        : 'Duplicate transition records were detected for at least one key/date/rate pair.',
+        : 'Duplicate transition records were detected for at least one series/date/rate pair.',
   }
 
   const checks = [missingKeyCheck, collisionCheck, duplicateTransitionCheck, excludedAccountingCheck]

@@ -53,6 +53,7 @@ export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartD
       SELECT
         h.collection_date,
         h.parsed_at,
+        h.run_id,
         h.bank_name,
         h.product_id,
         h.product_name,
@@ -60,7 +61,8 @@ export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartD
         h.interest_rate,
         h.confidence_score,
         h.run_source,
-        ${config.keyExpression} AS product_key
+        ${config.productKeyExpression} AS product_key,
+        ${config.seriesKeyExpression} AS series_key
       FROM ${config.table} h
     ),
     included AS (
@@ -75,15 +77,15 @@ export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartD
       SELECT
         i.*,
         LAG(i.interest_rate) OVER (
-          PARTITION BY i.product_key
+          PARTITION BY i.series_key
           ORDER BY i.collection_date ASC, i.parsed_at ASC
         ) AS previous_rate,
         LAG(i.parsed_at) OVER (
-          PARTITION BY i.product_key
+          PARTITION BY i.series_key
           ORDER BY i.collection_date ASC, i.parsed_at ASC
         ) AS previous_changed_at,
         LAG(i.collection_date) OVER (
-          PARTITION BY i.product_key
+          PARTITION BY i.series_key
           ORDER BY i.collection_date ASC, i.parsed_at ASC
         ) AS previous_collection_date
       FROM included i
@@ -96,6 +98,7 @@ export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartD
         o.previous_collection_date,
         o.bank_name,
         o.product_name,
+        o.series_key,
         o.product_key,
         ${detailSelect},
         o.previous_rate,
@@ -154,6 +157,7 @@ export function buildRateChangeIncludedCte(
       SELECT
         h.collection_date,
         h.parsed_at,
+        h.run_id,
         h.bank_name,
         h.product_id,
         h.product_name,
@@ -161,7 +165,8 @@ export function buildRateChangeIncludedCte(
         h.interest_rate,
         h.confidence_score,
         h.run_source,
-        ${config.keyExpression} AS product_key
+        ${config.productKeyExpression} AS product_key,
+        ${config.seriesKeyExpression} AS series_key
       FROM ${config.table} h
     ),
     included AS (

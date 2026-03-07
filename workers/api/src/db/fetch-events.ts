@@ -157,11 +157,26 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
     )
     .run()
 
+  let fetchEventId = Number(inserted.meta?.last_row_id || 0) || null
+  if (fetchEventId == null) {
+    // D1 can omit last_row_id for successful inserts, so recover the row id by payload identity.
+    fetchEventId = await resolveFetchEventIdByPayloadIdentity(env.DB, {
+      runId: input.runId ?? null,
+      lenderCode: input.lenderCode ?? null,
+      dataset: input.dataset ?? null,
+      sourceType: input.sourceType,
+      sourceUrl: input.sourceUrl,
+      contentHash,
+      productId: input.productId ?? null,
+      collectionDate: input.collectionDate ?? null,
+    })
+  }
+
   return {
     insertedObject: rawObjectCreated,
     contentHash,
     r2Key,
-    fetchEventId: Number(inserted.meta?.last_row_id || 0) || null,
+    fetchEventId,
     rawObjectCreated,
     bodyBytes,
   }

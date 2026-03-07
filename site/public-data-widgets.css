@@ -90,6 +90,7 @@
 .tabulator .tabulator-header,
 .tabulator .tabulator-footer {
     background: var(--ar-surface-soft) !important;
+    color: var(--ar-text) !important;
 }
 
 .tabulator .tabulator-header {
@@ -99,6 +100,19 @@
 .tabulator .tabulator-footer {
     border-top: 1px solid var(--ar-line) !important;
     color: var(--ar-muted) !important;
+}
+
+.tabulator .tabulator-tableholder .tabulator-table,
+.tabulator .tabulator-row,
+.tabulator .tabulator-row .tabulator-cell,
+.tabulator .tabulator-footer .tabulator-page-counter,
+.tabulator .tabulator-footer .tabulator-paginator,
+.tabulator .tabulator-footer .tabulator-paginator label {
+    color: var(--ar-text) !important;
+}
+
+.tabulator .tabulator-tableholder .tabulator-table {
+    background: transparent !important;
 }
 
 .tabulator .tabulator-col,
@@ -116,6 +130,13 @@
     color: var(--ar-text) !important;
 }
 
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter select {
+    background: var(--ar-surface) !important;
+    border: 1px solid var(--ar-line) !important;
+    color: var(--ar-text) !important;
+}
+
 .tabulator .tabulator-col .tabulator-col-content,
 .tabulator .tabulator-cell {
     padding: 11px 10px !important;
@@ -130,17 +151,43 @@
     text-transform: uppercase;
 }
 
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter {
+    color: var(--ar-muted) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable[aria-sort="none"] .tabulator-col-content .tabulator-col-sorter .tabulator-arrow {
+    border-bottom-color: var(--ar-line-strong) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable[aria-sort="ascending"] .tabulator-col-content .tabulator-col-sorter .tabulator-arrow {
+    border-bottom-color: var(--ar-accent) !important;
+}
+
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable[aria-sort="descending"] .tabulator-col-content .tabulator-col-sorter .tabulator-arrow {
+    border-top-color: var(--ar-accent) !important;
+}
+
 .tabulator .tabulator-row {
     border-bottom: 1px solid #ececf0 !important;
     background: transparent !important;
 }
 
+.tabulator .tabulator-row.tabulator-row-even,
 .tabulator .tabulator-row:nth-child(2n) {
     background: #fbfbfd !important;
 }
 
 .tabulator .tabulator-row:hover {
     background: rgba(0, 113, 227, 0.04) !important;
+}
+
+.tabulator .tabulator-row.tabulator-selected,
+.tabulator .tabulator-row.tabulator-selected:hover {
+    background: rgba(0, 113, 227, 0.12) !important;
+}
+
+.tabulator .tabulator-tableholder .tabulator-placeholder .tabulator-placeholder-contents {
+    color: var(--ar-muted) !important;
 }
 
 .tabulator .tabulator-cell a,

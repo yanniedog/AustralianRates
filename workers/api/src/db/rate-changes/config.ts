@@ -7,7 +7,8 @@ export type RateChangeDatasetConfig = {
   maxRate: number
   minConfidence: number
   keyDimensions: string[]
-  keyExpression: string
+  productKeyExpression: string
+  seriesKeyExpression: string
   detailColumns: string[]
   detailSelect: string[]
 }
@@ -19,7 +20,10 @@ const homeLoanConfig: RateChangeDatasetConfig = {
   maxRate: 25,
   minConfidence: 0.85,
   keyDimensions: ['bank_name', 'product_id', 'security_purpose', 'repayment_type', 'lvr_tier', 'rate_structure'],
-  keyExpression: "h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure",
+  productKeyExpression:
+    "h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure",
+  seriesKeyExpression:
+    "COALESCE(NULLIF(TRIM(h.series_key), ''), h.bank_name || '|' || h.product_id || '|' || h.security_purpose || '|' || h.repayment_type || '|' || h.lvr_tier || '|' || h.rate_structure)",
   detailColumns: ['security_purpose', 'repayment_type', 'lvr_tier', 'rate_structure'],
   detailSelect: ['o.security_purpose', 'o.repayment_type', 'o.lvr_tier', 'o.rate_structure'],
 }
@@ -31,7 +35,9 @@ const savingsConfig: RateChangeDatasetConfig = {
   maxRate: 15,
   minConfidence: 0.85,
   keyDimensions: ['bank_name', 'product_id', 'account_type', 'rate_type', 'deposit_tier'],
-  keyExpression: "h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier",
+  productKeyExpression: "h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier",
+  seriesKeyExpression:
+    "COALESCE(NULLIF(TRIM(h.series_key), ''), h.bank_name || '|' || h.product_id || '|' || h.account_type || '|' || h.rate_type || '|' || h.deposit_tier)",
   detailColumns: ['account_type', 'rate_type', 'deposit_tier'],
   detailSelect: ['o.account_type', 'o.rate_type', 'o.deposit_tier'],
 }
@@ -42,8 +48,10 @@ const termDepositConfig: RateChangeDatasetConfig = {
   minRate: 0,
   maxRate: 15,
   minConfidence: 0.85,
-  keyDimensions: ['bank_name', 'product_id', 'term_months', 'deposit_tier'],
-  keyExpression: "h.bank_name || '|' || h.product_id || '|' || CAST(h.term_months AS TEXT) || '|' || h.deposit_tier",
+  keyDimensions: ['bank_name', 'product_id', 'term_months', 'deposit_tier', 'interest_payment'],
+  productKeyExpression: "h.bank_name || '|' || h.product_id || '|' || CAST(h.term_months AS TEXT) || '|' || h.deposit_tier",
+  seriesKeyExpression:
+    "COALESCE(NULLIF(TRIM(h.series_key), ''), h.bank_name || '|' || h.product_id || '|' || CAST(h.term_months AS TEXT) || '|' || h.deposit_tier || '|' || h.interest_payment)",
   detailColumns: ['term_months', 'deposit_tier', 'interest_payment'],
   detailSelect: ['o.term_months', 'o.deposit_tier', 'o.interest_payment'],
 }
