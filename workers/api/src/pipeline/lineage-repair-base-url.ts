@@ -1,3 +1,4 @@
+import { TARGET_LENDERS } from '../constants'
 import { resolveFetchEventIdByPayloadIdentity } from '../db/fetch-events'
 import type { EnvBindings } from '../types'
 import type { DatasetKind } from '../../../../packages/shared/src'
@@ -22,6 +23,7 @@ type BaseUrlCandidate = {
 type ExistingFetchEventRow = {
   id: number
   run_id: string | null
+  lender_code: string | null
   dataset_kind: string | null
   source_url: string | null
   fetched_at: string | null
@@ -41,8 +43,18 @@ type RawPayloadRow = {
   content_type: string | null
 }
 
-const RAW_PAYLOAD_WINDOW_MS = 48 * 60 * 60 * 1000
+const RAW_PAYLOAD_WINDOW_MS = 72 * 60 * 60 * 1000
 const BATCH_SIZE = 70
+const BANK_NAME_TO_LENDER_CODE = new Map<string, string>(
+  TARGET_LENDERS.flatMap((lender) => {
+    const keys = new Set(
+      [String(lender.canonical_bank_name || '').trim(), String(lender.name || '').trim()]
+        .filter(Boolean)
+        .map((value) => value.toLowerCase()),
+    )
+    return Array.from(keys).map((key) => [key, lender.code] as const)
+  }),
+)
 
 function chunkValues<T>(values: T[], size: number): T[][] {
   const chunks: T[][] = []
@@ -112,11 +124,30 @@ export function parseLegacyRawPayloadLenderCode(notes: string | null | undefined
   return match ? String(match[1]).toLowerCase() : null
 }
 
+function lenderCodeForBankName(bankName: string | null | undefined): string | null {
+  const normalized = String(bankName || '').trim().toLowerCase()
+  if (!normalized) return null
+  return BANK_NAME_TO_LENDER_CODE.get(normalized) ?? null
+}
+
+export function resolveSyntheticLenderCode(
+  candidate: Pick<BaseUrlCandidate, 'bankName'>,
+  rawPayload: Pick<RawPayloadRow, 'notes'>,
+): string | null {
+  return lenderCodeForBankName(candidate.bankName) ?? parseLegacyRawPayloadLenderCode(rawPayload.notes)
+}
+
 export function pickPreferredExistingListFetchEvent(
   rows: ExistingFetchEventRow[],
   dataset: DatasetKind,
+  preferredLenderCode?: string | null,
 ): ExistingFetchEventRow | null {
-  const eligible = rows.filter((row) => datasetPreferenceScore(dataset, row.dataset_kind) < 9)
+  const eligible = rows.filter((row) => {
+    if (datasetPreferenceScore(dataset, row.dataset_kind) >= 9) return false
+    if (!preferredLenderCode) return true
+    const lenderCode = String(row.lender_code || '').trim().toLowerCase()
+    return !lenderCode || lenderCode === preferredLenderCode
+  })
   if (eligible.length === 0) return null
   const sorted = eligible.slice().sort((left, right) => {
     const leftScore = httpStatusPreference(left.http_status) * 10 + datasetPreferenceScore(dataset, left.dataset_kind)
@@ -227,7 +258,7 @@ async function loadExistingListFetchEvents(db: D1Database, runIds: string[]): Pr
     const placeholders = batch.map(() => '?').join(', ')
     const result = await db
       .prepare(
-        `SELECT id, run_id, dataset_kind, source_url, fetched_at, http_status
+        `SELECT id, run_id, lender_code, dataset_kind, source_url, fetched_at, http_status
          FROM fetch_events
          WHERE source_type = 'cdr_products'
            AND run_id IN (${placeholders})`,
@@ -318,7 +349,7 @@ async function ensureSyntheticListFetchEvent(
   candidate: BaseUrlCandidate,
   rawPayload: RawPayloadRow,
 ): Promise<number | null> {
-  const lenderCode = parseLegacyRawPayloadLenderCode(rawPayload.notes)
+  const lenderCode = resolveSyntheticLenderCode(candidate, rawPayload)
   const existingId = await resolveFetchEventIdByPayloadIdentity(env.DB, {
     runId: candidate.runId,
     lenderCode,
@@ -441,9 +472,11 @@ export async function repairMissingFetchEventLineageByBaseUrl(
   let repairedRows = 0
   for (const candidate of candidates) {
     const existingKey = `${candidate.runId}|${candidate.baseUrl}`
+    const preferredLenderCode = lenderCodeForBankName(candidate.bankName)
     const existingRow = pickPreferredExistingListFetchEvent(
       existingByRunAndUrl.get(existingKey) || [],
       target.dataset,
+      preferredLenderCode,
     )
 
     if (existingRow) {

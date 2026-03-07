@@ -4,6 +4,7 @@ import {
   parseLegacyRawPayloadLenderCode,
   pickPreferredExistingListFetchEvent,
   pickPreferredRawPayloadListRow,
+  resolveSyntheticLenderCode,
 } from '../src/pipeline/lineage-repair-base-url'
 
 describe('lineage repair base-url helpers', () => {
@@ -22,12 +23,22 @@ describe('lineage repair base-url helpers', () => {
     expect(parseLegacyRawPayloadLenderCode('cdr_collection products=67 rows=56')).toBeNull()
   })
 
+  it('prefers the candidate bank mapping over mismatched legacy lender notes', () => {
+    expect(
+      resolveSyntheticLenderCode(
+        { bankName: 'HSBC Australia' },
+        { notes: 'daily_product_index lender=ing' },
+      ),
+    ).toBe('hsbc')
+  })
+
   it('prefers a successful savings list fetch as the fallback for term deposits', () => {
     const chosen = pickPreferredExistingListFetchEvent(
       [
         {
           id: 1,
           run_id: 'daily:2026-03-04:2026-03-03T13:05:55.000Z',
+          lender_code: 'bankofmelbourne',
           dataset_kind: 'term_deposits',
           source_url: 'https://digital-api.bankofmelbourne.com.au/cds-au/v1/banking/products',
           fetched_at: '2026-03-03T13:11:13.676Z',
@@ -36,6 +47,7 @@ describe('lineage repair base-url helpers', () => {
         {
           id: 2,
           run_id: 'daily:2026-03-04:2026-03-03T13:05:55.000Z',
+          lender_code: 'bankofmelbourne',
           dataset_kind: 'savings',
           source_url: 'https://digital-api.bankofmelbourne.com.au/cds-au/v1/banking/products',
           fetched_at: '2026-03-03T13:11:11.990Z',
@@ -46,6 +58,26 @@ describe('lineage repair base-url helpers', () => {
     )
 
     expect(chosen?.id).toBe(2)
+  })
+
+  it('ignores existing list fetch-events that belong to a different lender', () => {
+    const chosen = pickPreferredExistingListFetchEvent(
+      [
+        {
+          id: 20,
+          run_id: 'daily:2026-02-26:2026-02-26T00:00:41.000Z',
+          lender_code: 'ing',
+          dataset_kind: 'savings',
+          source_url: 'https://public.ob.business.hsbc.com.au/cds-au/v1/banking/products',
+          fetched_at: '2026-02-24T15:28:22.572Z',
+          http_status: 200,
+        },
+      ],
+      'savings',
+      'hsbc',
+    )
+
+    expect(chosen).toBeNull()
   })
 
   it('prefers dataset-appropriate list payload notes over a generic collection', () => {
@@ -81,5 +113,28 @@ describe('lineage repair base-url helpers', () => {
     )
 
     expect(chosen?.id).toBe(11)
+  })
+
+  it('accepts legacy list payloads up to three days away for stale carry-forward repairs', () => {
+    const chosen = pickPreferredRawPayloadListRow(
+      [
+        {
+          id: 12,
+          source_type: 'cdr_products',
+          source_url: 'https://public.ob.business.hsbc.com.au/cds-au/v1/banking/products',
+          fetched_at: '2026-02-24T15:28:22.572Z',
+          content_hash: 'hash-hsbc-legacy',
+          r2_key: 'raw/cdr_products/2026/02/24/hash-hsbc-legacy.json',
+          http_status: 200,
+          notes: 'daily_product_index lender=ing',
+          body_bytes: 456,
+          content_type: 'application/json; charset=utf-8',
+        },
+      ],
+      '2026-02-27T00:20:55Z',
+      'savings',
+    )
+
+    expect(chosen?.id).toBe(12)
   })
 })
