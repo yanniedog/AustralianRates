@@ -1,35 +1,30 @@
 body.ar-admin .site-header {
-    background: rgba(10, 12, 20, 0.92);
+    background: rgba(245, 245, 247, 0.92);
 }
 
 .admin-shell {
     display: grid;
-    gap: 18px;
+    gap: 16px;
     max-width: 1100px;
     margin: 0 auto;
-    padding: 28px 24px 44px;
+    padding: 28px 24px 40px;
 }
 
 .admin-shell--narrow {
-    max-width: 720px;
+    max-width: 760px;
 }
 
 .admin-shell--wide {
     max-width: 1240px;
 }
 
-.admin-login-card {
-    max-width: 460px;
-    margin: 5rem auto 0;
-}
-
 .admin-page-head {
     display: grid;
-    gap: 8px;
+    gap: 6px;
 }
 
 .admin-page-head h1 {
-    font-size: clamp(1.8rem, 3vw, 2.5rem);
+    font-size: clamp(1.9rem, 3vw, 2.6rem);
 }
 
 .admin-subtitle,
@@ -37,7 +32,10 @@ body.ar-admin .site-header {
 .admin-hint,
 .admin-back a,
 .admin-note,
-.admin-shell .sub {
+.admin-shell .sub,
+.admin-shell .hint,
+.admin-shell .status,
+.admin-shell .live-meta {
     color: var(--ar-muted);
 }
 
@@ -47,40 +45,34 @@ body.ar-admin .site-header {
 
 .admin-back a {
     display: inline-flex;
-    gap: 8px;
     align-items: center;
-    font-size: 0.86rem;
-    font-weight: 700;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
 }
 
 .admin-back a::before {
     content: "<";
 }
 
-.admin-panel,
-.card,
-.section-card,
 .admin-card,
 .admin-login-card,
-.admin-dash nav a,
-.admin-status .card,
-.admin-runs .section-card,
-.admin-logs section,
-.admin-clear .panel {
+.admin-nav-card,
+.admin-modal-inner {
     border: 1px solid var(--ar-line);
-    border-radius: 22px;
+    border-radius: 24px;
     background: var(--ar-surface);
-    box-shadow: var(--ar-shadow);
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.04);
 }
 
-.card,
-.section-card,
 .admin-card,
-.admin-runs .section-card,
-.admin-logs section,
-.admin-clear .panel,
-.admin-login-card {
+.admin-login-card,
+.admin-nav-card {
     padding: 20px;
+}
+
+.admin-login-card {
+    margin: 4rem auto 0;
 }
 
 .admin-grid,
@@ -91,148 +83,121 @@ body.ar-admin .site-header {
 }
 
 .admin-dashboard-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .admin-nav-card {
     display: grid;
-    gap: 6px;
-    min-height: 130px;
-    padding: 20px;
+    gap: 8px;
+    min-height: 120px;
 }
 
 .admin-nav-card-title {
-    font-family: var(--ar-font-display);
-    font-size: 1.05rem;
-    color: var(--ar-strong);
+    color: var(--ar-text);
+    font-size: 1rem;
+    font-weight: 600;
 }
 
 .admin-nav-card-copy {
     margin: 0;
-    font-size: 0.86rem;
     color: var(--ar-muted);
+    font-size: 0.88rem;
 }
 
 .admin-actions,
 .actions,
 .admin-toolbar,
 .toolbar,
-.admin-log-actions {
+.admin-log-actions,
+.admin-modal-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
 }
 
-.admin-actions input[type="date"],
-.admin-actions input[type="number"],
-.admin-toolbar select,
-.admin-toolbar input,
-.admin-form-grid input,
-.admin-form-grid textarea,
-.admin-form-grid select,
-.admin-login-card input {
-    max-width: 100%;
-}
-
 .admin-message {
     display: none;
     padding: 0.85rem 0.95rem;
-    border-radius: 16px;
     border: 1px solid transparent;
+    border-radius: 16px;
     font-size: 0.9rem;
 }
 
-.message,
-.admin-message {
-    display: none;
-}
-
-.message.visible,
 .admin-message.visible {
     display: block;
 }
 
-.message.success,
 .admin-message.success {
-    background: rgba(102, 209, 150, 0.12);
-    border-color: rgba(102, 209, 150, 0.34);
-    color: #d8ffea;
+    border-color: rgba(6, 118, 71, 0.12);
+    background: #eefaf3;
+    color: #067647;
 }
 
-.message.error,
 .admin-message.error {
-    background: rgba(255, 146, 143, 0.12);
-    border-color: rgba(255, 146, 143, 0.34);
-    color: #ffd7d5;
+    border-color: rgba(180, 35, 24, 0.12);
+    background: #fff1f0;
+    color: #b42318;
 }
 
-.admin-table-wrap {
+.admin-table-wrap,
+.admin-shell pre {
     overflow: auto;
 }
 
 .admin-table,
-.admin-status table,
-.admin-config table,
-.admin-runs table {
+.admin-shell table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
-    overflow: hidden;
 }
 
 .admin-table th,
 .admin-table td,
-.admin-status th,
-.admin-status td,
-.admin-config th,
-.admin-config td,
-.admin-runs th,
-.admin-runs td {
+.admin-shell th,
+.admin-shell td {
     padding: 0.72rem 0.7rem;
-    border-bottom: 1px solid var(--ar-line);
+    border-bottom: 1px solid #ececf0;
     text-align: left;
     vertical-align: top;
 }
 
 .admin-table th,
-.admin-status th,
-.admin-config th,
-.admin-runs th {
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+.admin-shell th {
     color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .admin-summary-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .summary-cell,
 .admin-summary-cell {
     padding: 14px;
+    border: 1px solid var(--ar-line);
     border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--ar-surface-soft);
 }
 
 .summary-cell .label,
 .admin-summary-cell .label {
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: var(--ar-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .summary-cell .value,
 .admin-summary-cell .value {
-    margin-top: 0.38rem;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--ar-strong);
+    margin-top: 0.32rem;
+    color: var(--ar-text);
+    font-size: 1rem;
+    font-weight: 600;
 }
 
 .admin-pill,
@@ -240,26 +205,25 @@ body.ar-admin .site-header {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0.32rem 0.7rem;
+    padding: 0.3rem 0.66rem;
+    border: 1px solid var(--ar-line);
     border-radius: 999px;
-    border: 1px solid var(--ar-pill-border);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ar-surface-soft);
+    color: var(--ar-muted);
     font-size: 0.78rem;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .admin-pill.ok,
 .pill.ok {
-    color: #d8ffea;
-    background: rgba(102, 209, 150, 0.12);
-    border-color: rgba(102, 209, 150, 0.34);
+    background: #eefaf3;
+    color: #067647;
 }
 
 .admin-pill.bad,
 .pill.bad {
-    color: #ffd7d5;
-    background: rgba(255, 146, 143, 0.12);
-    border-color: rgba(255, 146, 143, 0.34);
+    background: #fff1f0;
+    color: #b42318;
 }
 
 .admin-form-grid {
@@ -267,14 +231,15 @@ body.ar-admin .site-header {
     gap: 12px;
 }
 
-.admin-form-grid label {
+.admin-form-grid label,
+.admin-login-card label {
     display: grid;
     gap: 6px;
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .admin-modal {
@@ -285,7 +250,7 @@ body.ar-admin .site-header {
     padding: 18px;
     align-items: center;
     justify-content: center;
-    background: rgba(4, 6, 12, 0.72);
+    background: rgba(29, 29, 31, 0.16);
 }
 
 .admin-modal.visible {
@@ -297,30 +262,6 @@ body.ar-admin .site-header {
     max-height: 88vh;
     overflow: auto;
     padding: 22px;
-    border-radius: 24px;
-    border: 1px solid var(--ar-line);
-    background: var(--ar-surface-strong);
-    box-shadow: var(--ar-shadow);
-}
-
-.modal-inner,
-.admin-modal-inner {
-    width: min(640px, 100%);
-    max-height: 88vh;
-    overflow: auto;
-}
-
-.admin-modal-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.modal-actions,
-.admin-modal-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
 }
 
 .admin-mono,
@@ -328,7 +269,7 @@ body.ar-admin .site-header {
 .admin-shell code,
 .admin-runs .mono,
 .admin-status .mono {
-    font-family: "JetBrains Mono", Consolas, monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .pagination:empty {
@@ -342,5 +283,10 @@ body.ar-admin .site-header {
 
     .admin-login-card {
         margin-top: 3rem;
+    }
+
+    .admin-dashboard-grid,
+    .admin-summary-grid {
+        grid-template-columns: 1fr;
     }
 }

@@ -46,6 +46,7 @@ type RunsNoOutputsRow = {
   home_rows: number
   savings_rows: number
   td_rows: number
+  problematic_dataset_rows?: number
 }
 type IntegrityOptions = {
   includeAnomalyProbes?: boolean
@@ -199,14 +200,200 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
   }
 
   try {
+    const hasFetchEvents = await tableExists(db, 'fetch_events')
+    const hasObjects = await tableExists(db, 'raw_objects')
+    if (!hasFetchEvents || !hasObjects) {
+      checks.push({
+        name: 'fetch_event_raw_object_linkage',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          fetch_events: hasFetchEvents,
+          raw_objects: hasObjects,
+        },
+      })
+    } else {
+      const orphanCountRow = await db
+        .prepare(
+          `SELECT COUNT(*) AS n
+           FROM fetch_events fe
+           LEFT JOIN raw_objects ro
+             ON ro.content_hash = fe.content_hash
+           WHERE ro.content_hash IS NULL`,
+        )
+        .first<NumberRow>()
+      const sampleRows = await db
+        .prepare(
+          `SELECT fe.id, fe.source_type, fe.fetched_at, fe.source_url, fe.content_hash
+           FROM fetch_events fe
+           LEFT JOIN raw_objects ro
+             ON ro.content_hash = fe.content_hash
+           WHERE ro.content_hash IS NULL
+           ORDER BY fe.fetched_at DESC
+           LIMIT 20`,
+        )
+        .all<Record<string, unknown>>()
+      checks.push({
+        name: 'fetch_event_raw_object_linkage',
+        passed: Number(orphanCountRow?.n ?? 0) === 0,
+        detail: {
+          orphan_count: Number(orphanCountRow?.n ?? 0),
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'fetch_event_raw_object_linkage',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const requiredTables = await Promise.all([
+      tableExists(db, 'run_reports'),
+      tableExists(db, 'historical_loan_rates'),
+      tableExists(db, 'historical_savings_rates'),
+      tableExists(db, 'historical_term_deposit_rates'),
+      tableExists(db, 'lender_dataset_runs'),
+    ])
+    if (requiredTables.some((exists) => !exists)) {
+      checks.push({
+        name: 'runs_with_no_outputs',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          run_reports: requiredTables[0],
+          historical_loan_rates: requiredTables[1],
+          historical_savings_rates: requiredTables[2],
+          historical_term_deposit_rates: requiredTables[3],
+          lender_dataset_runs: requiredTables[4],
+        },
+      })
+    } else {
+      const countRow = await db
+        .prepare(
+          `WITH run_outputs AS (
+             SELECT
+               rr.run_id,
+               rr.status,
+               (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
+               (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
+               (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
+             FROM run_reports rr
+           ),
+           run_violations AS (
+             SELECT
+               run_id,
+               SUM(
+                 CASE
+                   WHEN COALESCE(lineage_error_count, 0) > 0
+                     OR (
+                       COALESCE(written_row_count, 0) = 0
+                       AND NOT (
+                         COALESCE(index_fetch_succeeded, 0) = 1
+                         AND COALESCE(expected_detail_count, 0) = 0
+                         AND COALESCE(lineage_error_count, 0) = 0
+                       )
+                     )
+                   THEN 1 ELSE 0
+                 END
+               ) AS problematic_dataset_rows
+             FROM lender_dataset_runs
+             GROUP BY run_id
+           )
+           SELECT COUNT(*) AS n
+           FROM run_outputs
+           LEFT JOIN run_violations rv
+             ON rv.run_id = run_outputs.run_id
+           WHERE status = 'ok'
+             AND (home_rows + savings_rows + td_rows) = 0
+             AND COALESCE(rv.problematic_dataset_rows, 0) > 0`,
+        )
+        .first<NumberRow>()
+
+      const sampleRows = await db
+        .prepare(
+          `WITH run_outputs AS (
+             SELECT
+               rr.run_id,
+               rr.run_type,
+               rr.run_source,
+               rr.status,
+               rr.started_at,
+               (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
+               (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
+               (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
+             FROM run_reports rr
+           ),
+           run_violations AS (
+             SELECT
+               run_id,
+               SUM(
+                 CASE
+                   WHEN COALESCE(lineage_error_count, 0) > 0
+                     OR (
+                       COALESCE(written_row_count, 0) = 0
+                       AND NOT (
+                         COALESCE(index_fetch_succeeded, 0) = 1
+                         AND COALESCE(expected_detail_count, 0) = 0
+                         AND COALESCE(lineage_error_count, 0) = 0
+                       )
+                     )
+                   THEN 1 ELSE 0
+                 END
+               ) AS problematic_dataset_rows
+             FROM lender_dataset_runs
+             GROUP BY run_id
+           )
+           SELECT
+             run_outputs.run_id,
+             run_type,
+             run_source,
+             status,
+             started_at,
+             home_rows,
+             savings_rows,
+             td_rows,
+             COALESCE(rv.problematic_dataset_rows, 0) AS problematic_dataset_rows
+           FROM run_outputs
+           LEFT JOIN run_violations rv
+             ON rv.run_id = run_outputs.run_id
+           WHERE status = 'ok'
+             AND (home_rows + savings_rows + td_rows) = 0
+             AND COALESCE(rv.problematic_dataset_rows, 0) > 0
+           ORDER BY started_at DESC
+           LIMIT 20`,
+        )
+        .all<RunsNoOutputsRow>()
+
+      checks.push({
+        name: 'runs_with_no_outputs',
+        passed: Number(countRow?.n ?? 0) === 0,
+        detail: {
+          orphan_run_count: Number(countRow?.n ?? 0),
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'runs_with_no_outputs',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
     const hasPayloads = await tableExists(db, 'raw_payloads')
     const hasObjects = await tableExists(db, 'raw_objects')
     if (!hasPayloads || !hasObjects) {
       checks.push({
-        name: 'orphan_raw_payload_linkage',
-        passed: false,
+        name: 'legacy_raw_payload_backlog',
+        passed: true,
         detail: {
-          error: 'required_tables_missing',
+          available: false,
           raw_payloads: hasPayloads,
           raw_objects: hasObjects,
         },
@@ -233,8 +420,8 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
         )
         .all<Record<string, unknown>>()
       checks.push({
-        name: 'orphan_raw_payload_linkage',
-        passed: Number(orphanCountRow?.n ?? 0) === 0,
+        name: 'legacy_raw_payload_backlog',
+        passed: true,
         detail: {
           orphan_count: Number(orphanCountRow?.n ?? 0),
           sample: sampleRows.results ?? [],
@@ -243,83 +430,8 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
     }
   } catch (error) {
     checks.push({
-      name: 'orphan_raw_payload_linkage',
-      passed: false,
-      detail: errorDetail(error),
-    })
-  }
-
-  try {
-    const requiredTables = await Promise.all([
-      tableExists(db, 'run_reports'),
-      tableExists(db, 'historical_loan_rates'),
-      tableExists(db, 'historical_savings_rates'),
-      tableExists(db, 'historical_term_deposit_rates'),
-    ])
-    if (requiredTables.some((exists) => !exists)) {
-      checks.push({
-        name: 'runs_with_no_outputs',
-        passed: false,
-        detail: {
-          error: 'required_tables_missing',
-          run_reports: requiredTables[0],
-          historical_loan_rates: requiredTables[1],
-          historical_savings_rates: requiredTables[2],
-          historical_term_deposit_rates: requiredTables[3],
-        },
-      })
-    } else {
-      const countRow = await db
-        .prepare(
-          `WITH run_outputs AS (
-             SELECT
-               rr.run_id,
-               (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
-               (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
-               (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
-             FROM run_reports rr
-           )
-           SELECT COUNT(*) AS n
-           FROM run_outputs
-           WHERE (home_rows + savings_rows + td_rows) = 0`,
-        )
-        .first<NumberRow>()
-
-      const sampleRows = await db
-        .prepare(
-          `WITH run_outputs AS (
-             SELECT
-               rr.run_id,
-               rr.run_type,
-               rr.run_source,
-               rr.status,
-               rr.started_at,
-               (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
-               (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
-               (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
-             FROM run_reports rr
-           )
-           SELECT run_id, run_type, run_source, status, started_at, home_rows, savings_rows, td_rows
-           FROM run_outputs
-           WHERE (home_rows + savings_rows + td_rows) = 0
-           ORDER BY started_at DESC
-           LIMIT 20`,
-        )
-        .all<RunsNoOutputsRow>()
-
-      checks.push({
-        name: 'runs_with_no_outputs',
-        passed: Number(countRow?.n ?? 0) === 0,
-        detail: {
-          orphan_run_count: Number(countRow?.n ?? 0),
-          sample: sampleRows.results ?? [],
-        },
-      })
-    }
-  } catch (error) {
-    checks.push({
-      name: 'runs_with_no_outputs',
-      passed: false,
+      name: 'legacy_raw_payload_backlog',
+      passed: true,
       detail: errorDetail(error),
     })
   }

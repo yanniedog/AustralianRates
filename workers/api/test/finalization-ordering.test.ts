@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { finalizeLenderDataset } from '../src/queue/consumer/finalization'
+import type { LenderDatasetRunRow } from '../src/db/lender-dataset-runs'
 import type { EnvBindings, IngestMessage } from '../src/types'
 
 function makeEnv(): EnvBindings {
@@ -11,23 +12,34 @@ function makeEnv(): EnvBindings {
   }
 }
 
+function makeRunRow(overrides: Partial<LenderDatasetRunRow>): LenderDatasetRunRow {
+  return {
+    run_id: 'run:fixture',
+    lender_code: 'anz',
+    dataset_kind: 'home_loans',
+    bank_name: 'ANZ',
+    collection_date: '2026-03-01',
+    expected_detail_count: 1,
+    completed_detail_count: 1,
+    failed_detail_count: 0,
+    finalized_at: null,
+    last_error: null,
+    updated_at: '2026-03-01T00:00:00.000Z',
+    index_fetch_succeeded: 1,
+    accepted_row_count: 0,
+    written_row_count: 0,
+    dropped_row_count: 0,
+    detail_fetch_event_count: 0,
+    lineage_error_count: 0,
+    ...overrides,
+  }
+}
+
 describe('finalization ordering', () => {
   it('does not mark finalized when presence update throws', async () => {
     const order: string[] = []
     const deps = {
-      getLenderDatasetRun: async () => ({
-        run_id: 'run:1',
-        lender_code: 'anz',
-        dataset_kind: 'home_loans',
-        bank_name: 'ANZ',
-        collection_date: '2026-03-01',
-        expected_detail_count: 1,
-        completed_detail_count: 1,
-        failed_detail_count: 0,
-        finalized_at: null,
-        last_error: null,
-        updated_at: '2026-03-01T00:00:00.000Z',
-      }),
+      getLenderDatasetRun: async () => makeRunRow({ run_id: 'run:1' }),
       finalizePresenceForRun: async () => {
         order.push('presence')
         throw new Error('presence_write_failed')
@@ -58,19 +70,7 @@ describe('finalization ordering', () => {
   it('marks finalized only after presence succeeds', async () => {
     const order: string[] = []
     const deps = {
-      getLenderDatasetRun: async () => ({
-        run_id: 'run:2',
-        lender_code: 'anz',
-        dataset_kind: 'home_loans',
-        bank_name: 'ANZ',
-        collection_date: '2026-03-01',
-        expected_detail_count: 1,
-        completed_detail_count: 1,
-        failed_detail_count: 0,
-        finalized_at: null,
-        last_error: null,
-        updated_at: '2026-03-01T00:00:00.000Z',
-      }),
+      getLenderDatasetRun: async () => makeRunRow({ run_id: 'run:2' }),
       finalizePresenceForRun: async () => {
         order.push('presence')
         return {
@@ -104,19 +104,15 @@ describe('finalization ordering', () => {
   it('finalizes zero-expected runs without presence removal', async () => {
     const order: string[] = []
     const deps = {
-      getLenderDatasetRun: async () => ({
-        run_id: 'run:3',
-        lender_code: 'ubank',
-        dataset_kind: 'home_loans',
-        bank_name: 'ubank',
-        collection_date: '2026-03-01',
-        expected_detail_count: 0,
-        completed_detail_count: 0,
-        failed_detail_count: 0,
-        finalized_at: null,
-        last_error: null,
-        updated_at: '2026-03-01T00:00:00.000Z',
-      }),
+      getLenderDatasetRun: async () =>
+        makeRunRow({
+          run_id: 'run:3',
+          lender_code: 'ubank',
+          bank_name: 'ubank',
+          expected_detail_count: 0,
+          completed_detail_count: 0,
+          index_fetch_succeeded: 1,
+        }),
       finalizePresenceForRun: async () => {
         order.push('presence')
         return {

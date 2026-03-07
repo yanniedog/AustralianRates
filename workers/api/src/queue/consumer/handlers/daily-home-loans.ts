@@ -1,5 +1,9 @@
 import { TARGET_LENDERS } from '../../../constants'
-import { ensureLenderDatasetRun, setLenderDatasetExpectedDetails } from '../../../db/lender-dataset-runs'
+import {
+  ensureLenderDatasetRun,
+  markLenderDatasetIndexFetchSucceeded,
+  setLenderDatasetExpectedDetails,
+} from '../../../db/lender-dataset-runs'
 import { addRunEnqueuedCounts } from '../../../db/run-progress'
 import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
@@ -241,6 +245,11 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       bankName,
       collectionDate: job.collectionDate,
       expectedDetailCount: productIds.length,
+    })
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
     })
     const detailEnqueue =
       productIds.length > 0

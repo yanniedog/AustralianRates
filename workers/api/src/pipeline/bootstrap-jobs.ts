@@ -18,12 +18,15 @@ import type { EnvBindings, LenderConfig } from '../types'
 import { buildBackfillRunId, buildDailyRunId, buildRunLockKey } from '../utils/idempotency'
 import { log } from '../utils/logger'
 import { currentMonthCursor, getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
+import type { DatasetKind } from '../../../../packages/shared/src'
 
 type DailyRunOptions = {
   source: 'scheduled' | 'manual'
   force?: boolean
   /** When set, use this as runId (e.g. for interval-based runs so each run is unique). */
   runIdOverride?: string
+  lenderCodes?: string[]
+  datasets?: DatasetKind[]
 }
 
 type BackfillRunRequest = {
@@ -148,6 +151,52 @@ export function pendingSavingsTdLenders(
   return lenders.filter((lender) => !completedSavings.has(lender.code) || !completedTd.has(lender.code))
 }
 
+type DailyDatasetSelection = {
+  homeLoans: boolean
+  savings: boolean
+  termDeposits: boolean
+}
+
+function normalizeDailyDatasetSelection(datasets?: DatasetKind[]): DailyDatasetSelection {
+  const selected = new Set((datasets ?? []).filter(Boolean))
+  if (selected.size === 0) {
+    return {
+      homeLoans: true,
+      savings: true,
+      termDeposits: true,
+    }
+  }
+  return {
+    homeLoans: selected.has('home_loans'),
+    savings: selected.has('savings'),
+    termDeposits: selected.has('term_deposits'),
+  }
+}
+
+function pendingSelectedLenders(
+  lenders: LenderConfig[],
+  completed: ReadonlySet<string>,
+  force: boolean,
+): LenderConfig[] {
+  if (force) return lenders
+  return lenders.filter((lender) => !completed.has(lender.code))
+}
+
+function pendingSelectedSavingsTdLenders(
+  lenders: LenderConfig[],
+  completedSavings: ReadonlySet<string>,
+  completedTd: ReadonlySet<string>,
+  selection: DailyDatasetSelection,
+  force: boolean,
+): LenderConfig[] {
+  if (force) return lenders
+  return lenders.filter((lender) => {
+    const savingsPending = selection.savings && !completedSavings.has(lender.code)
+    const tdPending = selection.termDeposits && !completedTd.has(lender.code)
+    return savingsPending || tdPending
+  })
+}
+
 function isMonthCursor(value: string | undefined): value is string {
   return !!value && /^\d{4}-\d{2}$/.test(value)
 }
@@ -165,6 +214,9 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
 
   let lockAcquired = false
   try {
+    const selectedLenders = filterLenders(options.lenderCodes)
+    const datasetSelection = normalizeDailyDatasetSelection(options.datasets)
+
     if (!options.force) {
       const lock = await acquireRunLock(env, {
         key: lockKey,
@@ -200,8 +252,18 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       getCompletedSavingsLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
       getCompletedTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
     ])
-    const pendingLoanLenders = TARGET_LENDERS.filter((x) => !doneLoans.has(x.code))
-    const pendingSavingsLenders = pendingSavingsTdLenders(TARGET_LENDERS, doneSavings, doneTd)
+    const pendingLoanLenders = datasetSelection.homeLoans
+      ? pendingSelectedLenders(selectedLenders, doneLoans, Boolean(options.force))
+      : []
+    const pendingSavingsLenders = datasetSelection.savings || datasetSelection.termDeposits
+      ? pendingSelectedSavingsTdLenders(
+          selectedLenders,
+          doneSavings,
+          doneTd,
+          datasetSelection,
+          Boolean(options.force),
+        )
+      : []
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
       return {
@@ -211,6 +273,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
         runId,
         collectionDate,
         pending: { loans: 0, savings_td: 0 },
+        selection: {
+          lender_codes: selectedLenders.map((lender) => lender.code),
+          datasets: options.datasets ?? ['home_loans', 'savings', 'term_deposits'],
+        },
       }
     }
 
@@ -260,6 +326,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
         runSource: options.source,
         collectionDate,
         lenders: pendingSavingsLenders,
+        datasets: [
+          ...(datasetSelection.savings ? ['savings' as const] : []),
+          ...(datasetSelection.termDeposits ? ['term_deposits' as const] : []),
+        ],
       })
 
       const summary = buildInitialPerLenderSummary(mergePerLenderCounts(enqueue.perLender, savingsEnqueue.perLender))
@@ -273,6 +343,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
         runId,
         collectionDate,
         enqueued: totalEnqueued,
+        selection: {
+          lender_codes: selectedLenders.map((lender) => lender.code),
+          datasets: options.datasets ?? ['home_loans', 'savings', 'term_deposits'],
+        },
         endpoint_refresh: endpointRefresh,
         rba_collection: rbaCollection,
         source: options.source,

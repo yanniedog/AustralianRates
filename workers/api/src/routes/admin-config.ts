@@ -1,6 +1,11 @@
 import { Hono } from 'hono'
 import { ensureAppConfigTable } from '../db/app-config'
-import { MIN_RATE_CHECK_INTERVAL_MINUTES, RATE_CHECK_INTERVAL_MINUTES_KEY } from '../constants'
+import {
+  INGEST_PAUSE_MODE_KEY,
+  INGEST_PAUSE_MODES,
+  MIN_RATE_CHECK_INTERVAL_MINUTES,
+  RATE_CHECK_INTERVAL_MINUTES_KEY,
+} from '../constants'
 import type { AppContext, EnvBindings } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -16,7 +21,6 @@ const SAFE_ENV_KEYS = [
   'LOCK_TTL_SECONDS',
   'MAX_QUEUE_ATTEMPTS',
   'MAX_PRODUCTS_PER_LENDER',
-  'PERSIST_SUCCESSFUL_PRODUCT_DETAILS',
   'FEATURE_PROSPECTIVE_ENABLED',
   'FEATURE_BACKFILL_ENABLED',
   'AUTO_BACKFILL_DAILY_QUEUE_CAP',
@@ -36,6 +40,17 @@ function normalizeRateCheckMinutes(raw: unknown): { ok: true; value: string } | 
     return { ok: false, error: 'rate_check_interval_minutes must be a valid integer.' }
   }
   return { ok: true, value: String(Math.max(MIN_RATE_CHECK_INTERVAL_MINUTES, parsed)) }
+}
+
+function normalizeIngestPauseMode(raw: unknown): { ok: true; value: string } | { ok: false; error: string } {
+  const text = String(raw ?? '').trim().toLowerCase()
+  if ((INGEST_PAUSE_MODES as readonly string[]).includes(text)) {
+    return { ok: true, value: text }
+  }
+  return {
+    ok: false,
+    error: `ingest_pause_mode must be one of: ${INGEST_PAUSE_MODES.join(', ')}`,
+  }
 }
 
 /** GET /admin/config - return all app_config rows */
@@ -63,6 +78,14 @@ adminConfigRoutes.put('/config', async (c) => {
 
   if (key === RATE_CHECK_INTERVAL_MINUTES_KEY) {
     const normalized = normalizeRateCheckMinutes(value)
+    if (!normalized.ok) {
+      return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
+    }
+    value = normalized.value
+  }
+
+  if (key === INGEST_PAUSE_MODE_KEY) {
+    const normalized = normalizeIngestPauseMode(value)
     if (!normalized.ok) {
       return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
     }

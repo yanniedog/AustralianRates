@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Clear data | Admin | AustralianRates</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../foundation.css">
     <link rel="stylesheet" href="../public-shell.css">
     <link rel="stylesheet" href="admin-layout.css">
@@ -25,7 +22,7 @@
         <div class="admin-page-head">
             <p class="eyebrow">Danger zone</p>
             <h1>Clear data</h1>
-            <p class="admin-subtitle">Delete rate data by scope and product type. Use with care.</p>
+            <p class="admin-subtitle">Delete rate data by scope.</p>
         </div>
         <div class="admin-message" id="msg"></div>
 
@@ -47,7 +44,7 @@
 
         <div id="panel-individual" class="panel admin-card">
             <h3>Key (one row)</h3>
-            <p class="admin-hint">Fill every key field for the selected product type.</p>
+            <p class="admin-hint">Fill every key field.</p>
             <div id="key-fields"></div>
         </div>
 
@@ -66,7 +63,7 @@
 
         <div id="panel-multiselect" class="panel admin-card">
             <h3>Keys (JSON array)</h3>
-            <p class="admin-hint">Paste a JSON array of key objects. Each object must include all key columns for the selected product type.</p>
+            <p class="admin-hint">Paste a JSON array of full key objects.</p>
             <textarea id="multiselect-keys" placeholder='[{"bank_name":"ANZ","collection_date":"2026-02-24",...}, ...]'></textarea>
         </div>
 

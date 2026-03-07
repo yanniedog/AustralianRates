@@ -42,6 +42,21 @@ describe('run lifecycle reconciliation status derivation', () => {
     ).toBe('partial')
   })
 
+  it('returns partial when invariant violations remain after queue completion', () => {
+    expect(
+      deriveTerminalRunStatus(
+        {
+          enqueuedTotal: 12,
+          processedTotal: 12,
+          failedTotal: 0,
+        },
+        {
+          problematic_rows: 2,
+        },
+      ),
+    ).toBe('partial')
+  })
+
   it('reconciles ready finalizations across multiple passes until exhausted', async () => {
     const readyPasses = [
       [

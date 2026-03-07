@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Admin Status | AustralianRates</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../foundation.css">
     <link rel="stylesheet" href="../public-shell.css">
     <link rel="stylesheet" href="admin-layout.css">
@@ -25,7 +22,7 @@
         <div class="admin-page-head">
             <p class="eyebrow">Diagnostics</p>
             <h1>Status dashboard</h1>
-            <p class="admin-subtitle">Monitor end-to-end alignment, pipeline gaps, integrity signals, and recent issues from the production admin surface.</p>
+            <p class="admin-subtitle">Health, integrity, and recent issues.</p>
         </div>
         <div class="admin-actions">
             <button type="button" class="primary" id="run-check-btn">Run check now</button>
@@ -70,7 +67,7 @@
         </section>
 
         <section class="card admin-card">
-            <h2>Recent issues and suggested actions</h2>
+            <h2>Recent issues</h2>
             <div id="issues-wrap"></div>
             <div class="hint-links">
                 <a href="logs.html">Logs</a>

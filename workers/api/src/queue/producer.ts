@@ -136,6 +136,7 @@ export async function enqueueDailySavingsLenderJobs(
     runSource?: RunSource
     collectionDate: string
     lenders: LenderConfig[]
+    datasets?: Array<'savings' | 'term_deposits'>
   },
 ): Promise<{ enqueued: number; perLender: Record<string, number> }> {
   const runSource = input.runSource ?? 'scheduled'
@@ -145,6 +146,7 @@ export async function enqueueDailySavingsLenderJobs(
     runSource,
     lenderCode: lender.code,
     collectionDate: input.collectionDate,
+    datasets: input.datasets?.length ? Array.from(new Set(input.datasets)) : undefined,
     attempt: 0,
     idempotencyKey: `${input.runId}:savings:${lender.code}`,
   }))

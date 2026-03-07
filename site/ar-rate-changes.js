@@ -51,21 +51,21 @@
                 String(row.account_type || '').trim(),
                 String(row.rate_type || '').trim(),
                 String(row.deposit_tier || '').trim()
-            ].filter(Boolean).join(' | ');
+            ].filter(Boolean).join(' · ');
         }
         if (section === 'term-deposits') {
             return [
                 String(row.term_months || '').trim() ? String(row.term_months).trim() + 'm' : '',
                 String(row.deposit_tier || '').trim(),
                 String(row.interest_payment || '').trim()
-            ].filter(Boolean).join(' | ');
+            ].filter(Boolean).join(' · ');
         }
         return [
             String(row.security_purpose || '').trim(),
             String(row.repayment_type || '').trim(),
             String(row.lvr_tier || '').trim(),
             String(row.rate_structure || '').trim()
-        ].filter(Boolean).join(' | ');
+        ].filter(Boolean).join(' · ');
     }
 
     function changeTone(delta) {
@@ -111,7 +111,7 @@
                     '</div>' +
                     '<div class="rate-change-sub">' +
                         '<span class="rate-change-product">' + product + '</span>' +
-                        '<span class="rate-change-rates">' + esc(fromRate) + ' -> ' + esc(toRate) + '</span>' +
+                        '<span class="rate-change-rates">' + esc(fromRate) + ' to ' + esc(toRate) + '</span>' +
                         (detail ? '<span class="rate-change-detail">' + detail + '</span>' : '') +
                     '</div>' +
                 '</li>'
@@ -134,7 +134,7 @@
             ? ymd(rows[0].collection_date || rows[0].changed_at)
             : 'n/a';
         var integrityLabel = integrityText(integrity);
-        headlineEl.textContent = 'Latest ' + latestDate + ' | ' + total + ' tracked changes | ' + integrityLabel;
+        headlineEl.textContent = latestDate + ' · ' + total + ' changes · ' + integrityLabel;
     }
 
     function renderIntegrityWarning(integrity) {
@@ -145,7 +145,7 @@
         if (!warningEl) return;
         if (isStale) {
             warningEl.hidden = false;
-            warningEl.textContent = 'Integrity warning: ' + String(integrity.summary || 'Potential omissions, mismatches, or collisions detected. Data is marked stale for review.');
+            warningEl.textContent = 'Integrity warning: ' + String(integrity.summary || 'Potential omissions or mismatches detected.');
         } else {
             warningEl.hidden = true;
             warningEl.textContent = '';
@@ -163,7 +163,7 @@
             });
             return;
         }
-        if (statusEl) statusEl.textContent = 'Loading latest rate changes...';
+        if (statusEl) statusEl.textContent = 'Loading changes...';
         try {
             var res = await fetch(apiBase + '/changes?limit=200&offset=0', { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -175,10 +175,10 @@
             renderHeadline(rows, total, integrity);
             renderIntegrityWarning(integrity);
             if (statusEl) {
-                statusEl.textContent = 'Showing latest ' + rows.length + ' changes (' + total + ' total tracked). ' + integrityText(integrity) + '.';
+                statusEl.textContent = 'Showing ' + rows.length + ' recent changes.';
             }
         } catch (err) {
-            if (statusEl) statusEl.textContent = 'Rate change log unavailable right now.';
+            if (statusEl) statusEl.textContent = 'Change log unavailable right now.';
             renderRows([]);
             renderHeadline([], 0, null);
             renderIntegrityWarning(null);

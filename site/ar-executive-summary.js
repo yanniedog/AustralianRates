@@ -24,7 +24,7 @@
 
     function standoutText(example, label) {
         if (!example) return label + ': none';
-        return label + ': ' + esc(example.bank_name || '') + ' - ' + esc(example.product_name || '') + ' (' + fmt(example.delta_bps, 2) + ' bps)';
+        return label + ': ' + esc(example.bank_name || '') + ' (' + fmt(example.delta_bps, 2) + ' bps)';
     }
 
     function renderMetric(label, value) {
@@ -54,9 +54,10 @@
             var metricGrid = [
                 renderMetric('Total changes', fmt(metrics.total_changes, 0)),
                 renderMetric('Lenders touched', fmt(metrics.lender_coverage, 0)),
-                renderMetric('Up / Down', fmt(metrics.up_count, 0) + ' / ' + fmt(metrics.down_count, 0)),
-                renderMetric('Mean / Median move', fmt(metrics.mean_move_bps, 2) + ' bps / ' + fmt(metrics.median_move_bps, 2) + ' bps')
+                renderMetric('Up / Down', fmt(metrics.up_count, 0) + ' / ' + fmt(metrics.down_count, 0))
             ].join('');
+            var narrative = String(section.narrative || '').trim();
+            if (narrative.length > 140) narrative = narrative.slice(0, 137).trim() + '...';
             return (
                 '<article class="exec-card">' +
                     '<div class="exec-kicker">' +
@@ -64,10 +65,9 @@
                         '<p class="exec-window">' + esc(section.window_start || '') + ' to ' + esc(section.window_end || '') + '</p>' +
                     '</div>' +
                     '<div class="exec-metric-grid">' + metricGrid + '</div>' +
-                    '<p class="exec-standouts">Top lender concentration: ' + topLenderText + '</p>' +
+                    '<p class="exec-standouts">Top lender: ' + topLenderText + '</p>' +
                     '<p class="exec-standouts">' + standoutText(standouts.largest_increase, 'Largest increase') + '</p>' +
-                    '<p class="exec-standouts">' + standoutText(standouts.largest_decrease, 'Largest decrease') + '</p>' +
-                    '<p class="exec-narrative">' + esc(section.narrative || '') + '</p>' +
+                    '<p class="exec-narrative">' + esc(narrative || 'No additional narrative.') + '</p>' +
                 '</article>'
             );
         }).join('');
@@ -78,7 +78,7 @@
         var container = getContainerEl();
         if (!statusEl || !container) return;
 
-        statusEl.textContent = 'Loading executive summary...';
+        statusEl.textContent = 'Loading summary...';
         try {
             var endpoint = window.location.origin + '/api/home-loan-rates/executive-summary?window_days=30';
             var res = await fetch(endpoint, { cache: 'no-store' });
@@ -86,9 +86,9 @@
             var data = await res.json();
             var sections = Array.isArray(data && data.sections) ? data.sections : [];
             renderSections(sections);
-            statusEl.textContent = 'Executive summary generated at ' + esc(data.generated_at || 'n/a') + '.';
+            statusEl.textContent = 'Updated ' + esc(data.generated_at || 'n/a') + '.';
         } catch (err) {
-            statusEl.textContent = 'Executive summary unavailable right now.';
+            statusEl.textContent = 'Summary unavailable right now.';
             container.innerHTML = '<p class="exec-empty">Unable to load summary data.</p>';
             clientLog('error', 'Executive summary load failed', {
                 message: err && err.message ? err.message : String(err),

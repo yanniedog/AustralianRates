@@ -38,7 +38,7 @@
     }
 
     function applyUiMode(mode) {
-        var uiMode = String(mode || (state && state.getUiMode ? state.getUiMode() : 'analyst'));
+        var uiMode = String(mode || (state && state.getUiMode ? state.getUiMode() : 'consumer'));
         document.body.classList.toggle('ui-mode-consumer', uiMode !== 'analyst');
         document.body.classList.toggle('ui-mode-analyst', uiMode === 'analyst');
         setModeButtonState(uiMode);
@@ -87,7 +87,7 @@
     function finishAppInit(source) {
         if (appInitialized) return;
         appInitialized = true;
-        applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst');
+        applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
         if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
         if (explorer && explorer.initRateTable) explorer.initRateTable();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();

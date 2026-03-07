@@ -512,7 +512,7 @@ async function runTests() {
         
         // Eyebrow text
         const eyebrow = await page.textContent('.eyebrow');
-        if (eyebrow === 'Australian Home Loan Rate Tracker') {
+        if (eyebrow === 'Home loans') {
             results.passed.push('PASS Hero eyebrow text correct');
         } else {
             results.failed.push(`FAIL Hero eyebrow text incorrect: "${eyebrow}"`);
@@ -520,7 +520,7 @@ async function runTests() {
         
         // Heading
         const heading = await page.textContent('.hero h1');
-        if (heading === 'Compare mortgage rates from major banks') {
+        if (heading === 'Compare current mortgage rates.') {
             results.passed.push('PASS Hero heading correct');
         } else {
             results.failed.push(`FAIL Hero heading incorrect: "${heading}"`);
@@ -604,19 +604,19 @@ async function runTests() {
         await verifyNoScriptFallback(TEST_URL, 'Homepage', '/api/home-loan-rates');
         await verifyNoPublicAdminSurface('Homepage');
 
-        // Test 4e: Dark-only theme and no theme toggle
-        console.log('\nTest 4e: Checking dark-only theme...');
+        // Test 4e: Light-only theme and no theme toggle
+        console.log('\nTest 4e: Checking light-only theme...');
         const dataTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme')).catch(() => null);
-        if (dataTheme === 'dark') {
-            results.passed.push('PASS Dark-only theme is enforced (data-theme="dark")');
+        if (dataTheme === 'light') {
+            results.passed.push('PASS Light-only theme is enforced (data-theme="light")');
         } else {
-            results.failed.push('FAIL Theme is not forced to dark mode');
+            results.failed.push('FAIL Theme is not forced to light mode');
         }
         const themeToggleCount = await page.locator('#theme-toggle').count().catch(() => 0);
         if (themeToggleCount === 0) {
-            results.passed.push('PASS Theme toggle is absent in dark-only mode');
+            results.passed.push('PASS Theme toggle is absent in light-only mode');
         } else {
-            results.failed.push('FAIL Theme toggle should not be present in dark-only mode');
+            results.failed.push('FAIL Theme toggle should not be present in light-only mode');
         }
 
         // Test 4f: Rate change log collapsed with summary headline
@@ -652,15 +652,15 @@ async function runTests() {
         const tabPivotVisible = await page.locator('#tab-pivot').isVisible().catch(() => false);
         const tabChartsVisible = await page.locator('#tab-charts').isVisible().catch(() => false);
 
-        if (tabExplorer === 'Rate Explorer') {
-            results.passed.push('PASS Rate Explorer tab text is correct');
+        if (tabExplorer === 'Rates') {
+            results.passed.push('PASS Rates tab text is correct');
         } else {
-            results.failed.push('FAIL Rate Explorer tab incorrect: "' + tabExplorer + '"');
+            results.failed.push('FAIL Rates tab incorrect: "' + tabExplorer + '"');
         }
-        if (tabPivotVisible && tabChartsVisible) {
-            results.passed.push('PASS Pivot/Chart tabs are visible by default in analyst mode');
+        if (!tabPivotVisible && !tabChartsVisible) {
+            results.passed.push('PASS Pivot/Chart tabs are hidden by default in consumer mode');
         } else {
-            results.failed.push('FAIL Pivot/Chart tabs should be visible by default in analyst mode');
+            results.failed.push('FAIL Pivot/Chart tabs should be hidden by default in consumer mode');
         }
         
         // Test 6: Rate Explorer active by default
@@ -674,8 +674,8 @@ async function runTests() {
         } else {
             results.failed.push('FAIL Rate Explorer is not the default active tab');
         }
-        // Test 6b: Analyst-first defaults and mode toggles
-        console.log('\nTest 6b: Checking analyst-first mode toggle...');
+        // Test 6b: Consumer-first defaults and mode toggles
+        console.log('\nTest 6b: Checking consumer-first mode toggle...');
         const modeButtonsVisible = await page.locator('#mode-consumer').isVisible().catch(() => false)
             && await page.locator('#mode-analyst').isVisible().catch(() => false);
         if (modeButtonsVisible) {
@@ -684,21 +684,30 @@ async function runTests() {
             results.failed.push('FAIL Consumer/Analyst mode buttons missing');
         }
 
-        const analystPressedDefault = await page.getAttribute('#mode-analyst', 'aria-pressed').catch(() => 'false');
-        if (analystPressedDefault === 'true') {
-            results.passed.push('PASS Analyst mode is active by default');
+        const consumerPressedDefault = await page.getAttribute('#mode-consumer', 'aria-pressed').catch(() => 'false');
+        if (consumerPressedDefault === 'true') {
+            results.passed.push('PASS Consumer mode is active by default');
         } else {
-            results.failed.push('FAIL Analyst mode is not active by default');
+            results.failed.push('FAIL Consumer mode is not active by default');
         }
 
         const pivotVisibleByDefault = await page.locator('#tab-pivot').isVisible().catch(() => false);
         const chartsVisibleByDefault = await page.locator('#tab-charts').isVisible().catch(() => false);
-        if (pivotVisibleByDefault && chartsVisibleByDefault) {
-            results.passed.push('PASS Pivot/Chart tabs are visible in analyst mode');
+        if (!pivotVisibleByDefault && !chartsVisibleByDefault) {
+            results.passed.push('PASS Consumer mode hides Pivot/Chart tabs by default');
         } else {
-            results.failed.push('FAIL Pivot/Chart tabs should be visible in analyst mode');
+            results.failed.push('FAIL Consumer mode should hide Pivot/Chart tabs by default');
         }
 
+        await page.click('#mode-analyst');
+        await page.waitForTimeout(500);
+        const pivotVisibleAnalyst = await page.locator('#tab-pivot').isVisible().catch(() => false);
+        const chartsVisibleAnalyst = await page.locator('#tab-charts').isVisible().catch(() => false);
+        if (pivotVisibleAnalyst && chartsVisibleAnalyst) {
+            results.passed.push('PASS Analyst mode shows Pivot/Chart tabs');
+        } else {
+            results.failed.push('FAIL Analyst mode did not show Pivot/Chart tabs');
+        }
         await page.click('#mode-consumer');
         await page.waitForTimeout(500);
         const pivotHiddenConsumer = await page.locator('#tab-pivot').isHidden().catch(() => false);
@@ -723,15 +732,15 @@ async function runTests() {
         // Test 7: Filter bar dropdowns (analyst mode)
         console.log('\nTest 7: Checking filter bar...');
         const filterBarOpenByDefault = await page.locator('#filter-bar').evaluate((el) => !!el.open).catch(() => false);
-        if (filterBarOpenByDefault) {
-            results.passed.push('PASS Analyst mode opens filter panel by default');
+        if (!filterBarOpenByDefault) {
+            results.passed.push('PASS Advanced analysis stays collapsed by default');
         } else {
-            results.failed.push('FAIL Analyst mode should open filter panel by default');
-            await page.evaluate(function () {
-                var el = document.getElementById('filter-bar');
-                if (el && el.tagName === 'DETAILS') el.setAttribute('open', '');
-            });
+            results.failed.push('FAIL Advanced analysis should stay collapsed by default');
         }
+        await page.evaluate(function () {
+            var el = document.getElementById('filter-bar');
+            if (el && el.tagName === 'DETAILS') el.setAttribute('open', '');
+        });
         await page.waitForTimeout(200);
         const filterElements = [
             { id: '#filter-bank', name: 'Bank' },
@@ -913,7 +922,7 @@ async function runTests() {
                 if (await showRemovedToggle.isVisible().catch(() => false)) {
                     const isChecked = await showRemovedToggle.isChecked().catch(() => false);
                     if (!isChecked) {
-                        await showRemovedToggle.click();
+                        await showRemovedToggle.evaluate((el) => { el.click(); });
                         await page.waitForTimeout(1600);
                     }
                     if (includeRemovedRequested) {
@@ -1239,10 +1248,10 @@ async function runTests() {
             }
 
             const sectionTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme')).catch(() => null);
-            if (sectionTheme === 'dark') {
-                results.passed.push('PASS ' + name + ': dark-only theme remains enforced');
+            if (sectionTheme === 'light') {
+                results.passed.push('PASS ' + name + ': light-only theme remains enforced');
             } else {
-                results.failed.push('FAIL ' + name + ': theme is not forced to dark mode');
+                results.failed.push('FAIL ' + name + ': theme is not forced to light mode');
             }
 
             const sectionThemeToggleCount = await page.locator('#theme-toggle').count().catch(() => 0);

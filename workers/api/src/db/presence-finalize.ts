@@ -1,4 +1,5 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
+import { insertMissingProductCatalogFromRunSeenProducts } from './catalog'
 import { markMissingProductsRemoved, markProductsSeen } from './product-status'
 import { markMissingSeriesRemoved } from './series-status'
 
@@ -13,7 +14,15 @@ export async function finalizePresenceForRun(
   seenProducts: number
   removedProducts: number
   removedSeries: number
+  insertedCatalogProducts?: number
 }> {
+  const insertedCatalogProducts = await insertMissingProductCatalogFromRunSeenProducts(db, {
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    dataset: input.dataset,
+    bankName: input.bankName,
+  })
+
   const seenProducts = await db
     .prepare(
       `SELECT DISTINCT product_id, product_code
@@ -136,5 +145,6 @@ export async function finalizePresenceForRun(
     seenProducts: seenTouched,
     removedProducts,
     removedSeries,
+    insertedCatalogProducts,
   }
 }

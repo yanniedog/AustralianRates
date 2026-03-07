@@ -16,6 +16,7 @@ import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { registerHomeLoanExportRoutes } from './home-loan-exports'
 import { HOME_LOAN_COMPARISON_RATE_DISCLOSURE } from './home-loan-disclosures'
+import { matchLatestCache, setServerTimingHeader, shouldBypassLatestCache, shouldEnableAdminDebugTiming, storeLatestCache } from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
@@ -197,6 +198,13 @@ publicRoutes.get('/export', async (c) => {
 })
 
 publicRoutes.get('/latest', async (c) => {
+  const debugTiming = await shouldEnableAdminDebugTiming(c)
+  const { cacheKey, response: cachedResponse } = await matchLatestCache(c, shouldBypassLatestCache(c, debugTiming))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
+  const totalStartedAt = Date.now()
   const query = c.req.query()
   const limit = Number(query.limit || 1000)
   const modeRaw = String(query.mode || 'all').toLowerCase()
@@ -225,9 +233,16 @@ publicRoutes.get('/latest', async (c) => {
     limit,
     orderBy,
   }
+  const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
+  let dbCountMs = 0
   const [rows, total] = await Promise.all([
-    queryLatestRates(c.env.DB, filters),
-    queryLatestRatesCount(c.env.DB, filters),
+    queryLatestRates(c.env.DB, filters, latestTiming),
+    (async () => {
+      const countStartedAt = Date.now()
+      const value = await queryLatestRatesCount(c.env.DB, filters)
+      dbCountMs = Date.now() - countStartedAt
+      return value
+    })(),
   ])
   const meta = buildListMeta({
     sourceMode,
@@ -237,17 +252,36 @@ publicRoutes.get('/latest', async (c) => {
     limited: rows.length >= Math.max(1, Math.floor(limit)),
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
-
-  return c.json({
+  const jsonStartedAt = Date.now()
+  const response = c.json({
     ok: true,
     count: rows.length,
     total,
     rows,
     meta,
   })
+  const jsonMs = Date.now() - jsonStartedAt
+  if (debugTiming) {
+    setServerTimingHeader(response, {
+      dbMainMs: latestTiming.dbMainMs,
+      dbCountMs,
+      detailHydrateMs: latestTiming.detailHydrateMs,
+      jsonMs,
+      totalMs: Date.now() - totalStartedAt,
+    })
+  }
+  storeLatestCache(c, cacheKey, response)
+  return response
 })
 
 publicRoutes.get('/latest-all', async (c) => {
+  const debugTiming = await shouldEnableAdminDebugTiming(c)
+  const { cacheKey, response: cachedResponse } = await matchLatestCache(c, shouldBypassLatestCache(c, debugTiming))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
+  const totalStartedAt = Date.now()
   const query = c.req.query()
   const limit = Number(query.limit || 1000)
   const modeRaw = String(query.mode || 'all').toLowerCase()
@@ -258,6 +292,7 @@ publicRoutes.get('/latest-all', async (c) => {
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
 
+  const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   const rows = await queryLatestAllRates(c.env.DB, {
     bank: query.bank,
     banks,
@@ -275,7 +310,7 @@ publicRoutes.get('/latest-all', async (c) => {
     sourceMode,
     limit,
     orderBy,
-  })
+  }, latestTiming)
   const meta = buildListMeta({
     sourceMode,
     totalRows: rows.length,
@@ -284,13 +319,24 @@ publicRoutes.get('/latest-all', async (c) => {
     limited: rows.length >= Math.max(1, Math.floor(limit)),
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
-
-  return c.json({
+  const jsonStartedAt = Date.now()
+  const response = c.json({
     ok: true,
     count: rows.length,
     rows,
     meta,
   })
+  const jsonMs = Date.now() - jsonStartedAt
+  if (debugTiming) {
+    setServerTimingHeader(response, {
+      dbMainMs: latestTiming.dbMainMs,
+      detailHydrateMs: latestTiming.detailHydrateMs,
+      jsonMs,
+      totalMs: Date.now() - totalStartedAt,
+    })
+  }
+  storeLatestCache(c, cacheKey, response)
+  return response
 })
 
 publicRoutes.get('/timeseries', async (c) => {

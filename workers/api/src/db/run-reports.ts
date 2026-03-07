@@ -1,3 +1,4 @@
+import { deriveTerminalRunStatus, loadRunInvariantSummary } from './run-terminal-state'
 import type { RunReportRow, RunSource, RunStatus, RunType } from '../types'
 import { nowIso } from '../utils/time'
 
@@ -59,6 +60,44 @@ function asPerLenderSummary(input: unknown): PerLenderSummary {
       updated_at: String(rawMeta.updated_at || now),
     },
   }
+}
+
+function summaryTotals(input: PerLenderSummary): { enqueuedTotal: number; processedTotal: number; failedTotal: number } {
+  return {
+    enqueuedTotal: input._meta.enqueued_total,
+    processedTotal: input._meta.processed_total,
+    failedTotal: input._meta.failed_total,
+  }
+}
+
+async function refreshRunTerminalState(db: D1Database, row: RunReportRow | null): Promise<RunReportRow | null> {
+  if (!row) return null
+
+  const summary = asPerLenderSummary(parseJson<Record<string, unknown>>(row.per_lender_json, {}))
+  const totals = summaryTotals(summary)
+  const completedTotal = totals.processedTotal + totals.failedTotal
+  const terminalReached = totals.enqueuedTotal > 0 && completedTotal >= totals.enqueuedTotal
+  if (!terminalReached) {
+    return row
+  }
+
+  const invariantSummary = await loadRunInvariantSummary(db, row.run_id)
+  const nextStatus = deriveTerminalRunStatus(totals, invariantSummary)
+  const finishedAt = row.finished_at || nowIso()
+
+  if (row.status !== nextStatus || row.finished_at !== finishedAt) {
+    await db
+      .prepare(
+        `UPDATE run_reports
+         SET status = ?1,
+             finished_at = ?2
+         WHERE run_id = ?3`,
+      )
+      .bind(nextStatus, finishedAt, row.run_id)
+      .run()
+  }
+
+  return getRunReport(db, row.run_id)
 }
 
 export function buildInitialPerLenderSummary(perLenderEnqueued: Record<string, number>): PerLenderSummary {
@@ -332,7 +371,8 @@ export async function recordRunQueueOutcome(
     )
     .run()
 
-  return getRunReport(db, input.runId)
+  const row = await getRunReport(db, input.runId)
+  return refreshRunTerminalState(db, row)
 }
 
 export async function getLastManualRunStartedAt(db: D1Database): Promise<string | null> {

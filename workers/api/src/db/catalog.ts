@@ -191,3 +191,85 @@ export async function markRunSeenSeries(
     )
     .run()
 }
+
+export async function insertMissingProductCatalogFromRunSeenProducts(
+  db: D1Database,
+  input?: {
+    runId?: string
+    lenderCode?: string
+    dataset?: DatasetKind
+    bankName?: string
+  },
+): Promise<number> {
+  const where: string[] = []
+  const binds: Array<string> = []
+
+  if (input?.runId) {
+    where.push(`rsp.run_id = ?${binds.length + 1}`)
+    binds.push(input.runId)
+  }
+  if (input?.lenderCode) {
+    where.push(`rsp.lender_code = ?${binds.length + 1}`)
+    binds.push(input.lenderCode)
+  }
+  if (input?.dataset) {
+    where.push(`rsp.dataset_kind = ?${binds.length + 1}`)
+    binds.push(input.dataset)
+  }
+  if (input?.bankName) {
+    where.push(`rsp.bank_name = ?${binds.length + 1}`)
+    binds.push(input.bankName)
+  }
+
+  const result = await db
+    .prepare(
+      `INSERT OR IGNORE INTO product_catalog (
+         dataset_kind,
+         bank_name,
+         product_id,
+         product_code,
+         latest_product_name,
+         latest_source_url,
+         latest_product_url,
+         latest_published_at,
+         first_seen_collection_date,
+         last_seen_collection_date,
+         first_seen_at,
+         last_seen_at,
+         is_removed,
+         removed_at,
+         last_successful_run_id
+       )
+       SELECT
+         rsp.dataset_kind,
+         rsp.bank_name,
+         rsp.product_id,
+         MAX(rsp.product_code) AS product_code,
+         MAX(sc.product_name) AS latest_product_name,
+         MAX(sc.latest_source_url) AS latest_source_url,
+         MAX(sc.latest_product_url) AS latest_product_url,
+         MAX(sc.latest_published_at) AS latest_published_at,
+         MIN(rsp.collection_date) AS first_seen_collection_date,
+         MAX(rsp.collection_date) AS last_seen_collection_date,
+         MIN(rsp.seen_at) AS first_seen_at,
+         MAX(rsp.seen_at) AS last_seen_at,
+         COALESCE(MAX(pps.is_removed), 0) AS is_removed,
+         MAX(pps.removed_at) AS removed_at,
+         MAX(rsp.run_id) AS last_successful_run_id
+       FROM run_seen_products rsp
+       LEFT JOIN series_catalog sc
+         ON sc.dataset_kind = rsp.dataset_kind
+        AND sc.bank_name = rsp.bank_name
+        AND sc.product_id = rsp.product_id
+       LEFT JOIN product_presence_status pps
+         ON pps.section = rsp.dataset_kind
+        AND pps.bank_name = rsp.bank_name
+        AND pps.product_id = rsp.product_id
+       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+       GROUP BY rsp.dataset_kind, rsp.bank_name, rsp.product_id`,
+    )
+    .bind(...binds)
+    .run()
+
+  return Number(result.meta?.changes ?? 0)
+}

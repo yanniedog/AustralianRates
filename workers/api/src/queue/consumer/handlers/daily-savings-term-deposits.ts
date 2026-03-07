@@ -1,6 +1,10 @@
 import { TARGET_LENDERS } from '../../../constants'
 import { addRunEnqueuedCounts } from '../../../db/run-progress'
-import { ensureLenderDatasetRun, setLenderDatasetExpectedDetails } from '../../../db/lender-dataset-runs'
+import {
+  ensureLenderDatasetRun,
+  markLenderDatasetIndexFetchSucceeded,
+  setLenderDatasetExpectedDetails,
+} from '../../../db/lender-dataset-runs'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { discoverProductsEndpoint } from '../../../ingest/cdr'
@@ -20,6 +24,9 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   const startedAt = Date.now()
   const lender = TARGET_LENDERS.find((x) => x.code === job.lenderCode)
   if (!lender) throw new Error(`unknown_lender_code:${job.lenderCode}`)
+  const selectedDatasets = new Set(job.datasets?.length ? job.datasets : ['savings', 'term_deposits'])
+  const shouldFetchSavings = selectedDatasets.has('savings')
+  const shouldFetchTd = selectedDatasets.has('term_deposits')
   log.info('consumer', `daily_savings_lender_fetch started`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
@@ -30,22 +37,30 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
 
   const playbook = getLenderPlaybook(lender)
   const bankName = bankNameForLender(lender)
-  await Promise.all([
-    ensureLenderDatasetRun(env.DB, {
-      runId: job.runId,
-      lenderCode: job.lenderCode,
-      dataset: 'savings',
-      bankName,
-      collectionDate: job.collectionDate,
-    }),
-    ensureLenderDatasetRun(env.DB, {
-      runId: job.runId,
-      lenderCode: job.lenderCode,
-      dataset: 'term_deposits',
-      bankName,
-      collectionDate: job.collectionDate,
-    }),
-  ])
+  const ensureRuns: Promise<void>[] = []
+  if (shouldFetchSavings) {
+    ensureRuns.push(
+      ensureLenderDatasetRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName,
+        collectionDate: job.collectionDate,
+      }),
+    )
+  }
+  if (shouldFetchTd) {
+    ensureRuns.push(
+      ensureLenderDatasetRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        bankName,
+        collectionDate: job.collectionDate,
+      }),
+    )
+  }
+  await Promise.all(ensureRuns)
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   const endpointCandidates: string[] = []
@@ -96,18 +111,34 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         ` endpoint=${shortUrlForLog(candidateEndpoint)}`,
     })
     const [savingsProducts, tdProducts] = await Promise.all([
-      fetchSavingsProductIds(candidateEndpoint, maxCdrProductPages(), {
-        cdrVersions: playbook.cdrVersions,
-        env,
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-      }),
-      fetchTermDepositProductIds(candidateEndpoint, maxCdrProductPages(), {
-        cdrVersions: playbook.cdrVersions,
-        env,
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-      }),
+      shouldFetchSavings
+        ? fetchSavingsProductIds(candidateEndpoint, maxCdrProductPages(), {
+            cdrVersions: playbook.cdrVersions,
+            env,
+            runId: job.runId,
+            lenderCode: job.lenderCode,
+          })
+        : Promise.resolve({
+            productIds: [] as string[],
+            rawPayloads: [] as Array<{ sourceUrl: string; status: number; body: string }>,
+            pageLimitHit: false,
+            pagesFetched: 0,
+            nextUrl: null as string | null,
+          }),
+      shouldFetchTd
+        ? fetchTermDepositProductIds(candidateEndpoint, maxCdrProductPages(), {
+            cdrVersions: playbook.cdrVersions,
+            env,
+            runId: job.runId,
+            lenderCode: job.lenderCode,
+          })
+        : Promise.resolve({
+            productIds: [] as string[],
+            rawPayloads: [] as Array<{ sourceUrl: string; status: number; body: string }>,
+            pageLimitHit: false,
+            pagesFetched: 0,
+            nextUrl: null as string | null,
+          }),
     ])
     indexPayloads += savingsProducts.rawPayloads.length + tdProducts.rawPayloads.length
     const uniqueSavingsIds = Array.from(new Set(savingsProducts.productIds)).filter(Boolean)
@@ -221,7 +252,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       }
     }
 
-    if (savingsIndexFetchSucceeded) {
+    if (shouldFetchSavings && savingsIndexFetchSucceeded) {
       savingsIndexSucceeded = true
       for (const productId of uniqueSavingsIds) {
         savingsProductEndpointMap.set(productId, candidateEndpoint)
@@ -238,7 +269,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         productIds: uniqueSavingsIds,
       })
     }
-    if (tdIndexFetchSucceeded) {
+    if (shouldFetchTd && tdIndexFetchSucceeded) {
       tdIndexSucceeded = true
       for (const productId of uniqueTdIds) {
         tdProductEndpointMap.set(productId, candidateEndpoint)
@@ -301,7 +332,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
     Array.from(tdFallbackFetchEventIdByProductId.entries()).map(([productId, fetchEventId]) => [productId, fetchEventId]),
   )
 
-  if (savingsIndexSucceeded) {
+  if (shouldFetchSavings && savingsIndexSucceeded) {
     await setLenderDatasetExpectedDetails(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -310,8 +341,13 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       collectionDate: job.collectionDate,
       expectedDetailCount: uniqueSavingsProductIds.length,
     })
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'savings',
+    })
   }
-  if (tdIndexSucceeded) {
+  if (shouldFetchTd && tdIndexSucceeded) {
     await setLenderDatasetExpectedDetails(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -320,10 +356,15 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
       collectionDate: job.collectionDate,
       expectedDetailCount: uniqueTdProductIds.length,
     })
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'term_deposits',
+    })
   }
 
   const savingsDetailEnqueue =
-    savingsIndexSucceeded && uniqueSavingsProductIds.length > 0
+    shouldFetchSavings && savingsIndexSucceeded && uniqueSavingsProductIds.length > 0
       ? await enqueueProductDetailJobs(env, {
           runId: job.runId,
           runSource: job.runSource,
@@ -336,7 +377,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         })
       : { enqueued: 0 }
   const tdDetailEnqueue =
-    tdIndexSucceeded && uniqueTdProductIds.length > 0
+    shouldFetchTd && tdIndexSucceeded && uniqueTdProductIds.length > 0
       ? await enqueueProductDetailJobs(env, {
           runId: job.runId,
           runSource: job.runSource,
@@ -349,8 +390,8 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         })
       : { enqueued: 0 }
   const finalizeDatasets: DatasetKind[] = []
-  if (savingsIndexSucceeded) finalizeDatasets.push('savings')
-  if (tdIndexSucceeded) finalizeDatasets.push('term_deposits')
+  if (shouldFetchSavings && savingsIndexSucceeded) finalizeDatasets.push('savings')
+  if (shouldFetchTd && tdIndexSucceeded) finalizeDatasets.push('term_deposits')
   const finalizerEnqueue =
     finalizeDatasets.length > 0
       ? await enqueueLenderFinalizeJobs(env, {

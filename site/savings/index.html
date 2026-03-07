@@ -27,9 +27,6 @@
         "creator": { "@type": "Organization", "name": "AustralianRates" }
     }
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../vendor/tabulator/tabulator_midnight.min.css">
     <link rel="stylesheet" href="../vendor/pivottable/pivot.min.css">
     <link rel="stylesheet" href="../foundation.css">
@@ -47,140 +44,118 @@
     </header>
     <div class="bg-layer" aria-hidden="true"></div>
 
-    <nav class="section-nav" aria-label="Product sections">
-        <a href="/" class="section-link">Home Loans</a>
-        <a href="/savings/" class="section-link active" aria-current="page">Savings</a>
-        <a href="/term-deposits/" class="section-link">Term Deposits</a>
-    </nav>
-
     <main class="shell shell-public" id="main-content" tabindex="-1">
         <section class="page-intro">
             <header class="hero panel">
                 <div class="hero-copy">
-                    <p class="eyebrow">Australian Savings Rate Tracker</p>
-                    <h1>Compare savings rates from major banks</h1>
-                    <p class="subtitle">
-                        Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart savings rates across all banks.
-                    </p>
+                    <p class="eyebrow">Savings</p>
+                    <h1>Compare current savings rates.</h1>
+                    <p class="subtitle">Daily CDR-backed deposit pricing from major banks, kept simple by default and deeper only when you need it.</p>
                 </div>
-                <div class="hero-meta">
-                    <div class="hero-stats" id="hero-stats">
-                        <div class="hero-stat" id="stat-updated" title="When rates were last collected">
-                            <span class="hero-stat-label">Last updated:</span>
-                            <strong class="hero-stat-value">...</strong>
-                        </div>
-                        <div class="hero-stat" id="stat-cash-rate">
-                            <span class="hero-stat-label">Series tracking:</span>
-                            <strong class="hero-stat-value">product_key continuity</strong>
-                        </div>
-                        <div class="hero-stat" id="stat-records" title="Total savings rate records">
-                            <span class="hero-stat-label">Records:</span>
-                            <strong class="hero-stat-value">...</strong>
-                        </div>
+                <div class="hero-stats" id="hero-stats">
+                    <div class="hero-stat" id="stat-updated" title="When rates were last collected">
+                        <span class="hero-stat-label">Updated</span>
+                        <strong class="hero-stat-value">...</strong>
                     </div>
-                    <p class="hero-note">Compare base, bonus, and introductory accounts with product-level historical continuity via <code>product_key</code>.</p>
+                    <div class="hero-stat" id="stat-cash-rate" title="Series continuity">
+                        <span class="hero-stat-label">Series</span>
+                        <strong class="hero-stat-value">product_key continuity</strong>
+                    </div>
+                    <div class="hero-stat" id="stat-records" title="Total savings rate records">
+                        <span class="hero-stat-label">Records</span>
+                        <strong class="hero-stat-value">...</strong>
+                    </div>
                 </div>
             </header>
 
             <noscript>
                 <section class="panel noscript-panel" aria-label="No JavaScript fallback">
-                    <p>JavaScript is disabled. Access core savings-rate data directly:</p>
+                    <p>JavaScript is off. Use the direct data endpoints below.</p>
                     <div class="noscript-links">
-                        <a href="/api/savings-rates/export.csv" target="_blank" rel="noopener">Download CSV</a>
-                        <a href="/api/savings-rates/filters" target="_blank" rel="noopener">View filters JSON</a>
-                        <a href="/api/savings-rates/health" target="_blank" rel="noopener">API health</a>
+                        <a href="/api/savings-rates/export.csv" target="_blank" rel="noopener">CSV</a>
+                        <a href="/api/savings-rates/filters" target="_blank" rel="noopener">Filters</a>
+                        <a href="/api/savings-rates/health" target="_blank" rel="noopener">Health</a>
                     </div>
                 </section>
             </noscript>
 
-            <section class="seo-summary" aria-label="About this data">
-                <p>Compare savings account interest rates from Australia's major banks including
-                Commonwealth Bank (CBA), Westpac, NAB, ANZ, Macquarie, Bendigo Bank, Suncorp, Bankwest, ING, AMP,
-                HSBC, UBank, St. George, Bank of Melbourne, Bank of Queensland (BOQ), and Great Southern Bank.
-                Rates are collected daily from official Consumer Data Right (CDR) feeds and include base rates,
-                bonus rates, and introductory rates across different deposit tiers.</p>
-            </section>
-
-            <section class="market-brief" aria-label="Market briefing">
-                <div class="market-brief-main">
-                    <section class="panel quick-compare brief-panel" aria-label="Quick compare summary">
-                        <h2>Market Snapshot</h2>
-                        <p class="hint">Consumer mode highlights the strongest current rates and the size of the product set behind your filters.</p>
-                        <div id="quick-compare-cards" class="quick-compare-cards"></div>
-                    </section>
-                </div>
-
-                <div class="market-brief-side">
-                    <section class="panel rate-change-log brief-panel" aria-label="Rate change log">
-                        <details id="rate-change-details" class="rate-change-details">
-                            <summary id="rate-change-summary" class="rate-change-summary">
-                                <span class="rate-change-summary-title">Rate Change Log</span>
-                                <span id="rate-change-headline" class="rate-change-headline">Loading latest rate changes...</span>
-                            </summary>
-                            <p id="rate-change-warning" class="rate-change-warning" hidden></p>
-                            <p id="rate-change-status" class="hint">Loading latest rate changes...</p>
-                            <ul id="rate-change-list" class="rate-change-list">
-                                <li class="rate-change-item-empty">Loading...</li>
-                            </ul>
-                        </details>
-                    </section>
-
-                    <section class="panel brief-panel" aria-label="Series continuity">
-                        <h2>Series Continuity</h2>
-                        <p class="comparison-rate-disclosure">Historical rate series remain anchored to the canonical <code>product_key</code> so each line represents one tracked savings product through time.</p>
-                    </section>
-                </div>
-            </section>
+            <details class="panel seo-summary">
+                <summary>About this data</summary>
+                <p>Daily public CDR savings data covering base, bonus, and introductory rates across major institutions and deposit tiers.</p>
+            </details>
         </section>
 
         <section class="workspace workspace-grid" aria-label="Interactive data workspace">
-            <aside class="workspace-rail">
+            <div class="workspace-rail">
                 <section class="panel mode-panel" aria-label="Workspace mode">
                     <div class="mode-switch" role="group" aria-label="Select view mode">
-                        <button id="mode-consumer" class="mode-btn" type="button" aria-pressed="false">Consumer</button>
-                        <button id="mode-analyst" class="mode-btn active" type="button" aria-pressed="true">Analyst</button>
+                        <button id="mode-consumer" class="mode-btn active" type="button" aria-pressed="true">Overview</button>
+                        <button id="mode-analyst" class="mode-btn" type="button" aria-pressed="false">Analysis</button>
                     </div>
-                    <p class="mode-note">Analyst mode is the default workspace. Switch to Consumer mode for guided comparison only.</p>
+                    <p class="mode-note">Overview keeps the main table simple. Analysis reveals pivoting, charts, and advanced controls.</p>
                 </section>
 
                 <nav class="tabs panel" role="tablist" aria-label="Data views">
-                    <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rate Explorer</button>
-                    <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot Table</button>
-                    <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Chart Builder</button>
+                    <button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rates</button>
+                    <button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot</button>
+                    <button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Charts</button>
                 </nav>
 
-                <details class="filters panel filters-collapsible" id="filter-bar" open>
-                    <summary class="filters-toggle" aria-label="Show or hide filter settings">Filters</summary>
-                    <div class="filter-state-row">
-                        <span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span>
-                        <div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>
-                    </div>
-                    <div class="filters-grid">
+                <section class="panel panel-wide" aria-label="Primary filters">
+                    <div class="filter-primary-group">
                         <label>Banks
-                            <select id="filter-bank" multiple size="5"></select>
+                            <select id="filter-bank" multiple size="4"></select>
                         </label>
-                        <label title="Savings, transaction, or at-call">Account Type
-                            <select id="filter-account-type"><option value="">All</option></select>
-                        </label>
-                        <label title="Base, bonus, introductory, or bundle rate">Rate Type
-                            <select id="filter-rate-type"><option value="">All</option></select>
-                        </label>
-                        <label title="Balance range tier">Deposit Tier
-                            <select id="filter-deposit-tier"><option value="">All</option></select>
-                        </label>
-                        <label title="Minimum headline interest rate">Min Headline %
-                            <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="e.g. 1.50">
-                        </label>
-                        <label title="Maximum headline interest rate">Max Headline %
-                            <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="e.g. 6.00">
-                        </label>
+                        <div class="filter-range">
+                            <label>Min rate
+                                <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="1.50">
+                            </label>
+                            <label>Max rate
+                                <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="6.00">
+                            </label>
+                        </div>
                         <label>From
                             <input id="filter-start-date" type="date">
                         </label>
                         <label>To
                             <input id="filter-end-date" type="date">
                         </label>
-                        <label title="Show all, daily-only, or historical-only rows">Rate Mode
+                    </div>
+                    <div class="filter-primary-actions">
+                        <div class="filter-primary-actions-main">
+                            <button id="apply-filters" class="small" type="button">Apply</button>
+                            <button id="reset-filters" class="small secondary" type="button">Reset</button>
+                        </div>
+                        <div class="filter-primary-actions-meta">
+                            <label for="download-format" class="download-label">Download</label>
+                            <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
+                                <option value="">Choose format</option>
+                                <option value="csv">CSV</option>
+                                <option value="xls">XLS</option>
+                                <option value="json">JSON</option>
+                            </select>
+                            <span id="last-refreshed" class="hint"></span>
+                        </div>
+                    </div>
+                </section>
+
+                <details class="filters panel filters-collapsible" id="filter-bar">
+                    <summary class="filters-toggle" aria-label="Show or hide filter settings">Advanced analysis</summary>
+                    <div class="filter-state-row">
+                        <span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span>
+                        <div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>
+                    </div>
+                    <div class="filters-grid">
+                        <label title="Savings, transaction, or at-call">Account type
+                            <select id="filter-account-type"><option value="">All</option></select>
+                        </label>
+                        <label title="Base, bonus, introductory, or bundle rate">Rate type
+                            <select id="filter-rate-type"><option value="">All</option></select>
+                        </label>
+                        <label title="Balance range tier">Deposit tier
+                            <select id="filter-deposit-tier"><option value="">All</option></select>
+                        </label>
+                        <label title="Show all, daily-only, or historical-only rows">Rate mode
                             <select id="filter-mode">
                                 <option value="all" selected>All</option>
                                 <option value="daily">Daily only</option>
@@ -199,21 +174,9 @@
                                 <option value="120">2 hours</option>
                             </select>
                         </label>
-                        <div class="filter-actions">
-                            <button id="apply-filters" class="small" type="button">Apply Filters</button>
-                            <button id="reset-filters" class="small secondary" type="button">Reset</button>
-                            <label for="download-format" class="download-label">Download</label>
-                            <select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format">
-                                <option value="">Download as...</option>
-                                <option value="csv">CSV</option>
-                                <option value="xls">XLS</option>
-                                <option value="json">JSON</option>
-                            </select>
-                            <span id="last-refreshed" class="hint"></span>
-                        </div>
                     </div>
                 </details>
-            </aside>
+            </div>
 
             <div class="workspace-stage">
                 <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
@@ -229,8 +192,8 @@
                 <section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>
                     <div class="panel panel-wide">
                         <div class="pivot-controls">
-                            <button id="load-pivot" type="button" class="small">Load Data for Pivot</button>
-                            <span id="pivot-status" class="hint">Select filters and a date range, then click Load. Max 10,000 rows.</span>
+                            <button id="load-pivot" type="button" class="small">Load pivot data</button>
+                            <span id="pivot-status" class="hint">Select filters and date range, then load.</span>
                         </div>
                         <div id="pivot-output"></div>
                     </div>
@@ -239,32 +202,32 @@
                 <section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden>
                     <div class="panel panel-wide">
                         <div class="chart-controls">
-                            <label>X Axis
+                            <label>X axis
                                 <select id="chart-x">
                                     <option value="collection_date">Date</option>
                                     <option value="bank_name">Bank</option>
-                                    <option value="account_type">Account Type</option>
-                                    <option value="rate_type">Rate Type</option>
-                                    <option value="deposit_tier">Deposit Tier</option>
+                                    <option value="account_type">Account type</option>
+                                    <option value="rate_type">Rate type</option>
+                                    <option value="deposit_tier">Deposit tier</option>
                                 </select>
                             </label>
-                            <label>Y Axis
+                            <label>Y axis
                                 <select id="chart-y">
-                                    <option value="interest_rate">Interest Rate</option>
-                                    <option value="monthly_fee">Monthly Fee</option>
+                                    <option value="interest_rate">Interest rate</option>
+                                    <option value="monthly_fee">Monthly fee</option>
                                 </select>
                             </label>
-                            <label>Group By
+                            <label>Group by
                                 <select id="chart-group">
                                     <option value="">None</option>
                                     <option value="product_key" selected>Product</option>
                                     <option value="bank_name">Bank</option>
-                                    <option value="account_type">Account Type</option>
-                                    <option value="rate_type">Rate Type</option>
-                                    <option value="deposit_tier">Deposit Tier</option>
+                                    <option value="account_type">Account type</option>
+                                    <option value="rate_type">Rate type</option>
+                                    <option value="deposit_tier">Deposit tier</option>
                                 </select>
                             </label>
-                            <label>Chart Type
+                            <label>Chart type
                                 <select id="chart-type">
                                     <option value="scatter">Line / Scatter</option>
                                     <option value="bar">Bar</option>
@@ -272,25 +235,48 @@
                                 </select>
                             </label>
                             <div class="filter-actions">
-                                <button id="draw-chart" type="button" class="small">Draw Chart</button>
+                                <button id="draw-chart" type="button" class="small">Draw chart</button>
                             </div>
                         </div>
                         <div id="chart-output" aria-label="Interactive chart"></div>
-                        <p id="chart-status" class="hint">Configure axes and click Draw Chart. Loads up to 10,000 rows and renders up to 1,000 points.</p>
+                        <p id="chart-status" class="hint">Choose axes, then draw.</p>
                         <div id="chart-point-details" class="chart-point-details" hidden aria-live="polite"></div>
-                        <p class="hint">For rate over time per product: X = Date, Group by = Product, filter by one bank.</p>
                     </div>
                 </section>
+
+                <details class="panel market-notes" id="market-notes">
+                    <summary class="market-notes-summary">Market notes</summary>
+                    <div class="market-notes-content">
+                        <section class="market-notes-section quick-compare" aria-label="Quick compare summary">
+                            <h2>Snapshot</h2>
+                            <div id="quick-compare-cards" class="quick-compare-cards"></div>
+                        </section>
+
+                        <section class="market-notes-section rate-change-log" aria-label="Rate change log">
+                            <details id="rate-change-details" class="rate-change-details">
+                                <summary id="rate-change-summary" class="rate-change-summary">
+                                    <span class="rate-change-summary-title">Recent changes</span>
+                                    <span id="rate-change-headline" class="rate-change-headline">Loading changes...</span>
+                                </summary>
+                                <p id="rate-change-warning" class="rate-change-warning" hidden></p>
+                                <p id="rate-change-status" class="hint">Loading changes...</p>
+                                <ul id="rate-change-list" class="rate-change-list">
+                                    <li class="rate-change-item-empty">Loading...</li>
+                                </ul>
+                            </details>
+                        </section>
+
+                        <section class="market-notes-section" aria-label="Series continuity">
+                            <h2>Series continuity</h2>
+                            <p id="comparison-rate-disclosure" class="comparison-rate-disclosure">Historical charts stay anchored to the canonical product_key so each line represents one tracked savings product over time.</p>
+                        </section>
+                    </div>
+                </details>
             </div>
         </section>
     </main>
 
-    <p class="disclaimer">
-        This site provides general information only and does not constitute financial advice.
-        Rates are sourced from publicly available CDR feeds and may include both scheduled and manual verification runs.
-        Source and quality labels are shown in the data outputs.
-        Always confirm rates directly with the institution before making financial decisions.
-    </p>
+    <p class="disclaimer">This site provides general information only. Always confirm rates and product terms directly with the institution.</p>
 
     <script src="../vendor/tabulator/tabulator.min.js"></script>
     <script src="../vendor/jquery/jquery.min.js"></script>

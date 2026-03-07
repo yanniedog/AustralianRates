@@ -250,3 +250,71 @@ export async function getFetchEventById(
   if (!row) return null
   return mapFetchEventRow(row)
 }
+
+export async function resolveFetchEventIdByPayloadIdentity(
+  db: D1Database,
+  input: {
+    runId?: string | null
+    lenderCode?: string | null
+    dataset?: DatasetKind | null
+    sourceType: string
+    sourceUrl: string
+    contentHash: string
+    productId?: string | null
+    collectionDate?: string | null
+  },
+): Promise<number | null> {
+  const exact = await db
+    .prepare(
+      `SELECT id
+       FROM fetch_events
+       WHERE source_type = ?1
+         AND source_url = ?2
+         AND content_hash = ?3
+         AND ((run_id IS NULL AND ?4 IS NULL) OR run_id = ?4)
+         AND ((lender_code IS NULL AND ?5 IS NULL) OR lender_code = ?5)
+         AND ((dataset_kind IS NULL AND ?6 IS NULL) OR dataset_kind = ?6)
+         AND ((product_id IS NULL AND ?7 IS NULL) OR product_id = ?7)
+         AND ((collection_date IS NULL AND ?8 IS NULL) OR collection_date = ?8)
+       ORDER BY fetched_at DESC, id DESC
+       LIMIT 1`,
+    )
+    .bind(
+      input.sourceType,
+      input.sourceUrl,
+      input.contentHash,
+      input.runId ?? null,
+      input.lenderCode ?? null,
+      input.dataset ?? null,
+      input.productId ?? null,
+      input.collectionDate ?? null,
+    )
+    .first<{ id: number }>()
+
+  if (exact?.id != null) {
+    return Number(exact.id)
+  }
+
+  const fallback = await db
+    .prepare(
+      `SELECT id
+       FROM fetch_events
+       WHERE source_type = ?1
+         AND content_hash = ?2
+         AND ((run_id IS NULL AND ?3 IS NULL) OR run_id = ?3)
+         AND ((lender_code IS NULL AND ?4 IS NULL) OR lender_code = ?4)
+         AND ((dataset_kind IS NULL AND ?5 IS NULL) OR dataset_kind = ?5)
+       ORDER BY fetched_at DESC, id DESC
+       LIMIT 1`,
+    )
+    .bind(
+      input.sourceType,
+      input.contentHash,
+      input.runId ?? null,
+      input.lenderCode ?? null,
+      input.dataset ?? null,
+    )
+    .first<{ id: number }>()
+
+  return fallback?.id == null ? null : Number(fallback.id)
+}

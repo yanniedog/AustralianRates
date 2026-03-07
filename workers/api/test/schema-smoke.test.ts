@@ -69,4 +69,14 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain("export_scope IN ('rates', 'timeseries')")
     expect(sql).toContain("status IN ('queued', 'processing', 'completed', 'failed')")
   })
+
+  it('includes lender dataset invariant migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0024_run_invariants_and_pause_support.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('ADD COLUMN index_fetch_succeeded')
+    expect(sql).toContain('ADD COLUMN accepted_row_count')
+    expect(sql).toContain('ADD COLUMN written_row_count')
+    expect(sql).toContain('ADD COLUMN detail_fetch_event_count')
+    expect(sql).toContain('ADD COLUMN lineage_error_count')
+  })
 })

@@ -1,28 +1,28 @@
 /**
- * Dark-only theme bootstrap.
+ * Light-only theme bootstrap.
  * Keeps ARTheme API surface for backward compatibility.
  */
 (function () {
     'use strict';
 
-    function applyDarkTheme() {
+    function applyLightTheme() {
         var root = document.documentElement;
-        root.setAttribute('data-theme', 'dark');
+        root.setAttribute('data-theme', 'light');
     }
 
-    applyDarkTheme();
+    applyLightTheme();
 
     window.ARTheme = {
         getTheme: function () {
-            return 'dark';
+            return 'light';
         },
         setTheme: function () {
-            applyDarkTheme();
-            return 'dark';
+            applyLightTheme();
+            return 'light';
         },
         toggle: function () {
-            applyDarkTheme();
-            return 'dark';
+            applyLightTheme();
+            return 'light';
         }
     };
 })();

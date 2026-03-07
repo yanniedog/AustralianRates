@@ -1,4 +1,4 @@
-import { ensureAppConfigTable, setAppConfig } from '../db/app-config'
+import { ensureAppConfigTable, getIngestPauseConfig, setAppConfig } from '../db/app-config'
 import {
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
@@ -71,6 +71,27 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       error,
       context: (error as Error)?.message || String(error),
     })
+  }
+
+  const pause = await getIngestPauseConfig(env.DB)
+  if (pause.mode === 'repair_pause') {
+    log.warn('scheduler', 'Scheduled daily ingest paused by app config', {
+      code: 'ingest_paused',
+      context: JSON.stringify({
+        reason: pause.reason,
+        collection_date: collectionDate,
+        scheduled_at: cronIso,
+      }),
+    })
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'ingest_paused',
+      pause,
+      reconciliation,
+      melbourne: melbourneParts,
+      intervalMinutes: 0,
+    }
   }
 
   const runIdOverride = buildScheduledRunId(collectionDate, event.scheduledTime)

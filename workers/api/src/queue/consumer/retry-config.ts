@@ -7,14 +7,6 @@ export function calculateRetryDelaySeconds(attempts: number): number {
   return Math.min(900, 15 * Math.pow(2, safeAttempt - 1))
 }
 
-function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
-  if (value == null) return fallback
-  const normalized = value.trim().toLowerCase()
-  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true
-  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
-  return fallback
-}
-
 export function maxCdrProductPages(): number {
   return Number.MAX_SAFE_INTEGER
 }
@@ -25,15 +17,9 @@ export function maxProductsPerLender(env: EnvBindings): number {
 
 export async function persistProductDetailPayload(
   env: EnvBindings,
-  runSource: 'scheduled' | 'manual' | undefined,
+  _runSource: 'scheduled' | 'manual' | undefined,
   input: Parameters<typeof persistRawPayload>[1],
 ): Promise<Awaited<ReturnType<typeof persistRawPayload>> | null> {
-  const persistSuccessful = parseBooleanEnv(env.PERSIST_SUCCESSFUL_PRODUCT_DETAILS, false)
-  const isScheduled = (runSource ?? 'scheduled') === 'scheduled'
-  const isSuccess = (input.httpStatus ?? 200) < 400
-  if (isScheduled && isSuccess && !persistSuccessful) {
-    return null
-  }
   return persistRawPayload(env, input)
 }
 

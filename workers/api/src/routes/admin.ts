@@ -3,6 +3,7 @@ import { requireAdmin } from '../auth/admin'
 import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
 import { getFetchEventById, getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
+import { adminRemediationRoutes } from './admin-remediation'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
@@ -61,6 +62,7 @@ adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)
+adminRoutes.route('/', adminRemediationRoutes)
 
 adminRoutes.get('/cdr-audit', async (c) => {
   let report = getCachedCdrAuditReport()
@@ -422,10 +424,30 @@ adminRoutes.post('/runs/daily', async (c) => {
   log.info('admin', 'Manual daily run triggered')
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const force = Boolean(body.force)
+  const runIdOverride = typeof (body.run_id_override ?? body.runIdOverride) === 'string'
+    ? String(body.run_id_override ?? body.runIdOverride).trim() || undefined
+    : undefined
+  const rawLenderCodes = Array.isArray(body.lender_codes) ? body.lender_codes : Array.isArray(body.lenderCodes) ? body.lenderCodes : undefined
+  const lenderCodes = rawLenderCodes
+    ? rawLenderCodes.map((value) => String(value || '').trim()).filter(Boolean)
+    : undefined
+  const rawDatasets = Array.isArray(body.datasets) ? body.datasets : Array.isArray(body.datasetKinds) ? body.datasetKinds : undefined
+  const datasets = rawDatasets
+    ? rawDatasets
+        .map((value) => String(value || '').trim())
+        .filter((value) => value === 'home_loans' || value === 'savings' || value === 'term_deposits')
+    : undefined
+  const sourceOverride = body.source_override ?? body.sourceOverride
+  const source = sourceOverride === 'scheduled' || sourceOverride === 'manual'
+    ? sourceOverride
+    : 'manual'
 
   const result = await triggerDailyRun(c.env, {
-    source: 'manual',
+    source,
     force,
+    runIdOverride,
+    lenderCodes,
+    datasets,
   })
 
   return c.json({

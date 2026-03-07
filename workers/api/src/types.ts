@@ -3,6 +3,7 @@ import type { DatasetKind, IngestTaskKind } from '../../../packages/shared/src'
 
 export type RunType = 'daily' | 'backfill'
 export type RunStatus = 'running' | 'ok' | 'partial' | 'failed'
+export type IngestPauseMode = 'active' | 'repair_pause'
 
 export type SourceType = 'cdr_register' | 'cdr_products' | 'cdr_product_detail' | 'wayback_html'
 
@@ -160,6 +161,7 @@ export type DailySavingsLenderJob = {
   runSource: RunSource
   lenderCode: string
   collectionDate: string
+  datasets?: Array<'savings' | 'term_deposits'>
   attempt: number
   idempotencyKey: string
 }
@@ -224,7 +226,6 @@ export type EnvBindings = {
   LOCK_TTL_SECONDS?: string
   MAX_QUEUE_ATTEMPTS?: string
   MAX_PRODUCTS_PER_LENDER?: string
-  PERSIST_SUCCESSFUL_PRODUCT_DETAILS?: string
   FEATURE_PROSPECTIVE_ENABLED?: string
   FEATURE_BACKFILL_ENABLED?: string
   MANUAL_RUN_COOLDOWN_SECONDS?: string

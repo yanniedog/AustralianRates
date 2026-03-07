@@ -91,11 +91,6 @@
     function renderQuickCompareCards(rows, trackedTotal, limited) {
         if (!els.quickCompareCards) return;
 
-        if (isAnalystMode()) {
-            els.quickCompareCards.innerHTML = '';
-            return;
-        }
-
         if (!rows.length) {
             els.quickCompareCards.innerHTML = '<p class="quick-empty">No matching products for current filters.</p>';
             return;
@@ -110,8 +105,8 @@
 
         var topRateLabel = section === 'term-deposits' ? 'Best term deposit rate' : 'Best headline rate';
         var topRateNote = bestIsLowest
-            ? 'Lowest current interest rate in filtered results'
-            : 'Highest current interest rate in filtered results';
+            ? 'Lowest visible rate'
+            : 'Highest visible rate';
         var cards = [
             {
                 label: topRateLabel,
@@ -121,14 +116,14 @@
             {
                 label: section === 'home-loans' ? 'Median mortgage rate' : 'Median rate',
                 value: medRate == null ? '-' : pct(medRate),
-                note: 'Middle rate across visible product set',
+                note: 'Middle of current set',
             },
             {
                 label: 'Tracked products',
                 value: Number.isFinite(Number(trackedTotal)) ? Number(trackedTotal).toLocaleString() : String(rows.length),
                 note: limited
-                    ? 'Current products matching your filters (quick compare limited to top ' + QUICK_COMPARE_LIMIT.toLocaleString() + ')'
-                    : 'Current products matching your filters',
+                    ? 'Limited preview'
+                    : 'Current set',
             },
         ];
 
@@ -154,11 +149,6 @@
 
     async function loadQuickCompare() {
         if (!els.quickCompareCards) return;
-        if (isAnalystMode()) {
-            renderQuickCompareCards([], 0, false);
-            return;
-        }
-
         clientLog('info', 'Quick compare load started', { section: section });
         try {
             var latestParams = buildFilterParams();

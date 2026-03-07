@@ -139,11 +139,31 @@
     }
 
     function getHeaderTagline(context) {
-        if (context.admin) return 'Production admin portal';
-        if (context.legal) return 'Open-source rate intelligence';
-        if (context.section === 'savings') return 'Savings market monitor';
-        if (context.section === 'term-deposits') return 'Term deposit market monitor';
-        return 'Mortgage market monitor';
+        if (context.admin) return 'Admin';
+        if (context.legal) return 'Independent rate tracking';
+        if (context.section === 'savings') return 'Savings';
+        if (context.section === 'term-deposits') return 'Term deposits';
+        return 'Home loans';
+    }
+
+    function getNavLinks(context) {
+        if (context.admin) {
+            return [
+                { href: '/admin/dashboard.html', label: 'Dashboard', active: window.location.pathname.indexOf('/admin/') >= 0 },
+                { href: '/', label: 'Public site', active: false }
+            ];
+        }
+        return [
+            { href: '/', label: 'Home Loans', active: !context.legal && context.section === 'home-loans' },
+            { href: '/savings/', label: 'Savings', active: !context.legal && context.section === 'savings' },
+            { href: '/term-deposits/', label: 'Term Deposits', active: !context.legal && context.section === 'term-deposits' }
+        ];
+    }
+
+    function renderNavLinks(context) {
+        return getNavLinks(context).map(function (link) {
+            return '<a href="' + esc(link.href) + '" class="site-nav-link' + (link.active ? ' active' : '') + '"' + (link.active ? ' aria-current="page"' : '') + '>' + esc(link.label) + '</a>';
+        }).join('');
     }
 
     function buildNav() {
@@ -153,7 +173,7 @@
         var inner = header.querySelector('.site-header-inner');
         if (!inner) return;
         var context = getPageContext();
-        var technicalLabel = context.admin ? 'Admin tools' : 'Technical';
+        var technicalLabel = context.admin ? 'Tools' : 'Menu';
 
         inner.innerHTML =
             '<div class="site-brand-lockup">' +
@@ -163,17 +183,22 @@
                     '<p class="site-brand-tag">' + esc(getHeaderTagline(context)) + '</p>' +
                 '</div>' +
             '</div>' +
-            '<nav class="site-nav" aria-label="Technical shortcuts">' +
-                '<details class="site-nav-technical" id="site-nav-technical">' +
-                    '<summary class="site-nav-technical-summary">' + esc(technicalLabel) + '</summary>' +
-                    '<div class="site-nav-technical-body">' +
-                        '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
-                        '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
-                            '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>' +
-                            'GitHub' +
-                        '</a>' +
-                    '</div>' +
-                '</details>' +
+            '<nav class="site-nav" aria-label="Site navigation">' +
+                '<div class="site-nav-primary">' +
+                    '<div class="site-nav-links">' + renderNavLinks(context) + '</div>' +
+                '</div>' +
+                '<div class="site-nav-meta">' +
+                    '<details class="site-nav-technical" id="site-nav-technical">' +
+                        '<summary class="site-nav-technical-summary">' + esc(technicalLabel) + '</summary>' +
+                        '<div class="site-nav-technical-body">' +
+                            '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
+                            '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
+                                '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>' +
+                                'GitHub' +
+                            '</a>' +
+                        '</div>' +
+                    '</details>' +
+                '</div>' +
             '</nav>';
         var refreshBtn = inner.querySelector('#refresh-site-btn');
         if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
@@ -187,9 +212,9 @@
         var existing = document.querySelector('.site-footer');
         if (existing) existing.remove();
         var context = getPageContext();
-        var footerBlurb = context.admin
-            ? 'Operations, diagnostics, and data stewardship for the AustralianRates production stack.'
-            : 'Daily CDR-derived rate intelligence across mortgages, savings, and term deposits.';
+        var footerOperator = context.admin
+            ? 'AustralianRates admin portal · support@australianrates.com'
+            : 'AustralianRates open-source project · support@australianrates.com';
 
         var footer = document.createElement('footer');
         footer.className = 'site-footer';
@@ -203,8 +228,7 @@
                             '<span class="footer-label">' + esc(getHeaderTagline(context)) + '</span>' +
                         '</div>' +
                     '</div>' +
-                    '<p class="footer-blurb">' + esc(footerBlurb) + '</p>' +
-                    '<p class="footer-operator">Operator: AustralianRates open-source project &middot; Support: <a href="mailto:support@australianrates.com">support@australianrates.com</a></p>' +
+                    '<p class="footer-operator">' + esc(footerOperator).replace('support@australianrates.com', '<a href="mailto:support@australianrates.com">support@australianrates.com</a>') + '</p>' +
                 '</div>' +
                 '<div class="site-footer-actions">' +
                     '<details class="footer-technical" id="footer-technical">' +

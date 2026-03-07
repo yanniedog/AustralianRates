@@ -1,21 +1,11 @@
 .admin-login-card form,
 .admin-clear,
-.admin-config section,
+.admin-config,
 .admin-logs,
 .admin-runs,
 .admin-status {
     display: grid;
     gap: 16px;
-}
-
-.admin-login-card label {
-    display: block;
-    margin-bottom: 0.45rem;
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ar-muted);
 }
 
 .admin-login-card button {
@@ -35,26 +25,20 @@
     gap: 12px;
 }
 
-.admin-status .hint-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 14px;
-    margin-top: 12px;
-}
-
+.admin-status .hint-links,
 .admin-status .payload-actions,
 .admin-status .audit-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 10px 14px;
     align-items: center;
 }
 
 .admin-status .link-btn {
     border: 0;
+    padding: 0;
     background: transparent;
     color: var(--ar-accent);
-    padding: 0;
     box-shadow: none;
     text-decoration: underline;
 }
@@ -63,19 +47,21 @@
 .admin-runs pre {
     margin: 0;
     padding: 14px;
+    border: 1px solid var(--ar-line);
     border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    overflow: auto;
+    background: var(--ar-surface-soft);
     max-height: 420px;
 }
 
 .admin-db #db-grid {
     min-height: 320px;
+    border: 1px solid var(--ar-line);
+    border-radius: 20px;
+    overflow: hidden;
 }
 
 .admin-db .pagination {
-    margin: 0.5rem 0 0;
+    margin: 0;
     color: var(--ar-muted);
     font-size: 0.88rem;
 }
@@ -83,16 +69,6 @@
 .admin-db .pagination button {
     margin-left: 6px;
     padding: 0.45rem 0.72rem;
-}
-
-.admin-db .modal-inner label {
-    display: block;
-    margin-bottom: 0.35rem;
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ar-muted);
 }
 
 .admin-clear .panel {
@@ -112,13 +88,13 @@
     gap: 8px;
 }
 
-.admin-clear #key-fields label {
-    margin-top: 0.5rem;
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+.admin-clear #key-fields label,
+.admin-config .rate-check-label {
     color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .admin-config .add-row,
@@ -137,14 +113,6 @@
     white-space: nowrap;
 }
 
-.admin-config .rate-check-label {
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ar-muted);
-}
-
 .admin-config .actions button {
     margin-right: 6px;
     padding: 0.45rem 0.7rem;
@@ -152,7 +120,7 @@
 
 .admin-config .env-table .value,
 .admin-runs .mono {
-    font-family: "JetBrains Mono", Consolas, monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .admin-runs .run-grid {
@@ -160,11 +128,13 @@
     gap: 12px;
 }
 
-.admin-runs .run-item {
-    border: 1px solid rgba(255, 255, 255, 0.08);
+.admin-runs .run-item,
+.admin-runs .backlog-block,
+.admin-status .card {
+    border: 1px solid var(--ar-line);
     border-radius: 18px;
+    background: var(--ar-surface-soft);
     padding: 14px;
-    background: rgba(255, 255, 255, 0.03);
 }
 
 .admin-runs .run-item .head {
@@ -173,40 +143,65 @@
     gap: 10px;
     flex-wrap: wrap;
     margin-bottom: 6px;
-    font-weight: 700;
+    font-weight: 600;
 }
 
-.admin-runs .run-item .meta {
+.admin-runs .run-item .meta,
+.admin-logs .log-stats {
     color: var(--ar-muted);
-    font-size: 0.84rem;
+    font-size: 0.86rem;
     line-height: 1.55;
 }
 
 .admin-runs .backlog-block + .backlog-block {
-    margin-top: 14px;
+    margin-top: 12px;
 }
 
-.admin-runs details {
+.admin-runs details,
+.admin-status details {
     margin-top: 8px;
-}
-
-.admin-logs .log-stats {
-    color: var(--ar-muted);
-    font-size: 0.88rem;
 }
 
 .admin-logs .danger,
 .admin-clear .danger {
-    border-color: rgba(255, 146, 143, 0.34);
-    color: #ffd7d5;
-    background: rgba(255, 146, 143, 0.12);
+    border-color: #f0c0ba;
+    background: #fff5f4;
+    color: #8b2c22;
+}
+
+.admin-db .tabulator {
+    border: 0 !important;
+    background: var(--ar-surface) !important;
+    color: var(--ar-text) !important;
+    font-family: var(--ar-font-ui) !important;
+}
+
+.admin-db .tabulator .tabulator-header,
+.admin-db .tabulator .tabulator-footer {
+    background: var(--ar-surface-soft) !important;
+}
+
+.admin-db .tabulator .tabulator-col,
+.admin-db .tabulator .tabulator-row {
+    border-color: #ececf0 !important;
+}
+
+.admin-db .tabulator .tabulator-col-title {
+    color: var(--ar-muted) !important;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+}
+
+.admin-db .tabulator-row:nth-child(2n) {
+    background: #fbfbfd !important;
 }
 
 @media (max-width: 760px) {
     .admin-status .grid,
     .admin-status #overall-grid,
-    .admin-status #e2e-grid,
-    .admin-dashboard-grid {
+    .admin-status #e2e-grid {
         grid-template-columns: 1fr;
     }
 }

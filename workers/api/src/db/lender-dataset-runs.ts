@@ -8,6 +8,12 @@ export type LenderDatasetRunRow = {
   bank_name: string
   collection_date: string
   expected_detail_count: number
+  index_fetch_succeeded: number
+  accepted_row_count: number
+  written_row_count: number
+  dropped_row_count: number
+  detail_fetch_event_count: number
+  lineage_error_count: number
   completed_detail_count: number
   failed_detail_count: number
   finalized_at: string | null
@@ -70,6 +76,70 @@ export async function setLenderDatasetExpectedDetails(
     .run()
 }
 
+export async function markLenderDatasetIndexFetchSucceeded(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    dataset: DatasetKind
+  },
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE lender_dataset_runs
+       SET index_fetch_succeeded = 1,
+           updated_at = ?1
+       WHERE run_id = ?2
+         AND lender_code = ?3
+         AND dataset_kind = ?4`,
+    )
+    .bind(nowIso(), input.runId, input.lenderCode, input.dataset)
+    .run()
+}
+
+export async function recordLenderDatasetWriteStats(
+  db: D1Database,
+  input: {
+    runId: string
+    lenderCode: string
+    dataset: DatasetKind
+    acceptedRows?: number
+    writtenRows?: number
+    droppedRows?: number
+    detailFetchEventCount?: number
+    lineageErrors?: number
+    errorMessage?: string | null
+  },
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE lender_dataset_runs
+       SET accepted_row_count = accepted_row_count + ?1,
+           written_row_count = written_row_count + ?2,
+           dropped_row_count = dropped_row_count + ?3,
+           detail_fetch_event_count = detail_fetch_event_count + ?4,
+           lineage_error_count = lineage_error_count + ?5,
+           last_error = COALESCE(?6, last_error),
+           updated_at = ?7
+       WHERE run_id = ?8
+         AND lender_code = ?9
+         AND dataset_kind = ?10`,
+    )
+    .bind(
+      Math.max(0, Math.floor(input.acceptedRows ?? 0)),
+      Math.max(0, Math.floor(input.writtenRows ?? 0)),
+      Math.max(0, Math.floor(input.droppedRows ?? 0)),
+      Math.max(0, Math.floor(input.detailFetchEventCount ?? 0)),
+      Math.max(0, Math.floor(input.lineageErrors ?? 0)),
+      input.errorMessage ?? null,
+      nowIso(),
+      input.runId,
+      input.lenderCode,
+      input.dataset,
+    )
+    .run()
+}
+
 export async function markLenderDatasetDetailProcessed(
   db: D1Database,
   input: {
@@ -111,7 +181,9 @@ export async function getLenderDatasetRun(
     .prepare(
       `SELECT
          run_id, lender_code, dataset_kind, bank_name, collection_date,
-         expected_detail_count, completed_detail_count, failed_detail_count,
+         expected_detail_count, index_fetch_succeeded, accepted_row_count, written_row_count,
+         dropped_row_count, detail_fetch_event_count, lineage_error_count,
+         completed_detail_count, failed_detail_count,
          finalized_at, last_error, updated_at
        FROM lender_dataset_runs
        WHERE run_id = ?1

@@ -29,22 +29,7 @@
     var interactionBound = false;
 
     function getConsumerFilterIds() {
-        if (section === 'savings') {
-            return ['filter-bank', 'filter-account-type', 'filter-rate-type', 'filter-min-rate', 'filter-max-rate'];
-        }
-        if (section === 'term-deposits') {
-            return ['filter-bank', 'filter-term-months', 'filter-deposit-tier', 'filter-min-rate', 'filter-max-rate'];
-        }
-        return [
-            'filter-bank',
-            'filter-security',
-            'filter-repayment',
-            'filter-structure',
-            'filter-min-rate',
-            'filter-max-rate',
-            'filter-min-comparison-rate',
-            'filter-max-comparison-rate',
-        ];
+        return ['filter-bank', 'filter-min-rate', 'filter-max-rate'];
     }
 
     function normalizeParamsForSignature(params) {
@@ -313,7 +298,7 @@
         if (els.filterIncludeManual) setControlVisible(els.filterIncludeManual, analyst);
         if (els.refreshInterval) setControlVisible(els.refreshInterval, analyst);
         if (els.filterBar && els.filterBar.tagName === 'DETAILS') {
-            els.filterBar.open = analyst;
+            if (!analyst) els.filterBar.open = false;
         }
 
         refreshFilterUiState();

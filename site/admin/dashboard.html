@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Admin Dashboard | AustralianRates</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../foundation.css">
     <link rel="stylesheet" href="../public-shell.css">
     <link rel="stylesheet" href="admin-layout.css">
@@ -24,16 +21,16 @@
         <div class="admin-page-head">
             <p class="eyebrow">Operations</p>
             <h1>Admin dashboard</h1>
-            <p class="sub">Manage database, configuration, runs, and diagnostic workflows from one place.</p>
+            <p class="sub">Core tools for the production stack.</p>
         </div>
         <nav class="admin-dashboard-grid">
-            <a class="admin-nav-card" href="status.html"><span class="admin-nav-card-title">Status</span><p class="admin-nav-card-copy">Health checks, alignment results, integrity diagnostics, and payload inspection.</p></a>
-            <a class="admin-nav-card" href="database.html"><span class="admin-nav-card-title">Database</span><p class="admin-nav-card-copy">Browse tables, inspect rows, and edit or remove records.</p></a>
-            <a class="admin-nav-card" href="clear.html"><span class="admin-nav-card-title">Clear data</span><p class="admin-nav-card-copy">Delete rows by exact key, grouped scope, or full-table selection.</p></a>
-            <a class="admin-nav-card" href="config.html"><span class="admin-nav-card-title">Configuration</span><p class="admin-nav-card-copy">Maintain worker config overrides, schedules, and read-only env values.</p></a>
-            <a class="admin-nav-card" href="runs.html"><span class="admin-nav-card-title">Runs</span><p class="admin-nav-card-copy">Trigger daily, backfill, historical, reconcile, and lineage repair flows.</p></a>
-            <a class="admin-nav-card" href="logs.html"><span class="admin-nav-card-title">Logs</span><p class="admin-nav-card-copy">Download or wipe system logs and inspect the in-browser client log.</p></a>
-            <a class="admin-nav-card" href="../index.html"><span class="admin-nav-card-title">Public site</span><p class="admin-nav-card-copy">Return to the production-facing mortgage, savings, and term-deposit dashboards.</p></a>
+            <a class="admin-nav-card" href="status.html"><span class="admin-nav-card-title">Status</span><p class="admin-nav-card-copy">Health, integrity, and payload checks.</p></a>
+            <a class="admin-nav-card" href="database.html"><span class="admin-nav-card-title">Database</span><p class="admin-nav-card-copy">Browse and edit table rows.</p></a>
+            <a class="admin-nav-card" href="clear.html"><span class="admin-nav-card-title">Clear data</span><p class="admin-nav-card-copy">Delete rows by scope.</p></a>
+            <a class="admin-nav-card" href="config.html"><span class="admin-nav-card-title">Configuration</span><p class="admin-nav-card-copy">Schedules, overrides, and env values.</p></a>
+            <a class="admin-nav-card" href="runs.html"><span class="admin-nav-card-title">Runs</span><p class="admin-nav-card-copy">Trigger and monitor ingestion jobs.</p></a>
+            <a class="admin-nav-card" href="logs.html"><span class="admin-nav-card-title">Logs</span><p class="admin-nav-card-copy">Download or clear logs.</p></a>
+            <a class="admin-nav-card" href="../index.html"><span class="admin-nav-card-title">Public site</span><p class="admin-nav-card-copy">Return to the public dashboards.</p></a>
         </nav>
         <div class="admin-actions">
             <button type="button" id="logout-btn" class="secondary">Log out</button>

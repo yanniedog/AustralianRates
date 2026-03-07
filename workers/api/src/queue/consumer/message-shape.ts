@@ -50,7 +50,16 @@ export function isIngestMessage(value: unknown): value is IngestMessage {
   }
 
   if (value.kind === 'daily_savings_lender_fetch') {
-    return typeof value.runId === 'string' && typeof value.lenderCode === 'string' && typeof value.collectionDate === 'string'
+    const datasetsOk =
+      value.datasets == null ||
+      (Array.isArray(value.datasets) &&
+        value.datasets.every((dataset) => dataset === 'savings' || dataset === 'term_deposits'))
+    return (
+      typeof value.runId === 'string' &&
+      typeof value.lenderCode === 'string' &&
+      typeof value.collectionDate === 'string' &&
+      datasetsOk
+    )
   }
 
   if (value.kind === 'historical_task_execute') {

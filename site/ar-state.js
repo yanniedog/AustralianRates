@@ -13,10 +13,10 @@
     function readStoredUiMode() {
         try {
             var stored = window.localStorage.getItem(UI_MODE_STORAGE_KEY);
-            if (stored == null || String(stored).trim() === '') return 'analyst';
+            if (stored == null || String(stored).trim() === '') return 'consumer';
             return normalizeUiMode(stored);
         } catch (_err) {
-            return 'analyst';
+            return 'consumer';
         }
     }
 

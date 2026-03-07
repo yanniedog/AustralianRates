@@ -1,6 +1,6 @@
 import { TARGET_LENDERS } from '../../../constants'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
-import { ensureLenderDatasetRun } from '../../../db/lender-dataset-runs'
+import { ensureLenderDatasetRun, recordLenderDatasetWriteStats } from '../../../db/lender-dataset-runs'
 import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { upsertSavingsRateRows } from '../../../db/savings-rates'
 import { upsertTdRateRows } from '../../../db/td-rates'
@@ -11,9 +11,9 @@ import type { EnvBindings, ProductDetailJob } from '../../../types'
 import { log } from '../../../utils/logger'
 import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { recordDroppedAnomalies } from '../anomalies'
+import { ensureProductDetailFetchEventId } from '../detail-fetch-event'
 import { markDetailProcessedAndFinalize } from '../finalization'
 import { elapsedMs, serializeForLog } from '../log-helpers'
-import { persistProductDetailPayload } from '../retry-config'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
 
@@ -36,6 +36,10 @@ export function resolveRowFetchEventId(input: {
   if (input.fallbackFetchEventId != null) return input.fallbackFetchEventId
   if (input.rowFetchEventId != null) return input.rowFetchEventId
   return null
+}
+
+function countRowsMissingFetchEventId(rows: Array<{ fetchEventId?: number | null }>): number {
+  return rows.reduce((sum, row) => sum + (row.fetchEventId == null ? 1 : 0), 0)
 }
 
 export async function handleProductDetailJob(env: EnvBindings, job: ProductDetailJob): Promise<void> {
@@ -102,7 +106,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         lenderCode: job.lenderCode,
       })
       fetchStatus = details.rawPayload.status
-      const persisted = await persistProductDetailPayload(env, job.runSource, {
+      const persisted = await ensureProductDetailFetchEventId(env, {
         sourceType: 'cdr_product_detail',
         sourceUrl: details.rawPayload.sourceUrl,
         payload: details.rawPayload.body,
@@ -116,7 +120,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         productId: job.productId,
         notes: `direct_product_detail lender=${job.lenderCode} product=${job.productId}`,
       })
-      fetchEventId = persisted?.fetchEventId
+      fetchEventId = persisted.fetchEventId
       const upstreamBlock = detectUpstreamBlock({
         status: details.rawPayload.status,
         body: details.rawPayload.body,
@@ -163,9 +167,32 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         row.runSource = job.runSource ?? 'scheduled'
       }
       acceptedRows = accepted.length
+      const acceptedMissingLineage = countRowsMissingFetchEventId(accepted)
+      if (acceptedMissingLineage > 0) {
+        await recordLenderDatasetWriteStats(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'home_loans',
+          acceptedRows,
+          droppedRows: dropped.length,
+          detailFetchEventCount: fetchEventId != null ? 1 : 0,
+          lineageErrors: acceptedMissingLineage,
+          errorMessage: `detail_lineage_missing_for_accepted_rows:${job.productId}`,
+        })
+        throw new Error(`detail_lineage_persist_failed:home_loans:${job.productId}`)
+      }
       if (accepted.length > 0) {
         written = await upsertHistoricalRateRows(env.DB, accepted)
       }
+      await recordLenderDatasetWriteStats(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        acceptedRows,
+        writtenRows: written,
+        droppedRows: dropped.length,
+        detailFetchEventCount: fetchEventId != null ? 1 : 0,
+      })
     } else if (job.dataset === 'savings') {
       const details = await fetchSavingsProductDetailRows({
         lender,
@@ -178,7 +205,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         lenderCode: job.lenderCode,
       })
       fetchStatus = details.rawPayload.status
-      const persisted = await persistProductDetailPayload(env, job.runSource, {
+      const persisted = await ensureProductDetailFetchEventId(env, {
         sourceType: 'cdr_product_detail',
         sourceUrl: details.rawPayload.sourceUrl,
         payload: details.rawPayload.body,
@@ -192,7 +219,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         productId: job.productId,
         notes: `savings_product_detail lender=${job.lenderCode} product=${job.productId}`,
       })
-      fetchEventId = persisted?.fetchEventId
+      fetchEventId = persisted.fetchEventId
       const upstreamBlock = detectUpstreamBlock({
         status: details.rawPayload.status,
         body: details.rawPayload.body,
@@ -239,9 +266,32 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         row.runSource = job.runSource ?? 'scheduled'
       }
       acceptedRows = accepted.length
+      const acceptedMissingLineage = countRowsMissingFetchEventId(accepted)
+      if (acceptedMissingLineage > 0) {
+        await recordLenderDatasetWriteStats(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'savings',
+          acceptedRows,
+          droppedRows: dropped.length,
+          detailFetchEventCount: fetchEventId != null ? 1 : 0,
+          lineageErrors: acceptedMissingLineage,
+          errorMessage: `detail_lineage_missing_for_accepted_rows:${job.productId}`,
+        })
+        throw new Error(`detail_lineage_persist_failed:savings:${job.productId}`)
+      }
       if (accepted.length > 0) {
         written = await upsertSavingsRateRows(env.DB, accepted)
       }
+      await recordLenderDatasetWriteStats(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        acceptedRows,
+        writtenRows: written,
+        droppedRows: dropped.length,
+        detailFetchEventCount: fetchEventId != null ? 1 : 0,
+      })
     } else {
       const details = await fetchTdProductDetailRows({
         lender,
@@ -254,7 +304,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         lenderCode: job.lenderCode,
       })
       fetchStatus = details.rawPayload.status
-      const persisted = await persistProductDetailPayload(env, job.runSource, {
+      const persisted = await ensureProductDetailFetchEventId(env, {
         sourceType: 'cdr_product_detail',
         sourceUrl: details.rawPayload.sourceUrl,
         payload: details.rawPayload.body,
@@ -268,7 +318,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         productId: job.productId,
         notes: `td_product_detail lender=${job.lenderCode} product=${job.productId}`,
       })
-      fetchEventId = persisted?.fetchEventId
+      fetchEventId = persisted.fetchEventId
       const upstreamBlock = detectUpstreamBlock({
         status: details.rawPayload.status,
         body: details.rawPayload.body,
@@ -315,9 +365,32 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         row.runSource = job.runSource ?? 'scheduled'
       }
       acceptedRows = accepted.length
+      const acceptedMissingLineage = countRowsMissingFetchEventId(accepted)
+      if (acceptedMissingLineage > 0) {
+        await recordLenderDatasetWriteStats(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'term_deposits',
+          acceptedRows,
+          droppedRows: dropped.length,
+          detailFetchEventCount: fetchEventId != null ? 1 : 0,
+          lineageErrors: acceptedMissingLineage,
+          errorMessage: `detail_lineage_missing_for_accepted_rows:${job.productId}`,
+        })
+        throw new Error(`detail_lineage_persist_failed:term_deposits:${job.productId}`)
+      }
       if (accepted.length > 0) {
         written = await upsertTdRateRows(env.DB, accepted)
       }
+      await recordLenderDatasetWriteStats(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        acceptedRows,
+        writtenRows: written,
+        droppedRows: dropped.length,
+        detailFetchEventCount: fetchEventId != null ? 1 : 0,
+      })
     }
 
     await markDetailProcessedAndFinalize(env, {

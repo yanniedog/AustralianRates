@@ -1,6 +1,7 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import type { LatestQueryTiming } from '../latest-query-timing'
 import { addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
@@ -67,7 +68,7 @@ function orderByClause(filters: LatestTdFilters): string {
   return LATEST_ORDER_BY[filters.orderBy ?? 'default'] ?? LATEST_ORDER_BY.default
 }
 
-export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilters) {
+export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilters, timing?: LatestQueryTiming) {
   const { clause, binds } = buildLatestWhere(filters)
   const limit = safeLimit(filters.limit, 200, 1000)
   const sql = `
@@ -121,8 +122,12 @@ export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilter
     ORDER BY ${orderByClause(filters)}
     LIMIT ?`
 
+  const dbStartedAt = Date.now()
   const result = await db.prepare(sql).bind(...binds, limit).all<Record<string, unknown>>()
+  if (timing) timing.dbMainMs = Date.now() - dbStartedAt
+  const hydrateStartedAt = Date.now()
   const hydrated = await hydrateCdrDetailJson(db, rows(result))
+  if (timing) timing.detailHydrateMs = Date.now() - hydrateStartedAt
   return hydrated.map((row) => presentTdRow(row))
 }
 
@@ -139,6 +144,6 @@ export async function queryLatestTdRatesCount(db: D1Database, filters: LatestTdF
   return Number(result?.n ?? 0)
 }
 
-export async function queryLatestAllTdRates(db: D1Database, filters: LatestTdFilters) {
-  return queryLatestTdRates(db, filters)
+export async function queryLatestAllTdRates(db: D1Database, filters: LatestTdFilters, timing?: LatestQueryTiming) {
+  return queryLatestTdRates(db, filters, timing)
 }

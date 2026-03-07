@@ -1,6 +1,9 @@
+import { deriveTerminalRunStatus, loadRunInvariantSummary, type SummaryTotals } from '../db/run-terminal-state'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { nowIso } from '../utils/time'
+
+export { deriveTerminalRunStatus } from '../db/run-terminal-state'
 
 type ReconciliationOptions = {
   dryRun?: boolean
@@ -27,12 +30,6 @@ type StaleRunningRun = {
   finished_at: string | null
   per_lender_json: string
   errors_json: string
-}
-
-type SummaryTotals = {
-  enqueuedTotal: number
-  processedTotal: number
-  failedTotal: number
 }
 
 export type ReadyFinalizationReconciliation = {
@@ -87,14 +84,6 @@ function asSummaryTotals(rawSummary: string | null | undefined): SummaryTotals {
     processedTotal: Number(meta?.processed_total) || 0,
     failedTotal: Number(meta?.failed_total) || 0,
   }
-}
-
-export function deriveTerminalRunStatus(totals: SummaryTotals): 'ok' | 'partial' {
-  const completedTotal = totals.processedTotal + totals.failedTotal
-  if (totals.enqueuedTotal > 0 && completedTotal >= totals.enqueuedTotal) {
-    return totals.failedTotal > 0 ? 'partial' : 'ok'
-  }
-  return 'partial'
 }
 
 function cutoffIso(minutes: number): string {
@@ -254,7 +243,8 @@ export async function closeStaleRunningRuns(
 
   for (const row of rows.results ?? []) {
     const totals = asSummaryTotals(row.per_lender_json)
-    const nextStatus = deriveTerminalRunStatus(totals)
+    const invariantSummary = await loadRunInvariantSummary(db, row.run_id)
+    const nextStatus = deriveTerminalRunStatus(totals, invariantSummary)
     const reconciliationTime = nowIso()
     const note =
       `[${reconciliationTime}] reconciliation_autoclose: stale_running_run` +
@@ -262,6 +252,7 @@ export async function closeStaleRunningRuns(
       ` enqueued=${totals.enqueuedTotal}` +
       ` processed=${totals.processedTotal}` +
       ` failed=${totals.failedTotal}` +
+      ` invariant_problem_rows=${invariantSummary.problematic_rows}` +
       ` started_at=${row.started_at}`
 
     if (dryRun) {

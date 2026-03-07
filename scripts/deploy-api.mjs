@@ -1,10 +1,15 @@
 import { spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const forwardedArgs = process.argv.slice(2)
 const dryRunRequested = forwardedArgs.includes('--dry-run')
+const explicitWorkerVersion = forwardedArgs.some((arg, index, args) => {
+  if (arg.startsWith('--var=WORKER_VERSION:')) return true
+  return arg === '--var' && String(args[index + 1] || '').startsWith('WORKER_VERSION:')
+})
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -12,7 +17,12 @@ const apiWorkdir = path.resolve(__dirname, '..', 'workers', 'api')
 
 const wranglerCli = path.resolve(__dirname, '..', 'node_modules', 'wrangler', 'wrangler-dist', 'cli.js')
 const wranglerBin = process.execPath
-const wranglerArgs = [wranglerCli, 'deploy', ...forwardedArgs]
+const wranglerArgs = [
+  wranglerCli,
+  'deploy',
+  ...(explicitWorkerVersion ? [] : ['--var', `WORKER_VERSION:${buildWorkerVersion()}`]),
+  ...forwardedArgs,
+]
 
 const stdoutChunks = []
 const stderrChunks = []
@@ -61,3 +71,22 @@ child.on('close', (code, signal) => {
 
   process.exit(code ?? 1)
 })
+
+function buildWorkerVersion() {
+  const override = String(process.env.WORKER_VERSION_OVERRIDE || '').trim()
+  if (override) return override
+  const shortCommit = getGitShortCommit()
+  const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+  return shortCommit ? `${shortCommit}-${timestamp}` : `deploy-${timestamp}`
+}
+
+function getGitShortCommit() {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: path.resolve(__dirname, '..'),
+      encoding: 'utf8',
+    }).trim()
+  } catch {
+    return ''
+  }
+}

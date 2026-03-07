@@ -172,6 +172,45 @@ async function updateByRunIdAndSourceUrl(
   return Number(result.meta?.changes ?? 0)
 }
 
+async function updateBySourceIdentity(
+  db: D1Database,
+  input: { dataset: DatasetKind; table: DatasetTable['table']; cutoffDate: string },
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE ${input.table} AS rates
+       SET fetch_event_id = (
+         SELECT fe.id
+         FROM fetch_events fe
+         WHERE fe.dataset_kind = ?2
+           AND fe.source_type = 'cdr_product_detail'
+           AND fe.source_url = rates.source_url
+           AND fe.product_id = rates.product_id
+           AND fe.collection_date = rates.collection_date
+         ORDER BY fe.fetched_at DESC, fe.id DESC
+         LIMIT 1
+       )
+       WHERE rates.fetch_event_id IS NULL
+         AND rates.collection_date >= ?1
+         AND rates.source_url IS NOT NULL
+         AND TRIM(rates.source_url) != ''
+         AND rates.product_id IS NOT NULL
+         AND TRIM(rates.product_id) != ''
+         AND EXISTS (
+           SELECT 1
+           FROM fetch_events fe
+           WHERE fe.dataset_kind = ?2
+             AND fe.source_type = 'cdr_product_detail'
+             AND fe.source_url = rates.source_url
+             AND fe.product_id = rates.product_id
+             AND fe.collection_date = rates.collection_date
+         )`,
+    )
+    .bind(input.cutoffDate, input.dataset)
+    .run()
+  return Number(result.meta?.changes ?? 0)
+}
+
 async function loadSyntheticCandidates(
   db: D1Database,
   input: { table: DatasetTable['table']; cutoffDate: string },
@@ -324,6 +363,13 @@ export async function repairMissingFetchEventLineage(
 
     const byRunSourceRows = await updateByRunIdAndSourceUrl(env.DB, target.table, cutoffDate)
     strategyCounts.push({ dataset: target.dataset, strategy: 'run_id_source_url', rows: byRunSourceRows })
+
+    const bySourceIdentityRows = await updateBySourceIdentity(env.DB, {
+      dataset: target.dataset,
+      table: target.table,
+      cutoffDate,
+    })
+    strategyCounts.push({ dataset: target.dataset, strategy: 'source_identity', rows: bySourceIdentityRows })
   }
 
   const missingAfter = dryRun ? missingBefore : await countMissingFetchEventRows(env.DB, cutoffDate)

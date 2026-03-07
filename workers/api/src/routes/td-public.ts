@@ -24,6 +24,7 @@ import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { queryTdRateChangeIntegrity, queryTdRateChanges } from '../db/rate-change-log'
 import { registerTdExportRoutes } from './td-exports'
+import { matchLatestCache, setServerTimingHeader, shouldBypassLatestCache, shouldEnableAdminDebugTiming, storeLatestCache } from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 
@@ -158,6 +159,13 @@ tdPublicRoutes.get('/rates', async (c) => {
 })
 
 tdPublicRoutes.get('/latest', async (c) => {
+  const debugTiming = await shouldEnableAdminDebugTiming(c)
+  const { cacheKey, response: cachedResponse } = await matchLatestCache(c, shouldBypassLatestCache(c, debugTiming))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
+  const totalStartedAt = Date.now()
   const q = c.req.query()
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode: 'daily' | 'historical' | 'all' = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
@@ -182,9 +190,16 @@ tdPublicRoutes.get('/latest', async (c) => {
     limit,
     orderBy,
   }
+  const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
+  let dbCountMs = 0
   const [rows, total] = await Promise.all([
-    queryLatestTdRates(c.env.DB, filters),
-    queryLatestTdRatesCount(c.env.DB, filters),
+    queryLatestTdRates(c.env.DB, filters, latestTiming),
+    (async () => {
+      const countStartedAt = Date.now()
+      const value = await queryLatestTdRatesCount(c.env.DB, filters)
+      dbCountMs = Date.now() - countStartedAt
+      return value
+    })(),
   ])
   const meta = buildListMeta({
     sourceMode,
@@ -193,10 +208,30 @@ tdPublicRoutes.get('/latest', async (c) => {
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
   })
-  return c.json({ ok: true, count: rows.length, total, rows, meta })
+  const jsonStartedAt = Date.now()
+  const response = c.json({ ok: true, count: rows.length, total, rows, meta })
+  const jsonMs = Date.now() - jsonStartedAt
+  if (debugTiming) {
+    setServerTimingHeader(response, {
+      dbMainMs: latestTiming.dbMainMs,
+      dbCountMs,
+      detailHydrateMs: latestTiming.detailHydrateMs,
+      jsonMs,
+      totalMs: Date.now() - totalStartedAt,
+    })
+  }
+  storeLatestCache(c, cacheKey, response)
+  return response
 })
 
 tdPublicRoutes.get('/latest-all', async (c) => {
+  const debugTiming = await shouldEnableAdminDebugTiming(c)
+  const { cacheKey, response: cachedResponse } = await matchLatestCache(c, shouldBypassLatestCache(c, debugTiming))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
+  const totalStartedAt = Date.now()
   const q = c.req.query()
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
@@ -207,6 +242,7 @@ tdPublicRoutes.get('/latest-all', async (c) => {
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
 
+  const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   const rows = await queryLatestAllTdRates(c.env.DB, {
     bank: q.bank,
     banks,
@@ -220,7 +256,7 @@ tdPublicRoutes.get('/latest-all', async (c) => {
     sourceMode,
     limit,
     orderBy,
-  })
+  }, latestTiming)
   const meta = buildListMeta({
     sourceMode,
     totalRows: rows.length,
@@ -228,7 +264,19 @@ tdPublicRoutes.get('/latest-all', async (c) => {
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
   })
-  return c.json({ ok: true, count: rows.length, rows, meta })
+  const jsonStartedAt = Date.now()
+  const response = c.json({ ok: true, count: rows.length, rows, meta })
+  const jsonMs = Date.now() - jsonStartedAt
+  if (debugTiming) {
+    setServerTimingHeader(response, {
+      dbMainMs: latestTiming.dbMainMs,
+      detailHydrateMs: latestTiming.detailHydrateMs,
+      jsonMs,
+      totalMs: Date.now() - totalStartedAt,
+    })
+  }
+  storeLatestCache(c, cacheKey, response)
+  return response
 })
 
 tdPublicRoutes.get('/timeseries', async (c) => {
