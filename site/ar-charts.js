@@ -68,8 +68,14 @@
         if (!model || !model.meta) return 'Draw a chart to render the rate surface.';
         var parts = [];
         parts.push('Loaded ' + Number(chartState.totalRows || 0).toLocaleString() + ' rows.');
-        parts.push(currentFields.view.charAt(0).toUpperCase() + currentFields.view.slice(1) + ' view shows ' +
-            model.meta.visibleSeries.toLocaleString() + ' of ' + model.meta.totalSeries.toLocaleString() + ' product series.');
+        if (currentFields.view === 'lenders') {
+            parts.push('Lenders view ranks ' +
+                model.meta.visibleLenders.toLocaleString() + ' of ' +
+                model.meta.totalLenders.toLocaleString() + ' lenders for the current slice.');
+        } else {
+            parts.push(currentFields.view.charAt(0).toUpperCase() + currentFields.view.slice(1) + ' view shows ' +
+                model.meta.visibleSeries.toLocaleString() + ' of ' + model.meta.totalSeries.toLocaleString() + ' product series.');
+        }
         if (chartState.truncated) parts.push('Results hit the 10,000-row fetch cap.');
         return parts.join(' ');
     }
@@ -99,6 +105,11 @@
 
         var currentFields = fields();
         var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
+        if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
+            clearOutput('No lender matches are available for this configuration.');
+            if (chartUi.setStatus) chartUi.setStatus('No lender matches are available for this configuration.');
+            return;
+        }
         if (!model.visibleSeries.length || !model.surface.cells.length) {
             clearOutput('No numeric values are available for this configuration.');
             if (chartUi.setStatus) chartUi.setStatus('No numeric values are available for this configuration.');
@@ -128,17 +139,22 @@
 
     function handleMainChartClick(params) {
         if (!params) return;
+        var nextSeriesKey = '';
         if (params.data && params.data.seriesKey) {
-            chartState.spotlightSeriesKey = String(params.data.seriesKey);
+            nextSeriesKey = String(params.data.seriesKey);
         } else if (params.seriesId) {
-            chartState.spotlightSeriesKey = String(params.seriesId);
+            nextSeriesKey = String(params.seriesId);
         } else if (params.seriesName) {
             var currentFields = fields();
             var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
             var match = model.visibleSeries.find(function (series) { return series.name === params.seriesName; });
-            chartState.spotlightSeriesKey = match ? match.key : chartState.spotlightSeriesKey;
+            nextSeriesKey = match ? match.key : chartState.spotlightSeriesKey;
         }
 
+        if (nextSeriesKey) {
+            if (nextSeriesKey !== chartState.spotlightSeriesKey) chartState.spotlightDate = '';
+            chartState.spotlightSeriesKey = nextSeriesKey;
+        }
         if (params.data && params.data.date) chartState.spotlightDate = String(params.data.date);
         if (!chartState.stale) renderFromCache();
     }

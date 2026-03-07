@@ -107,6 +107,13 @@
         return SECTION_PALETTES[section] || SECTION_PALETTES['home-loans'];
     }
 
+    function rankDirection(field) {
+        var key = String(field || '').toLowerCase();
+        if (key.indexOf('fee') >= 0 || key.indexOf('cost') >= 0) return 'asc';
+        if (key === 'rba_cash_rate') return section === 'home-loans' ? 'asc' : 'desc';
+        return section === 'home-loans' ? 'asc' : 'desc';
+    }
+
     function parseDensity(value) {
         var key = String(value || 'standard').trim().toLowerCase();
         return DENSITIES[key] || DENSITIES.standard;
@@ -143,6 +150,7 @@
         isMoneyField: isMoneyField,
         isPercentField: isPercentField,
         palette: palette,
+        rankDirection: rankDirection,
         parseDensity: parseDensity,
     };
 })();

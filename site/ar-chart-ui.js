@@ -53,6 +53,68 @@
         return raw.split(',').filter(Boolean).length;
     }
 
+    function currentFilterParams() {
+        var buildFilterParams = filters && typeof filters.buildFilterParams === 'function'
+            ? filters.buildFilterParams
+            : function () { return {}; };
+        return buildFilterParams() || {};
+    }
+
+    function findFilterField(param) {
+        var filterFields = sectionConfig.filterFields || [];
+        for (var i = 0; i < filterFields.length; i++) {
+            if (filterFields[i].param === param) return filterFields[i];
+        }
+        return null;
+    }
+
+    function formatSliceValue(param, value) {
+        var formatFilterValue = utils.formatFilterValue || function (_field, next) { return String(next == null ? '' : next); };
+        return formatFilterValue(param, value) || String(value == null ? '' : value);
+    }
+
+    function currentSlicePills(fields) {
+        var params = currentFilterParams();
+        var order = [
+            'banks',
+            'security_purpose',
+            'repayment_type',
+            'lvr_tier',
+            'rate_structure',
+            'feature_set',
+            'account_type',
+            'rate_type',
+            'deposit_tier',
+            'term_months',
+            'interest_payment',
+        ];
+        var pills = [];
+
+        order.forEach(function (key) {
+            if (!Object.prototype.hasOwnProperty.call(params, key)) return;
+            var raw = String(params[key] || '').trim();
+            if (!raw) return;
+            var field = findFilterField(key);
+            var values = raw.split(',').filter(Boolean);
+            var rendered = values.map(function (value) { return formatSliceValue(key, value); });
+            if (key === 'banks' && values.length > 1) {
+                rendered = [values.length + ' banks'];
+            }
+            pills.push(
+                '<span class="chart-summary-pill is-config">' +
+                    esc((field && field.label) || chartConfig.fieldLabel(key)) + ': ' +
+                    esc(rendered.join(', ')) +
+                '</span>'
+            );
+        });
+
+        if (fields.view === 'lenders' && !String(params.banks || '').trim()) {
+            pills.unshift('<span class="chart-summary-pill is-config">Banks: All lenders</span>');
+        }
+
+        return pills.slice(0, 5);
+    }
+
     function guidance(fields, model, stale) {
         var notes = [];
         if (sectionConfig.chartHint) notes.push(sectionConfig.chartHint);
@@ -60,9 +122,16 @@
             notes.push('Surface view maps collection date across the x-axis and product_key series down the y-axis.');
             if (getSelectedBankCount() !== 1) notes.push('Filter to one bank for the cleanest longitudinal surface.');
         }
+        if (fields.view === 'lenders') {
+            notes.push('Lenders view ranks each bank by its best current product for the active configuration.');
+            if (getSelectedBankCount() === 1) notes.push('Clear the bank filter to compare lenders across this slice.');
+            else notes.push('Use purpose, repayment, LVR, structure, or term filters above to define the slice.');
+        }
         if (fields.view === 'compare') notes.push('Compare view animates only the selected spotlight series.');
         if (fields.view === 'distribution') notes.push('Distribution groups the current filter set into category-level boxplots.');
-        if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) {
+        if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) {
+            notes.push('Visible lenders are limited by the chosen density preset.');
+        } else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) {
             notes.push('Visible rows are limited by the chosen density preset.');
         }
         if (stale) notes.push('Filters changed. Redraw to fetch fresh rows.');
@@ -78,8 +147,9 @@
         var pills = [];
         pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
         pills.push('<span class="chart-summary-pill">' + esc(chartConfig.fieldLabel(fields.yField)) + '</span>');
-        pills.push('<span class="chart-summary-pill">' + esc(model.meta.visibleSeries) + ' visible series</span>');
+        pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
         pills.push('<span class="chart-summary-pill">' + esc(model.meta.densityLabel) + ' density</span>');
+        pills = pills.concat(currentSlicePills(fields));
         if (payloadMeta && Number.isFinite(Number(payloadMeta.totalRows))) {
             pills.push('<span class="chart-summary-pill">' + esc(Number(payloadMeta.totalRows).toLocaleString()) + ' rows loaded</span>');
         }
@@ -101,15 +171,38 @@
         }
     }
 
-    function surfaceSeriesNote(model) {
-        if (!model || !model.visibleSeries.length) return 'Draw a chart to activate the rate surface.';
+    function railNote(fields, model) {
+        if (!model) return 'Draw a chart to activate the workspace.';
+        if (fields.view === 'lenders') return 'Click a lender to spotlight its best filtered product and lock it into Compare.';
+        if (fields.view === 'compare') return 'Click cards to keep only the series you want in the comparison chart.';
+        if (fields.view === 'distribution') return 'Use the shortlist to keep a product trend visible while the distribution summarises the slice.';
         return 'Click cards to include series in Compare. Click the surface to move the spotlight.';
+    }
+
+    function seriesCardMarkup(options) {
+        return '' +
+            '<button class="chart-series-card' + (options.isSelected ? ' is-selected' : '') + (options.isSpotlight ? ' is-active' : '') + '"' +
+                ' style="--series-accent:' + esc(options.color) + ';" type="button" data-series-key="' + esc(options.key) + '">' +
+                '<span class="chart-series-topline">' +
+                    '<span class="chart-series-name-wrap">' +
+                        '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                        '<span class="chart-series-name">' + esc(options.title) + '</span>' +
+                    '</span>' +
+                    '<span class="chart-series-value">' + esc(options.valueText) + '</span>' +
+                '</span>' +
+                (options.caption ? '<span class="chart-series-caption">' + esc(options.caption) + '</span>' : '') +
+                '<span class="chart-series-meta">' +
+                    '<span class="chart-series-delta">' + esc(options.metaLeft) + '</span>' +
+                    '<span class="chart-series-points">' + esc(options.metaRight) + '</span>' +
+                '</span>' +
+            '</button>';
     }
 
     function renderSeriesRail(model, selectionState) {
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
+        var fields = getChartFields();
         if (!model || !model.visibleSeries.length) {
-            els.chartSeriesNote.textContent = 'Draw a chart to activate the rate surface.';
+            els.chartSeriesNote.textContent = 'Draw a chart to activate the workspace.';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">Visible products and selected comparison lines will appear here.</p>';
             return;
         }
@@ -118,26 +211,40 @@
             ? selectionState.selectedSeriesKeys
             : [];
 
-        els.chartSeriesNote.textContent = surfaceSeriesNote(model);
+        els.chartSeriesNote.textContent = railNote(fields, model);
+        if (fields.view === 'lenders' && model.lenderRanking && model.lenderRanking.entries.length) {
+            els.chartSeriesList.innerHTML = model.lenderRanking.entries.map(function (entry, index) {
+                var isSelected = selected.indexOf(entry.seriesKey) >= 0;
+                var isSpotlight = selectionState && selectionState.spotlightSeriesKey === entry.seriesKey;
+                return seriesCardMarkup({
+                    key: entry.seriesKey,
+                    title: entry.bankName,
+                    valueText: chartConfig.formatMetricValue(fields.yField, entry.value),
+                    caption: entry.productName || 'Best matching product',
+                    metaLeft: entry.latestDate ? chartConfig.formatFieldValue('collection_date', entry.latestDate, entry.row || null) : 'Latest',
+                    metaRight: entry.pointCount.toLocaleString() + ' pts',
+                    isSelected: isSelected,
+                    isSpotlight: isSpotlight,
+                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                });
+            }).join('');
+            return;
+        }
+
         els.chartSeriesList.innerHTML = model.visibleSeries.map(function (series) {
             var isSelected = selected.indexOf(series.key) >= 0;
             var isSpotlight = selectionState && selectionState.spotlightSeriesKey === series.key;
-            var color = chartConfig.palette()[series.colorIndex % chartConfig.palette().length];
-            return '' +
-                '<button class="chart-series-card' + (isSelected ? ' is-selected' : '') + (isSpotlight ? ' is-active' : '') + '"' +
-                    ' style="--series-accent:' + esc(color) + ';" type="button" data-series-key="' + esc(series.key) + '">' +
-                    '<span class="chart-series-topline">' +
-                        '<span class="chart-series-name-wrap">' +
-                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
-                            '<span class="chart-series-name">' + esc(series.name) + '</span>' +
-                        '</span>' +
-                        '<span class="chart-series-value">' + esc(chartConfig.formatMetricValue(getChartFields().yField, series.latestValue)) + '</span>' +
-                    '</span>' +
-                    '<span class="chart-series-meta">' +
-                        '<span class="chart-series-delta">' + esc(Number.isFinite(Number(series.delta)) ? chartConfig.formatMetricValue(getChartFields().yField, series.delta) : 'No delta') + '</span>' +
-                        '<span class="chart-series-points">' + esc(series.pointCount.toLocaleString()) + ' pts</span>' +
-                    '</span>' +
-                '</button>';
+            return seriesCardMarkup({
+                key: series.key,
+                title: series.name,
+                valueText: chartConfig.formatMetricValue(fields.yField, series.latestValue),
+                caption: series.subtitle || 'Canonical product_key trend',
+                metaLeft: Number.isFinite(Number(series.delta)) ? chartConfig.formatMetricValue(fields.yField, series.delta) : 'No delta',
+                metaRight: series.pointCount.toLocaleString() + ' pts',
+                isSelected: isSelected,
+                isSpotlight: isSpotlight,
+                color: chartConfig.palette()[series.colorIndex % chartConfig.palette().length],
+            });
         }).join('');
     }
 
@@ -160,19 +267,25 @@
         }
 
         var spotlight = model.spotlight;
+        var lenderEntry = fields.view === 'lenders' && model.lenderRanking ? model.lenderRanking.activeEntry : null;
         var row = spotlight.row || {};
+        var title = lenderEntry ? lenderEntry.bankName : spotlight.series.name;
+        var subtitle = lenderEntry
+            ? 'Best current ' + chartConfig.fieldLabel(fields.yField).toLowerCase() + ' for the active slice'
+            : (spotlight.series.subtitle || 'Canonical product_key trend');
         els.chartPointDetails.hidden = false;
         els.chartPointDetails.innerHTML = '' +
             '<div class="chart-spotlight-card">' +
                 '<div class="chart-spotlight-copy">' +
-                    '<p class="chart-series-kicker">Series spotlight</p>' +
-                    '<strong>' + esc(spotlight.series.name) + '</strong>' +
-                    '<span class="chart-spotlight-subtitle">' + esc(spotlight.series.subtitle || 'Canonical product_key trend') + '</span>' +
+                    '<p class="chart-series-kicker">' + esc(lenderEntry ? 'Lender spotlight' : 'Series spotlight') + '</p>' +
+                    '<strong>' + esc(title) + '</strong>' +
+                    '<span class="chart-spotlight-subtitle">' + esc(subtitle) + '</span>' +
                 '</div>' +
                 '<div class="chart-spotlight-metrics">' +
                     '<span class="chart-summary-pill is-emphasis">' + esc(chartConfig.formatMetricValue(fields.yField, spotlight.value)) + '</span>' +
                     '<span class="chart-summary-pill">' + esc(chartConfig.formatFieldValue('collection_date', spotlight.date, row)) + '</span>' +
                     '<span class="chart-summary-pill">' + esc(spotlight.series.pointCount.toLocaleString()) + ' observations</span>' +
+                    (lenderEntry ? '<span class="chart-summary-pill is-config">Best product by bank</span>' : '') +
                 '</div>' +
                 '<div class="chart-spotlight-grid">' +
                     '<span><strong>Bank</strong> ' + esc(row.bank_name || '-') + '</span>' +

@@ -1,92 +1,98 @@
-.chart-shell {
+.ar-public #panel-charts .chart-shell {
     display: grid;
-    gap: 18px;
+    gap: 16px;
 }
 
-.ar-public .chart-hero,
-.ar-public .chart-controls,
-.ar-public .chart-advanced,
-.ar-public .chart-main-stage,
-.ar-public .chart-series-rail,
-.ar-public .chart-point-details,
-.ar-public .chart-detail-output {
-    border: 1px solid rgba(145, 172, 217, 0.18);
-    border-radius: 26px;
+.ar-public #panel-charts .chart-hero,
+.ar-public #panel-charts .chart-controls,
+.ar-public #panel-charts .chart-advanced,
+.ar-public #panel-charts .chart-main-stage,
+.ar-public #panel-charts .chart-series-rail,
+.ar-public #panel-charts .chart-point-details,
+.ar-public #panel-charts .chart-detail-output {
+    border: 1px solid rgba(141, 172, 217, 0.18);
+    border-radius: 24px;
     background:
-        linear-gradient(180deg, rgba(14, 21, 36, 0.92), rgba(10, 16, 29, 0.88)),
-        radial-gradient(circle at top right, rgba(79, 141, 255, 0.14), transparent 38%);
+        linear-gradient(180deg, rgba(11, 17, 31, 0.96), rgba(8, 13, 24, 0.93)),
+        radial-gradient(circle at top right, rgba(79, 141, 255, 0.14), transparent 42%);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 20px 50px rgba(0, 0, 0, 0.28);
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 20px 48px rgba(4, 10, 22, 0.2);
     backdrop-filter: blur(18px);
 }
 
-.chart-hero {
+.ar-public #panel-charts .chart-hero {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.9fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
     gap: 18px;
-    padding: 24px;
+    padding: 22px;
     position: relative;
     overflow: hidden;
 }
 
-.chart-hero::after {
+.ar-public #panel-charts .chart-hero::after {
     content: "";
     position: absolute;
-    inset: auto -10% -55% auto;
+    right: -8%;
+    bottom: -56%;
     width: 260px;
     height: 260px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(79, 210, 255, 0.18), transparent 68%);
+    background: radial-gradient(circle, rgba(79, 210, 255, 0.18), transparent 70%);
     pointer-events: none;
 }
 
-.chart-hero-copy,
-.chart-meta,
-.chart-series-rail-header,
-.chart-spotlight-copy {
+.ar-public #panel-charts .chart-hero-copy,
+.ar-public #panel-charts .chart-meta,
+.ar-public #panel-charts .chart-series-rail-header,
+.ar-public #panel-charts .chart-spotlight-copy {
     display: grid;
     gap: 8px;
 }
 
-.chart-kicker,
-.chart-series-kicker {
+.ar-public #panel-charts .chart-kicker,
+.ar-public #panel-charts .chart-series-kicker {
     margin: 0;
-    color: #8db8f2;
+    color: #8ebaf4;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
 }
 
-.chart-hero-copy h2,
-.chart-series-rail-header h3 {
+.ar-public #panel-charts .chart-hero-copy h2,
+.ar-public #panel-charts .chart-series-rail-header h3 {
     margin: 0;
-    color: #f4f8ff;
-    letter-spacing: -0.05em;
-    font-size: clamp(1.8rem, 2vw, 2.6rem);
+    color: #f5f8ff;
+    letter-spacing: -0.045em;
 }
 
-.chart-series-rail-header h3 {
-    font-size: 1.4rem;
+.ar-public #panel-charts .chart-hero-copy h2 {
+    font-size: clamp(1.85rem, 2.4vw, 2.8rem);
+    line-height: 0.98;
 }
 
-.chart-hero-note,
-.chart-guidance,
-.chart-series-note,
-.chart-series-empty,
-.chart-output-empty,
-.chart-detail-empty,
-.chart-spotlight-empty span,
-.chart-spotlight-subtitle,
-.chart-spotlight-link.is-muted {
+.ar-public #panel-charts .chart-series-rail-header h3 {
+    font-size: 1.28rem;
+}
+
+.ar-public #panel-charts .chart-hero-note,
+.ar-public #panel-charts .chart-guidance,
+.ar-public #panel-charts .chart-series-note,
+.ar-public #panel-charts .chart-series-empty,
+.ar-public #panel-charts .chart-output-empty,
+.ar-public #panel-charts .chart-detail-empty,
+.ar-public #panel-charts .chart-spotlight-empty span,
+.ar-public #panel-charts .chart-spotlight-subtitle,
+.ar-public #panel-charts .chart-spotlight-link.is-muted,
+.ar-public #panel-charts .chart-series-caption {
     margin: 0;
-    color: #97abc8;
-    font-size: 0.94rem;
+    color: #c3d7f3;
+    font-size: 0.92rem;
     line-height: 1.55;
 }
 
-.chart-presets {
+.ar-public #panel-charts .chart-presets {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -94,267 +100,308 @@
     align-content: flex-start;
 }
 
-.chart-preset {
-    min-width: 122px;
-    padding: 0.84rem 1.08rem;
+.ar-public #panel-charts .chart-preset,
+.ar-public #panel-charts .chart-advanced summary {
+    transition:
+        transform var(--ar-transition),
+        border-color var(--ar-transition),
+        background-color var(--ar-transition),
+        color var(--ar-transition);
+}
+
+.ar-public #panel-charts .chart-preset {
+    min-width: 116px;
+    padding: 0.82rem 1.02rem;
     border: 1px solid rgba(126, 176, 255, 0.18);
     border-radius: 999px;
-    background: rgba(17, 26, 45, 0.84);
-    color: #d9e8ff;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    background: rgba(17, 27, 46, 0.92);
+    color: #edf4ff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.chart-preset:hover,
-.chart-series-card:hover,
-.chart-advanced summary:hover {
+.ar-public #panel-charts .chart-preset:hover,
+.ar-public #panel-charts .chart-series-card:hover,
+.ar-public #panel-charts .chart-advanced summary:hover {
     transform: translateY(-1px);
-    border-color: rgba(126, 176, 255, 0.36);
-    background: rgba(21, 33, 57, 0.96);
+    border-color: rgba(126, 176, 255, 0.38);
+    background: rgba(24, 38, 63, 0.96);
 }
 
-.chart-preset.is-active,
-.chart-preset[aria-pressed="true"] {
+.ar-public #panel-charts .chart-preset.is-active,
+.ar-public #panel-charts .chart-preset[aria-pressed="true"] {
     border-color: transparent;
-    background: linear-gradient(135deg, rgba(79, 141, 255, 0.95), rgba(79, 210, 255, 0.88));
-    color: #06101f;
+    background: linear-gradient(135deg, rgba(79, 141, 255, 0.96), rgba(79, 210, 255, 0.9));
+    color: #06111f;
     font-weight: 700;
 }
 
-.ar-public .chart-controls {
+.ar-public #panel-charts .chart-controls {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
-    padding: 16px;
+    padding: 14px 16px 16px;
     align-items: end;
 }
 
-.ar-public .chart-controls label,
-.ar-public .chart-advanced-grid label {
+.ar-public #panel-charts .chart-controls label,
+.ar-public #panel-charts .chart-advanced-grid label {
     display: grid;
     gap: 8px;
-    color: #cfe0f9;
-    font-size: 0.82rem;
+    color: #d9e7fa;
+    font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
 .ar-public #panel-charts .chart-controls select,
-.ar-public .chart-advanced-grid select {
+.ar-public #panel-charts .chart-advanced-grid select {
     min-height: 48px;
-    padding-right: 2.2rem;
+    padding-right: 2.4rem;
     border-radius: 16px;
     border: 1px solid rgba(145, 172, 217, 0.18);
-    background: rgba(9, 15, 28, 0.86);
-    color: #ecf4ff;
+    background: rgba(7, 13, 25, 0.94);
+    color: #f1f7ff;
 }
 
 .ar-public #panel-charts .chart-controls select:hover,
 .ar-public #panel-charts .chart-controls select:focus-visible,
-.ar-public .chart-advanced-grid select:hover,
-.ar-public .chart-advanced-grid select:focus-visible {
-    border-color: rgba(126, 176, 255, 0.4);
+.ar-public #panel-charts .chart-advanced-grid select:hover,
+.ar-public #panel-charts .chart-advanced-grid select:focus-visible {
+    border-color: rgba(126, 176, 255, 0.42);
 }
 
-.ar-public .chart-actions {
+.ar-public #panel-charts .chart-actions {
     display: flex;
     align-items: stretch;
 }
 
-.ar-public .chart-actions .small {
+.ar-public #panel-charts .chart-actions .small {
     width: 100%;
     min-height: 48px;
     border-color: transparent;
-    background: linear-gradient(135deg, rgba(79, 141, 255, 0.95), rgba(79, 210, 255, 0.88));
-    color: #06101f;
+    background: linear-gradient(135deg, rgba(79, 141, 255, 0.96), rgba(79, 210, 255, 0.9));
+    color: #06111f;
     font-weight: 700;
     box-shadow: 0 18px 32px rgba(79, 141, 255, 0.18);
 }
 
-.ar-public .chart-actions .small:hover {
-    background: linear-gradient(135deg, rgba(109, 164, 255, 0.96), rgba(110, 225, 255, 0.9));
+.ar-public #panel-charts .chart-actions .small:hover {
+    background: linear-gradient(135deg, rgba(110, 165, 255, 0.96), rgba(111, 225, 255, 0.9));
 }
 
-.ar-public .chart-advanced {
+.ar-public #panel-charts .chart-advanced {
     padding: 14px 16px 16px;
 }
 
-.ar-public .chart-advanced summary {
+.ar-public #panel-charts .chart-advanced summary {
     cursor: pointer;
-    color: #d5e5ff;
+    list-style: none;
+    padding: 0.72rem 0.86rem;
+    border: 1px solid rgba(126, 176, 255, 0.12);
+    border-radius: 16px;
+    background: rgba(14, 22, 38, 0.68);
+    color: #e8f1ff;
     font-size: 0.92rem;
     font-weight: 700;
-    list-style: none;
-    transition: background-color var(--ar-transition), border-color var(--ar-transition), transform var(--ar-transition);
 }
 
-.ar-public .chart-advanced summary::-webkit-details-marker {
+.ar-public #panel-charts .chart-advanced summary::-webkit-details-marker {
     display: none;
 }
 
-.ar-public .chart-advanced[open] summary {
+.ar-public #panel-charts .chart-advanced[open] summary {
     margin-bottom: 14px;
 }
 
-.ar-public .chart-advanced-grid {
+.ar-public #panel-charts .chart-advanced-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
 }
 
-.chart-meta {
-    gap: 12px;
+.ar-public #panel-charts .chart-meta {
+    gap: 10px;
 }
 
-.chart-summary {
+.ar-public #panel-charts .chart-summary {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
 }
 
-.chart-summary-pill {
+.ar-public #panel-charts .chart-summary-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0.46rem 0.82rem;
-    border: 1px solid rgba(130, 159, 201, 0.2);
+    padding: 0.44rem 0.78rem;
+    border: 1px solid rgba(130, 159, 201, 0.22);
     border-radius: 999px;
-    background: rgba(19, 29, 48, 0.86);
-    color: #cfe0fb;
+    background: rgba(18, 29, 50, 0.88);
+    color: #edf4ff;
     font-size: 0.8rem;
     font-weight: 600;
 }
 
-.chart-summary-pill.is-emphasis {
+.ar-public #panel-charts .chart-summary-pill.is-emphasis {
     background: rgba(79, 141, 255, 0.18);
-    border-color: rgba(126, 176, 255, 0.24);
-    color: #f3f7ff;
+    border-color: rgba(126, 176, 255, 0.28);
 }
 
-.chart-summary-pill.is-warning {
+.ar-public #panel-charts .chart-summary-pill.is-config {
+    background: rgba(22, 42, 72, 0.84);
+    border-color: rgba(98, 151, 236, 0.22);
+    color: #dceaff;
+}
+
+.ar-public #panel-charts .chart-summary-pill.is-warning {
     background: rgba(236, 179, 107, 0.16);
     border-color: rgba(236, 179, 107, 0.24);
     color: #ffe2be;
 }
 
-.chart-canvas-shell {
+.ar-public #panel-charts .chart-canvas-shell {
     display: grid;
-    grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.92fr);
+    grid-template-columns: minmax(0, 1.68fr) minmax(340px, 0.92fr);
     gap: 16px;
-    align-items: start;
+    align-items: stretch;
 }
 
-.chart-main-stage {
+.ar-public #panel-charts .chart-main-stage {
     display: grid;
-}
-
-#chart-output {
-    position: relative;
-    min-height: 560px;
+    height: clamp(400px, 56vh, 540px);
+    min-height: clamp(400px, 56vh, 540px);
+    padding: 0;
     overflow: hidden;
-    padding: 10px;
 }
 
-#chart-output canvas,
-#chart-output div[_echarts_instance_] canvas {
+.ar-public #panel-charts #chart-output {
+    position: relative;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: 12px !important;
+    border: 0 !important;
+    border-radius: 24px !important;
+    background:
+        radial-gradient(circle at top left, rgba(79, 141, 255, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(8, 14, 26, 0.98), rgba(5, 9, 18, 0.96)) !important;
+    overflow: hidden !important;
+}
+
+.ar-public #panel-charts #chart-output > div {
+    min-height: inherit;
+}
+
+.ar-public #panel-charts #chart-output canvas,
+.ar-public #panel-charts #chart-output svg {
     border-radius: 20px;
 }
 
-.chart-output-empty,
-.chart-detail-empty {
-    min-height: inherit;
+.ar-public #panel-charts .chart-output-empty,
+.ar-public #panel-charts .chart-detail-empty {
+    min-height: 100%;
     display: grid;
     place-items: center;
-    padding: 20px;
+    padding: 18px;
     text-align: center;
+    background: linear-gradient(180deg, rgba(10, 17, 32, 0.94), rgba(5, 9, 18, 0.96));
 }
 
-.chart-series-rail {
+.ar-public #panel-charts .chart-series-rail {
     position: sticky;
     top: 16px;
     display: grid;
-    gap: 14px;
-    padding: 18px;
-    min-height: 560px;
-}
-
-.ar-public .chart-point-details {
-    padding: 16px;
-}
-
-.chart-spotlight-card,
-.chart-spotlight-empty {
-    display: grid;
+    grid-template-rows: auto auto minmax(190px, 220px) minmax(0, 1fr);
     gap: 12px;
+    height: clamp(400px, 56vh, 540px);
+    min-height: clamp(400px, 56vh, 540px);
+    max-height: clamp(400px, 56vh, 540px);
+    padding: 16px;
+    overflow: hidden;
 }
 
-.chart-spotlight-card strong,
-.chart-spotlight-empty strong {
-    color: #f4f8ff;
+.ar-public #panel-charts .chart-point-details {
+    min-height: 0;
+    padding: 14px;
+}
+
+.ar-public #panel-charts .chart-spotlight-card,
+.ar-public #panel-charts .chart-spotlight-empty {
+    display: grid;
+    gap: 10px;
+}
+
+.ar-public #panel-charts .chart-spotlight-card strong,
+.ar-public #panel-charts .chart-spotlight-empty strong {
+    color: #f5f8ff;
     font-size: 1rem;
 }
 
-.chart-spotlight-metrics,
-.chart-spotlight-grid {
+.ar-public #panel-charts .chart-spotlight-metrics,
+.ar-public #panel-charts .chart-spotlight-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
 }
 
-.chart-spotlight-grid span {
+.ar-public #panel-charts .chart-spotlight-grid span {
     flex: 1 1 46%;
     min-width: 0;
-    padding: 0.72rem 0.82rem;
+    padding: 0.68rem 0.8rem;
     border: 1px solid rgba(145, 172, 217, 0.14);
     border-radius: 16px;
-    background: rgba(11, 18, 32, 0.7);
-    color: #d5e5ff;
+    background: rgba(9, 15, 28, 0.8);
+    color: #e4eefc;
     font-size: 0.84rem;
 }
 
-.chart-spotlight-grid strong {
-    color: #8db8f2;
+.ar-public #panel-charts .chart-spotlight-grid strong {
+    color: #8ebaf4;
     margin-right: 0.28rem;
     font-size: 0.8rem;
 }
 
-.chart-spotlight-link-row {
+.ar-public #panel-charts .chart-spotlight-link-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
 }
 
-.ar-public .chart-point-link {
+.ar-public #panel-charts .chart-point-link {
     color: #8adfff;
     font-weight: 700;
 }
 
-.chart-detail-output {
-    min-height: 230px;
-    padding: 8px;
+.ar-public #panel-charts .chart-detail-output {
+    min-height: 190px;
+    max-height: 220px;
+    padding: 10px;
+    overflow: hidden;
 }
 
-.chart-series-list {
+.ar-public #panel-charts .chart-series-list {
     display: grid;
     gap: 10px;
-    align-content: start;
-    max-height: 420px;
+    min-height: 0;
     overflow: auto;
-    padding-right: 2px;
+    align-content: start;
+    padding-right: 4px;
 }
 
-.chart-series-card {
+.ar-public #panel-charts .chart-series-card {
     --series-accent: #4f8dff;
     display: grid;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    padding: 13px 14px;
+    padding: 11px 12px;
     border: 1px solid rgba(145, 172, 217, 0.14);
     border-left: 4px solid var(--series-accent);
     border-radius: 18px;
-    background: rgba(12, 20, 34, 0.9);
-    color: #e8f1ff;
+    background: rgba(10, 17, 31, 0.92);
+    color: #edf4ff;
     text-align: left;
     transition:
         transform var(--ar-transition),
@@ -363,31 +410,31 @@
         background-color var(--ar-transition);
 }
 
-.chart-series-card.is-selected {
+.ar-public #panel-charts .chart-series-card.is-selected {
     box-shadow: 0 0 0 1px rgba(126, 176, 255, 0.24);
 }
 
-.chart-series-card.is-active {
+.ar-public #panel-charts .chart-series-card.is-active {
     background: linear-gradient(135deg, rgba(79, 141, 255, 0.22), rgba(79, 210, 255, 0.16));
     border-color: rgba(126, 176, 255, 0.28);
 }
 
-.chart-series-topline,
-.chart-series-meta {
+.ar-public #panel-charts .chart-series-topline,
+.ar-public #panel-charts .chart-series-meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
 }
 
-.chart-series-name-wrap {
+.ar-public #panel-charts .chart-series-name-wrap {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
 }
 
-.chart-series-swatch {
+.ar-public #panel-charts .chart-series-swatch {
     flex: 0 0 auto;
     width: 10px;
     height: 10px;
@@ -396,7 +443,7 @@
     box-shadow: 0 0 0 4px rgba(79, 141, 255, 0.12);
 }
 
-.chart-series-name {
+.ar-public #panel-charts .chart-series-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -405,84 +452,89 @@
     font-weight: 700;
 }
 
-.chart-series-value,
-.chart-series-delta,
-.chart-series-points {
-    font-size: 0.78rem;
+.ar-public #panel-charts .chart-series-caption {
+    font-size: 0.8rem;
+}
+
+.ar-public #panel-charts .chart-series-value,
+.ar-public #panel-charts .chart-series-delta,
+.ar-public #panel-charts .chart-series-points {
+    font-size: 0.76rem;
     font-weight: 700;
 }
 
-.chart-series-meta {
-    color: #9db3d3;
+.ar-public #panel-charts .chart-series-meta {
+    color: #b0c6e4;
 }
 
 @media (max-width: 1240px) {
-    .chart-canvas-shell,
-    .chart-hero {
+    .ar-public #panel-charts .chart-hero,
+    .ar-public #panel-charts .chart-canvas-shell {
         grid-template-columns: 1fr;
     }
 
-    .chart-presets {
+    .ar-public #panel-charts .chart-presets {
         justify-content: flex-start;
     }
 
-    .chart-series-rail {
+    .ar-public #panel-charts .chart-series-rail {
         position: static;
         min-height: auto;
-    }
-
-    #chart-output {
-        min-height: 460px;
+        max-height: none;
+        grid-template-rows: auto auto minmax(180px, 220px) minmax(0, auto);
     }
 }
 
 @media (max-width: 860px) {
-    .ar-public .chart-controls,
-    .ar-public .chart-advanced-grid {
+    .ar-public #panel-charts .chart-controls,
+    .ar-public #panel-charts .chart-advanced-grid {
         grid-template-columns: 1fr;
     }
 
-    .chart-hero,
-    .chart-series-rail,
-    .chart-main-stage,
-    .ar-public .chart-point-details,
-    .ar-public .chart-detail-output {
-        padding-left: 16px;
-        padding-right: 16px;
+    .ar-public #panel-charts .chart-hero {
+        padding: 18px;
     }
 
-    .chart-preset {
+    .ar-public #panel-charts .chart-preset {
         flex: 1 1 calc(50% - 10px);
         min-width: 0;
     }
 
-    .chart-series-list {
-        max-height: none;
+    .ar-public #panel-charts #chart-output {
+        height: 100% !important;
+        min-height: 360px !important;
+        padding: 8px !important;
+    }
+
+    .ar-public #panel-charts .chart-main-stage {
+        height: 360px;
+        min-height: 360px;
+    }
+
+    .ar-public #panel-charts .chart-series-list {
+        max-height: 220px;
     }
 }
 
 @media (max-width: 560px) {
-    .chart-hero {
-        padding: 18px;
-    }
-
-    .chart-series-topline,
-    .chart-series-meta,
-    .chart-spotlight-link-row {
+    .ar-public #panel-charts .chart-series-topline,
+    .ar-public #panel-charts .chart-series-meta,
+    .ar-public #panel-charts .chart-spotlight-link-row {
         flex-direction: column;
         align-items: flex-start;
     }
 
-    #chart-output {
-        min-height: 340px;
-        padding: 6px;
+    .ar-public #panel-charts .chart-series-rail {
+        padding: 14px;
+        grid-template-rows: auto auto minmax(170px, 200px) minmax(0, auto);
     }
 
-    .chart-detail-output {
-        min-height: 200px;
+    .ar-public #panel-charts .chart-detail-output {
+        min-height: 170px;
+        max-height: 200px;
     }
 
-    .chart-spotlight-grid span {
+    .ar-public #panel-charts .chart-spotlight-grid span {
         flex-basis: 100%;
     }
 }

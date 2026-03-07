@@ -58,6 +58,20 @@
         ].filter(Boolean).join(' | ');
     }
 
+    function shortText(value, maxLength) {
+        var text = String(value || '').trim();
+        if (!text) return '';
+        if (text.length <= maxLength) return text;
+        return text.slice(0, Math.max(0, maxLength - 1)).trim() + '...';
+    }
+
+    function axisLabel(row) {
+        return [
+            row && row.bank_name ? String(row.bank_name) : '',
+            shortText(row && row.product_name ? row.product_name : 'Unknown product', 34),
+        ].filter(Boolean).join(' | ');
+    }
+
     function finalizeSeries(entry) {
         var points = sortPoints(entry.points);
         var first = points[0] || null;
@@ -65,6 +79,7 @@
         return {
             key: entry.key,
             name: seriesName(entry.firstRow),
+            axisLabel: axisLabel(entry.firstRow),
             subtitle: subtitleParts(entry.firstRow).join(' | '),
             bankName: entry.firstRow.bank_name || '',
             productName: entry.firstRow.product_name || '',
@@ -114,6 +129,56 @@
         }).sort(compareSeries);
     }
 
+    function metricDirection(field) {
+        return chartConfig.rankDirection ? chartConfig.rankDirection(field) : 'desc';
+    }
+
+    function compareMetricValues(left, right, direction) {
+        var leftValue = Number(left);
+        var rightValue = Number(right);
+        if (Number.isFinite(leftValue) && Number.isFinite(rightValue) && leftValue !== rightValue) {
+            return direction === 'asc' ? leftValue - rightValue : rightValue - leftValue;
+        }
+        if (Number.isFinite(leftValue)) return -1;
+        if (Number.isFinite(rightValue)) return 1;
+        return 0;
+    }
+
+    function buildVisibleSeries(allSeries, density, selectionState) {
+        var visible = allSeries.slice(0, density.rowLimit);
+        var requiredKeys = [];
+        if (selectionState && selectionState.spotlightSeriesKey) {
+            requiredKeys.push(String(selectionState.spotlightSeriesKey));
+        }
+        if (selectionState && Array.isArray(selectionState.selectedSeriesKeys)) {
+            selectionState.selectedSeriesKeys.forEach(function (key) {
+                if (key != null) requiredKeys.push(String(key));
+            });
+        }
+
+        var requiredMap = {};
+        requiredKeys.forEach(function (key) {
+            if (!key || requiredMap[key]) return;
+            requiredMap[key] = true;
+            var present = visible.some(function (series) { return series.key === key; });
+            if (present) return;
+            var match = allSeries.find(function (series) { return series.key === key; });
+            if (match) visible.push(match);
+        });
+
+        while (visible.length > density.rowLimit) {
+            var removableIndex = visible.length - 1;
+            while (removableIndex >= 0 && requiredMap[visible[removableIndex].key]) removableIndex -= 1;
+            if (removableIndex < 0) break;
+            visible.splice(removableIndex, 1);
+        }
+
+        return visible.sort(compareSeries).map(function (series, index) {
+            series.colorIndex = index;
+            return series;
+        });
+    }
+
     function uniqueDates(seriesList) {
         var seen = {};
         seriesList.forEach(function (series) {
@@ -159,7 +224,7 @@
 
         return {
             xLabels: xLabels,
-            yLabels: seriesList.map(function (series) { return series.name; }),
+            yLabels: seriesList.map(function (series) { return series.axisLabel || series.name; }),
             cells: cells,
             min: min,
             max: max,
@@ -184,6 +249,7 @@
 
     function buildDistributionModel(rows, fields) {
         var grouped = {};
+        var direction = metricDirection(fields.yField);
         rows.forEach(function (row) {
             var value = numericValue(row, fields.yField);
             if (!Number.isFinite(value)) return;
@@ -211,7 +277,8 @@
                 ],
             };
         }).sort(function (left, right) {
-            if (Number(right.mean) !== Number(left.mean)) return Number(right.mean) - Number(left.mean);
+            var metricSort = compareMetricValues(left.mean, right.mean, direction);
+            if (metricSort !== 0) return metricSort;
             return right.count - left.count;
         }).slice(0, 10);
 
@@ -220,6 +287,63 @@
             boxes: categories.map(function (entry) { return entry.box; }),
             means: categories.map(function (entry) { return entry.mean; }),
             counts: categories.map(function (entry) { return entry.count; }),
+        };
+    }
+
+    function buildLenderRanking(allSeries, fields, density) {
+        var direction = metricDirection(fields.yField);
+        var grouped = {};
+
+        allSeries.forEach(function (series) {
+            var bankName = String(series.bankName || '').trim() || 'Unknown bank';
+            if (!grouped[bankName]) grouped[bankName] = [];
+            grouped[bankName].push(series);
+        });
+
+        var entries = Object.keys(grouped).map(function (bankName) {
+            var ranked = grouped[bankName].slice().sort(function (left, right) {
+                var metricSort = compareMetricValues(left.latestValue, right.latestValue, direction);
+                if (metricSort !== 0) return metricSort;
+                if (right.pointCount !== left.pointCount) return right.pointCount - left.pointCount;
+                return String(left.productName).localeCompare(String(right.productName));
+            });
+            var bestSeries = ranked[0];
+            return {
+                key: bankName,
+                bankName: bankName,
+                seriesKey: bestSeries.key,
+                series: bestSeries,
+                row: bestSeries.latestRow,
+                productName: bestSeries.productName,
+                subtitle: bestSeries.subtitle,
+                latestDate: bestSeries.latestDate,
+                value: bestSeries.latestValue,
+                delta: bestSeries.delta,
+                pointCount: bestSeries.pointCount,
+            };
+        }).sort(function (left, right) {
+            var metricSort = compareMetricValues(left.value, right.value, direction);
+            if (metricSort !== 0) return metricSort;
+            if (right.pointCount !== left.pointCount) return right.pointCount - left.pointCount;
+            return String(left.bankName).localeCompare(String(right.bankName));
+        });
+
+        var visibleEntries = entries.slice(0, density.rowLimit);
+        var min = null;
+        var max = null;
+        visibleEntries.forEach(function (entry) {
+            if (!Number.isFinite(Number(entry.value))) return;
+            if (min == null || entry.value < min) min = entry.value;
+            if (max == null || entry.value > max) max = entry.value;
+        });
+        if (min != null && max != null && min === max) max = min + 1;
+
+        return {
+            direction: direction,
+            totalBanks: entries.length,
+            entries: visibleEntries,
+            min: min,
+            max: max,
         };
     }
 
@@ -266,22 +390,26 @@
     function buildChartModel(rows, fields, selectionState) {
         var density = chartConfig.parseDensity(fields.density);
         var allSeries = buildSeriesCollection(rows, fields.yField);
-        var visibleSeries = allSeries.slice(0, density.rowLimit).map(function (series, index) {
-            series.colorIndex = index;
-            return series;
-        });
+        var visibleSeries = buildVisibleSeries(allSeries, density, selectionState);
+        var lenderRanking = buildLenderRanking(allSeries, fields, density);
         var selectedKeys = effectiveSelection(visibleSeries, selectionState && selectionState.selectedSeriesKeys, density.compareLimit);
         var spotlight = spotlightEntry(visibleSeries, selectionState, selectedKeys);
+        lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
+            return spotlight && spotlight.series && entry.seriesKey === spotlight.series.key;
+        }) || lenderRanking.entries[0] || null;
 
         return {
             meta: {
                 totalRows: rows.length,
                 totalSeries: allSeries.length,
                 visibleSeries: visibleSeries.length,
+                visibleLenders: lenderRanking.entries.length,
+                totalLenders: lenderRanking.totalBanks,
                 densityLabel: density.label,
                 renderedCells: visibleSeries.reduce(function (sum, series) { return sum + series.pointCount; }, 0),
                 selectedCount: selectedKeys.length,
             },
+            lenderRanking: lenderRanking,
             surface: buildSurfaceModel(visibleSeries),
             distribution: buildDistributionModel(rows, fields),
             visibleSeries: visibleSeries,
