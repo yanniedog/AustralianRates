@@ -117,7 +117,7 @@
         if (isVeryNarrow) return trimAxisLabel(bank, 10);
         if (isNarrow) return trimAxisLabel(bank, 14);
         if (!product) return trimAxisLabel(bank, isDense ? 22 : 32);
-        return trimAxisLabel(bank, isDense ? 14 : 18) + ' · ' + trimAxisLabel(product, isDense ? 18 : 22);
+        return trimAxisLabel(bank, isDense ? 14 : 18) + ' | ' + trimAxisLabel(product, isDense ? 18 : 22);
     }
 
     window.AR.chartEchartsHelpers = {

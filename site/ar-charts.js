@@ -100,6 +100,33 @@
         if (chartState.detailChart && !chartState.detailChart.isDisposed()) chartState.detailChart.resize();
     }
 
+    function scheduleResizeCharts() {
+        [0, 120, 320].forEach(function (delay) {
+            setTimeout(resizeCharts, delay);
+        });
+    }
+
+    var responsiveSyncTimer = 0;
+
+    function chartsPanelVisible() {
+        if (!els.panelCharts) return false;
+        if (els.panelCharts.hidden || !els.panelCharts.classList.contains('active')) return false;
+        return window.getComputedStyle(els.panelCharts).display !== 'none';
+    }
+
+    function scheduleResponsiveSync() {
+        scheduleResizeCharts();
+        if (responsiveSyncTimer) window.clearTimeout(responsiveSyncTimer);
+        responsiveSyncTimer = window.setTimeout(function () {
+            responsiveSyncTimer = 0;
+            if (!chartState.rows.length || !chartsPanelVisible()) {
+                resizeCharts();
+                return;
+            }
+            renderFromCache();
+        }, 150);
+    }
+
     function renderFromCache() {
         if (!chartState.rows.length) {
             clearOutput('No chart data is cached yet.');
@@ -138,7 +165,7 @@
         if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'Filters changed. Redraw to fetch fresh chart rows.' : statusText(model, currentFields));
 
         tabState.chartDrawn = true;
-        resizeCharts();
+        scheduleResizeCharts();
     }
 
     function handleMainChartClick(params) {
@@ -258,7 +285,13 @@
     }
     if (chartUi.setIdleState) chartUi.setIdleState();
 
-    window.addEventListener('resize', resizeCharts);
+    window.addEventListener('resize', scheduleResponsiveSync);
+    window.addEventListener('orientationchange', scheduleResponsiveSync);
+    window.addEventListener('ar:tab-changed', function (event) {
+        var tab = event && event.detail ? event.detail.tab : '';
+        if (tab === 'charts') scheduleResponsiveSync();
+    });
+    window.addEventListener('ar:ui-mode-changed', scheduleResponsiveSync);
 
     window.AR.charts = {
         drawChart: drawChart,

@@ -75,9 +75,7 @@
         if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'Filters changed -- click "Load Data for Pivot" to refresh.';
         }
-        if (tabState.activeTab === 'charts' && tabState.chartDrawn && charts && charts.drawChart) {
-            charts.drawChart();
-        } else if (charts && charts.markStale) {
+        if (charts && charts.markStale) {
             charts.markStale('Filters changed. Redraw to fetch fresh chart rows.');
         } else if (tabState.chartDrawn && els.chartStatus) {
             els.chartStatus.textContent = 'Filters changed -- click "Draw Chart" to refresh.';
@@ -181,9 +179,8 @@
     });
     window.addEventListener('ar:tab-changed', function (event) {
         var tab = event && event.detail && event.detail.tab;
-        if (tab === 'charts' && charts && charts.drawChart && !tabState.chartDrawn) {
-            if (filters && filters.validateInputs && !filters.validateInputs()) return;
-            charts.drawChart();
+        if (tab === 'charts' && charts && charts.markStale && tabState.chartDrawn) {
+            charts.markStale('Review the chart controls, then draw to refresh this view.');
         }
     });
     document.addEventListener('keydown', applyFiltersShortcut);

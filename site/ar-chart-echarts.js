@@ -128,6 +128,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var narrow = size && size.width < 760;
+        var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
         var maxValue = maxMetric(entries);
         return {
@@ -154,8 +155,8 @@
                 },
             },
             grid: {
-                left: 18,
-                right: narrow ? 76 : 28,
+                left: compact ? 14 : 18,
+                right: compact ? 66 : (narrow ? 76 : 28),
                 top: 22,
                 bottom: narrow ? 38 : 20,
                 containLabel: true,
@@ -165,8 +166,8 @@
                 min: 0,
                 max: maxValue == null ? null : maxValue * (narrow ? 1.18 : 1.08),
                 splitNumber: narrow ? 4 : 6,
-                name: chartConfig.fieldLabel(fields.yField),
-                nameGap: narrow ? 18 : 26,
+                name: compact ? '' : chartConfig.fieldLabel(fields.yField),
+                nameGap: compact ? 10 : (narrow ? 18 : 26),
                 nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 axisLabel: {
@@ -183,15 +184,15 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: '#0f172a',
-                    width: narrow ? 128 : 180,
+                    width: compact ? 104 : (narrow ? 128 : 180),
                     overflow: 'truncate',
                 },
-                data: entries.map(function (entry) { return trimAxisLabel(entry.bankName, narrow ? 18 : 28); }),
+                data: entries.map(function (entry) { return trimAxisLabel(entry.bankName, compact ? 14 : (narrow ? 18 : 28)); }),
             },
             series: [{
                 name: 'Best product by bank',
                 type: 'bar',
-                barWidth: narrow ? 16 : 18,
+                barWidth: compact ? 14 : (narrow ? 16 : 18),
                 clip: false,
                 data: entries.map(function (entry, index) {
                     return {
@@ -210,8 +211,9 @@
                 label: {
                     show: true,
                     position: 'right',
-                    distance: narrow ? 8 : 10,
+                    distance: compact ? 6 : (narrow ? 8 : 10),
                     color: '#0f172a',
+                    fontSize: compact ? 11 : 12,
                     formatter: function (params) {
                         return metricAxisLabel(fields.yField, params.value, narrow);
                     },
@@ -229,6 +231,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var narrow = size && size.width < 760;
+        var compact = size && size.width < 420;
         var showLegend = !narrow && model.compareSeries.length <= 3;
         var showEndLabels = !narrow && model.compareSeries.length <= 2;
         return {
@@ -279,7 +282,7 @@
             },
             yAxis: {
                 type: 'value',
-                name: chartConfig.fieldLabel(fields.yField),
+                name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 splitNumber: narrow ? 4 : 6,
@@ -327,6 +330,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var narrow = size && size.width < 760;
+        var compact = size && size.width < 420;
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -361,7 +365,7 @@
             },
             yAxis: {
                 type: 'value',
-                name: chartConfig.fieldLabel(fields.yField),
+                name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 splitNumber: narrow ? 4 : 6,

@@ -1,6 +1,19 @@
 .ar-public #panel-charts .chart-shell {
     display: grid;
     gap: 16px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ar-public #panel-charts .chart-shell > *,
+.ar-public #panel-charts .chart-hero,
+.ar-public #panel-charts .chart-hero > *,
+.ar-public #panel-charts .chart-canvas-shell,
+.ar-public #panel-charts .chart-canvas-shell > *,
+.ar-public #panel-charts .chart-series-rail > *,
+.ar-public #panel-charts .chart-meta {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .ar-public #panel-charts .chart-hero,
@@ -25,6 +38,11 @@
     padding: 22px;
     position: relative;
     overflow: hidden;
+    border-color: rgba(10, 54, 98, 0.82);
+    background:
+        radial-gradient(circle at top right, rgba(95, 186, 255, 0.24), transparent 36%),
+        linear-gradient(155deg, #0d2344, #163d6d);
+    box-shadow: 0 18px 36px rgba(8, 25, 49, 0.22);
 }
 
 .ar-public #panel-charts .chart-hero::after {
@@ -44,6 +62,7 @@
 .ar-public #panel-charts .chart-series-rail-header,
 .ar-public #panel-charts .chart-spotlight-copy {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
 }
 
@@ -51,7 +70,7 @@
 .ar-public #panel-charts .chart-series-kicker,
 .ar-public #panel-charts .chart-data-summary-kicker {
     margin: 0;
-    color: var(--ar-accent);
+    color: #8cc7ff;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.14em;
@@ -64,6 +83,10 @@
     margin: 0;
     color: var(--ar-strong);
     letter-spacing: -0.045em;
+}
+
+.ar-public #panel-charts .chart-hero-copy h2 {
+    color: #f7fbff;
 }
 
 .ar-public #panel-charts .chart-hero-copy h2 {
@@ -91,6 +114,11 @@
     color: var(--ar-muted);
     font-size: 0.92rem;
     line-height: 1.55;
+}
+
+.ar-public #panel-charts .chart-hero-note,
+.ar-public #panel-charts .chart-guidance {
+    color: #dce9ff;
 }
 
 .ar-public #panel-charts .chart-presets {
@@ -223,6 +251,13 @@
 
 .ar-public #panel-charts .chart-meta {
     gap: 10px;
+    padding: 16px 18px;
+    border: 1px solid rgba(10, 54, 98, 0.78);
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at top right, rgba(95, 186, 255, 0.16), transparent 38%),
+        linear-gradient(155deg, #0f2647, #173b67);
+    box-shadow: 0 14px 30px rgba(8, 25, 49, 0.18);
 }
 
 .ar-public #panel-charts .chart-summary {
@@ -236,30 +271,30 @@
     align-items: center;
     gap: 6px;
     padding: 0.44rem 0.78rem;
-    border: 1px solid rgba(0, 113, 227, 0.12);
+    border: 1px solid rgba(226, 238, 255, 0.12);
     border-radius: 999px;
-    background: #f6f9ff;
-    color: #274469;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e6efff;
     font-size: 0.8rem;
     font-weight: 600;
 }
 
 .ar-public #panel-charts .chart-summary-pill.is-emphasis {
-    background: rgba(0, 113, 227, 0.10);
-    border-color: rgba(0, 113, 227, 0.16);
-    color: #0b4ea2;
+    background: rgba(79, 210, 255, 0.18);
+    border-color: rgba(122, 207, 255, 0.22);
+    color: #ffffff;
 }
 
 .ar-public #panel-charts .chart-summary-pill.is-config {
-    background: #eef6ff;
-    border-color: rgba(0, 113, 227, 0.12);
-    color: #30537f;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(226, 238, 255, 0.12);
+    color: #dce9ff;
 }
 
 .ar-public #panel-charts .chart-summary-pill.is-warning {
-    background: #fff8e9;
-    border-color: rgba(236, 179, 107, 0.35);
-    color: #8b5e00;
+    background: rgba(236, 179, 107, 0.16);
+    border-color: rgba(236, 179, 107, 0.26);
+    color: #ffe5b6;
 }
 
 .ar-public #panel-charts .chart-canvas-shell {
@@ -296,6 +331,16 @@
     min-height: inherit;
 }
 
+.ar-public #panel-charts #chart-output > div,
+.ar-public #panel-charts .chart-detail-output > div,
+.ar-public #panel-charts #chart-output canvas,
+.ar-public #panel-charts #chart-output svg,
+.ar-public #panel-charts .chart-detail-output canvas,
+.ar-public #panel-charts .chart-detail-output svg {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
 .ar-public #panel-charts #chart-output canvas,
 .ar-public #panel-charts #chart-output svg {
     border-radius: 20px;
@@ -315,6 +360,7 @@
     position: sticky;
     top: 16px;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(160px, 180px) minmax(140px, 1fr);
     gap: 12px;
     height: clamp(440px, 60vh, 620px);
@@ -326,8 +372,15 @@
     scrollbar-gutter: stable;
 }
 
+.ar-public #panel-charts .chart-series-rail > * {
+    width: 100%;
+    min-width: 0;
+}
+
 .ar-public #panel-charts .chart-point-details {
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
     padding: 14px;
     background:
         radial-gradient(circle at top right, rgba(0, 113, 227, 0.06), transparent 34%),
@@ -337,7 +390,10 @@
 .ar-public #panel-charts .chart-spotlight-card,
 .ar-public #panel-charts .chart-spotlight-empty {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .ar-public #panel-charts .chart-spotlight-card strong,
@@ -351,6 +407,8 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .ar-public #panel-charts .chart-spotlight-grid span {
@@ -362,6 +420,8 @@
     background: #ffffff;
     color: var(--ar-text);
     font-size: 0.84rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .ar-public #panel-charts .chart-spotlight-grid strong {
@@ -375,6 +435,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .ar-public #panel-charts .chart-point-link,
@@ -400,8 +462,11 @@
     gap: 10px;
     min-height: 140px;
     overflow: auto;
+    overflow-x: hidden;
     align-content: start;
     padding-right: 4px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .ar-public #panel-charts .chart-series-card {
@@ -409,6 +474,8 @@
     display: grid;
     gap: 6px;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     padding: 11px 12px;
     border: 1px solid var(--ar-line);
     border-left: 4px solid var(--series-accent);
@@ -438,6 +505,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .ar-public #panel-charts .chart-series-name-wrap {
@@ -480,6 +549,36 @@
     color: var(--ar-muted);
 }
 
+.ar-public #panel-charts .chart-series-rail,
+.ar-public #panel-charts .chart-point-details,
+.ar-public #panel-charts .chart-spotlight-copy,
+.ar-public #panel-charts .chart-spotlight-metrics,
+.ar-public #panel-charts .chart-spotlight-grid,
+.ar-public #panel-charts .chart-spotlight-link-row,
+.ar-public #panel-charts .chart-summary-pill,
+.ar-public #panel-charts .chart-point-link,
+.ar-public #panel-charts .chart-summary-link.is-muted {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ar-public #panel-charts .chart-series-rail,
+.ar-public #panel-charts .chart-point-details {
+    overflow-x: hidden;
+}
+
+.ar-public #panel-charts .chart-spotlight-copy strong,
+.ar-public #panel-charts .chart-spotlight-subtitle,
+.ar-public #panel-charts .chart-point-link,
+.ar-public #panel-charts .chart-summary-link.is-muted {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ar-public #panel-charts .chart-spotlight-copy strong {
+    line-height: 1.35;
+}
+
 @media (max-width: 1240px) {
     .ar-public #panel-charts .chart-hero,
     .ar-public #panel-charts .chart-canvas-shell {
@@ -496,7 +595,8 @@
         min-height: auto;
         max-height: none;
         grid-template-rows: auto auto minmax(180px, 220px) minmax(0, auto);
-        overflow: visible;
+        overflow-x: hidden;
+        overflow-y: visible;
     }
 }
 
@@ -532,6 +632,37 @@
 }
 
 @media (max-width: 560px) {
+    .ar-public #panel-charts .chart-hero {
+        padding: 16px;
+        gap: 14px;
+    }
+
+    .ar-public #panel-charts .chart-hero-copy h2 {
+        font-size: 1.92rem;
+        line-height: 1.02;
+    }
+
+    .ar-public #panel-charts .chart-meta {
+        padding: 14px;
+    }
+
+    .ar-public #panel-charts .chart-summary {
+        gap: 6px;
+    }
+
+    .ar-public #panel-charts .chart-summary-pill {
+        font-size: 0.76rem;
+    }
+
+    .ar-public #panel-charts .chart-main-stage {
+        height: 320px;
+        min-height: 320px;
+    }
+
+    .ar-public #panel-charts #chart-output {
+        min-height: 320px !important;
+    }
+
     .ar-public #panel-charts .chart-series-topline,
     .ar-public #panel-charts .chart-series-meta,
     .ar-public #panel-charts .chart-spotlight-link-row {
@@ -550,6 +681,13 @@
     }
 
     .ar-public #panel-charts .chart-spotlight-grid span {
+        display: grid;
+        gap: 4px;
         flex-basis: 100%;
+    }
+
+    .ar-public #panel-charts .chart-spotlight-grid strong {
+        display: block;
+        margin-right: 0;
     }
 }

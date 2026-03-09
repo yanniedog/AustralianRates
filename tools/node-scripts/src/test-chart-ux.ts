@@ -2,6 +2,25 @@
 const { chromium } = require('playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
+const testUrlObj = new URL(TEST_URL);
+const baseOrigin = testUrlObj.origin;
+const sharedParams = new URLSearchParams(testUrlObj.search || '');
+
+function withSharedQuery(path, apiBasePath) {
+    const params = new URLSearchParams(sharedParams.toString());
+    if (apiBasePath && params.has('apiBase')) {
+        const currentApiBase = params.get('apiBase');
+        try {
+            const parsedApiBase = new URL(String(currentApiBase || ''));
+            parsedApiBase.pathname = apiBasePath;
+            params.set('apiBase', parsedApiBase.toString());
+        } catch (_) {
+            // Ignore invalid overrides and keep the original query value.
+        }
+    }
+    const query = params.toString();
+    return baseOrigin + path + (query ? ('?' + query) : '');
+}
 
 function parseRgb(input) {
     const match = String(input || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
@@ -57,7 +76,10 @@ async function inspectWorkspace(page) {
         const shell = document.querySelector('#panel-charts .chart-shell');
         const stage = document.querySelector('#panel-charts .chart-main-stage');
         const rail = document.querySelector('#panel-charts .chart-series-rail');
+        const pointDetails = document.getElementById('chart-point-details');
         const output = document.getElementById('chart-output');
+        const summaryTable = document.querySelector('#chart-data-summary .chart-data-summary-table');
+        const summaryCells = summaryTable ? Array.from(summaryTable.querySelectorAll('td')) : [];
         const title = document.querySelector('#panel-charts .chart-hero-copy h2');
         const guidance = document.getElementById('chart-guidance');
         const summary = document.getElementById('chart-summary');
@@ -74,8 +96,11 @@ async function inspectWorkspace(page) {
             summaryText: summary ? String(summary.textContent || '') : '',
             noteText: note ? String(note.textContent || '') : '',
             shellFits: !!(shell && shell.scrollWidth <= shell.clientWidth + 1),
+            railFits: !!(rail && rail.scrollWidth <= rail.clientWidth + 1),
+            spotlightFits: !!(pointDetails && pointDetails.scrollWidth <= pointDetails.clientWidth + 1),
             stageHeight: stageRect ? stageRect.height : 0,
             railHeight: railRect ? railRect.height : 0,
+            summaryCellsHaveLabels: summaryCells.length > 0 && summaryCells.every((cell) => cell.hasAttribute('data-label')),
             titleColor,
             guidanceColor,
             outputHasGradient: !!(outputStyle && /gradient/i.test(String(outputStyle.backgroundImage || ''))),
@@ -91,6 +116,8 @@ async function verifyChartWorkspace(page, label, options) {
     const info = await inspectWorkspace(page);
     if (info.view !== options.expectedView) failures.push(`${label}: expected ${options.expectedView} view, got ${info.view || 'none'}`);
     if (!info.shellFits) failures.push(`${label}: chart shell has horizontal overflow`);
+    if (!info.railFits) failures.push(`${label}: chart series rail has horizontal overflow`);
+    if (!info.spotlightFits) failures.push(`${label}: spotlight panel has horizontal overflow`);
     if (!info.outputHasGradient && /255,\s*255,\s*255/.test(info.outputBackgroundColor)) {
         failures.push(`${label}: chart output background fell back to white`);
     }
@@ -175,19 +202,27 @@ async function verifyMobile(url) {
             const shell = document.querySelector('#panel-charts .chart-shell');
             const output = document.getElementById('chart-output');
             const rail = document.querySelector('#panel-charts .chart-series-rail');
+            const pointDetails = document.getElementById('chart-point-details');
+            const summaryCells = Array.from(document.querySelectorAll('#chart-data-summary td'));
             return {
                 pageFits: document.documentElement.scrollWidth <= window.innerWidth,
                 shellFits: !!(shell && shell.scrollWidth <= shell.clientWidth + 1),
+                railFits: !!(rail && rail.scrollWidth <= rail.clientWidth + 1),
+                spotlightFits: !!(pointDetails && pointDetails.scrollWidth <= pointDetails.clientWidth + 1),
                 outputWidth: output ? output.getBoundingClientRect().width : 0,
                 railWidth: rail ? rail.getBoundingClientRect().width : 0,
                 panelVisible: !!(panel && !panel.hasAttribute('hidden')),
+                summaryCellsHaveLabels: summaryCells.length > 0 && summaryCells.every((cell) => cell.hasAttribute('data-label')),
             };
         });
         if (!mobile.panelVisible) failures.push('Mobile: chart panel is not visible');
         if (!mobile.pageFits) failures.push('Mobile: page has horizontal overflow');
         if (!mobile.shellFits) failures.push('Mobile: chart shell has horizontal overflow');
+        if (!mobile.railFits) failures.push('Mobile: chart rail has horizontal overflow');
+        if (!mobile.spotlightFits) failures.push('Mobile: spotlight panel has horizontal overflow');
         if (mobile.outputWidth < 260) failures.push(`Mobile: chart output is too narrow (${mobile.outputWidth}px)`);
         if (mobile.railWidth < 260) failures.push(`Mobile: chart rail is too narrow (${mobile.railWidth}px)`);
+        if (!mobile.summaryCellsHaveLabels) failures.push('Mobile: chart summary cells are missing responsive labels');
     } finally {
         await browser.close();
     }
@@ -201,12 +236,12 @@ async function main() {
     const sections = [
         {
             name: 'Home loans',
-            url: TEST_URL,
+            url: withSharedQuery('/', '/api/home-loan-rates'),
             configure: configureHomeLoanSlice,
             expectedSliceText: ['owner', 'principal', '80-85'],
         },
-        { name: 'Savings', url: new URL('/savings/', TEST_URL).toString() },
-        { name: 'Term deposits', url: new URL('/term-deposits/', TEST_URL).toString() },
+        { name: 'Savings', url: withSharedQuery('/savings/', '/api/savings-rates') },
+        { name: 'Term deposits', url: withSharedQuery('/term-deposits/', '/api/term-deposit-rates') },
     ];
 
     try {

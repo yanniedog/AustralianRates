@@ -590,6 +590,31 @@
         min-height: 220px;
     }
 
+    #pivot-output {
+        padding: 10px;
+    }
+
+    #pivot-output .pvtUi {
+        gap: 10px;
+    }
+
+    #pivot-output .pvtUi .pvtUnused,
+    #pivot-output .pvtUi .pvtRows,
+    #pivot-output .pvtUi .pvtCols,
+    #pivot-output .pvtUi .pvtRendererArea {
+        min-width: 0;
+        overflow: auto;
+    }
+
+    #pivot-output .pvtAxisContainer li {
+        max-width: 100%;
+    }
+
+    #pivot-output .pvtTable {
+        min-width: 540px;
+        font-size: 0.82rem;
+    }
+
     .tabulator .tabulator-col .tabulator-col-content,
     .tabulator .tabulator-cell {
         padding: 9px 8px !important;

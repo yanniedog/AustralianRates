@@ -48,8 +48,8 @@
         }).join('');
 
         var rowsHtml = rows.map(function (cells) {
-            return '<tr>' + cells.map(function (cell) {
-                return '<td>' + cell + '</td>';
+            return '<tr>' + cells.map(function (cell, index) {
+                return '<td data-label="' + hrefValue(headers[index] || '') + '">' + cell + '</td>';
             }).join('') + '</tr>';
         }).join('');
 
