@@ -67,8 +67,8 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Daily ingest only (Wayback cron removed for now).
-crons = ["5 * * * *", "*/15 * * * *"]
+# Rate check every 6 hours; wayback/site health every 15 min.
+crons = ["0 */6 * * *", "*/15 * * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
