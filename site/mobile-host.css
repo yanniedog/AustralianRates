@@ -166,11 +166,28 @@ html[data-ar-host-variant="mobile"] body.ar-public .filter-primary-group,
 html[data-ar-host-variant="mobile"] body.ar-public .filters-grid,
 html[data-ar-host-variant="mobile"] body.ar-public .chart-controls {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+}
+
+html[data-ar-host-variant="mobile"] body.ar-public .filter-primary-group > label:first-of-type {
+    grid-column: 1;
+    grid-row: 1;
 }
 
 html[data-ar-host-variant="mobile"] body.ar-public .filter-primary-group .filter-range {
     grid-template-columns: 1fr;
-    grid-column: auto;
+    grid-column: 1;
+    grid-row: 2;
+}
+
+html[data-ar-host-variant="mobile"] body.ar-public .filter-primary-group > label:nth-of-type(2) {
+    grid-column: 1;
+    grid-row: 3;
+}
+
+html[data-ar-host-variant="mobile"] body.ar-public .filter-primary-group > label:nth-of-type(3) {
+    grid-column: 1;
+    grid-row: 4;
 }
 
 html[data-ar-host-variant="mobile"] body.ar-public .chart-canvas-shell {
