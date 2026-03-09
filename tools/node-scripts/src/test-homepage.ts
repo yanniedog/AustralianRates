@@ -1222,6 +1222,13 @@ async function runTests() {
         
         // Test 9: Check Rate Explorer table
         console.log('\nTest 9: Checking Rate Explorer table data...');
+        // Expand rate table section (it is collapsed by default)
+        const rateTableDetails = page.locator('#rate-table-details');
+        const detailsOpen = await rateTableDetails.getAttribute('open');
+        if (!detailsOpen) {
+            await page.click('#rate-table-details .rate-table-toggle');
+            await page.waitForTimeout(300);
+        }
         await page.click('#mode-analyst');
         await page.waitForTimeout(700);
         
@@ -1681,6 +1688,12 @@ async function runTests() {
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
             await page.waitForSelector('#main-content', { timeout: 8000 });
             await page.waitForTimeout(1500);
+            // Expand rate table section (collapsed by default)
+            const sectionRateTableDetails = page.locator('#rate-table-details');
+            if (!(await sectionRateTableDetails.getAttribute('open'))) {
+                await page.click('#rate-table-details .rate-table-toggle');
+                await page.waitForTimeout(300);
+            }
             await verifyFooterDeployStatus(name);
             await verifyFooterLogControls(name);
             await verifyFooterLegalLinks(name);
