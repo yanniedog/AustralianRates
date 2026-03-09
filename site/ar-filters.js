@@ -5,6 +5,7 @@
     var dom = window.AR.dom;
     var config = window.AR.config;
     var state = window.AR.state;
+    var filterUi = window.AR.filterUi || {};
     var sc = window.AR.sectionConfig || {};
     var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
@@ -152,6 +153,7 @@
         if (els.filterMode) els.filterMode.value = 'all';
         if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
         if (els.refreshInterval) els.refreshInterval.value = '60';
+        if (filterUi && filterUi.resetUi) filterUi.resetUi();
         refreshFilterUiState();
     }
 
@@ -248,6 +250,9 @@
                 return '<option value="' + esc(v) + '">' + esc(label || v) + '</option>';
             }).join('');
             setSelectedValues(el, currentValues);
+            if (el === els.filterBank && filterUi && filterUi.refreshBankOptions) {
+                filterUi.refreshBankOptions();
+            }
             return;
         }
 
@@ -327,8 +332,17 @@
             if (value) p[field.param] = value;
         }
 
-        if (els.filterStartDate && els.filterStartDate.value) p.start_date = els.filterStartDate.value;
-        if (els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
+        var startMeta = filterUi && filterUi.normalizeDateValue
+            ? filterUi.normalizeDateValue(els.filterStartDate ? els.filterStartDate.value : '')
+            : null;
+        var endMeta = filterUi && filterUi.normalizeDateValue
+            ? filterUi.normalizeDateValue(els.filterEndDate ? els.filterEndDate.value : '')
+            : null;
+
+        if (startMeta && startMeta.ok && !startMeta.empty) p.start_date = startMeta.value;
+        else if (!startMeta && els.filterStartDate && els.filterStartDate.value) p.start_date = els.filterStartDate.value;
+        if (endMeta && endMeta.ok && !endMeta.empty) p.end_date = endMeta.value;
+        else if (!endMeta && els.filterEndDate && els.filterEndDate.value) p.end_date = els.filterEndDate.value;
         if (isAnalystMode()) {
             if (els.filterMode && els.filterMode.value) p.mode = els.filterMode.value;
             if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
@@ -422,6 +436,11 @@
             restored.include_removed = String(nextPrefs.showRemoved);
         }
 
+        if (filterUi && filterUi.refreshBankOptions) filterUi.refreshBankOptions();
+        if (filterUi && filterUi.validateDateInputs) {
+            filterUi.validateDateInputs({ focusInvalid: false });
+        }
+
         clientLog('info', 'Filter URL state restored', restored);
     }
 
@@ -457,6 +476,7 @@
                 });
             }
             restoreUrlState();
+            if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
             markFiltersApplied();
@@ -465,6 +485,7 @@
                 message: err && err.message ? err.message : String(err),
             });
             restoreUrlState();
+            if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
             markFiltersApplied();
@@ -482,6 +503,11 @@
         refreshFilterUiState: refreshFilterUiState,
         markFiltersApplied: markFiltersApplied,
         bindInteractionListeners: bindInteractionListeners,
+        validateInputs: function () {
+            return filterUi && filterUi.validateDateInputs
+                ? filterUi.validateDateInputs()
+                : true;
+        },
         getFiltersPayload: function () { return latestFilterPayload; },
         readColumnPrefs: readColumnPrefs,
         writeColumnPrefs: writeColumnPrefs,

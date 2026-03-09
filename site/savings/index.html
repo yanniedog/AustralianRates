@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="../public-data-widgets.css?v=20260307-pivot-fix">
     <link rel="stylesheet" href="../public-pivot.css">
     <link rel="stylesheet" href="../public-charts.css">
+    <link rel="stylesheet" href="../public-chart-summary.css">
     <script src="../theme.js"></script>
 </head>
 <body class="ar-public ar-section-savings" data-ar-section="savings">
@@ -106,23 +107,35 @@
                 <section class="panel panel-wide" aria-label="Primary filters">
                     <div class="filter-primary-group">
                         <label>Banks
-                            <select id="filter-bank" multiple size="4"></select>
+                            <span class="filter-bank-tools">
+                                <input id="filter-bank-search" type="search" placeholder="Search banks" aria-describedby="filter-bank-help">
+                                <button id="filter-bank-clear" class="small secondary filter-bank-clear" type="button">All banks</button>
+                            </span>
+                            <select id="filter-bank" multiple size="4" aria-describedby="filter-bank-help"></select>
+                            <span id="filter-bank-help" class="filter-helper">Search to narrow the list or use All banks to clear your selection.</span>
                         </label>
                         <div class="filter-range">
-                            <label>Min rate
-                                <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="1.50">
+                            <label>Min headline rate
+                                <input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="1.50" aria-describedby="primary-rate-help">
                             </label>
-                            <label>Max rate
-                                <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="6.00">
+                            <label>Max headline rate
+                                <input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="6.00" aria-describedby="primary-rate-help">
                             </label>
                         </div>
                         <label>From
-                            <input id="filter-start-date" type="date">
+                            <input id="filter-start-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" aria-describedby="filter-date-status">
                         </label>
                         <label>To
-                            <input id="filter-end-date" type="date">
+                            <input id="filter-end-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" aria-describedby="filter-date-status">
                         </label>
                     </div>
+                    <p id="primary-rate-help" class="filter-helper filter-primary-note">These limits apply to the headline rate shown in the table.</p>
+                    <div class="date-quick-actions" role="group" aria-label="Quick date ranges">
+                        <button class="small secondary date-quick-btn" type="button" data-date-range="7">Last 7 days</button>
+                        <button class="small secondary date-quick-btn" type="button" data-date-range="30">Last 30 days</button>
+                        <button class="small secondary date-quick-btn" type="button" data-date-range="all">All history</button>
+                    </div>
+                    <p id="filter-date-status" class="filter-helper input-helper" aria-live="polite">Enter dates in YYYY-MM-DD format.</p>
                     <div class="filter-primary-actions">
                         <div class="filter-primary-actions-main">
                             <button id="apply-filters" class="small" type="button">Apply</button>
@@ -139,14 +152,14 @@
                             <span id="last-refreshed" class="hint"></span>
                         </div>
                     </div>
-                </section>
-
-                <details class="filters panel filters-collapsible" id="filter-bar">
-                    <summary class="filters-toggle" aria-label="Show or hide filter settings">Advanced analysis</summary>
                     <div class="filter-state-row">
                         <span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span>
                         <div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>
                     </div>
+                </section>
+
+                <details class="filters panel filters-collapsible" id="filter-bar">
+                    <summary class="filters-toggle" aria-label="Show or hide filter settings">Advanced analysis</summary>
                     <div class="filters-grid">
                         <label title="Savings, transaction, or at-call">Account type
                             <select id="filter-account-type"><option value="">All</option></select>
@@ -291,6 +304,9 @@
                                     </div>
                                 </aside>
                             </div>
+                            <div id="chart-data-summary" class="chart-data-summary" aria-live="polite">
+                                <p class="chart-data-summary-empty">Draw a chart to populate the summary table.</p>
+                            </div>
                         </div>
                         <p id="chart-status" class="hint">Choose a view, adjust the metric or density, then draw.</p>
                     </div>
@@ -345,6 +361,7 @@
     <script src="../ar-dom.js"></script>
     <script src="../ar-state.js"></script>
     <script src="../ar-tabs.js"></script>
+    <script src="../ar-filter-ui.js"></script>
     <script src="../ar-filters.js"></script>
     <script src="../ar-hero.js"></script>
     <script src="../ar-explorer.js"></script>
@@ -353,6 +370,7 @@
     <script src="../ar-chart-data.js"></script>
     <script src="../ar-chart-echarts.js"></script>
     <script src="../ar-chart-ui.js"></script>
+    <script src="../ar-chart-summary.js"></script>
     <script src="../ar-charts.js"></script>
     <script src="../ar-refresh.js"></script>
     <script src="../ar-export.js"></script>

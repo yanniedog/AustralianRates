@@ -179,7 +179,6 @@
                 '<span class="site-brand-mark" aria-hidden="true">AR</span>' +
                 '<div class="site-brand-copy">' +
                     '<h1 class="site-brand"><a href="/">AustralianRates</a></h1>' +
-                    '<p class="site-brand-tag">' + esc(getHeaderTagline(context)) + '</p>' +
                 '</div>' +
             '</div>' +
             '<nav class="site-nav" aria-label="Site navigation">' +

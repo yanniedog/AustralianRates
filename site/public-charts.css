@@ -10,15 +10,12 @@
 .ar-public #panel-charts .chart-series-rail,
 .ar-public #panel-charts .chart-point-details,
 .ar-public #panel-charts .chart-detail-output {
-    border: 1px solid rgba(141, 172, 217, 0.18);
+    border: 1px solid rgba(210, 210, 215, 0.92);
     border-radius: 24px;
     background:
-        linear-gradient(180deg, rgba(11, 17, 31, 0.96), rgba(8, 13, 24, 0.93)),
-        radial-gradient(circle at top right, rgba(79, 141, 255, 0.14), transparent 42%);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.05),
-        0 20px 48px rgba(4, 10, 22, 0.2);
-    backdrop-filter: blur(18px);
+        radial-gradient(circle at top right, rgba(0, 113, 227, 0.08), transparent 38%),
+        linear-gradient(180deg, #ffffff, #f8fbff);
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
 }
 
 .ar-public #panel-charts .chart-hero {
@@ -38,7 +35,7 @@
     width: 260px;
     height: 260px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(79, 210, 255, 0.18), transparent 70%);
+    background: radial-gradient(circle, rgba(0, 113, 227, 0.12), transparent 72%);
     pointer-events: none;
 }
 
@@ -51,9 +48,10 @@
 }
 
 .ar-public #panel-charts .chart-kicker,
-.ar-public #panel-charts .chart-series-kicker {
+.ar-public #panel-charts .chart-series-kicker,
+.ar-public #panel-charts .chart-data-summary-kicker {
     margin: 0;
-    color: #8ebaf4;
+    color: var(--ar-accent);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.14em;
@@ -61,9 +59,10 @@
 }
 
 .ar-public #panel-charts .chart-hero-copy h2,
-.ar-public #panel-charts .chart-series-rail-header h3 {
+.ar-public #panel-charts .chart-series-rail-header h3,
+.ar-public #panel-charts .chart-data-summary-header h3 {
     margin: 0;
-    color: #f5f8ff;
+    color: var(--ar-strong);
     letter-spacing: -0.045em;
 }
 
@@ -72,8 +71,9 @@
     line-height: 0.98;
 }
 
-.ar-public #panel-charts .chart-series-rail-header h3 {
-    font-size: 1.28rem;
+.ar-public #panel-charts .chart-series-rail-header h3,
+.ar-public #panel-charts .chart-data-summary-header h3 {
+    font-size: 1.22rem;
 }
 
 .ar-public #panel-charts .chart-hero-note,
@@ -85,9 +85,10 @@
 .ar-public #panel-charts .chart-spotlight-empty span,
 .ar-public #panel-charts .chart-spotlight-subtitle,
 .ar-public #panel-charts .chart-spotlight-link.is-muted,
-.ar-public #panel-charts .chart-series-caption {
+.ar-public #panel-charts .chart-series-caption,
+.ar-public #panel-charts .chart-data-summary-empty {
     margin: 0;
-    color: #c3d7f3;
+    color: var(--ar-muted);
     font-size: 0.92rem;
     line-height: 1.55;
 }
@@ -112,26 +113,26 @@
 .ar-public #panel-charts .chart-preset {
     min-width: 116px;
     padding: 0.82rem 1.02rem;
-    border: 1px solid rgba(126, 176, 255, 0.18);
+    border: 1px solid var(--ar-line);
     border-radius: 999px;
-    background: rgba(17, 27, 46, 0.92);
-    color: #edf4ff;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    background: #ffffff;
+    color: var(--ar-muted);
+    box-shadow: none;
 }
 
 .ar-public #panel-charts .chart-preset:hover,
 .ar-public #panel-charts .chart-series-card:hover,
 .ar-public #panel-charts .chart-advanced summary:hover {
     transform: translateY(-1px);
-    border-color: rgba(126, 176, 255, 0.38);
-    background: rgba(24, 38, 63, 0.96);
+    border-color: rgba(0, 113, 227, 0.28);
+    background: #eef6ff;
 }
 
 .ar-public #panel-charts .chart-preset.is-active,
 .ar-public #panel-charts .chart-preset[aria-pressed="true"] {
     border-color: transparent;
-    background: linear-gradient(135deg, rgba(79, 141, 255, 0.96), rgba(79, 210, 255, 0.9));
-    color: #06111f;
+    background: var(--ar-accent);
+    color: #ffffff;
     font-weight: 700;
 }
 
@@ -147,7 +148,7 @@
 .ar-public #panel-charts .chart-advanced-grid label {
     display: grid;
     gap: 8px;
-    color: #d9e7fa;
+    color: var(--ar-muted);
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -159,16 +160,16 @@
     min-height: 48px;
     padding-right: 2.4rem;
     border-radius: 16px;
-    border: 1px solid rgba(145, 172, 217, 0.18);
-    background: rgba(7, 13, 25, 0.94);
-    color: #f1f7ff;
+    border: 1px solid var(--ar-line);
+    background: #ffffff;
+    color: var(--ar-text);
 }
 
 .ar-public #panel-charts .chart-controls select:hover,
 .ar-public #panel-charts .chart-controls select:focus-visible,
 .ar-public #panel-charts .chart-advanced-grid select:hover,
 .ar-public #panel-charts .chart-advanced-grid select:focus-visible {
-    border-color: rgba(126, 176, 255, 0.42);
+    border-color: rgba(0, 113, 227, 0.38);
 }
 
 .ar-public #panel-charts .chart-actions {
@@ -180,14 +181,14 @@
     width: 100%;
     min-height: 48px;
     border-color: transparent;
-    background: linear-gradient(135deg, rgba(79, 141, 255, 0.96), rgba(79, 210, 255, 0.9));
-    color: #06111f;
+    background: var(--ar-accent);
+    color: #ffffff;
     font-weight: 700;
-    box-shadow: 0 18px 32px rgba(79, 141, 255, 0.18);
+    box-shadow: 0 16px 30px rgba(0, 113, 227, 0.14);
 }
 
 .ar-public #panel-charts .chart-actions .small:hover {
-    background: linear-gradient(135deg, rgba(110, 165, 255, 0.96), rgba(111, 225, 255, 0.9));
+    background: #005fc1;
 }
 
 .ar-public #panel-charts .chart-advanced {
@@ -198,10 +199,10 @@
     cursor: pointer;
     list-style: none;
     padding: 0.72rem 0.86rem;
-    border: 1px solid rgba(126, 176, 255, 0.12);
+    border: 1px solid var(--ar-line);
     border-radius: 16px;
-    background: rgba(14, 22, 38, 0.68);
-    color: #e8f1ff;
+    background: #f6f9ff;
+    color: var(--ar-text);
     font-size: 0.92rem;
     font-weight: 700;
 }
@@ -235,29 +236,30 @@
     align-items: center;
     gap: 6px;
     padding: 0.44rem 0.78rem;
-    border: 1px solid rgba(130, 159, 201, 0.22);
+    border: 1px solid rgba(0, 113, 227, 0.12);
     border-radius: 999px;
-    background: rgba(18, 29, 50, 0.88);
-    color: #edf4ff;
+    background: #f6f9ff;
+    color: #274469;
     font-size: 0.8rem;
     font-weight: 600;
 }
 
 .ar-public #panel-charts .chart-summary-pill.is-emphasis {
-    background: rgba(79, 141, 255, 0.18);
-    border-color: rgba(126, 176, 255, 0.28);
+    background: rgba(0, 113, 227, 0.10);
+    border-color: rgba(0, 113, 227, 0.16);
+    color: #0b4ea2;
 }
 
 .ar-public #panel-charts .chart-summary-pill.is-config {
-    background: rgba(22, 42, 72, 0.84);
-    border-color: rgba(98, 151, 236, 0.22);
-    color: #dceaff;
+    background: #eef6ff;
+    border-color: rgba(0, 113, 227, 0.12);
+    color: #30537f;
 }
 
 .ar-public #panel-charts .chart-summary-pill.is-warning {
-    background: rgba(236, 179, 107, 0.16);
-    border-color: rgba(236, 179, 107, 0.24);
-    color: #ffe2be;
+    background: #fff8e9;
+    border-color: rgba(236, 179, 107, 0.35);
+    color: #8b5e00;
 }
 
 .ar-public #panel-charts .chart-canvas-shell {
@@ -285,8 +287,8 @@
     border: 0 !important;
     border-radius: 24px !important;
     background:
-        radial-gradient(circle at top left, rgba(79, 141, 255, 0.08), transparent 34%),
-        linear-gradient(180deg, rgba(8, 14, 26, 0.98), rgba(5, 9, 18, 0.96)) !important;
+        radial-gradient(circle at top left, rgba(0, 113, 227, 0.08), transparent 34%),
+        linear-gradient(180deg, #fbfdff, #f4f8ff) !important;
     overflow: hidden !important;
 }
 
@@ -306,7 +308,7 @@
     place-items: center;
     padding: 18px;
     text-align: center;
-    background: linear-gradient(180deg, rgba(10, 17, 32, 0.94), rgba(5, 9, 18, 0.96));
+    background: linear-gradient(180deg, #fbfdff, #f1f6ff);
 }
 
 .ar-public #panel-charts .chart-series-rail {
@@ -325,6 +327,9 @@
 .ar-public #panel-charts .chart-point-details {
     min-height: 0;
     padding: 14px;
+    background:
+        radial-gradient(circle at top right, rgba(0, 113, 227, 0.06), transparent 34%),
+        linear-gradient(180deg, #ffffff, #f7faff);
 }
 
 .ar-public #panel-charts .chart-spotlight-card,
@@ -335,7 +340,7 @@
 
 .ar-public #panel-charts .chart-spotlight-card strong,
 .ar-public #panel-charts .chart-spotlight-empty strong {
-    color: #f5f8ff;
+    color: var(--ar-strong);
     font-size: 1rem;
 }
 
@@ -350,15 +355,15 @@
     flex: 1 1 46%;
     min-width: 0;
     padding: 0.68rem 0.8rem;
-    border: 1px solid rgba(145, 172, 217, 0.14);
+    border: 1px solid var(--ar-line);
     border-radius: 16px;
-    background: rgba(9, 15, 28, 0.8);
-    color: #e4eefc;
+    background: #ffffff;
+    color: var(--ar-text);
     font-size: 0.84rem;
 }
 
 .ar-public #panel-charts .chart-spotlight-grid strong {
-    color: #8ebaf4;
+    color: var(--ar-accent);
     margin-right: 0.28rem;
     font-size: 0.8rem;
 }
@@ -370,9 +375,15 @@
     gap: 12px;
 }
 
-.ar-public #panel-charts .chart-point-link {
-    color: #8adfff;
+.ar-public #panel-charts .chart-point-link,
+.ar-public #panel-charts .chart-summary-link {
+    color: var(--ar-accent);
     font-weight: 700;
+}
+
+.ar-public #panel-charts .chart-summary-link.is-muted {
+    color: var(--ar-muted);
+    font-weight: 500;
 }
 
 .ar-public #panel-charts .chart-detail-output {
@@ -392,16 +403,16 @@
 }
 
 .ar-public #panel-charts .chart-series-card {
-    --series-accent: #4f8dff;
+    --series-accent: #1259c3;
     display: grid;
     gap: 6px;
     width: 100%;
     padding: 11px 12px;
-    border: 1px solid rgba(145, 172, 217, 0.14);
+    border: 1px solid var(--ar-line);
     border-left: 4px solid var(--series-accent);
     border-radius: 18px;
-    background: rgba(10, 17, 31, 0.92);
-    color: #edf4ff;
+    background: #ffffff;
+    color: var(--ar-text);
     text-align: left;
     transition:
         transform var(--ar-transition),
@@ -411,12 +422,12 @@
 }
 
 .ar-public #panel-charts .chart-series-card.is-selected {
-    box-shadow: 0 0 0 1px rgba(126, 176, 255, 0.24);
+    box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.16);
 }
 
 .ar-public #panel-charts .chart-series-card.is-active {
-    background: linear-gradient(135deg, rgba(79, 141, 255, 0.22), rgba(79, 210, 255, 0.16));
-    border-color: rgba(126, 176, 255, 0.28);
+    background: #eef6ff;
+    border-color: rgba(0, 113, 227, 0.24);
 }
 
 .ar-public #panel-charts .chart-series-topline,
@@ -440,7 +451,7 @@
     height: 10px;
     border-radius: 999px;
     background: var(--series-accent);
-    box-shadow: 0 0 0 4px rgba(79, 141, 255, 0.12);
+    box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
 }
 
 .ar-public #panel-charts .chart-series-name {
@@ -464,7 +475,7 @@
 }
 
 .ar-public #panel-charts .chart-series-meta {
-    color: #b0c6e4;
+    color: var(--ar-muted);
 }
 
 @media (max-width: 1240px) {

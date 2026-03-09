@@ -8,6 +8,7 @@
     var state = window.AR.state;
     var chartData = window.AR.chartData || {};
     var chartEcharts = window.AR.chartEcharts || {};
+    var chartSummary = window.AR.chartSummary || {};
     var chartUi = window.AR.chartUi || {};
     var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
@@ -62,6 +63,7 @@
         if (chartUi.renderSummary) chartUi.renderSummary(null, fields(), payloadMeta(), chartState.stale);
         if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, chartState);
         if (chartUi.renderSpotlight) chartUi.renderSpotlight(null, fields());
+        if (chartSummary && chartSummary.clear) chartSummary.clear(message);
     }
 
     function statusText(model, currentFields) {
@@ -131,6 +133,7 @@
         if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
         if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
         if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
+        if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
         if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'Filters changed. Redraw to fetch fresh chart rows.' : statusText(model, currentFields));
 
         tabState.chartDrawn = true;

@@ -659,6 +659,12 @@ async function runTests() {
         } else {
             results.failed.push(`FAIL Header brand incorrect: "${brand}"`);
         }
+        const headerTaglineCount = await page.locator('.site-header .site-brand-tag').count().catch(() => 0);
+        if (headerTaglineCount === 0) {
+            results.passed.push('PASS Header does not duplicate the active section label');
+        } else {
+            results.failed.push('FAIL Header still duplicates the active section label');
+        }
 
         // Footer deploy status and log controls
         console.log('\nTest 4b: Checking footer deploy status...');
@@ -758,6 +764,38 @@ async function runTests() {
             results.passed.push('PASS Consumer mode is active by default');
         } else {
             results.failed.push('FAIL Consumer mode is not active by default');
+        }
+        const overviewSummaryVisible = await page.locator('#filter-dirty-indicator').isVisible().catch(() => false)
+            && await page.locator('#active-filter-chips').isVisible().catch(() => false);
+        if (overviewSummaryVisible) {
+            results.passed.push('PASS Overview mode shows the active filter summary strip');
+        } else {
+            results.failed.push('FAIL Overview mode should show the active filter summary strip');
+        }
+        const primaryRateHelp = await page.textContent('#primary-rate-help').catch(() => '');
+        if (primaryRateHelp && /headline rate/i.test(primaryRateHelp)) {
+            results.passed.push('PASS Primary filter helper copy explains the headline-rate filters');
+        } else {
+            results.failed.push('FAIL Primary filter helper copy missing or unclear');
+        }
+        const bankSearchVisible = await page.locator('#filter-bank-search').isVisible().catch(() => false);
+        const allBanksVisible = await page.locator('#filter-bank-clear').isVisible().catch(() => false);
+        if (bankSearchVisible && allBanksVisible) {
+            results.passed.push('PASS Bank search input and All banks action are visible');
+        } else {
+            results.failed.push('FAIL Bank search input or All banks action missing');
+        }
+        const primaryLabels = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('.filter-primary-group label')).map((label) =>
+                String(label.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase()
+            );
+        });
+        const hasMinHeadlineLabel = primaryLabels.some((text) => text.includes('min headline rate'));
+        const hasMaxHeadlineLabel = primaryLabels.some((text) => text.includes('max headline rate'));
+        if (hasMinHeadlineLabel && hasMaxHeadlineLabel) {
+            results.passed.push('PASS Primary rate labels use headline-rate wording');
+        } else {
+            results.failed.push('FAIL Primary rate labels should use headline-rate wording');
         }
 
         const pivotVisibleByDefault = await page.locator('#tab-pivot').isVisible().catch(() => false);
@@ -908,6 +946,55 @@ async function runTests() {
         
         if (bankOptions.length > 1) { // More than just "All"
             results.passed.push(`PASS Bank dropdown populated with ${bankOptions.length} options`);
+
+            await page.fill('#filter-bank-search', 'westpac');
+            await page.waitForTimeout(300);
+            const filteredVisibleBanks = await page.evaluate(() => {
+                return Array.from(document.querySelectorAll('#filter-bank option'))
+                    .filter((option) => !option.hidden)
+                    .map((option) => String(option.textContent || '').trim());
+            });
+            const bankSearchWorks =
+                filteredVisibleBanks.length >= 1 &&
+                filteredVisibleBanks.length < bankOptions.length &&
+                filteredVisibleBanks.every((name) => /westpac/i.test(name));
+            if (bankSearchWorks) {
+                results.passed.push('PASS Bank search filters the native bank list');
+            } else {
+                results.failed.push('FAIL Bank search did not filter the native bank list as expected');
+            }
+
+            const firstBankValue = await page.evaluate(() => {
+                const first = document.querySelector('#filter-bank option');
+                return first ? String(first.getAttribute('value') || '') : '';
+            });
+            if (firstBankValue) {
+                await page.selectOption('#filter-bank', [firstBankValue]);
+            }
+            await page.click('#filter-bank-clear');
+            await page.waitForTimeout(300);
+            const bankClearState = await page.evaluate(() => {
+                const search = document.getElementById('filter-bank-search');
+                const select = document.getElementById('filter-bank');
+                const totalOptions = select ? select.querySelectorAll('option').length : 0;
+                const visibleOptions = select
+                    ? Array.from(select.querySelectorAll('option')).filter((option) => !option.hidden).length
+                    : 0;
+                const selectedCount = select
+                    ? Array.from(select.querySelectorAll('option')).filter((option) => option.selected).length
+                    : 0;
+                return {
+                    searchValue: search ? String(search.value || '') : '',
+                    selectedCount,
+                    totalOptions,
+                    visibleOptions,
+                };
+            });
+            if (bankClearState.searchValue === '' && bankClearState.selectedCount === 0 && bankClearState.visibleOptions === bankClearState.totalOptions) {
+                results.passed.push('PASS All banks clears the search input and bank selection');
+            } else {
+                results.failed.push('FAIL All banks should clear the search input and bank selection');
+            }
             
             // Click to open dropdown (visual test)
             await page.click('#filter-bank');
@@ -1205,6 +1292,23 @@ async function runTests() {
         
         // Test 10e: Apply Filters - table reloads (wait for network/table update)
         console.log('\nTest 10e: Apply Filters...');
+        await page.click('[data-date-range="30"]');
+        await page.waitForTimeout(250);
+        const quickRangeValues = await page.evaluate(() => {
+            const start = document.getElementById('filter-start-date');
+            const end = document.getElementById('filter-end-date');
+            return {
+                start: start ? String(start.value || '') : '',
+                end: end ? String(end.value || '') : '',
+            };
+        });
+        if (/^\d{4}-\d{2}-\d{2}$/.test(quickRangeValues.start) && /^\d{4}-\d{2}-\d{2}$/.test(quickRangeValues.end) && quickRangeValues.start <= quickRangeValues.end) {
+            results.passed.push('PASS Quick date range actions populate valid YYYY-MM-DD values');
+        } else {
+            results.failed.push('FAIL Quick date range actions did not populate valid YYYY-MM-DD values');
+        }
+        await page.fill('#filter-start-date', '2026-2-3');
+        await page.fill('#filter-end-date', '2026-03-07');
         await page.click('#apply-filters');
         await page.waitForTimeout(2000);
         const tableStillHasRows = await page.locator('#rate-table .tabulator-row').count() > 0;
@@ -1212,6 +1316,12 @@ async function runTests() {
             results.passed.push('PASS Apply Filters runs and table still has data');
         } else {
             results.warnings.push('WARN After Apply Filters, table may have no rows (could be empty data)');
+        }
+        const normalizedDateUrl = await page.url();
+        if (normalizedDateUrl.includes('start_date=2026-02-03') && normalizedDateUrl.includes('end_date=2026-03-07')) {
+            results.passed.push('PASS Manual date entry is normalized and preserved in URL state');
+        } else {
+            results.failed.push('FAIL Manual date entry was not normalized into URL state');
         }
 
         // Keyboard shortcut: Ctrl/Cmd+Enter should apply filters.
@@ -1261,6 +1371,12 @@ async function runTests() {
             results.passed.push('PASS Draw Chart renders ECharts surface output');
         } else {
             results.warnings.push('WARN Chart output did not render the expected ECharts surface');
+        }
+        const chartSummaryRows = await page.locator('#chart-data-summary tbody tr').count().catch(() => 0);
+        if (chartSummaryRows > 0) {
+            results.passed.push('PASS Chart summary table renders from cached chart data');
+        } else {
+            results.failed.push('FAIL Chart summary table did not render after drawing the chart');
         }
 
         const chartBox = await page.locator('#chart-output').boundingBox().catch(() => null);

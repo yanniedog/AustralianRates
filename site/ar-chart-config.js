@@ -32,9 +32,9 @@
     };
 
     var SECTION_PALETTES = {
-        'home-loans': ['#4f8dff', '#4fd2ff', '#8ed0ff', '#1b4da5'],
-        'savings': ['#4ecb92', '#7de6b3', '#71b4ff', '#1d7155'],
-        'term-deposits': ['#ecb36b', '#ffd29c', '#7ab7ff', '#8e5a16'],
+        'home-loans': ['#1259c3', '#0f766e', '#b45309', '#9f1239', '#6b21a8', '#166534'],
+        'savings': ['#166534', '#0f766e', '#1259c3', '#b45309', '#9f1239', '#854d0e'],
+        'term-deposits': ['#b45309', '#1259c3', '#166534', '#7c2d12', '#9f1239', '#6b21a8'],
     };
 
     var DENSITIES = {

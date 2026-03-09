@@ -57,6 +57,12 @@
     }
 
     function applyFilters() {
+        if (filters && filters.validateInputs && !filters.validateInputs()) {
+            clientLog('warn', 'Apply filters blocked by invalid input', {
+                section: window.AR.section || 'home-loans',
+            });
+            return;
+        }
         clientLog('info', 'Apply filters requested', {
             activeTab: tabState.activeTab || 'explorer',
             includeManual: !!(els.filterIncludeManual && els.filterIncludeManual.checked),
@@ -87,6 +93,21 @@
         if (tag === 'TEXTAREA') return;
         event.preventDefault();
         applyFilters();
+    }
+
+    function collapseWorkspacePanelsByDefault() {
+        var detailEls = [
+            els.filterBar,
+            els.rateChangeDetails,
+            document.getElementById('market-notes'),
+            document.querySelector('.chart-advanced'),
+        ];
+
+        for (var i = 0; i < detailEls.length; i++) {
+            var detailEl = detailEls[i];
+            if (!detailEl || detailEl.tagName !== 'DETAILS') continue;
+            detailEl.open = false;
+        }
     }
 
     function finishAppInit(source) {
@@ -127,9 +148,11 @@
         else if (exportModule && exportModule.downloadCsv) exportModule.downloadCsv();
     });
     if (els.loadPivot) els.loadPivot.addEventListener('click', function () {
+        if (filters && filters.validateInputs && !filters.validateInputs()) return;
         if (pivot && pivot.loadPivotData) pivot.loadPivotData();
     });
     if (els.drawChart) els.drawChart.addEventListener('click', function () {
+        if (filters && filters.validateInputs && !filters.validateInputs()) return;
         if (charts && charts.drawChart) charts.drawChart();
     });
     if (els.filterIncludeManual) els.filterIncludeManual.addEventListener('change', function () {
@@ -157,6 +180,7 @@
     document.addEventListener('keydown', applyFiltersShortcut);
 
     if (tabs && tabs.bindTabListeners) tabs.bindTabListeners();
+    collapseWorkspacePanelsByDefault();
     applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer', { skipRefresh: true });
 
     if (filters && filters.loadFilters) {

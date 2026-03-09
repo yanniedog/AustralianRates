@@ -22,7 +22,7 @@
 
     function baseTextStyles() {
         return {
-            textStyle: { color: '#dbe7ff', fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
+            textStyle: { color: '#1f2937', fontFamily: '"SF Pro Text", "Segoe UI", sans-serif' },
             animationDuration: 420,
             animationDurationUpdate: 300,
             animationEasing: 'cubicOut',
@@ -31,9 +31,18 @@
 
     function gridStyles() {
         return {
-            axisLine: { lineStyle: { color: 'rgba(141, 162, 192, 0.24)' } },
-            axisLabel: { color: '#d6e6ff' },
-            splitLine: { lineStyle: { color: 'rgba(141, 162, 192, 0.12)' } },
+            axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
+            axisLabel: { color: '#334155' },
+            splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.24)' } },
+        };
+    }
+
+    function tooltipStyles() {
+        return {
+            backgroundColor: '#ffffff',
+            borderColor: 'rgba(37, 99, 235, 0.28)',
+            textStyle: { color: '#0f172a' },
+            extraCssText: 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;',
         };
     }
 
@@ -62,9 +71,10 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'item',
-                backgroundColor: 'rgba(7, 10, 18, 0.96)',
-                borderColor: 'rgba(126, 176, 255, 0.32)',
-                textStyle: { color: '#eef5ff' },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
                 formatter: function (params) {
                     var row = params.data && params.data.row ? params.data.row : null;
                     return [
@@ -83,7 +93,7 @@
                 axisTick: { show: false },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#d6e6ff',
+                    color: '#475569',
                     interval: narrow && model.surface.xLabels.length > 7 ? 1 : 0,
                     rotate: model.surface.xLabels.length > 10 ? (narrow ? 44 : 28) : 0,
                     formatter: function (value) { return String(value || '').replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3/$2'); },
@@ -96,7 +106,7 @@
                 axisTick: { show: false },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#eef5ff',
+                    color: '#0f172a',
                     width: narrow ? 96 : 240,
                     overflow: 'truncate',
                     formatter: function (value) {
@@ -115,11 +125,11 @@
                 right: 18,
                 bottom: narrow ? 18 : 20,
                 text: ['High', 'Low'],
-                textStyle: { color: '#c3daf7' },
+                textStyle: { color: '#475569' },
                 itemWidth: narrow ? 90 : 130,
                 itemHeight: 12,
                 inRange: {
-                    color: ['#0e213f', paletteColor(0), paletteColor(1), '#f8f4ff'],
+                    color: ['#eef6ff', '#bfdbfe', paletteColor(1), paletteColor(0)],
                 },
             },
             series: [{
@@ -133,12 +143,12 @@
                         borderColor: '#ffffff',
                         borderWidth: 1.5,
                         shadowBlur: 18,
-                        shadowColor: 'rgba(79, 210, 255, 0.36)',
+                        shadowColor: 'rgba(37, 99, 235, 0.22)',
                     },
                 },
                 itemStyle: {
                     borderWidth: 1,
-                    borderColor: 'rgba(7, 10, 18, 0.28)',
+                    borderColor: 'rgba(255, 255, 255, 0.88)',
                     borderRadius: 8,
                 },
             }],
@@ -158,9 +168,10 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'item',
-                backgroundColor: 'rgba(7, 10, 18, 0.96)',
-                borderColor: 'rgba(126, 176, 255, 0.32)',
-                textStyle: { color: '#eef5ff' },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
                 formatter: function (params) {
                     var data = params.data || {};
                     var row = data.row || {};
@@ -177,10 +188,10 @@
                 type: 'value',
                 name: chartConfig.fieldLabel(fields.yField),
                 nameGap: narrow ? 18 : 26,
-                nameTextStyle: { color: '#b9d2f2' },
+                nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#d6e6ff',
+                    color: '#334155',
                     formatter: function (value) { return chartConfig.formatMetricValue(fields.yField, value); },
                 },
                 splitLine: styles.splitLine,
@@ -191,7 +202,7 @@
                 axisTick: { show: false },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#eef5ff',
+                    color: '#0f172a',
                     width: narrow ? 104 : 180,
                     overflow: 'truncate',
                 },
@@ -218,7 +229,7 @@
                 label: {
                     show: true,
                     position: 'right',
-                    color: '#eef5ff',
+                    color: '#0f172a',
                     formatter: function (params) {
                         return chartConfig.formatMetricValue(fields.yField, params.value);
                     },
@@ -226,7 +237,7 @@
                 emphasis: {
                     itemStyle: {
                         shadowBlur: 18,
-                        shadowColor: 'rgba(79, 210, 255, 0.24)',
+                        shadowColor: 'rgba(37, 99, 235, 0.16)',
                     },
                 },
             }],
@@ -245,10 +256,11 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'axis',
-                axisPointer: { type: 'line', lineStyle: { color: 'rgba(79, 210, 255, 0.28)' } },
-                backgroundColor: 'rgba(7, 10, 18, 0.96)',
-                borderColor: 'rgba(126, 176, 255, 0.32)',
-                textStyle: { color: '#eef5ff' },
+                axisPointer: { type: 'line', lineStyle: { color: 'rgba(37, 99, 235, 0.28)' } },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
             },
             grid: { left: 62, right: 30, top: narrow ? 58 : 42, bottom: 54 },
             legend: {
@@ -256,7 +268,7 @@
                 type: 'scroll',
                 left: 0,
                 right: 0,
-                textStyle: { color: '#eef5ff' },
+                textStyle: { color: '#334155' },
                 itemWidth: 12,
                 itemHeight: 12,
             },
@@ -265,16 +277,16 @@
                 data: model.surface.xLabels,
                 boundaryGap: false,
                 axisLine: styles.axisLine,
-                axisLabel: { color: '#d6e6ff', interval: narrow && model.surface.xLabels.length > 7 ? 1 : 0 },
+                axisLabel: { color: '#475569', interval: narrow && model.surface.xLabels.length > 7 ? 1 : 0 },
                 splitLine: { show: false },
             },
             yAxis: {
                 type: 'value',
                 name: chartConfig.fieldLabel(fields.yField),
-                nameTextStyle: { color: '#9db8da' },
+                nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#d6e6ff',
+                    color: '#334155',
                     formatter: function (value) {
                         return chartConfig.formatMetricValue(fields.yField, value);
                     },
@@ -291,7 +303,7 @@
                     symbolSize: 6,
                     endLabel: {
                         show: true,
-                        color: '#eef5ff',
+                        color: '#0f172a',
                         formatter: function () {
                             return series.name + '  ' + chartConfig.formatMetricValue(fields.yField, series.latestValue);
                         },
@@ -324,9 +336,10 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'item',
-                backgroundColor: 'rgba(7, 10, 18, 0.96)',
-                borderColor: 'rgba(126, 176, 255, 0.32)',
-                textStyle: { color: '#eef5ff' },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
             },
             grid: { left: 62, right: 28, top: 36, bottom: narrow ? 82 : 60 },
             xAxis: {
@@ -334,7 +347,7 @@
                 data: model.distribution.categories,
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#d6e6ff',
+                    color: '#475569',
                     interval: 0,
                     rotate: model.distribution.categories.length > 6 ? (narrow ? 40 : 24) : 0,
                 },
@@ -342,10 +355,10 @@
             yAxis: {
                 type: 'value',
                 name: chartConfig.fieldLabel(fields.yField),
-                nameTextStyle: { color: '#9db8da' },
+                nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#d6e6ff',
+                    color: '#334155',
                     formatter: function (value) {
                         return chartConfig.formatMetricValue(fields.yField, value);
                     },
@@ -357,7 +370,7 @@
                     name: 'Distribution',
                     type: 'boxplot',
                     itemStyle: {
-                        color: 'rgba(79, 141, 255, 0.22)',
+                        color: 'rgba(37, 99, 235, 0.14)',
                         borderColor: paletteColor(0),
                         borderWidth: 2,
                     },
@@ -386,7 +399,7 @@
                 text: 'Select a rate cell to inspect a single product trend',
                 left: 'center',
                 top: 'middle',
-                textStyle: { color: '#8da2c0', fontSize: 14, fontWeight: 500 },
+                textStyle: { color: '#64748b', fontSize: 14, fontWeight: 500 },
             },
         };
         return {
@@ -396,26 +409,27 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'axis',
-                backgroundColor: 'rgba(7, 10, 18, 0.96)',
-                borderColor: 'rgba(126, 176, 255, 0.32)',
-                textStyle: { color: '#eef5ff' },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
             },
             grid: { left: 48, right: 18, top: 24, bottom: 36 },
             xAxis: {
                 type: 'category',
                 data: spotlight.series.points.map(function (point) { return point.date; }),
-                axisLine: { lineStyle: { color: 'rgba(141, 162, 192, 0.22)' } },
-                axisLabel: { color: '#9db8da', formatter: function (value) { return String(value || '').slice(5); } },
+                axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
+                axisLabel: { color: '#475569', formatter: function (value) { return String(value || '').slice(5); } },
                 splitLine: { show: false },
             },
             yAxis: {
                 type: 'value',
-                axisLine: { lineStyle: { color: 'rgba(141, 162, 192, 0.22)' } },
+                axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
                 axisLabel: {
-                    color: '#9db8da',
+                    color: '#334155',
                     formatter: function (value) { return chartConfig.formatMetricValue(fields.yField, value); },
                 },
-                splitLine: { lineStyle: { color: 'rgba(141, 162, 192, 0.10)' } },
+                splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.18)' } },
             },
             series: [{
                 type: 'line',
@@ -424,7 +438,7 @@
                 symbolSize: 7,
                 lineStyle: { width: 3, color: paletteColor(1) },
                 itemStyle: { color: paletteColor(1) },
-                areaStyle: { color: 'rgba(79, 210, 255, 0.12)' },
+                areaStyle: { color: 'rgba(37, 99, 235, 0.10)' },
                 data: spotlight.series.points.map(function (point) {
                     return [point.date, point.value];
                 }),

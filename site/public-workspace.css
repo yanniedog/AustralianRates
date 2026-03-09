@@ -132,6 +132,11 @@
 .filter-state-row {
     display: grid;
     gap: 10px;
+    margin-top: 14px;
+}
+
+.filters .filter-state-row {
+    margin-top: 0;
     padding: 0 20px 16px;
 }
 
@@ -196,6 +201,8 @@
 }
 
 .filter-primary-group label {
+    display: grid;
+    gap: 8px;
     min-width: 0;
 }
 
@@ -204,6 +211,58 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     grid-column: span 2;
+}
+
+.filter-primary-group .filter-range label {
+    display: grid;
+    gap: 8px;
+}
+
+.filter-bank-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.filter-bank-clear {
+    white-space: nowrap;
+}
+
+.filter-helper {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.filter-primary-note {
+    margin-top: 14px;
+}
+
+.input-helper {
+    margin-top: 10px;
+}
+
+.input-helper.is-error {
+    color: var(--ar-danger);
+}
+
+.date-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.date-quick-btn {
+    box-shadow: none;
+}
+
+input.is-invalid,
+select.is-invalid {
+    border-color: var(--ar-danger);
+    box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.12);
 }
 
 .filter-primary-actions {
@@ -370,6 +429,10 @@
         grid-column: auto;
     }
 
+    .filter-bank-tools {
+        grid-template-columns: 1fr;
+    }
+
     .filter-primary-actions {
         align-items: stretch;
     }
@@ -381,6 +444,11 @@
 
     .filter-primary-actions-main > *,
     .filter-primary-actions-meta > * {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .date-quick-actions > * {
         flex: 1 1 auto;
         min-width: 0;
     }
