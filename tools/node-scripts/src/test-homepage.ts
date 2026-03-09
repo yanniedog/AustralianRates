@@ -1224,16 +1224,23 @@ async function runTests() {
         console.log('\nTest 9: Checking Rate Explorer table data...');
         // Expand rate table section (it is collapsed by default)
         const rateTableDetails = page.locator('#rate-table-details');
-        const detailsOpen = await rateTableDetails.getAttribute('open');
+        let detailsOpen = await rateTableDetails.getAttribute('open');
         if (!detailsOpen) {
             await page.click('#rate-table-details .rate-table-toggle');
             await page.waitForTimeout(300);
         }
         await page.click('#mode-analyst');
         await page.waitForTimeout(700);
-        
+        // Ensure details is open (analyst mode may re-render)
+        detailsOpen = await rateTableDetails.getAttribute('open');
+        if (!detailsOpen) {
+            await page.click('#rate-table-details .rate-table-toggle');
+            await page.waitForTimeout(500);
+        }
         await page.waitForTimeout(3000); // Wait for table to load
-        
+        await page.locator('#rate-table').waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+        await page.locator('#rate-table').scrollIntoViewIfNeeded().catch(() => {});
+
         const tableExists = await page.locator('#rate-table').isVisible();
         if (tableExists) {
             results.passed.push('PASS Rate Explorer table element exists');
@@ -1350,6 +1357,7 @@ async function runTests() {
         if (tableRows > 0) {
             console.log('  Testing column sort (click Bank header)...');
             const bankHeader = page.locator('#rate-table .tabulator-col').filter({ hasText: 'Bank' }).first();
+            await bankHeader.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
             if (await bankHeader.isVisible().catch(() => false)) {
                 const readTopBanks = async (maxRows) => {
                     const bankColumnIndex = await page.evaluate(() => {
