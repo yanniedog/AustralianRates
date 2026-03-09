@@ -212,6 +212,8 @@
     gap: 12px;
     grid-column: span 2;
     min-width: 0;
+    position: relative;
+    z-index: 0;
 }
 
 .filter-primary-group .filter-range label {

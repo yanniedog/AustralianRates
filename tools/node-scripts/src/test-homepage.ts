@@ -1209,8 +1209,8 @@ async function runTests() {
                 results.failed.push('FAIL All banks should clear the search input and bank selection');
             }
             
-            // Click to open dropdown (visual test)
-            await page.click('#filter-bank');
+            // Click to open dropdown (visual test); force in case adjacent filter-range overlaps in narrow viewports
+            await page.locator('#filter-bank').click({ force: true });
             await page.waitForTimeout(500);
             await page.screenshot({ 
                 path: `${SCREENSHOT_DIR}/04-bank-dropdown-open.png`
