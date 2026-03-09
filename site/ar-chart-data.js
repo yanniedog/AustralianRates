@@ -423,7 +423,7 @@
 
     function fetchRatesPage(params) {
         var query = new URLSearchParams(params || {});
-        return fetch(apiBase + '/rates?' + query.toString()).then(function (response) {
+        return fetch(apiBase + '/rates?' + query.toString(), { cache: 'no-store' }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
             return response.json();
         });

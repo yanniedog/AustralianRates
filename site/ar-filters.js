@@ -11,6 +11,7 @@
     var els = dom && dom.els ? dom.els : {};
     var filterElMap = dom && dom.filterElMap ? dom.filterElMap : {};
     var tabState = state && state.state ? state.state : {};
+    var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var apiOverride = config && config.apiOverride ? config.apiOverride : null;
     var isAnalystMode = state && typeof state.isAnalystMode === 'function'
@@ -21,13 +22,37 @@
     var formatFilterValue = utils.formatFilterValue || function (_field, value) { return String(value == null ? '' : value); };
     var clientLog = utils.clientLog || function () {};
 
-    var COLUMN_PREFS_KEY = 'ar_column_prefs_' + section;
     var filterFields = sc.filterFields || [];
     var filterApiMap = sc.filterApiMap || {};
     var consumerFilterIds = getConsumerFilterIds();
     var appliedFilterSignature = '';
     var latestFilterPayload = null;
     var interactionBound = false;
+
+    function defaultColumnPrefs() {
+        return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
+    }
+
+    function normalizeColumnPrefs(input) {
+        var prefs = input && typeof input === 'object' ? input : {};
+        return {
+            visible: prefs.visible && typeof prefs.visible === 'object' ? prefs.visible : {},
+            showRemoved: !!prefs.showRemoved,
+            moveColumnsMode: !!prefs.moveColumnsMode,
+            columnOrder: Array.isArray(prefs.columnOrder) ? prefs.columnOrder.slice() : null,
+        };
+    }
+
+    function columnPrefsStore() {
+        if (!runtimePrefs.columnPrefsBySection || typeof runtimePrefs.columnPrefsBySection !== 'object') {
+            runtimePrefs.columnPrefsBySection = {};
+        }
+        if (!runtimePrefs.columnPrefsBySection[section]) {
+            runtimePrefs.columnPrefsBySection[section] = defaultColumnPrefs();
+        }
+        runtimePrefs.columnPrefsBySection[section] = normalizeColumnPrefs(runtimePrefs.columnPrefsBySection[section]);
+        return runtimePrefs.columnPrefsBySection;
+    }
 
     function getConsumerFilterIds() {
         return ['filter-bank', 'filter-min-rate', 'filter-max-rate'];
@@ -259,26 +284,11 @@
     }
 
     function readColumnPrefs() {
-        try {
-            var raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
-            if (!raw) return { visible: {}, showRemoved: false };
-            var parsed = JSON.parse(raw);
-            if (!parsed || typeof parsed !== 'object') return { visible: {}, showRemoved: false };
-            return {
-                visible: parsed.visible && typeof parsed.visible === 'object' ? parsed.visible : {},
-                showRemoved: !!parsed.showRemoved,
-            };
-        } catch (_err) {
-            return { visible: {}, showRemoved: false };
-        }
+        return normalizeColumnPrefs(columnPrefsStore()[section]);
     }
 
     function writeColumnPrefs(next) {
-        try {
-            window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(next || { visible: {}, showRemoved: false }));
-        } catch (_err) {
-            // Ignore storage errors.
-        }
+        columnPrefsStore()[section] = normalizeColumnPrefs(next);
     }
 
     function parseBooleanParam(value) {
@@ -548,7 +558,7 @@
     async function loadFilters() {
         clientLog('info', 'Loading filter options', { apiBase: apiBase });
         try {
-            var r = await fetch(apiBase + '/filters');
+            var r = await fetch(apiBase + '/filters', { cache: 'no-store' });
             if (!r.ok) throw new Error('HTTP ' + r.status + ' for /filters');
             var data = await r.json();
             if (!data || !data.filters) {

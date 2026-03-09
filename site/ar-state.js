@@ -3,47 +3,33 @@
     window.AR = window.AR || {};
 
     var config = window.AR.config;
+    var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var params = config && config.params ? config.params : new URLSearchParams(window.location.search);
-    var UI_MODE_STORAGE_KEY = 'ar_ui_mode';
 
     function normalizeUiMode(value) {
         return String(value || '').toLowerCase() === 'analyst' ? 'analyst' : 'consumer';
     }
 
-    function readStoredUiMode() {
-        try {
-            var stored = window.localStorage.getItem(UI_MODE_STORAGE_KEY);
-            if (stored == null || String(stored).trim() === '') return 'consumer';
-            return normalizeUiMode(stored);
-        } catch (_err) {
-            return 'consumer';
-        }
+    function currentUiMode() {
+        if (params.get('view')) return normalizeUiMode(params.get('view'));
+        return normalizeUiMode(runtimePrefs.uiMode);
     }
 
-    function persistUiMode(mode) {
-        try {
-            window.localStorage.setItem(UI_MODE_STORAGE_KEY, normalizeUiMode(mode));
-        } catch (_err) {
-            // Ignore storage failures in private/restricted mode.
-        }
-    }
-
-    var urlView = params.get('view');
     var state = {
         activeTab: params.get('tab') || 'explorer',
         pivotLoaded: false,
         chartDrawn: false,
         refreshTimerId: null,
         lastRefreshedAt: null,
-        uiMode: urlView ? normalizeUiMode(urlView) : readStoredUiMode(),
+        uiMode: currentUiMode(),
     };
-    if (urlView) persistUiMode(state.uiMode);
+    runtimePrefs.uiMode = state.uiMode;
 
     function setUiMode(mode) {
         var normalized = normalizeUiMode(mode);
         if (state.uiMode === normalized) return;
         state.uiMode = normalized;
-        persistUiMode(normalized);
+        runtimePrefs.uiMode = normalized;
         window.dispatchEvent(new CustomEvent('ar:ui-mode-changed', {
             detail: { mode: normalized },
         }));

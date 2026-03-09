@@ -59,7 +59,7 @@
 
     function fetchRatesPage(params) {
         var q = new URLSearchParams(params || {});
-        return fetch(apiBase + '/rates?' + q.toString())
+        return fetch(apiBase + '/rates?' + q.toString(), { cache: 'no-store' })
             .then(function (response) {
                 if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
                 return response.json();

@@ -37,7 +37,7 @@
             Object.keys(filterParams || {}).forEach(function (key) {
                 query.set(key, filterParams[key]);
             });
-            var ratesRes = await fetch(apiBase + '/rates?' + query.toString());
+            var ratesRes = await fetch(apiBase + '/rates?' + query.toString(), { cache: 'no-store' });
             if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
             var ratesData = await ratesRes.json();
             if (ratesData && ratesData.total != null) {
@@ -155,7 +155,7 @@
             latestParams.limit = String(QUICK_COMPARE_LIMIT);
             latestParams.order_by = 'rate_desc';
             var latestQuery = new URLSearchParams(latestParams);
-            var response = await fetch(apiBase + '/latest?' + latestQuery.toString());
+            var response = await fetch(apiBase + '/latest?' + latestQuery.toString(), { cache: 'no-store' });
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
 
             var data = await response.json();

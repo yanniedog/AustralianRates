@@ -3,20 +3,7 @@
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
 
-/*.html
-  Cache-Control: no-cache, must-revalidate
-
-/*.js
-  Cache-Control: public, max-age=300, must-revalidate
-
-/*.css
-  Cache-Control: public, max-age=300, must-revalidate
-
-/robots.txt
-  Cache-Control: public, max-age=86400
-
-/sitemap.xml
-  Cache-Control: public, max-age=86400
-
-/version.json
-  Cache-Control: no-store, no-cache, must-revalidate
+/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Expires: 0

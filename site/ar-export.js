@@ -74,6 +74,7 @@
     async function requestExportJob(format) {
         var response = await fetch(apiBase + '/exports', {
             method: 'POST',
+            cache: 'no-store',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(buildExportRequestBody(format)),
         });
@@ -85,7 +86,7 @@
         var attempts = 0;
         while (attempts < 120) {
             attempts += 1;
-            var response = await fetch(apiBase + '/exports/' + encodeURIComponent(jobId));
+            var response = await fetch(apiBase + '/exports/' + encodeURIComponent(jobId), { cache: 'no-store' });
             if (!response.ok) throw new Error('Export status failed (HTTP ' + response.status + ')');
             var payload = await response.json();
             if (payload.status === 'completed') return payload;
@@ -104,7 +105,7 @@
             job = await waitForExportJob(job.job_id);
         }
         if (!job.download_path) throw new Error('Export job completed without a download path');
-        var response = await fetch(apiBase + job.download_path);
+        var response = await fetch(apiBase + job.download_path, { cache: 'no-store' });
         if (!response.ok) throw new Error('Export download failed (HTTP ' + response.status + ')');
         return {
             response: response,

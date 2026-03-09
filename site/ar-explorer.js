@@ -27,10 +27,35 @@
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
     var esc = window._arEsc;
     var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
-    var COLUMN_PREFS_KEY = 'ar_column_prefs_' + section;
+    var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var ORDER_FIRST = ['found_at', 'comparison_rate', 'interest_rate', 'bank_name'];
     var ORDER_LAST = ['rate_confirmed_at', 'urls'];
     var WAYBACK_PREFIX = 'https://web.archive.org/web/*/';
+
+    function defaultColumnPrefs() {
+        return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
+    }
+
+    function normalizeColumnPrefs(input) {
+        var prefs = input && typeof input === 'object' ? input : {};
+        return {
+            visible: prefs.visible && typeof prefs.visible === 'object' ? prefs.visible : {},
+            showRemoved: !!prefs.showRemoved,
+            moveColumnsMode: !!prefs.moveColumnsMode,
+            columnOrder: Array.isArray(prefs.columnOrder) ? prefs.columnOrder.slice() : null,
+        };
+    }
+
+    function columnPrefsStore() {
+        if (!runtimePrefs.columnPrefsBySection || typeof runtimePrefs.columnPrefsBySection !== 'object') {
+            runtimePrefs.columnPrefsBySection = {};
+        }
+        if (!runtimePrefs.columnPrefsBySection[section]) {
+            runtimePrefs.columnPrefsBySection[section] = defaultColumnPrefs();
+        }
+        runtimePrefs.columnPrefsBySection[section] = normalizeColumnPrefs(runtimePrefs.columnPrefsBySection[section]);
+        return runtimePrefs.columnPrefsBySection;
+    }
 
     function pctFormatter(cell) { return pct(cell.getValue()); }
 
@@ -353,35 +378,11 @@
     }
 
     function readColumnPrefs() {
-        try {
-            var raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
-            if (!raw) return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
-            var parsed = JSON.parse(raw);
-            if (!parsed || typeof parsed !== 'object') return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
-            var order = parsed.columnOrder;
-            if (!Array.isArray(order)) order = null;
-            return {
-                visible: parsed.visible && typeof parsed.visible === 'object' ? parsed.visible : {},
-                showRemoved: !!parsed.showRemoved,
-                moveColumnsMode: !!parsed.moveColumnsMode,
-                columnOrder: order,
-            };
-        } catch (_err) {
-            return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
-        }
+        return normalizeColumnPrefs(columnPrefsStore()[section]);
     }
 
     function writeColumnPrefs(next) {
-        try {
-            var def = { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
-            var o = next && typeof next === 'object' ? next : def;
-            window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify({
-                visible: o.visible && typeof o.visible === 'object' ? o.visible : {},
-                showRemoved: !!o.showRemoved,
-                moveColumnsMode: !!o.moveColumnsMode,
-                columnOrder: Array.isArray(o.columnOrder) ? o.columnOrder : null,
-            }));
-        } catch (_err) {}
+        columnPrefsStore()[section] = normalizeColumnPrefs(next);
     }
 
     function isRowRemoved(row) {
@@ -912,7 +913,7 @@
         if (sharedFilters && Array.isArray(sharedFilters.single_value_columns)) {
             singleValueColumns = sharedFilters.single_value_columns;
         } else {
-            fetch(apiBase + '/filters').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            fetch(apiBase + '/filters', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
                 if (!data || !data.filters || !Array.isArray(data.filters.single_value_columns)) return;
                 singleValueColumns = data.filters.single_value_columns;
                 if (rateTable) {
@@ -924,7 +925,7 @@
 
         rateTable = new Tabulator('#rate-table', {
             ajaxURL: apiBase + '/rates',
-            ajaxConfig: 'GET',
+            ajaxConfig: { method: 'GET', cache: 'no-store' },
             ajaxContentType: 'json',
             ajaxParams: function () {
                 var fp = buildFilterParams();
