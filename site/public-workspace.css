@@ -245,6 +245,8 @@
 
 .filter-bank-clear {
     white-space: nowrap;
+    position: relative;
+    z-index: 1;
 }
 
 .filter-helper {
