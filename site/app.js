@@ -101,6 +101,7 @@
             els.rateChangeDetails,
             document.getElementById('market-notes'),
             document.querySelector('.chart-advanced'),
+            document.getElementById('rate-table-details'),
         ];
 
         for (var i = 0; i < detailEls.length; i++) {
