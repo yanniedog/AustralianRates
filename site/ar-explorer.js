@@ -502,6 +502,19 @@
     var resizeBound = false;
     var resizeTimer = null;
 
+    function emitExplorerTableUpdated(reason) {
+        var container = document.getElementById('rate-table');
+        var rowCount = container ? container.querySelectorAll('.tabulator-row').length : 0;
+        window.dispatchEvent(new CustomEvent('ar:explorer-table-updated', {
+            detail: {
+                reason: String(reason || 'unknown'),
+                rows: rowCount,
+                section: section,
+                mobile: isMobile(),
+            },
+        }));
+    }
+
     function getTableLayout() {
         return isMobile() ? 'fitDataTable' : 'fitDataStretch';
     }
@@ -616,6 +629,7 @@
         rateTable.setColumns(getRateTableColumns());
         rateTable.redraw(true);
         if (columnPrefs.moveColumnsMode) scheduleUpdateMoveColumnHeaders();
+        emitExplorerTableUpdated('column-preferences');
     }
 
     function rowFormatter(row) {
@@ -1001,6 +1015,7 @@
             columns: getRateTableColumns(),
             initialSort: [{ column: currentSort.field, dir: currentSort.dir }],
         });
+        emitExplorerTableUpdated('init');
         function hideTableLoader(reason) {
             var container = document.getElementById('rate-table');
             if (!container) return;
@@ -1072,13 +1087,21 @@
             if (bad.length > 0) {
                 clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Column header(s) contain double colon', { sample: bad.slice(0, 10) });
             }
+            emitExplorerTableUpdated('dataLoaded');
         });
-        rateTable.on('dataProcessed', scheduleHideTableLoader);
+        rateTable.on('dataProcessed', function () {
+            scheduleHideTableLoader();
+            emitExplorerTableUpdated('dataProcessed');
+        });
         rateTable.on('renderComplete', function () {
             scheduleHideTableLoader();
             if (columnPrefs.moveColumnsMode) scheduleUpdateMoveColumnHeaders();
+            emitExplorerTableUpdated('renderComplete');
         });
-        rateTable.on('pageLoaded', scheduleHideTableLoader);
+        rateTable.on('pageLoaded', function () {
+            scheduleHideTableLoader();
+            emitExplorerTableUpdated('pageLoaded');
+        });
         clientLog('info', 'Explorer table init complete');
         if (!resizeBound) {
             window.addEventListener('resize', handleResize);
@@ -1098,6 +1121,7 @@
         if (rateTable) {
             clientLog('info', 'Explorer reload requested');
             rateTable.setData();
+            emitExplorerTableUpdated('reload-requested');
         }
     }
 
@@ -1107,6 +1131,17 @@
         applyUiMode: applyUiMode,
         getCurrentSort: getCurrentSort,
     };
+
+    window.addEventListener('ar:tab-changed', function (event) {
+        var tab = event && event.detail ? event.detail.tab : '';
+        if (tab !== 'explorer' || !rateTable) return;
+        setTimeout(function () {
+            if (!rateTable) return;
+            if (rateTable.redraw) rateTable.redraw(true);
+            if (columnPrefs.moveColumnsMode) scheduleUpdateMoveColumnHeaders();
+            emitExplorerTableUpdated('tab-activated');
+        }, 60);
+    });
 
     window.addEventListener('error', function (event) {
         var target = event && event.target;

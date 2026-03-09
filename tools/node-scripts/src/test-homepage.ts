@@ -450,6 +450,219 @@ async function runTests() {
             results.failed.push(`FAIL ${label}: pivot filter menu opens off-screen`);
         }
     }
+
+    async function waitForExplorerTableReady(targetPage, timeoutMs) {
+        return await targetPage.waitForFunction(() => {
+            var container = document.getElementById('rate-table');
+            if (!container) return false;
+            var hasRows = container.querySelectorAll('.tabulator-row').length > 0;
+            if (hasRows) return true;
+            var placeholder = container.querySelector('.tabulator-placeholder');
+            var noData = placeholder && /no rate data/i.test(String(placeholder.textContent || ''));
+            if (noData) return true;
+            return !!container.querySelector('.tabulator');
+        }, { timeout: timeoutMs || 30000 }).catch(() => null);
+    }
+
+    async function isMobileRailVisible(targetPage) {
+        return await targetPage.evaluate(() => {
+            var rail = document.getElementById('mobile-table-rail');
+            if (!rail || rail.hidden) return false;
+            return rail.classList.contains('is-visible') && getComputedStyle(rail).display !== 'none';
+        }).catch(() => false);
+    }
+
+    async function waitForMobileRailVisible(targetPage, timeoutMs) {
+        return await targetPage.waitForFunction(() => {
+            var rail = document.getElementById('mobile-table-rail');
+            if (!rail || rail.hidden) return false;
+            return rail.classList.contains('is-visible') && getComputedStyle(rail).display !== 'none';
+        }, { timeout: timeoutMs || 20000 }).catch(() => null);
+    }
+
+    async function performTouchSwipe(targetPage, start, end, steps) {
+        var count = Number.isFinite(steps) && steps > 1 ? Math.floor(steps) : 8;
+        const session = await targetPage.context().newCDPSession(targetPage);
+        const pointFor = (x, y) => ({
+            x: Math.round(x),
+            y: Math.round(y),
+            radiusX: 2,
+            radiusY: 2,
+            force: 1,
+        });
+
+        try {
+            await session.send('Input.dispatchTouchEvent', {
+                type: 'touchStart',
+                touchPoints: [pointFor(start.x, start.y)],
+            });
+            for (let i = 1; i <= count; i++) {
+                const progress = i / count;
+                const x = start.x + ((end.x - start.x) * progress);
+                const y = start.y + ((end.y - start.y) * progress);
+                await session.send('Input.dispatchTouchEvent', {
+                    type: 'touchMove',
+                    touchPoints: [pointFor(x, y)],
+                });
+                await targetPage.waitForTimeout(18);
+            }
+            await session.send('Input.dispatchTouchEvent', {
+                type: 'touchEnd',
+                touchPoints: [],
+            });
+        } finally {
+            await session.detach().catch(() => {});
+        }
+    }
+
+    async function verifyHomepageMobileExplorerRailAndTouch() {
+        const label = 'Homepage mobile explorer';
+        const mobileContext = await browser.newContext({
+            viewport: { width: 390, height: 844 },
+            isMobile: true,
+            hasTouch: true,
+        });
+        const mobilePage = await mobileContext.newPage();
+
+        try {
+            await mobilePage.goto(withSharedQuery('/'), { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await mobilePage.waitForSelector('#main-content', { timeout: 8000 });
+            await waitForExplorerTableReady(mobilePage, 30000);
+            await mobilePage.waitForTimeout(1200);
+            await mobilePage.evaluate(() => {
+                if (window.AR && window.AR.mobileTableNav && typeof window.AR.mobileTableNav.refresh === 'function') {
+                    window.AR.mobileTableNav.refresh();
+                }
+            }).catch(() => {});
+
+            const railVisible = await waitForMobileRailVisible(mobilePage, 20000);
+            if (railVisible) {
+                results.passed.push(`PASS ${label}: smart rail appears on mobile explorer`);
+            } else {
+                results.failed.push(`FAIL ${label}: smart rail did not appear on mobile explorer`);
+            }
+
+            const beforeDown = await mobilePage.evaluate(() => window.scrollY).catch(() => 0);
+            await mobilePage.click('#mobile-table-rail .mobile-table-rail-btn:last-of-type').catch(() => {});
+            await mobilePage.waitForTimeout(900);
+            const afterDown = await mobilePage.evaluate(() => window.scrollY).catch(() => beforeDown);
+            if (afterDown > beforeDown + 40) {
+                results.passed.push(`PASS ${label}: down rail button advances the page`);
+            } else {
+                results.failed.push(`FAIL ${label}: down rail button did not move the page`);
+            }
+
+            await mobilePage.click('#mobile-table-rail .mobile-table-rail-btn:first-of-type').catch(() => {});
+            await mobilePage.waitForTimeout(900);
+            const afterUp = await mobilePage.evaluate(() => window.scrollY).catch(() => afterDown);
+            if (afterUp < afterDown - 40) {
+                results.passed.push(`PASS ${label}: up rail button rewinds the page`);
+            } else {
+                results.failed.push(`FAIL ${label}: up rail button did not move the page upward`);
+            }
+
+            await mobilePage.evaluate(() => {
+                var panel = document.getElementById('panel-explorer');
+                if (panel) panel.scrollIntoView({ block: 'start' });
+            }).catch(() => {});
+            await mobilePage.waitForTimeout(300);
+
+            const touchRect = await mobilePage.evaluate(() => {
+                var holder = document.querySelector('#rate-table .tabulator-tableholder');
+                if (!holder) return null;
+                var rect = holder.getBoundingClientRect();
+                return {
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                };
+            }).catch(() => null);
+            const beforeTouchScroll = await mobilePage.evaluate(() => window.scrollY).catch(() => 0);
+            if (touchRect && touchRect.height > 40) {
+                await performTouchSwipe(mobilePage, {
+                    x: touchRect.left + (touchRect.width * 0.5),
+                    y: touchRect.top + Math.min(touchRect.height - 18, touchRect.height * 0.8),
+                }, {
+                    x: touchRect.left + (touchRect.width * 0.5),
+                    y: touchRect.top + 24,
+                }, 10);
+                await mobilePage.waitForTimeout(500);
+            }
+            const afterTouchScroll = await mobilePage.evaluate(() => window.scrollY).catch(() => beforeTouchScroll);
+            if (touchRect && afterTouchScroll > beforeTouchScroll + 40) {
+                results.passed.push(`PASS ${label}: vertical touch swipe on the table still scrolls the page`);
+            } else {
+                results.failed.push(`FAIL ${label}: vertical touch swipe on the table did not scroll the page`);
+            }
+
+            await mobilePage.click('#mode-analyst').catch(() => {});
+            await waitForExplorerTableReady(mobilePage, 30000);
+            await mobilePage.waitForTimeout(1200);
+            await mobilePage.evaluate(() => {
+                var panel = document.getElementById('panel-explorer');
+                if (panel) panel.scrollIntoView({ block: 'start' });
+                var holder = document.querySelector('#rate-table .tabulator-tableholder');
+                if (holder) holder.scrollLeft = 0;
+            }).catch(() => {});
+            await mobilePage.waitForTimeout(300);
+
+            const horizontalInfo = await mobilePage.evaluate(() => {
+                var holder = document.querySelector('#rate-table .tabulator-tableholder');
+                if (!holder) return null;
+                var rect = holder.getBoundingClientRect();
+                return {
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                    scrollWidth: holder.scrollWidth,
+                    clientWidth: holder.clientWidth,
+                };
+            }).catch(() => null);
+            if (horizontalInfo && horizontalInfo.scrollWidth > horizontalInfo.clientWidth + 20) {
+                const scrollLeft = await mobilePage.evaluate(() => {
+                    var holder = document.querySelector('#rate-table .tabulator-tableholder');
+                    if (!holder) return 0;
+                    holder.scrollLeft = Math.min(160, Math.max(0, holder.scrollWidth - holder.clientWidth));
+                    return holder.scrollLeft;
+                }).catch(() => 0);
+                if (scrollLeft > 20) {
+                    results.passed.push(`PASS ${label}: horizontal table scrolling remains available on mobile`);
+                } else {
+                    results.failed.push(`FAIL ${label}: horizontal table scrolling was not available on mobile`);
+                }
+            } else {
+                results.failed.push(`FAIL ${label}: analyst table did not expose horizontal overflow to verify mobile scrolling`);
+            }
+
+            await mobilePage.click('#tab-pivot').catch(() => {});
+            await mobilePage.waitForTimeout(400);
+            if (!(await isMobileRailVisible(mobilePage))) {
+                results.passed.push(`PASS ${label}: rail hides on Pivot`);
+            } else {
+                results.failed.push(`FAIL ${label}: rail stayed visible on Pivot`);
+            }
+
+            await mobilePage.click('#tab-charts').catch(() => {});
+            await mobilePage.waitForTimeout(400);
+            if (!(await isMobileRailVisible(mobilePage))) {
+                results.passed.push(`PASS ${label}: rail hides on Charts`);
+            } else {
+                results.failed.push(`FAIL ${label}: rail stayed visible on Charts`);
+            }
+
+            await mobilePage.click('#tab-explorer').catch(() => {});
+            const railVisibleAgain = await waitForMobileRailVisible(mobilePage, 12000);
+            if (railVisibleAgain) {
+                results.passed.push(`PASS ${label}: rail returns on Rates`);
+            } else {
+                results.failed.push(`FAIL ${label}: rail did not return on Rates`);
+            }
+        } finally {
+            await mobileContext.close();
+        }
+    }
     
     try {
         // Test 1: Page loads without errors
@@ -1529,6 +1742,35 @@ async function runTests() {
             } else {
                 results.failed.push('FAIL ' + name + ': Product Code column missing in analyst mode');
             }
+
+            await page.setViewportSize({ width: 375, height: 667 });
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await page.waitForSelector('#main-content', { timeout: 8000 });
+            await waitForExplorerTableReady(page, 20000);
+            await page.waitForTimeout(1200);
+            await page.evaluate(() => {
+                if (window.AR && window.AR.mobileTableNav && typeof window.AR.mobileTableNav.refresh === 'function') {
+                    window.AR.mobileTableNav.refresh();
+                }
+            }).catch(() => {});
+            const sectionRailVisible = await waitForMobileRailVisible(page, 15000);
+            if (sectionRailVisible) {
+                results.passed.push('PASS ' + name + ': smart rail appears on mobile Rates');
+            } else {
+                results.failed.push('FAIL ' + name + ': smart rail did not appear on mobile Rates');
+            }
+
+            await page.click('#mode-analyst').catch(() => {});
+            await page.waitForTimeout(700);
+            await page.click('#tab-pivot').catch(() => {});
+            await page.waitForTimeout(400);
+            if (!(await isMobileRailVisible(page))) {
+                results.passed.push('PASS ' + name + ': smart rail hides on mobile Pivot');
+            } else {
+                results.failed.push('FAIL ' + name + ': smart rail stayed visible on mobile Pivot');
+            }
+
+            await page.setViewportSize({ width: 1920, height: 1080 });
         }
         await page.goto(TEST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForSelector('#main-content', { timeout: 5000 });
@@ -1622,9 +1864,15 @@ async function runTests() {
 
         await verifyResponsivePivotLayout({ w: 375, h: 667, name: 'mobile' });
         await verifyResponsivePivotLayout({ w: 768, h: 1024, name: 'tablet' });
+        await verifyHomepageMobileExplorerRailAndTouch();
         
         await page.setViewportSize({ width: 1920, height: 1080 });
         await page.waitForTimeout(1000);
+        if (!(await isMobileRailVisible(page))) {
+            results.passed.push('PASS Desktop viewport keeps the mobile rail hidden');
+        } else {
+            results.failed.push('FAIL Desktop viewport should not show the mobile rail');
+        }
         
         // Test 12: Pivot and Chart panel elements (visibility when tab switched)
         console.log('\nTest 12: Pivot and Chart panel elements...');

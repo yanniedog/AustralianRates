@@ -41,6 +41,9 @@
             panel.hidden = !active;
             panel.classList.toggle('active', active);
         });
+        window.dispatchEvent(new CustomEvent('ar:tab-changed', {
+            detail: { tab: tabState.activeTab },
+        }));
         clientLog('info', 'Tab activated', { tab: tabState.activeTab });
         if (window.AR.filters && window.AR.filters.syncUrlState) {
             window.AR.filters.syncUrlState();

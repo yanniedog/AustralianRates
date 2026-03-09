@@ -59,10 +59,58 @@
         return text.slice(0, Math.max(0, maxLength - 1)).trim() + '...';
     }
 
+    function trimTrailingZeros(value) {
+        return String(value || '')
+            .replace(/(\.\d*?[1-9])0+$/, '$1')
+            .replace(/\.0+$/, '');
+    }
+
+    function formatDateAxisLabel(value, compact) {
+        var text = String(value || '');
+        var match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!match) return compact ? trimAxisLabel(text, 8) : text;
+        if (compact) return match[3] + '/' + match[2];
+        return match[1] + '-' + match[2] + '-' + match[3];
+    }
+
+    function compactMetricValue(field, value) {
+        var num = Number(value);
+        if (!Number.isFinite(num)) return chartConfig.formatMetricValue(field, value);
+
+        if (chartConfig.isPercentField && chartConfig.isPercentField(field)) {
+            return trimTrailingZeros(num.toFixed(2)) + '%';
+        }
+
+        if (chartConfig.isMoneyField && chartConfig.isMoneyField(field)) {
+            var abs = Math.abs(num);
+            if (abs >= 1000000) return '$' + trimTrailingZeros((num / 1000000).toFixed(1)) + 'm';
+            if (abs >= 1000) return '$' + trimTrailingZeros((num / 1000).toFixed(1)) + 'k';
+            return '$' + num.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
+
+        return num.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    }
+
+    function metricAxisLabel(field, value, compact) {
+        return compact ? compactMetricValue(field, value) : chartConfig.formatMetricValue(field, value);
+    }
+
+    function maxMetric(entries) {
+        var max = null;
+        entries.forEach(function (entry) {
+            var value = Number(entry && entry.value);
+            if (!Number.isFinite(value)) return;
+            if (max == null || value > max) max = value;
+        });
+        return max;
+    }
+
     function buildSurfaceOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
         var narrow = size && size.width < 760;
+        var veryNarrow = size && size.width < 420;
+        var showVisualMap = !veryNarrow;
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -85,7 +133,13 @@
                     ].filter(Boolean).join('<br>');
                 },
             },
-            grid: { left: narrow ? 24 : 112, right: 18, top: 26, bottom: narrow ? 90 : 78, containLabel: false },
+            grid: {
+                left: veryNarrow ? 70 : (narrow ? 92 : 112),
+                right: 18,
+                top: 24,
+                bottom: narrow ? 52 : 78,
+                containLabel: true,
+            },
             xAxis: {
                 type: 'category',
                 data: model.surface.xLabels,
@@ -94,9 +148,11 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: '#475569',
-                    interval: narrow && model.surface.xLabels.length > 7 ? 1 : 0,
-                    rotate: model.surface.xLabels.length > 10 ? (narrow ? 44 : 28) : 0,
-                    formatter: function (value) { return String(value || '').replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3/$2'); },
+                    hideOverlap: true,
+                    margin: 12,
+                    interval: narrow && model.surface.xLabels.length > (veryNarrow ? 5 : 7) ? 1 : 0,
+                    rotate: !veryNarrow && model.surface.xLabels.length > 10 ? (narrow ? 28 : 18) : 0,
+                    formatter: function (value) { return formatDateAxisLabel(value, true); },
                 },
                 splitArea: { show: false },
             },
@@ -107,25 +163,26 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: '#0f172a',
-                    width: narrow ? 96 : 240,
+                    width: veryNarrow ? 58 : (narrow ? 88 : 240),
                     overflow: 'truncate',
                     formatter: function (value) {
                         if (!narrow) return trimAxisLabel(value, 36);
                         var primary = String(value || '').split('|')[0];
-                        return trimAxisLabel(primary, 14);
+                        return trimAxisLabel(primary, veryNarrow ? 10 : 14);
                     },
                 },
             },
             visualMap: {
+                show: showVisualMap,
                 min: model.surface.min == null ? 0 : model.surface.min,
                 max: model.surface.max == null ? 1 : model.surface.max,
                 calculable: !narrow,
                 orient: 'horizontal',
-                left: narrow ? 22 : 112,
+                left: narrow ? (veryNarrow ? 70 : 92) : 112,
                 right: 18,
-                bottom: narrow ? 18 : 20,
+                bottom: narrow ? 8 : 20,
                 text: ['High', 'Low'],
-                textStyle: { color: '#475569' },
+                textStyle: { color: '#475569', fontSize: narrow ? 11 : 12 },
                 itemWidth: narrow ? 90 : 130,
                 itemHeight: 12,
                 inRange: {
@@ -149,7 +206,7 @@
                 itemStyle: {
                     borderWidth: 1,
                     borderColor: 'rgba(255, 255, 255, 0.88)',
-                    borderRadius: 8,
+                    borderRadius: narrow ? 4 : 8,
                 },
             }],
         };
@@ -160,6 +217,7 @@
         var styles = gridStyles();
         var narrow = size && size.width < 760;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
+        var maxValue = maxMetric(entries);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -183,16 +241,26 @@
                     ].filter(Boolean).join('<br>');
                 },
             },
-            grid: { left: 18, right: 22, top: 22, bottom: 20, containLabel: true },
+            grid: {
+                left: 18,
+                right: narrow ? 76 : 28,
+                top: 22,
+                bottom: narrow ? 38 : 20,
+                containLabel: true,
+            },
             xAxis: {
                 type: 'value',
+                min: 0,
+                max: maxValue == null ? null : maxValue * (narrow ? 1.18 : 1.08),
+                splitNumber: narrow ? 4 : 6,
                 name: chartConfig.fieldLabel(fields.yField),
                 nameGap: narrow ? 18 : 26,
                 nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: '#334155',
-                    formatter: function (value) { return chartConfig.formatMetricValue(fields.yField, value); },
+                    hideOverlap: true,
+                    formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
                 },
                 splitLine: styles.splitLine,
             },
@@ -203,15 +271,16 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: '#0f172a',
-                    width: narrow ? 104 : 180,
+                    width: narrow ? 128 : 180,
                     overflow: 'truncate',
                 },
-                data: entries.map(function (entry) { return trimAxisLabel(entry.bankName, narrow ? 16 : 28); }),
+                data: entries.map(function (entry) { return trimAxisLabel(entry.bankName, narrow ? 18 : 28); }),
             },
             series: [{
                 name: 'Best product by bank',
                 type: 'bar',
                 barWidth: narrow ? 16 : 18,
+                clip: false,
                 data: entries.map(function (entry, index) {
                     return {
                         value: entry.value,
@@ -229,9 +298,10 @@
                 label: {
                     show: true,
                     position: 'right',
+                    distance: narrow ? 8 : 10,
                     color: '#0f172a',
                     formatter: function (params) {
-                        return chartConfig.formatMetricValue(fields.yField, params.value);
+                        return metricAxisLabel(fields.yField, params.value, narrow);
                     },
                 },
                 emphasis: {
@@ -248,6 +318,8 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var narrow = size && size.width < 760;
+        var showLegend = !narrow && model.compareSeries.length <= 3;
+        var showEndLabels = !narrow && model.compareSeries.length <= 2;
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -262,8 +334,15 @@
                 textStyle: tooltipStyles().textStyle,
                 extraCssText: tooltipStyles().extraCssText,
             },
-            grid: { left: 62, right: 30, top: narrow ? 58 : 42, bottom: 54 },
+            grid: {
+                left: narrow ? 52 : 62,
+                right: showEndLabels ? 120 : 18,
+                top: showLegend ? 42 : 22,
+                bottom: narrow ? 48 : 54,
+                containLabel: true,
+            },
             legend: {
+                show: showLegend,
                 top: 0,
                 type: 'scroll',
                 left: 0,
@@ -271,13 +350,20 @@
                 textStyle: { color: '#334155' },
                 itemWidth: 12,
                 itemHeight: 12,
+                formatter: function (name) { return trimAxisLabel(name, 36); },
             },
             xAxis: {
                 type: 'category',
                 data: model.surface.xLabels,
                 boundaryGap: false,
                 axisLine: styles.axisLine,
-                axisLabel: { color: '#475569', interval: narrow && model.surface.xLabels.length > 7 ? 1 : 0 },
+                axisLabel: {
+                    color: '#475569',
+                    hideOverlap: true,
+                    margin: 12,
+                    interval: narrow && model.surface.xLabels.length > 5 ? 1 : 0,
+                    formatter: function (value) { return formatDateAxisLabel(value, narrow); },
+                },
                 splitLine: { show: false },
             },
             yAxis: {
@@ -285,10 +371,11 @@
                 name: chartConfig.fieldLabel(fields.yField),
                 nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
+                splitNumber: narrow ? 4 : 6,
                 axisLabel: {
                     color: '#334155',
                     formatter: function (value) {
-                        return chartConfig.formatMetricValue(fields.yField, value);
+                        return metricAxisLabel(fields.yField, value, narrow);
                     },
                 },
                 splitLine: styles.splitLine,
@@ -302,15 +389,17 @@
                     showSymbol: false,
                     symbolSize: 6,
                     endLabel: {
-                        show: true,
+                        show: showEndLabels,
                         color: '#0f172a',
+                        distance: 10,
                         formatter: function () {
-                            return series.name + '  ' + chartConfig.formatMetricValue(fields.yField, series.latestValue);
+                            return trimAxisLabel(series.name, 24) + ' ' + metricAxisLabel(fields.yField, series.latestValue, true);
                         },
                     },
+                    labelLayout: { hideOverlap: true },
                     emphasis: { focus: 'series' },
                     animationDurationUpdate: 280,
-                    lineStyle: { width: 3, color: paletteColor(index) },
+                    lineStyle: { width: narrow ? 2.5 : 3, color: paletteColor(index) },
                     itemStyle: { color: paletteColor(index) },
                     data: series.points.map(function (point) {
                         return {
@@ -341,7 +430,13 @@
                 textStyle: tooltipStyles().textStyle,
                 extraCssText: tooltipStyles().extraCssText,
             },
-            grid: { left: 62, right: 28, top: 36, bottom: narrow ? 82 : 60 },
+            grid: {
+                left: narrow ? 54 : 62,
+                right: 20,
+                top: 28,
+                bottom: narrow ? 82 : 60,
+                containLabel: true,
+            },
             xAxis: {
                 type: 'category',
                 data: model.distribution.categories,
@@ -349,7 +444,9 @@
                 axisLabel: {
                     color: '#475569',
                     interval: 0,
+                    hideOverlap: true,
                     rotate: model.distribution.categories.length > 6 ? (narrow ? 40 : 24) : 0,
+                    formatter: function (value) { return trimAxisLabel(value, narrow ? 12 : 20); },
                 },
             },
             yAxis: {
@@ -357,10 +454,11 @@
                 name: chartConfig.fieldLabel(fields.yField),
                 nameTextStyle: { color: '#475569' },
                 axisLine: styles.axisLine,
+                splitNumber: narrow ? 4 : 6,
                 axisLabel: {
                     color: '#334155',
                     formatter: function (value) {
-                        return chartConfig.formatMetricValue(fields.yField, value);
+                        return metricAxisLabel(fields.yField, value, narrow);
                     },
                 },
                 splitLine: styles.splitLine,
@@ -392,6 +490,7 @@
     function buildDetailOption(model, fields) {
         var base = baseTextStyles();
         var spotlight = model.spotlight;
+        var narrow = typeof window !== 'undefined' && window.innerWidth < 560;
         if (!spotlight || !spotlight.series) return {
             textStyle: base.textStyle,
             backgroundColor: 'transparent',
@@ -414,20 +513,32 @@
                 textStyle: tooltipStyles().textStyle,
                 extraCssText: tooltipStyles().extraCssText,
             },
-            grid: { left: 48, right: 18, top: 24, bottom: 36 },
+            grid: {
+                left: narrow ? 44 : 48,
+                right: 14,
+                top: 24,
+                bottom: narrow ? 40 : 36,
+                containLabel: true,
+            },
             xAxis: {
                 type: 'category',
                 data: spotlight.series.points.map(function (point) { return point.date; }),
                 axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
-                axisLabel: { color: '#475569', formatter: function (value) { return String(value || '').slice(5); } },
+                axisLabel: {
+                    color: '#475569',
+                    hideOverlap: true,
+                    interval: narrow && spotlight.series.points.length > 4 ? 1 : 0,
+                    formatter: function (value) { return formatDateAxisLabel(value, true); },
+                },
                 splitLine: { show: false },
             },
             yAxis: {
                 type: 'value',
                 axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
+                splitNumber: narrow ? 4 : 6,
                 axisLabel: {
                     color: '#334155',
-                    formatter: function (value) { return chartConfig.formatMetricValue(fields.yField, value); },
+                    formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
                 },
                 splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.18)' } },
             },

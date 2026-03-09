@@ -490,9 +490,11 @@
 
     .ar-public #panel-charts .chart-series-rail {
         position: static;
+        height: auto;
         min-height: auto;
         max-height: none;
         grid-template-rows: auto auto minmax(180px, 220px) minmax(0, auto);
+        overflow: visible;
     }
 }
 
