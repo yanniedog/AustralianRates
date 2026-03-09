@@ -79,9 +79,15 @@ function collectConditionsText(rate: JsonRecord, detail: JsonRecord): string {
 function parseMonthlyFeeFromDetail(detail: JsonRecord): number | null {
   const fees = asArray(detail.fees).filter(isRecord)
   for (const fee of fees) {
-    const feeType = pickText(fee, ['feeType', 'name']).toLowerCase()
-    if (!feeType.includes('monthly') && !feeType.includes('service')) continue
-    const amount = Number(fee.amount ?? fee.additionalValue)
+    const feeText = `${pickText(fee, ['feeType'])} ${pickText(fee, ['name'])} ${pickText(fee, ['additionalInfo'])}`.toLowerCase()
+    if (!feeText.includes('monthly') && !feeText.includes('service')) continue
+    const fixedAmount = isRecord(fee.fixedAmount) ? fee.fixedAmount : null
+    const additionalValue = getText(fee.additionalValue)
+    const rawAmount =
+      fee.amount ??
+      fixedAmount?.amount ??
+      (/^p\d/i.test(additionalValue) ? null : additionalValue)
+    const amount = Number(rawAmount)
     if (Number.isFinite(amount) && amount >= 0 && amount <= 50) return amount
   }
   return null

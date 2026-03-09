@@ -1,4 +1,5 @@
 import type { LenderConfig } from '../../types'
+import { configuredProductEndpoints } from '../product-endpoints'
 import { safeUrl } from './detail-metadata'
 import { fetchCdrJson, fetchJson } from './http'
 import type { FetchRequestContext } from './http'
@@ -57,7 +58,7 @@ function registrableHost(host: string): string {
   return `${parts[parts.length - 2]}.${parts[parts.length - 1]}`
 }
 
-function hostAffinityScore(candidateEndpoint: string, configuredEndpoint?: string): number {
+function hostAffinityScoreSingle(candidateEndpoint: string, configuredEndpoint?: string): number {
   if (!configuredEndpoint) return 0
   const candidateHost = hostFromEndpoint(candidateEndpoint)
   const configuredHost = hostFromEndpoint(configuredEndpoint)
@@ -66,6 +67,15 @@ function hostAffinityScore(candidateEndpoint: string, configuredEndpoint?: strin
   if (candidateHost.endsWith(`.${configuredHost}`) || configuredHost.endsWith(`.${candidateHost}`)) return 400
   if (registrableHost(candidateHost) === registrableHost(configuredHost)) return 200
   return 0
+}
+
+function hostAffinityScore(candidateEndpoint: string, lender: LenderConfig): number {
+  let best = 0
+  for (const [index, configuredEndpoint] of configuredProductEndpoints(lender).entries()) {
+    const weightedScore = Math.max(0, hostAffinityScoreSingle(candidateEndpoint, configuredEndpoint) - index * 300)
+    best = Math.max(best, weightedScore)
+  }
+  return best
 }
 
 export function brandMatchScore(lender: LenderConfig, brand: RegisterBrand): number {
@@ -110,7 +120,7 @@ export function selectBestMatchingBrand(lender: LenderConfig, brands: RegisterBr
   for (const brand of brands) {
     const matchScore = brandMatchScore(lender, brand)
     if (matchScore <= 0) continue
-    const score = matchScore + hostAffinityScore(brand.endpointUrl, lender.products_endpoint)
+    const score = matchScore + hostAffinityScore(brand.endpointUrl, lender)
     if (!best || score > best.score) {
       best = { brand, score }
     }
@@ -153,9 +163,10 @@ export async function discoverProductsEndpoint(
     }
   }
 
-  if (lender.products_endpoint) {
+  const configuredEndpoints = configuredProductEndpoints(lender)
+  if (configuredEndpoints.length > 0) {
     return {
-      endpointUrl: lender.products_endpoint,
+      endpointUrl: configuredEndpoints[0],
       sourceUrl: 'lenders.json',
       status: 200,
       notes: 'configured_products_endpoint',

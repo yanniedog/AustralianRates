@@ -6,6 +6,7 @@ import { upsertTdRateRows } from '../../../db/td-rates'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { discoverProductsEndpoint } from '../../../ingest/cdr'
+import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
 import { collectHistoricalDayFromWayback } from '../../../ingest/wayback-historical'
 import type { BackfillDayJob, EnvBindings } from '../../../types'
 import { log } from '../../../utils/logger'
@@ -31,17 +32,17 @@ export async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob
   try {
     const payloadFetchEventIdBySourceUrl = new Map<string, number>()
     const endpointDiscoveryStartedAt = Date.now()
-    const endpointCandidates: string[] = []
     const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
-    if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
-    if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
     const discovered = await discoverProductsEndpoint(lender, {
       env,
       runId: job.runId,
       lenderCode: job.lenderCode,
     })
-    if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
-    const uniqueEndpointCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
+    const uniqueEndpointCandidates = candidateProductEndpoints({
+      cachedEndpointUrl: endpoint?.endpointUrl,
+      lender,
+      discoveredEndpointUrl: discovered?.endpointUrl,
+    })
     const endpointDiscoveryMs = elapsedMs(endpointDiscoveryStartedAt)
     log.info('consumer', 'backfill_day_fetch collect', {
       runId: job.runId,

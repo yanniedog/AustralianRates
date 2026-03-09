@@ -2,6 +2,7 @@ import { TARGET_LENDERS } from '../../../constants'
 import {
   ensureLenderDatasetRun,
   markLenderDatasetIndexFetchSucceeded,
+  recordLenderDatasetWriteStats,
   setLenderDatasetExpectedDetails,
 } from '../../../db/lender-dataset-runs'
 import { addRunEnqueuedCounts } from '../../../db/run-progress'
@@ -9,6 +10,7 @@ import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { cdrCollectionNotes, discoverProductsEndpoint, fetchResidentialMortgageProductIds } from '../../../ingest/cdr'
+import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
 import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../producer'
 import { extractLenderRatesFromHtml } from '../../../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
@@ -26,6 +28,13 @@ import { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 import { splitValidatedRows } from '../validation'
 
 export { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
+
+export function shouldShortCircuitAfterHomeLoanIndexFetch(input: {
+  successfulIndexFetch: boolean
+  discoveredProductCount: number
+}): boolean {
+  return input.successfulIndexFetch && input.discoveredProductCount > 0
+}
 
 export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
   const jobStartedAt = Date.now()
@@ -53,16 +62,16 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   let sourceUrl = ''
-  const endpointCandidates: string[] = []
-  if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
-  if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
   const discovered = await discoverProductsEndpoint(lender, {
     env,
     runId: job.runId,
     lenderCode: job.lenderCode,
   })
-  if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
-  const uniqueCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
+  const uniqueCandidates = candidateProductEndpoints({
+    cachedEndpointUrl: endpoint?.endpointUrl,
+    lender,
+    discoveredEndpointUrl: discovered?.endpointUrl,
+  })
   const endpointHosts = summarizeEndpointHosts(uniqueCandidates)
   const endpointDiscoveryMs = elapsedMs(endpointDiscoveryStartedAt)
 
@@ -218,14 +227,8 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
 
   collectionMs = elapsedMs(collectionStartedAt)
 
+  const productIds = Array.from(discoveredProductEndpointMap.keys())
   if (successfulIndexFetch) {
-    const productIds = Array.from(discoveredProductEndpointMap.keys())
-    const endpointUrlByProductId = Object.fromEntries(
-      Array.from(discoveredProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
-    )
-    const fallbackFetchEventIdByProductId = Object.fromEntries(
-      Array.from(discoveredProductFallbackFetchEventIdMap.entries()).map(([productId, fetchEventId]) => [productId, fetchEventId]),
-    )
     await setLenderDatasetExpectedDetails(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -239,6 +242,18 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       lenderCode: job.lenderCode,
       dataset: 'home_loans',
     })
+  }
+
+  if (shouldShortCircuitAfterHomeLoanIndexFetch({
+    successfulIndexFetch,
+    discoveredProductCount: productIds.length,
+  })) {
+    const endpointUrlByProductId = Object.fromEntries(
+      Array.from(discoveredProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
+    )
+    const fallbackFetchEventIdByProductId = Object.fromEntries(
+      Array.from(discoveredProductFallbackFetchEventIdMap.entries()).map(([productId, fetchEventId]) => [productId, fetchEventId]),
+    )
     const detailEnqueue =
       productIds.length > 0
         ? await enqueueProductDetailJobs(env, {
@@ -544,6 +559,14 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   const writeStartedAt = Date.now()
   const written = await upsertHistoricalRateRows(env.DB, accepted)
   writeMs = elapsedMs(writeStartedAt)
+  await recordLenderDatasetWriteStats(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: 'home_loans',
+    acceptedRows: accepted.length,
+    writtenRows: written,
+    droppedRows: dropped.length,
+  })
   log.info('consumer', `daily_lender_fetch completed: ${written} written, ${dropped.length} dropped`, {
     runId: job.runId,
     lenderCode: job.lenderCode,
@@ -598,4 +621,12 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     collectionDate: job.collectionDate,
     notes: cdrCollectionNotes(collectedRows.length, accepted.length),
   })
+
+  if (detailJobsEnqueued === 0) {
+    await finalizeLenderDatasetIfReady(env, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+  }
 }

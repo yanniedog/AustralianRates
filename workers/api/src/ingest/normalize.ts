@@ -157,9 +157,17 @@ function tierForBoundary(percent: number): LvrTier {
 
 export type LvrTierResult = { tier: LvrTier; wasDefault: boolean }
 
+function normalizeLvrBoundaryPercent(value: number): number {
+  if (value > 0 && value <= 1) {
+    return Number((value * 100).toFixed(4))
+  }
+  return value
+}
+
 export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: number | null): LvrTierResult {
   if (Number.isFinite(minLvr as number) || Number.isFinite(maxLvr as number)) {
-    const hi = Number.isFinite(maxLvr as number) ? (maxLvr as number) : (minLvr as number)
+    const hiRaw = Number.isFinite(maxLvr as number) ? (maxLvr as number) : (minLvr as number)
+    const hi = normalizeLvrBoundaryPercent(hiRaw)
     return { tier: tierForBoundary(hi), wasDefault: false }
   }
 

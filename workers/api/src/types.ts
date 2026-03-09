@@ -191,6 +191,7 @@ export type LenderConfig = {
   register_brand_name: string
   seed_rate_urls: string[]
   products_endpoint?: string
+  additional_products_endpoints?: string[]
 }
 
 export type LenderConfigFile = {

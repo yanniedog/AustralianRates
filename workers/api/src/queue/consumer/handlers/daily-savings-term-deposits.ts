@@ -9,6 +9,7 @@ import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { discoverProductsEndpoint } from '../../../ingest/cdr'
 import { fetchSavingsProductIds, fetchTermDepositProductIds } from '../../../ingest/cdr-savings'
+import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../producer'
 import type { DailySavingsLenderJob, EnvBindings } from '../../../types'
@@ -65,16 +66,16 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   await Promise.all(ensureRuns)
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
-  const endpointCandidates: string[] = []
-  if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
-  if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
   const discovered = await discoverProductsEndpoint(lender, {
     env,
     runId: job.runId,
     lenderCode: job.lenderCode,
   })
-  if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
-  const uniqueCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
+  const uniqueCandidates = candidateProductEndpoints({
+    cachedEndpointUrl: endpoint?.endpointUrl,
+    lender,
+    discoveredEndpointUrl: discovered?.endpointUrl,
+  })
   const endpointHosts = summarizeEndpointHosts(uniqueCandidates)
   const endpointDiscoveryMs = elapsedMs(endpointDiscoveryStartedAt)
 

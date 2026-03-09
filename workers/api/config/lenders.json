@@ -99,7 +99,7 @@
       "register_brand_name": "AMP Bank",
       "products_endpoint": "https://pub.cdr-sme.amp.com.au/api/cds-au/v1/banking/products",
       "seed_rate_urls": [
-        "https://www.amp.com.au/home-loans/rates-and-fees"
+        "https://www.amp.com.au/home-loans/interest-rates-fees"
       ]
     },
     {
@@ -147,6 +147,7 @@
       "name": "BOQ",
       "canonical_bank_name": "Bank of Queensland",
       "register_brand_name": "Bank of Queensland",
+      "products_endpoint": "https://api.cds.boq.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.boq.com.au/personal/home-loans/home-loan-interest-rates"
       ]
@@ -156,8 +157,12 @@
       "name": "Great Southern Bank",
       "canonical_bank_name": "Great Southern Bank",
       "register_brand_name": "Great Southern Bank",
+      "products_endpoint": "https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products",
+      "additional_products_endpoints": [
+        "https://od1.open-banking.business.greatsouthernbank.com.au/api/cds-au/v1/banking/products"
+      ],
       "seed_rate_urls": [
-        "https://www.greatsouthernbank.com.au/home-loans/rates"
+        "https://www.greatsouthernbank.com.au/home-loans/interest-rates"
       ]
     }
   ]

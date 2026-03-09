@@ -7,6 +7,7 @@ import { persistRawPayload } from '../../../db/raw-payloads'
 import { upsertSavingsRateRows } from '../../../db/savings-rates'
 import { upsertTdRateRows } from '../../../db/td-rates'
 import { discoverProductsEndpoint } from '../../../ingest/cdr'
+import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
 import { collectHistoricalDayFromWayback } from '../../../ingest/wayback-historical'
 import type { EnvBindings, HistoricalTaskExecuteJob } from '../../../types'
 import { log } from '../../../utils/logger'
@@ -76,17 +77,17 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
   try {
     const payloadFetchEventIdBySourceUrl = new Map<string, number>()
     const endpointDiscoveryStartedAt = Date.now()
-    const endpointCandidates: string[] = []
     const endpoint = await getCachedEndpoint(env.DB, task.lender_code)
-    if (endpoint?.endpointUrl) endpointCandidates.push(endpoint.endpointUrl)
-    if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
     const discovered = await discoverProductsEndpoint(lender, {
       env,
       runId: job.runId,
       lenderCode: task.lender_code,
     })
-    if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
-    const uniqueEndpointCandidates = Array.from(new Set(endpointCandidates.filter(Boolean)))
+    const uniqueEndpointCandidates = candidateProductEndpoints({
+      cachedEndpointUrl: endpoint?.endpointUrl,
+      lender,
+      discoveredEndpointUrl: discovered?.endpointUrl,
+    })
     const endpointHosts = uniqueEndpointCandidates
       .map((value) => {
         try {

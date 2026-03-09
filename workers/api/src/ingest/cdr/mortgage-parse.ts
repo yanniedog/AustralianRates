@@ -111,15 +111,16 @@ function parseLvrBounds(rate: JsonRecord): { min: number | null; max: number | n
 function parseAnnualFeeFromDetail(detail: JsonRecord): number | null {
   const fees = asArray(detail.fees).filter(isRecord)
   for (const fee of fees) {
-    const feeType = pickText(fee, ['feeType', 'name']).toLowerCase()
-    if (!feeType.includes('annual') && !feeType.includes('package')) {
+    const feeText = `${pickText(fee, ['feeType'])} ${pickText(fee, ['name'])} ${pickText(fee, ['additionalInfo'])}`.toLowerCase()
+    if (!feeText.includes('annual') && !feeText.includes('package')) {
       continue
     }
     const fixedAmount = isRecord(fee.fixedAmount) ? fee.fixedAmount : null
+    const additionalValue = getText(fee.additionalValue)
     const amount =
       parseAnnualFee(fee.amount) ??
-      parseAnnualFee(fee.additionalValue) ??
-      parseAnnualFee(fixedAmount ? fixedAmount.amount : null)
+      parseAnnualFee(fixedAmount ? fixedAmount.amount : null) ??
+      (/^p\d/i.test(additionalValue) ? null : parseAnnualFee(additionalValue))
     if (amount != null) {
       return amount
     }
@@ -136,7 +137,8 @@ export function parseRatesFromDetail(input: {
   const detail = input.detail
   const productId = pickText(detail, ['productId', 'id'])
   const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
-  if (!productId || !productName || !isProductNameLikelyRateProduct(productName)) {
+  const isLikelyMortgageProduct = isResidentialMortgage(detail) || isProductNameLikelyRateProduct(productName)
+  if (!productId || !productName || !isLikelyMortgageProduct) {
     return []
   }
   const rates = extractRatesArray(detail)
@@ -159,9 +161,6 @@ export function parseRatesFromDetail(input: {
     const contextText = collectConstraintText(rate, detail)
     const lvr = parseLvrBounds(rate)
     const contextLower = contextText.toLowerCase()
-    if (playbook.excludeKeywords.some((x) => contextLower.includes(x))) {
-      continue
-    }
 
     const lvrResult = normalizeLvrTier(contextText, lvr.min, lvr.max)
 

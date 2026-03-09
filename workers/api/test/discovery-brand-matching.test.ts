@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandMatchScore, selectBestMatchingBrand, type RegisterBrand } from '../src/ingest/cdr/discovery'
+import { candidateProductEndpoints } from '../src/ingest/product-endpoints'
 import type { LenderConfig } from '../src/types'
 
 function lender(overrides?: Partial<LenderConfig>): LenderConfig {
@@ -73,5 +74,44 @@ describe('CDR discovery brand matching', () => {
     }
 
     expect(brandMatchScore(cba, commbizOnly)).toBe(0)
+  })
+
+  it('prefers Great Southern retail over Business+ when retail is the configured primary endpoint', () => {
+    const greatSouthern = lender({
+      code: 'great_southern',
+      name: 'Great Southern Bank',
+      canonical_bank_name: 'Great Southern Bank',
+      register_brand_name: 'Great Southern Bank',
+      products_endpoint: 'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products',
+      additional_products_endpoints: [
+        'https://od1.open-banking.business.greatsouthernbank.com.au/api/cds-au/v1/banking/products',
+      ],
+    })
+    const brands: RegisterBrand[] = [
+      {
+        brandName: 'Great Southern Bank Business+',
+        legalEntityName: '',
+        endpointUrl: 'https://od1.open-banking.business.greatsouthernbank.com.au/api/cds-au/v1/banking/products',
+      },
+      {
+        brandName: 'Great Southern Bank',
+        legalEntityName: '',
+        endpointUrl: 'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products',
+      },
+    ]
+
+    expect(selectBestMatchingBrand(greatSouthern, brands)?.endpointUrl).toBe(
+      'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products',
+    )
+    expect(
+      candidateProductEndpoints({
+        cachedEndpointUrl: null,
+        lender: greatSouthern,
+        discoveredEndpointUrl: 'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products',
+      }),
+    ).toEqual([
+      'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products',
+      'https://od1.open-banking.business.greatsouthernbank.com.au/api/cds-au/v1/banking/products',
+    ])
   })
 })

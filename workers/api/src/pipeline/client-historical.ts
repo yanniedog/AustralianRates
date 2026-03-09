@@ -20,6 +20,7 @@ import { upsertHistoricalRateRows } from '../db/historical-rates'
 import { upsertSavingsRateRows } from '../db/savings-rates'
 import { upsertTdRateRows } from '../db/td-rates'
 import { discoverProductsEndpoint } from '../ingest/cdr'
+import { candidateProductEndpoints } from '../ingest/product-endpoints'
 import { type NormalizedRateRow, validateNormalizedRow } from '../ingest/normalize'
 import { type NormalizedSavingsRow, type NormalizedTdRow, validateNormalizedSavingsRow, validateNormalizedTdRow } from '../ingest/normalize-savings'
 import { enqueueHistoricalTaskJobs } from '../queue/producer'
@@ -267,16 +268,17 @@ export async function claimHistoricalPullTask(
     return fail(500, 'INTERNAL_ERROR', `Unknown lender code in task: ${task.lender_code}`)
   }
 
-  const endpointCandidates: string[] = []
   const cached = await getCachedEndpoint(env.DB, lender.code)
-  if (cached?.endpointUrl) endpointCandidates.push(cached.endpointUrl)
-  if (lender.products_endpoint) endpointCandidates.push(lender.products_endpoint)
   const discovered = await discoverProductsEndpoint(lender, {
     env,
     runId,
     lenderCode: lender.code,
   })
-  if (discovered?.endpointUrl) endpointCandidates.push(discovered.endpointUrl)
+  const endpointCandidates = candidateProductEndpoints({
+    cachedEndpointUrl: cached?.endpointUrl,
+    lender,
+    discoveredEndpointUrl: discovered?.endpointUrl,
+  })
 
   return ok({
     run_id: runId,
@@ -285,7 +287,7 @@ export async function claimHistoricalPullTask(
       lender_code: task.lender_code,
       collection_date: task.collection_date,
       seed_urls: lender.seed_rate_urls.slice(0, 2),
-      endpoint_candidates: Array.from(new Set(endpointCandidates.filter(Boolean))),
+      endpoint_candidates: endpointCandidates,
       attempt_count: task.attempt_count,
     },
   })
