@@ -231,9 +231,11 @@
     min-width: 10ch;
 }
 
-/* Keep Banks column wide enough for helper text */
+/* Keep Banks column wide enough for helper text; stack above adjacent filter-range to avoid overlap */
 .filter-primary-group > label:first-of-type {
     min-width: 14rem;
+    position: relative;
+    z-index: 1;
 }
 
 .filter-bank-tools {
