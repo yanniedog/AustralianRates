@@ -12,6 +12,8 @@
 
     function currentUiMode() {
         if (params.get('view')) return normalizeUiMode(params.get('view'));
+        var requestedTab = String(params.get('tab') || '').toLowerCase();
+        if (requestedTab === 'pivot' || requestedTab === 'charts') return 'analyst';
         return normalizeUiMode(runtimePrefs.uiMode);
     }
 

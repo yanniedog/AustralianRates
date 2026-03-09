@@ -1,0 +1,340 @@
+body.ar-public,
+body.ar-legal {
+    --ar-surface: rgba(255, 252, 247, 0.88);
+    --ar-surface-solid: #fffdf8;
+    --ar-surface-soft: rgba(249, 243, 233, 0.92);
+    --ar-surface-muted: rgba(237, 230, 218, 0.72);
+    --ar-text: #455468;
+    --ar-muted: #6d7c90;
+    --ar-strong: #142033;
+    --ar-line: rgba(111, 129, 154, 0.18);
+    --ar-stroke: rgba(111, 129, 154, 0.16);
+    --ar-stroke-strong: rgba(31, 75, 124, 0.22);
+    --ar-shadow: 0 24px 56px rgba(25, 45, 77, 0.08);
+    --ar-accent: #1468d8;
+    --ar-accent-strong: #0f58b6;
+    --ar-accent-soft: rgba(20, 104, 216, 0.12);
+    --ar-accent-2: #0d8f74;
+    --ar-accent-2-soft: rgba(13, 143, 116, 0.12);
+    --ar-focus: #0d6efd;
+    background:
+        radial-gradient(circle at top left, rgba(20, 104, 216, 0.08), transparent 34%),
+        radial-gradient(circle at top right, rgba(13, 143, 116, 0.08), transparent 28%),
+        linear-gradient(180deg, #f4efe7 0%, #fbf8f3 42%, #f5f8fc 100%);
+    color: var(--ar-text);
+}
+
+body.ar-public.ar-section-savings,
+body.ar-legal.ar-section-savings {
+    --ar-accent: #128767;
+    --ar-accent-strong: #0d6f55;
+}
+
+body.ar-public.ar-section-term-deposits,
+body.ar-legal.ar-section-term-deposits {
+    --ar-accent: #b77212;
+    --ar-accent-strong: #935b0d;
+}
+
+body.ar-public .bg-layer,
+body.ar-legal .bg-layer {
+    background:
+        radial-gradient(920px 380px at -6% 0%, rgba(20, 104, 216, 0.1) 0%, transparent 56%),
+        radial-gradient(760px 320px at 106% 0%, rgba(13, 143, 116, 0.12) 0%, transparent 52%),
+        linear-gradient(to right, rgba(17, 38, 65, 0.035) 1px, transparent 1px) 0 0 / 42px 42px,
+        linear-gradient(to bottom, rgba(17, 38, 65, 0.035) 1px, transparent 1px) 0 0 / 42px 42px;
+}
+
+body.ar-public .site-header,
+body.ar-legal .site-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(248, 244, 238, 0.88);
+    box-shadow: 0 8px 28px rgba(25, 45, 77, 0.06);
+}
+
+body.ar-public .site-header-inner,
+body.ar-legal .site-header-inner {
+    max-width: 1320px;
+    min-height: 72px;
+    padding: 12px 24px;
+}
+
+body.ar-public .site-brand-mark,
+body.ar-legal .site-brand-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 14px;
+    border-color: rgba(20, 104, 216, 0.12);
+    background: linear-gradient(145deg, rgba(20, 104, 216, 0.12), rgba(13, 143, 116, 0.08));
+    color: var(--ar-accent);
+    font-weight: 800;
+}
+
+body.ar-public .site-brand,
+body.ar-legal .site-brand {
+    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    font-size: 1.14rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+body.ar-public .site-nav-link,
+body.ar-public .site-nav-technical-summary,
+body.ar-public .site-nav-refresh-btn,
+body.ar-public .site-nav-github,
+body.ar-public .site-nav-host-switch,
+body.ar-legal .site-nav-link,
+body.ar-legal .site-nav-technical-summary,
+body.ar-legal .site-nav-refresh-btn,
+body.ar-legal .site-nav-github,
+body.ar-legal .site-nav-host-switch {
+    border: 1px solid rgba(65, 87, 117, 0.14);
+    background: rgba(255, 255, 255, 0.65);
+    color: var(--ar-muted);
+    box-shadow: none;
+}
+
+body.ar-public .site-nav-link.active,
+body.ar-public .site-nav-host-switch:hover,
+body.ar-public .site-nav-link:hover,
+body.ar-public .site-nav-github:hover,
+body.ar-legal .site-nav-host-switch:hover,
+body.ar-legal .site-nav-link:hover,
+body.ar-legal .site-nav-github:hover {
+    color: var(--ar-strong);
+    border-color: rgba(20, 104, 216, 0.18);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+body.ar-public .site-nav-link.active,
+body.ar-legal .site-nav-link.active {
+    background: linear-gradient(135deg, var(--ar-accent), var(--ar-accent-2));
+    color: #fff;
+}
+
+body.ar-public .shell,
+body.ar-legal .shell {
+    max-width: 1320px;
+    padding: 32px 24px 40px;
+}
+
+body.ar-public .panel,
+body.ar-legal .panel {
+    border: 1px solid rgba(255, 255, 255, 0.56);
+    border-radius: 28px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(251, 247, 241, 0.92)),
+        linear-gradient(145deg, rgba(20, 104, 216, 0.04), rgba(13, 143, 116, 0.03));
+    box-shadow: var(--ar-shadow);
+    backdrop-filter: blur(16px);
+}
+
+body.ar-public .hero,
+body.ar-legal .legal-hero {
+    border-color: rgba(20, 104, 216, 0.12);
+    background:
+        radial-gradient(circle at top right, rgba(20, 104, 216, 0.08), transparent 32%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(247, 242, 233, 0.96));
+}
+
+body.ar-public .hero,
+body.ar-legal .legal-hero {
+    padding: 30px;
+}
+
+body.ar-public .hero-copy,
+body.ar-legal .legal-hero-copy {
+    gap: 14px;
+}
+
+body.ar-public .hero-copy h1,
+body.ar-legal .legal-hero h1 {
+    max-width: 12ch;
+    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    letter-spacing: -0.05em;
+    line-height: 0.98;
+}
+
+body.ar-public .subtitle,
+body.ar-legal .subtitle {
+    max-width: 58ch;
+    font-size: 1.02rem;
+    line-height: 1.65;
+    color: var(--ar-muted);
+}
+
+body.ar-public .eyebrow,
+body.ar-legal .eyebrow,
+body.ar-public .workspace-summary-kicker,
+body.ar-public .chart-kicker,
+body.ar-public .chart-series-kicker,
+body.ar-legal .legal-callout-title {
+    color: var(--ar-accent-strong);
+    letter-spacing: 0.12em;
+    font-weight: 700;
+}
+
+body.ar-public .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+body.ar-public .hero-actions button,
+body.ar-public .workspace-summary-actions button,
+body.ar-public #draw-chart {
+    min-height: 48px;
+    padding-inline: 20px;
+    border-radius: 999px;
+}
+
+body.ar-public .hero-trust,
+body.ar-legal .legal-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+body.ar-public .hero-trust-pill,
+body.ar-legal .legal-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.58rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(31, 75, 124, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--ar-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+body.ar-public .hero-aside {
+    display: grid;
+    gap: 14px;
+}
+
+body.ar-public .hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+body.ar-public .hero-stat,
+body.ar-public .workspace-summary,
+body.ar-public .mode-panel,
+body.ar-public .tabs,
+body.ar-public .quick-card,
+body.ar-public .chart-meta,
+body.ar-legal .legal-callout {
+    border: 1px solid rgba(31, 75, 124, 0.1);
+    background: rgba(255, 255, 255, 0.68);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+body.ar-public .hero-guide {
+    padding: 22px;
+    border-radius: 24px;
+    background: linear-gradient(160deg, #16365c, #0f6b7d);
+    color: rgba(244, 249, 255, 0.92);
+}
+
+body.ar-public .hero-guide li,
+body.ar-public .hero-guide p {
+    color: inherit;
+}
+
+body.ar-public .workspace-grid {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+body.ar-public .workspace-rail {
+    position: sticky;
+    top: 96px;
+}
+
+body.ar-public .workspace-summary-title,
+body.ar-public .chart-hero-copy h2,
+body.ar-public .market-notes-section h2,
+body.ar-legal .legal-panel h2,
+body.ar-legal .legal-support-card h2 {
+    color: var(--ar-strong);
+    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    letter-spacing: -0.03em;
+}
+
+body.ar-public .chart-summary-pill,
+body.ar-public .workspace-summary-pill,
+body.ar-public .filter-dirty-indicator,
+body.ar-public .filter-chip {
+    background: rgba(255, 255, 255, 0.84);
+    border-color: rgba(31, 75, 124, 0.14);
+    color: var(--ar-muted);
+}
+
+body.ar-public .tab-btn.active,
+body.ar-public .mode-btn.active {
+    background: linear-gradient(135deg, var(--ar-accent), var(--ar-accent-2));
+    color: #fff;
+}
+
+body.ar-public .site-footer,
+body.ar-legal .site-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.6);
+    background: rgba(243, 238, 230, 0.88);
+    color: var(--ar-muted);
+}
+
+body.ar-public .footer-host-switch,
+body.ar-legal .footer-host-switch {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.52rem 0.82rem;
+    border-radius: 999px;
+    border: 1px solid rgba(31, 75, 124, 0.14);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--ar-muted);
+    text-decoration: none;
+}
+
+body.ar-public .footer-host-switch:hover,
+body.ar-legal .footer-host-switch:hover {
+    color: var(--ar-strong);
+    border-color: rgba(20, 104, 216, 0.2);
+}
+
+body.ar-legal .legal-shell {
+    max-width: 980px;
+    gap: 18px;
+}
+
+body.ar-legal .legal-stack,
+body.ar-legal .legal-support {
+    gap: 16px;
+}
+
+@media (max-width: 1100px) {
+    body.ar-public .workspace-grid {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-public .workspace-rail {
+        position: static;
+    }
+}
+
+@media (max-width: 760px) {
+    body.ar-public .shell,
+    body.ar-legal .shell {
+        padding: 20px 14px 28px;
+    }
+
+    body.ar-public .hero,
+    body.ar-legal .legal-hero {
+        padding: 22px;
+    }
+
+    body.ar-public .hero-stats {
+        grid-template-columns: 1fr;
+    }
+}

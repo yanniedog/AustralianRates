@@ -9,6 +9,7 @@
     <title>Compare Australian Term Deposit Rates - Daily CDR Data | AustralianRates</title>
     <meta name="description" content="Compare term deposit interest rates from Australia's major banks updated daily from official CDR data. Track rates across terms from 1 to 60 months.">
     <link rel="canonical" href="https://www.australianrates.com/term-deposits/">
+    <link rel="alternate" media="only screen and (max-width: 760px)" href="https://m.australianrates.com/term-deposits/">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%</text></svg>">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Compare Australian Term Deposit Rates | AustralianRates">
@@ -27,6 +28,7 @@
         "creator": { "@type": "Organization", "name": "AustralianRates" }
     }
     </script>
+    <script src="../site-variant.js?v=20260310"></script>
     <link rel="stylesheet" href="../vendor/tabulator/tabulator_midnight.min.css?v=22af7ad">
     <link rel="stylesheet" href="../vendor/pivottable/pivot.min.css?v=22af7ad">
     <link rel="stylesheet" href="../foundation.css?v=22af7ad">
@@ -37,6 +39,8 @@
     <link rel="stylesheet" href="../public-charts.css?v=22af7ad">
     <link rel="stylesheet" href="../public-chart-summary.css?v=22af7ad">
     <link rel="stylesheet" href="../public-ux.css?v=22af7ad">
+    <link rel="stylesheet" href="../site-redesign.css?v=20260310">
+    <link rel="stylesheet" href="../mobile-host.css?v=20260310">
     <script src="../theme.js?v=22af7ad"></script>
 </head>
 <body class="ar-public ar-section-term-deposits" data-ar-section="term-deposits">
@@ -237,7 +241,7 @@
                             <button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button>
                             <div id="table-settings-popover" class="table-settings-popover" hidden></div>
                         </div>
-                        <details class="panel rate-table-collapsible" id="rate-table-details">
+                        <details class="panel rate-table-collapsible" id="rate-table-details" open>
                             <summary class="rate-table-toggle" aria-label="Show or hide rate table">Rate table</summary>
                             <div id="explorer-overview" class="explorer-overview" aria-live="polite">
                                 <div class="explorer-overview-copy">
@@ -429,5 +433,6 @@
     <script src="../ar-ux.js?v=22af7ad"></script>
     <script src="../app.js?v=22af7ad"></script>
     <script src="../frame.js?v=22af7ad"></script>
+    <script src="../site-variant-ui.js?v=20260310"></script>
 </body>
 </html>
