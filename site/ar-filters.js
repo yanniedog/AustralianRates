@@ -79,27 +79,67 @@
         return toTitleWords(key);
     }
 
-    function renderActiveFilterChips() {
-        if (!els.activeFilterChips) return;
-        var params = buildFilterParams();
-        var chips = [];
-        Object.keys(params).forEach(function (key) {
-            if (key === 'include_removed') return;
-            var value = params[key];
-            if (value == null) return;
-            var text = String(value).trim();
+    function isDisplayDefaultParam(key, value) {
+        var text = String(value == null ? '' : value).trim().toLowerCase();
+        if (!text) return true;
+        if (key === 'include_removed') return true;
+        if (key === 'min_rate' && text === '0.01') return true;
+        if (key === 'mode' && text === 'all') return true;
+        return false;
+    }
+
+    function getDisplayParams() {
+        var raw = buildFilterParams();
+        var params = {};
+        Object.keys(raw).forEach(function (key) {
+            if (isDisplayDefaultParam(key, raw[key])) return;
+            params[key] = String(raw[key]).trim();
+        });
+        return params;
+    }
+
+    function getChipEntries(params) {
+        var source = params && typeof params === 'object' ? params : getDisplayParams();
+        var entries = [];
+        Object.keys(source).forEach(function (key) {
+            var text = String(source[key] || '').trim();
             if (!text) return;
             var field = findFieldByParam(key);
             var label = formatChipLabel(field, key);
-            if (text.indexOf(',') >= 0) {
-                var parts = text.split(',').filter(Boolean).map(function (part) {
-                    return field ? formatFilterValue(field.param, part) : part;
+            var values = key === 'include_manual' ? ['true'] : text.split(',').filter(Boolean);
+            values.forEach(function (rawValue) {
+                var displayValue = rawValue;
+                if (key === 'include_manual') displayValue = 'Included';
+                else if (field) displayValue = formatFilterValue(field.param, rawValue);
+                entries.push({
+                    key: key,
+                    label: label,
+                    rawValue: rawValue,
+                    displayValue: displayValue,
                 });
-                text = parts.join(', ');
-            } else if (field) {
-                text = formatFilterValue(field.param, text);
-            }
-            chips.push('<span class="filter-chip"><strong>' + esc(label) + ':</strong> ' + esc(text) + '</span>');
+            });
+        });
+        return entries;
+    }
+
+    function getActiveFilterCount() {
+        return getChipEntries(getDisplayParams()).length;
+    }
+
+    function emitFiltersState() {
+        window.dispatchEvent(new CustomEvent('ar:filters-state', {
+            detail: getStateSnapshot(),
+        }));
+    }
+
+    function renderActiveFilterChips() {
+        if (!els.activeFilterChips) return;
+        var chips = getChipEntries(getDisplayParams()).map(function (entry) {
+            return '' +
+                '<button class="filter-chip" type="button" data-remove-param="' + esc(entry.key) + '" data-remove-value="' + esc(entry.rawValue) + '">' +
+                    '<strong>' + esc(entry.label) + ':</strong> ' + esc(entry.displayValue) +
+                    '<span class="filter-chip-remove" aria-hidden="true">&times;</span>' +
+                '</button>';
         });
 
         if (!chips.length) {
@@ -112,13 +152,17 @@
     function renderDirtyIndicator() {
         if (!els.filterDirtyIndicator) return;
         var dirty = isFilterDirty();
+        var activeCount = getActiveFilterCount();
         els.filterDirtyIndicator.classList.toggle('is-dirty', dirty);
-        els.filterDirtyIndicator.textContent = dirty ? 'Unsaved filter changes' : 'Filters applied';
+        els.filterDirtyIndicator.textContent = dirty
+            ? 'Unsaved changes'
+            : (activeCount ? activeCount + ' active filters' : 'No active filters');
     }
 
     function refreshFilterUiState() {
         renderActiveFilterChips();
         renderDirtyIndicator();
+        emitFiltersState();
     }
 
     function markFiltersApplied() {
@@ -141,6 +185,62 @@
                 el.addEventListener('input', refreshFilterUiState);
             }
         });
+        if (els.activeFilterChips) {
+            els.activeFilterChips.addEventListener('click', function (event) {
+                var button = event.target && event.target.closest
+                    ? event.target.closest('[data-remove-param]')
+                    : null;
+                if (!button) return;
+                clearFilterValue(
+                    String(button.getAttribute('data-remove-param') || ''),
+                    String(button.getAttribute('data-remove-value') || '')
+                );
+            });
+        }
+    }
+
+    function clearFilterValue(param, rawValue) {
+        var key = String(param || '').trim();
+        var value = String(rawValue || '').trim();
+        if (!key) return;
+
+        if (key === 'start_date' && els.filterStartDate) {
+            els.filterStartDate.value = '';
+        } else if (key === 'end_date' && els.filterEndDate) {
+            els.filterEndDate.value = '';
+        } else if (key === 'mode' && els.filterMode) {
+            els.filterMode.value = 'all';
+        } else if (key === 'include_manual' && els.filterIncludeManual) {
+            els.filterIncludeManual.checked = false;
+        } else {
+            var field = findFieldByParam(key);
+            var el = field ? getFilterEl(field.id) : null;
+            if (!el) return;
+            if (isMultiField(field)) {
+                setSelectedValues(el, selectedValues(el).filter(function (candidate) {
+                    return String(candidate) !== value;
+                }));
+                if (el === els.filterBank && filterUi && filterUi.refreshBankOptions) {
+                    filterUi.refreshBankOptions();
+                }
+            } else {
+                el.value = '';
+                if (field && field.param === 'min_rate') applyDefaultMinRateIfEmpty();
+            }
+        }
+
+        if (filterUi && filterUi.validateDateInputs) {
+            filterUi.validateDateInputs({ focusInvalid: false });
+        }
+        refreshFilterUiState();
+    }
+
+    function getStateSnapshot() {
+        return {
+            params: getDisplayParams(),
+            activeCount: getActiveFilterCount(),
+            dirty: isFilterDirty(),
+        };
     }
 
     function resetFilters() {
@@ -153,6 +253,7 @@
         if (els.filterMode) els.filterMode.value = 'all';
         if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
         if (els.refreshInterval) els.refreshInterval.value = '60';
+        applyDefaultMinRateIfEmpty();
         if (filterUi && filterUi.resetUi) filterUi.resetUi();
         refreshFilterUiState();
     }
@@ -476,6 +577,7 @@
                 });
             }
             restoreUrlState();
+            applyDefaultMinRateIfEmpty();
             if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
@@ -485,11 +587,20 @@
                 message: err && err.message ? err.message : String(err),
             });
             restoreUrlState();
+            applyDefaultMinRateIfEmpty();
             if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
             markFiltersApplied();
         }
+    }
+
+    function applyDefaultMinRateIfEmpty() {
+        var field = findFieldByParam('min_rate');
+        if (!field) return;
+        var el = getFilterEl(field.id);
+        if (!el || String(el.value || '').trim() !== '') return;
+        el.value = '0.01';
     }
 
     window.AR.filters = {
@@ -508,6 +619,7 @@
                 ? filterUi.validateDateInputs()
                 : true;
         },
+        getStateSnapshot: getStateSnapshot,
         getFiltersPayload: function () { return latestFilterPayload; },
         readColumnPrefs: readColumnPrefs,
         writeColumnPrefs: writeColumnPrefs,

@@ -501,6 +501,14 @@
     var tableOverlayObserver = null;
     var resizeBound = false;
     var resizeTimer = null;
+    var explorerState = {
+        status: 'idle',
+        rows: 0,
+        total: 0,
+        currentPage: 1,
+        totalPages: 1,
+        message: '',
+    };
 
     function emitExplorerTableUpdated(reason) {
         var container = document.getElementById('rate-table');
@@ -512,6 +520,13 @@
                 section: section,
                 mobile: isMobile(),
             },
+        }));
+    }
+
+    function emitExplorerState(next) {
+        explorerState = Object.assign({}, explorerState, next || {});
+        window.dispatchEvent(new CustomEvent('ar:explorer-state', {
+            detail: explorerState,
         }));
     }
 
@@ -883,6 +898,14 @@
         clientLog('info', 'Explorer table init start', {
             section: window.AR.section || 'home-loans',
         });
+        emitExplorerState({
+            status: 'loading',
+            rows: 0,
+            total: 0,
+            currentPage: 1,
+            totalPages: 1,
+            message: '',
+        });
 
         var apiBase = (config && config.apiBase) ? config.apiBase : (window.location.origin + (window.AR.sectionConfig && window.AR.sectionConfig.apiPath ? window.AR.sectionConfig.apiPath : '/api/home-loan-rates'));
         var sharedFilters = filters && typeof filters.getFiltersPayload === 'function' ? filters.getFiltersPayload() : null;
@@ -921,6 +944,11 @@
                 q.set('size', '50');
                 q.set('sort', currentSort.field);
                 q.set('dir', currentSort.dir);
+                emitExplorerState({
+                    status: 'loading',
+                    currentPage: Number(params && params.page != null ? params.page : 1) || 1,
+                    message: '',
+                });
 
                 return url + '?' + q.toString();
             },
@@ -964,11 +992,25 @@
                     // Return full object so Tabulator gets pagination metadata and clears the loading overlay.
                     var lastPage = response && response.last_page != null ? Number(response.last_page) : 1;
                     var total = response && response.total != null ? Number(response.total) : rows.length;
+                    emitExplorerState({
+                        status: 'ready',
+                        rows: rows.length,
+                        total: total,
+                        currentPage: Number(_params && _params.page != null ? _params.page : 1) || 1,
+                        totalPages: Math.max(1, lastPage),
+                        message: '',
+                    });
                     return { last_page: Math.max(1, lastPage), last_row: total, data: rows };
                 } catch (e) {
                     var errMsg = e && e.message ? e.message : String(e);
                     clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data response processing failed', { message: errMsg });
                     if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: ajaxResponse threw', e);
+                    emitExplorerState({
+                        status: 'error',
+                        rows: 0,
+                        total: 0,
+                        message: errMsg,
+                    });
                     return { last_page: 1, last_row: 0, data: [] };
                 }
             },
@@ -980,6 +1022,12 @@
                 }
                 clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
                 if (typeof console !== 'undefined' && console.error) console.error('EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', errData);
+                emitExplorerState({
+                    status: 'error',
+                    rows: 0,
+                    total: 0,
+                    message: errData.message || 'Explorer data load failed',
+                });
                 if (rateTable) {
                     try {
                         hideTableLoader('ajaxError');
@@ -1120,6 +1168,10 @@
     function reloadExplorer() {
         if (rateTable) {
             clientLog('info', 'Explorer reload requested');
+            emitExplorerState({
+                status: 'loading',
+                message: '',
+            });
             rateTable.setData();
             emitExplorerTableUpdated('reload-requested');
         }

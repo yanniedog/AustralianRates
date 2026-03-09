@@ -6,7 +6,8 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"test": "vitest",
+		"test": "vitest && npm run test:policy",
+		"test:policy": "node ../../scripts/enforce-api-test-policy.js",
 		"cf-typegen": "wrangler types"
 	},
 	"devDependencies": {

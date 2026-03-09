@@ -19,7 +19,7 @@ This project treats **real data only** in tests as both a quality stance and a n
   - `stubGlobal('fetch', ...)` returning fake JSON or HTML
   - Hand-crafted row/response objects (e.g. `validHomeLoanRow()`) — use real-data fixtures instead
 - **Allowed:** Pure unit tests that only use literal inputs (e.g. parsing a string, testing a pure function with constants).
-- **Tests that need D1, Queue, or live API:** Run them with vitest-pool-workers or integration; until then, skip with a clear comment. Do not implement them with mocks.
+- **Tests that need D1, Queue, or live API:** Run them with vitest-pool-workers or integration; until then, replace them with `it.todo(...)` or move them to integration with a clear note. Do not implement them with mocks.
 
 ## References
 

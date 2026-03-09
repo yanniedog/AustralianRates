@@ -136,21 +136,21 @@ async function verifySection(page, section) {
         await page.waitForTimeout(350);
     }
     await drawChart(page);
-    failures.push(...await verifyChartWorkspace(page, `${section.name} surface`, {
-        expectedView: 'surface',
-        expectLendersButton: true,
-        expectSliceText: section.expectedSliceText || [],
-        expectRailFit: true,
-        expectNote: 'click',
-    }));
-    const lendersSwitch = await verifyCachedViewSwitch(page, section.name, 'lenders');
-    if (lendersSwitch) failures.push(lendersSwitch);
     failures.push(...await verifyChartWorkspace(page, `${section.name} lenders`, {
         expectedView: 'lenders',
         expectLendersButton: true,
         expectSliceText: section.expectedSliceText || [],
         expectRailFit: true,
         expectNote: 'lender',
+    }));
+    const surfaceSwitch = await verifyCachedViewSwitch(page, section.name, 'surface');
+    if (surfaceSwitch) failures.push(surfaceSwitch);
+    failures.push(...await verifyChartWorkspace(page, `${section.name} surface`, {
+        expectedView: 'surface',
+        expectLendersButton: true,
+        expectSliceText: section.expectedSliceText || [],
+        expectRailFit: true,
+        expectNote: 'click',
     }));
     const compareSwitch = await verifyCachedViewSwitch(page, section.name, 'compare');
     if (compareSwitch) failures.push(compareSwitch);

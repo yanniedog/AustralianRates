@@ -120,7 +120,7 @@
     }
 
     function defaultView() {
-        return 'surface';
+        return 'lenders';
     }
 
     function defaultMetric() {

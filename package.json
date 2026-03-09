@@ -15,6 +15,7 @@
     "dev:archive": "npm run dev -w workers/archive",
     "test:api": "npm run test -w workers/api",
     "test:archive": "npm run test -w workers/archive",
+    "test:policy": "node scripts/enforce-api-test-policy.js",
     "test:homepage": "node test-homepage.js",
     "test:admin-portal": "node test-admin-portal.js",
     "test:site": "node test-homepage.js && node diagnose-api.js",

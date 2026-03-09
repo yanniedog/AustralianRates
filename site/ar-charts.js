@@ -29,7 +29,8 @@
     };
 
     function fields() {
-        return chartUi.getChartFields ? chartUi.getChartFields() : { view: 'surface', yField: 'interest_rate', density: 'standard' };
+        var defaultView = (window.AR.chartConfig && window.AR.chartConfig.defaultView) ? window.AR.chartConfig.defaultView() : 'lenders';
+        return chartUi.getChartFields ? chartUi.getChartFields() : { view: defaultView, yField: 'interest_rate', density: 'standard' };
     }
 
     function payloadMeta() {

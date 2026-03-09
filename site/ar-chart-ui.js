@@ -13,19 +13,24 @@
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
     var uiBound = false;
 
+    function defaultViewFallback() {
+        return chartConfig.defaultView ? chartConfig.defaultView() : 'lenders';
+    }
+
     function activeViewButton() {
-        return document.querySelector('[data-chart-view].is-active') || document.querySelector('[data-chart-view="surface"]');
+        return document.querySelector('[data-chart-view].is-active') || document.querySelector('[data-chart-view="' + defaultViewFallback() + '"]');
     }
 
     function activeView() {
         var button = activeViewButton();
-        return button ? String(button.getAttribute('data-chart-view') || 'surface') : 'surface';
+        return button ? String(button.getAttribute('data-chart-view') || defaultViewFallback()) : defaultViewFallback();
     }
 
     function setActiveView(view) {
+        var fallback = view || defaultViewFallback();
         var buttons = document.querySelectorAll('[data-chart-view]');
         for (var i = 0; i < buttons.length; i++) {
-            var isActive = String(buttons[i].getAttribute('data-chart-view') || '') === String(view || 'surface');
+            var isActive = String(buttons[i].getAttribute('data-chart-view') || '') === String(fallback);
             buttons[i].classList.toggle('is-active', isActive);
             buttons[i].setAttribute('aria-pressed', String(isActive));
         }
@@ -306,7 +311,7 @@
             els.chartOutput.removeAttribute('data-chart-rendered');
             els.chartOutput.removeAttribute('data-chart-engine');
             els.chartOutput.removeAttribute('data-chart-view');
-            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Draw a chart to render the rate surface.') + '</div>';
+            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Draw a chart to render the chart.') + '</div>';
         }
         if (els.chartDetailOutput) {
             els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'Select a series to inspect its detail trend.') + '</div>';
@@ -314,11 +319,11 @@
     }
 
     function setIdleState() {
-        setActiveView('surface');
+        setActiveView(defaultViewFallback());
         renderSummary(null, getChartFields(), null, false);
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
-        setCanvasPlaceholder('Draw a chart to render the rate surface.');
+        setCanvasPlaceholder('Draw a chart to render the chart.');
         setStatus('Choose a view, adjust the metric or density, then draw.');
     }
 
@@ -347,7 +352,7 @@
         for (var i = 0; i < buttons.length; i++) {
             buttons[i].addEventListener('click', function (event) {
                 var button = event.currentTarget;
-                var view = button ? button.getAttribute('data-chart-view') : 'surface';
+                var view = button ? button.getAttribute('data-chart-view') : defaultViewFallback();
                 setActiveView(view);
                 if (handlers && typeof handlers.onViewChange === 'function') handlers.onViewChange(view);
             });

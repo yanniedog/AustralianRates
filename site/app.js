@@ -75,7 +75,9 @@
         if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'Filters changed -- click "Load Data for Pivot" to refresh.';
         }
-        if (charts && charts.markStale) {
+        if (tabState.activeTab === 'charts' && tabState.chartDrawn && charts && charts.drawChart) {
+            charts.drawChart();
+        } else if (charts && charts.markStale) {
             charts.markStale('Filters changed. Redraw to fetch fresh chart rows.');
         } else if (tabState.chartDrawn && els.chartStatus) {
             els.chartStatus.textContent = 'Filters changed -- click "Draw Chart" to refresh.';
@@ -176,6 +178,13 @@
     window.addEventListener('ar:ui-mode-changed', function (event) {
         var mode = event && event.detail ? event.detail.mode : null;
         applyUiMode(mode);
+    });
+    window.addEventListener('ar:tab-changed', function (event) {
+        var tab = event && event.detail && event.detail.tab;
+        if (tab === 'charts' && charts && charts.drawChart && !tabState.chartDrawn) {
+            if (filters && filters.validateInputs && !filters.validateInputs()) return;
+            charts.drawChart();
+        }
     });
     document.addEventListener('keydown', applyFiltersShortcut);
 

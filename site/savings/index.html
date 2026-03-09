@@ -36,6 +36,7 @@
     <link rel="stylesheet" href="../public-pivot.css">
     <link rel="stylesheet" href="../public-charts.css">
     <link rel="stylesheet" href="../public-chart-summary.css">
+    <link rel="stylesheet" href="../public-ux.css">
     <script src="../theme.js"></script>
 </head>
 <body class="ar-public ar-section-savings" data-ar-section="savings">
@@ -54,20 +55,41 @@
                     <p class="eyebrow">Savings</p>
                     <h1>Compare current savings rates.</h1>
                     <p class="subtitle">Daily CDR-backed deposit pricing from major banks, kept simple by default and deeper only when you need it.</p>
+                    <div class="hero-actions" role="group" aria-label="Quick actions">
+                        <button id="hero-jump-rates" type="button">Explore rates</button>
+                        <button id="hero-open-charts" class="secondary" type="button">Open charts</button>
+                        <button id="hero-open-notes" class="secondary" type="button">Market notes</button>
+                    </div>
+                    <div class="hero-trust" aria-label="Why use this workspace">
+                        <span class="hero-trust-pill">Daily public CDR data</span>
+                        <span class="hero-trust-pill">No signup required</span>
+                        <span class="hero-trust-pill">CSV, XLS, and JSON exports</span>
+                    </div>
                 </div>
-                <div class="hero-stats" id="hero-stats">
-                    <div class="hero-stat" id="stat-updated" title="When rates were last collected">
-                        <span class="hero-stat-label">Updated</span>
-                        <strong class="hero-stat-value">...</strong>
+                <div class="hero-aside">
+                    <div class="hero-stats" id="hero-stats">
+                        <div class="hero-stat" id="stat-updated" title="When rates were last collected">
+                            <span class="hero-stat-label">Updated</span>
+                            <strong class="hero-stat-value">...</strong>
+                        </div>
+                        <div class="hero-stat" id="stat-cash-rate" title="Series continuity">
+                            <span class="hero-stat-label">Series</span>
+                            <strong class="hero-stat-value">product_key continuity</strong>
+                        </div>
+                        <div class="hero-stat" id="stat-records" title="Total savings rate records">
+                            <span class="hero-stat-label">Records</span>
+                            <strong class="hero-stat-value">...</strong>
+                        </div>
                     </div>
-                    <div class="hero-stat" id="stat-cash-rate" title="Series continuity">
-                        <span class="hero-stat-label">Series</span>
-                        <strong class="hero-stat-value">product_key continuity</strong>
-                    </div>
-                    <div class="hero-stat" id="stat-records" title="Total savings rate records">
-                        <span class="hero-stat-label">Records</span>
-                        <strong class="hero-stat-value">...</strong>
-                    </div>
+                    <aside class="hero-guide" aria-label="How to use the workspace">
+                        <p class="hero-guide-kicker">Start here</p>
+                        <ol class="hero-guide-list">
+                            <li>Set a bank, rate band, or date range to define the slice you care about.</li>
+                            <li>Stay in Overview when you only need a clean shortlist of current rates.</li>
+                            <li>Switch to Analysis for pivots, trend charts, and deeper product metadata.</li>
+                        </ol>
+                        <p class="hero-guide-note">The same filters drive the table, charts, exports, and market notes.</p>
+                    </aside>
                 </div>
             </header>
 
@@ -194,11 +216,36 @@
             </div>
 
             <div class="workspace-stage">
+                <section class="panel workspace-summary" id="workspace-summary-panel" aria-live="polite">
+                    <div class="workspace-summary-top">
+                        <div class="workspace-summary-main">
+                            <p class="workspace-summary-kicker">Workspace snapshot</p>
+                            <h2 id="workspace-summary-title" class="workspace-summary-title">Loading current view...</h2>
+                            <p id="workspace-summary-text" class="workspace-summary-text">Preparing the active slice and result surfaces.</p>
+                        </div>
+                        <div class="workspace-summary-actions">
+                            <button id="workspace-focus-filters" class="small secondary" type="button">Focus filters</button>
+                            <button id="workspace-copy-link" class="small secondary" type="button">Copy current view</button>
+                        </div>
+                    </div>
+                    <div id="workspace-summary-pills" class="workspace-summary-pills"></div>
+                </section>
+
                 <section id="panel-explorer" class="tab-panel active" role="tabpanel" aria-labelledby="tab-explorer">
                     <div class="panel panel-wide">
                         <div class="explorer-toolbar">
                             <button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button>
                             <div id="table-settings-popover" class="table-settings-popover" hidden></div>
+                        </div>
+                        <div id="explorer-overview" class="explorer-overview" aria-live="polite">
+                            <div class="explorer-overview-copy">
+                                <p class="explorer-overview-kicker">Results</p>
+                                <h2 id="explorer-overview-title" class="explorer-overview-title">Loading the current rate table...</h2>
+                                <p id="explorer-overview-text" class="explorer-overview-text">Preparing the first slice.</p>
+                            </div>
+                            <div class="explorer-overview-meta">
+                                <span id="explorer-overview-status" class="explorer-overview-pill is-loading">Loading</span>
+                            </div>
                         </div>
                         <div id="rate-table"></div>
                     </div>
@@ -224,8 +271,8 @@
                                     <p class="chart-hero-note">Use Lenders to compare banks for the current configuration, then switch to Surface to inspect product histories and Compare to track the shortlist.</p>
                                 </div>
                                 <div class="chart-presets" role="group" aria-label="Chart views">
-                                    <button class="chart-preset is-active" data-chart-view="surface" type="button" aria-pressed="true">Surface</button>
-                                    <button class="chart-preset" data-chart-view="lenders" type="button" aria-pressed="false">Lenders</button>
+                                    <button class="chart-preset" data-chart-view="surface" type="button" aria-pressed="false">Surface</button>
+                                    <button class="chart-preset is-active" data-chart-view="lenders" type="button" aria-pressed="true">Lenders</button>
                                     <button class="chart-preset" data-chart-view="compare" type="button" aria-pressed="false">Compare</button>
                                     <button class="chart-preset" data-chart-view="distribution" type="button" aria-pressed="false">Distribution</button>
                                 </div>
@@ -377,6 +424,7 @@
     <script src="../ar-export.js"></script>
     <script src="../ar-rate-changes.js"></script>
     <script src="../ar-mobile-table-nav.js"></script>
+    <script src="../ar-ux.js"></script>
     <script src="../app.js"></script>
     <script src="../frame.js"></script>
 </body>

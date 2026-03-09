@@ -17,7 +17,7 @@ Tests and tooling in this project must not rely on mock or simulated data. This 
 
 - **Why:** Tests that use fake rows, stubbed APIs, or in-memory fake databases validate behavior against an artificial world. They can pass while production fails on real shapes, real APIs, and real persistence. We want tests to reflect reality so that passing tests mean the system works with real data.
 - **Principle:** All test data must be real. Use real D1 (e.g. via vitest-pool-workers with migrations), real API responses, or fixture files captured from production or real ingest runs. Pure unit tests that only use literal inputs (e.g. parsing a string) are acceptable; anything that looks like business data must come from a real source.
-- **Rule:** No mock or simulated data in tests. No fake D1, no vi.mock with fake business data, no stub fetch returning fake JSON. Tests that need real bindings may be skipped until run in an integration environment, but must not be implemented with mocks.
+- **Rule:** No mock or simulated data in tests. No fake D1, no vi.mock with fake business data, no stub fetch returning fake JSON. Tests that need real bindings should move to integration or become `it.todo(...)` placeholders until a real-data fixture or environment exists; they must not be implemented with mocks.
 
 See AGENTS.md (Test Data) and `.cursor/rules/no-mock-test-data.mdc` for the concrete rule and implementation guidance.
 

@@ -1579,11 +1579,12 @@ async function runTests() {
             const engine = el.getAttribute('data-chart-engine');
             return engine === 'echarts' || !!el.querySelector('canvas') || !!el.querySelector('svg');
         });
-        const surfaceViewActive = await page.locator('#chart-output').evaluate(el => el.getAttribute('data-chart-view') === 'surface');
-        if (chartHasContent && surfaceViewActive) {
-            results.passed.push('PASS Draw Chart renders ECharts surface output');
+        const chartView = await page.locator('#chart-output').evaluate(el => el.getAttribute('data-chart-view') || '');
+        const validView = ['lenders', 'surface', 'compare', 'distribution'].includes(chartView);
+        if (chartHasContent && validView) {
+            results.passed.push('PASS Draw Chart renders ECharts chart output');
         } else {
-            results.warnings.push('WARN Chart output did not render the expected ECharts surface');
+            results.warnings.push('WARN Chart output did not render the expected ECharts chart');
         }
         const chartSummaryRows = await page.locator('#chart-data-summary tbody tr').count().catch(() => 0);
         if (chartSummaryRows > 0) {
@@ -1593,7 +1594,7 @@ async function runTests() {
         }
 
         const chartBox = await page.locator('#chart-output').boundingBox().catch(() => null);
-        if (chartBox) {
+        if (chartBox && chartView === 'surface') {
             await page.mouse.click(chartBox.x + chartBox.width * 0.42, chartBox.y + chartBox.height * 0.46);
             await page.waitForTimeout(1200);
             const spotlightUpdated = await page.locator('#chart-point-details').evaluate(el => {
@@ -1603,6 +1604,17 @@ async function runTests() {
                 results.passed.push('PASS Surface cell click updates spotlight panel');
             } else {
                 results.warnings.push('WARN Surface click did not update spotlight panel');
+            }
+        } else if (chartBox && chartView === 'lenders') {
+            await page.mouse.click(chartBox.x + chartBox.width * 0.2, chartBox.y + chartBox.height * 0.3);
+            await page.waitForTimeout(1200);
+            const spotlightUpdated = await page.locator('#chart-point-details').evaluate(el => {
+                return /Lender spotlight|Series spotlight|Bank|Product/i.test(String(el.textContent || ''));
+            }).catch(() => false);
+            if (spotlightUpdated) {
+                results.passed.push('PASS Lenders chart click updates spotlight panel');
+            } else {
+                results.warnings.push('WARN Lenders click did not update spotlight panel');
             }
         }
 
