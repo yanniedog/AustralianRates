@@ -337,6 +337,36 @@
 }
 .ar-public .filters-collapsible[open] .filters-grid { padding-top: 12px; margin-top: 2px; border-top: 1px solid var(--ar-stroke); }
 
+.ar-public .rate-table-collapsible { padding: 0; }
+.ar-public .rate-table-collapsible .rate-table-toggle {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    color: var(--ar-muted);
+    font-weight: 700;
+}
+.ar-public .rate-table-collapsible .rate-table-toggle::-webkit-details-marker {
+    display: none;
+}
+.ar-public .rate-table-collapsible .rate-table-toggle::before {
+    content: '\25B8';
+    font-size: 0.66rem;
+    color: var(--ar-muted);
+    transition: transform var(--ar-transition);
+}
+.ar-public .rate-table-collapsible .rate-table-toggle:hover { color: var(--ar-strong); }
+.ar-public .rate-table-collapsible[open] .rate-table-toggle::before {
+    transform: rotate(90deg);
+}
+.ar-public .rate-table-collapsible[open] > .explorer-overview {
+    padding-top: 12px;
+    margin-top: 2px;
+    border-top: 1px solid var(--ar-stroke);
+}
+
 .ar-public .filter-state-row {
     display: grid;
     gap: 8px;

@@ -237,17 +237,20 @@
                             <button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button>
                             <div id="table-settings-popover" class="table-settings-popover" hidden></div>
                         </div>
-                        <div id="explorer-overview" class="explorer-overview" aria-live="polite">
-                            <div class="explorer-overview-copy">
-                                <p class="explorer-overview-kicker">Results</p>
-                                <h2 id="explorer-overview-title" class="explorer-overview-title">Loading the current rate table...</h2>
-                                <p id="explorer-overview-text" class="explorer-overview-text">Preparing the first slice.</p>
+                        <details class="panel rate-table-collapsible" id="rate-table-details">
+                            <summary class="rate-table-toggle" aria-label="Show or hide rate table">Rate table</summary>
+                            <div id="explorer-overview" class="explorer-overview" aria-live="polite">
+                                <div class="explorer-overview-copy">
+                                    <p class="explorer-overview-kicker">Results</p>
+                                    <h2 id="explorer-overview-title" class="explorer-overview-title">Loading the current rate table...</h2>
+                                    <p id="explorer-overview-text" class="explorer-overview-text">Preparing the first slice.</p>
+                                </div>
+                                <div class="explorer-overview-meta">
+                                    <span id="explorer-overview-status" class="explorer-overview-pill is-loading">Loading</span>
+                                </div>
                             </div>
-                            <div class="explorer-overview-meta">
-                                <span id="explorer-overview-status" class="explorer-overview-pill is-loading">Loading</span>
-                            </div>
-                        </div>
-                        <div id="rate-table"></div>
+                            <div id="rate-table"></div>
+                        </details>
                     </div>
                 </section>
 
