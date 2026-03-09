@@ -1,108 +1,15 @@
 (function () {
     'use strict';
     window.AR = window.AR || {};
-
-    var chartConfig = window.AR.chartConfig || {};
-
-    function paletteColor(index) {
-        var palette = chartConfig.palette();
-        return palette[index % palette.length];
-    }
-
+    var chartConfig = window.AR.chartConfig || {}, helpers = window.AR.chartEchartsHelpers || {};
+    var paletteColor = helpers.paletteColor, tooltipMetric = helpers.tooltipMetric, baseTextStyles = helpers.baseTextStyles, gridStyles = helpers.gridStyles;
+    var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize, trimAxisLabel = helpers.trimAxisLabel;
+    var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
+    var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, categoryInterval = helpers.categoryInterval;
     function ensureChart(element, instance) {
         if (!element || !window.echarts) return null;
         if (instance && !instance.isDisposed()) return instance;
         return window.echarts.init(element, null, { renderer: 'canvas' });
-    }
-
-    function tooltipMetric(field, row, value) {
-        if (row) return chartConfig.formatFieldValue(field, row[field], row);
-        return chartConfig.formatMetricValue(field, value);
-    }
-
-    function baseTextStyles() {
-        return {
-            textStyle: { color: '#1f2937', fontFamily: '"SF Pro Text", "Segoe UI", sans-serif' },
-            animationDuration: 420,
-            animationDurationUpdate: 300,
-            animationEasing: 'cubicOut',
-        };
-    }
-
-    function gridStyles() {
-        return {
-            axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
-            axisLabel: { color: '#334155' },
-            splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.24)' } },
-        };
-    }
-
-    function tooltipStyles() {
-        return {
-            backgroundColor: '#ffffff',
-            borderColor: 'rgba(37, 99, 235, 0.28)',
-            textStyle: { color: '#0f172a' },
-            extraCssText: 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;',
-        };
-    }
-
-    function chartSize(element) {
-        return {
-            width: Math.max(0, Number(element && element.clientWidth) || 0),
-            height: Math.max(0, Number(element && element.clientHeight) || 0),
-        };
-    }
-
-    function trimAxisLabel(value, maxLength) {
-        var text = String(value || '');
-        if (text.length <= maxLength) return text;
-        return text.slice(0, Math.max(0, maxLength - 1)).trim() + '...';
-    }
-
-    function trimTrailingZeros(value) {
-        return String(value || '')
-            .replace(/(\.\d*?[1-9])0+$/, '$1')
-            .replace(/\.0+$/, '');
-    }
-
-    function formatDateAxisLabel(value, compact) {
-        var text = String(value || '');
-        var match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (!match) return compact ? trimAxisLabel(text, 8) : text;
-        if (compact) return match[3] + '/' + match[2];
-        return match[1] + '-' + match[2] + '-' + match[3];
-    }
-
-    function compactMetricValue(field, value) {
-        var num = Number(value);
-        if (!Number.isFinite(num)) return chartConfig.formatMetricValue(field, value);
-
-        if (chartConfig.isPercentField && chartConfig.isPercentField(field)) {
-            return trimTrailingZeros(num.toFixed(2)) + '%';
-        }
-
-        if (chartConfig.isMoneyField && chartConfig.isMoneyField(field)) {
-            var abs = Math.abs(num);
-            if (abs >= 1000000) return '$' + trimTrailingZeros((num / 1000000).toFixed(1)) + 'm';
-            if (abs >= 1000) return '$' + trimTrailingZeros((num / 1000).toFixed(1)) + 'k';
-            return '$' + num.toLocaleString(undefined, { maximumFractionDigits: 0 });
-        }
-
-        return num.toLocaleString(undefined, { maximumFractionDigits: 1 });
-    }
-
-    function metricAxisLabel(field, value, compact) {
-        return compact ? compactMetricValue(field, value) : chartConfig.formatMetricValue(field, value);
-    }
-
-    function maxMetric(entries) {
-        var max = null;
-        entries.forEach(function (entry) {
-            var value = Number(entry && entry.value);
-            if (!Number.isFinite(value)) return;
-            if (max == null || value > max) max = value;
-        });
-        return max;
     }
 
     function buildSurfaceOption(model, fields, size) {
@@ -110,7 +17,10 @@
         var styles = gridStyles();
         var narrow = size && size.width < 760;
         var veryNarrow = size && size.width < 420;
-        var showVisualMap = !veryNarrow;
+        var denseSurface = model.surface.yLabels.length > (narrow ? 12 : 16);
+        var xLabelInterval = categoryInterval(model.surface.xLabels.length, veryNarrow ? 5 : (narrow ? 7 : 10));
+        var yLabelInterval = categoryInterval(model.surface.yLabels.length, veryNarrow ? 8 : (narrow ? 10 : 12));
+        var showVisualMap = !narrow && !denseSurface;
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -134,10 +44,10 @@
                 },
             },
             grid: {
-                left: veryNarrow ? 70 : (narrow ? 92 : 112),
-                right: 18,
-                top: 24,
-                bottom: narrow ? 52 : 78,
+                left: veryNarrow ? 84 : (narrow ? 112 : (denseSurface ? 156 : 142)),
+                right: showVisualMap ? 42 : 18,
+                top: 20,
+                bottom: narrow ? 42 : 28,
                 containLabel: true,
             },
             xAxis: {
@@ -150,7 +60,7 @@
                     color: '#475569',
                     hideOverlap: true,
                     margin: 12,
-                    interval: narrow && model.surface.xLabels.length > (veryNarrow ? 5 : 7) ? 1 : 0,
+                    interval: xLabelInterval,
                     rotate: !veryNarrow && model.surface.xLabels.length > 10 ? (narrow ? 28 : 18) : 0,
                     formatter: function (value) { return formatDateAxisLabel(value, true); },
                 },
@@ -163,12 +73,16 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: '#0f172a',
-                    width: veryNarrow ? 58 : (narrow ? 88 : 240),
+                    width: veryNarrow ? 64 : (narrow ? 104 : (denseSurface ? 220 : 250)),
                     overflow: 'truncate',
+                    interval: yLabelInterval,
+                    hideOverlap: true,
                     formatter: function (value) {
-                        if (!narrow) return trimAxisLabel(value, 36);
-                        var primary = String(value || '').split('|')[0];
-                        return trimAxisLabel(primary, veryNarrow ? 10 : 14);
+                        return formatSurfaceAxisLabel(value, {
+                            dense: denseSurface,
+                            narrow: narrow,
+                            veryNarrow: veryNarrow,
+                        });
                     },
                 },
             },
@@ -176,15 +90,14 @@
                 show: showVisualMap,
                 min: model.surface.min == null ? 0 : model.surface.min,
                 max: model.surface.max == null ? 1 : model.surface.max,
-                calculable: !narrow,
-                orient: 'horizontal',
-                left: narrow ? (veryNarrow ? 70 : 92) : 112,
-                right: 18,
-                bottom: narrow ? 8 : 20,
+                calculable: false,
+                orient: 'vertical',
+                top: 28,
+                right: 10,
                 text: ['High', 'Low'],
-                textStyle: { color: '#475569', fontSize: narrow ? 11 : 12 },
-                itemWidth: narrow ? 90 : 130,
-                itemHeight: 12,
+                textStyle: { color: '#475569', fontSize: 12 },
+                itemWidth: 10,
+                itemHeight: denseSurface ? 118 : 144,
                 inRange: {
                     color: ['#eef6ff', '#bfdbfe', paletteColor(1), paletteColor(0)],
                 },
@@ -211,7 +124,6 @@
             }],
         };
     }
-
     function buildLenderOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
@@ -313,7 +225,6 @@
             }],
         };
     }
-
     function buildCompareOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
@@ -412,7 +323,6 @@
             }),
         };
     }
-
     function buildDistributionOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
@@ -486,11 +396,14 @@
             ],
         };
     }
-
-    function buildDetailOption(model, fields) {
+    function buildDetailOption(model, fields, size) {
         var base = baseTextStyles();
         var spotlight = model.spotlight;
-        var narrow = typeof window !== 'undefined' && window.innerWidth < 560;
+        var narrow = size && size.width < 340;
+        var compact = size && size.width < 420;
+        var xLabelInterval = spotlight && spotlight.series
+            ? categoryInterval(spotlight.series.points.length, narrow ? 4 : (compact ? 5 : 7))
+            : 0;
         if (!spotlight || !spotlight.series) return {
             textStyle: base.textStyle,
             backgroundColor: 'transparent',
@@ -517,7 +430,7 @@
                 left: narrow ? 44 : 48,
                 right: 14,
                 top: 24,
-                bottom: narrow ? 40 : 36,
+                bottom: compact ? 34 : 30,
                 containLabel: true,
             },
             xAxis: {
@@ -527,7 +440,7 @@
                 axisLabel: {
                     color: '#475569',
                     hideOverlap: true,
-                    interval: narrow && spotlight.series.points.length > 4 ? 1 : 0,
+                    interval: xLabelInterval,
                     formatter: function (value) { return formatDateAxisLabel(value, true); },
                 },
                 splitLine: { show: false },
@@ -535,7 +448,7 @@
             yAxis: {
                 type: 'value',
                 axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
-                splitNumber: narrow ? 4 : 6,
+                splitNumber: narrow ? 3 : (compact ? 4 : 6),
                 axisLabel: {
                     color: '#334155',
                     formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
@@ -578,9 +491,9 @@
         });
     }
 
-    function renderDetailChart(instance, model, fields) {
+    function renderDetailChart(instance, element, model, fields) {
         if (!instance) return;
-        instance.setOption(buildDetailOption(model, fields), true);
+        instance.setOption(buildDetailOption(model, fields, chartSize(element)), true);
     }
 
     window.AR.chartEcharts = {

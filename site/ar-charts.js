@@ -128,7 +128,7 @@
         chartEcharts.renderMainChart(chartState.mainChart, els.chartOutput, currentFields.view, model, currentFields, {
             onMainClick: handleMainChartClick,
         });
-        chartEcharts.renderDetailChart(chartState.detailChart, model, currentFields);
+        chartEcharts.renderDetailChart(chartState.detailChart, els.chartDetailOutput, model, currentFields);
 
         if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
         if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
