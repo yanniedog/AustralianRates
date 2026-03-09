@@ -5,6 +5,8 @@ import { execSync } from 'node:child_process';
 const commit = process.env.CF_PAGES_COMMIT_SHA || getGitCommit();
 const branch = process.env.CF_PAGES_BRANCH || getGitBranch();
 const shortCommit = sanitizeVersionToken(commit ? commit.slice(0, 7) : '');
+const commitDate = getGitCommitDate();
+const buildTime = new Date().toISOString();
 
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, 'site');
@@ -15,6 +17,8 @@ const payload = {
   commit: commit || null,
   shortCommit: shortCommit || null,
   branch: branch || null,
+  buildTime: buildTime,
+  commitDate: commitDate || null,
 };
 
 if (!fs.existsSync(outDir)) {
@@ -93,6 +97,14 @@ function getGitCommit(): string {
 function getGitBranch(): string {
   try {
     return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function getGitCommitDate(): string {
+  try {
+    return execSync('git log -1 --format=%cI HEAD', { encoding: 'utf8' }).trim();
   } catch {
     return '';
   }

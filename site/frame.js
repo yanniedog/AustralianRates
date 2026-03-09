@@ -304,6 +304,9 @@
             ? '<a href="' + esc(info.latestUrl) + '" target="_blank" rel="noopener">latest ' + esc(info.latestShort) + '</a>'
             : 'latest unknown';
         var parts = [badge, deployText, latestText];
+        var siteBuiltLabel = 'Site built: ' + (info.buildTime ? esc(formatDate(info.buildTime)) : 'unknown');
+        var commitDateLabel = 'Commit: ' + (info.commitDate ? esc(formatDate(info.commitDate)) : 'unknown');
+        parts.push(siteBuiltLabel, commitDateLabel);
         if (info.latestDate) parts.push(esc(formatDate(info.latestDate)));
         if (info.status === 'Behind') parts.push(info.latestSha ? 'Refresh to update.' : 'Latest commit lookup unavailable.');
         if (info.status === 'Unknown') parts.push('Set Pages build to npm run build to show deploy version.');
@@ -336,6 +339,8 @@
             var latestSha = deploySha;
             var latestUrl = deploySha ? ('https://github.com/' + GITHUB_REPO + '/commit/' + deploySha) : 'https://github.com/' + GITHUB_REPO + '/commits';
             var status = deploySha ? 'In sync' : 'Unknown';
+            var buildTime = deployVersion && deployVersion.buildTime ? deployVersion.buildTime : null;
+            var commitDate = deployVersion && deployVersion.commitDate ? deployVersion.commitDate : null;
             renderCommitStatus(el, {
                 status: status,
                 deploySha: deploySha,
@@ -344,6 +349,8 @@
                 latestShort: deployShort,
                 latestUrl: latestUrl,
                 latestDate: null,
+                buildTime: buildTime,
+                commitDate: commitDate,
             });
             addSessionLog('info', 'Commit info loaded', {
                 status: status,
@@ -360,6 +367,8 @@
                 latestShort: '',
                 latestUrl: 'https://github.com/' + GITHUB_REPO + '/commits',
                 latestDate: null,
+                buildTime: null,
+                commitDate: null,
             });
         });
     }
