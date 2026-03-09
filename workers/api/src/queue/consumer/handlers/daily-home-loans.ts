@@ -5,17 +5,19 @@ import {
   recordLenderDatasetWriteStats,
   setLenderDatasetExpectedDetails,
 } from '../../../db/lender-dataset-runs'
+import { getActiveCdrProductRefs } from '../../../db/active-cdr-products'
 import { addRunEnqueuedCounts } from '../../../db/run-progress'
 import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { cdrCollectionNotes, discoverProductsEndpoint, fetchResidentialMortgageProductIds } from '../../../ingest/cdr'
+import { AMP_MORTGAGE_VARIABLES_URL, parseAmpMortgageVariables } from '../../../ingest/amp-mortgage-variables'
 import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
 import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../producer'
 import { extractLenderRatesFromHtml } from '../../../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import type { DailyLenderJob, EnvBindings } from '../../../types'
-import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
+import { FetchWithTimeoutError, fetchJsonWithTimeout, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
 import { log } from '../../../utils/logger'
 import { detectUpstreamBlock } from '../../../utils/upstream-block'
 import { nowIso } from '../../../utils/time'
@@ -81,6 +83,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   let endpointsTried = 0
   let indexPayloads = 0
   let detailJobsEnqueued = 0
+  let catalogSupplements = 0
   const discoveredProductEndpointMap = new Map<string, string>()
   const discoveredProductFallbackFetchEventIdMap = new Map<string, number>()
   let successfulIndexFetch = false
@@ -227,6 +230,15 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
 
   collectionMs = elapsedMs(collectionStartedAt)
 
+  if (successfulIndexFetch) {
+    const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'home_loans', bankName })
+    for (const ref of refs) {
+      if (discoveredProductEndpointMap.has(ref.productId)) continue
+      discoveredProductEndpointMap.set(ref.productId, ref.endpointUrl)
+      catalogSupplements += 1
+    }
+  }
+
   const productIds = Array.from(discoveredProductEndpointMap.keys())
   if (successfulIndexFetch) {
     await setLenderDatasetExpectedDetails(env.DB, {
@@ -293,6 +305,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         collection: {
           endpointsTried,
           indexPayloads,
+          catalogSupplements,
         },
         upstreamBlocks: {
           count: observedUpstreamBlocks.length,
@@ -319,6 +332,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       lenderCode: job.lenderCode,
       context:
         `products=${productIds.length} detail_jobs=${detailEnqueue.enqueued}` +
+        ` catalog_supplements=${catalogSupplements}` +
         ` finalizer_jobs=${finalizerEnqueue.enqueued}` +
         ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
         ` upstream_blocks=${observedUpstreamBlocks.length}` +
@@ -328,10 +342,64 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   }
 
   if (collectedRows.length === 0) {
+    let ampVariablePayload: unknown = null
+    let ampVariableDiagnostics: {
+      endpoint: string
+      status: number
+      elapsed_ms: number
+      attempts: number
+    } | null = null
+    if (lender.code === 'amp') {
+      try {
+        const fetched = await fetchJsonWithTimeout(
+          AMP_MORTGAGE_VARIABLES_URL,
+          {
+            headers: {
+              Accept: 'application/json',
+            },
+          },
+          { env },
+        )
+        ampVariableDiagnostics = {
+          endpoint: AMP_MORTGAGE_VARIABLES_URL,
+          status: fetched.response.status,
+          elapsed_ms: fetched.meta.elapsed_ms,
+          attempts: fetched.meta.attempts,
+        }
+        if (fetched.response.ok) {
+          ampVariablePayload = fetched.json
+        } else {
+          log.warn('consumer', 'daily_lender_fetch amp_variable_feed_unavailable', {
+            runId: job.runId,
+            lenderCode: job.lenderCode,
+            context:
+              `endpoint=${shortUrlForLog(AMP_MORTGAGE_VARIABLES_URL)}` +
+              ` status=${fetched.response.status} elapsed_ms=${fetched.meta.elapsed_ms}` +
+              ` attempts=${fetched.meta.attempts}`,
+          })
+        }
+      } catch (error) {
+        const meta = error instanceof FetchWithTimeoutError ? error.meta : null
+        log.warn('consumer', 'daily_lender_fetch amp_variable_feed_failed', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `endpoint=${shortUrlForLog(AMP_MORTGAGE_VARIABLES_URL)}` +
+            ` elapsed_ms=${meta?.elapsed_ms ?? 0}` +
+            ` attempts=${meta?.attempts ?? 1}` +
+            ` status=${meta?.status ?? 0}`,
+        })
+      }
+    }
     log.info('consumer', 'daily_lender_fetch fallback_html_start', {
       runId: job.runId,
       lenderCode: job.lenderCode,
-      context: `seed_count=${Math.min(2, lender.seed_rate_urls.length)}`,
+      context:
+        `seed_count=${Math.min(2, lender.seed_rate_urls.length)}` +
+        (ampVariableDiagnostics
+          ? ` amp_variables_status=${ampVariableDiagnostics.status}` +
+            ` amp_variables_elapsed_ms=${ampVariableDiagnostics.elapsed_ms}`
+          : ''),
     })
     for (const seedUrl of lender.seed_rate_urls.slice(0, 2)) {
       const seedStartedAt = Date.now()
@@ -400,14 +468,31 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
             ` fetch_event_id=${persisted.fetchEventId ?? 'none'}`,
         })
       }
-      const parsed = extractLenderRatesFromHtml({
-        lender,
-        html,
-        sourceUrl: seedUrl,
-        collectionDate: job.collectionDate,
-        mode: 'daily',
-        qualityFlag: 'scraped_fallback_strict',
-      })
+      const ampVariableParsed =
+        ampVariablePayload != null
+          ? parseAmpMortgageVariables({
+              lender,
+              payload: ampVariablePayload,
+              sourceUrl: seedUrl,
+              collectionDate: job.collectionDate,
+              qualityFlag: 'scraped_fallback_strict',
+            })
+          : null
+      const parsed =
+        ampVariableParsed && ampVariableParsed.rows.length > 0
+          ? {
+              rows: ampVariableParsed.rows,
+              inspected: ampVariableParsed.inspected,
+              dropped: ampVariableParsed.dropped,
+            }
+          : extractLenderRatesFromHtml({
+              lender,
+              html,
+              sourceUrl: seedUrl,
+              collectionDate: job.collectionDate,
+              mode: 'daily',
+              qualityFlag: 'scraped_fallback_strict',
+            })
       inspectedHtml += parsed.inspected
       droppedByParser += parsed.dropped
       for (const row of parsed.rows) {
@@ -421,6 +506,10 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         inspected: parsed.inspected,
         parsed_rows: parsed.rows.length,
         dropped: parsed.dropped,
+        amp_variable_endpoint: ampVariableDiagnostics?.endpoint ?? null,
+        amp_variable_status: ampVariableDiagnostics?.status ?? null,
+        amp_variable_rows: ampVariableParsed?.rows.length ?? 0,
+        amp_variable_deduped: ampVariableParsed?.deduped ?? 0,
         elapsed_ms: elapsedMs(seedStartedAt),
       }
       seedDiagnostics.push(seedSummary)
@@ -431,8 +520,13 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
           `seed=${shortUrlForLog(seedUrl)} status=${response.status}` +
           ` html_bytes=${html.length} inspected=${parsed.inspected}` +
           ` parsed_rows=${parsed.rows.length} dropped=${parsed.dropped}` +
+          ` amp_variable_rows=${ampVariableParsed?.rows.length ?? 0}` +
+          ` amp_variable_deduped=${ampVariableParsed?.deduped ?? 0}` +
           ` elapsed_ms=${seedSummary.elapsed_ms}`,
       })
+      if (ampVariableParsed && ampVariableParsed.rows.length > 0) {
+        break
+      }
     }
   }
 

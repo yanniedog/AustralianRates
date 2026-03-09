@@ -5,6 +5,7 @@ import {
   markLenderDatasetIndexFetchSucceeded,
   setLenderDatasetExpectedDetails,
 } from '../../../db/lender-dataset-runs'
+import { getActiveCdrProductRefs } from '../../../db/active-cdr-products'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { discoverProductsEndpoint } from '../../../ingest/cdr'
@@ -83,6 +84,8 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   let indexPayloads = 0
   let savingsDetailJobsEnqueued = 0
   let tdDetailJobsEnqueued = 0
+  let savingsCatalogSupplements = 0
+  let tdCatalogSupplements = 0
   const savingsProductEndpointMap = new Map<string, string>()
   const tdProductEndpointMap = new Map<string, string>()
   const savingsFallbackFetchEventIdByProductId = new Map<string, number>()
@@ -327,6 +330,23 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   }
   collectionMs = elapsedMs(collectStartedAt)
 
+  if (shouldFetchSavings && savingsIndexSucceeded) {
+    const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'savings', bankName })
+    for (const ref of refs) {
+      if (savingsProductEndpointMap.has(ref.productId)) continue
+      savingsProductEndpointMap.set(ref.productId, ref.endpointUrl)
+      savingsCatalogSupplements += 1
+    }
+  }
+  if (shouldFetchTd && tdIndexSucceeded) {
+    const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'term_deposits', bankName })
+    for (const ref of refs) {
+      if (tdProductEndpointMap.has(ref.productId)) continue
+      tdProductEndpointMap.set(ref.productId, ref.endpointUrl)
+      tdCatalogSupplements += 1
+    }
+  }
+
   const uniqueSavingsProductIds = Array.from(savingsProductEndpointMap.keys())
   const uniqueTdProductIds = Array.from(tdProductEndpointMap.keys())
   const savingsEndpointUrlByProductId = Object.fromEntries(
@@ -452,6 +472,10 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         collection: {
           endpointsTried,
           indexPayloads,
+          catalogSupplements: {
+            savings: savingsCatalogSupplements,
+            term_deposits: tdCatalogSupplements,
+          },
         },
         observedUpstreamStatuses,
         softFailNoSignals,
@@ -520,6 +544,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
     context:
       `products(s=${uniqueSavingsProductIds.length},td=${uniqueTdProductIds.length})` +
       ` detail_jobs(s=${savingsDetailJobsEnqueued},td=${tdDetailJobsEnqueued})` +
+      ` catalog_supplements(s=${savingsCatalogSupplements},td=${tdCatalogSupplements})` +
       ` finalizer_jobs=${finalizerEnqueue.enqueued}` +
       ` upstream_blocks=${observedUpstreamBlocks.length}` +
       ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},total=${elapsedMs(startedAt)}`,

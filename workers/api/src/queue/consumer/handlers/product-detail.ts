@@ -14,7 +14,7 @@ import { recordDroppedAnomalies } from '../anomalies'
 import { ensureProductDetailFetchEventId } from '../detail-fetch-event'
 import { markDetailProcessedAndFinalize } from '../finalization'
 import { elapsedMs, serializeForLog } from '../log-helpers'
-import { bankNameForLender, markHomeLoanSeriesSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
+import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun, markSavingsSeriesSeenForRun, markTdSeriesSeenForRun } from '../series-tracking'
 import { splitValidatedRows, splitValidatedSavingsRows, splitValidatedTdRows } from '../validation'
 
 export function resolveProductDetailEndpoint(
@@ -144,6 +144,14 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         })
       }
       fetchedRows = details.rows.length
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'home_loans',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: details.rows.map((row) => row.productId),
+      })
       await markHomeLoanSeriesSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -243,6 +251,14 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         })
       }
       fetchedRows = details.savingsRows.length
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: details.savingsRows.map((row) => row.productId),
+      })
       await markSavingsSeriesSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
@@ -342,6 +358,14 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         })
       }
       fetchedRows = details.tdRows.length
+      await markProductsSeenForRun(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'term_deposits',
+        bankName,
+        collectionDate: job.collectionDate,
+        productIds: details.tdRows.map((row) => row.productId),
+      })
       await markTdSeriesSeenForRun(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,

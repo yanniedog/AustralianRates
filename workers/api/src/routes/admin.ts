@@ -13,6 +13,7 @@ import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
 import { adminHealthRoutes } from './admin-health'
+import { adminLiveCdrRepairRoutes } from './admin-live-cdr-repair'
 import { adminLogRoutes } from './admin-logs'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
@@ -62,6 +63,7 @@ adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)
+adminRoutes.route('/', adminLiveCdrRepairRoutes)
 adminRoutes.route('/', adminRemediationRoutes)
 
 adminRoutes.get('/cdr-audit', async (c) => {

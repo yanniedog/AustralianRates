@@ -180,7 +180,12 @@ export function parseTermDepositRatesFromDetail(input: {
     const bounds = parseTierBounds(rate)
     const depositTier = normalizeDepositTier(bounds.min, bounds.max)
     const paymentText = `${getText(rate.applicationFrequency)} ${getText(rate.additionalInfo)}`
-    const interestPayment = normalizeInterestPayment(paymentText)
+    const interestPayment = normalizeInterestPayment({
+      text: paymentText,
+      applicationType: getText(rate.applicationType),
+      applicationFrequency: getText(rate.applicationFrequency),
+      termMonths,
+    })
 
     let confidence = 0.93
     if (!additionalValue) confidence -= 0.03

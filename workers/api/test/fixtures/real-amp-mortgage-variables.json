@@ -1,0 +1,108 @@
+{
+  "data": {
+    "variableList": {
+      "items": [
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/essential/essential_gteq_250k_lt_750k_gt50_to_lteg60_lvr_oo_p_i_interest",
+          "key": "essential_gteq_250k_lt_750k_gt50_to_lteg60_lvr_oo_p_i_interest",
+          "value": { "plaintext": "5.84" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/essential/essential_gteq_250k_lt_750k_gt50_to_lteg60_lvr_oo_p_i_comparision",
+          "key": "essential_gteq_250k_lt_750k_gt50_to_lteg60_lvr_oo_p_i_comparision",
+          "value": { "plaintext": "5.87" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/essential/essential_gteq_250k_lt_750k_lteg50_lvr_oo_p_i_interest",
+          "key": "essential_gteq_250k_lt_750k_lteg50_lvr_oo_p_i_interest",
+          "value": { "plaintext": "5.84" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/essential/essential_gteq_250k_lt_750k_lteg50_lvr_oo_p_i_comparision",
+          "key": "essential_gteq_250k_lt_750k_lteg50_lvr_oo_p_i_comparision",
+          "value": { "plaintext": "5.87" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/pro-pack/pro_pack_10yr_io_gt_1m_gt50_to_lteg60_lvr_oo_io_interest",
+          "key": "pro_pack_10yr_io_gt_1m_gt50_to_lteg60_lvr_oo_io_interest",
+          "value": { "plaintext": "5.99" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/pro-pack/pro_pack_10yr_io_gt_1m_gt50_to_lteg60_lvr_oo_io_comparision",
+          "key": "pro_pack_10yr_io_gt_1m_gt50_to_lteg60_lvr_oo_io_comparision",
+          "value": { "plaintext": "6.23" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/pro-pack/pro_pack_construction_gt_500k_gt80_to_lteg90_lvr_oo_io_interest",
+          "key": "pro_pack_construction_gt_500k_gt80_to_lteg90_lvr_oo_io_interest",
+          "value": { "plaintext": "6.64" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/pro-pack/pro_pack_construction_gt_500k_gt80_to_lteg90_lvr_oo_io_comparision",
+          "key": "pro_pack_construction_gt_500k_gt80_to_lteg90_lvr_oo_io_comparision",
+          "value": { "plaintext": "6.58" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/pro-pack/prof_loc_gt500k_gt50_lteg_60_lvr_oo_io_interest",
+          "key": "prof_loc_gt500k_gt50_lteg_60_lvr_oo_io_interest",
+          "value": { "plaintext": "6.14" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/pro-pack/prof_loc_gt500k_gt50_lteg_60_lvr_oo_io_comparision",
+          "key": "prof_loc_gt500k_gt50_lteg_60_lvr_oo_io_comparision",
+          "value": { "plaintext": "6.34" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/land-loan/land_oo_p_i_interest",
+          "key": "land_oo_p_i_interest",
+          "value": { "plaintext": "7.45" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/land-loan/land_oo_p_i_comparision",
+          "key": "land_oo_p_i_comparision",
+          "value": { "plaintext": "7.50" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/amp-first/amp_first_1yr_fixed_oo_p_i_interest",
+          "key": "amp_first_1yr_fixed_oo_p_i_interest",
+          "value": { "plaintext": "5.82" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/amp-first/amp_first_1yr_fixed_oo_p_i_comparision",
+          "key": "amp_first_1yr_fixed_oo_p_i_comparision",
+          "value": { "plaintext": "5.65" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/amp-first/amp_firstlocinvestment_inv_io_interest",
+          "key": "amp_firstlocinvestment_inv_io_interest",
+          "value": { "plaintext": "6.13" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/amp-first/amp_firstlocinvestment_inv_io_comparision",
+          "key": "amp_firstlocinvestment_inv_io_comparision",
+          "value": { "plaintext": "6.04" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/smsf/superedge_variable_gt70_to_lteg80_lvr_inv_p_i_interest",
+          "key": "superedge_variable_gt70_to_lteg80_lvr_inv_p_i_interest",
+          "value": { "plaintext": "6.74" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/smsf/superedge_variable_gt70_to_lteg80_lvr_inv_p_i_comparision",
+          "key": "superedge_variable_gt70_to_lteg80_lvr_inv_p_i_comparision",
+          "value": { "plaintext": "7.11" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/line-of-credit/all_lines_of_credit_gt20k_to_credit_balances_all_all_interest",
+          "key": "all_lines_of_credit_gt20k_to_credit_balances_all_all_interest",
+          "value": { "plaintext": "0.25" }
+        },
+        {
+          "_path": "/content/dam/amp-2024/variables/home-loans/line-of-credit/all_lines_of_credit_gt20k_to_credit_balances_all_all_comparision",
+          "key": "all_lines_of_credit_gt20k_to_credit_balances_all_all_comparision",
+          "value": { "plaintext": "n/a" }
+        }
+      ]
+    }
+  }
+}

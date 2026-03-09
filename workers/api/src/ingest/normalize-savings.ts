@@ -169,11 +169,31 @@ export function parseTermMonths(duration: string): number | null {
   return null
 }
 
-export function normalizeInterestPayment(text: string): InterestPayment {
+export function normalizeInterestPayment(
+  input:
+    | string
+    | {
+        text?: string | null
+        applicationType?: string | null
+        applicationFrequency?: string | null
+        termMonths?: number | null
+      },
+): InterestPayment {
+  const text = typeof input === 'string'
+    ? input
+    : `${asText(input.text)} ${asText(input.applicationType)} ${asText(input.applicationFrequency)}`
   const t = lower(text)
-  if (t.includes('monthly')) return 'monthly'
+  const termMonths = typeof input === 'string' ? null : input.termMonths ?? null
+  const applicationType = typeof input === 'string' ? '' : lower(input.applicationType)
+  const frequencyMonths = typeof input === 'string' ? null : parseTermMonths(asText(input.applicationFrequency))
+
+  if (applicationType.includes('maturity')) return 'at_maturity'
+  if (frequencyMonths != null && termMonths != null && frequencyMonths >= termMonths) return 'at_maturity'
   if (t.includes('quarterly') || t.includes('quarter')) return 'quarterly'
   if (t.includes('annual') || t.includes('yearly')) return 'annually'
+  if (frequencyMonths != null && frequencyMonths >= 12) return 'annually'
+  if (t.includes('monthly') || (frequencyMonths != null && (frequencyMonths === 1 || frequencyMonths === 6))) return 'monthly'
+  if (t.includes('at maturity')) return 'at_maturity'
   return 'at_maturity'
 }
 
