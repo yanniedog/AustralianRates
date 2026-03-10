@@ -106,6 +106,13 @@ body.ar-legal .site-brand {
     letter-spacing: -0.03em;
 }
 
+body.ar-public .site-brand a,
+body.ar-legal .site-brand a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+}
+
 .site-nav,
 .site-nav-primary,
 .site-nav-meta,
@@ -340,5 +347,32 @@ body.ar-legal .site-footer {
 
     body.ar-public .hero-stats {
         grid-template-columns: 1fr;
+    }
+
+    body.ar-public .footer-technical-summary,
+    body.ar-legal .footer-technical-summary {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 14px;
+    }
+
+    body.ar-public .footer-legal-links,
+    body.ar-legal .footer-legal-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    body.ar-public .footer-legal-links a,
+    body.ar-legal .footer-legal-links a,
+    body.ar-public .footer-operator a,
+    body.ar-legal .footer-operator a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
     }
 }

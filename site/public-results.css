@@ -13,6 +13,19 @@
     padding: 22px 24px;
 }
 
+.ar-public .quick-compare {
+    flex: 0.95 1 0;
+}
+
+.ar-public .executive-summary,
+.ar-public .continuity-card {
+    flex: 1.22 1 0;
+}
+
+.ar-public .rate-change-log {
+    flex: 0.88 1 0;
+}
+
 .ar-public .quick-compare-cards,
 .ar-public .executive-summary-sections,
 .ar-public .rate-change-list,
@@ -219,6 +232,46 @@
     accent-color: var(--ar-accent);
 }
 
+.ar-public .seo-summary {
+    padding: 0;
+    overflow: hidden;
+}
+
+.ar-public .seo-summary > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 46px;
+    padding: 16px 18px;
+    list-style: none;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.ar-public .seo-summary > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ar-public .seo-summary > summary::after {
+    content: "+";
+    color: var(--ar-accent);
+    font-size: 1rem;
+}
+
+.ar-public .seo-summary[open] > summary::after {
+    content: "\2212";
+}
+
+.ar-public .seo-summary[open] > summary {
+    border-bottom: 1px solid rgba(92, 115, 147, 0.12);
+}
+
+.ar-public .seo-summary > p {
+    margin: 0;
+    padding: 0 18px 18px;
+}
+
 .ar-public #rate-table,
 .ar-public #pivot-output {
     overflow: hidden;
@@ -294,6 +347,30 @@
     -webkit-overflow-scrolling: touch;
 }
 
+.ar-public #rate-table .tabulator-cell a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(29, 78, 216, 0.08);
+    color: #1d4ed8;
+    text-decoration: none;
+}
+
+.ar-public #rate-table .tabulator-cell a:hover {
+    background: rgba(29, 78, 216, 0.14);
+}
+
+.ar-public .tabulator .tabulator-footer .tabulator-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    min-height: 34px;
+}
+
 .ar-public .pivot-controls {
     display: flex;
     flex-wrap: wrap;
@@ -318,6 +395,16 @@
     }
 }
 
+@media (max-width: 1180px) {
+    .ar-public .quick-compare,
+    .ar-public .executive-summary,
+    .ar-public .continuity-card,
+    .ar-public .rate-change-log {
+        grid-column: auto;
+        grid-row: auto;
+    }
+}
+
 @media (max-width: 760px) {
     .ar-public .insight-card,
     .ar-public .results-panel,
@@ -336,5 +423,20 @@
 
     .ar-public .results-intro {
         grid-template-columns: 1fr;
+    }
+
+    .ar-public .seo-summary > summary {
+        min-height: 48px;
+    }
+
+    .ar-public #rate-table .tabulator-cell a {
+        min-height: 40px;
+        padding-inline: 10px;
+    }
+
+    .ar-public .tabulator .tabulator-footer .tabulator-page {
+        min-width: 40px;
+        min-height: 40px;
+        padding-inline: 10px;
     }
 }

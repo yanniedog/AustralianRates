@@ -921,16 +921,16 @@ async function runTests() {
             results.failed.push('FAIL Rate Change Log should be collapsed by default with a visible headline');
         }
 
-        // Test 4g: Executive summary renders all three sections
+        // Test 4g: Executive summary focuses on the current market
         console.log('\nTest 4g: Checking executive summary...');
-        await page.waitForFunction(() => document.querySelectorAll('#executive-summary-sections .exec-card').length >= 3, { timeout: 25000 }).catch(() => null);
+        await page.waitForFunction(() => document.querySelectorAll('#executive-summary-sections .exec-card').length >= 1, { timeout: 25000 }).catch(() => null);
         const executiveCards = await page.locator('#executive-summary-sections .exec-card').count().catch(() => 0);
         const executiveHeadings = await page.locator('#executive-summary-sections .exec-card h3').allTextContents().catch(() => []);
-        const hasAllExecutiveSections = ['Home Loans', 'Savings', 'Term Deposits'].every((name) => executiveHeadings.includes(name));
-        if (executiveCards >= 3 && hasAllExecutiveSections) {
-            results.passed.push('PASS Executive summary renders Home Loans, Savings, and Term Deposits sections');
+        const hasFocusedHomeLoanSummary = executiveCards === 1 && executiveHeadings.length === 1 && executiveHeadings[0] === 'Home Loans';
+        if (hasFocusedHomeLoanSummary) {
+            results.passed.push('PASS Executive summary focuses on Home Loans for the home-loans page');
         } else {
-            results.failed.push('FAIL Executive summary missing one or more required sections');
+            results.failed.push('FAIL Executive summary should render a single Home Loans summary card');
         }
 
         // Test 5: Tab buttons
@@ -1756,7 +1756,14 @@ async function runTests() {
             await page.click('#tab-charts');
             await page.waitForTimeout(500);
             await page.click('#draw-chart');
-            await page.waitForTimeout(5000);
+            await page.waitForFunction(() => {
+                var output = document.getElementById('chart-output');
+                return !!(output && (
+                    output.getAttribute('data-chart-engine') === 'echarts' ||
+                    output.querySelector('canvas') ||
+                    output.querySelector('svg')
+                ));
+            }, { timeout: 15000 }).catch(() => null);
             const sectionChartRendered = await page.locator('#chart-output').evaluate(el => {
                 return el.getAttribute('data-chart-engine') === 'echarts' || !!el.querySelector('canvas') || !!el.querySelector('svg');
             }).catch(() => false);

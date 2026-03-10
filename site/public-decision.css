@@ -88,8 +88,32 @@
     align-items: start;
 }
 
-.ar-public .insight-band {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+body.ar-public .insight-band {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: start;
+}
+
+body.ar-public.ar-section-home-loans .insight-band {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.92fr) minmax(0, 1.08fr);
+    grid-template-areas:
+        "quick summary"
+        "changes summary";
+    align-items: start;
+}
+
+body.ar-public.ar-section-home-loans .quick-compare {
+    grid-area: quick;
+}
+
+body.ar-public.ar-section-home-loans .executive-summary {
+    grid-area: summary;
+    align-self: start;
+}
+
+body.ar-public.ar-section-home-loans .rate-change-log {
+    grid-area: changes;
 }
 
 .ar-public .workspace-grid,
@@ -427,9 +451,21 @@
 
 @media (max-width: 1180px) {
     .ar-public .decision-flow,
-    .ar-public .insight-band,
     .ar-public .market-notes-content-grid {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.ar-public .insight-band {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.ar-public.ar-section-home-loans .insight-band {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "quick"
+            "summary"
+            "changes";
     }
 
     .ar-public .workspace-rail {

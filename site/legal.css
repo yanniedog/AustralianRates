@@ -108,4 +108,15 @@
     .legal-support-card {
         padding: 20px;
     }
+
+    .legal-panel a,
+    .legal-support-card a,
+    .legal-callout a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 4px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.78);
+    }
 }

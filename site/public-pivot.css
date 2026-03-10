@@ -66,8 +66,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
 }
 
 #pivot-output .pvtFilterBox,
@@ -96,6 +96,8 @@
 
     #pivot-output .pvtUi .pvtRowOrder,
     #pivot-output .pvtUi .pvtColOrder {
+        width: 40px;
+        height: 40px;
         justify-self: start;
     }
 

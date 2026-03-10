@@ -36,6 +36,28 @@
         );
     }
 
+    function getPrimaryDataset() {
+        var section = String(
+            (window.AR && window.AR.section) ||
+            (document.body && document.body.getAttribute('data-ar-section')) ||
+            ''
+        ).trim();
+        if (section === 'home-loans') return 'home_loans';
+        if (section === 'term-deposits') return 'term_deposits';
+        if (section === 'savings') return 'savings';
+        return '';
+    }
+
+    function pickPrimarySections(sections) {
+        if (!Array.isArray(sections) || sections.length === 0) return [];
+        var primaryDataset = getPrimaryDataset();
+        if (!primaryDataset) return sections.slice(0, 1);
+        var matching = sections.filter(function (section) {
+            return section && section.dataset === primaryDataset;
+        });
+        return matching.length ? matching : sections.slice(0, 1);
+    }
+
     function renderSections(sections) {
         var container = getContainerEl();
         if (!container) return;
@@ -85,7 +107,7 @@
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
             var sections = Array.isArray(data && data.sections) ? data.sections : [];
-            renderSections(sections);
+            renderSections(pickPrimarySections(sections));
             statusEl.textContent = 'Updated ' + esc(data.generated_at || 'n/a') + '.';
         } catch (err) {
             statusEl.textContent = 'Summary unavailable right now.';
