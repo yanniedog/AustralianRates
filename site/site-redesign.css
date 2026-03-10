@@ -243,7 +243,7 @@ body.ar-public .hero-guide p {
 }
 
 body.ar-public .workspace-grid {
-    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    grid-template-columns: minmax(440px, 1fr) minmax(0, 1.2fr);
     gap: 20px;
     align-items: start;
 }

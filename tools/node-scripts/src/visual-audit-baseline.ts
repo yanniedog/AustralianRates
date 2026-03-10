@@ -25,6 +25,7 @@ function runGit(args: string[], repoRoot: string, encoding: BufferEncoding | 'bu
   const result = spawnSync('git', args, {
     cwd: repoRoot,
     encoding: encoding === 'buffer' ? undefined : encoding,
+    maxBuffer: 64 * 1024 * 1024,
     shell: false,
   })
   if (result.status !== 0) {

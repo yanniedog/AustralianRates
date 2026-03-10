@@ -3,7 +3,6 @@ import {
   ANALYST_CLICK_TARGETS,
   BASE_CLICK_TARGETS,
   CHART_CLICK_TARGETS,
-  CURRENT_ORIGIN,
   GEOMETRY_SELECTORS,
   PIVOT_CLICK_TARGETS,
 } from './visual-audit-config'
@@ -184,20 +183,23 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
 
 export async function collectGeometry(page: Page, interactiveSelectors: string[]): Promise<GeometryEvidence> {
   return await page.evaluate(
-    ({ origin, selectors, targets }) => {
+    ({ selectors, targets }) => {
       const viewport = { height: window.innerHeight, width: window.innerWidth }
       const root = document.documentElement
-      const visible = (node: Element | null) => {
-        if (!node) return false
-        const style = window.getComputedStyle(node)
-        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false
-        const rect = node.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0
-      }
       const selectorMetrics = selectors.map((selector) => {
         const node = document.querySelector(selector)
-        if (!visible(node)) return { selector, visible: false }
-        const rect = node!.getBoundingClientRect()
+        const style = node ? window.getComputedStyle(node) : null
+        const rect = node ? node.getBoundingClientRect() : null
+        const isVisible =
+          !!node &&
+          !!style &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          Number(style.opacity) !== 0 &&
+          !!rect &&
+          rect.width > 0 &&
+          rect.height > 0
+        if (!isVisible || !rect) return { selector, visible: false }
         return {
           bottom: Number(rect.bottom.toFixed(2)),
           clippedHorizontally: rect.left < -1 || rect.right > viewport.width + 1,
@@ -214,13 +216,22 @@ export async function collectGeometry(page: Page, interactiveSelectors: string[]
       })
       const blockedSelectors = targets.filter((selector) => {
         const node = document.querySelector(selector)
-        if (!visible(node)) return false
-        const rect = node!.getBoundingClientRect()
+        const style = node ? window.getComputedStyle(node) : null
+        const rect = node ? node.getBoundingClientRect() : null
+        const isVisible =
+          !!node &&
+          !!style &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          Number(style.opacity) !== 0 &&
+          !!rect &&
+          rect.width > 0 &&
+          rect.height > 0
+        if (!isVisible || !rect) return false
         const probe = document.elementFromPoint(rect.left + Math.min(20, rect.width / 2), rect.top + Math.min(20, rect.height / 2))
         return !!probe && probe !== node && !node!.contains(probe) && !probe.contains(node!)
       })
       const horizontalIssues = selectorMetrics.filter((item) => item.visible && item.clippedHorizontally).map((item) => item.selector)
-      if (window.location.origin !== origin) console.warn('visual-audit origin mismatch', window.location.origin)
       return {
         blockedSelectors,
         horizontalIssues,
@@ -230,6 +241,6 @@ export async function collectGeometry(page: Page, interactiveSelectors: string[]
         viewport,
       }
     },
-    { origin: CURRENT_ORIGIN, selectors: GEOMETRY_SELECTORS, targets: interactiveSelectors },
+    { selectors: GEOMETRY_SELECTORS, targets: interactiveSelectors },
   )
 }
