@@ -73,11 +73,18 @@
         }, 80);
     }
 
+    function tokenValue(base, delta) {
+        return (base + delta).toFixed(3);
+    }
+
     function applyScale(percent, options) {
         var opts = options || {};
         var nextPercent = normalizePercent(percent);
+        var delta = (nextPercent - DEFAULT_PERCENT) / 100;
         currentPercent = nextPercent;
-        document.documentElement.style.setProperty('--ar-ui-scale', String(nextPercent / 100));
+        document.documentElement.style.setProperty('--ar-space-scale', tokenValue(1, delta * 0.4));
+        document.documentElement.style.setProperty('--ar-type-scale', tokenValue(1, delta * 0.32));
+        document.documentElement.style.setProperty('--ar-chart-scale', tokenValue(1, delta * 0.55));
         updateControls(nextPercent);
         if (!opts.skipStorage) writeStoredPercent(nextPercent);
         if (!opts.skipResizeSync) scheduleResizeSync();

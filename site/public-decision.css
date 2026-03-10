@@ -1,0 +1,466 @@
+.ar-public .hero-actions,
+.ar-public .hero-trust,
+.ar-public .workspace-summary-pills,
+.ar-public .active-filter-chips,
+.ar-public .date-quick-actions,
+.ar-public .filter-primary-actions,
+.ar-public .filter-primary-actions-main,
+.ar-public .filter-primary-actions-meta,
+.ar-public .workspace-summary-actions,
+.ar-public .mode-switch,
+.ar-public .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ar-public .hero-actions button,
+.ar-public .workspace-summary-actions button,
+.ar-public #draw-chart {
+    min-height: 48px;
+    padding-inline: 20px;
+}
+
+.ar-public .filter-bank-tools,
+.ar-public .ui-scale-actions,
+.ar-public .ui-scale-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ar-public .hero-trust-pill,
+.ar-public .workspace-summary-pill,
+.ar-public .filter-dirty-indicator,
+.ar-public .filter-chip,
+.ar-public .explorer-overview-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.44rem 0.82rem;
+    border: 1px solid rgba(92, 115, 147, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--ar-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.ar-public .hero-guide-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: guide-step;
+}
+
+.ar-public .hero-guide-list li {
+    position: relative;
+    padding-left: 42px;
+    min-height: 30px;
+}
+
+.ar-public .hero-guide-list li::before {
+    counter-increment: guide-step;
+    content: counter(guide-step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.ar-public .section-heading-inline,
+.ar-public .workspace-summary-top,
+.ar-public .mode-panel,
+.ar-public .results-intro {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px 20px;
+    align-items: start;
+}
+
+.ar-public .insight-band {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ar-public .workspace-grid,
+.ar-public .workspace-rail,
+.ar-public .decision-surface,
+.ar-public .workspace-summary,
+.ar-public .ui-scale-control,
+.ar-public .market-notes-content-grid,
+.ar-public .filters-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.ar-public .decision-flow {
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+    align-items: start;
+}
+
+.ar-public .workspace-rail {
+    position: sticky;
+    top: 96px;
+}
+
+.ar-public .scenario-builder,
+.ar-public .filters {
+    padding: 24px;
+}
+
+.ar-public .filter-primary-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+}
+
+.ar-public .filter-primary-group > label:first-of-type {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+}
+
+.ar-public .filter-primary-group .filter-range {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    grid-column: 2 / span 2;
+}
+
+.ar-public .filter-primary-group label,
+.ar-public .filters-grid label {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    color: var(--ar-muted);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ar-public .filters {
+    padding: 0;
+}
+
+.ar-public .filters-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    padding: 18px 24px;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.ar-public .filters-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.ar-public .filters-toggle::after {
+    content: "+";
+    color: var(--ar-accent);
+    font-size: 1rem;
+}
+
+.ar-public .filters[open] .filters-toggle::after {
+    content: "\2212";
+}
+
+.ar-public .filters-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 0 24px 24px;
+    border-top: 1px solid rgba(92, 115, 147, 0.12);
+}
+
+.ar-public .filter-state-row {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.ar-public .filter-dirty-indicator.is-dirty,
+.ar-public .workspace-summary-pill.is-warning,
+.ar-public .explorer-overview-pill.is-loading,
+.ar-public .explorer-overview-pill.is-warning {
+    background: rgba(29, 78, 216, 0.08);
+    border-color: rgba(29, 78, 216, 0.14);
+    color: #1d4ed8;
+}
+
+.ar-public .workspace-summary-pill.is-emphasis,
+.ar-public .explorer-overview-pill.is-ready {
+    background: rgba(15, 122, 88, 0.10);
+    border-color: rgba(15, 122, 88, 0.14);
+    color: var(--ar-positive);
+}
+
+.ar-public .explorer-overview-pill.is-error {
+    background: rgba(180, 59, 48, 0.10);
+    border-color: rgba(180, 59, 48, 0.14);
+    color: var(--ar-danger);
+}
+
+.ar-public .workspace-summary {
+    padding: 22px 24px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(246, 241, 233, 0.98));
+}
+
+.ar-public .workspace-summary-main {
+    display: grid;
+    gap: 8px;
+}
+
+.ar-public .workspace-summary-title,
+.ar-public .explorer-overview-title {
+    margin: 0;
+    font-size: 1.12rem;
+    line-height: 1.35;
+}
+
+.ar-public .workspace-summary-text,
+.ar-public .explorer-overview-text {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.ar-public .ui-scale-control {
+    min-width: min(100%, 300px);
+    padding: 12px 14px;
+    border: 1px solid rgba(92, 115, 147, 0.14);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.ar-public .ui-scale-label {
+    color: var(--ar-muted);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.ar-public .ui-scale-actions input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 110px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.ar-public .ui-scale-meta {
+    justify-content: space-between;
+}
+
+.ar-public .ui-scale-meta output {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: var(--ar-strong);
+}
+
+.ar-public .mode-panel,
+.ar-public .tabs {
+    padding: 16px 20px;
+}
+
+.ar-public .mode-panel {
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.ar-public .mode-switch,
+.ar-public .tabs {
+    padding: 4px;
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.84);
+    width: fit-content;
+}
+
+.ar-public .mode-btn,
+.ar-public .tab-btn {
+    min-width: 120px;
+    justify-content: center;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ar-muted);
+    box-shadow: none;
+}
+
+.ar-public .mode-btn.active,
+.ar-public .tab-btn.active {
+    background: linear-gradient(135deg, var(--ar-accent), var(--ar-accent-2));
+    color: #ffffff;
+}
+
+.ar-public .tab-panel {
+    display: none;
+}
+
+.ar-public .tab-panel.active {
+    display: block;
+}
+
+.ar-public .market-notes {
+    padding: 0;
+    overflow: hidden;
+}
+
+.ar-public .market-notes-summary {
+    list-style: none;
+    padding: 18px 24px;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.ar-public .market-notes-summary::-webkit-details-marker {
+    display: none;
+}
+
+.ar-public .market-notes-content-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0 24px 24px;
+    border-top: 1px solid rgba(92, 115, 147, 0.12);
+}
+
+.ar-public .filter-helper,
+.ar-public .mode-note,
+.ar-public .hero-guide-note,
+.ar-public .comparison-rate-disclosure {
+    margin: 0;
+    color: var(--ar-muted);
+    line-height: 1.5;
+}
+
+.ar-public .input-helper.is-error {
+    color: var(--ar-danger);
+}
+
+.ar-public #filter-bank {
+    max-height: 8.5rem;
+}
+
+.ar-public .download-label {
+    color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ar-public .filter-chip strong {
+    color: inherit;
+}
+
+.ar-public button.filter-chip {
+    border: 1px solid rgba(92, 115, 147, 0.16);
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--ar-text);
+    box-shadow: none;
+    padding: 0.44rem 0.82rem;
+}
+
+.ar-public .filter-chip-remove {
+    font-size: 0.92rem;
+    line-height: 1;
+    color: var(--ar-accent);
+}
+
+.ar-public .filter-chip-empty {
+    border-style: dashed;
+}
+
+.ar-public .toggle-label {
+    align-content: center;
+}
+
+.ar-public .toggle-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    accent-color: var(--ar-accent);
+}
+
+.ar-public .filters-grid .mode-hidden,
+.ar-public .filter-primary-group .mode-hidden {
+    display: none !important;
+}
+
+.ar-public input.is-invalid,
+.ar-public select.is-invalid {
+    border-color: var(--ar-danger);
+    box-shadow: 0 0 0 1px rgba(180, 59, 48, 0.12);
+}
+
+@media (max-width: 1180px) {
+    .ar-public .decision-flow,
+    .ar-public .insight-band,
+    .ar-public .market-notes-content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ar-public .workspace-rail {
+        position: static;
+    }
+}
+
+@media (max-width: 760px) {
+    .ar-public .scenario-builder,
+    .ar-public .workspace-summary,
+    .ar-public .mode-panel,
+    .ar-public .tabs,
+    .ar-public .filters-toggle,
+    .ar-public .market-notes-summary,
+    .ar-public .market-notes-content-grid {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .ar-public .filter-primary-group,
+    .ar-public .filter-primary-group .filter-range,
+    .ar-public .filters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ar-public .filter-primary-group > label:first-of-type,
+    .ar-public .filter-primary-group .filter-range {
+        grid-column: auto;
+        grid-row: auto;
+    }
+
+    .ar-public .filters-grid {
+        padding-bottom: 18px;
+    }
+
+    .ar-public .workspace-summary-actions > *,
+    .ar-public .hero-actions > * {
+        flex: 1 1 100%;
+    }
+
+    .ar-public .filter-bank-tools,
+    .ar-public .ui-scale-actions,
+    .ar-public .ui-scale-meta {
+        flex-wrap: wrap;
+    }
+
+    .ar-public .tabs {
+        width: 100%;
+    }
+
+    .ar-public .tab-btn,
+    .ar-public .mode-btn {
+        min-width: 0;
+        flex: 1 1 0;
+    }
+}

@@ -27,6 +27,8 @@
         mainChart: null,
         detailChart: null,
     };
+    var responsiveSyncTimer = 0;
+    var resizeObserver = null;
 
     function fields() {
         var defaultView = (window.AR.chartConfig && window.AR.chartConfig.defaultView) ? window.AR.chartConfig.defaultView() : 'lenders';
@@ -68,7 +70,7 @@
     }
 
     function statusText(model, currentFields) {
-        if (!model || !model.meta) return 'Draw a chart to render the rate surface.';
+        if (!model || !model.meta) return 'Render a chart to answer the current scenario.';
         var parts = [];
         parts.push('Loaded ' + Number(chartState.totalRows || 0).toLocaleString() + ' rows.');
         if (currentFields.view === 'lenders') {
@@ -93,6 +95,7 @@
             els.chartDetailOutput.innerHTML = '';
             chartState.detailChart = chartEcharts.ensureChart(els.chartDetailOutput, null);
         }
+        observeChartContainers();
     }
 
     function resizeCharts() {
@@ -106,7 +109,31 @@
         });
     }
 
-    var responsiveSyncTimer = 0;
+    function disconnectResizeObserver() {
+        if (!resizeObserver || typeof resizeObserver.disconnect !== 'function') return;
+        resizeObserver.disconnect();
+        resizeObserver = null;
+    }
+
+    function observeChartContainers() {
+        if (typeof window.ResizeObserver === 'undefined') return;
+        disconnectResizeObserver();
+        resizeObserver = new window.ResizeObserver(function () {
+            scheduleResponsiveSync();
+        });
+        [
+            els.chartOutput,
+            els.chartDetailOutput,
+            els.chartOutput && els.chartOutput.parentElement,
+            els.chartDetailOutput && els.chartDetailOutput.parentElement,
+            document.querySelector('#panel-charts .chart-canvas-shell'),
+            document.querySelector('#panel-charts .chart-series-rail'),
+            document.querySelector('#panel-charts .chart-shell')
+        ].forEach(function (element) {
+            if (!element) return;
+            resizeObserver.observe(element);
+        });
+    }
 
     function chartsPanelVisible() {
         if (!els.panelCharts) return false;
@@ -222,10 +249,10 @@
             resetSelection();
 
             if (!chartState.rows.length) {
-                clearOutput('No data returned. Adjust filters or date range.');
-                if (chartUi.setStatus) chartUi.setStatus('No data to chart. Adjust filters or date range.');
-                return;
-            }
+            clearOutput('No data returned. Adjust filters or date range.');
+            if (chartUi.setStatus) chartUi.setStatus('No data matched the scenario. Adjust filters or date range.');
+            return;
+        }
 
             renderFromCache();
             clientLog('info', 'Chart load completed', {
@@ -284,6 +311,14 @@
         });
     }
     if (chartUi.setIdleState) chartUi.setIdleState();
+    [
+        document.querySelector('.chart-advanced'),
+        document.getElementById('market-notes'),
+        document.getElementById('filter-bar')
+    ].forEach(function (details) {
+        if (!details || details.tagName !== 'DETAILS') return;
+        details.addEventListener('toggle', scheduleResponsiveSync);
+    });
 
     window.addEventListener('resize', scheduleResponsiveSync);
     window.addEventListener('orientationchange', scheduleResponsiveSync);
@@ -298,4 +333,5 @@
         markStale: markStale,
         refreshFromCache: refreshFromCache,
     };
+    window.addEventListener('beforeunload', disconnectResizeObserver);
 })();

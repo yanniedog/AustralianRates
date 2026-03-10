@@ -1,0 +1,340 @@
+.ar-public .insight-card,
+.ar-public .results-panel,
+.ar-public #rate-table,
+.ar-public #pivot-output {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.ar-public .insight-card,
+.ar-public .results-panel {
+    padding: 22px 24px;
+}
+
+.ar-public .quick-compare-cards,
+.ar-public .executive-summary-sections,
+.ar-public .rate-change-list,
+.ar-public .results-intro-copy {
+    display: grid;
+    gap: 14px;
+}
+
+.ar-public .quick-compare-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ar-public .quick-card,
+.ar-public .exec-card {
+    display: grid;
+    gap: 10px;
+    padding: 18px;
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.ar-public .quick-label,
+.ar-public .exec-metric-label,
+.ar-public .rate-change-summary-title {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ar-public .quick-value,
+.ar-public .exec-metric-value,
+.ar-public .rate-change-headline {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--ar-strong);
+}
+
+.ar-public .exec-card h3,
+.ar-public .market-notes-section h2 {
+    margin: 0;
+    font-size: 1.06rem;
+}
+
+.ar-public .exec-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ar-public .exec-metric {
+    padding: 12px;
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    border-radius: 16px;
+    background: rgba(248, 250, 252, 0.84);
+}
+
+.ar-public .rate-change-details {
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.ar-public .rate-change-summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px 14px;
+    list-style: none;
+    padding: 16px 18px;
+    cursor: pointer;
+}
+
+.ar-public .rate-change-summary::-webkit-details-marker {
+    display: none;
+}
+
+.ar-public .rate-change-warning,
+.ar-public #rate-change-status {
+    margin: 0;
+    padding: 0 18px 12px;
+}
+
+.ar-public .rate-change-list {
+    margin: 0;
+    padding: 0 18px 18px;
+    list-style: none;
+}
+
+.ar-public .rate-change-item {
+    display: grid;
+    gap: 8px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(92, 115, 147, 0.12);
+}
+
+.ar-public .rate-change-item:last-child {
+    border-bottom: 0;
+}
+
+.ar-public .rate-change-main,
+.ar-public .rate-change-sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+}
+
+.ar-public .rate-change-bank,
+.ar-public .rate-change-product {
+    font-weight: 800;
+    color: var(--ar-strong);
+}
+
+.ar-public .rate-change-delta {
+    font-weight: 800;
+}
+
+.ar-public .rate-change-delta.up {
+    color: #c2410c;
+}
+
+.ar-public .rate-change-delta.down {
+    color: var(--ar-positive);
+}
+
+.ar-public .rate-change-delta.flat {
+    color: var(--ar-muted);
+}
+
+.ar-public .results-intro {
+    margin-bottom: 16px;
+    padding: 18px 20px;
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.ar-public .explorer-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.ar-public .table-settings-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 999px;
+    border-color: rgba(92, 115, 147, 0.16);
+    background: rgba(255, 255, 255, 0.78);
+    color: var(--ar-muted);
+    box-shadow: none;
+}
+
+.ar-public .table-settings-popover {
+    position: absolute;
+    top: 48px;
+    right: 0;
+    z-index: 20;
+    width: min(340px, 92vw);
+    max-height: 420px;
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid rgba(92, 115, 147, 0.16);
+    border-radius: 22px;
+    background: rgba(255, 253, 249, 0.98);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+}
+
+.ar-public .table-settings-section {
+    display: grid;
+    gap: 8px;
+}
+
+.ar-public .table-settings-section + .table-settings-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(92, 115, 147, 0.12);
+}
+
+.ar-public .table-settings-title {
+    margin: 0;
+    color: var(--ar-muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ar-public .table-settings-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+}
+
+.ar-public .table-settings-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--ar-accent);
+}
+
+.ar-public #rate-table,
+.ar-public #pivot-output {
+    overflow: hidden;
+    border: 1px solid rgba(92, 115, 147, 0.12);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.88);
+}
+
+.ar-public .rate-table-collapsible {
+    padding: 0;
+    overflow: hidden;
+}
+
+.ar-public .rate-table-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    padding: 16px 18px;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.ar-public .rate-table-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.ar-public .tabulator {
+    width: 100% !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--ar-text) !important;
+    font-size: 0.88rem !important;
+}
+
+.ar-public .tabulator .tabulator-header,
+.ar-public .tabulator .tabulator-footer {
+    background: rgba(247, 242, 234, 0.92) !important;
+    color: var(--ar-text) !important;
+}
+
+.ar-public .tabulator .tabulator-col,
+.ar-public .tabulator .tabulator-cell {
+    border-right: 1px solid rgba(92, 115, 147, 0.10) !important;
+}
+
+.ar-public .tabulator .tabulator-row {
+    border-bottom: 1px solid rgba(92, 115, 147, 0.10) !important;
+    background: transparent !important;
+}
+
+.ar-public .tabulator .tabulator-row:nth-child(2n) {
+    background: rgba(15, 23, 42, 0.025) !important;
+}
+
+.ar-public .tabulator .tabulator-row:hover {
+    background: rgba(29, 78, 216, 0.05) !important;
+}
+
+.ar-public .tabulator .tabulator-col .tabulator-col-title {
+    color: var(--ar-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.ar-public #rate-table .tabulator-tableholder,
+.ar-public #pivot-output .pvtRendererArea {
+    overflow: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.ar-public .pivot-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.ar-public #pivot-output {
+    padding: 14px;
+}
+
+.ar-public .market-notes-section {
+    display: grid;
+    gap: 10px;
+}
+
+@media (max-width: 980px) {
+    .ar-public .quick-compare-cards,
+    .ar-public .exec-metric-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .ar-public .insight-card,
+    .ar-public .results-panel,
+    .ar-public .results-intro,
+    .ar-public #pivot-output {
+        padding: 18px;
+    }
+
+    .ar-public .rate-change-summary,
+    .ar-public .rate-change-warning,
+    .ar-public #rate-change-status,
+    .ar-public .rate-change-list {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .ar-public .results-intro {
+        grid-template-columns: 1fr;
+    }
+}

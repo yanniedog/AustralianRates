@@ -124,16 +124,16 @@
         var notes = [];
         if (sectionConfig.chartHint) notes.push(sectionConfig.chartHint);
         if (fields.view === 'surface') {
-            notes.push('Surface view maps collection date across the x-axis and product_key series down the y-axis.');
+            notes.push('What changed over time maps collection date across the x-axis and product_key series down the y-axis.');
             if (getSelectedBankCount() !== 1) notes.push('Filter to one bank for the cleanest longitudinal surface.');
         }
         if (fields.view === 'lenders') {
-            notes.push('Lenders view ranks each bank by its best current product for the active configuration.');
+            notes.push('Who leads now ranks each bank by its best current product for the active configuration.');
             if (getSelectedBankCount() === 1) notes.push('Clear the bank filter to compare lenders across this slice.');
             else notes.push('Use purpose, repayment, LVR, structure, or term filters above to define the slice.');
         }
-        if (fields.view === 'compare') notes.push('Compare view animates only the selected spotlight series.');
-        if (fields.view === 'distribution') notes.push('Distribution groups the current filter set into category-level boxplots.');
+        if (fields.view === 'compare') notes.push('Track a shortlist keeps only the selected spotlight series in view.');
+        if (fields.view === 'distribution') notes.push('See the spread groups the current filter set into category-level boxplots.');
         if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) {
             notes.push('Visible lenders are limited by the chosen density preset.');
         } else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) {
@@ -178,10 +178,10 @@
 
     function railNote(fields, model) {
         if (!model) return 'Draw a chart to activate the workspace.';
-        if (fields.view === 'lenders') return 'Click a lender to spotlight its best filtered product and lock it into Compare.';
-        if (fields.view === 'compare') return 'Click cards to keep only the series you want in the comparison chart.';
-        if (fields.view === 'distribution') return 'Use the shortlist to keep a product trend visible while the distribution summarises the slice.';
-        return 'Click cards to include series in Compare. Click the surface to move the spotlight.';
+        if (fields.view === 'lenders') return 'Click a lender to spotlight its best filtered product and carry it into the shortlist chart.';
+        if (fields.view === 'compare') return 'Click cards to keep only the series you want in the shortlist chart.';
+        if (fields.view === 'distribution') return 'Keep a product spotlight active while the spread summarises the full slice.';
+        return 'Click cards to include series in the shortlist chart. Click the surface to move the spotlight.';
     }
 
     function seriesCardMarkup(options) {
@@ -311,7 +311,7 @@
             els.chartOutput.removeAttribute('data-chart-rendered');
             els.chartOutput.removeAttribute('data-chart-engine');
             els.chartOutput.removeAttribute('data-chart-view');
-            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Draw a chart to render the chart.') + '</div>';
+            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Render a chart to answer the current scenario.') + '</div>';
         }
         if (els.chartDetailOutput) {
             els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'Select a series to inspect its detail trend.') + '</div>';
@@ -323,8 +323,8 @@
         renderSummary(null, getChartFields(), null, false);
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
-        setCanvasPlaceholder('Draw a chart to render the chart.');
-        setStatus('Choose a view, adjust the metric or density, then draw.');
+        setCanvasPlaceholder('Render a chart to answer the current scenario.');
+        setStatus('Choose a question, adjust the metric if needed, then render the chart.');
     }
 
     function setPendingState(message) {

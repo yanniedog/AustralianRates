@@ -1418,7 +1418,47 @@ async function runTests() {
                 results.failed.push('FAIL Sort test skipped: Bank column header not found');
             }
         }
-        
+
+        // Test 9c: Resizable workspace divider (desktop only)
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await page.waitForTimeout(200);
+        const viewportW = await page.evaluate(() => window.innerWidth).catch(() => 0);
+        if (viewportW >= 1100) {
+            console.log('  Testing resizable workspace divider...');
+            await page.locator('.workspace-grid').waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
+            await page.locator('.workspace-resizer').scrollIntoViewIfNeeded().catch(() => {});
+            await page.waitForTimeout(200);
+            const resizer = page.locator('.workspace-resizer');
+            await resizer.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+            if (await resizer.isVisible().catch(() => false)) {
+                const getRailWidth = () => page.evaluate(() => {
+                    const rail = document.querySelector('.workspace-rail');
+                    return rail ? rail.getBoundingClientRect().width : 0;
+                });
+                const widthBefore = await getRailWidth();
+                const box = await resizer.boundingBox().catch(() => null);
+                if (box && widthBefore > 0) {
+                    const centerX = box.x + box.width / 2;
+                    const centerY = box.y + box.height / 2;
+                    await page.mouse.move(centerX, centerY);
+                    await page.mouse.down();
+                    await page.mouse.move(centerX - 80, centerY, { steps: 5 });
+                    await page.mouse.up();
+                    await page.waitForTimeout(300);
+                    const widthAfter = await getRailWidth();
+                    if (widthAfter > 0 && Math.abs(widthAfter - widthBefore) >= 10) {
+                        results.passed.push('PASS Workspace divider is resizable (rail width changed after drag)');
+                    } else {
+                        results.failed.push('FAIL Workspace divider drag did not change rail width');
+                    }
+                } else {
+                    results.warnings.push('WARN Workspace resizer visible but bounding box or rail not measurable');
+                }
+            } else {
+                results.warnings.push('WARN Workspace resizer not visible (may be narrow viewport)');
+            }
+        }
+
         // Test 10: Check disclaimer
         console.log('\nTest 10: Checking disclaimer text...');
         

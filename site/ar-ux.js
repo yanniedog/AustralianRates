@@ -92,7 +92,7 @@
         var params = snapshot.params || {};
         var pills = [
             '<span class="workspace-summary-pill is-emphasis">' + esc(sectionLabel()) + '</span>',
-            '<span class="workspace-summary-pill">' + esc(getUiMode() === 'analyst' ? 'Analysis mode' : 'Overview mode') + '</span>',
+            '<span class="workspace-summary-pill">' + esc(getUiMode() === 'analyst' ? 'Deep analysis' : 'Shortlist') + '</span>',
             '<span class="workspace-summary-pill">' + esc(tabLabel()) + '</span>',
         ];
 
@@ -124,21 +124,21 @@
         var snapshot = getFilterSnapshot();
         var activeTab = getActiveTab();
         var mode = getUiMode();
-        var title = 'Overview mode is ready for quick comparison.';
-        var text = 'Start with a bank, rate band, or date range, then apply filters to refresh the current slice.';
+        var title = 'Your current scenario is ready for a shortlist.';
+        var text = 'Start with a bank, rate band, or date range, then refresh the shortlist for the current slice.';
 
         if (mode === 'analyst' && activeTab === 'charts') {
-            title = 'Analysis mode is focused on trend exploration.';
-            text = 'Use the chart workspace to inspect product_key histories, compare lenders, and keep a shortlist in view.';
+            title = 'Deep analysis is focused on trend evidence.';
+            text = 'Use the chart studio to inspect product_key histories, compare lenders, and keep a shortlist in view.';
         } else if (mode === 'analyst' && activeTab === 'pivot') {
-            title = 'Analysis mode is ready for slice-level pivots.';
+            title = 'Deep analysis is ready for slice-level pivots.';
             text = 'Load pivot data after you define the current slice to reshape the table by lender, structure, term, or date.';
         } else if (mode === 'analyst') {
-            title = 'Analysis mode is surfacing the full metadata table.';
-            text = 'The rates table now exposes more columns and advanced controls for product-by-product inspection.';
+            title = 'Deep analysis is surfacing the full metadata table.';
+            text = 'The rates table now exposes more columns and controls for product-by-product inspection.';
         } else if (snapshot.activeCount > 0) {
-            title = 'Overview mode is narrowed to your current slice.';
-            text = 'Keep using the rates table for quick comparison, or switch to Analysis once you want pivots and charts.';
+            title = 'The shortlist is narrowed to your current slice.';
+            text = 'Stay with the shortlist for a quick decision, or open Deep analysis once you want pivots and charts.';
         }
 
         if (snapshot.dirty) {
