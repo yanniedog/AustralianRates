@@ -12,11 +12,6 @@
     width: 100%;
 }
 
-.admin-dash nav {
-    display: grid;
-    gap: 12px;
-}
-
 .admin-status .grid,
 .admin-status #overall-grid,
 .admin-status #e2e-grid {
@@ -45,10 +40,10 @@
 
 .admin-status .link-btn {
     border: 0;
+    min-height: auto;
     padding: 0;
     background: transparent;
     color: var(--ar-accent);
-    box-shadow: none;
     text-decoration: underline;
 }
 
@@ -57,7 +52,7 @@
     margin: 0;
     padding: 14px;
     border: 1px solid var(--ar-line);
-    border-radius: 18px;
+    border-radius: var(--ar-radius-2);
     background: var(--ar-surface-soft);
     max-height: 420px;
 }
@@ -71,7 +66,6 @@
 .admin-status #cdr-audit-overview,
 .admin-status #cdr-audit-wrap,
 .admin-runs #backlog-tables {
-    min-width: 0;
     max-width: 100%;
     overflow: auto;
 }
@@ -99,19 +93,8 @@
 .admin-db #db-grid {
     min-height: 320px;
     border: 1px solid var(--ar-line);
-    border-radius: 20px;
+    border-radius: var(--ar-radius-2);
     overflow: hidden;
-}
-
-.admin-db .pagination {
-    margin: 0;
-    color: var(--ar-muted);
-    font-size: 0.88rem;
-}
-
-.admin-db .pagination button {
-    margin-left: 6px;
-    padding: 0.45rem 0.72rem;
 }
 
 .admin-clear .panel {
@@ -134,9 +117,9 @@
 .admin-clear #key-fields label,
 .admin-config .rate-check-label {
     color: var(--ar-muted);
-    font-size: 0.74rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
@@ -146,13 +129,6 @@
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
-}
-
-.admin-config .add-row > *,
-.admin-config .rate-check-row > *,
-.admin-runs .actions > * {
-    min-width: 0;
-    max-width: 100%;
 }
 
 .admin-config .add-row input {
@@ -166,13 +142,8 @@
     flex: 0 1 180px;
 }
 
-.admin-config .actions {
-    white-space: nowrap;
-}
-
 .admin-config .actions button {
-    margin-right: 6px;
-    padding: 0.45rem 0.7rem;
+    padding-inline: 12px;
 }
 
 .admin-config .env-table .value,
@@ -189,7 +160,7 @@
 .admin-runs .backlog-block,
 .admin-status .card {
     border: 1px solid var(--ar-line);
-    border-radius: 18px;
+    border-radius: var(--ar-radius-2);
     background: var(--ar-surface-soft);
     padding: 14px;
 }
@@ -200,13 +171,7 @@
     gap: 10px;
     flex-wrap: wrap;
     margin-bottom: 6px;
-    font-weight: 600;
-}
-
-.admin-runs .run-item .head > * {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    font-weight: 700;
 }
 
 .admin-runs .run-item .meta,
@@ -214,12 +179,6 @@
     color: var(--ar-muted);
     font-size: 0.86rem;
     line-height: 1.55;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-.admin-runs .backlog-block + .backlog-block {
-    margin-top: 12px;
 }
 
 .admin-runs details,
@@ -229,9 +188,9 @@
 
 .admin-logs .danger,
 .admin-clear .danger {
-    border-color: #f0c0ba;
-    background: #fff5f4;
-    color: #8b2c22;
+    border-color: rgba(181, 71, 56, 0.2);
+    background: rgba(181, 71, 56, 0.08);
+    color: var(--ar-danger);
 }
 
 .admin-db .tabulator {
@@ -248,19 +207,19 @@
 
 .admin-db .tabulator .tabulator-col,
 .admin-db .tabulator .tabulator-row {
-    border-color: #ececf0 !important;
+    border-color: var(--ar-line) !important;
 }
 
 .admin-db .tabulator .tabulator-col-title {
     color: var(--ar-muted) !important;
     font-size: 0.72rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
 }
 
-.admin-db .tabulator-row:nth-child(2n) {
-    background: #fbfbfd !important;
+.admin-db .tabulator-row:hover {
+    background: #f5f8ff !important;
 }
 
 @media (max-width: 760px) {
@@ -268,5 +227,14 @@
     .admin-status #overall-grid,
     .admin-status #e2e-grid {
         grid-template-columns: 1fr;
+    }
+
+    .admin-config .add-row,
+    .admin-config .rate-check-row,
+    .admin-status .hint-links,
+    .admin-status .payload-actions,
+    .admin-status .audit-actions {
+        flex-direction: column;
+        align-items: stretch;
     }
 }

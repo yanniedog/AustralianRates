@@ -20,6 +20,19 @@
     var tabState = state && state.state ? state.state : {};
     var appInitialized = false;
 
+    function getDeepAnalysisDrawer() {
+        return document.getElementById('deep-analysis-drawer');
+    }
+
+    function syncDeepAnalysisDrawer(mode) {
+        var drawer = getDeepAnalysisDrawer();
+        if (!drawer) return;
+        var activeTab = tabState.activeTab || 'explorer';
+        var currentMode = mode || (state && state.getUiMode ? state.getUiMode() : 'consumer');
+        var shouldOpen = String(currentMode) === 'analyst' || activeTab !== 'explorer';
+        drawer.open = shouldOpen;
+    }
+
     clientLog('info', 'App init start', {
         section: window.AR.section || 'home-loans',
         activeTab: tabState.activeTab || 'explorer',
@@ -43,6 +56,7 @@
         document.body.classList.toggle('ui-mode-consumer', uiMode !== 'analyst');
         document.body.classList.toggle('ui-mode-analyst', uiMode === 'analyst');
         setModeButtonState(uiMode);
+        syncDeepAnalysisDrawer(uiMode);
 
         if (tabs && tabs.applyUiMode) tabs.applyUiMode();
         if (filters && filters.applyUiMode) filters.applyUiMode();
@@ -97,6 +111,7 @@
 
     function collapseWorkspacePanelsByDefault() {
         var detailEls = [
+            getDeepAnalysisDrawer(),
             els.filterBar,
             els.rateChangeDetails,
             document.getElementById('market-notes'),
@@ -115,6 +130,7 @@
         appInitialized = true;
         applyUiMode(state && state.getUiMode ? state.getUiMode() : 'consumer');
         if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer');
+        syncDeepAnalysisDrawer(state && state.getUiMode ? state.getUiMode() : 'consumer');
         if (explorer && explorer.initRateTable) explorer.initRateTable();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
@@ -179,11 +195,23 @@
     });
     window.addEventListener('ar:tab-changed', function (event) {
         var tab = event && event.detail && event.detail.tab;
+        syncDeepAnalysisDrawer(state && state.getUiMode ? state.getUiMode() : 'consumer');
         if (tab === 'charts' && charts && charts.markStale && tabState.chartDrawn) {
             charts.markStale('Review the chart controls, then draw to refresh this view.');
         }
     });
     document.addEventListener('keydown', applyFiltersShortcut);
+
+    var deepAnalysisDrawer = getDeepAnalysisDrawer();
+    if (deepAnalysisDrawer) {
+        deepAnalysisDrawer.addEventListener('toggle', function () {
+            if (deepAnalysisDrawer.open) return;
+            if (tabs && tabs.activateTab && (tabState.activeTab || 'explorer') !== 'explorer') {
+                tabs.activateTab('explorer');
+            }
+            if (state && state.setUiMode) state.setUiMode('consumer');
+        });
+    }
 
     if (tabs && tabs.bindTabListeners) tabs.bindTabListeners();
     collapseWorkspacePanelsByDefault();

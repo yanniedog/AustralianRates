@@ -57,6 +57,10 @@
         return byId('panel-' + activeTab) || byId('panel-explorer');
     }
 
+    function getDeepAnalysisDrawer() {
+        return byId('deep-analysis-drawer');
+    }
+
     function scrollToElement(element) {
         if (!element) return;
         element.scrollIntoView({
@@ -201,7 +205,7 @@
     }
 
     function focusFilters() {
-        var filterPanel = document.querySelector('.workspace-rail .panel-wide');
+        var filterPanel = document.querySelector('.scenario-surface .panel-wide') || document.querySelector('.workspace-rail .panel-wide');
         scrollToElement(filterPanel);
         var firstInput = byId('filter-bank-search') || byId('filter-bank');
         if (firstInput && typeof firstInput.focus === 'function') {
@@ -216,6 +220,8 @@
     }
 
     function openCharts() {
+        var drawer = getDeepAnalysisDrawer();
+        if (drawer) drawer.open = true;
         if (state && typeof state.setUiMode === 'function') state.setUiMode('analyst');
         if (tabs && typeof tabs.activateTab === 'function') tabs.activateTab('charts');
         setTimeout(focusResults, 120);

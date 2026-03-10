@@ -6,7 +6,6 @@
     var timeUtils = (window.AR && window.AR.time) ? window.AR.time : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
 
-    /* Session log (client-side buffer for this tab) */
     var SESSION_LOG_MAX = 500;
     var _sessionLog = [];
 
@@ -30,12 +29,13 @@
         updateClientLogCount();
     }
 
-    window.addSessionLog = addSessionLog;
-    window.getSessionLogEntries = getSessionLogEntries;
-    window.clearSessionLog = clearSessionLog;
-    var flushedCount = flushClientLogQueue();
-    if (flushedCount > 0) {
-        addSessionLog('info', 'Flushed queued client logs', { count: flushedCount });
+    function esc(s) {
+        if (window._arEsc) return window._arEsc(s);
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     function updateClientLogCount() {
@@ -45,16 +45,15 @@
     function updateLogLinkText() {
         var el = document.getElementById('footer-log-link-text');
         if (!el) return;
-        var yy = _sessionLog.length.toLocaleString();
-        el.textContent = 'log private/' + yy;
+        el.textContent = 'log private/' + _sessionLog.length.toLocaleString();
     }
 
     function downloadClientLog() {
         var entries = getSessionLogEntries();
-        var lines = entries.map(function (e) {
-            var parts = [e.ts, '[' + (e.level || 'info').toUpperCase() + ']', e.message];
-            if (e.detail && typeof e.detail === 'object') parts.push(JSON.stringify(e.detail));
-            else if (e.detail != null) parts.push(String(e.detail));
+        var lines = entries.map(function (entry) {
+            var parts = [entry.ts, '[' + (entry.level || 'info').toUpperCase() + ']', entry.message];
+            if (entry.detail && typeof entry.detail === 'object') parts.push(JSON.stringify(entry.detail));
+            else if (entry.detail != null) parts.push(String(entry.detail));
             return parts.join(' ');
         });
         var text = '# AustralianRates Client Log (' + entries.length + ' entries)\n# Downloaded at ' + new Date().toISOString() + '\n\n' + lines.join('\n') + '\n';
@@ -66,20 +65,6 @@
         URL.revokeObjectURL(a.href);
     }
 
-    function esc(s) {
-        if (window._arEsc) return window._arEsc(s);
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
-    /**
-     * Clears all site data for australianrates.com: cookies (current origin),
-     * localStorage, sessionStorage, Cache API caches, and service workers;
-     * then hard-reloads so the site is loaded fresh.
-     */
     function clearSiteDataAndReload() {
         var hostname = typeof location !== 'undefined' && location.hostname ? location.hostname : '';
         var expired = 'expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
@@ -88,43 +73,39 @@
             var cookies = document.cookie.split(';');
             for (var i = 0; i < cookies.length; i++) {
                 var name = cookies[i].split('=')[0].trim();
-                if (name) {
-                    document.cookie = name + '=;' + expired;
-                    if (hostname) document.cookie = name + '=;' + expired + ';domain=' + hostname;
-                }
+                if (!name) continue;
+                document.cookie = name + '=;' + expired;
+                if (hostname) document.cookie = name + '=;' + expired + ';domain=' + hostname;
             }
-        } catch (e) { /* ignore */ }
+        } catch (_err) {}
         try {
             if (typeof localStorage !== 'undefined' && localStorage) localStorage.clear();
-        } catch (e) { /* ignore */ }
+        } catch (_err) {}
         try {
             if (typeof sessionStorage !== 'undefined' && sessionStorage) sessionStorage.clear();
-        } catch (e) { /* ignore */ }
+        } catch (_err) {}
 
         function doReload() {
             var q = (window.location.search ? '&' : '?') + '_=' + Date.now();
             window.location.replace(window.location.pathname + window.location.search + q);
         }
 
-        function runClearThenReload() {
-            var p = Promise.resolve();
-            if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-                p = p.then(function () {
-                    return navigator.serviceWorker.getRegistrations().then(function (regs) {
-                        return Promise.all(regs.map(function (r) { return r.unregister(); }));
-                    });
+        var p = Promise.resolve();
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            p = p.then(function () {
+                return navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    return Promise.all(regs.map(function (r) { return r.unregister(); }));
                 });
-            }
-            if (typeof caches !== 'undefined' && caches.keys) {
-                p = p.then(function () {
-                    return caches.keys().then(function (keys) {
-                        return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-                    });
-                });
-            }
-            p.then(doReload).catch(doReload);
+            });
         }
-        runClearThenReload();
+        if (typeof caches !== 'undefined' && caches.keys) {
+            p = p.then(function () {
+                return caches.keys().then(function (keys) {
+                    return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+                });
+            });
+        }
+        p.then(doReload).catch(doReload);
     }
 
     function getPageContext() {
@@ -139,7 +120,7 @@
 
     function getHeaderTagline(context) {
         if (context.admin) return 'Admin';
-        if (context.legal) return 'Independent rate tracking';
+        if (context.legal) return 'Reference pages';
         if (context.section === 'savings') return 'Savings';
         if (context.section === 'term-deposits') return 'Term deposits';
         return 'Home loans';
@@ -168,17 +149,18 @@
     function buildNav() {
         var header = document.querySelector('.site-header');
         if (!header) return;
-
         var inner = header.querySelector('.site-header-inner');
         if (!inner) return;
+
         var context = getPageContext();
-        var technicalLabel = context.admin ? 'Tools' : 'Menu';
+        var technicalLabel = context.admin ? 'Tools' : 'Utility';
 
         inner.innerHTML =
             '<div class="site-brand-lockup">' +
                 '<span class="site-brand-mark" aria-hidden="true">AR</span>' +
                 '<div class="site-brand-copy">' +
                     '<h1 class="site-brand"><a href="/">AustralianRates</a></h1>' +
+                    '<span class="site-brand-tagline">' + esc(getHeaderTagline(context)) + '</span>' +
                 '</div>' +
             '</div>' +
             '<nav class="site-nav" aria-label="Site navigation">' +
@@ -189,6 +171,7 @@
                     '<details class="site-nav-technical" id="site-nav-technical">' +
                         '<summary class="site-nav-technical-summary">' + esc(technicalLabel) + '</summary>' +
                         '<div class="site-nav-technical-body">' +
+                            (context.admin ? '' : '<p class="site-nav-technical-label">Site tools</p>') +
                             '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
                             '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
                                 '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>' +
@@ -198,6 +181,7 @@
                     '</details>' +
                 '</div>' +
             '</nav>';
+
         var refreshBtn = inner.querySelector('#refresh-site-btn');
         if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
     }
@@ -209,10 +193,14 @@
     function buildFooter() {
         var existing = document.querySelector('.site-footer');
         if (existing) existing.remove();
+
         var context = getPageContext();
         var footerOperator = context.admin
-            ? 'AustralianRates admin portal · support@australianrates.com'
-            : 'AustralianRates open-source project · support@australianrates.com';
+            ? 'Operational surfaces for the AustralianRates production stack.'
+            : 'Daily CDR-backed reference data for home loans, savings, and term deposits.';
+        var footerDisclaimer = context.admin
+            ? 'Admin pages expose operational tooling only.'
+            : 'General information only. Confirm rates and product terms directly with the institution.';
 
         var footer = document.createElement('footer');
         footer.className = 'site-footer';
@@ -226,7 +214,8 @@
                             '<span class="footer-label">' + esc(getHeaderTagline(context)) + '</span>' +
                         '</div>' +
                     '</div>' +
-                    '<p class="footer-operator">' + esc(footerOperator).replace('support@australianrates.com', '<a href="mailto:support@australianrates.com">support@australianrates.com</a>') + '</p>' +
+                    '<p class="footer-operator">' + esc(footerOperator) + '</p>' +
+                    '<p class="footer-disclaimer">' + esc(footerDisclaimer) + '</p>' +
                 '</div>' +
                 '<div class="site-footer-actions">' +
                     '<details class="footer-technical" id="footer-technical">' +
@@ -243,9 +232,9 @@
                     '</details>' +
                     '<span class="footer-legal-links">' +
                         '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
+                        '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                         '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
                         '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
-                        '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                     '</span>' +
                 '</div>' +
             '</div>';
@@ -260,9 +249,7 @@
                 e.preventDefault();
                 var wasHidden = popup.hidden;
                 popup.hidden = !wasHidden;
-                if (wasHidden) {
-                    downloadClient.focus();
-                }
+                if (wasHidden && downloadClient) downloadClient.focus();
             });
         }
         if (downloadClient) {
@@ -274,10 +261,9 @@
         document.addEventListener('click', function (e) {
             if (!popup || popup.hidden) return;
             var wrap = document.getElementById('footer-log-info');
-            if (wrap && !wrap.contains(e.target)) {
-                popup.hidden = true;
-            }
+            if (wrap && !wrap.contains(e.target)) popup.hidden = true;
         });
+
         updateLogLinkText();
     }
 
@@ -373,12 +359,21 @@
         });
     }
 
+    window.addSessionLog = addSessionLog;
+    window.getSessionLogEntries = getSessionLogEntries;
+    window.clearSessionLog = clearSessionLog;
     window.refreshSystemLogCount = function () { return null; };
+
+    var flushedCount = flushClientLogQueue();
+    if (flushedCount > 0) {
+        addSessionLog('info', 'Flushed queued client logs', { count: flushedCount });
+    }
 
     addSessionLog('info', 'Frame loaded', {
         sectionApiBase: SECTION_API_BASE,
         systemLogsPublic: false,
     });
+
     buildNav();
     buildFooter();
     loadCommitInfo();
