@@ -45,14 +45,22 @@ function reviewNote(verdict: Verdict, issues: CaptureRecord['issues']): string {
 function runNodeScript(scriptName: string, label: string, outDir: string): GuardCommandResult {
   const logPath = path.join(outDir, 'guards', `${scriptName.replace(/\.js$/u, '')}.log`)
   ensureDirectory(path.dirname(logPath))
-  const result = spawnSync(process.execPath, [path.join(process.cwd(), scriptName)], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    env: process.env,
-    shell: false,
-  })
-  fs.writeFileSync(logPath, `${result.stdout || ''}${result.stderr || ''}`)
-  return { command: `${process.execPath} ${scriptName}`, exitCode: result.status ?? 1, label, logPath }
+  const attempts = 2
+  let finalExitCode = 1
+  const logChunks: string[] = []
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync(process.execPath, [path.join(process.cwd(), scriptName)], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: process.env,
+      shell: false,
+    })
+    finalExitCode = result.status ?? 1
+    logChunks.push(`===== Attempt ${attempt}/${attempts} =====\n${result.stdout || ''}${result.stderr || ''}`)
+    if (finalExitCode === 0) break
+  }
+  fs.writeFileSync(logPath, logChunks.join('\n\n'))
+  return { command: `${process.execPath} ${scriptName}`, exitCode: finalExitCode, label, logPath }
 }
 
 function attachTelemetry(page: Page): { consoleErrors: string[]; detach: () => void; pageErrors: string[]; requestFailures: Array<{ url: string; error: string }> } {

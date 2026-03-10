@@ -3,6 +3,7 @@ import {
   ANALYST_CLICK_TARGETS,
   BASE_CLICK_TARGETS,
   CHART_CLICK_TARGETS,
+  EXPLORER_CLICK_TARGETS,
   GEOMETRY_SELECTORS,
   PIVOT_CLICK_TARGETS,
 } from './visual-audit-config'
@@ -160,7 +161,7 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
   if (state.key === 'analyst-advanced-full') {
     await switchAnalyst(page)
     await openDetails(page, '#filter-bar')
-    return [...interactiveSelectors, ...ANALYST_CLICK_TARGETS]
+    return [...interactiveSelectors, ...EXPLORER_CLICK_TARGETS, ...ANALYST_CLICK_TARGETS]
   }
   if (state.key === 'table-settings-open') {
     await switchAnalyst(page)
@@ -169,7 +170,7 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
     const visible = await page.locator('#table-settings-popover').evaluate((node) => !(node as HTMLElement).hidden).catch(() => false)
     pushCheck(checks, 'table settings popover visible', visible)
     if (!visible) pushIssue(issues, 'TABLE_SETTINGS_HIDDEN', 'Table settings popover did not stay visible.')
-    return [...interactiveSelectors, ...ANALYST_CLICK_TARGETS]
+    return [...interactiveSelectors, ...EXPLORER_CLICK_TARGETS, ...ANALYST_CLICK_TARGETS]
   }
   if (state.key === 'pivot-full') {
     await switchAnalyst(page)
@@ -195,7 +196,7 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
     pushCheck(checks, 'footer technical expanded', await page.locator('#footer-technical').evaluate((node) => node instanceof HTMLDetailsElement && node.open).catch(() => false))
     return interactiveSelectors
   }
-  return interactiveSelectors
+  return [...interactiveSelectors, ...EXPLORER_CLICK_TARGETS]
 }
 
 export async function collectGeometry(page: Page, interactiveSelectors: string[]): Promise<GeometryEvidence> {

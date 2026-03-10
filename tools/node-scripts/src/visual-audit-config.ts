@@ -135,7 +135,8 @@ export const GEOMETRY_SELECTORS = [
   '.admin-login-card',
 ]
 
-export const BASE_CLICK_TARGETS = ['#apply-filters', '#download-format', '#tab-explorer', '#tab-pivot', '#tab-charts']
+export const BASE_CLICK_TARGETS = ['#tab-explorer', '#tab-pivot', '#tab-charts']
+export const EXPLORER_CLICK_TARGETS = ['#apply-filters', '#download-format']
 export const ANALYST_CLICK_TARGETS = ['#mode-analyst', '#table-settings-btn']
 export const PIVOT_CLICK_TARGETS = ['#load-pivot']
 export const CHART_CLICK_TARGETS = ['#draw-chart', '[data-chart-view="lenders"]', '[data-chart-view="surface"]', '[data-chart-view="compare"]', '[data-chart-view="distribution"]']
