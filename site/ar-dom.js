@@ -73,6 +73,11 @@
         filterIncludeManual: document.getElementById('filter-include-manual'),
         refreshInterval: document.getElementById('refresh-interval'),
         lastRefreshed: document.getElementById('last-refreshed'),
+        uiScaleDown: document.getElementById('ui-scale-down'),
+        uiScaleRange: document.getElementById('ui-scale-range'),
+        uiScaleUp: document.getElementById('ui-scale-up'),
+        uiScaleReset: document.getElementById('ui-scale-reset'),
+        uiScaleValue: document.getElementById('ui-scale-value'),
         tableSettingsBtn: document.getElementById('table-settings-btn'),
         tableSettingsPopover: document.getElementById('table-settings-popover'),
     };

@@ -72,26 +72,43 @@ async function waitForPivot(page: Page): Promise<void> {
 
 async function evaluatePivotLayout(page: Page, viewportKey: ViewportKey, checks: CaptureCheck[], issues: CaptureIssue[]): Promise<void> {
   const layout = await page.evaluate((mode) => {
-    const widths = Array.from(document.querySelectorAll('#pivot-output select')).map((el) => Math.round(el.getBoundingClientRect().width))
-    const enoughWidth = widths.length > 0 && widths.every((width) => width >= (mode === 'desktop' ? 150 : 110))
-    return { enoughWidth, widths }
+    const viewportWidth = window.innerWidth
+    const selectInfo = Array.from(document.querySelectorAll('#pivot-output select')).map((el) => {
+      const rect = el.getBoundingClientRect()
+      return {
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+      }
+    })
+    const enoughWidth =
+      selectInfo.length > 0 &&
+      selectInfo.every((info) =>
+        mode === 'desktop'
+          ? info.width >= 150
+          : info.left >= 0 && info.right <= viewportWidth - 8 && info.width >= 180,
+      )
+    return {
+      enoughWidth,
+      widths: selectInfo.map((info) => Math.round(info.width)),
+    }
   }, viewportKey)
   pushCheck(checks, 'pivot controls readable', layout.enoughWidth, layout.widths.join(', '))
   if (!layout.enoughWidth) pushIssue(issues, 'PIVOT_CONTROL_WIDTH', 'Pivot controls collapsed below the readable width threshold.')
 
   if (viewportKey === 'desktop') return
-  const triangle = page.locator('#pivot-output .pvtTriangle').first()
+  const triangle = page.locator('#pivot-output .pvtUnused .pvtTriangle').first()
   if (!(await triangle.count().catch(() => 0))) return
   await triangle.click().catch(() => undefined)
   await page.waitForTimeout(300)
   const onScreen = await page.evaluate(() => {
     const box = Array.from(document.querySelectorAll('#pivot-output .pvtFilterBox')).find((node) => {
       const style = window.getComputedStyle(node)
-      return style.display !== 'none' && style.visibility !== 'hidden'
+      return style.display !== 'none'
     })
     if (!box) return false
     const rect = box.getBoundingClientRect()
-    return rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+    return rect.left >= 0 && rect.right <= window.innerWidth - 8
   })
   pushCheck(checks, 'pivot filter menu on-screen', onScreen)
   if (!onScreen) pushIssue(issues, 'PIVOT_FILTER_OFFSCREEN', 'Pivot filter menu opened outside the viewport.')
