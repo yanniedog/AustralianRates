@@ -6,8 +6,8 @@ import {
   RATE_STRUCTURES,
   RUN_SOURCES,
   SECURITY_PURPOSES,
-} from '../constants'
-import type { FeatureSet, LvrTier, RateStructure, RepaymentType, RetrievalType, RunSource, SecurityPurpose } from '../types'
+} from '../constants.js'
+import type { FeatureSet, LvrTier, RateStructure, RepaymentType, RetrievalType, RunSource, SecurityPurpose } from '../types.js'
 import {
   isAllowedDataQualityFlag,
   isFiniteNumber,
@@ -15,7 +15,7 @@ import {
   isValidUrl,
   reasonableStringLength,
   VALIDATE_COMMON,
-} from './validate-common'
+} from './validate-common.js'
 
 export type NormalizedRateRow = {
   bankName: string

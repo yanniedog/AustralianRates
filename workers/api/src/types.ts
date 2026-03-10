@@ -1,5 +1,5 @@
 import type { JWTPayload } from 'jose'
-import type { DatasetKind, IngestTaskKind } from '../../../packages/shared/src'
+import type { DatasetKind, IngestTaskKind } from '../../../packages/shared/src/index.js'
 
 export type RunType = 'daily' | 'backfill'
 export type RunStatus = 'running' | 'ok' | 'partial' | 'failed'

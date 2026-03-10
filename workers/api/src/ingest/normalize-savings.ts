@@ -4,8 +4,8 @@ import {
   RUN_SOURCES,
   SAVINGS_ACCOUNT_TYPES,
   SAVINGS_RATE_TYPES,
-} from '../constants'
-import type { InterestPayment, RetrievalType, RunSource, SavingsAccountType, SavingsRateType } from '../types'
+} from '../constants.js'
+import type { InterestPayment, RetrievalType, RunSource, SavingsAccountType, SavingsRateType } from '../types.js'
 import {
   isAllowedDataQualityFlag,
   isFiniteNumber,
@@ -13,7 +13,7 @@ import {
   isValidUrl,
   reasonableStringLength,
   VALIDATE_COMMON,
-} from './validate-common'
+} from './validate-common.js'
 
 export type NormalizedSavingsRow = {
   bankName: string

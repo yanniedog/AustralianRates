@@ -7,7 +7,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"],
+    "types": ["node", "@cloudflare/workers-types"],
     "noEmit": true
   },
   "include": ["src/**/*.ts"]

@@ -1,4 +1,4 @@
-import { normalizeBankName, normalizeProductName } from './normalize'
+import { normalizeBankName, normalizeProductName } from './normalize.js'
 import {
   normalizeAccountType,
   normalizeDepositRateType,
@@ -8,7 +8,7 @@ import {
   parseTermMonths,
   type NormalizedSavingsRow,
   type NormalizedTdRow,
-} from './normalize-savings'
+} from './normalize-savings.js'
 import {
   asArray,
   extractProducts,
@@ -20,8 +20,9 @@ import {
   productUrlFromDetail,
   publishedAtFromDetail,
   type JsonRecord,
-} from './cdr'
-import type { EnvBindings, LenderConfig } from '../types'
+} from './cdr.js'
+import type { FetchJsonResult } from './cdr/http.js'
+import type { EnvBindings, LenderConfig } from '../types.js'
 
 type FetchEnvBindings = Pick<
   EnvBindings,
@@ -237,7 +238,7 @@ export async function fetchSavingsProductIds(
     if (visitedUrls.has(url)) break
     visitedUrls.add(url)
     pages += 1
-    const response = await fetchCdrJson(url, versions, {
+    const response: FetchJsonResult = await fetchCdrJson(url, versions, {
       env: options?.env,
       runId: options?.runId,
       lenderCode: options?.lenderCode,
@@ -252,7 +253,7 @@ export async function fetchSavingsProductIds(
       const id = pickText(product, ['productId', 'id'])
       if (id) ids.add(id)
     }
-    const next = nextLink(response.data)
+    const next: string | null = nextLink(response.data)
     if (next && visitedUrls.has(next)) {
       url = null
       break
@@ -285,7 +286,7 @@ export async function fetchTermDepositProductIds(
     if (visitedUrls.has(url)) break
     visitedUrls.add(url)
     pages += 1
-    const response = await fetchCdrJson(url, versions, {
+    const response: FetchJsonResult = await fetchCdrJson(url, versions, {
       env: options?.env,
       runId: options?.runId,
       lenderCode: options?.lenderCode,

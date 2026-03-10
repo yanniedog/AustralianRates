@@ -1,4 +1,4 @@
-import type { LenderConfig } from '../types'
+import type { LenderConfig } from '../types.js'
 
 export type LenderPlaybook = {
   code: string

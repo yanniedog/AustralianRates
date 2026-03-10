@@ -1,7 +1,7 @@
-import type { LenderConfig } from '../../types'
-import { nowIso } from '../../utils/time'
-import type { NormalizedRateRow } from '../normalize'
-import { normalizeBankName, normalizeFeatureSet } from '../normalize'
+import type { LenderConfig } from '../../types.js'
+import { nowIso } from '../../utils/time.js'
+import type { NormalizedRateRow } from '../normalize.js'
+import { normalizeBankName, normalizeFeatureSet } from '../normalize.js'
 
 export function backfillSeedProductRows(input: {
   lender: LenderConfig

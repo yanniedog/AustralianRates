@@ -1,8 +1,8 @@
-import type { FetchRetryEnv, FetchWithTimeoutMeta } from '../../utils/fetch-with-timeout'
-import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../utils/fetch-with-timeout'
-import { log } from '../../utils/logger'
+import type { FetchRetryEnv, FetchWithTimeoutMeta } from '../../utils/fetch-with-timeout.js'
+import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../utils/fetch-with-timeout.js'
+import { log } from '../../utils/logger.js'
 
-type FetchJsonResult = {
+export type FetchJsonResult = {
   ok: boolean
   status: number
   url: string
@@ -86,7 +86,7 @@ async function fetchTextWithRetries(
     }
   } catch (error) {
     const timeoutError = error instanceof FetchWithTimeoutError ? error : null
-    const meta = timeoutError?.meta ?? fallbackMeta(error)
+    const meta: FetchWithTimeoutMeta = timeoutError?.meta ?? fallbackMeta(error)
     logUpstreamRequest(url, meta, context, 'warn')
     const message = (error as Error)?.message || String(error)
     return {

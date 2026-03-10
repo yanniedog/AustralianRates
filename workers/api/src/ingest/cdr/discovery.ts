@@ -1,9 +1,9 @@
-import type { LenderConfig } from '../../types'
-import { configuredProductEndpoints } from '../product-endpoints'
-import { safeUrl } from './detail-metadata'
-import { fetchCdrJson, fetchJson } from './http'
-import type { FetchRequestContext } from './http'
-import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives'
+import type { LenderConfig } from '../../types.js'
+import { configuredProductEndpoints } from '../product-endpoints.js'
+import { safeUrl } from './detail-metadata.js'
+import { fetchCdrJson, fetchJson } from './http.js'
+import type { FetchRequestContext } from './http.js'
+import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives.js'
 
 export type RegisterBrand = {
   brandName: string
@@ -178,13 +178,15 @@ export async function discoverProductsEndpoint(
 
 export function extractProducts(payload: unknown): JsonRecord[] {
   if (!isRecord(payload)) return []
-  const data = isRecord(payload.data) ? asArray((payload.data as JsonRecord).products) : asArray(payload.data)
+  const p = payload as JsonRecord
+  const data = isRecord(p.data) ? asArray((p.data as JsonRecord).products) : asArray(p.data)
   return data.filter(isRecord)
 }
 
 export function nextLink(payload: unknown): string | null {
   if (!isRecord(payload)) return null
-  const links = isRecord(payload.links) ? (payload.links as JsonRecord) : null
+  const p = payload as JsonRecord
+  const links = isRecord(p.links) ? (p.links as JsonRecord) : null
   const next = links ? getText(links.next) : ''
   return next || null
 }

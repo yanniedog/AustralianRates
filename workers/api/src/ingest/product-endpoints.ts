@@ -1,4 +1,4 @@
-import type { LenderConfig } from '../types'
+import type { LenderConfig } from '../types.js'
 
 function uniqueProductEndpoints(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))

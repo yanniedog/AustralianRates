@@ -70,7 +70,7 @@ function lenderByCode(lenderCode: string): LenderConfig {
 
 async function fetchHomeRows(lender: LenderConfig, collectionDate: string): Promise<DetailResult<NormalizedRateRow>> {
   const productMap = new Map<string, string>()
-  for (const endpointUrl of configuredProductEndpoints(lender)) {
+  for (const endpointUrl of configuredProductEndpoints({ products_endpoint: lender.products_endpoint, additional_products_endpoints: lender.additional_products_endpoints })) {
     const discovered = await fetchResidentialMortgageProductIds(endpointUrl)
     for (const productId of discovered.productIds) {
       if (!productMap.has(productId)) productMap.set(productId, endpointUrl)
@@ -98,7 +98,7 @@ async function fetchHomeRows(lender: LenderConfig, collectionDate: string): Prom
 
 async function fetchSavingsRows(lender: LenderConfig, collectionDate: string): Promise<DetailResult<NormalizedSavingsRow>> {
   const productMap = new Map<string, string>()
-  for (const endpointUrl of configuredProductEndpoints(lender)) {
+  for (const endpointUrl of configuredProductEndpoints({ products_endpoint: lender.products_endpoint, additional_products_endpoints: lender.additional_products_endpoints })) {
     const discovered = await fetchSavingsProductIds(endpointUrl)
     for (const productId of discovered.productIds) {
       if (!productMap.has(productId)) productMap.set(productId, endpointUrl)
@@ -126,7 +126,7 @@ async function fetchSavingsRows(lender: LenderConfig, collectionDate: string): P
 
 async function fetchTdRows(lender: LenderConfig, collectionDate: string): Promise<DetailResult<NormalizedTdRow>> {
   const productMap = new Map<string, string>()
-  for (const endpointUrl of configuredProductEndpoints(lender)) {
+  for (const endpointUrl of configuredProductEndpoints({ products_endpoint: lender.products_endpoint, additional_products_endpoints: lender.additional_products_endpoints })) {
     const discovered = await fetchTermDepositProductIds(endpointUrl)
     for (const productId of discovered.productIds) {
       if (!productMap.has(productId)) productMap.set(productId, endpointUrl)

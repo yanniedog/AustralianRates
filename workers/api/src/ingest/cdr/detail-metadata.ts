@@ -1,4 +1,4 @@
-import { getText, isRecord, pickText, type JsonRecord } from './primitives'
+import { getText, isRecord, pickText, type JsonRecord } from './primitives.js'
 
 export function safeUrl(value: string): string {
   return value.replace(/\/+$/, '')

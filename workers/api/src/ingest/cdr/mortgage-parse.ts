@@ -11,11 +11,11 @@ import {
   parseInterestRate,
   isProductNameLikelyRateProduct,
   type NormalizedRateRow,
-} from '../normalize'
-import { getLenderPlaybook } from '../lender-playbooks'
-import type { LenderConfig } from '../../types'
-import { productUrlFromDetail, publishedAtFromDetail } from './detail-metadata'
-import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives'
+} from '../normalize.js'
+import { getLenderPlaybook } from '../lender-playbooks.js'
+import type { LenderConfig } from '../../types.js'
+import { productUrlFromDetail, publishedAtFromDetail } from './detail-metadata.js'
+import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives.js'
 
 export function isResidentialMortgage(product: JsonRecord): boolean {
   const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()

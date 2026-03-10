@@ -1,6 +1,6 @@
-import { buildDimensionJson, buildLegacyProductKey, buildSeriesKey, type DatasetKind } from '../../../../packages/shared/src'
-import type { NormalizedRateRow } from '../ingest/normalize'
-import type { NormalizedSavingsRow, NormalizedTdRow } from '../ingest/normalize-savings'
+import { buildDimensionJson, buildLegacyProductKey, buildSeriesKey, type DatasetKind } from '../../../../packages/shared/src/index.js'
+import type { NormalizedRateRow } from '../ingest/normalize.js'
+import type { NormalizedSavingsRow, NormalizedTdRow } from '../ingest/normalize-savings.js'
 
 export function homeLoanSeriesKey(row: Pick<NormalizedRateRow, 'bankName' | 'productId' | 'securityPurpose' | 'repaymentType' | 'lvrTier' | 'rateStructure'>): string {
   return buildSeriesKey({

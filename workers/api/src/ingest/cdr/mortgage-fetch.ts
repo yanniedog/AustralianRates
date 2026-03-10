@@ -1,10 +1,10 @@
-import type { EnvBindings, LenderConfig } from '../../types'
-import { safeUrl } from './detail-metadata'
-import { extractProducts, nextLink } from './discovery'
-import { fetchCdrJson } from './http'
-import { isRecord, pickText, type JsonRecord } from './primitives'
-import { isResidentialMortgage, parseRatesFromDetail } from './mortgage-parse'
-import type { NormalizedRateRow } from '../normalize'
+import type { EnvBindings, LenderConfig } from '../../types.js'
+import { safeUrl } from './detail-metadata.js'
+import { extractProducts, nextLink } from './discovery.js'
+import { fetchCdrJson, type FetchJsonResult } from './http.js'
+import { isRecord, pickText, type JsonRecord } from './primitives.js'
+import { isResidentialMortgage, parseRatesFromDetail } from './mortgage-parse.js'
+import type { NormalizedRateRow } from '../normalize.js'
 
 type FetchEnvBindings = Pick<
   EnvBindings,
@@ -35,7 +35,7 @@ export async function fetchResidentialMortgageProductIds(
     if (visitedUrls.has(url)) break
     visitedUrls.add(url)
     pages += 1
-    const response = await fetchCdrJson(url, versions, {
+    const response: FetchJsonResult = await fetchCdrJson(url, versions, {
       env: options?.env,
       runId: options?.runId,
       lenderCode: options?.lenderCode,
@@ -56,7 +56,7 @@ export async function fetchResidentialMortgageProductIds(
       const id = pickText(product, ['productId', 'id'])
       if (id) ids.add(id)
     }
-    const next = nextLink(response.data)
+    const next: string | null = nextLink(response.data)
     if (next && visitedUrls.has(next)) {
       url = null
       break
@@ -111,7 +111,7 @@ export async function fetchProductDetailRows(input: {
       detail,
       sourceUrl: detailUrl,
       collectionDate: input.collectionDate,
-    }).map((row) => ({
+    }).map((row: NormalizedRateRow) => ({
       ...row,
       cdrProductDetailJson: fetched.text || null,
     })),

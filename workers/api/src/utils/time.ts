@@ -1,5 +1,5 @@
-import type { MelbourneParts } from '../types'
-import { MELBOURNE_TIMEZONE } from '../constants'
+import type { MelbourneParts } from '../types.js'
+import { MELBOURNE_TIMEZONE } from '../constants.js'
 
 function parseIntlParts(date: Date, timeZone: string): MelbourneParts {
   const formatter = new Intl.DateTimeFormat('en-CA', {

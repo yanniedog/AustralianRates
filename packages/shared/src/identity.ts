@@ -1,4 +1,4 @@
-import type { DatasetKind, SeriesKeyParts } from './types'
+import type { DatasetKind, SeriesKeyParts } from './types.js'
 
 function asText(value: unknown): string {
   if (value == null) return ''

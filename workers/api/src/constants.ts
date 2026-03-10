@@ -1,4 +1,4 @@
-import lendersConfigRaw from '../config/lenders.json'
+import lendersConfigRaw from '../config/lenders.json' with { type: 'json' }
 import type {
   FeatureSet,
   InterestPayment,
@@ -9,7 +9,7 @@ import type {
   SavingsAccountType,
   SavingsRateType,
   SecurityPurpose,
-} from './types'
+} from './types.js'
 
 export const API_BASE_PATH = '/api/home-loan-rates'
 export const SAVINGS_API_BASE_PATH = '/api/savings-rates'
