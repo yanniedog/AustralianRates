@@ -76,7 +76,8 @@ function proxyApiRequest(req: http.IncomingMessage, res: http.ServerResponse, ap
   req.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
   req.on('end', () => {
     const body = chunks.length ? Buffer.concat(chunks) : undefined
-    const upstream = https.request(target, { headers, method: req.method || 'GET' }, (upstreamRes) => {
+    const requester = target.protocol === 'http:' ? http : https
+    const upstream = requester.request(target, { headers, method: req.method || 'GET' }, (upstreamRes) => {
       const responseHeaders = { ...upstreamRes.headers }
       delete responseHeaders['content-length']
       responseHeaders['access-control-allow-origin'] = '*'

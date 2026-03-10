@@ -320,6 +320,12 @@
     color: #ffffff;
 }
 
+.ar-public .tabs {
+    position: sticky;
+    top: 92px;
+    z-index: 6;
+}
+
 .ar-public .tab-panel {
     display: none;
 }
@@ -427,6 +433,10 @@
     }
 
     .ar-public .workspace-rail {
+        position: static;
+    }
+
+    .ar-public .tabs {
         position: static;
     }
 }

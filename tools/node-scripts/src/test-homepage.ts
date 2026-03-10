@@ -802,8 +802,8 @@ async function runTests() {
         
         // Heading
         const heading = await page.textContent('.hero h1');
-        if (heading === 'Compare current mortgage rates.') {
-            results.passed.push('PASS Hero heading correct');
+        if (heading && /mortgage rate/i.test(heading) && /scenario/i.test(heading)) {
+            results.passed.push('PASS Hero heading reflects the decision-first mortgage scenario flow');
         } else {
             results.failed.push(`FAIL Hero heading incorrect: "${heading}"`);
         }
@@ -1419,43 +1419,31 @@ async function runTests() {
             }
         }
 
-        // Test 9c: Resizable workspace divider (desktop only)
+        // Test 9c: Decision-first workspace structure (desktop)
         await page.setViewportSize({ width: 1920, height: 1080 });
         await page.waitForTimeout(200);
         const viewportW = await page.evaluate(() => window.innerWidth).catch(() => 0);
         if (viewportW >= 1100) {
-            console.log('  Testing resizable workspace divider...');
+            console.log('  Testing decision-first workspace structure...');
             await page.locator('.workspace-grid').waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
-            await page.locator('.workspace-resizer').scrollIntoViewIfNeeded().catch(() => {});
-            await page.waitForTimeout(200);
-            const resizer = page.locator('.workspace-resizer');
-            await resizer.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-            if (await resizer.isVisible().catch(() => false)) {
-                const getRailWidth = () => page.evaluate(() => {
-                    const rail = document.querySelector('.workspace-rail');
-                    return rail ? rail.getBoundingClientRect().width : 0;
-                });
-                const widthBefore = await getRailWidth();
-                const box = await resizer.boundingBox().catch(() => null);
-                if (box && widthBefore > 0) {
-                    const centerX = box.x + box.width / 2;
-                    const centerY = box.y + box.height / 2;
-                    await page.mouse.move(centerX, centerY);
-                    await page.mouse.down();
-                    await page.mouse.move(centerX - 80, centerY, { steps: 5 });
-                    await page.mouse.up();
-                    await page.waitForTimeout(300);
-                    const widthAfter = await getRailWidth();
-                    if (widthAfter > 0 && Math.abs(widthAfter - widthBefore) >= 10) {
-                        results.passed.push('PASS Workspace divider is resizable (rail width changed after drag)');
-                    } else {
-                        results.failed.push('FAIL Workspace divider drag did not change rail width');
-                    }
-                } else {
-                    results.warnings.push('WARN Workspace resizer visible but bounding box or rail not measurable');
-                }
+            const decisionLayout = await page.evaluate(() => {
+                const flow = document.querySelector('.decision-flow');
+                const scenario = document.querySelector('.workspace-rail');
+                const surface = document.querySelector('.decision-surface');
+                const resizer = document.querySelector('.workspace-resizer');
+                if (!flow || !scenario || !surface) return null;
+                const flowStyle = getComputedStyle(flow);
+                return {
+                    flowColumns: String(flowStyle.gridTemplateColumns || ''),
+                    hasResizer: !!resizer,
+                    scenarioWidth: scenario.getBoundingClientRect().width,
+                    surfaceWidth: surface.getBoundingClientRect().width,
+                };
+            }).catch(() => null);
+            if (decisionLayout && decisionLayout.flowColumns && !decisionLayout.hasResizer && decisionLayout.scenarioWidth > 220 && decisionLayout.surfaceWidth > 220) {
+                results.passed.push('PASS Decision workspace renders as scenario plus surface with no manual divider');
             } else {
-                results.warnings.push('WARN Workspace resizer not visible (may be narrow viewport)');
+                results.failed.push('FAIL Decision workspace did not render the expected two-part desktop structure');
             }
         }
 
