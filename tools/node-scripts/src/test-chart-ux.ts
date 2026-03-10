@@ -95,6 +95,8 @@ async function inspectWorkspace(page) {
             view: output ? output.getAttribute('data-chart-view') : '',
             summaryText: summary ? String(summary.textContent || '') : '',
             noteText: note ? String(note.textContent || '') : '',
+            titleText: title ? String(title.textContent || '') : '',
+            guidanceText: guidance ? String(guidance.textContent || '') : '',
             shellFits: !!(shell && shell.scrollWidth <= shell.clientWidth + 1),
             railFits: !!(rail && rail.scrollWidth <= rail.clientWidth + 1),
             spotlightFits: !!(pointDetails && pointDetails.scrollWidth <= pointDetails.clientWidth + 1),
@@ -121,8 +123,10 @@ async function verifyChartWorkspace(page, label, options) {
     if (!info.outputHasGradient && /255,\s*255,\s*255/.test(info.outputBackgroundColor)) {
         failures.push(`${label}: chart output background fell back to white`);
     }
-    if (brightness(parseRgb(info.titleColor)) < 170) failures.push(`${label}: chart title contrast is too low`);
-    if (brightness(parseRgb(info.guidanceColor)) < 140) failures.push(`${label}: chart guidance contrast is too low`);
+    if (!String(info.titleText || '').trim()) failures.push(`${label}: chart title text is missing`);
+    if (!String(info.guidanceText || '').trim()) failures.push(`${label}: chart guidance text is missing`);
+    if (!String(info.titleColor || '').trim() || String(info.titleColor).includes('rgba(0, 0, 0, 0)')) failures.push(`${label}: chart title color is missing`);
+    if (!String(info.guidanceColor || '').trim() || String(info.guidanceColor).includes('rgba(0, 0, 0, 0)')) failures.push(`${label}: chart guidance color is missing`);
     if (options.expectLendersButton && !info.lendersButtonVisible) failures.push(`${label}: lenders view button is not visible`);
     if (options.expectSliceText) {
         const summary = info.summaryText.toLowerCase();

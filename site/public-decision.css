@@ -103,6 +103,22 @@
     gap: 16px;
 }
 
+.ar-public .workspace-summary,
+.ar-public .analysis-studio,
+.ar-public .tab-panel {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.ar-public .workspace-rail,
+.ar-public .decision-surface,
+.ar-public .results-panel {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
 .ar-public .decision-flow {
     grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
     align-items: start;
@@ -407,7 +423,7 @@
     .ar-public .decision-flow,
     .ar-public .insight-band,
     .ar-public .market-notes-content-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .ar-public .workspace-rail {

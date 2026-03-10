@@ -113,6 +113,7 @@ body.ar-legal .site-brand {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
 }
 
 .site-nav {
@@ -311,6 +312,21 @@ body.ar-legal .site-footer {
     body.ar-public .shell,
     body.ar-legal .shell {
         padding: 20px 14px 96px;
+    }
+
+    .site-header-inner {
+        align-items: start;
+    }
+
+    .site-nav {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .site-nav-primary,
+    .site-nav-links {
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
     body.ar-public .hero,
