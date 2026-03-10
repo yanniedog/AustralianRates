@@ -338,6 +338,7 @@ tdPublicRoutes.get('/export', async (c) => {
   if (format !== 'csv' && format !== 'json') {
     return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
   }
+  const exportLimit = parsePageSize(String(q.limit || ''), 10000, 10000)
   const dir = String(q.dir || 'desc').toLowerCase()
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
@@ -360,7 +361,7 @@ tdPublicRoutes.get('/export', async (c) => {
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
     sourceMode,
-  })
+  }, exportLimit)
   const meta = buildListMeta({
     sourceMode,
     totalRows: total,
