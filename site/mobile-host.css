@@ -129,6 +129,10 @@ html[data-ar-host-variant="mobile"] body.ar-public .workspace-grid {
     gap: 14px;
 }
 
+html[data-ar-host-variant="mobile"] body.ar-public .workspace-resizer {
+    display: none;
+}
+
 html[data-ar-host-variant="mobile"] body.ar-public .workspace-stage {
     order: 1;
 }

@@ -256,14 +256,49 @@ body.ar-public .hero-guide p {
 }
 
 body.ar-public .workspace-grid {
-    grid-template-columns: minmax(440px, 1fr) minmax(0, 1.2fr);
-    gap: 20px;
+    --workspace-rail-width: minmax(440px, 1fr);
+    --workspace-stage-width: minmax(0, 1.2fr);
+    grid-template-columns: var(--workspace-rail-width) 8px var(--workspace-stage-width);
+    gap: 0 12px;
     align-items: start;
 }
 
 body.ar-public .workspace-rail {
     position: sticky;
     top: 96px;
+}
+
+body.ar-public .workspace-resizer {
+    width: 8px;
+    min-width: 8px;
+    cursor: ew-resize;
+    background: transparent;
+    position: relative;
+    z-index: 1;
+}
+
+body.ar-public .workspace-resizer::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--ar-line);
+    border-radius: 1px;
+}
+
+body.ar-public .workspace-resizer:hover::before,
+body.ar-public .workspace-resizer:focus-visible::before {
+    background: var(--ar-stroke-strong);
+    width: 3px;
+    margin-left: -1.5px;
+}
+
+body.ar-public .workspace-resizer:focus-visible {
+    outline: 2px solid var(--ar-focus);
+    outline-offset: 2px;
 }
 
 body.ar-public .workspace-summary-title,
@@ -333,6 +368,10 @@ body.ar-legal .legal-support {
 
     body.ar-public .workspace-rail {
         position: static;
+    }
+
+    body.ar-public .workspace-resizer {
+        display: none;
     }
 }
 
