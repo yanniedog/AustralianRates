@@ -12,6 +12,7 @@ const FILES = [
 
 const allowedExternalStyles = new Set([
   'https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap',
+  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap',
 ]);
 
 const requiredVendorSnippets = [
