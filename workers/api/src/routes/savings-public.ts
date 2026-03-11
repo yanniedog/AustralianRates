@@ -24,7 +24,16 @@ import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { querySavingsRateChangeIntegrity, querySavingsRateChanges } from '../db/rate-change-log'
 import { registerSavingsExportRoutes } from './savings-exports'
-import { matchLatestCache, setServerTimingHeader, shouldBypassLatestCache, shouldEnableAdminDebugTiming, storeLatestCache } from './latest-response'
+import {
+  matchLatestCache,
+  matchPublicReadCache,
+  setServerTimingHeader,
+  shouldBypassLatestCache,
+  shouldBypassPublicReadCache,
+  shouldEnableAdminDebugTiming,
+  storeLatestCache,
+  storePublicReadCache,
+} from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 
@@ -117,11 +126,23 @@ savingsPublicRoutes.get('/historical/pull/:runId', async (c) => {
 })
 
 savingsPublicRoutes.get('/filters', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const filters = await getSavingsFilters(c.env.DB)
-  return c.json({ ok: true, filters })
+  const response = c.json({ ok: true, filters })
+  storePublicReadCache(c, cacheKey, response)
+  return response
 })
 
 savingsPublicRoutes.get('/rates', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const q = c.req.query()
   const dir = String(q.dir || 'desc').toLowerCase()
   const modeRaw = String(q.mode || 'all').toLowerCase()
@@ -155,7 +176,9 @@ savingsPublicRoutes.get('/rates', async (c) => {
     sourceMix: result.source_mix,
     limited: result.total > result.data.length,
   })
-  return c.json({ ...result, meta })
+  const response = c.json({ ...result, meta })
+  storePublicReadCache(c, cacheKey, response)
+  return response
 })
 
 savingsPublicRoutes.get('/latest', async (c) => {

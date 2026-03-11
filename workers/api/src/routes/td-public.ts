@@ -24,7 +24,16 @@ import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { queryTdRateChangeIntegrity, queryTdRateChanges } from '../db/rate-change-log'
 import { registerTdExportRoutes } from './td-exports'
-import { matchLatestCache, setServerTimingHeader, shouldBypassLatestCache, shouldEnableAdminDebugTiming, storeLatestCache } from './latest-response'
+import {
+  matchLatestCache,
+  matchPublicReadCache,
+  setServerTimingHeader,
+  shouldBypassLatestCache,
+  shouldBypassPublicReadCache,
+  shouldEnableAdminDebugTiming,
+  storeLatestCache,
+  storePublicReadCache,
+} from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 
@@ -117,11 +126,23 @@ tdPublicRoutes.get('/historical/pull/:runId', async (c) => {
 })
 
 tdPublicRoutes.get('/filters', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const filters = await getTdFilters(c.env.DB)
-  return c.json({ ok: true, filters })
+  const response = c.json({ ok: true, filters })
+  storePublicReadCache(c, cacheKey, response)
+  return response
 })
 
 tdPublicRoutes.get('/rates', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const q = c.req.query()
   const dir = String(q.dir || 'desc').toLowerCase()
   const modeRaw = String(q.mode || 'all').toLowerCase()
@@ -155,7 +176,9 @@ tdPublicRoutes.get('/rates', async (c) => {
     sourceMix: result.source_mix,
     limited: result.total > result.data.length,
   })
-  return c.json({ ...result, meta })
+  const response = c.json({ ...result, meta })
+  storePublicReadCache(c, cacheKey, response)
+  return response
 })
 
 tdPublicRoutes.get('/latest', async (c) => {

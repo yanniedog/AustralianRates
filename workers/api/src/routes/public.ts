@@ -16,7 +16,16 @@ import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { registerHomeLoanExportRoutes } from './home-loan-exports'
 import { HOME_LOAN_COMPARISON_RATE_DISCLOSURE } from './home-loan-disclosures'
-import { matchLatestCache, setServerTimingHeader, shouldBypassLatestCache, shouldEnableAdminDebugTiming, storeLatestCache } from './latest-response'
+import {
+  matchLatestCache,
+  matchPublicReadCache,
+  setServerTimingHeader,
+  shouldBypassLatestCache,
+  shouldBypassPublicReadCache,
+  shouldEnableAdminDebugTiming,
+  storeLatestCache,
+  storePublicReadCache,
+} from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
@@ -76,14 +85,26 @@ publicRoutes.get('/historical/pull/:runId', async (c) => {
 })
 
 publicRoutes.get('/filters', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const filters = await getFilters(c.env.DB)
-  return c.json({
+  const response = c.json({
     ok: true,
     filters,
   })
+  storePublicReadCache(c, cacheKey, response)
+  return response
 })
 
 publicRoutes.get('/rates', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const query = c.req.query()
   const dir = String(query.dir || 'desc').toLowerCase()
   const modeRaw = String(query.mode || 'all').toLowerCase()
@@ -115,10 +136,12 @@ publicRoutes.get('/rates', async (c) => {
     sourceMode,
   }
 
+  let queryFailed = false
   let result: Awaited<ReturnType<typeof queryRatesPaginated>>
   try {
     result = await queryRatesPaginated(c.env.DB, filters)
   } catch (err) {
+    queryFailed = true
     log.error('public', 'rates paginated failed, returning empty', {
       context: (err as Error)?.message ?? String(err),
     })
@@ -139,7 +162,11 @@ publicRoutes.get('/rates', async (c) => {
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
-  return c.json({ ...result, meta })
+  const response = c.json({ ...result, meta })
+  if (!queryFailed) {
+    storePublicReadCache(c, cacheKey, response)
+  }
+  return response
 })
 
 publicRoutes.get('/export', async (c) => {

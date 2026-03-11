@@ -52,14 +52,18 @@ export async function shouldEnableAdminDebugTiming(c: Context<AppContext>): Prom
   return authState.ok
 }
 
-export function shouldBypassLatestCache(c: Context<AppContext>, debugTiming: boolean): boolean {
+export function shouldBypassPublicReadCache(c: Context<AppContext>, debugTiming: boolean): boolean {
   if (debugTiming) return true
   if (isInternalProbeRequest(c)) return true
   if (truthyQuery(c.req.query('cache_bust'))) return true
   return Boolean(c.req.header('Authorization') || c.req.header('Cf-Access-Jwt-Assertion'))
 }
 
-export async function matchLatestCache(
+export function shouldBypassLatestCache(c: Context<AppContext>, debugTiming: boolean): boolean {
+  return shouldBypassPublicReadCache(c, debugTiming)
+}
+
+export async function matchPublicReadCache(
   c: Context<AppContext>,
   bypass: boolean,
 ): Promise<{ cacheKey: Request | null; response: Response | null }> {
@@ -89,12 +93,23 @@ export async function matchLatestCache(
   }
 }
 
-export function storeLatestCache(c: Context<AppContext>, cacheKey: Request | null, response: Response): void {
+export async function matchLatestCache(
+  c: Context<AppContext>,
+  bypass: boolean,
+): Promise<{ cacheKey: Request | null; response: Response | null }> {
+  return matchPublicReadCache(c, bypass)
+}
+
+export function storePublicReadCache(c: Context<AppContext>, cacheKey: Request | null, response: Response): void {
   const cache = getDefaultCache()
   if (!cacheKey || response.status !== 200 || !cache) return
   const cacheResponse = response.clone()
   cacheResponse.headers.delete('set-cookie')
   scheduleBackgroundTask(c, cache.put(cacheKey, cacheResponse))
+}
+
+export function storeLatestCache(c: Context<AppContext>, cacheKey: Request | null, response: Response): void {
+  storePublicReadCache(c, cacheKey, response)
 }
 
 export function setServerTimingHeader(response: Response, timing: TimingParts): void {
