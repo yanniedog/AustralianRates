@@ -45,7 +45,7 @@ async function drawChart(page) {
         const output = document.getElementById('chart-output');
         if (!output) return false;
         return output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
-    }, { timeout: 90000 });
+    }, undefined, { timeout: 90000 });
     await page.waitForTimeout(1500);
 }
 
