@@ -116,7 +116,7 @@
 
 .admin-clear #key-fields label,
 .admin-config .rate-check-label {
-    color: var(--ar-muted);
+    color: var(--ar-text-muted);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -176,7 +176,7 @@
 
 .admin-runs .run-item .meta,
 .admin-logs .log-stats {
-    color: var(--ar-muted);
+    color: var(--ar-text-muted);
     font-size: 0.86rem;
     line-height: 1.55;
 }
@@ -210,16 +210,57 @@
     border-color: var(--ar-line) !important;
 }
 
+.admin-db .tabulator .tabulator-header .tabulator-col,
+.admin-db .tabulator .tabulator-header .tabulator-col.tabulator-moving,
+.admin-db .tabulator .tabulator-header .tabulator-col.tabulator-range-highlight,
+.admin-db .tabulator .tabulator-header .tabulator-col.tabulator-range-selected {
+    background: var(--ar-surface-soft) !important;
+    color: var(--ar-text-soft) !important;
+}
+
+.admin-db .tabulator .tabulator-header .tabulator-col .tabulator-col-content,
+.admin-db .tabulator .tabulator-header .tabulator-col .tabulator-col-title-holder,
+.admin-db .tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
+    background: transparent !important;
+    color: inherit !important;
+}
+
 .admin-db .tabulator .tabulator-col-title {
-    color: var(--ar-muted) !important;
+    color: var(--ar-text-muted) !important;
     font-size: 0.72rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
 }
 
+.admin-db .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter,
+.admin-db .tabulator .tabulator-footer,
+.admin-db .tabulator .tabulator-footer .tabulator-page-counter,
+.admin-db .tabulator .tabulator-footer .tabulator-paginator,
+.admin-db .tabulator .tabulator-footer .tabulator-page-size,
+.admin-db .tabulator .tabulator-cell,
+.admin-db .tabulator .tabulator-tableholder .tabulator-table,
+.admin-db .tabulator .tabulator-tableholder .tabulator-placeholder {
+    color: var(--ar-text-soft) !important;
+}
+
+.admin-db .tabulator .tabulator-cell,
+.admin-db .tabulator .tabulator-tableholder .tabulator-table,
+.admin-db .tabulator .tabulator-tableholder .tabulator-placeholder {
+    background: var(--ar-surface) !important;
+}
+
+.admin-db .tabulator .tabulator-tableholder .tabulator-placeholder .tabulator-placeholder-contents {
+    color: var(--ar-text-soft) !important;
+    font-size: 1rem !important;
+}
+
+.admin-db .tabulator .tabulator-footer .tabulator-page:disabled {
+    color: var(--ar-text-muted) !important;
+}
+
 .admin-db .tabulator-row:hover {
-    background: #f5f8ff !important;
+    background: color-mix(in srgb, var(--ar-accent-soft) 38%, var(--ar-surface-3)) !important;
 }
 
 @media (max-width: 760px) {

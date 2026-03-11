@@ -42,14 +42,21 @@ body.ar-admin {
 }
 
 .site-brand-mark {
-    width: 34px;
-    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
     border: 1px solid var(--ar-line-strong);
     border-radius: 10px;
     background: var(--ar-surface);
     color: var(--ar-accent);
-    font-size: 0.82rem;
-    font-weight: 700;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-accent) 10%, transparent);
+}
+
+.site-brand-mark .ar-icon {
+    width: 1.05rem;
+    height: 1.05rem;
 }
 
 .site-brand {
@@ -127,6 +134,14 @@ body.ar-public .disclaimer {
     gap: 12px;
 }
 
+.terminal-data-head > div,
+.site-menu-head > div {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
 .terminal-panel-head strong,
 .terminal-data-head h2 {
     font-size: 0.9rem;
@@ -162,12 +177,25 @@ body.ar-public .disclaimer {
 .site-tree-root a,
 .site-tree-leaf,
 .admin-sidebar-link {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     padding: 9px 12px;
     border-radius: 10px;
     color: var(--ar-text-soft);
     font-size: 0.78rem;
     font-weight: 600;
+}
+
+.nav-link-label {
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.nav-link-label .ar-icon {
+    width: 1rem;
+    height: 1rem;
+    color: var(--ar-accent);
 }
 
 .site-tree-root.is-active a,
@@ -210,6 +238,9 @@ body.ar-public .disclaimer {
 }
 
 .footer-technical-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     list-style: none;
     font-size: 0.76rem;
     font-weight: 700;
@@ -218,6 +249,12 @@ body.ar-public .disclaimer {
 
 .footer-technical-summary::-webkit-details-marker {
     display: none;
+}
+
+.icon-link {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
 }
 
 .footer-log-popup {

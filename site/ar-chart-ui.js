@@ -122,21 +122,21 @@
 
     function guidance(fields, model, stale) {
         var tags = [];
-        if (fields.view === 'surface') tags.push('MOVE');
-        if (fields.view === 'lenders') tags.push('NOW');
-        if (fields.view === 'compare') tags.push('CMP');
-        if (fields.view === 'distribution') tags.push('BOX');
-        if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('LIMIT');
-        else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) tags.push('LIMIT');
-        if (stale) tags.push('STALE');
-        return tags.filter(Boolean).join(' | ') || 'READY';
+        if (fields.view === 'surface') tags.push('Movement');
+        if (fields.view === 'lenders') tags.push('Leaders');
+        if (fields.view === 'compare') tags.push('Compare');
+        if (fields.view === 'distribution') tags.push('Distribution');
+        if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('Limited');
+        else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) tags.push('Limited');
+        if (stale) tags.push('Stale');
+        return tags.filter(Boolean).join(' | ') || 'Ready';
     }
 
     function summaryPills(model, fields, payloadMeta, stale) {
         if (!model) {
             return '' +
-                '<span class="chart-summary-pill">WAIT</span>' +
-                (stale ? '<span class="chart-summary-pill is-warning">STALE</span>' : '');
+                '<span class="chart-summary-pill">Loading</span>' +
+                (stale ? '<span class="chart-summary-pill is-warning">Stale</span>' : '');
         }
         var pills = [];
         pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
@@ -148,10 +148,10 @@
             pills.push('<span class="chart-summary-pill">' + esc(Number(payloadMeta.totalRows).toLocaleString()) + ' rows loaded</span>');
         }
         if (payloadMeta && payloadMeta.truncated) {
-            pills.push('<span class="chart-summary-pill is-warning">10K CAP</span>');
+            pills.push('<span class="chart-summary-pill is-warning">10k row cap</span>');
         }
         if (stale) {
-            pills.push('<span class="chart-summary-pill is-warning">STALE</span>');
+            pills.push('<span class="chart-summary-pill is-warning">Stale</span>');
         }
         return pills.join('');
     }
@@ -166,16 +166,16 @@
     }
 
     function railNote(fields, model) {
-        if (!model) return 'WAIT';
-        if (fields.view === 'lenders') return 'BANK';
-        if (fields.view === 'compare') return 'CMP';
-        if (fields.view === 'distribution') return 'BOX';
-        return 'PK';
+        if (!model) return 'Loading';
+        if (fields.view === 'lenders') return 'Best lenders';
+        if (fields.view === 'compare') return 'Selected shortlist';
+        if (fields.view === 'distribution') return 'Distribution view';
+        return 'Product series';
     }
 
     function seriesCardMarkup(options) {
         return '' +
-            '<button class="chart-series-card' + (options.isSelected ? ' is-selected' : '') + (options.isSpotlight ? ' is-active' : '') + '"' +
+            '<button class="chart-series-card secondary' + (options.isSelected ? ' is-selected' : '') + (options.isSpotlight ? ' is-active' : '') + '"' +
                 ' style="--series-accent:' + esc(options.color) + ';" type="button" data-series-key="' + esc(options.key) + '">' +
                 '<span class="chart-series-topline">' +
                     '<span class="chart-series-name-wrap">' +
@@ -196,7 +196,7 @@
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
         var fields = getChartFields();
         if (!model || !model.visibleSeries.length) {
-            els.chartSeriesNote.textContent = 'WAIT';
+            els.chartSeriesNote.textContent = 'Loading';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
         }
@@ -254,8 +254,8 @@
             els.chartPointDetails.hidden = false;
             els.chartPointDetails.innerHTML =
                 '<div class="chart-spotlight-empty">' +
-                    '<strong>WAIT</strong>' +
-                    '<span>No focus</span>' +
+                    '<strong>Waiting</strong>' +
+                    '<span>No focus yet</span>' +
                 '</div>';
             return;
         }
@@ -300,10 +300,10 @@
             els.chartOutput.removeAttribute('data-chart-rendered');
             els.chartOutput.removeAttribute('data-chart-engine');
             els.chartOutput.removeAttribute('data-chart-view');
-            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'WAIT') + '</div>';
+            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Loading') + '</div>';
         }
         if (els.chartDetailOutput) {
-            els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'WAIT') + '</div>';
+            els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'Loading') + '</div>';
         }
     }
 
@@ -312,20 +312,20 @@
         renderSummary(null, getChartFields(), null, false);
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
-        setCanvasPlaceholder('WAIT');
-        setStatus('READY');
+        setCanvasPlaceholder('Loading');
+        setStatus('Ready');
     }
 
     function setPendingState(message) {
         renderSummary(null, getChartFields(), null, false);
-        setStatus(message || 'LOAD');
-        setCanvasPlaceholder('LOAD');
+        setStatus(message || 'Loading');
+        setCanvasPlaceholder('Loading');
     }
 
     function markStale(message) {
         if (!tabState.chartDrawn) return;
         renderSummary(null, getChartFields(), null, true);
-        setStatus(message || 'STALE');
+        setStatus(message || 'Stale');
     }
 
     function bindUi(handlers) {

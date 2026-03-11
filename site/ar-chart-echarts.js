@@ -6,6 +6,18 @@
     var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize, trimAxisLabel = helpers.trimAxisLabel;
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
     var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, categoryInterval = helpers.categoryInterval;
+    var chartTheme = helpers.chartTheme || function () {
+        return {
+            emphasisText: '#0f172a',
+            mutedText: '#475569',
+            shadowAccent: 'rgba(37, 99, 235, 0.18)',
+            softText: '#334155',
+            splitLine: 'rgba(148, 163, 184, 0.18)',
+            surfaceScale: ['#eef6ff', '#bfdbfe'],
+            text: '#15273c',
+            axisLine: 'rgba(148, 163, 184, 0.55)',
+        };
+    };
     function ensureChart(element, instance) {
         if (!element || !window.echarts) return null;
         if (instance && !instance.isDisposed()) return instance;
@@ -15,6 +27,7 @@
     function buildSurfaceOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
+        var theme = chartTheme();
         var narrow = size && size.width < 760;
         var veryNarrow = size && size.width < 420;
         var denseSurface = model.surface.yLabels.length > (narrow ? 12 : 16);
@@ -57,7 +70,7 @@
                 axisTick: { show: false },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#475569',
+                    color: theme.mutedText,
                     hideOverlap: true,
                     margin: 12,
                     interval: xLabelInterval,
@@ -72,7 +85,7 @@
                 axisTick: { show: false },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#0f172a',
+                    color: theme.emphasisText,
                     width: veryNarrow ? 64 : (narrow ? 104 : (denseSurface ? 220 : 250)),
                     overflow: 'truncate',
                     interval: yLabelInterval,
@@ -95,11 +108,11 @@
                 top: 28,
                 right: 10,
                 text: ['High', 'Low'],
-                textStyle: { color: '#475569', fontSize: 12 },
+                textStyle: { color: theme.mutedText, fontSize: 12 },
                 itemWidth: 10,
                 itemHeight: denseSurface ? 118 : 144,
                 inRange: {
-                    color: ['#eef6ff', '#bfdbfe', paletteColor(1), paletteColor(0)],
+                    color: [theme.surfaceScale[0], theme.surfaceScale[1], paletteColor(1), paletteColor(0)],
                 },
             },
             series: [{
@@ -110,15 +123,15 @@
                 label: { show: false },
                 emphasis: {
                     itemStyle: {
-                        borderColor: '#ffffff',
+                        borderColor: theme.emphasisText,
                         borderWidth: 1.5,
                         shadowBlur: 18,
-                        shadowColor: 'rgba(37, 99, 235, 0.22)',
+                        shadowColor: theme.shadowAccent,
                     },
                 },
                 itemStyle: {
                     borderWidth: 1,
-                    borderColor: 'rgba(255, 255, 255, 0.88)',
+                    borderColor: theme.axisLine,
                     borderRadius: narrow ? 4 : 8,
                 },
             }],
@@ -127,6 +140,7 @@
     function buildLenderOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
+        var theme = chartTheme();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
@@ -168,10 +182,10 @@
                 splitNumber: narrow ? 4 : 6,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameGap: compact ? 10 : (narrow ? 18 : 26),
-                nameTextStyle: { color: '#475569' },
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#334155',
+                    color: theme.softText,
                     hideOverlap: true,
                     formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
                 },
@@ -183,7 +197,7 @@
                 axisTick: { show: false },
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#0f172a',
+                    color: theme.emphasisText,
                     width: compact ? 104 : (narrow ? 128 : 180),
                     overflow: 'truncate',
                 },
@@ -212,7 +226,7 @@
                     show: true,
                     position: 'right',
                     distance: compact ? 6 : (narrow ? 8 : 10),
-                    color: '#0f172a',
+                    color: theme.emphasisText,
                     fontSize: compact ? 11 : 12,
                     formatter: function (params) {
                         return metricAxisLabel(fields.yField, params.value, narrow);
@@ -221,7 +235,7 @@
                 emphasis: {
                     itemStyle: {
                         shadowBlur: 18,
-                        shadowColor: 'rgba(37, 99, 235, 0.16)',
+                        shadowColor: theme.shadowAccent,
                     },
                 },
             }],
@@ -230,6 +244,7 @@
     function buildCompareOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
+        var theme = chartTheme();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var showLegend = !narrow && model.compareSeries.length <= 3;
@@ -242,7 +257,7 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'axis',
-                axisPointer: { type: 'line', lineStyle: { color: 'rgba(37, 99, 235, 0.28)' } },
+                axisPointer: { type: 'line', lineStyle: { color: theme.shadowAccent } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -261,7 +276,7 @@
                 type: 'scroll',
                 left: 0,
                 right: 0,
-                textStyle: { color: '#334155' },
+                textStyle: { color: theme.softText },
                 itemWidth: 12,
                 itemHeight: 12,
                 formatter: function (name) { return trimAxisLabel(name, 36); },
@@ -272,7 +287,7 @@
                 boundaryGap: false,
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#475569',
+                    color: theme.mutedText,
                     hideOverlap: true,
                     margin: 12,
                     interval: narrow && model.surface.xLabels.length > 5 ? 1 : 0,
@@ -283,11 +298,11 @@
             yAxis: {
                 type: 'value',
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
-                nameTextStyle: { color: '#475569' },
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: styles.axisLine,
                 splitNumber: narrow ? 4 : 6,
                 axisLabel: {
-                    color: '#334155',
+                    color: theme.softText,
                     formatter: function (value) {
                         return metricAxisLabel(fields.yField, value, narrow);
                     },
@@ -304,7 +319,7 @@
                     symbolSize: 6,
                     endLabel: {
                         show: showEndLabels,
-                        color: '#0f172a',
+                        color: theme.emphasisText,
                         distance: 10,
                         formatter: function () {
                             return trimAxisLabel(series.name, 24) + ' ' + metricAxisLabel(fields.yField, series.latestValue, true);
@@ -329,6 +344,7 @@
     function buildDistributionOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
+        var theme = chartTheme();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         return {
@@ -356,7 +372,7 @@
                 data: model.distribution.categories,
                 axisLine: styles.axisLine,
                 axisLabel: {
-                    color: '#475569',
+                    color: theme.mutedText,
                     interval: 0,
                     hideOverlap: true,
                     rotate: model.distribution.categories.length > 6 ? (narrow ? 40 : 24) : 0,
@@ -366,11 +382,11 @@
             yAxis: {
                 type: 'value',
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
-                nameTextStyle: { color: '#475569' },
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: styles.axisLine,
                 splitNumber: narrow ? 4 : 6,
                 axisLabel: {
-                    color: '#334155',
+                    color: theme.softText,
                     formatter: function (value) {
                         return metricAxisLabel(fields.yField, value, narrow);
                     },
@@ -382,7 +398,7 @@
                     name: 'Distribution',
                     type: 'boxplot',
                     itemStyle: {
-                        color: 'rgba(37, 99, 235, 0.14)',
+                        color: theme.shadowAccent,
                         borderColor: paletteColor(0),
                         borderWidth: 2,
                     },
@@ -402,6 +418,7 @@
     }
     function buildDetailOption(model, fields, size) {
         var base = baseTextStyles();
+        var theme = chartTheme();
         var spotlight = model.spotlight;
         var narrow = size && size.width < 340;
         var compact = size && size.width < 420;
@@ -415,7 +432,7 @@
                 text: 'Select a rate cell to inspect a single product trend',
                 left: 'center',
                 top: 'middle',
-                textStyle: { color: '#64748b', fontSize: 14, fontWeight: 500 },
+                textStyle: { color: theme.mutedText, fontSize: 14, fontWeight: 500 },
             },
         };
         return {
@@ -440,9 +457,9 @@
             xAxis: {
                 type: 'category',
                 data: spotlight.series.points.map(function (point) { return point.date; }),
-                axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
+                axisLine: { lineStyle: { color: theme.axisLine } },
                 axisLabel: {
-                    color: '#475569',
+                    color: theme.mutedText,
                     hideOverlap: true,
                     interval: xLabelInterval,
                     formatter: function (value) { return formatDateAxisLabel(value, true); },
@@ -451,13 +468,13 @@
             },
             yAxis: {
                 type: 'value',
-                axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
+                axisLine: { lineStyle: { color: theme.axisLine } },
                 splitNumber: narrow ? 3 : (compact ? 4 : 6),
                 axisLabel: {
-                    color: '#334155',
+                    color: theme.softText,
                     formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
                 },
-                splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.18)' } },
+                splitLine: { lineStyle: { color: theme.splitLine } },
             },
             series: [{
                 type: 'line',
@@ -466,7 +483,7 @@
                 symbolSize: 7,
                 lineStyle: { width: 3, color: paletteColor(1) },
                 itemStyle: { color: paletteColor(1) },
-                areaStyle: { color: 'rgba(37, 99, 235, 0.10)' },
+                areaStyle: { color: theme.shadowAccent },
                 data: spotlight.series.points.map(function (point) {
                     return [point.date, point.value];
                 }),

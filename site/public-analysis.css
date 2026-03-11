@@ -27,6 +27,22 @@
 .chart-preset,
 .tab-btn {
     border-radius: 999px;
+    white-space: normal;
+}
+
+.chart-preset,
+.tab-btn,
+.terminal-more-summary {
+    gap: 8px;
+}
+
+.control-chip-label {
+    justify-content: center;
+}
+
+.control-chip-label .ar-icon {
+    width: 1rem;
+    height: 1rem;
 }
 
 .chart-preset.is-active,
@@ -187,6 +203,14 @@
 }
 
 .chart-point-link {
+    color: var(--ar-text);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.18em;
+}
+
+.chart-point-link:hover {
     color: var(--ar-accent);
 }
 

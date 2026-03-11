@@ -14,12 +14,23 @@
     var pct = utils.pct || function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
     var clientLog = utils.clientLog || function () {};
+    var uiIcons = (window.AR && window.AR.uiIcons) ? window.AR.uiIcons : {};
+    var iconText = typeof uiIcons.text === 'function'
+        ? uiIcons.text
+        : function (_icon, label, className, textClassName) {
+            var classes = ['ar-icon-label'];
+            if (className) classes.push(className);
+            return '' +
+                '<span class="' + classes.join(' ') + '">' +
+                    '<span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span>' +
+                '</span>';
+        };
     var QUICK_COMPARE_LIMIT = 20;
     var ladderRows = [];
 
-    function renderStat(el, code, value, help) {
+    function renderStat(el, icon, label, value, help) {
         if (!el) return;
-        el.innerHTML = '<span class="metric-code">' + esc(code) + '</span><strong>' + esc(value) + '</strong>';
+        el.innerHTML = '<span class="metric-code">' + iconText(icon, label) + '</span><strong>' + esc(value) + '</strong>';
         if (help) el.setAttribute('data-help', help);
     }
 
@@ -37,7 +48,7 @@
             if (!ratesData || ratesData.total == null) return;
 
             var total = Number(ratesData.total || 0);
-            renderStat(els.statRecords, 'ROWS', total.toLocaleString(), 'Total rows in the active slice.');
+            renderStat(els.statRecords, 'rows', 'Rows', total.toLocaleString(), 'Total rows in the active slice.');
 
             if (ratesData.data && ratesData.data.length > 0) {
                 var latest = ratesData.data[0];
@@ -45,12 +56,12 @@
                     var renderedDate = timeUtils.formatSourceDateWithLocal
                         ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
                         : { text: String(latest.collection_date) };
-                    renderStat(els.statUpdated, 'UPD', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
+                    renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
                 }
                 if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
-                    renderStat(els.statCashRate, 'RBA', pct(latest.rba_cash_rate), 'Current RBA cash rate.');
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), 'Current RBA cash rate.');
                 } else if (els.statCashRate) {
-                    renderStat(els.statCashRate, 'PK', 'CONT', 'Series continuity by canonical product_key.');
+                    renderStat(els.statCashRate, 'continuity', 'Series continuity', 'Healthy', 'Series continuity by canonical product_key.');
                 }
             }
         } catch (err) {

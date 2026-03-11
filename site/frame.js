@@ -8,6 +8,7 @@
     var timeUtils = (window.AR && window.AR.time) ? window.AR.time : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
     var themeApi = window.ARTheme || {};
+    var uiIcons = (window.AR && window.AR.uiIcons) ? window.AR.uiIcons : {};
     var SESSION_LOG_MAX = 500;
     var TOOLTIP_DELAY_MS = 450;
     var LONG_PRESS_MS = 500;
@@ -45,6 +46,31 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
+
+    function fallbackText(_icon, label, className, textClassName) {
+        var classes = ['ar-icon-label'];
+        if (className) classes.push(className);
+        return '' +
+            '<span class="' + classes.join(' ') + '">' +
+                '<span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span>' +
+            '</span>';
+    }
+
+    function fallbackPanel(_icon, label, className) {
+        var classes = ['panel-code'];
+        if (className) classes.push(className);
+        return '<span class="' + classes.join(' ') + '" aria-hidden="true">' + esc(String(label || '').charAt(0) || '*') + '</span>';
+    }
+
+    function fallbackIcon(_icon, label, className) {
+        var classes = ['ar-icon'];
+        if (className) classes.push(className);
+        return '<span class="' + classes.join(' ') + '" aria-hidden="true">' + esc(String(label || '').charAt(0) || '*') + '</span>';
+    }
+
+    var iconText = typeof uiIcons.text === 'function' ? uiIcons.text : fallbackText;
+    var panelIcon = typeof uiIcons.panel === 'function' ? uiIcons.panel : fallbackPanel;
+    var iconOnly = typeof uiIcons.icon === 'function' ? uiIcons.icon : fallbackIcon;
 
     function updateLogLinkText() {
         var el = document.getElementById('footer-log-link-text');
@@ -123,9 +149,9 @@
     }
 
     function sectionMeta(section) {
-        if (section === 'savings') return { label: 'Savings', code: 'SAV', path: '/savings/' };
-        if (section === 'term-deposits') return { label: 'Term Deposits', code: 'TD', path: '/term-deposits/' };
-        return { label: 'Home Loans', code: 'HL', path: '/' };
+        if (section === 'savings') return { label: 'Savings', code: 'SAV', icon: 'stats', path: '/savings/' };
+        if (section === 'term-deposits') return { label: 'Term Deposits', code: 'TD', icon: 'history', path: '/term-deposits/' };
+        return { label: 'Home Loans', code: 'HL', icon: 'home', path: '/' };
     }
 
     function currentPageLabel(context) {
@@ -157,14 +183,14 @@
 
     function buildMarketLinks(baseHref) {
         return [
-            { href: baseHref + '#chart', label: 'CHT' },
-            { href: baseHref + '#ladder', label: 'LDR' },
-            { href: baseHref + '#table', label: 'TBL' },
-            { href: baseHref + '#pivot', label: 'PVT' },
-            { href: baseHref + '#history', label: 'HST' },
-            { href: baseHref + '#changes', label: 'CHG' },
-            { href: baseHref + '#export', label: 'EXP' },
-            { href: baseHref + '#notes', label: 'NTS' }
+            { href: baseHref + '#chart', label: 'Charts', icon: 'chart' },
+            { href: baseHref + '#ladder', label: 'Leaders', icon: 'ladder' },
+            { href: baseHref + '#table', label: 'Table', icon: 'table' },
+            { href: baseHref + '#pivot', label: 'Pivot', icon: 'pivot' },
+            { href: baseHref + '#history', label: 'History', icon: 'history' },
+            { href: baseHref + '#changes', label: 'Changes', icon: 'changes' },
+            { href: baseHref + '#export', label: 'Download', icon: 'download' },
+            { href: baseHref + '#market-notes', label: 'Notes', icon: 'notes' }
         ];
     }
 
@@ -183,19 +209,19 @@
                         return '' +
                             '<details class="site-tree-branch"' + (activeRoot ? ' open' : '') + '>' +
                                 '<summary class="site-tree-root' + (activeRoot ? ' is-active' : '') + '">' +
-                                    '<a href="' + esc(item.path) + '"' + (activeRoot ? ' aria-current="page"' : '') + '>' + esc(item.label) + '</a>' +
+                                    '<a href="' + esc(item.path) + '"' + (activeRoot ? ' aria-current="page"' : '') + '>' + iconText(item.icon || 'home', item.label, 'nav-link-label') + '</a>' +
                                 '</summary>' +
                                 '<div class="site-tree-children">' +
                                     buildMarketLinks(item.path).map(function (link) {
                                         var active = activeRoot && window.location.hash === link.href.slice(item.path.length);
-                                        return '<a class="site-tree-leaf' + (active ? ' is-active' : '') + '" href="' + esc(link.href) + '">' + esc(link.label) + '</a>';
+                                        return '<a class="site-tree-leaf' + (active ? ' is-active' : '') + '" href="' + esc(link.href) + '">' + iconText(link.icon, link.label, 'nav-link-label') + '</a>';
                                     }).join('') +
                                 '</div>' +
                             '</details>';
                     }).join('') +
                 '</div>' +
                 '<div class="site-tree-group site-tree-group-secondary">' +
-                    '<span class="panel-code">REF</span>' +
+                    panelIcon('reference', 'Reference') +
                     '<a class="site-tree-leaf" href="' + esc(getLegalHref('about')) + '">About</a>' +
                     '<a class="site-tree-leaf" href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                     '<a class="site-tree-leaf" href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
@@ -229,10 +255,10 @@
         return '' +
             '<div class="site-header-actions">' +
                 '<button type="button" class="icon-btn secondary" data-theme-toggle aria-label="Toggle theme"></button>' +
-                '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">?</button>' +
-                '<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">&#8635;</button>' +
-                '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">GH</a>' +
-                '<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">&#9776;</button>' +
+                '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">' + iconOnly('help', 'Open help') + '</button>' +
+                '<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">' + iconOnly('refresh', 'Clear cookies and cache and reload') + '</button>' +
+                '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">' + iconOnly('github', 'GitHub repository') + '</a>' +
+                '<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">' + iconOnly('menu', 'Toggle menu') + '</button>' +
             '</div>';
     }
 
@@ -243,18 +269,16 @@
         if (!inner) return;
 
         var context = getPageContext();
-        var meta = sectionMeta(context.section);
-
         inner.innerHTML =
             '<div class="site-brand-lockup">' +
-                '<a href="/" class="site-brand-mark" aria-label="AustralianRates home">AR</a>' +
+                '<a href="/" class="site-brand-mark" aria-label="AustralianRates home">' + iconOnly('brand', 'AustralianRates home') + '</a>' +
                 '<div class="site-brand-copy">' +
                     '<a href="/" class="site-brand">AustralianRates</a>' +
                     '<span class="site-brand-tagline">' + esc(currentPageLabel(context)) + '</span>' +
                 '</div>' +
             '</div>' +
             '<div class="site-header-context">' +
-                '<span class="eyebrow">' + esc(context.admin ? 'ADMIN' : (context.legal ? 'REF' : meta.code)) + '</span>' +
+                '<span class="eyebrow">' + esc(context.admin ? 'Admin' : (context.legal ? 'Reference' : 'Markets')) + '</span>' +
                 '<strong class="site-header-title">' + esc(currentPageLabel(context)) + '</strong>' +
             '</div>' +
             headerActionsMarkup(context);
@@ -279,7 +303,7 @@
         aside.className = 'admin-sidebar';
         aside.innerHTML =
             '<div class="admin-sidebar-head">' +
-                '<span class="panel-code">OPS</span>' +
+                panelIcon('admin', 'Admin') +
                 '<strong>Admin</strong>' +
             '</div>' +
             adminNavMarkup();
@@ -302,8 +326,8 @@
             '<div class="site-menu-backdrop" data-menu-close></div>' +
             '<div class="site-menu-panel">' +
                 '<div class="site-menu-head">' +
-                    '<span class="panel-code">MENU</span>' +
-                    '<button type="button" class="icon-btn secondary" data-menu-close aria-label="Close menu">x</button>' +
+                    panelIcon('menu', 'Menu') +
+                    '<button type="button" class="icon-btn secondary" data-menu-close aria-label="Close menu">' + iconOnly('close', 'Close menu') + '</button>' +
                 '</div>' +
                 publicTreeMarkup(context) +
             '</div>';
@@ -328,7 +352,7 @@
                 '</div>' +
                 '<div class="site-footer-tech">' +
                     '<details class="footer-technical" id="footer-technical">' +
-                        '<summary class="footer-technical-summary">TECH</summary>' +
+                        '<summary class="footer-technical-summary">' + iconText('tech', 'Technical', 'nav-link-label') + '</summary>' +
                         '<div class="footer-technical-body">' +
                             '<span id="footer-commit">Loading commit info...</span>' +
                             '<span id="footer-log-info" class="footer-log-wrap">' +

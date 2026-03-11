@@ -18,10 +18,32 @@
         return document.documentElement.getAttribute('data-theme') === 'light';
     }
 
-    function baseTextStyles() {
+    function chartTheme() {
         var light = isLightTheme();
         return {
-            textStyle: { color: light ? '#1f2937' : '#e7edf4', fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
+            emphasisText: light ? '#102033' : '#f8fbff',
+            mutedText: light ? '#5b6d81' : '#9aa9b9',
+            shadowAccent: light ? 'rgba(37, 99, 235, 0.18)' : 'rgba(79, 141, 253, 0.24)',
+            softText: light ? '#31465c' : '#c5ced8',
+            splitLine: light ? 'rgba(79, 98, 118, 0.18)' : 'rgba(237, 243, 249, 0.1)',
+            surfaceScale: light
+                ? ['#eef6ff', '#bfdbfe']
+                : ['#173256', '#315f9a'],
+            text: light ? '#15273c' : '#edf3f9',
+            tooltipBackground: light ? '#ffffff' : '#11161d',
+            tooltipBorder: light ? 'rgba(37, 99, 235, 0.28)' : 'rgba(79, 141, 253, 0.28)',
+            tooltipShadow: light
+                ? 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;'
+                : 'box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24); border-radius: 12px;',
+            tooltipText: light ? '#0f172a' : '#edf3f9',
+            axisLine: light ? 'rgba(79, 98, 118, 0.42)' : 'rgba(237, 243, 249, 0.2)',
+        };
+    }
+
+    function baseTextStyles() {
+        var theme = chartTheme();
+        return {
+            textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
             animationDuration: 420,
             animationDurationUpdate: 300,
             animationEasing: 'cubicOut',
@@ -29,23 +51,21 @@
     }
 
     function gridStyles() {
-        var light = isLightTheme();
+        var theme = chartTheme();
         return {
-            axisLine: { lineStyle: { color: light ? 'rgba(93, 109, 130, 0.42)' : 'rgba(231, 237, 244, 0.18)' } },
-            axisLabel: { color: light ? '#2f435a' : '#b7c0cb' },
-            splitLine: { lineStyle: { color: light ? 'rgba(93, 109, 130, 0.16)' : 'rgba(231, 237, 244, 0.08)' } },
+            axisLine: { lineStyle: { color: theme.axisLine } },
+            axisLabel: { color: theme.softText },
+            splitLine: { lineStyle: { color: theme.splitLine } },
         };
     }
 
     function tooltipStyles() {
-        var light = isLightTheme();
+        var theme = chartTheme();
         return {
-            backgroundColor: light ? '#ffffff' : '#11161d',
-            borderColor: light ? 'rgba(37, 99, 235, 0.28)' : 'rgba(79, 141, 253, 0.28)',
-            textStyle: { color: light ? '#0f172a' : '#e7edf4' },
-            extraCssText: light
-                ? 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;'
-                : 'box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24); border-radius: 12px;',
+            backgroundColor: theme.tooltipBackground,
+            borderColor: theme.tooltipBorder,
+            textStyle: { color: theme.tooltipText },
+            extraCssText: theme.tooltipShadow,
         };
     }
 
@@ -139,6 +159,7 @@
         maxMetric: maxMetric,
         metricAxisLabel: metricAxisLabel,
         paletteColor: paletteColor,
+        chartTheme: chartTheme,
         tooltipMetric: tooltipMetric,
         tooltipStyles: tooltipStyles,
         trimAxisLabel: trimAxisLabel,

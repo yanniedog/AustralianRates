@@ -4,6 +4,7 @@
     var STORAGE_KEY = 'ar-theme';
     var root = document.documentElement;
     var boundToggleAttr = 'data-ar-theme-bound';
+    var themeTransitionTimer = null;
 
     function normalizeTheme(value) {
         return String(value || '').toLowerCase() === 'light' ? 'light' : 'dark';
@@ -44,9 +45,23 @@
         }
     }
 
+    function clampThemeTransitions() {
+        if (themeTransitionTimer != null) {
+            window.clearTimeout(themeTransitionTimer);
+        }
+        root.setAttribute('data-theme-switching', 'true');
+        themeTransitionTimer = window.setTimeout(function () {
+            root.removeAttribute('data-theme-switching');
+            themeTransitionTimer = null;
+        }, 220);
+    }
+
     function applyTheme(theme, options) {
         var next = normalizeTheme(theme);
         var opts = options || {};
+        if (!opts.skipTransitionClamp && typeof window.setTimeout === 'function') {
+            clampThemeTransitions();
+        }
         root.setAttribute('data-theme', next);
         root.style.colorScheme = next;
 
@@ -97,7 +112,7 @@
         }
     }
 
-    applyTheme(readStoredTheme(), { skipPersist: true, silent: true });
+    applyTheme(readStoredTheme(), { skipPersist: true, silent: true, skipTransitionClamp: true });
 
     window.ARTheme = {
         bindToggle: bindToggle,

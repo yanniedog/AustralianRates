@@ -165,11 +165,15 @@ async function verifyHeader(page, results, label, expectedTitle) {
 async function verifyWorkspaceShell(page, results, label) {
     const shell = await page.evaluate(() => ({
         marketTerminal: !!document.querySelector('.market-terminal'),
-        chartViews: Array.from(document.querySelectorAll('[data-chart-view]')).map((el) => String(el.textContent || '').trim()),
+        chartViews: Array.from(document.querySelectorAll('[data-chart-view]')).map((el) => ({
+            label: String(el.getAttribute('data-ui-label') || el.textContent || '').trim(),
+            hasIcon: !!el.querySelector('.ar-icon'),
+        })),
         tabs: Array.from(document.querySelectorAll('.tab-btn')).map((el) => ({
             id: el.id,
-            text: String(el.textContent || '').trim(),
+            label: String(el.getAttribute('data-ui-label') || el.textContent || '').trim(),
             active: el.classList.contains('active'),
+            hasIcon: !!el.querySelector('.ar-icon'),
         })),
         controls: {
             bank: !!document.getElementById('filter-bank'),
@@ -184,17 +188,18 @@ async function verifyWorkspaceShell(page, results, label) {
     if (shell.marketTerminal) pass(results, `${label}: market workspace renders`);
     else fail(results, `${label}: market workspace missing`);
 
-    const expectedChartViews = ['NOW', 'MOVE', 'CMP', 'BOX'];
-    if (expectedChartViews.every((view) => shell.chartViews.includes(view))) {
-        pass(results, `${label}: chart view controls render`);
+    const expectedChartViews = ['Leaders', 'Movement', 'Compare', 'Distribution'];
+    const actualChartViews = shell.chartViews.map((view) => view.label);
+    if (expectedChartViews.every((view) => actualChartViews.includes(view)) && shell.chartViews.every((view) => view.hasIcon)) {
+        pass(results, `${label}: chart view controls render with icon labels`);
     } else {
-        fail(results, `${label}: chart view controls mismatch (${shell.chartViews.join(', ')})`);
+        fail(results, `${label}: chart view controls mismatch (${actualChartViews.join(', ')})`);
     }
 
-    const expectedTabs = ['TBL', 'PVT', 'HST', 'CHG'];
-    const actualTabs = shell.tabs.map((tab) => tab.text);
-    if (expectedTabs.every((tab) => actualTabs.includes(tab))) {
-        pass(results, `${label}: workspace tabs render`);
+    const expectedTabs = ['Table', 'Pivot', 'History', 'Changes'];
+    const actualTabs = shell.tabs.map((tab) => tab.label);
+    if (expectedTabs.every((tab) => actualTabs.includes(tab)) && shell.tabs.every((tab) => tab.hasIcon)) {
+        pass(results, `${label}: workspace tabs render with icon labels`);
     } else {
         fail(results, `${label}: workspace tabs mismatch (${actualTabs.join(', ')})`);
     }
