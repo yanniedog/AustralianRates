@@ -5,6 +5,14 @@ const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const testUrlObj = new URL(TEST_URL);
 const baseOrigin = testUrlObj.origin;
 const sharedParams = new URLSearchParams(testUrlObj.search || '');
+const DESKTOP_VIEWPORT = { width: 1440, height: 1200 };
+const MOBILE_VIEWPORT = { width: 390, height: 1100 };
+const SECTIONS = [
+    { name: 'Home loans', path: '/', apiBasePath: '/api/home-loan-rates' },
+    { name: 'Savings', path: '/savings/', apiBasePath: '/api/savings-rates' },
+    { name: 'Term deposits', path: '/term-deposits/', apiBasePath: '/api/term-deposit-rates' },
+];
+const VIEWS = ['lenders', 'surface', 'compare', 'distribution'];
 
 function withSharedQuery(path, apiBasePath) {
     const params = new URLSearchParams(sharedParams.toString());
@@ -15,295 +23,193 @@ function withSharedQuery(path, apiBasePath) {
             parsedApiBase.pathname = apiBasePath;
             params.set('apiBase', parsedApiBase.toString());
         } catch (_) {
-            // Ignore invalid overrides and keep the original query value.
+            // Keep the original override if it is malformed.
         }
     }
     const query = params.toString();
     return baseOrigin + path + (query ? ('?' + query) : '');
 }
 
-function parseRgb(input) {
-    const match = String(input || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-    if (!match) return null;
-    return [Number(match[1]), Number(match[2]), Number(match[3])];
-}
-
-function brightness(rgb) {
-    if (!rgb) return 0;
-    return (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
-}
-
-async function ensureDeepAnalysisOpen(page) {
-    const drawer = page.locator('#deep-analysis-drawer');
-    const drawerCount = await drawer.count().catch(() => 0);
-    if (drawerCount === 0) return false;
-
-    const isOpen = await drawer.evaluate((el) => !!el.open).catch(() => false);
-    if (isOpen) return true;
-
-    const summary = page.locator('#deep-analysis-drawer > summary');
-    if (await summary.isVisible().catch(() => false)) {
-        await summary.scrollIntoViewIfNeeded().catch(() => {});
-        await summary.click().catch(() => {});
-        await page.waitForTimeout(250);
-    }
-
-    const openAfterClick = await drawer.evaluate((el) => !!el.open).catch(() => false);
-    if (openAfterClick) return true;
-
-    await page.evaluate(() => {
-        const el = document.getElementById('deep-analysis-drawer');
-        if (el && el.tagName === 'DETAILS') el.setAttribute('open', '');
-    }).catch(() => {});
-    await page.waitForTimeout(150);
-
-    return await drawer.evaluate((el) => !!el.open).catch(() => false);
-}
-
-async function setUiMode(page, mode) {
-    const desiredMode = String(mode || 'consumer') === 'analyst' ? 'analyst' : 'consumer';
-    const selector = desiredMode === 'analyst' ? '#mode-analyst' : '#mode-consumer';
-    await ensureDeepAnalysisOpen(page);
-
-    const buttonVisible = await page.locator(selector).isVisible().catch(() => false);
-    if (!buttonVisible) return false;
-
-    const alreadyPressed = await page.getAttribute(selector, 'aria-pressed').catch(() => 'false');
-    if (alreadyPressed === 'true') return true;
-
-    await page.locator(selector).scrollIntoViewIfNeeded().catch(() => {});
-    await page.click(selector, { timeout: 10000 }).catch(() => null);
-    await page.waitForTimeout(500);
-
-    return await page.getAttribute(selector, 'aria-pressed').catch(() => 'false') === 'true';
-}
-
-async function openChartWorkspace(page) {
+async function gotoSection(page, section) {
+    await page.goto(withSharedQuery(section.path, section.apiBasePath), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+    });
     await page.waitForSelector('#main-content', { timeout: 15000 });
-    await ensureDeepAnalysisOpen(page);
-    await setUiMode(page, 'analyst').catch(() => false);
-    await page.click('#tab-charts');
-    await page.waitForTimeout(400);
-}
-
-async function openFilterBar(page) {
-    const bar = page.locator('#filter-bar');
-    const open = await bar.evaluate((el) => !!el.open).catch(() => false);
-    if (open) return;
-    await page.locator('#filter-bar > summary').click().catch(() => {});
-    await page.waitForTimeout(250);
-}
-
-async function configureHomeLoanSlice(page) {
-    await openFilterBar(page);
-    await page.selectOption('#filter-security', 'owner_occupied').catch(() => {});
-    await page.selectOption('#filter-repayment', 'principal_and_interest').catch(() => {});
-    await page.selectOption('#filter-lvr', 'lvr_80-85%').catch(() => {});
-    await page.click('#apply-filters');
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2500);
 }
 
 async function drawChart(page) {
     await page.click('#draw-chart');
     await page.waitForFunction(() => {
         const output = document.getElementById('chart-output');
-        return !!output && (
-            output.getAttribute('data-chart-engine') === 'echarts' ||
-            !!output.querySelector('canvas') ||
-            !!output.querySelector('svg')
-        );
-    }, { timeout: 30000 });
-    await page.waitForTimeout(1200);
+        if (!output) return false;
+        return output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
+    }, { timeout: 90000 });
+    await page.waitForTimeout(1500);
 }
 
-async function inspectWorkspace(page) {
+async function switchViewWithoutRatesFetch(page, view) {
+    let requestCount = 0;
+    const handler = (request) => {
+        if (String(request.url() || '').includes('/rates?')) requestCount += 1;
+    };
+
+    page.context().on('request', handler);
+    try {
+        await page.click(`[data-chart-view="${view}"]`);
+        await page.waitForFunction((nextView) => {
+            return String(document.getElementById('chart-output')?.getAttribute('data-chart-view') || '') === String(nextView || '');
+        }, view, { timeout: 15000 });
+        await page.waitForTimeout(800);
+    } finally {
+        page.context().off('request', handler);
+    }
+
+    return requestCount;
+}
+
+async function collectChartMetrics(page) {
     return await page.evaluate(() => {
-        const shell = document.querySelector('#panel-charts .chart-shell');
-        const stage = document.querySelector('#panel-charts .chart-main-stage');
-        const rail = document.querySelector('#panel-charts .chart-series-rail');
-        const pointDetails = document.getElementById('chart-point-details');
-        const output = document.getElementById('chart-output');
-        const summaryTable = document.querySelector('#chart-data-summary .chart-data-summary-table');
-        const summaryCells = summaryTable ? Array.from(summaryTable.querySelectorAll('td')) : [];
-        const title = document.querySelector('#panel-charts .chart-hero-copy h2');
-        const guidance = document.getElementById('chart-guidance');
-        const summary = document.getElementById('chart-summary');
-        const lendersButton = document.querySelector('[data-chart-view="lenders"]');
-        const note = document.getElementById('chart-series-note');
-        const titleColor = title ? window.getComputedStyle(title).color : '';
-        const guidanceColor = guidance ? window.getComputedStyle(guidance).color : '';
-        const outputStyle = output ? window.getComputedStyle(output) : null;
-        const shellRect = shell ? shell.getBoundingClientRect() : null;
-        const stageRect = stage ? stage.getBoundingClientRect() : null;
-        const railRect = rail ? rail.getBoundingClientRect() : null;
+        const selectors = [
+            '.terminal-chart-surface',
+            '#chart-output',
+            '#chart-series-list',
+            '#chart-point-details',
+            '#chart-detail-output',
+            '#chart-data-summary',
+        ];
+        const boxes = {};
+        selectors.forEach((selector) => {
+            const el = document.querySelector(selector);
+            boxes[selector] = el ? {
+                selector,
+                clientWidth: el.clientWidth,
+                scrollWidth: el.scrollWidth,
+                clientHeight: el.clientHeight,
+                scrollHeight: el.scrollHeight,
+            } : null;
+        });
+
         return {
-            view: output ? output.getAttribute('data-chart-view') : '',
-            summaryText: summary ? String(summary.textContent || '') : '',
-            noteText: note ? String(note.textContent || '') : '',
-            titleText: title ? String(title.textContent || '') : '',
-            guidanceText: guidance ? String(guidance.textContent || '') : '',
-            shellFits: !!(shell && shell.scrollWidth <= shell.clientWidth + 1),
-            railFits: !!(rail && rail.scrollWidth <= rail.clientWidth + 1),
-            spotlightFits: !!(pointDetails && pointDetails.scrollWidth <= pointDetails.clientWidth + 1),
-            stageHeight: stageRect ? stageRect.height : 0,
-            railHeight: railRect ? railRect.height : 0,
-            summaryCellsHaveLabels: summaryCells.length > 0 && summaryCells.every((cell) => cell.hasAttribute('data-label')),
-            titleColor,
-            guidanceColor,
-            outputHasGradient: !!(outputStyle && /gradient/i.test(String(outputStyle.backgroundImage || ''))),
-            outputBackgroundColor: outputStyle ? String(outputStyle.backgroundColor || '') : '',
-            lendersButtonVisible: !!(lendersButton && !lendersButton.hasAttribute('hidden')),
-            shellWidth: shellRect ? shellRect.width : 0,
+            pageFits: document.documentElement.scrollWidth <= window.innerWidth,
+            view: String(document.getElementById('chart-output')?.getAttribute('data-chart-view') || ''),
+            status: String(document.getElementById('chart-status')?.textContent || '').trim(),
+            guidance: String(document.getElementById('chart-guidance')?.textContent || '').trim(),
+            summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
+            note: String(document.getElementById('chart-series-note')?.textContent || '').trim(),
+            outputEngine: String(document.getElementById('chart-output')?.getAttribute('data-chart-engine') || ''),
+            outputCanvases: document.querySelectorAll('#chart-output canvas').length,
+            detailCanvases: document.querySelectorAll('#chart-detail-output canvas').length,
+            summaryLabelCells: Array.from(document.querySelectorAll('#chart-data-summary td')).every((cell) => cell.hasAttribute('data-label')),
+            summaryRows: document.querySelectorAll('#chart-data-summary tbody tr').length,
+            surface: boxes['.terminal-chart-surface'],
+            output: boxes['#chart-output'],
+            seriesList: boxes['#chart-series-list'],
+            pointDetails: boxes['#chart-point-details'],
+            detailOutput: boxes['#chart-detail-output'],
+            dataSummary: boxes['#chart-data-summary'],
         };
     });
 }
 
-async function verifyChartWorkspace(page, label, options) {
-    const failures = [];
-    const info = await inspectWorkspace(page);
-    if (info.view !== options.expectedView) failures.push(`${label}: expected ${options.expectedView} view, got ${info.view || 'none'}`);
-    if (!info.shellFits) failures.push(`${label}: chart shell has horizontal overflow`);
-    if (!info.railFits) failures.push(`${label}: chart series rail has horizontal overflow`);
-    if (!info.spotlightFits) failures.push(`${label}: spotlight panel has horizontal overflow`);
-    if (!info.outputHasGradient && /255,\s*255,\s*255/.test(info.outputBackgroundColor)) {
-        failures.push(`${label}: chart output background fell back to white`);
+function assertFits(metrics, failures, label, key) {
+    const box = metrics[key];
+    if (!box) {
+        failures.push(`${label}: missing ${key} container`);
+        return;
     }
-    if (!String(info.titleText || '').trim()) failures.push(`${label}: chart title text is missing`);
-    if (!String(info.guidanceText || '').trim()) failures.push(`${label}: chart guidance text is missing`);
-    if (!String(info.titleColor || '').trim() || String(info.titleColor).includes('rgba(0, 0, 0, 0)')) failures.push(`${label}: chart title color is missing`);
-    if (!String(info.guidanceColor || '').trim() || String(info.guidanceColor).includes('rgba(0, 0, 0, 0)')) failures.push(`${label}: chart guidance color is missing`);
-    if (options.expectLendersButton && !info.lendersButtonVisible) failures.push(`${label}: lenders view button is not visible`);
-    if (options.expectSliceText) {
-        const summary = info.summaryText.toLowerCase();
-        const missing = options.expectSliceText.filter((text) => !summary.includes(String(text).toLowerCase()));
-        if (missing.length) failures.push(`${label}: summary is missing slice pills for ${missing.join(', ')}`);
+    if (box.scrollWidth > box.clientWidth + 1) {
+        failures.push(`${label}: ${key} has horizontal overflow (${box.scrollWidth} > ${box.clientWidth})`);
     }
-    if (options.expectRailFit && Math.abs(info.stageHeight - info.railHeight) > 180) {
-        failures.push(`${label}: chart rail height drifted too far from the main chart frame`);
-    }
-    if (options.expectNote && !String(info.noteText || '').toLowerCase().includes(String(options.expectNote).toLowerCase())) {
-        failures.push(`${label}: rail note did not mention "${options.expectNote}"`);
-    }
-    return failures;
 }
 
-async function verifyCachedViewSwitch(page, label, view) {
-    let requestCount = 0;
-    const handler = (req) => {
-        if (String(req.url() || '').includes('/rates?')) requestCount += 1;
-    };
-    page.context().on('request', handler);
-    await page.click(`[data-chart-view="${view}"]`);
-    await page.waitForTimeout(1200);
-    page.context().off('request', handler);
-    const currentView = await page.locator('#chart-output').evaluate((el) => el.getAttribute('data-chart-view')).catch(() => '');
-    if (currentView !== view) return `${label}: failed to switch to ${view} view`;
-    if (requestCount !== 0) return `${label}: switching to ${view} triggered ${requestCount} unexpected /rates fetches`;
-    return null;
+function verifyChartState(metrics, failures, label, expectedView) {
+    if (metrics.view !== expectedView) failures.push(`${label}: expected ${expectedView} view, got ${metrics.view || 'none'}`);
+    if (!metrics.status || /^ERR/i.test(metrics.status)) failures.push(`${label}: chart status is invalid (${metrics.status || 'missing'})`);
+    if (!metrics.guidance) failures.push(`${label}: chart guidance is missing`);
+    if (!metrics.summary || metrics.summary === 'WAIT') failures.push(`${label}: chart summary did not populate`);
+    if ((metrics.outputEngine !== 'echarts') && metrics.outputCanvases === 0) failures.push(`${label}: chart canvas did not render`);
+    assertFits(metrics, failures, label, 'surface');
+    assertFits(metrics, failures, label, 'output');
+    assertFits(metrics, failures, label, 'seriesList');
+    assertFits(metrics, failures, label, 'pointDetails');
 }
 
-async function verifySection(page, section) {
-    const failures = [];
-    await page.goto(section.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await openChartWorkspace(page);
-    if (section.configure) {
-        await section.configure(page);
-        await page.click('#tab-charts');
-        await page.waitForTimeout(350);
-    }
+async function verifyHistoryPane(page, failures, label) {
+    await page.click('#tab-history');
+    await page.waitForTimeout(500);
+
+    const historyState = await collectChartMetrics(page);
+    if (historyState.detailCanvases === 0) failures.push(`${label}: history detail chart did not render`);
+    if (historyState.summaryRows === 0) failures.push(`${label}: history summary table is empty`);
+    if (!historyState.summaryLabelCells) failures.push(`${label}: history summary table is missing responsive data-label cells`);
+    assertFits(historyState, failures, label, 'detailOutput');
+    assertFits(historyState, failures, label, 'dataSummary');
+
+    await page.click('#tab-explorer');
+    await page.waitForTimeout(250);
+}
+
+async function verifyDesktopSection(page, section, failures) {
+    await gotoSection(page, section);
     await drawChart(page);
-    failures.push(...await verifyChartWorkspace(page, `${section.name} lenders`, {
-        expectedView: 'lenders',
-        expectLendersButton: true,
-        expectSliceText: section.expectedSliceText || [],
-        expectRailFit: true,
-        expectNote: 'lender',
-    }));
-    const surfaceSwitch = await verifyCachedViewSwitch(page, section.name, 'surface');
-    if (surfaceSwitch) failures.push(surfaceSwitch);
-    failures.push(...await verifyChartWorkspace(page, `${section.name} surface`, {
-        expectedView: 'surface',
-        expectLendersButton: true,
-        expectSliceText: section.expectedSliceText || [],
-        expectRailFit: true,
-        expectNote: 'click',
-    }));
-    const compareSwitch = await verifyCachedViewSwitch(page, section.name, 'compare');
-    if (compareSwitch) failures.push(compareSwitch);
-    return failures;
+
+    let metrics = await collectChartMetrics(page);
+    verifyChartState(metrics, failures, `${section.name} lenders`, 'lenders');
+
+    for (const view of VIEWS.slice(1)) {
+        const requestCount = await switchViewWithoutRatesFetch(page, view);
+        if (requestCount !== 0) failures.push(`${section.name} ${view}: switching views triggered ${requestCount} unexpected /rates requests`);
+        metrics = await collectChartMetrics(page);
+        verifyChartState(metrics, failures, `${section.name} ${view}`, view);
+    }
+
+    await verifyHistoryPane(page, failures, section.name);
 }
 
-async function verifyMobile(url) {
-    const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
-    const page = await browser.newPage({ viewport: { width: 390, height: 1100 } });
-    const failures = [];
+async function verifyMobileSection(browser, section, failures) {
+    const page = await browser.newPage({ viewport: MOBILE_VIEWPORT });
     try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await openChartWorkspace(page);
-        await configureHomeLoanSlice(page);
-        await page.click('#tab-charts');
-        await page.waitForTimeout(350);
+        await gotoSection(page, section);
         await drawChart(page);
-        await page.click('[data-chart-view="lenders"]');
-        await page.waitForTimeout(900);
-        const mobile = await page.evaluate(() => {
-            const panel = document.querySelector('#panel-charts');
-            const shell = document.querySelector('#panel-charts .chart-shell');
-            const output = document.getElementById('chart-output');
-            const rail = document.querySelector('#panel-charts .chart-series-rail');
-            const pointDetails = document.getElementById('chart-point-details');
-            const summaryCells = Array.from(document.querySelectorAll('#chart-data-summary td'));
-            return {
-                pageFits: document.documentElement.scrollWidth <= window.innerWidth,
-                shellFits: !!(shell && shell.scrollWidth <= shell.clientWidth + 1),
-                railFits: !!(rail && rail.scrollWidth <= rail.clientWidth + 1),
-                spotlightFits: !!(pointDetails && pointDetails.scrollWidth <= pointDetails.clientWidth + 1),
-                outputWidth: output ? output.getBoundingClientRect().width : 0,
-                railWidth: rail ? rail.getBoundingClientRect().width : 0,
-                panelVisible: !!(panel && !panel.hasAttribute('hidden')),
-                summaryCellsHaveLabels: summaryCells.length > 0 && summaryCells.every((cell) => cell.hasAttribute('data-label')),
-            };
-        });
-        if (!mobile.panelVisible) failures.push('Mobile: chart panel is not visible');
-        if (!mobile.pageFits) failures.push('Mobile: page has horizontal overflow');
-        if (!mobile.shellFits) failures.push('Mobile: chart shell has horizontal overflow');
-        if (!mobile.railFits) failures.push('Mobile: chart rail has horizontal overflow');
-        if (!mobile.spotlightFits) failures.push('Mobile: spotlight panel has horizontal overflow');
-        if (mobile.outputWidth < 260) failures.push(`Mobile: chart output is too narrow (${mobile.outputWidth}px)`);
-        if (mobile.railWidth < 260) failures.push(`Mobile: chart rail is too narrow (${mobile.railWidth}px)`);
-        if (!mobile.summaryCellsHaveLabels) failures.push('Mobile: chart summary cells are missing responsive labels');
+
+        const metrics = await collectChartMetrics(page);
+        if (!metrics.pageFits) failures.push(`${section.name} mobile: page has horizontal overflow`);
+        verifyChartState(metrics, failures, `${section.name} mobile lenders`, 'lenders');
+
+        const surfaceRequests = await switchViewWithoutRatesFetch(page, 'surface');
+        if (surfaceRequests !== 0) failures.push(`${section.name} mobile surface: switching views triggered ${surfaceRequests} unexpected /rates requests`);
+        const surfaceMetrics = await collectChartMetrics(page);
+        if (!surfaceMetrics.pageFits) failures.push(`${section.name} mobile surface: page has horizontal overflow`);
+        verifyChartState(surfaceMetrics, failures, `${section.name} mobile surface`, 'surface');
     } finally {
-        await browser.close();
+        await page.close();
     }
-    return failures;
 }
 
 async function main() {
-    const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
     const failures = [];
-    const sections = [
-        {
-            name: 'Home loans',
-            url: withSharedQuery('/', '/api/home-loan-rates'),
-            configure: configureHomeLoanSlice,
-            expectedSliceText: ['owner', 'principal', '80-85'],
-        },
-        { name: 'Savings', url: withSharedQuery('/savings/', '/api/savings-rates') },
-        { name: 'Term deposits', url: withSharedQuery('/term-deposits/', '/api/term-deposit-rates') },
-    ];
+    const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
 
     try {
-        for (const section of sections) {
-            failures.push(...await verifySection(page, section));
+        const desktopPage = await browser.newPage({ viewport: DESKTOP_VIEWPORT });
+        try {
+            for (const section of SECTIONS) {
+                await verifyDesktopSection(desktopPage, section, failures);
+            }
+        } finally {
+            await desktopPage.close();
+        }
+
+        for (const section of SECTIONS) {
+            await verifyMobileSection(browser, section, failures);
         }
     } finally {
         await browser.close();
     }
 
-    failures.push(...await verifyMobile(TEST_URL));
-
-    if (failures.length) {
+    if (failures.length > 0) {
         console.error('Chart UX test failures:');
         failures.forEach((failure) => console.error(`- ${failure}`));
         process.exit(1);

@@ -66,6 +66,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     min-height: 28px;
     padding: 0 10px;
     border: 1px solid var(--ar-line);
@@ -90,6 +91,7 @@
 .rate-change-list {
     display: grid;
     gap: 10px;
+    min-width: 0;
 }
 
 .chart-series-card,
@@ -117,6 +119,18 @@
     justify-content: space-between;
     gap: 8px 12px;
     align-items: center;
+}
+
+.chart-guidance-wrap,
+.chart-summary,
+.chart-series-name-wrap,
+.chart-spotlight-copy,
+.chart-spotlight-metrics,
+.chart-spotlight-grid,
+.chart-spotlight-link-row,
+.chart-point-details > *,
+.chart-data-summary > * {
+    min-width: 0;
 }
 
 .chart-series-name-wrap {
@@ -155,6 +169,21 @@
 .rate-change-rates {
     color: var(--ar-text-soft);
     font-size: 0.74rem;
+}
+
+.chart-series-caption,
+.chart-series-name,
+.chart-spotlight-subtitle,
+.chart-summary-pill,
+.chart-point-link,
+.chart-spotlight-grid span {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.chart-spotlight-grid span {
+    min-width: 0;
+    flex: 1 1 180px;
 }
 
 .chart-point-link {
