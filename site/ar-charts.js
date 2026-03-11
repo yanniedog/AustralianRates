@@ -49,9 +49,7 @@
     }
 
     function disposeChart(instance) {
-        if (instance && typeof instance.dispose === 'function' && !instance.isDisposed()) {
-            instance.dispose();
-        }
+        if (instance && typeof instance.dispose === 'function' && !instance.isDisposed()) instance.dispose();
         return null;
     }
 
@@ -70,19 +68,15 @@
     }
 
     function statusText(model, currentFields) {
-        if (!model || !model.meta) return 'Render a chart to answer the current scenario.';
-        var parts = [];
-        parts.push('Loaded ' + Number(chartState.totalRows || 0).toLocaleString() + ' rows.');
+        if (!model || !model.meta) return 'WAIT';
+        var parts = [Number(chartState.totalRows || 0).toLocaleString() + ' rows'];
         if (currentFields.view === 'lenders') {
-            parts.push('Lenders view ranks ' +
-                model.meta.visibleLenders.toLocaleString() + ' of ' +
-                model.meta.totalLenders.toLocaleString() + ' lenders for the current slice.');
+            parts.push(model.meta.visibleLenders.toLocaleString() + '/' + model.meta.totalLenders.toLocaleString() + ' lenders');
         } else {
-            parts.push(currentFields.view.charAt(0).toUpperCase() + currentFields.view.slice(1) + ' view shows ' +
-                model.meta.visibleSeries.toLocaleString() + ' of ' + model.meta.totalSeries.toLocaleString() + ' product series.');
+            parts.push(model.meta.visibleSeries.toLocaleString() + '/' + model.meta.totalSeries.toLocaleString() + ' series');
         }
-        if (chartState.truncated) parts.push('Results hit the 10,000-row fetch cap.');
-        return parts.join(' ');
+        if (chartState.truncated) parts.push('10K cap');
+        return parts.join(' | ');
     }
 
     function ensureCharts() {
@@ -104,9 +98,7 @@
     }
 
     function scheduleResizeCharts() {
-        [0, 120, 320].forEach(function (delay) {
-            setTimeout(resizeCharts, delay);
-        });
+        [0, 120, 320].forEach(function (delay) { setTimeout(resizeCharts, delay); });
     }
 
     function disconnectResizeObserver() {
@@ -126,19 +118,15 @@
             els.chartDetailOutput,
             els.chartOutput && els.chartOutput.parentElement,
             els.chartDetailOutput && els.chartDetailOutput.parentElement,
-            document.querySelector('#panel-charts .chart-canvas-shell'),
-            document.querySelector('#panel-charts .chart-series-rail'),
-            document.querySelector('#panel-charts .chart-shell')
+            document.getElementById('chart'),
+            document.getElementById('history')
         ].forEach(function (element) {
-            if (!element) return;
-            resizeObserver.observe(element);
+            if (element) resizeObserver.observe(element);
         });
     }
 
-    function chartsPanelVisible() {
-        if (!els.panelCharts) return false;
-        if (els.panelCharts.hidden || !els.panelCharts.classList.contains('active')) return false;
-        return window.getComputedStyle(els.panelCharts).display !== 'none';
+    function chartVisible() {
+        return !!(els.chartOutput && window.getComputedStyle(els.chartOutput).display !== 'none');
     }
 
     function scheduleResponsiveSync() {
@@ -146,7 +134,7 @@
         if (responsiveSyncTimer) window.clearTimeout(responsiveSyncTimer);
         responsiveSyncTimer = window.setTimeout(function () {
             responsiveSyncTimer = 0;
-            if (!chartState.rows.length || !chartsPanelVisible()) {
+            if (!chartState.rows.length || !chartVisible()) {
                 resizeCharts();
                 return;
             }
@@ -156,20 +144,20 @@
 
     function renderFromCache() {
         if (!chartState.rows.length) {
-            clearOutput('No chart data is cached yet.');
+            clearOutput('WAIT');
             return;
         }
 
         var currentFields = fields();
         var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
         if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
-            clearOutput('No lender matches are available for this configuration.');
-            if (chartUi.setStatus) chartUi.setStatus('No lender matches are available for this configuration.');
+            clearOutput('No lender match');
+            if (chartUi.setStatus) chartUi.setStatus('No lender match');
             return;
         }
         if (!model.visibleSeries.length || !model.surface.cells.length) {
-            clearOutput('No numeric values are available for this configuration.');
-            if (chartUi.setStatus) chartUi.setStatus('No numeric values are available for this configuration.');
+            clearOutput('No numeric values');
+            if (chartUi.setStatus) chartUi.setStatus('No numeric values');
             return;
         }
 
@@ -189,7 +177,7 @@
         if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
         if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
         if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
-        if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'Filters changed. Redraw to fetch fresh chart rows.' : statusText(model, currentFields));
+        if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'STALE' : statusText(model, currentFields));
 
         tabState.chartDrawn = true;
         scheduleResizeCharts();
@@ -227,18 +215,13 @@
     async function drawChart() {
         if (!els.chartOutput) return;
         disposeCharts();
-        if (chartUi.setPendingState) chartUi.setPendingState('Loading chart data...');
+        if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
         try {
             var payload = await chartData.fetchAllRateRows(buildBaseParams(), function (progress) {
                 if (chartUi.setStatus) {
-                    chartUi.setStatus(
-                        'Loading chart data... ' +
-                        progress.loaded.toLocaleString() + ' of ' +
-                        progress.total.toLocaleString() + ' rows (' +
-                        progress.page + '/' + progress.lastPage + ' pages).'
-                    );
+                    chartUi.setStatus('LOAD ' + progress.loaded.toLocaleString() + '/' + progress.total.toLocaleString() + ' ' + progress.page + '/' + progress.lastPage);
                 }
             });
 
@@ -249,10 +232,10 @@
             resetSelection();
 
             if (!chartState.rows.length) {
-            clearOutput('No data returned. Adjust filters or date range.');
-            if (chartUi.setStatus) chartUi.setStatus('No data matched the scenario. Adjust filters or date range.');
-            return;
-        }
+                clearOutput('No data');
+                if (chartUi.setStatus) chartUi.setStatus('No data');
+                return;
+            }
 
             renderFromCache();
             clientLog('info', 'Chart load completed', {
@@ -261,10 +244,8 @@
                 truncated: chartState.truncated,
             });
         } catch (error) {
-            clearOutput('Chart rendering failed.');
-            if (chartUi.setStatus) {
-                chartUi.setStatus('Error: ' + String(error && error.message ? error.message : error));
-            }
+            clearOutput('ERR');
+            if (chartUi.setStatus) chartUi.setStatus('ERR ' + String(error && error.message ? error.message : error));
             clientLog('error', 'Chart load failed', {
                 message: error && error.message ? error.message : String(error),
             });
@@ -273,24 +254,22 @@
 
     function refreshFromCache(reason) {
         if (!chartState.rows.length) {
-            if (chartUi.setStatus) chartUi.setStatus('Choose a view, adjust the metric or density, then draw.');
+            if (chartUi.setStatus) chartUi.setStatus('READY');
             return;
         }
         if (chartState.stale) {
-            if (chartUi.markStale) chartUi.markStale('Filters changed. Redraw to fetch fresh chart rows.');
+            if (chartUi.markStale) chartUi.markStale('STALE');
             return;
         }
         renderFromCache();
-        if (chartUi.setStatus) {
-            chartUi.setStatus('Updated ' + fields().view + ' view from cached rows' + (reason ? ' after ' + reason + '.' : '.'));
-        }
+        if (chartUi.setStatus) chartUi.setStatus('LIVE ' + fields().view + (reason ? ' | ' + reason : ''));
     }
 
     function toggleSeries(seriesKey) {
         if (!seriesKey) return;
         var next = chartState.selectedSeriesKeys.slice();
-        var currentIndex = next.indexOf(seriesKey);
-        if (currentIndex >= 0) next.splice(currentIndex, 1);
+        var index = next.indexOf(seriesKey);
+        if (index >= 0) next.splice(index, 1);
         else next.push(seriesKey);
         chartState.selectedSeriesKeys = next;
         chartState.spotlightSeriesKey = seriesKey;
@@ -300,38 +279,32 @@
 
     function markStale(message) {
         chartState.stale = true;
-        if (chartUi.markStale) chartUi.markStale(message);
+        if (chartUi.markStale) chartUi.markStale(message || 'STALE');
     }
 
     if (chartUi.bindUi) {
         chartUi.bindUi({
-            onControlChange: function () { refreshFromCache('control change'); },
+            onControlChange: function () { refreshFromCache('control'); },
             onSeriesToggle: toggleSeries,
-            onViewChange: function () { refreshFromCache('view switch'); },
+            onViewChange: function () { refreshFromCache('view'); },
         });
     }
     if (chartUi.setIdleState) chartUi.setIdleState();
-    [
-        document.querySelector('.chart-advanced'),
-        document.getElementById('market-notes'),
-        document.getElementById('filter-bar')
-    ].forEach(function (details) {
-        if (!details || details.tagName !== 'DETAILS') return;
-        details.addEventListener('toggle', scheduleResponsiveSync);
+
+    [document.getElementById('notes'), document.getElementById('filter-bar')].forEach(function (details) {
+        if (details && details.tagName === 'DETAILS') details.addEventListener('toggle', scheduleResponsiveSync);
     });
 
     window.addEventListener('resize', scheduleResponsiveSync);
     window.addEventListener('orientationchange', scheduleResponsiveSync);
-    window.addEventListener('ar:tab-changed', function (event) {
-        var tab = event && event.detail ? event.detail.tab : '';
-        if (tab === 'charts') scheduleResponsiveSync();
-    });
+    window.addEventListener('ar:tab-changed', scheduleResponsiveSync);
     window.addEventListener('ar:ui-mode-changed', scheduleResponsiveSync);
+    window.addEventListener('ar:theme-changed', scheduleResponsiveSync);
+    window.addEventListener('beforeunload', disconnectResizeObserver);
 
     window.AR.charts = {
         drawChart: drawChart,
         markStale: markStale,
         refreshFromCache: refreshFromCache,
     };
-    window.addEventListener('beforeunload', disconnectResizeObserver);
 })();

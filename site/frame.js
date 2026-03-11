@@ -1,13 +1,21 @@
 (function () {
+    'use strict';
+
     var GITHUB_REPO = 'yanniedog/AustralianRates';
     var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
     var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
     var timeUtils = (window.AR && window.AR.time) ? window.AR.time : {};
     var flushClientLogQueue = (typeof utils.flushClientLogQueue === 'function') ? utils.flushClientLogQueue : function () { return 0; };
-
+    var themeApi = window.ARTheme || {};
     var SESSION_LOG_MAX = 500;
+    var TOOLTIP_DELAY_MS = 450;
+    var LONG_PRESS_MS = 500;
     var _sessionLog = [];
+    var tooltipEl = null;
+    var tooltipTimer = 0;
+    var longPressTimer = 0;
+    var helpSheet = null;
 
     function addSessionLog(level, message, detail) {
         _sessionLog.push({
@@ -17,7 +25,7 @@
             detail: detail
         });
         if (_sessionLog.length > SESSION_LOG_MAX) _sessionLog.shift();
-        updateClientLogCount();
+        updateLogLinkText();
     }
 
     function getSessionLogEntries() {
@@ -26,26 +34,22 @@
 
     function clearSessionLog() {
         _sessionLog.length = 0;
-        updateClientLogCount();
+        updateLogLinkText();
     }
 
-    function esc(s) {
-        if (window._arEsc) return window._arEsc(s);
-        return String(s == null ? '' : s)
+    function esc(value) {
+        if (window._arEsc) return window._arEsc(value);
+        return String(value == null ? '' : value)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
 
-    function updateClientLogCount() {
-        updateLogLinkText();
-    }
-
     function updateLogLinkText() {
         var el = document.getElementById('footer-log-link-text');
         if (!el) return;
-        el.textContent = 'log private/' + _sessionLog.length.toLocaleString();
+        el.textContent = 'log/' + _sessionLog.length.toLocaleString();
     }
 
     function downloadClientLog() {
@@ -87,7 +91,7 @@
 
         function doReload() {
             var q = (window.location.search ? '&' : '?') + '_=' + Date.now();
-            window.location.replace(window.location.pathname + window.location.search + q);
+            window.location.replace(window.location.pathname + window.location.search + q + window.location.hash);
         }
 
         var p = Promise.resolve();
@@ -118,76 +122,192 @@
         };
     }
 
-    function getHeaderTagline(context) {
-        if (context.admin) return 'Admin';
-        if (context.legal) return 'Reference pages';
-        if (context.section === 'savings') return 'Savings';
-        if (context.section === 'term-deposits') return 'Term deposits';
-        return 'Home loans';
+    function sectionMeta(section) {
+        if (section === 'savings') return { label: 'Savings', code: 'SAV', path: '/savings/' };
+        if (section === 'term-deposits') return { label: 'Term Deposits', code: 'TD', path: '/term-deposits/' };
+        return { label: 'Home Loans', code: 'HL', path: '/' };
     }
 
-    function getNavLinks(context) {
+    function currentPageLabel(context) {
         if (context.admin) {
-            return [
-                { href: '/admin/dashboard.html', label: 'Dashboard', active: window.location.pathname.indexOf('/admin/') >= 0 },
-                { href: '/', label: 'Public site', active: false }
-            ];
+            var path = window.location.pathname.toLowerCase();
+            if (path.indexOf('/admin/status') >= 0) return 'Status';
+            if (path.indexOf('/admin/database') >= 0) return 'Database';
+            if (path.indexOf('/admin/clear') >= 0) return 'Clear';
+            if (path.indexOf('/admin/config') >= 0) return 'Config';
+            if (path.indexOf('/admin/runs') >= 0) return 'Runs';
+            if (path.indexOf('/admin/logs') >= 0) return 'Logs';
+            if (path.indexOf('/admin/dashboard') >= 0) return 'Dashboard';
+            return 'Admin';
         }
+        if (context.legal) {
+            var legalPath = window.location.pathname.toLowerCase();
+            if (legalPath.indexOf('/about/') >= 0) return 'About';
+            if (legalPath.indexOf('/contact/') >= 0) return 'Contact';
+            if (legalPath.indexOf('/privacy/') >= 0) return 'Privacy';
+            if (legalPath.indexOf('/terms/') >= 0) return 'Terms';
+            return 'Reference';
+        }
+        return sectionMeta(context.section).label;
+    }
+
+    function getLegalHref(slug) {
+        return '/' + String(slug || '').replace(/^\/+|\/+$/g, '') + '/';
+    }
+
+    function buildMarketLinks(baseHref) {
         return [
-            { href: '/', label: 'Home Loans', active: !context.legal && context.section === 'home-loans' },
-            { href: '/savings/', label: 'Savings', active: !context.legal && context.section === 'savings' },
-            { href: '/term-deposits/', label: 'Term Deposits', active: !context.legal && context.section === 'term-deposits' }
+            { href: baseHref + '#chart', label: 'CHT' },
+            { href: baseHref + '#ladder', label: 'LDR' },
+            { href: baseHref + '#table', label: 'TBL' },
+            { href: baseHref + '#pivot', label: 'PVT' },
+            { href: baseHref + '#history', label: 'HST' },
+            { href: baseHref + '#changes', label: 'CHG' },
+            { href: baseHref + '#export', label: 'EXP' },
+            { href: baseHref + '#notes', label: 'NTS' }
         ];
     }
 
-    function renderNavLinks(context) {
-        return getNavLinks(context).map(function (link) {
-            return '<a href="' + esc(link.href) + '" class="site-nav-link' + (link.active ? ' active' : '') + '"' + (link.active ? ' aria-current="page"' : '') + '>' + esc(link.label) + '</a>';
-        }).join('');
+    function publicTreeMarkup(context) {
+        var sections = [
+            sectionMeta('home-loans'),
+            sectionMeta('savings'),
+            sectionMeta('term-deposits')
+        ];
+        var currentPath = window.location.pathname;
+        return '' +
+            '<nav class="site-tree" aria-label="Market tree">' +
+                '<div class="site-tree-group">' +
+                    sections.map(function (item) {
+                        var activeRoot = currentPath === item.path || (item.path !== '/' && currentPath.indexOf(item.path) === 0);
+                        return '' +
+                            '<details class="site-tree-branch"' + (activeRoot ? ' open' : '') + '>' +
+                                '<summary class="site-tree-root' + (activeRoot ? ' is-active' : '') + '">' +
+                                    '<a href="' + esc(item.path) + '"' + (activeRoot ? ' aria-current="page"' : '') + '>' + esc(item.label) + '</a>' +
+                                '</summary>' +
+                                '<div class="site-tree-children">' +
+                                    buildMarketLinks(item.path).map(function (link) {
+                                        var active = activeRoot && window.location.hash === link.href.slice(item.path.length);
+                                        return '<a class="site-tree-leaf' + (active ? ' is-active' : '') + '" href="' + esc(link.href) + '">' + esc(link.label) + '</a>';
+                                    }).join('') +
+                                '</div>' +
+                            '</details>';
+                    }).join('') +
+                '</div>' +
+                '<div class="site-tree-group site-tree-group-secondary">' +
+                    '<span class="panel-code">REF</span>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('about')) + '">About</a>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
+                '</div>' +
+            '</nav>';
     }
 
-    function buildNav() {
+    function adminNavMarkup() {
+        var path = window.location.pathname.toLowerCase();
+        var links = [
+            { href: '/admin/dashboard.html', label: 'Dashboard' },
+            { href: '/admin/status.html', label: 'Status' },
+            { href: '/admin/database.html', label: 'Database' },
+            { href: '/admin/clear.html', label: 'Clear' },
+            { href: '/admin/config.html', label: 'Config' },
+            { href: '/admin/runs.html', label: 'Runs' },
+            { href: '/admin/logs.html', label: 'Logs' },
+            { href: '/', label: 'Public' }
+        ];
+        return '' +
+            '<nav class="admin-sidebar-nav" aria-label="Admin navigation">' +
+                links.map(function (link) {
+                    var active = path === link.href.toLowerCase() || (link.href.indexOf('/admin/') >= 0 && path.indexOf(link.href.toLowerCase().replace('.html', '')) === 0);
+                    return '<a class="admin-sidebar-link' + (active ? ' is-active' : '') + '" href="' + esc(link.href) + '"' + (active ? ' aria-current="page"' : '') + '>' + esc(link.label) + '</a>';
+                }).join('') +
+            '</nav>';
+    }
+
+    function headerActionsMarkup(context) {
+        return '' +
+            '<div class="site-header-actions">' +
+                '<button type="button" class="icon-btn secondary" data-theme-toggle aria-label="Toggle theme"></button>' +
+                '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">?</button>' +
+                '<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">&#8635;</button>' +
+                '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">GH</a>' +
+                '<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">&#9776;</button>' +
+            '</div>';
+    }
+
+    function buildHeader() {
         var header = document.querySelector('.site-header');
         if (!header) return;
         var inner = header.querySelector('.site-header-inner');
         if (!inner) return;
 
         var context = getPageContext();
-        var technicalLabel = context.admin ? 'Tools' : 'Utility';
+        var meta = sectionMeta(context.section);
 
         inner.innerHTML =
             '<div class="site-brand-lockup">' +
-                '<span class="site-brand-mark" aria-hidden="true">AR</span>' +
+                '<a href="/" class="site-brand-mark" aria-label="AustralianRates home">AR</a>' +
                 '<div class="site-brand-copy">' +
-                    '<h1 class="site-brand"><a href="/">AustralianRates</a></h1>' +
-                    '<span class="site-brand-tagline">' + esc(getHeaderTagline(context)) + '</span>' +
+                    '<a href="/" class="site-brand">AustralianRates</a>' +
+                    '<span class="site-brand-tagline">' + esc(currentPageLabel(context)) + '</span>' +
                 '</div>' +
             '</div>' +
-            '<nav class="site-nav" aria-label="Site navigation">' +
-                '<div class="site-nav-primary">' +
-                    '<div class="site-nav-links">' + renderNavLinks(context) + '</div>' +
-                '</div>' +
-                '<div class="site-nav-meta">' +
-                    '<details class="site-nav-technical" id="site-nav-technical">' +
-                        '<summary class="site-nav-technical-summary">' + esc(technicalLabel) + '</summary>' +
-                        '<div class="site-nav-technical-body">' +
-                            (context.admin ? '' : '<p class="site-nav-technical-label">Site tools</p>') +
-                            '<button type="button" id="refresh-site-btn" class="site-nav-refresh-btn" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">Refresh</button>' +
-                            '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="site-nav-github">' +
-                                '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>' +
-                                'GitHub' +
-                            '</a>' +
-                        '</div>' +
-                    '</details>' +
-                '</div>' +
-            '</nav>';
+            '<div class="site-header-context">' +
+                '<span class="eyebrow">' + esc(context.admin ? 'ADMIN' : (context.legal ? 'REF' : meta.code)) + '</span>' +
+                '<strong class="site-header-title">' + esc(currentPageLabel(context)) + '</strong>' +
+            '</div>' +
+            headerActionsMarkup(context);
 
-        var refreshBtn = inner.querySelector('#refresh-site-btn');
-        if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
+        if (themeApi && typeof themeApi.initToggles === 'function') {
+            themeApi.initToggles(inner);
+        }
     }
 
-    function getLegalHref(slug) {
-        return '/' + String(slug || '').replace(/^\/+|\/+$/g, '') + '/';
+    function buildPublicTree(context) {
+        var target = document.getElementById('market-nav-tree');
+        if (!target) return;
+        target.innerHTML = publicTreeMarkup(context);
+    }
+
+    function buildAdminSidebar(context) {
+        if (!context.admin) return;
+        if (window.location.pathname.toLowerCase().indexOf('/admin/index.html') >= 0 || window.location.pathname.toLowerCase().endsWith('/admin/')) return;
+        if (document.querySelector('.admin-sidebar')) return;
+
+        var aside = document.createElement('aside');
+        aside.className = 'admin-sidebar';
+        aside.innerHTML =
+            '<div class="admin-sidebar-head">' +
+                '<span class="panel-code">OPS</span>' +
+                '<strong>Admin</strong>' +
+            '</div>' +
+            adminNavMarkup();
+        var main = document.querySelector('main.admin-shell');
+        if (main && main.parentNode) {
+            main.parentNode.insertBefore(aside, main);
+            document.body.classList.add('has-admin-sidebar');
+        }
+    }
+
+    function buildLegalDrawer(context) {
+        if (!context.legal) return;
+        if (document.getElementById('site-menu-drawer')) return;
+
+        var drawer = document.createElement('aside');
+        drawer.id = 'site-menu-drawer';
+        drawer.className = 'site-menu-drawer';
+        drawer.hidden = true;
+        drawer.innerHTML =
+            '<div class="site-menu-backdrop" data-menu-close></div>' +
+            '<div class="site-menu-panel">' +
+                '<div class="site-menu-head">' +
+                    '<span class="panel-code">MENU</span>' +
+                    '<button type="button" class="icon-btn secondary" data-menu-close aria-label="Close menu">x</button>' +
+                '</div>' +
+                publicTreeMarkup(context) +
+            '</div>';
+        document.body.appendChild(drawer);
     }
 
     function buildFooter() {
@@ -195,47 +315,31 @@
         if (existing) existing.remove();
 
         var context = getPageContext();
-        var footerOperator = context.admin
-            ? 'Operational surfaces for the AustralianRates production stack.'
-            : 'Daily CDR-backed reference data for home loans, savings, and term deposits.';
-        var footerDisclaimer = context.admin
-            ? 'Admin pages expose operational tooling only.'
-            : 'General information only. Confirm rates and product terms directly with the institution.';
-
         var footer = document.createElement('footer');
         footer.className = 'site-footer';
         footer.innerHTML =
             '<div class="site-footer-inner">' +
-                '<div class="site-footer-copy">' +
-                    '<div class="site-brand-lockup">' +
-                        '<span class="site-brand-mark" aria-hidden="true">AR</span>' +
-                        '<div class="site-brand-copy">' +
-                            '<strong class="site-brand">AustralianRates</strong>' +
-                            '<span class="footer-label">' + esc(getHeaderTagline(context)) + '</span>' +
-                        '</div>' +
-                    '</div>' +
-                    '<p class="footer-operator">' + esc(footerOperator) + '</p>' +
-                    '<p class="footer-disclaimer">' + esc(footerDisclaimer) + '</p>' +
+                '<div class="site-footer-meta">' +
+                    '<strong>AustralianRates</strong>' +
+                    '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
+                    '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
+                    '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
+                    '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
                 '</div>' +
-                '<div class="site-footer-actions">' +
+                '<div class="site-footer-tech">' +
                     '<details class="footer-technical" id="footer-technical">' +
-                        '<summary class="footer-technical-summary">Technical</summary>' +
+                        '<summary class="footer-technical-summary">TECH</summary>' +
                         '<div class="footer-technical-body">' +
                             '<span id="footer-commit">Loading commit info...</span>' +
                             '<span id="footer-log-info" class="footer-log-wrap">' +
-                                '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log private/0</span></a>' +
+                                '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log/0</span></a>' +
                                 '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
                                     '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
                                 '</div>' +
                             '</span>' +
+                            (context.admin ? '<span class="footer-note">Admin tooling</span>' : '<span class="footer-note">General information only</span>') +
                         '</div>' +
                     '</details>' +
-                    '<span class="footer-legal-links">' +
-                        '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
-                        '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
-                        '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
-                        '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
-                    '</span>' +
                 '</div>' +
             '</div>';
         document.body.appendChild(footer);
@@ -245,11 +349,10 @@
         var downloadClient = document.getElementById('footer-log-download-client');
 
         if (logLink && popup) {
-            logLink.addEventListener('click', function (e) {
-                e.preventDefault();
-                var wasHidden = popup.hidden;
-                popup.hidden = !wasHidden;
-                if (wasHidden && downloadClient) downloadClient.focus();
+            logLink.addEventListener('click', function (event) {
+                event.preventDefault();
+                popup.hidden = !popup.hidden;
+                if (!popup.hidden && downloadClient) downloadClient.focus();
             });
         }
         if (downloadClient) {
@@ -258,10 +361,10 @@
                 if (popup) popup.hidden = true;
             });
         }
-        document.addEventListener('click', function (e) {
+        document.addEventListener('click', function (event) {
             if (!popup || popup.hidden) return;
             var wrap = document.getElementById('footer-log-info');
-            if (wrap && !wrap.contains(e.target)) popup.hidden = true;
+            if (wrap && !wrap.contains(event.target)) popup.hidden = true;
         });
 
         updateLogLinkText();
@@ -275,28 +378,12 @@
         return String(iso || '');
     }
 
-    function getBadgeClass(status) {
-        if (status === 'In sync') return 'footer-version-badge footer-version-sync';
-        if (status === 'Behind') return 'footer-version-badge footer-version-behind';
-        return 'footer-version-badge footer-version-unknown';
-    }
-
     function renderCommitStatus(el, info) {
-        var badge = '<span id="footer-sync-status" class="' + getBadgeClass(info.status) + '">' + esc(info.status) + '</span>';
         var deployText = info.deploySha
             ? '<a href="https://github.com/' + GITHUB_REPO + '/commit/' + esc(info.deploySha) + '" target="_blank" rel="noopener">deploy ' + esc(info.deployShort) + '</a>'
-            : 'deploy unknown';
-        var latestText = info.latestSha
-            ? '<a href="' + esc(info.latestUrl) + '" target="_blank" rel="noopener">latest ' + esc(info.latestShort) + '</a>'
-            : 'latest unknown';
-        var parts = [badge, deployText, latestText];
-        var siteBuiltLabel = 'Site built: ' + (info.buildTime ? esc(formatDate(info.buildTime)) : 'unknown');
-        var commitDateLabel = 'Commit: ' + (info.commitDate ? esc(formatDate(info.commitDate)) : 'unknown');
-        parts.push(siteBuiltLabel, commitDateLabel);
-        if (info.latestDate) parts.push(esc(formatDate(info.latestDate)));
-        if (info.status === 'Behind') parts.push(info.latestSha ? 'Refresh to update.' : 'Latest commit lookup unavailable.');
-        if (info.status === 'Unknown') parts.push('Set Pages build to npm run build to show deploy version.');
-        el.innerHTML = parts.join(' &middot; ');
+            : 'deploy ?';
+        var buildText = info.buildTime ? ('build ' + esc(formatDate(info.buildTime))) : 'build ?';
+        el.innerHTML = [esc(info.status), deployText, buildText].join(' | ');
     }
 
     function fetchDeployVersion(versionUrl) {
@@ -321,41 +408,191 @@
 
         fetchDeployVersion(versionUrl).then(function (deployVersion) {
             var deploySha = deployVersion && deployVersion.commit ? deployVersion.commit : null;
-            var deployShort = deployVersion && deployVersion.shortCommit ? deployVersion.shortCommit : (deploySha ? deploySha.slice(0, 7) : '');
-            var latestSha = deploySha;
-            var latestUrl = deploySha ? ('https://github.com/' + GITHUB_REPO + '/commit/' + deploySha) : 'https://github.com/' + GITHUB_REPO + '/commits';
-            var status = deploySha ? 'In sync' : 'Unknown';
-            var buildTime = deployVersion && deployVersion.buildTime ? deployVersion.buildTime : null;
-            var commitDate = deployVersion && deployVersion.commitDate ? deployVersion.commitDate : null;
             renderCommitStatus(el, {
-                status: status,
+                status: deploySha ? 'LIVE' : 'UNKNOWN',
                 deploySha: deploySha,
-                deployShort: deployShort,
-                latestSha: latestSha,
-                latestShort: deployShort,
-                latestUrl: latestUrl,
-                latestDate: null,
-                buildTime: buildTime,
-                commitDate: commitDate,
+                deployShort: deployVersion && deployVersion.shortCommit ? deployVersion.shortCommit : (deploySha ? deploySha.slice(0, 7) : ''),
+                buildTime: deployVersion && deployVersion.buildTime ? deployVersion.buildTime : null,
             });
             addSessionLog('info', 'Commit info loaded', {
-                status: status,
+                status: deploySha ? 'LIVE' : 'UNKNOWN',
                 hasDeployVersion: !!deploySha,
-                latestSource: 'deploy-version',
             });
         }).catch(function (err) {
             addSessionLog('error', 'Commit info fetch failed', { message: err && err.message });
             renderCommitStatus(el, {
-                status: 'Unknown',
+                status: 'UNKNOWN',
                 deploySha: null,
                 deployShort: '',
-                latestSha: null,
-                latestShort: '',
-                latestUrl: 'https://github.com/' + GITHUB_REPO + '/commits',
-                latestDate: null,
                 buildTime: null,
-                commitDate: null,
             });
+        });
+    }
+
+    function helpSheetHtml(title, body) {
+        return '' +
+            '<div class="site-help-backdrop" data-help-close></div>' +
+            '<div class="site-help-panel" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+                '<div class="site-help-head">' +
+                    '<strong>' + esc(title) + '</strong>' +
+                    '<button type="button" class="icon-btn secondary" data-help-close aria-label="Close help">x</button>' +
+                '</div>' +
+                '<div class="site-help-body">' + body + '</div>' +
+            '</div>';
+    }
+
+    function ensureHelpSheet() {
+        if (helpSheet) return helpSheet;
+        helpSheet = document.createElement('div');
+        helpSheet.id = 'site-help-sheet';
+        helpSheet.className = 'site-help-sheet';
+        helpSheet.hidden = true;
+        document.body.appendChild(helpSheet);
+        helpSheet.addEventListener('click', function (event) {
+            if (event.target && event.target.closest && event.target.closest('[data-help-close]')) {
+                closeHelpSheet();
+            }
+        });
+        return helpSheet;
+    }
+
+    function openHelpSheet(title, text) {
+        var sheet = ensureHelpSheet();
+        sheet.innerHTML = helpSheetHtml(title, '<p>' + esc(text) + '</p>');
+        sheet.hidden = false;
+        document.body.classList.add('has-help-open');
+    }
+
+    function closeHelpSheet() {
+        var sheet = ensureHelpSheet();
+        sheet.hidden = true;
+        document.body.classList.remove('has-help-open');
+    }
+
+    function pageHelpText(context) {
+        if (context.admin) return 'Use the left rail for admin destinations. Hover or focus controls for field definitions.';
+        if (context.legal) return 'Use the menu for section links. Theme and utility actions remain in the top bar.';
+        return 'Use the left rail for market and pane navigation. Hover or focus short labels for full definitions. Long press on touch devices opens contextual help.';
+    }
+
+    function ensureTooltip() {
+        if (tooltipEl) return tooltipEl;
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'site-tooltip';
+        tooltipEl.className = 'site-tooltip';
+        tooltipEl.hidden = true;
+        document.body.appendChild(tooltipEl);
+        return tooltipEl;
+    }
+
+    function hideTooltip() {
+        window.clearTimeout(tooltipTimer);
+        if (!tooltipEl) return;
+        tooltipEl.hidden = true;
+        tooltipEl.textContent = '';
+    }
+
+    function showTooltipFor(target) {
+        if (!target) return;
+        var text = String(target.getAttribute('data-help') || '').trim();
+        if (!text) return;
+        var tooltip = ensureTooltip();
+        var label = String(target.getAttribute('data-help-label') || '').trim();
+        tooltip.innerHTML = label ? ('<strong>' + esc(label) + '</strong><span>' + esc(text) + '</span>') : ('<span>' + esc(text) + '</span>');
+        tooltip.hidden = false;
+        var rect = target.getBoundingClientRect();
+        var tooltipRect = tooltip.getBoundingClientRect();
+        var top = Math.max(12, rect.top + window.scrollY - tooltipRect.height - 10);
+        var left = Math.min(window.scrollX + window.innerWidth - tooltipRect.width - 12, Math.max(12, rect.left + window.scrollX));
+        tooltip.style.top = top + 'px';
+        tooltip.style.left = left + 'px';
+    }
+
+    function scheduleTooltip(target) {
+        hideTooltip();
+        tooltipTimer = window.setTimeout(function () {
+            showTooltipFor(target);
+        }, TOOLTIP_DELAY_MS);
+    }
+
+    function closestHelpTarget(node) {
+        return node && node.closest ? node.closest('[data-help]') : null;
+    }
+
+    function bindTooltipSystem() {
+        ensureTooltip();
+        ensureHelpSheet();
+
+        document.addEventListener('mouseover', function (event) {
+            var target = closestHelpTarget(event.target);
+            if (!target || window.matchMedia('(hover: none)').matches) return;
+            scheduleTooltip(target);
+        });
+        document.addEventListener('mouseout', function (event) {
+            var target = closestHelpTarget(event.target);
+            if (!target) return;
+            if (!event.relatedTarget || !target.contains(event.relatedTarget)) hideTooltip();
+        });
+        document.addEventListener('focusin', function (event) {
+            var target = closestHelpTarget(event.target);
+            if (target) scheduleTooltip(target);
+        });
+        document.addEventListener('focusout', function (event) {
+            var target = closestHelpTarget(event.target);
+            if (!target) return;
+            hideTooltip();
+        });
+        document.addEventListener('touchstart', function (event) {
+            var target = closestHelpTarget(event.target);
+            window.clearTimeout(longPressTimer);
+            if (!target) return;
+            longPressTimer = window.setTimeout(function () {
+                openHelpSheet(
+                    target.getAttribute('data-help-label') || 'Help',
+                    target.getAttribute('data-help') || ''
+                );
+            }, LONG_PRESS_MS);
+        }, { passive: true });
+        document.addEventListener('touchend', function () {
+            window.clearTimeout(longPressTimer);
+        }, { passive: true });
+        document.addEventListener('touchmove', function () {
+            window.clearTimeout(longPressTimer);
+        }, { passive: true });
+    }
+
+    function setMenuOpen(open) {
+        document.body.classList.toggle('is-nav-open', !!open);
+        var drawer = document.getElementById('site-menu-drawer');
+        if (drawer) drawer.hidden = !open;
+    }
+
+    function bindFrameControls(context) {
+        var refreshBtn = document.getElementById('refresh-site-btn');
+        var helpBtn = document.getElementById('site-help-btn');
+        var menuBtn = document.getElementById('site-menu-toggle');
+        if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
+        if (helpBtn) {
+            helpBtn.addEventListener('click', function () {
+                openHelpSheet(currentPageLabel(context), pageHelpText(context));
+            });
+        }
+        if (menuBtn) {
+            menuBtn.addEventListener('click', function () {
+                setMenuOpen(!document.body.classList.contains('is-nav-open'));
+            });
+        }
+        document.addEventListener('click', function (event) {
+            if (event.target && event.target.closest && event.target.closest('[data-menu-close]')) {
+                setMenuOpen(false);
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                setMenuOpen(false);
+                closeHelpSheet();
+                hideTooltip();
+            }
         });
     }
 
@@ -374,7 +611,13 @@
         systemLogsPublic: false,
     });
 
-    buildNav();
+    var context = getPageContext();
+    buildHeader();
+    if (!context.admin) buildPublicTree(context);
+    buildLegalDrawer(context);
+    buildAdminSidebar(context);
     buildFooter();
+    bindTooltipSystem();
+    bindFrameControls(context);
     loadCommitInfo();
 })();

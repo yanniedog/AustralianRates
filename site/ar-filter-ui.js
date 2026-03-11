@@ -6,7 +6,7 @@
     var els = dom.els || {};
     var DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     var bound = false;
-    var defaultDateStatus = 'Enter dates in YYYY-MM-DD format.';
+    var defaultDateStatus = 'YYYY-MM-DD';
 
     function pad2(value) {
         var num = Number(value);
@@ -42,14 +42,14 @@
 
         var match = raw.match(DATE_RE);
         if (!match) {
-            return { ok: false, empty: false, value: raw, message: 'Enter dates in YYYY-MM-DD format.' };
+            return { ok: false, empty: false, value: raw, message: 'YYYY-MM-DD' };
         }
 
         var year = Number(match[1]);
         var month = Number(match[2]);
         var day = Number(match[3]);
         if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-            return { ok: false, empty: false, value: raw, message: 'Enter dates in YYYY-MM-DD format.' };
+            return { ok: false, empty: false, value: raw, message: 'YYYY-MM-DD' };
         }
 
         var date = new Date(Date.UTC(year, month - 1, day));
@@ -57,7 +57,7 @@
             date.getUTCMonth() === month - 1 &&
             date.getUTCDate() === day;
         if (!sameDay) {
-            return { ok: false, empty: false, value: raw, message: 'Enter a real calendar date.' };
+            return { ok: false, empty: false, value: raw, message: 'Invalid date' };
         }
 
         return {
@@ -129,7 +129,7 @@
             invalidStart = true;
             invalidEnd = true;
             invalidEl = els.filterStartDate;
-            message = 'From date must be on or before To date.';
+            message = 'FROM <= TO';
         }
 
         setDateInvalid(els.filterStartDate, invalidStart);

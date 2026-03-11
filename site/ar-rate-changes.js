@@ -6,8 +6,8 @@
     var config = window.AR.config;
     var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
-    var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
-    var esc = window._arEsc || function (v) { return String(v == null ? '' : v); };
+    var clientLog = utils.clientLog || function () {};
+    var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
     var apiBase = config && config.apiBase ? config.apiBase : '';
 
     function getStatusEl() {
@@ -32,43 +32,27 @@
 
     function ymd(value) {
         var raw = String(value == null ? '' : value).trim();
-        if (!raw) return '-';
-        var m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (m) return m[1] + '/' + m[2] + '/' + m[3];
-        return raw;
+        var match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        return match ? (match[1] + '/' + match[2] + '/' + match[3]) : (raw || '-');
     }
 
     function pct(value) {
         var n = Number(value);
-        if (!Number.isFinite(n)) return '-';
-        return n.toFixed(3) + '%';
+        return Number.isFinite(n) ? n.toFixed(3) + '%' : '-';
     }
 
     function detailText(row) {
         var section = window.AR.section || 'home-loans';
         if (section === 'savings') {
-            return [
-                String(row.account_type || '').trim(),
-                String(row.rate_type || '').trim(),
-                String(row.deposit_tier || '').trim()
-            ].filter(Boolean).join(' · ');
+            return [row.account_type, row.rate_type, row.deposit_tier].filter(Boolean).join(' | ');
         }
         if (section === 'term-deposits') {
-            return [
-                String(row.term_months || '').trim() ? String(row.term_months).trim() + 'm' : '',
-                String(row.deposit_tier || '').trim(),
-                String(row.interest_payment || '').trim()
-            ].filter(Boolean).join(' · ');
+            return [row.term_months ? String(row.term_months) + 'm' : '', row.deposit_tier, row.interest_payment].filter(Boolean).join(' | ');
         }
-        return [
-            String(row.security_purpose || '').trim(),
-            String(row.repayment_type || '').trim(),
-            String(row.lvr_tier || '').trim(),
-            String(row.rate_structure || '').trim()
-        ].filter(Boolean).join(' · ');
+        return [row.security_purpose, row.repayment_type, row.lvr_tier, row.rate_structure].filter(Boolean).join(' | ');
     }
 
-    function changeTone(delta) {
+    function tone(delta) {
         if (!Number.isFinite(delta)) return 'flat';
         if (delta > 0) return 'up';
         if (delta < 0) return 'down';
@@ -78,63 +62,42 @@
     function renderRows(rows) {
         var listEl = getListEl();
         if (!listEl) return;
-        var section = window.AR.section || 'home-loans';
-        var listBaseClass = 'rate-change-list';
-        if (section === 'savings') {
-            listEl.className = listBaseClass + ' section-savings';
-        } else if (section === 'term-deposits') {
-            listEl.className = listBaseClass + ' section-term-deposits';
-        } else {
-            listEl.className = listBaseClass;
-        }
         if (!Array.isArray(rows) || rows.length === 0) {
-            listEl.innerHTML = '<li class="rate-change-item-empty">No rate changes logged yet.</li>';
+            listEl.innerHTML = '<li class="rate-change-item-empty">No data</li>';
             return;
         }
 
-        var html = rows.map(function (row) {
-            var bank = esc(row.bank_name || '');
-            var product = esc(row.product_name || '');
-            var fromRate = pct(row.previous_rate);
-            var toRate = pct(row.new_rate);
-            var date = ymd(row.collection_date || row.changed_at);
-            var detail = esc(detailText(row));
+        listEl.innerHTML = rows.map(function (row) {
             var delta = Number(row.delta_bps);
-            var dirClass = changeTone(delta);
-            var deltaText = Number.isFinite(delta) ? ((delta > 0 ? '+' : '') + delta.toFixed(1) + ' bps') : '';
+            var deltaText = Number.isFinite(delta) ? ((delta > 0 ? '+' : '') + delta.toFixed(1) + 'bps') : '';
             return (
                 '<li class="rate-change-item">' +
                     '<div class="rate-change-main">' +
-                        '<span class="rate-change-date">' + esc(date) + '</span>' +
-                        '<span class="rate-change-bank">' + bank + '</span>' +
-                        (deltaText ? '<span class="rate-change-delta ' + dirClass + '">' + esc(deltaText) + '</span>' : '') +
+                        '<span class="rate-change-date">' + esc(ymd(row.collection_date || row.changed_at)) + '</span>' +
+                        '<span class="rate-change-bank">' + esc(row.bank_name || '-') + '</span>' +
+                        (deltaText ? '<span class="rate-change-delta ' + tone(delta) + '">' + esc(deltaText) + '</span>' : '') +
                     '</div>' +
                     '<div class="rate-change-sub">' +
-                        '<span class="rate-change-product">' + product + '</span>' +
-                        '<span class="rate-change-rates">' + esc(fromRate) + ' to ' + esc(toRate) + '</span>' +
-                        (detail ? '<span class="rate-change-detail">' + detail + '</span>' : '') +
+                        '<span class="rate-change-product">' + esc(row.product_name || '-') + '</span>' +
+                        '<span class="rate-change-rates">' + esc(pct(row.previous_rate)) + ' > ' + esc(pct(row.new_rate)) + '</span>' +
+                        '<span class="rate-change-detail">' + esc(detailText(row) || '-') + '</span>' +
                     '</div>' +
                 '</li>'
             );
         }).join('');
-        listEl.innerHTML = html;
     }
 
     function integrityText(integrity) {
-        if (!integrity || typeof integrity !== 'object') return 'Integrity unknown';
-        if (integrity.ok === true) return 'Integrity OK';
-        var status = String(integrity.status || 'warn').toUpperCase();
-        return 'Integrity ' + status;
+        if (!integrity || typeof integrity !== 'object') return 'INT ?';
+        if (integrity.ok === true) return 'INT OK';
+        return 'INT ' + String(integrity.status || 'WARN').toUpperCase();
     }
 
     function renderHeadline(rows, total, integrity) {
         var headlineEl = getHeadlineEl();
         if (!headlineEl) return;
-        var latestDate = (Array.isArray(rows) && rows.length > 0)
-            ? ymd(rows[0].collection_date || rows[0].changed_at)
-            : 'n/a';
-        var integrityLabel = integrityText(integrity);
-        headlineEl.textContent = latestDate + ' · ' + total + ' changes · ' + integrityLabel;
+        var latestDate = rows && rows.length ? ymd(rows[0].collection_date || rows[0].changed_at) : 'n/a';
+        headlineEl.textContent = latestDate + ' | ' + total + ' | ' + integrityText(integrity);
     }
 
     function renderIntegrityWarning(integrity) {
@@ -143,27 +106,16 @@
         var isStale = !!(integrity && integrity.ok === false);
         if (detailsEl) detailsEl.classList.toggle('is-stale', isStale);
         if (!warningEl) return;
-        if (isStale) {
-            warningEl.hidden = false;
-            warningEl.textContent = 'Integrity warning: ' + String(integrity.summary || 'Potential omissions or mismatches detected.');
-        } else {
-            warningEl.hidden = true;
-            warningEl.textContent = '';
-        }
+        warningEl.hidden = !isStale;
+        warningEl.textContent = isStale ? ('Integrity: ' + String(integrity.summary || 'Warn')) : '';
     }
 
     async function loadRateChanges() {
         var listEl = getListEl();
         var statusEl = getStatusEl();
-        if (!listEl || !statusEl || !apiBase) {
-            clientLog('error', 'RATE_CHANGE_LOG_ABNORMALITY: Missing DOM container or API base', {
-                hasList: !!listEl,
-                hasStatus: !!statusEl,
-                hasApiBase: !!apiBase
-            });
-            return;
-        }
-        if (statusEl) statusEl.textContent = 'Loading changes...';
+        if (!listEl || !statusEl || !apiBase) return;
+
+        statusEl.textContent = 'WAIT';
         try {
             var res = await fetch(apiBase + '/changes?limit=200&offset=0', { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -174,11 +126,9 @@
             renderRows(rows);
             renderHeadline(rows, total, integrity);
             renderIntegrityWarning(integrity);
-            if (statusEl) {
-                statusEl.textContent = 'Showing ' + rows.length + ' recent changes.';
-            }
+            statusEl.textContent = rows.length + ' rows';
         } catch (err) {
-            if (statusEl) statusEl.textContent = 'Change log unavailable right now.';
+            statusEl.textContent = 'ERR';
             renderRows([]);
             renderHeadline([], 0, null);
             renderIntegrityWarning(null);

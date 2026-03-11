@@ -33,10 +33,55 @@ function brightness(rgb) {
     return (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
 }
 
+async function ensureDeepAnalysisOpen(page) {
+    const drawer = page.locator('#deep-analysis-drawer');
+    const drawerCount = await drawer.count().catch(() => 0);
+    if (drawerCount === 0) return false;
+
+    const isOpen = await drawer.evaluate((el) => !!el.open).catch(() => false);
+    if (isOpen) return true;
+
+    const summary = page.locator('#deep-analysis-drawer > summary');
+    if (await summary.isVisible().catch(() => false)) {
+        await summary.scrollIntoViewIfNeeded().catch(() => {});
+        await summary.click().catch(() => {});
+        await page.waitForTimeout(250);
+    }
+
+    const openAfterClick = await drawer.evaluate((el) => !!el.open).catch(() => false);
+    if (openAfterClick) return true;
+
+    await page.evaluate(() => {
+        const el = document.getElementById('deep-analysis-drawer');
+        if (el && el.tagName === 'DETAILS') el.setAttribute('open', '');
+    }).catch(() => {});
+    await page.waitForTimeout(150);
+
+    return await drawer.evaluate((el) => !!el.open).catch(() => false);
+}
+
+async function setUiMode(page, mode) {
+    const desiredMode = String(mode || 'consumer') === 'analyst' ? 'analyst' : 'consumer';
+    const selector = desiredMode === 'analyst' ? '#mode-analyst' : '#mode-consumer';
+    await ensureDeepAnalysisOpen(page);
+
+    const buttonVisible = await page.locator(selector).isVisible().catch(() => false);
+    if (!buttonVisible) return false;
+
+    const alreadyPressed = await page.getAttribute(selector, 'aria-pressed').catch(() => 'false');
+    if (alreadyPressed === 'true') return true;
+
+    await page.locator(selector).scrollIntoViewIfNeeded().catch(() => {});
+    await page.click(selector, { timeout: 10000 }).catch(() => null);
+    await page.waitForTimeout(500);
+
+    return await page.getAttribute(selector, 'aria-pressed').catch(() => 'false') === 'true';
+}
+
 async function openChartWorkspace(page) {
     await page.waitForSelector('#main-content', { timeout: 15000 });
-    await page.click('#mode-analyst');
-    await page.waitForTimeout(500);
+    await ensureDeepAnalysisOpen(page);
+    await setUiMode(page, 'analyst').catch(() => false);
     await page.click('#tab-charts');
     await page.waitForTimeout(400);
 }

@@ -14,9 +14,14 @@
         return chartConfig.formatMetricValue(field, value);
     }
 
+    function isLightTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'light';
+    }
+
     function baseTextStyles() {
+        var light = isLightTheme();
         return {
-            textStyle: { color: '#1f2937', fontFamily: '"SF Pro Text", "Segoe UI", sans-serif' },
+            textStyle: { color: light ? '#1f2937' : '#e7edf4', fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
             animationDuration: 420,
             animationDurationUpdate: 300,
             animationEasing: 'cubicOut',
@@ -24,19 +29,23 @@
     }
 
     function gridStyles() {
+        var light = isLightTheme();
         return {
-            axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.55)' } },
-            axisLabel: { color: '#334155' },
-            splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.24)' } },
+            axisLine: { lineStyle: { color: light ? 'rgba(93, 109, 130, 0.42)' : 'rgba(231, 237, 244, 0.18)' } },
+            axisLabel: { color: light ? '#2f435a' : '#b7c0cb' },
+            splitLine: { lineStyle: { color: light ? 'rgba(93, 109, 130, 0.16)' : 'rgba(231, 237, 244, 0.08)' } },
         };
     }
 
     function tooltipStyles() {
+        var light = isLightTheme();
         return {
-            backgroundColor: '#ffffff',
-            borderColor: 'rgba(37, 99, 235, 0.28)',
-            textStyle: { color: '#0f172a' },
-            extraCssText: 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;',
+            backgroundColor: light ? '#ffffff' : '#11161d',
+            borderColor: light ? 'rgba(37, 99, 235, 0.28)' : 'rgba(79, 141, 253, 0.28)',
+            textStyle: { color: light ? '#0f172a' : '#e7edf4' },
+            extraCssText: light
+                ? 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;'
+                : 'box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24); border-radius: 12px;',
         };
     }
 

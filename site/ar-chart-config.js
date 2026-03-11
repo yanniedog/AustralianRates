@@ -32,9 +32,16 @@
     };
 
     var SECTION_PALETTES = {
-        'home-loans': ['#1259c3', '#0f766e', '#b45309', '#9f1239', '#6b21a8', '#166534'],
-        'savings': ['#166534', '#0f766e', '#1259c3', '#b45309', '#9f1239', '#854d0e'],
-        'term-deposits': ['#b45309', '#1259c3', '#166534', '#7c2d12', '#9f1239', '#6b21a8'],
+        dark: {
+            'home-loans': ['#4f8dfd', '#f0b90b', '#27c27a', '#f97316', '#8b5cf6', '#ef4444'],
+            'savings': ['#27c27a', '#4f8dfd', '#f0b90b', '#14b8a6', '#8b5cf6', '#ef4444'],
+            'term-deposits': ['#f0b90b', '#4f8dfd', '#27c27a', '#f97316', '#8b5cf6', '#ef4444'],
+        },
+        light: {
+            'home-loans': ['#2563eb', '#d89f00', '#0f8a5f', '#ea580c', '#7c3aed', '#dc2626'],
+            'savings': ['#0f8a5f', '#2563eb', '#d89f00', '#0f766e', '#7c3aed', '#dc2626'],
+            'term-deposits': ['#d89f00', '#2563eb', '#0f8a5f', '#ea580c', '#7c3aed', '#dc2626'],
+        }
     };
 
     var DENSITIES = {
@@ -104,7 +111,9 @@
     }
 
     function palette() {
-        return SECTION_PALETTES[section] || SECTION_PALETTES['home-loans'];
+        var theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        var themedPalettes = SECTION_PALETTES[theme] || SECTION_PALETTES.dark;
+        return themedPalettes[section] || themedPalettes['home-loans'];
     }
 
     function rankDirection(field) {

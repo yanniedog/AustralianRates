@@ -5,171 +5,176 @@
     var root = document.getElementById('ar-section-root');
     if (!root) return;
 
+    var esc = window._arEsc || function (value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    };
+
     var BASE_CHART_TYPES = [
-        { value: 'scatter', label: 'Trend lines', selected: true },
-        { value: 'bar', label: 'Ranking bars' },
-        { value: 'box', label: 'Box summary' }
+        { value: 'scatter', label: 'LINE', selected: true },
+        { value: 'bar', label: 'BAR' },
+        { value: 'box', label: 'BOX' }
     ];
+
     var SHARED_ADVANCED_FIELDS = [
         {
             kind: 'select',
             id: 'filter-mode',
-            label: 'Rate mode',
-            title: 'Show all, daily-only, or historical-only rows',
+            code: 'MODE',
+            help: 'Show all rows, daily-only rows, or historical-only rows.',
             options: [
-                { value: 'all', label: 'All', selected: true },
-                { value: 'daily', label: 'Daily only' },
-                { value: 'historical', label: 'Historical only' }
+                { value: 'all', label: 'ALL', selected: true },
+                { value: 'daily', label: 'DAY' },
+                { value: 'historical', label: 'HIST' }
             ]
         },
-        { kind: 'toggle', id: 'filter-include-manual', label: 'Include manual runs', title: 'Show data from manually triggered runs' },
+        {
+            kind: 'toggle',
+            id: 'filter-include-manual',
+            code: 'MAN',
+            help: 'Include manually triggered runs in the result set.'
+        },
         {
             kind: 'select',
             id: 'refresh-interval',
-            label: 'Auto-refresh',
-            title: 'How often to auto-refresh data (minutes, 0 = off)',
+            code: 'AUTO',
+            help: 'Auto-refresh interval in minutes. Off disables background refresh.',
             options: [
-                { value: '0', label: 'Off' },
-                { value: '15', label: '15 min' },
-                { value: '30', label: '30 min' },
-                { value: '60', label: '1 hour', selected: true },
-                { value: '120', label: '2 hours' }
+                { value: '0', label: 'OFF' },
+                { value: '15', label: '15M' },
+                { value: '30', label: '30M' },
+                { value: '60', label: '60M', selected: true },
+                { value: '120', label: '120M' }
             ]
         }
     ];
+
     var SECTION_UI = {
         'home-loans': {
-            eyebrow: 'Home loans',
-            title: 'Find the right mortgage rate for your scenario.',
-            subtitle: 'Daily CDR-backed mortgage pricing arranged to help you narrow the field first, then inspect the evidence only when you need it.',
-            statSecondaryLabel: 'Cash rate',
+            short: 'HL',
+            title: 'Home Loans',
+            ladderTitle: 'Leaders',
+            statSecondaryCode: 'RBA',
             statSecondaryValue: '...',
-            statSecondaryTitle: 'Current RBA official cash rate',
-            aboutText: 'Daily public CDR product data across variable and fixed home loans, owner-occupied and investment lending, and major LVR tiers.',
-            scenarioTitle: 'Set your borrowing scenario',
-            scenarioText: 'Describe the slice you care about once, then use the same scenario across the shortlist, exports, history, and notes.',
-            studioTitle: 'Go deeper only when needed',
-            studioText: 'Stay in the shortlist for quick decisions. Switch into deep analysis when you want pivots, metadata, or product history.',
-            notesTitle: 'Methodology and context',
+            statSecondaryHelp: 'Current RBA cash rate.',
+            notesHeading: 'HL Notes',
+            notesText: 'Rates are sourced from public CDR product feeds and grouped for shortlist-first comparison. Comparison rates, when available, use the standard Australian benchmark of $150,000 over 25 years.',
+            continuityText: 'Series and charts follow canonical product_key identity so one line maps to one tracked product over time.',
             minRatePlaceholder: '5.20',
             maxRatePlaceholder: '7.00',
-            primaryNote: 'These limits apply to the headline rate shown in the shortlist. Comparison-rate filters live in More filters.',
             advancedFields: [
-                { kind: 'select', id: 'filter-security', label: 'Purpose', title: 'Owner-occupied (live in) or investment (rent out)' },
-                { kind: 'select', id: 'filter-repayment', label: 'Repayment', title: 'Principal & Interest (P&I) or Interest Only (IO)' },
-                { kind: 'select', id: 'filter-structure', label: 'Structure', title: 'Variable rate or fixed term (1-5 years)' },
-                { kind: 'select', id: 'filter-lvr', label: 'LVR', title: 'Loan-to-Value Ratio -- how much you borrow vs property value' },
-                { kind: 'select', id: 'filter-feature', label: 'Feature', title: 'Basic (no offset/redraw) or Premium (with offset/redraw)' },
-                { kind: 'number', id: 'filter-min-comparison-rate', label: 'Min comparison', placeholder: '5.40', title: 'Minimum comparison interest rate' },
-                { kind: 'number', id: 'filter-max-comparison-rate', label: 'Max comparison', placeholder: '7.20', title: 'Maximum comparison interest rate' }
+                { kind: 'select', id: 'filter-security', code: 'PURP', help: 'Owner-occupied or investment lending.' },
+                { kind: 'select', id: 'filter-repayment', code: 'REP', help: 'Principal and interest or interest-only repayment.' },
+                { kind: 'select', id: 'filter-structure', code: 'TYPE', help: 'Variable or fixed structure.' },
+                { kind: 'select', id: 'filter-lvr', code: 'LVR', help: 'Loan-to-value ratio tier.' },
+                { kind: 'select', id: 'filter-feature', code: 'FEAT', help: 'Feature set such as offset or redraw.' },
+                { kind: 'number', id: 'filter-min-comparison-rate', code: 'CMIN', placeholder: '5.40', help: 'Minimum comparison rate.' },
+                { kind: 'number', id: 'filter-max-comparison-rate', code: 'CMAX', placeholder: '7.20', help: 'Maximum comparison rate.' }
             ],
             chartMetrics: [
-                { value: 'interest_rate', label: 'Interest rate', selected: true },
-                { value: 'comparison_rate', label: 'Comparison rate' },
-                { value: 'annual_fee', label: 'Annual fee' },
-                { value: 'rba_cash_rate', label: 'Cash rate' }
+                { value: 'interest_rate', label: 'RATE', selected: true },
+                { value: 'comparison_rate', label: 'COMP' },
+                { value: 'annual_fee', label: 'FEE' },
+                { value: 'rba_cash_rate', label: 'RBA' }
             ],
             chartX: [
-                { value: 'collection_date', label: 'Date', selected: true },
-                { value: 'bank_name', label: 'Bank' },
-                { value: 'rate_structure', label: 'Structure' },
+                { value: 'collection_date', label: 'DATE', selected: true },
+                { value: 'bank_name', label: 'BANK' },
+                { value: 'rate_structure', label: 'TYPE' },
                 { value: 'lvr_tier', label: 'LVR' },
-                { value: 'feature_set', label: 'Feature' }
+                { value: 'feature_set', label: 'FEAT' }
             ],
             chartGroups: [
-                { value: '', label: 'None' },
-                { value: 'product_key', label: 'Product', selected: true },
-                { value: 'bank_name', label: 'Bank' },
-                { value: 'security_purpose', label: 'Purpose' },
-                { value: 'rate_structure', label: 'Structure' },
+                { value: '', label: 'NONE' },
+                { value: 'product_key', label: 'PK', selected: true },
+                { value: 'bank_name', label: 'BANK' },
+                { value: 'security_purpose', label: 'PURP' },
+                { value: 'rate_structure', label: 'TYPE' },
                 { value: 'lvr_tier', label: 'LVR' },
-                { value: 'feature_set', label: 'Feature' },
-                { value: 'repayment_type', label: 'Repayment' }
-            ],
-            comparisonText: 'Where lenders disclose them, comparison rates reflect the standard Australian benchmark of $150,000 over 25 years. Your own cost can differ materially.'
+                { value: 'feature_set', label: 'FEAT' },
+                { value: 'repayment_type', label: 'REP' }
+            ]
         },
         'savings': {
-            eyebrow: 'Savings',
-            title: 'Find the strongest savings rate for your rules.',
-            subtitle: 'Daily CDR-backed deposit pricing arranged to surface the leaders quickly, then unpack rate conditions and history only when needed.',
-            statSecondaryLabel: 'Series',
-            statSecondaryValue: 'product_key continuity',
-            statSecondaryTitle: 'Series continuity',
-            aboutText: 'Daily public CDR savings data covering base, bonus, and introductory rates across major institutions and deposit tiers.',
-            scenarioTitle: 'Set your saving scenario',
-            scenarioText: 'Pick the account type, rate rules, and date window you care about. The shortlist and history views will stay anchored to that slice.',
-            studioTitle: 'Inspect the conditions behind the rate',
-            studioText: 'Use deep analysis when you want the full product metadata, pivots, and historical series behind the shortlist.',
-            notesTitle: 'Context and continuity',
+            short: 'SAV',
+            title: 'Savings',
+            ladderTitle: 'Yield',
+            statSecondaryCode: 'PK',
+            statSecondaryValue: 'CONT',
+            statSecondaryHelp: 'Series continuity by canonical product_key.',
+            notesHeading: 'SAV Notes',
+            notesText: 'Rates are sourced from public CDR savings feeds and grouped by account type, rate type, and deposit tier. Bonus and introductory conditions can materially change the observed rate.',
+            continuityText: 'Series and charts follow canonical product_key identity so one line maps to one tracked savings product over time.',
             minRatePlaceholder: '1.50',
             maxRatePlaceholder: '6.00',
-            primaryNote: 'These limits apply to the headline rate shown in the shortlist.',
             advancedFields: [
-                { kind: 'select', id: 'filter-account-type', label: 'Account type', title: 'Savings, transaction, or at-call' },
-                { kind: 'select', id: 'filter-rate-type', label: 'Rate type', title: 'Base, bonus, introductory, or bundle rate' },
-                { kind: 'select', id: 'filter-deposit-tier', label: 'Deposit tier', title: 'Balance range tier' }
+                { kind: 'select', id: 'filter-account-type', code: 'ACCT', help: 'Savings, transaction, or at-call account type.' },
+                { kind: 'select', id: 'filter-rate-type', code: 'RATE', help: 'Base, bonus, introductory, or bundle rate.' },
+                { kind: 'select', id: 'filter-deposit-tier', code: 'TIER', help: 'Balance tier for the observed rate.' }
             ],
             chartMetrics: [
-                { value: 'interest_rate', label: 'Interest rate', selected: true },
-                { value: 'monthly_fee', label: 'Monthly fee' }
+                { value: 'interest_rate', label: 'RATE', selected: true },
+                { value: 'monthly_fee', label: 'FEE' }
             ],
             chartX: [
-                { value: 'collection_date', label: 'Date', selected: true },
-                { value: 'bank_name', label: 'Bank' },
-                { value: 'account_type', label: 'Account type' },
-                { value: 'rate_type', label: 'Rate type' },
-                { value: 'deposit_tier', label: 'Deposit tier' }
+                { value: 'collection_date', label: 'DATE', selected: true },
+                { value: 'bank_name', label: 'BANK' },
+                { value: 'account_type', label: 'ACCT' },
+                { value: 'rate_type', label: 'RATE' },
+                { value: 'deposit_tier', label: 'TIER' }
             ],
             chartGroups: [
-                { value: '', label: 'None' },
-                { value: 'product_key', label: 'Product', selected: true },
-                { value: 'bank_name', label: 'Bank' },
-                { value: 'account_type', label: 'Account type' },
-                { value: 'rate_type', label: 'Rate type' },
-                { value: 'deposit_tier', label: 'Deposit tier' }
-            ],
-            comparisonText: 'Historical charts stay anchored to the canonical product_key so each line represents one tracked savings product over time.'
+                { value: '', label: 'NONE' },
+                { value: 'product_key', label: 'PK', selected: true },
+                { value: 'bank_name', label: 'BANK' },
+                { value: 'account_type', label: 'ACCT' },
+                { value: 'rate_type', label: 'RATE' },
+                { value: 'deposit_tier', label: 'TIER' }
+            ]
         },
         'term-deposits': {
-            eyebrow: 'Term deposits',
-            title: 'Find the best term deposit for your term and balance.',
-            subtitle: 'Daily CDR-backed term pricing arranged to help you narrow the choice first, then inspect terms, payments, and product history.',
-            statSecondaryLabel: 'Series',
-            statSecondaryValue: 'product_key continuity',
-            statSecondaryTitle: 'Series continuity',
-            aboutText: 'Daily public CDR term-deposit data across major institutions, with rates covering terms from one month through five years.',
-            scenarioTitle: 'Set your deposit scenario',
-            scenarioText: 'Choose the term, balance tier, and payment setup you care about, then compare current leaders before diving into detail.',
-            studioTitle: 'Open the analysis studio when you need the detail',
-            studioText: 'The shortlist stays simple. Deep analysis opens the full table, pivots, and product-level trend views for the same slice.',
-            notesTitle: 'Context and continuity',
+            short: 'TD',
+            title: 'Term Deposits',
+            ladderTitle: 'Yield',
+            statSecondaryCode: 'PK',
+            statSecondaryValue: 'CONT',
+            statSecondaryHelp: 'Series continuity by canonical product_key.',
+            notesHeading: 'TD Notes',
+            notesText: 'Rates are sourced from public CDR term deposit feeds and grouped by term, deposit tier, and payment frequency. Maturity, rollover, and payment rules should be verified with the institution.',
+            continuityText: 'Series and charts follow canonical product_key identity so one line maps to one tracked term-deposit product over time.',
             minRatePlaceholder: '2.00',
             maxRatePlaceholder: '6.00',
-            primaryNote: 'These limits apply to the headline rate shown in the shortlist.',
             advancedFields: [
-                { kind: 'select', id: 'filter-term-months', label: 'Term', title: 'Term length in months' },
-                { kind: 'select', id: 'filter-deposit-tier', label: 'Deposit tier', title: 'Minimum deposit range' },
-                { kind: 'select', id: 'filter-interest-payment', label: 'Payment', title: 'Interest payment frequency' }
+                { kind: 'select', id: 'filter-term-months', code: 'TERM', help: 'Term length in months.' },
+                { kind: 'select', id: 'filter-deposit-tier', code: 'TIER', help: 'Minimum deposit tier.' },
+                { kind: 'select', id: 'filter-interest-payment', code: 'PAY', help: 'Interest payment frequency.' }
             ],
-            chartMetrics: [{ value: 'interest_rate', label: 'Interest rate', selected: true }],
+            chartMetrics: [{ value: 'interest_rate', label: 'RATE', selected: true }],
             chartX: [
-                { value: 'collection_date', label: 'Date', selected: true },
-                { value: 'bank_name', label: 'Bank' },
-                { value: 'term_months', label: 'Term (months)' },
-                { value: 'deposit_tier', label: 'Deposit tier' },
-                { value: 'interest_payment', label: 'Payment' }
+                { value: 'collection_date', label: 'DATE', selected: true },
+                { value: 'bank_name', label: 'BANK' },
+                { value: 'term_months', label: 'TERM' },
+                { value: 'deposit_tier', label: 'TIER' },
+                { value: 'interest_payment', label: 'PAY' }
             ],
             chartGroups: [
-                { value: '', label: 'None' },
-                { value: 'product_key', label: 'Product', selected: true },
-                { value: 'bank_name', label: 'Bank' },
-                { value: 'term_months', label: 'Term' },
-                { value: 'deposit_tier', label: 'Deposit tier' },
-                { value: 'interest_payment', label: 'Payment' }
-            ],
-            comparisonText: 'Historical charts stay anchored to the canonical product_key so each line represents one tracked term-deposit product over time.'
+                { value: '', label: 'NONE' },
+                { value: 'product_key', label: 'PK', selected: true },
+                { value: 'bank_name', label: 'BANK' },
+                { value: 'term_months', label: 'TERM' },
+                { value: 'deposit_tier', label: 'TIER' },
+                { value: 'interest_payment', label: 'PAY' }
+            ]
         }
     };
+
+    function helpAttrs(label, help) {
+        if (!help) return '';
+        return ' data-help="' + esc(help) + '" data-help-label="' + esc(label) + '"';
+    }
 
     function optionsMarkup(options) {
         return (options || []).map(function (option) {
@@ -177,78 +182,258 @@
         }).join('');
     }
 
-    function advancedFieldMarkup(field) {
+    function fieldMarkup(field) {
+        var attrs = helpAttrs(field.code, field.help);
         if (field.kind === 'toggle') {
-            return '<label class="toggle-label" title="' + field.title + '"><input id="' + field.id + '" type="checkbox"> ' + field.label + '</label>';
+            return '' +
+                '<label class="terminal-field terminal-field-toggle"' + attrs + '>' +
+                    '<span class="field-code">' + field.code + '</span>' +
+                    '<input id="' + field.id + '" type="checkbox">' +
+                '</label>';
         }
         if (field.kind === 'number') {
-            return '<label title="' + field.title + '">' + field.label + '<input id="' + field.id + '" type="number" step="0.001" min="0" placeholder="' + field.placeholder + '"></label>';
+            return '' +
+                '<label class="terminal-field"' + attrs + '>' +
+                    '<span class="field-code">' + field.code + '</span>' +
+                    '<input id="' + field.id + '" type="number" step="0.001" min="0" placeholder="' + field.placeholder + '">' +
+                '</label>';
         }
-        return '<label title="' + field.title + '">' + field.label + '<select id="' + field.id + '">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select></label>';
+        return '' +
+            '<label class="terminal-field"' + attrs + '>' +
+                '<span class="field-code">' + field.code + '</span>' +
+                '<select id="' + field.id + '">' + optionsMarkup(field.options || [{ value: '', label: 'ALL', selected: true }]) + '</select>' +
+            '</label>';
     }
 
-    function quickCompareMarkup() {
-        return '<section class="panel insight-card quick-compare" aria-label="Current leaders"><div class="section-heading"><p class="section-kicker">Decision snapshot</p><h2>Start with the leaders</h2><p class="section-note">A compact view of the current slice before you open the full shortlist.</p></div><div id="quick-compare-cards" class="quick-compare-cards"></div></section>';
+    function chartQuestionMarkup() {
+        return '' +
+            '<div class="chart-question-row" role="group" aria-label="Chart view">' +
+                '<button class="chart-preset is-active" data-chart-view="lenders" type="button" aria-pressed="true" data-help="Best current product by lender for the active slice." data-help-label="NOW">NOW</button>' +
+                '<button class="chart-preset" data-chart-view="surface" type="button" aria-pressed="false" data-help="Rate movement over time for the active slice." data-help-label="MOVE">MOVE</button>' +
+                '<button class="chart-preset" data-chart-view="compare" type="button" aria-pressed="false" data-help="Track only the spotlight shortlist series." data-help-label="CMP">CMP</button>' +
+                '<button class="chart-preset" data-chart-view="distribution" type="button" aria-pressed="false" data-help="Distribution summary for the current slice." data-help-label="BOX">BOX</button>' +
+            '</div>';
     }
 
-    function executiveSummaryMarkup(ui) {
-        if (section !== 'home-loans') {
-            return '<section class="panel insight-card continuity-card" aria-label="Series continuity"><div class="section-heading"><p class="section-kicker">Series integrity</p><h2>Longitudinal continuity</h2><p class="comparison-rate-disclosure">' + ui.comparisonText + '</p></div></section>';
-        }
-        return '<section class="panel insight-card executive-summary" id="executive-summary-panel" aria-label="Executive summary"><div class="section-heading"><p class="section-kicker">What changed</p><h2>30-day market summary</h2><p class="section-note" id="executive-summary-status">Loading summary...</p></div><div id="executive-summary-sections" class="executive-summary-sections"></div></section>';
-    }
-
-    function rateChangeMarkup() {
-        return '<section class="panel insight-card rate-change-log" aria-label="Rate change log"><details id="rate-change-details" class="rate-change-details"><summary id="rate-change-summary" class="rate-change-summary"><span class="rate-change-summary-title">Recent changes</span><span id="rate-change-headline" class="rate-change-headline">Loading changes...</span></summary><p id="rate-change-warning" class="rate-change-warning" hidden></p><p id="rate-change-status" class="hint">Loading changes...</p><ul id="rate-change-list" class="rate-change-list"><li class="rate-change-item-empty">Loading...</li></ul></details></section>';
-    }
-
-    function chartControlMarkup(ui) {
-        return [
-            '<div class="chart-question-row" role="group" aria-label="Chart questions">',
-            '<button class="chart-preset" data-chart-view="lenders" type="button" aria-pressed="true">Who leads now</button>',
-            '<button class="chart-preset" data-chart-view="surface" type="button" aria-pressed="false">What changed over time</button>',
-            '<button class="chart-preset" data-chart-view="compare" type="button" aria-pressed="false">Track a shortlist</button>',
-            '<button class="chart-preset" data-chart-view="distribution" type="button" aria-pressed="false">See the spread</button>',
-            '</div>',
-            '<div class="chart-controls">',
-            '<label>Metric<select id="chart-y">' + optionsMarkup(ui.chartMetrics) + '</select></label>',
-            '<label>Density<select id="chart-series-limit"><option value="compact">Compact</option><option value="standard" selected>Standard</option><option value="expanded">Expanded</option></select></label>',
-            '<div class="chart-actions"><button id="draw-chart" type="button" class="small">Render chart</button></div>',
-            '</div>',
-            '<details class="chart-advanced"><summary>Custom controls</summary><div class="chart-advanced-grid"><label>X axis<select id="chart-x">' + optionsMarkup(ui.chartX) + '</select></label><label>Group by<select id="chart-group">' + optionsMarkup(ui.chartGroups) + '</select></label><label>Chart type<select id="chart-type">' + optionsMarkup(BASE_CHART_TYPES) + '</select></label></div></details>'
-        ].join('');
-    }
-
-    function uiScaleMarkup() {
-        return '<div class="ui-scale-control" role="group" aria-label="Adjust reading comfort"><span class="ui-scale-label">Reading comfort</span><div class="ui-scale-actions"><button id="ui-scale-down" class="small secondary" type="button" aria-label="Reduce reading comfort">A-</button><input id="ui-scale-range" type="range" min="85" max="130" step="5" value="100" aria-label="Reading comfort"><button id="ui-scale-up" class="small secondary" type="button" aria-label="Increase reading comfort">A+</button></div><div class="ui-scale-meta"><output id="ui-scale-value" for="ui-scale-range" aria-live="polite">100%</output><button id="ui-scale-reset" class="small secondary" type="button">Reset</button></div></div>';
-    }
-
-    function marketNotesMarkup(ui) {
-        return '<div class="market-notes-content-grid"><section class="market-notes-section" aria-label="How to use the workspace"><h2>' + ui.notesTitle + '</h2><p>The shortlist is designed for fast comparison first. Deep analysis reveals pivots, charts, and extra metadata only when you want them.</p></section><section class="market-notes-section" aria-label="Disclosure"><h2>' + (section === 'home-loans' ? 'Comparison rates' : 'Series continuity') + '</h2><p id="comparison-rate-disclosure" class="comparison-rate-disclosure">' + ui.comparisonText + '</p></section></div>';
-    }
-
-    function explorerPanelMarkup() {
-        return '<section id="panel-explorer" class="tab-panel active shortlist-panel" role="tabpanel" aria-labelledby="tab-explorer"><div class="panel panel-wide results-panel"><div class="results-intro"><div class="results-intro-copy"><p class="explorer-overview-kicker">Decision shortlist</p><h2 id="explorer-overview-title" class="explorer-overview-title">Loading the current rate table...</h2><p id="explorer-overview-text" class="explorer-overview-text">Preparing the first shortlist.</p></div><div class="explorer-overview-meta"><span id="explorer-overview-status" class="explorer-overview-pill is-loading">Loading</span></div></div><div class="explorer-toolbar"><button id="table-settings-btn" class="table-settings-btn" type="button" title="Table settings" aria-label="Table settings" aria-expanded="false">&#9881;</button><div id="table-settings-popover" class="table-settings-popover" hidden></div></div><details class="panel rate-table-collapsible" id="rate-table-details" open><summary class="rate-table-toggle" aria-label="Show or hide rate table">Rate table</summary><div id="rate-table"></div></details></div></section>';
-    }
-
-    function analysisDrawerMarkup(ui) {
-        return '<details class="panel deep-analysis-drawer" id="deep-analysis-drawer"><summary class="deep-analysis-summary"><div><p class="section-kicker">Deep analysis</p><h2>' + ui.studioTitle + '</h2></div><p class="section-note">' + ui.studioText + '</p></summary><div class="deep-analysis-body"><section class="panel mode-panel" aria-label="Depth toggle"><div class="mode-switch" role="group" aria-label="Select workspace depth"><button id="mode-consumer" class="mode-btn active" type="button" aria-pressed="true">Shortlist</button><button id="mode-analyst" class="mode-btn" type="button" aria-pressed="false">Deep analysis</button></div><p class="mode-note">Rates stay visible above. Open Pivot or Charts only when you need the extra surface.</p></section><nav class="tabs" role="tablist" aria-label="Analysis views"><button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button">Rates</button><button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button">Pivot</button><button id="tab-charts" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-charts" type="button">Charts</button></nav><p class="analysis-drawer-note">Choose Pivot or Charts to expand the analysis studio for the current scenario.</p><section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden><div class="panel panel-wide"><div class="pivot-controls"><button id="load-pivot" type="button" class="small">Load pivot data</button><span id="pivot-status" class="hint">Define the scenario, then load the pivot view.</span></div><div id="pivot-output"></div></div></section><section id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" hidden><div class="panel panel-wide"><div class="chart-shell"><div class="chart-hero"><div class="chart-hero-copy"><p class="chart-kicker">Chart answers</p><h2>See who leads, what moved, and which product is worth following.</h2><p class="chart-hero-note">Start with the question row, then open custom controls only if you need a different cut of the same scenario.</p></div><div class="chart-meta"><p id="chart-guidance" class="chart-guidance">Who leads now ranks the best current product for each lender in the current slice.</p><div id="chart-summary" class="chart-summary" aria-live="polite"><span class="chart-summary-pill">Awaiting first render</span></div></div></div>' + chartControlMarkup(ui) + '<div class="chart-canvas-shell"><div class="chart-main-stage"><div id="chart-output" aria-label="Interactive chart"></div><p id="chart-status" class="hint">Choose a question, then render the chart.</p></div><aside class="chart-series-rail" aria-label="Visible chart series"><div class="chart-series-rail-header"><div><p class="chart-series-kicker">Spotlight</p><h3>Shortlist and evidence</h3></div><p id="chart-series-note" class="chart-series-note">Draw a chart to activate the analysis surface.</p></div><div id="chart-point-details" class="chart-point-details" aria-live="polite"></div><div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div><div id="chart-series-list" class="chart-series-list"><p class="chart-series-empty">Visible products and selected comparison lines will appear here.</p></div></aside></div><div id="chart-data-summary" class="chart-data-summary" aria-live="polite"><p class="chart-data-summary-empty">Draw a chart to populate the summary table.</p></div></div></div></section></div></details>';
+    function notesMarkup(ui) {
+        return '' +
+            '<details class="panel terminal-notes" id="notes">' +
+                '<summary class="terminal-panel-head" data-help="Open methodology and disclosure notes." data-help-label="NTS">' +
+                    '<span class="panel-code">NTS</span>' +
+                    '<strong>' + esc(ui.notesHeading) + '</strong>' +
+                '</summary>' +
+                '<div class="terminal-notes-body">' +
+                    '<p>' + esc(ui.notesText) + '</p>' +
+                    '<p id="comparison-rate-disclosure">' + esc(ui.continuityText) + '</p>' +
+                '</div>' +
+            '</details>';
     }
 
     function render(ui) {
         root.innerHTML = [
-            '<section class="page-intro">',
-            '<header class="hero panel"><div class="hero-copy"><p class="eyebrow">' + ui.eyebrow + '</p><h1>' + ui.title + '</h1><p class="subtitle">' + ui.subtitle + '</p><div class="hero-actions" role="group" aria-label="Primary actions"><button id="hero-jump-rates" type="button">See the shortlist</button><button id="hero-open-charts" class="secondary" type="button">Open deep analysis</button></div><p class="hero-trust-line">Daily public CDR data. No signup required. CSV, XLS, and JSON exports.</p></div><div class="hero-aside"><div class="hero-stats" id="hero-stats"><div class="hero-stat" id="stat-updated" title="When rates were last collected"><span class="hero-stat-label">Updated</span><strong class="hero-stat-value">...</strong></div><div class="hero-stat" id="stat-cash-rate" title="' + ui.statSecondaryTitle + '"><span class="hero-stat-label">' + ui.statSecondaryLabel + '</span><strong class="hero-stat-value">' + ui.statSecondaryValue + '</strong></div><div class="hero-stat" id="stat-records" title="Total rate records in database"><span class="hero-stat-label">Records</span><strong class="hero-stat-value">...</strong></div></div><aside class="hero-guide" aria-label="How to use the workspace"><p class="hero-guide-kicker">How it works</p><ol class="hero-guide-list"><li>Describe your scenario once.</li><li>Read the shortlist first.</li><li>Open deep analysis only when you need evidence.</li></ol><p class="hero-guide-note">The same filters drive the shortlist, exports, charts, and notes.</p></aside></div></header>',
-            '<details class="panel seo-summary"><summary>About this data</summary><p>' + ui.aboutText + '</p></details>',
-            '</section>',
-            '<section class="insight-band" aria-label="Market snapshot">',
-            quickCompareMarkup(),
-            executiveSummaryMarkup(ui),
-            rateChangeMarkup(),
-            '</section>',
-            '<section class="workspace scenario-surface workspace-rail" aria-label="Scenario builder"><div class="section-heading section-heading-inline"><div><p class="section-kicker">Set the scenario</p><h2>' + ui.scenarioTitle + '</h2></div><p class="section-note">' + ui.scenarioText + '</p></div><section class="panel panel-wide scenario-builder"><div class="filter-primary-group"><label>Banks<span class="filter-bank-tools"><input id="filter-bank-search" type="search" placeholder="Search banks" aria-describedby="filter-bank-help"><button id="filter-bank-clear" class="small secondary filter-bank-clear" type="button">All banks</button></span><select id="filter-bank" multiple size="4" aria-describedby="filter-bank-help"></select><span id="filter-bank-help" class="filter-helper">Search to narrow the list or use All banks to clear your selection.</span></label><div class="filter-range"><label>Min headline rate<input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="' + ui.minRatePlaceholder + '" aria-describedby="primary-rate-help"></label><label>Max headline rate<input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="' + ui.maxRatePlaceholder + '" aria-describedby="primary-rate-help"></label></div><label>From<input id="filter-start-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" aria-describedby="filter-date-status"></label><label>To<input id="filter-end-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" aria-describedby="filter-date-status"></label></div><p id="primary-rate-help" class="filter-helper filter-primary-note">' + ui.primaryNote + '</p><div class="date-quick-actions" role="group" aria-label="Quick date ranges"><button class="small secondary date-quick-btn" type="button" data-date-range="7">Last 7 days</button><button class="small secondary date-quick-btn" type="button" data-date-range="30">Last 30 days</button><button class="small secondary date-quick-btn" type="button" data-date-range="all">All history</button></div><p id="filter-date-status" class="filter-helper input-helper" aria-live="polite">Enter dates in YYYY-MM-DD format.</p><div class="filter-primary-actions"><div class="filter-primary-actions-main"><button id="apply-filters" class="small" type="button">Refresh shortlist</button><button id="reset-filters" class="small secondary" type="button">Reset</button></div><div class="filter-primary-actions-meta"><label for="download-format" class="download-label">Download</label><select id="download-format" class="small" title="Download current table as CSV, XLS or JSON" aria-label="Download table format"><option value="">Choose format</option><option value="csv">CSV</option><option value="xls">XLS</option><option value="json">JSON</option></select><span id="last-refreshed" class="hint"></span></div></div><div class="filter-state-row"><span id="filter-dirty-indicator" class="filter-dirty-indicator">Filters applied</span><div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div></div><details class="filters filters-collapsible" id="filter-bar"><summary class="filters-toggle" aria-label="Show or hide secondary filters">More filters</summary><div class="filters-grid">' + ui.advancedFields.concat(SHARED_ADVANCED_FIELDS).map(advancedFieldMarkup).join('') + '</div></details></section></section>',
-            '<section class="workspace workspace-stack decision-surface" aria-label="Decision workspace"><section class="panel workspace-summary" id="workspace-summary-panel" aria-live="polite"><div class="workspace-summary-top"><div class="workspace-summary-main"><p class="workspace-summary-kicker">Shortlist snapshot</p><h2 id="workspace-summary-title" class="workspace-summary-title">Loading the current shortlist...</h2><p id="workspace-summary-text" class="workspace-summary-text">Preparing the active slice and decision surfaces.</p></div><div class="workspace-summary-actions"><button id="workspace-focus-filters" class="small secondary" type="button">Focus scenario</button><button id="workspace-copy-link" class="small secondary" type="button">Copy current view</button>' + uiScaleMarkup() + '</div></div><div id="workspace-summary-pills" class="workspace-summary-pills"></div></section>' + explorerPanelMarkup() + analysisDrawerMarkup(ui) + '</section>',
-            '<section class="decision-notes"><details class="panel market-notes" id="market-notes"><summary class="market-notes-summary">Context and disclosures</summary>' + marketNotesMarkup(ui) + '</details></section>'
+            '<section class="market-terminal" aria-label="' + esc(ui.title) + ' workspace">',
+                '<aside class="terminal-column terminal-column-left">',
+                    '<section class="panel terminal-panel terminal-nav-panel">',
+                        '<div class="terminal-panel-head">',
+                            '<span class="panel-code">NAV</span>',
+                            '<strong>' + esc(ui.short) + '</strong>',
+                        '</div>',
+                        '<div id="market-nav-tree" class="market-nav-tree" aria-label="Market navigation"></div>',
+                    '</section>',
+                    '<section id="scenario" class="panel terminal-panel terminal-filter-panel">',
+                        '<div class="terminal-panel-head">',
+                            '<span class="panel-code">SCN</span>',
+                            '<strong>Slice</strong>',
+                        '</div>',
+                        '<div class="terminal-filter-grid terminal-filter-grid-primary">',
+                            '<label class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="BANK">',
+                                '<span class="field-code">BANK</span>',
+                                '<div class="terminal-inline-inputs">',
+                                    '<input id="filter-bank-search" type="search" placeholder="Bank">',
+                                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button">ALL</button>',
+                                '</div>',
+                                '<select id="filter-bank" multiple size="5"></select>',
+                            '</label>',
+                            '<label class="terminal-field" data-help="Minimum visible headline rate." data-help-label="MIN">',
+                                '<span class="field-code">MIN</span>',
+                                '<input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="' + ui.minRatePlaceholder + '">' +
+                            '</label>',
+                            '<label class="terminal-field" data-help="Maximum visible headline rate." data-help-label="MAX">',
+                                '<span class="field-code">MAX</span>',
+                                '<input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="' + ui.maxRatePlaceholder + '">' +
+                            '</label>',
+                            '<label class="terminal-field" data-help="Start date in YYYY-MM-DD format." data-help-label="FROM">',
+                                '<span class="field-code">FROM</span>',
+                                '<input id="filter-start-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD">' +
+                            '</label>',
+                            '<label class="terminal-field" data-help="End date in YYYY-MM-DD format." data-help-label="TO">',
+                                '<span class="field-code">TO</span>',
+                                '<input id="filter-end-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD">' +
+                            '</label>',
+                        '</div>',
+                        '<p id="filter-date-status" class="field-help">YYYY-MM-DD</p>',
+                        '<div class="terminal-action-row">',
+                            '<button id="apply-filters" class="primary" type="button" data-help="Refresh the current slice across the dashboard." data-help-label="APPLY">RUN</button>',
+                            '<button id="reset-filters" class="secondary" type="button" data-help="Reset the current slice to defaults." data-help-label="RESET">RST</button>',
+                            '<button id="workspace-copy-link" class="secondary" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="COPY">LINK</button>',
+                        '</div>',
+                        '<div class="terminal-filter-state-row">',
+                            '<span id="filter-dirty-indicator" class="pill">0</span>',
+                            '<div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>',
+                        '</div>',
+                        '<details class="terminal-more-filters" id="filter-bar">',
+                            '<summary class="terminal-more-summary" data-help="Open secondary filters and refresh controls." data-help-label="MORE">MORE</summary>',
+                            '<div class="terminal-filter-grid terminal-filter-grid-advanced">',
+                                ui.advancedFields.concat(SHARED_ADVANCED_FIELDS).map(fieldMarkup).join(''),
+                            '</div>',
+                        '</details>',
+                        '<div id="export" class="terminal-export-row">',
+                            '<label class="terminal-field" data-help="Export the current table view." data-help-label="DL">',
+                                '<span class="field-code">DL</span>',
+                                '<select id="download-format" class="small" aria-label="Download format">',
+                                    '<option value="">-</option>',
+                                    '<option value="csv">CSV</option>',
+                                    '<option value="xls">XLS</option>',
+                                    '<option value="json">JSON</option>',
+                                '</select>',
+                            '</label>',
+                            '<span id="last-refreshed" class="hint"></span>',
+                        '</div>',
+                    '</section>',
+                    notesMarkup(ui),
+                '</aside>',
+                '<section class="terminal-column terminal-column-center">',
+                    '<section id="chart" class="panel terminal-panel terminal-stage-panel">',
+                        '<div class="terminal-stage-top">',
+                            '<div class="terminal-panel-head">',
+                                '<span class="panel-code">CHT</span>',
+                                '<strong>' + esc(ui.short) + '</strong>',
+                            '</div>',
+                            '<div class="chart-guidance-wrap">',
+                                '<span id="chart-guidance" class="hint">READY</span>',
+                                '<div id="chart-summary" class="chart-summary" aria-live="polite"><span class="pill">WAIT</span></div>',
+                            '</div>',
+                        '</div>',
+                        chartQuestionMarkup(),
+                        '<div class="terminal-chart-controls">',
+                            '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y">',
+                                '<span class="field-code">Y</span>',
+                                '<select id="chart-y">' + optionsMarkup(ui.chartMetrics) + '</select>',
+                            '</label>',
+                            '<label class="terminal-field" data-help="Axis or category shown on the X axis." data-help-label="X">',
+                                '<span class="field-code">X</span>',
+                                '<select id="chart-x">' + optionsMarkup(ui.chartX) + '</select>',
+                            '</label>',
+                            '<label class="terminal-field" data-help="Series grouping field." data-help-label="BY">',
+                                '<span class="field-code">BY</span>',
+                                '<select id="chart-group">' + optionsMarkup(ui.chartGroups) + '</select>',
+                            '</label>',
+                            '<label class="terminal-field" data-help="Visible series density." data-help-label="DENS">',
+                                '<span class="field-code">DENS</span>',
+                                '<select id="chart-series-limit"><option value="compact">CMP</option><option value="standard" selected>STD</option><option value="expanded">EXP</option></select>',
+                            '</label>',
+                            '<label class="terminal-field" data-help="Chart renderer type." data-help-label="TYPE">',
+                                '<span class="field-code">TYPE</span>',
+                                '<select id="chart-type">' + optionsMarkup(BASE_CHART_TYPES) + '</select>',
+                            '</label>',
+                            '<button id="draw-chart" type="button" class="primary" data-help="Render the chart for the current slice." data-help-label="DRAW">DRAW</button>',
+                        '</div>',
+                        '<div class="terminal-chart-surface">',
+                            '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
+                        '</div>',
+                        '<p id="chart-status" class="hint">IDLE</p>',
+                    '</section>',
+                    '<section class="panel terminal-panel terminal-bottom-panel" id="table">',
+                        '<nav class="terminal-bottom-tabs" role="tablist" aria-label="Data panes">',
+                            '<button id="tab-explorer" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-explorer" type="button" data-help="Live rates table." data-help-label="TBL">TBL</button>',
+                            '<button id="tab-pivot" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-pivot" type="button" data-help="Pivot workspace for the active slice." data-help-label="PVT">PVT</button>',
+                            '<button id="tab-history" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-history" type="button" data-help="Series detail, spotlight trend, and chart summary." data-help-label="HST">HST</button>',
+                            '<button id="tab-changes" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-changes" type="button" data-help="Summary metrics and recent rate changes." data-help-label="CHG">CHG</button>',
+                        '</nav>',
+                        '<section id="panel-explorer" class="tab-panel active shortlist-panel" role="tabpanel" aria-labelledby="tab-explorer">',
+                            '<div class="terminal-data-head">',
+                                '<div>',
+                                    '<span class="panel-code">TBL</span>',
+                                    '<h2 id="explorer-overview-title">LOAD</h2>',
+                                '</div>',
+                                '<div class="terminal-data-actions">',
+                                    '<span id="explorer-overview-status" class="pill">WAIT</span>',
+                                    '<button id="table-settings-btn" class="icon-btn secondary" type="button" aria-label="Table settings" data-help="Column visibility, removed rows, and move-column mode." data-help-label="CFG">&#9881;</button>',
+                                    '<div id="table-settings-popover" class="table-settings-popover" hidden></div>',
+                                '</div>',
+                            '</div>',
+                            '<p id="explorer-overview-text" class="hint">SYNC</p>',
+                            '<div id="rate-table" class="terminal-rate-table"></div>',
+                        '</section>',
+                        '<section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>',
+                            '<div id="pivot">',
+                                '<div class="terminal-data-head">',
+                                    '<div><span class="panel-code">PVT</span><h2>Pivot</h2></div>',
+                                    '<div class="terminal-data-actions"><button id="load-pivot" type="button" class="secondary" data-help="Load rows into the pivot workspace." data-help-label="LOAD">LOAD</button></div>',
+                                '</div>',
+                                '<p id="pivot-status" class="hint">WAIT</p>',
+                                '<div id="pivot-output"></div>',
+                            '</div>',
+                        '</section>',
+                        '<section id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="tab-history" hidden>',
+                            '<div class="terminal-history-grid" id="history">',
+                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head"><span class="panel-code">SPT</span><strong>Spotlight</strong></div><div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div></section>',
+                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head"><span class="panel-code">SUM</span><strong>History</strong></div><div id="chart-data-summary" class="chart-data-summary" aria-live="polite"><p class="chart-data-summary-empty">WAIT</p></div></section>',
+                            '</div>',
+                        '</section>',
+                        '<section id="panel-changes" class="tab-panel" role="tabpanel" aria-labelledby="tab-changes" hidden>',
+                            '<div class="terminal-changes-grid" id="changes">',
+                                '<section class="panel terminal-subpanel executive-summary" id="executive-summary-panel" aria-label="Executive summary">',
+                                    '<div class="terminal-panel-head"><span class="panel-code">30D</span><strong>Summary</strong></div>',
+                                    '<p id="executive-summary-status" class="hint">WAIT</p>',
+                                    '<div id="executive-summary-sections" class="executive-summary-sections"></div>',
+                                '</section>',
+                                '<section class="panel terminal-subpanel rate-change-log" aria-label="Rate changes">',
+                                    '<details id="rate-change-details" class="rate-change-details" open>',
+                                        '<summary id="rate-change-summary" class="rate-change-summary"><span class="panel-code">CHG</span><span id="rate-change-headline" class="rate-change-headline">WAIT</span></summary>',
+                                        '<p id="rate-change-warning" class="rate-change-warning" hidden></p>',
+                                        '<p id="rate-change-status" class="hint">WAIT</p>',
+                                        '<ul id="rate-change-list" class="rate-change-list"><li class="rate-change-item-empty">WAIT</li></ul>',
+                                    '</details>',
+                                '</section>',
+                            '</div>',
+                        '</section>',
+                    '</section>',
+                '</section>',
+                '<aside id="ladder" class="terminal-column terminal-column-right">',
+                    '<section class="panel terminal-panel terminal-stats-panel">',
+                        '<div class="terminal-panel-head">',
+                            '<span class="panel-code">TICK</span>',
+                            '<strong>' + esc(ui.short) + '</strong>',
+                        '</div>',
+                        '<div class="terminal-stat-grid" id="hero-stats">',
+                            '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="UPD"><span class="metric-code">UPD</span><strong>...</strong></div>',
+                            '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(ui.statSecondaryHelp) + '" data-help-label="' + esc(ui.statSecondaryCode) + '"><span class="metric-code">' + esc(ui.statSecondaryCode) + '</span><strong>' + esc(ui.statSecondaryValue) + '</strong></div>',
+                            '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="ROWS"><span class="metric-code">ROWS</span><strong>...</strong></div>',
+                        '</div>',
+                    '</section>',
+                    '<section class="panel terminal-panel terminal-ladder-panel">',
+                        '<div class="terminal-panel-head">',
+                            '<span class="panel-code">LDR</span>',
+                            '<strong>' + esc(ui.ladderTitle) + '</strong>',
+                        '</div>',
+                        '<label class="terminal-field terminal-ladder-search" data-help="Filter the ladder by lender or product name." data-help-label="FIND">',
+                            '<span class="field-code">FIND</span>',
+                            '<input id="ladder-search" type="search" placeholder="Find">',
+                        '</label>',
+                        '<div id="quick-compare-cards" class="quick-compare-cards"></div>',
+                    '</section>',
+                    '<section class="panel terminal-panel terminal-spotlight-panel">',
+                        '<div class="terminal-panel-head"><span class="panel-code">SPT</span><strong>Focus</strong></div>',
+                        '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
+                    '</section>',
+                    '<section class="panel terminal-panel terminal-series-panel">',
+                        '<div class="terminal-panel-head"><span class="panel-code">PK</span><strong>Series</strong></div>',
+                        '<p id="chart-series-note" class="hint">WAIT</p>',
+                        '<div id="chart-series-list" class="chart-series-list"><p class="chart-series-empty">WAIT</p></div>',
+                    '</section>',
+                '</aside>',
+            '</section>'
         ].join('');
     }
 

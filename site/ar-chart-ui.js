@@ -121,33 +121,22 @@
     }
 
     function guidance(fields, model, stale) {
-        var notes = [];
-        if (sectionConfig.chartHint) notes.push(sectionConfig.chartHint);
-        if (fields.view === 'surface') {
-            notes.push('What changed over time maps collection date across the x-axis and product_key series down the y-axis.');
-            if (getSelectedBankCount() !== 1) notes.push('Filter to one bank for the cleanest longitudinal surface.');
-        }
-        if (fields.view === 'lenders') {
-            notes.push('Who leads now ranks each bank by its best current product for the active configuration.');
-            if (getSelectedBankCount() === 1) notes.push('Clear the bank filter to compare lenders across this slice.');
-            else notes.push('Use purpose, repayment, LVR, structure, or term filters above to define the slice.');
-        }
-        if (fields.view === 'compare') notes.push('Track a shortlist keeps only the selected spotlight series in view.');
-        if (fields.view === 'distribution') notes.push('See the spread groups the current filter set into category-level boxplots.');
-        if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) {
-            notes.push('Visible lenders are limited by the chosen density preset.');
-        } else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) {
-            notes.push('Visible rows are limited by the chosen density preset.');
-        }
-        if (stale) notes.push('Filters changed. Redraw to fetch fresh rows.');
-        return notes.filter(Boolean).join(' ');
+        var tags = [];
+        if (fields.view === 'surface') tags.push('MOVE');
+        if (fields.view === 'lenders') tags.push('NOW');
+        if (fields.view === 'compare') tags.push('CMP');
+        if (fields.view === 'distribution') tags.push('BOX');
+        if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('LIMIT');
+        else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) tags.push('LIMIT');
+        if (stale) tags.push('STALE');
+        return tags.filter(Boolean).join(' | ') || 'READY';
     }
 
     function summaryPills(model, fields, payloadMeta, stale) {
         if (!model) {
             return '' +
-                '<span class="chart-summary-pill">Awaiting first render</span>' +
-                (stale ? '<span class="chart-summary-pill is-warning">Stale after filter change</span>' : '');
+                '<span class="chart-summary-pill">WAIT</span>' +
+                (stale ? '<span class="chart-summary-pill is-warning">STALE</span>' : '');
         }
         var pills = [];
         pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
@@ -159,10 +148,10 @@
             pills.push('<span class="chart-summary-pill">' + esc(Number(payloadMeta.totalRows).toLocaleString()) + ' rows loaded</span>');
         }
         if (payloadMeta && payloadMeta.truncated) {
-            pills.push('<span class="chart-summary-pill is-warning">10,000-row fetch cap reached</span>');
+            pills.push('<span class="chart-summary-pill is-warning">10K CAP</span>');
         }
         if (stale) {
-            pills.push('<span class="chart-summary-pill is-warning">Stale after filter change</span>');
+            pills.push('<span class="chart-summary-pill is-warning">STALE</span>');
         }
         return pills.join('');
     }
@@ -177,11 +166,11 @@
     }
 
     function railNote(fields, model) {
-        if (!model) return 'Draw a chart to activate the workspace.';
-        if (fields.view === 'lenders') return 'Click a lender to spotlight its best filtered product and carry it into the shortlist chart.';
-        if (fields.view === 'compare') return 'Click cards to keep only the series you want in the shortlist chart.';
-        if (fields.view === 'distribution') return 'Keep a product spotlight active while the spread summarises the full slice.';
-        return 'Click cards to include series in the shortlist chart. Click the surface to move the spotlight.';
+        if (!model) return 'WAIT';
+        if (fields.view === 'lenders') return 'BANK';
+        if (fields.view === 'compare') return 'CMP';
+        if (fields.view === 'distribution') return 'BOX';
+        return 'PK';
     }
 
     function seriesCardMarkup(options) {
@@ -207,8 +196,8 @@
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
         var fields = getChartFields();
         if (!model || !model.visibleSeries.length) {
-            els.chartSeriesNote.textContent = 'Draw a chart to activate the workspace.';
-            els.chartSeriesList.innerHTML = '<p class="chart-series-empty">Visible products and selected comparison lines will appear here.</p>';
+            els.chartSeriesNote.textContent = 'WAIT';
+            els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
         }
 
@@ -255,8 +244,8 @@
 
     function productLink(row) {
         var href = row && /^https?:\/\//i.test(String(row.product_url || '')) ? String(row.product_url) : '';
-        if (!href) return '<span class="chart-spotlight-link is-muted">No product page available for this series.</span>';
-        return '<a class="chart-point-link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">Open product page</a>';
+        if (!href) return '<span class="chart-spotlight-link is-muted">No link</span>';
+        return '<a class="chart-point-link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">Open</a>';
     }
 
     function renderSpotlight(model, fields) {
@@ -265,8 +254,8 @@
             els.chartPointDetails.hidden = false;
             els.chartPointDetails.innerHTML =
                 '<div class="chart-spotlight-empty">' +
-                    '<strong>Spotlight inactive</strong>' +
-                    '<span>Select a visible product from the surface or side rail to inspect its detail trend.</span>' +
+                    '<strong>WAIT</strong>' +
+                    '<span>No focus</span>' +
                 '</div>';
             return;
         }
@@ -276,8 +265,8 @@
         var row = spotlight.row || {};
         var title = lenderEntry ? lenderEntry.bankName : spotlight.series.name;
         var subtitle = lenderEntry
-            ? 'Best current ' + chartConfig.fieldLabel(fields.yField).toLowerCase() + ' for the active slice'
-            : (spotlight.series.subtitle || 'Canonical product_key trend');
+            ? 'Best current ' + chartConfig.fieldLabel(fields.yField).toLowerCase()
+            : (spotlight.series.subtitle || 'product_key');
         els.chartPointDetails.hidden = false;
         els.chartPointDetails.innerHTML = '' +
             '<div class="chart-spotlight-card">' +
@@ -311,10 +300,10 @@
             els.chartOutput.removeAttribute('data-chart-rendered');
             els.chartOutput.removeAttribute('data-chart-engine');
             els.chartOutput.removeAttribute('data-chart-view');
-            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Render a chart to answer the current scenario.') + '</div>';
+            els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'WAIT') + '</div>';
         }
         if (els.chartDetailOutput) {
-            els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'Select a series to inspect its detail trend.') + '</div>';
+            els.chartDetailOutput.innerHTML = '<div class="chart-detail-empty">' + esc(message || 'WAIT') + '</div>';
         }
     }
 
@@ -323,20 +312,20 @@
         renderSummary(null, getChartFields(), null, false);
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
-        setCanvasPlaceholder('Render a chart to answer the current scenario.');
-        setStatus('Choose a question, adjust the metric if needed, then render the chart.');
+        setCanvasPlaceholder('WAIT');
+        setStatus('READY');
     }
 
     function setPendingState(message) {
         renderSummary(null, getChartFields(), null, false);
-        setStatus(message || 'Loading chart data...');
-        setCanvasPlaceholder('Loading chart data...');
+        setStatus(message || 'LOAD');
+        setCanvasPlaceholder('LOAD');
     }
 
     function markStale(message) {
         if (!tabState.chartDrawn) return;
         renderSummary(null, getChartFields(), null, true);
-        setStatus(message || 'Filters changed. Redraw to fetch fresh chart rows.');
+        setStatus(message || 'STALE');
     }
 
     function bindUi(handlers) {

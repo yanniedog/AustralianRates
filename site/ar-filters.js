@@ -168,7 +168,7 @@
         });
 
         if (!chips.length) {
-            els.activeFilterChips.innerHTML = '<span class="filter-chip filter-chip-empty">No active filters</span>';
+            els.activeFilterChips.innerHTML = '<span class="filter-chip filter-chip-empty">0</span>';
             return;
         }
         els.activeFilterChips.innerHTML = chips.join('');
@@ -180,8 +180,8 @@
         var activeCount = getActiveFilterCount();
         els.filterDirtyIndicator.classList.toggle('is-dirty', dirty);
         els.filterDirtyIndicator.textContent = dirty
-            ? 'Unsaved changes'
-            : (activeCount ? activeCount + ' active filters' : 'No active filters');
+            ? 'DIRTY'
+            : (activeCount ? String(activeCount) : '0');
     }
 
     function refreshFilterUiState() {
@@ -488,7 +488,7 @@
         if (apiOverride) q.set('apiBase', apiOverride);
         if (isAnalystMode()) q.set('view', 'analyst');
 
-        window.history.replaceState(null, '', window.location.pathname + '?' + q.toString());
+        window.history.replaceState(null, '', window.location.pathname + '?' + q.toString() + window.location.hash);
     }
 
     function restoreUrlState() {

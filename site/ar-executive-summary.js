@@ -62,7 +62,7 @@
         var container = getContainerEl();
         if (!container) return;
         if (!Array.isArray(sections) || sections.length === 0) {
-            container.innerHTML = '<p class="exec-empty">No executive summary sections available.</p>';
+            container.innerHTML = '<p class="exec-empty">No data</p>';
             return;
         }
         container.innerHTML = sections.map(function (section) {
@@ -78,8 +78,6 @@
                 renderMetric('Lenders touched', fmt(metrics.lender_coverage, 0)),
                 renderMetric('Up / Down', fmt(metrics.up_count, 0) + ' / ' + fmt(metrics.down_count, 0))
             ].join('');
-            var narrative = String(section.narrative || '').trim();
-            if (narrative.length > 140) narrative = narrative.slice(0, 137).trim() + '...';
             return (
                 '<article class="exec-card">' +
                     '<div class="exec-kicker">' +
@@ -89,7 +87,6 @@
                     '<div class="exec-metric-grid">' + metricGrid + '</div>' +
                     '<p class="exec-standouts">Top lender: ' + topLenderText + '</p>' +
                     '<p class="exec-standouts">' + standoutText(standouts.largest_increase, 'Largest increase') + '</p>' +
-                    '<p class="exec-narrative">' + esc(narrative || 'No additional narrative.') + '</p>' +
                 '</article>'
             );
         }).join('');
@@ -100,7 +97,7 @@
         var container = getContainerEl();
         if (!statusEl || !container) return;
 
-        statusEl.textContent = 'Loading summary...';
+        statusEl.textContent = 'WAIT';
         try {
             var endpoint = window.location.origin + '/api/home-loan-rates/executive-summary?window_days=30';
             var res = await fetch(endpoint, { cache: 'no-store' });
@@ -108,10 +105,10 @@
             var data = await res.json();
             var sections = Array.isArray(data && data.sections) ? data.sections : [];
             renderSections(pickPrimarySections(sections));
-            statusEl.textContent = 'Updated ' + esc(data.generated_at || 'n/a') + '.';
+            statusEl.textContent = esc(data.generated_at || 'n/a');
         } catch (err) {
-            statusEl.textContent = 'Summary unavailable right now.';
-            container.innerHTML = '<p class="exec-empty">Unable to load summary data.</p>';
+            statusEl.textContent = 'ERR';
+            container.innerHTML = '<p class="exec-empty">Unavailable</p>';
             clientLog('error', 'Executive summary load failed', {
                 message: err && err.message ? err.message : String(err),
             });
