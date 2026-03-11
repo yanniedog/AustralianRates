@@ -1,17 +1,54 @@
+import dns from 'node:dns/promises';
 import { Resolver } from 'node:dns/promises';
 import tls from 'node:tls';
 
 const HOSTS = ['www.australianrates.com', 'australianrates.com'];
 const API_PATHS = ['/', '/api/home-loan-rates/health', '/api/savings-rates/health', '/api/term-deposit-rates/health'];
 const RESOLVERS = ['1.1.1.1', '8.8.8.8'];
+const DNS_TIMEOUT_MS = Math.max(1000, Number(process.env.PROD_VERIFY_DNS_TIMEOUT_MS || 5000));
 
-async function resolveHost(host: string): Promise<Array<{ resolver: string; ok: boolean; addresses?: string[]; error?: string }>> {
+type DnsResult = { resolver: string; ok: boolean; addresses?: string[]; error?: string; advisory?: boolean };
+
+async function resolveWithTimeout(resolver: Resolver, host: string): Promise<string[]> {
+  return await Promise.race([
+    resolver.resolve4(host),
+    new Promise<string[]>((_, reject) => {
+      setTimeout(() => reject(new Error(`queryA ETIMEOUT ${host}`)), DNS_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+function isNetworkPathError(error: string | undefined): boolean {
+  const normalized = String(error || '').toUpperCase();
+  return (
+    normalized.includes('ETIMEOUT') ||
+    normalized.includes('ETIMEDOUT') ||
+    normalized.includes('ECONNREFUSED') ||
+    normalized.includes('EHOSTUNREACH') ||
+    normalized.includes('ENETUNREACH')
+  );
+}
+
+async function resolveWithSystemDns(host: string): Promise<DnsResult> {
+  try {
+    const records = await dns.lookup(host, { all: true });
+    return {
+      resolver: 'system',
+      ok: records.length > 0,
+      addresses: records.map((record) => record.address),
+    };
+  } catch (error) {
+    return { resolver: 'system', ok: false, error: String((error as Error)?.message || error) };
+  }
+}
+
+async function resolveHost(host: string): Promise<DnsResult[]> {
   const results: Array<{ resolver: string; ok: boolean; addresses?: string[]; error?: string }> = [];
   for (const server of RESOLVERS) {
     const resolver = new Resolver();
     resolver.setServers([server]);
     try {
-      const addresses = await resolver.resolve4(host);
+      const addresses = await resolveWithTimeout(resolver, host);
       results.push({ resolver: server, ok: true, addresses });
     } catch (error) {
       results.push({ resolver: server, ok: false, error: String((error as Error)?.message || error) });
@@ -69,6 +106,7 @@ async function main(): Promise<void> {
   let failed = false;
 
   for (const host of HOSTS) {
+    const systemDns = await resolveWithSystemDns(host);
     const dns = await resolveHost(host);
     const tlsCheck = await verifyTls(host);
     const fetches: any[] = [];
@@ -76,9 +114,17 @@ async function main(): Promise<void> {
       fetches.push(await fetchUrl(`https://${host}${apiPath}`));
     }
 
-    const hostFailed = dns.some((item) => !item.ok) || !tlsCheck.ok || fetches.some((item) => !item.ok);
+    const publicDnsFailed = dns.some((item) => !item.ok);
+    const publicDnsNetworkOnly = publicDnsFailed && dns.every((item) => item.ok || isNetworkPathError(item.error));
+    const hasEdgeProof = systemDns.ok && tlsCheck.ok && fetches.every((item) => item.ok);
+    const normalizedDns = dns.map((item) => ({
+      ...item,
+      advisory: !item.ok && publicDnsNetworkOnly && hasEdgeProof,
+    }));
+    const publicDnsIsBlocking = publicDnsFailed && !(publicDnsNetworkOnly && hasEdgeProof);
+    const hostFailed = !systemDns.ok || !tlsCheck.ok || fetches.some((item) => !item.ok) || publicDnsIsBlocking;
     failed ||= hostFailed;
-    summary.push({ host, dns, tls: tlsCheck, fetches });
+    summary.push({ host, dns: normalizedDns, system_dns: systemDns, tls: tlsCheck, fetches });
   }
 
   console.log(JSON.stringify({ ok: !failed, checked_at: new Date().toISOString(), summary }, null, 2));

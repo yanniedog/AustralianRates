@@ -4,7 +4,8 @@
 
 const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const ORIGIN = new URL(DEFAULT_TEST_URL).origin;
-const BENCH_N = Math.max(1, Math.floor(Number(process.env.DIAG_BENCH_N || 10)));
+const BENCH_N = Math.max(3, Math.floor(Number(process.env.DIAG_BENCH_N || 20)));
+const BENCH_WARMUP_N = Math.max(0, Math.floor(Number(process.env.DIAG_BENCH_WARMUP_N || 1)));
 const P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_P95_TARGET_MS || 500)));
 const EXPORT_P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_EXPORT_P95_TARGET_MS || 4000)));
 const DATASET_P95_OVERRIDES: Record<string, { default: number; exportJson: number }> = {
@@ -68,6 +69,11 @@ async function requestJson(pathname: string): Promise<any> {
 async function benchmark(pathname: string, n: number): Promise<{ avgMs: number; p50Ms: number; p95Ms: number; non200: number }> {
   const durations: number[] = [];
   let non200 = 0;
+  for (let i = 0; i < BENCH_WARMUP_N; i += 1) {
+    const warmup = await fetch(`${ORIGIN}${pathname}`);
+    if (warmup.status !== 200) non200 += 1;
+    await warmup.arrayBuffer();
+  }
   for (let i = 0; i < n; i += 1) {
     const start = Date.now();
     const res = await fetch(`${ORIGIN}${pathname}`);
@@ -186,6 +192,7 @@ async function main(): Promise<void> {
   console.log('========================================');
   console.log(`Origin: ${ORIGIN}`);
   console.log(`Bench repetitions: ${BENCH_N}`);
+  console.log(`Bench warmup requests per endpoint: ${BENCH_WARMUP_N}`);
   console.log(`P95 target: ${P95_TARGET_MS}ms`);
   console.log(`Time: ${new Date().toISOString()}`);
 
