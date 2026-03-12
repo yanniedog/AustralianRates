@@ -159,12 +159,17 @@
     if (els.loadPivot) {
         els.loadPivot.addEventListener('click', function () {
             if (filters && filters.validateInputs && !filters.validateInputs()) return;
-            if (pivot && pivot.loadPivotData) {
-                pivot.loadPivotData({
-                    force: true,
+            if (pivot && pivot.ensurePivotLoaded) {
+                pivot.ensurePivotLoaded({
                     reason: 'manual-refresh',
-                    statusMessage: 'Refreshing default pivot grid...',
-                    statusPrefix: 'Refreshing default pivot grid... ',
+                    statusMessage: 'Loading default pivot grid...',
+                    statusPrefix: 'Loading default pivot grid... ',
+                });
+            } else if (pivot && pivot.loadPivotData) {
+                pivot.loadPivotData({
+                    reason: 'manual-refresh',
+                    statusMessage: 'Loading default pivot grid...',
+                    statusPrefix: 'Loading default pivot grid... ',
                 });
             }
         });
