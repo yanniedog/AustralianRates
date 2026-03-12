@@ -65,13 +65,29 @@
         if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
-        if (tabState.pivotLoaded && els.pivotStatus) els.pivotStatus.textContent = 'STALE';
+        if (pivot && pivot.invalidatePivot) {
+            pivot.invalidatePivot({
+                message: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid...' : 'Default pivot grid queued for refresh.',
+            });
+        } else if (tabState.pivotLoaded && els.pivotStatus) {
+            els.pivotStatus.textContent = 'STALE';
+        }
         if (charts && charts.markStale) charts.markStale('STALE');
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
         drawChartIfReady(true);
+        if (pivot && pivot.preloadPivotData) {
+            pivot.preloadPivotData({
+                delay: tabState.activeTab === 'pivot' ? 0 : 900,
+                force: true,
+                immediate: tabState.activeTab === 'pivot',
+                reason: 'filters-applied',
+                statusMessage: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid...' : 'Preparing default pivot grid...',
+                statusPrefix: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid... ' : 'Preparing default pivot grid... ',
+            });
+        }
     }
 
     function applyFiltersShortcut(event) {
@@ -104,6 +120,13 @@
         }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
         drawChartIfReady(false);
+        if (pivot && pivot.preloadPivotData) {
+            pivot.preloadPivotData({
+                delay: tabState.activeTab === 'pivot' ? 0 : 1200,
+                immediate: tabState.activeTab === 'pivot',
+                reason: 'app-init',
+            });
+        }
 
         clientLog('info', 'App init complete', {
             activeTab: tabState.activeTab || 'explorer',
@@ -136,7 +159,14 @@
     if (els.loadPivot) {
         els.loadPivot.addEventListener('click', function () {
             if (filters && filters.validateInputs && !filters.validateInputs()) return;
-            if (pivot && pivot.loadPivotData) pivot.loadPivotData();
+            if (pivot && pivot.loadPivotData) {
+                pivot.loadPivotData({
+                    force: true,
+                    reason: 'manual-refresh',
+                    statusMessage: 'Refreshing default pivot grid...',
+                    statusPrefix: 'Refreshing default pivot grid... ',
+                });
+            }
         });
     }
     if (els.drawChart) {
@@ -170,6 +200,9 @@
         var tab = event && event.detail && event.detail.tab;
         if (tab === 'history' && charts && charts.markStale && tabState.chartDrawn) {
             charts.markStale('LIVE');
+        }
+        if (tab === 'pivot' && pivot && pivot.ensurePivotLoaded) {
+            pivot.ensurePivotLoaded({ reason: 'pivot-tab-activated' });
         }
     });
     window.addEventListener('ar:theme-changed', function () {
