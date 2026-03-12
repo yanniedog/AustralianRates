@@ -7,7 +7,7 @@ body.ar-admin.has-admin-sidebar .admin-sidebar {
     width: var(--ar-admin-sidebar-width);
     display: grid;
     gap: 14px;
-    align-content: start;
+    grid-template-rows: auto 1fr auto;
     padding: 16px;
     border: 1px solid var(--ar-line);
     border-radius: 18px;
@@ -17,6 +17,7 @@ body.ar-admin.has-admin-sidebar .admin-sidebar {
 
 .admin-sidebar-head,
 .admin-sidebar-nav,
+.admin-sidebar-actions,
 .admin-page-head,
 .admin-grid,
 .admin-summary-grid,
@@ -32,12 +33,34 @@ body.ar-admin.has-admin-sidebar .admin-sidebar {
     align-items: center;
 }
 
+.admin-sidebar-head strong {
+    font-size: 0.94rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.admin-sidebar-nav {
+    align-content: start;
+}
+
 .admin-sidebar-link {
     border: 1px solid transparent;
 }
 
 .admin-sidebar-link.is-active {
     border-color: rgba(37, 99, 235, 0.22);
+}
+
+.admin-sidebar-actions {
+    align-content: end;
+}
+
+.admin-sidebar-actions .secondary {
+    width: 100%;
+}
+
+body.ar-admin.has-admin-sidebar .admin-back {
+    display: none;
 }
 
 .admin-shell {
