@@ -12,6 +12,7 @@ export type ExecutiveSummaryExample = {
   product_name: string
   product_key: string
   collection_date: string
+  previous_collection_date: string | null
   previous_rate: number
   new_rate: number
   delta_bps: number
@@ -105,6 +106,7 @@ function toChangeExample(row: GenericChangeRow, descriptor: DatasetDescriptor): 
     product_name: String(row.product_name || ''),
     product_key: String(row.product_key || ''),
     collection_date: String(row.collection_date || ''),
+    previous_collection_date: row.previous_collection_date == null ? null : String(row.previous_collection_date),
     previous_rate: Number(row.previous_rate ?? 0),
     new_rate: Number(row.new_rate ?? 0),
     delta_bps: Number(row.delta_bps ?? 0),
@@ -125,6 +127,14 @@ function describeRow(row: GenericChangeRow, dataset: ExecutiveSummarySection['da
   return [String(td.term_months ?? ''), td.deposit_tier, td.interest_payment].filter(Boolean).join(' | ')
 }
 
+function formatChangeWindow(example: ExecutiveSummaryExample): string {
+  const current = String(example.collection_date || '').trim()
+  const previous = String(example.previous_collection_date || '').trim()
+  if (previous && previous !== current) return `${previous} -> ${current}`
+  if (current) return `through ${current}`
+  return 'date unavailable'
+}
+
 function buildNarrative(
   descriptor: DatasetDescriptor,
   windowDays: number,
@@ -138,9 +148,11 @@ function buildNarrative(
   increase: ExecutiveSummaryExample | null,
   decrease: ExecutiveSummaryExample | null,
   partial: boolean,
+  windowStart: string,
+  windowEnd: string,
 ): string {
   if (totalChanges === 0) {
-    return `No verified ${descriptor.title.toLowerCase()} rate changes were detected in the last ${windowDays} days.`
+    return `No verified ${descriptor.title.toLowerCase()} rate changes were detected through ${windowEnd} in the last ${windowDays} days.`
   }
 
   const directionSentence = `${upCount} increases versus ${downCount} decreases were observed across ${lenderCoverage} lenders.`
@@ -153,16 +165,20 @@ function buildNarrative(
     : 'No single lender concentration signal is available.'
   const standoutParts: string[] = []
   if (increase) {
-    standoutParts.push(`Largest increase: ${increase.bank_name} ${increase.product_name} (${round(increase.delta_bps, 2)} bps).`)
+    standoutParts.push(
+      `Largest increase: ${increase.bank_name} ${increase.product_name} (${round(increase.delta_bps, 2)} bps, ${formatChangeWindow(increase)}).`,
+    )
   }
   if (decrease) {
-    standoutParts.push(`Largest decrease: ${decrease.bank_name} ${decrease.product_name} (${round(decrease.delta_bps, 2)} bps).`)
+    standoutParts.push(
+      `Largest decrease: ${decrease.bank_name} ${decrease.product_name} (${round(decrease.delta_bps, 2)} bps, ${formatChangeWindow(decrease)}).`,
+    )
   }
   if (standoutParts.length === 0) {
     standoutParts.push('No standout increase/decrease examples were found.')
   }
   const partialSentence = partial ? 'Metrics are based on a bounded sample window due to high change volume.' : ''
-  return `${totalChanges} ${descriptor.title.toLowerCase()} changes were tracked over the last ${windowDays} days. ${directionSentence} ${moveSentence} ${concentrationSentence} ${standoutParts.join(' ')} ${partialSentence}`.trim()
+  return `${totalChanges} ${descriptor.title.toLowerCase()} changes were tracked from ${windowStart} through ${windowEnd}. ${directionSentence} ${moveSentence} ${concentrationSentence} ${standoutParts.join(' ')} ${partialSentence}`.trim()
 }
 
 function buildSection(
@@ -251,6 +267,8 @@ function buildSection(
       increaseExample,
       decreaseExample,
       partial,
+      windowStart,
+      windowEnd,
     ),
   }
 }

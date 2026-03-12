@@ -36,6 +36,14 @@
         return match ? (match[1] + '/' + match[2] + '/' + match[3]) : (raw || '-');
     }
 
+    function changeWindow(row) {
+        var current = ymd(row.collection_date || row.changed_at);
+        var previous = ymd(row.previous_collection_date || row.previous_changed_at);
+        if (current === '-') return '-';
+        if (previous !== '-' && previous !== current) return previous + ' -> ' + current;
+        return 'Through ' + current;
+    }
+
     function pct(value) {
         var n = Number(value);
         return Number.isFinite(n) ? n.toFixed(3) + '%' : '-';
@@ -73,7 +81,7 @@
             return (
                 '<li class="rate-change-item">' +
                     '<div class="rate-change-main">' +
-                        '<span class="rate-change-date">' + esc(ymd(row.collection_date || row.changed_at)) + '</span>' +
+                        '<span class="rate-change-date">' + esc(changeWindow(row)) + '</span>' +
                         '<span class="rate-change-bank">' + esc(row.bank_name || '-') + '</span>' +
                         (deltaText ? '<span class="rate-change-delta ' + tone(delta) + '">' + esc(deltaText) + '</span>' : '') +
                     '</div>' +
@@ -97,7 +105,7 @@
         var headlineEl = getHeadlineEl();
         if (!headlineEl) return;
         var latestDate = rows && rows.length ? ymd(rows[0].collection_date || rows[0].changed_at) : 'n/a';
-        headlineEl.textContent = latestDate + ' | ' + total + ' | ' + integrityText(integrity);
+        headlineEl.textContent = 'Through ' + latestDate + ' | ' + total + ' changes | ' + integrityText(integrity);
     }
 
     function renderIntegrityWarning(integrity) {
