@@ -92,9 +92,17 @@ body.ar-public .disclaimer {
 }
 
 .market-terminal {
+    --ar-left-rail-width: 280px;
+    --ar-right-rail-width: 330px;
+    --ar-splitter-track: 18px;
     display: grid;
-    grid-template-columns: minmax(260px, 280px) minmax(0, 1fr) minmax(280px, 330px);
-    gap: 18px;
+    grid-template-columns:
+        minmax(260px, var(--ar-left-rail-width))
+        var(--ar-splitter-track)
+        minmax(0, 1fr)
+        var(--ar-splitter-track)
+        minmax(280px, var(--ar-right-rail-width));
+    gap: 0;
     align-items: start;
 }
 
@@ -115,6 +123,117 @@ body.ar-public .disclaimer {
 .terminal-column-center,
 .terminal-column-right {
     align-content: start;
+}
+
+.terminal-resizer {
+    position: relative;
+    align-self: stretch;
+    min-width: 0;
+    min-height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    outline: none;
+}
+
+.terminal-resizer::before,
+.terminal-resizer::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    transition:
+        opacity var(--ar-motion-base) var(--ar-ease),
+        background-color var(--ar-motion-base) var(--ar-ease),
+        box-shadow var(--ar-motion-base) var(--ar-ease);
+    opacity: 0;
+}
+
+.terminal-resizer::before {
+    top: 10px;
+    bottom: 10px;
+    width: 2px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ar-accent) 82%, white 18%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-accent) 24%, transparent);
+}
+
+.terminal-resizer::after {
+    top: 50%;
+    width: 10px;
+    height: 68px;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+    background:
+        linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 12px,
+            color-mix(in srgb, var(--ar-text-soft) 72%, transparent) 12px,
+            color-mix(in srgb, var(--ar-text-soft) 72%, transparent) 16px,
+            transparent 16px,
+            transparent 26px,
+            color-mix(in srgb, var(--ar-text-soft) 72%, transparent) 26px,
+            color-mix(in srgb, var(--ar-text-soft) 72%, transparent) 30px,
+            transparent 30px,
+            transparent 40px,
+            color-mix(in srgb, var(--ar-text-soft) 72%, transparent) 40px,
+            color-mix(in srgb, var(--ar-text-soft) 72%, transparent) 44px,
+            transparent 44px,
+            transparent 100%
+        ),
+        color-mix(in srgb, var(--ar-surface) 90%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--ar-line-strong) 72%, transparent),
+        var(--ar-shadow-soft);
+}
+
+.market-terminal:hover .terminal-resizer::before,
+.market-terminal:hover .terminal-resizer::after,
+.terminal-resizer:focus-visible::before,
+.terminal-resizer:focus-visible::after,
+.terminal-resizer.is-active::before,
+.terminal-resizer.is-active::after {
+    opacity: 1;
+}
+
+.terminal-resizer:hover::before,
+.terminal-resizer:focus-visible::before,
+.terminal-resizer.is-active::before {
+    background: color-mix(in srgb, var(--ar-accent-2) 78%, white 22%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--ar-accent) 42%, transparent),
+        0 0 18px color-mix(in srgb, var(--ar-accent) 18%, transparent);
+}
+
+.terminal-resizer:hover::after,
+.terminal-resizer:focus-visible::after,
+.terminal-resizer.is-active::after {
+    background:
+        linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 12px,
+            color-mix(in srgb, var(--ar-accent) 76%, white 24%) 12px,
+            color-mix(in srgb, var(--ar-accent) 76%, white 24%) 16px,
+            transparent 16px,
+            transparent 26px,
+            color-mix(in srgb, var(--ar-accent) 76%, white 24%) 26px,
+            color-mix(in srgb, var(--ar-accent) 76%, white 24%) 30px,
+            transparent 30px,
+            transparent 40px,
+            color-mix(in srgb, var(--ar-accent) 76%, white 24%) 40px,
+            color-mix(in srgb, var(--ar-accent) 76%, white 24%) 44px,
+            transparent 44px,
+            transparent 100%
+        ),
+        color-mix(in srgb, var(--ar-surface) 96%, transparent);
+}
+
+body.is-resizing-panels,
+body.is-resizing-panels * {
+    cursor: col-resize !important;
+    user-select: none !important;
 }
 
 .terminal-panel,
@@ -363,7 +482,12 @@ body.ar-legal .legal-callout {
 
 @media (max-width: 1280px) {
     .market-terminal {
+        gap: 18px;
         grid-template-columns: minmax(240px, 260px) minmax(0, 1fr);
+    }
+
+    .terminal-resizer {
+        display: none;
     }
 
     .terminal-column-right {
