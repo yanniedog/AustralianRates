@@ -300,7 +300,7 @@
         if (els.chartOutput) {
             els.chartOutput.removeAttribute('data-chart-rendered');
             els.chartOutput.removeAttribute('data-chart-engine');
-            els.chartOutput.removeAttribute('data-chart-view');
+            els.chartOutput.removeAttribute('data-chart-render-view');
             els.chartOutput.innerHTML = '<div class="chart-output-empty">' + esc(message || 'Loading') + '</div>';
         }
         if (els.chartDetailOutput) {

@@ -505,7 +505,7 @@
         if (!instance || !element) return;
         instance.setOption(optionForView(view, model, fields, chartSize(element)), true);
         element.setAttribute('data-chart-engine', 'echarts');
-        element.setAttribute('data-chart-view', view);
+        element.setAttribute('data-chart-render-view', view);
         element.setAttribute('data-chart-rendered', 'true');
 
         instance.off('click');

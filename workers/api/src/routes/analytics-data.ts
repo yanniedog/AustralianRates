@@ -1,4 +1,6 @@
+import type { DatasetKind } from '../../../../packages/shared/src/index.js'
 import { queryHomeLoanAnalyticsRows, querySavingsAnalyticsRows, queryTdAnalyticsRows, type HomeLoanAnalyticsInput, type SavingsAnalyticsInput, type TdAnalyticsInput } from '../db/analytics/change-reads'
+import { analyticsProjectionReady } from '../db/analytics/readiness'
 import { queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { querySavingsRatesPaginated, querySavingsTimeseries } from '../db/savings-queries'
 import { queryTdRatesPaginated, queryTdTimeseries } from '../db/td-queries'
@@ -8,6 +10,13 @@ import { collectAllPages } from './analytics-route-utils'
 type DbPair = {
   canonicalDb: D1Database
   analyticsDb: D1Database
+}
+
+export type ResolvedAnalyticsRows = {
+  requestedRepresentation: AnalyticsRepresentation
+  representation: AnalyticsRepresentation
+  fallbackReason: 'projection_unavailable' | 'projection_query_failed' | null
+  rows: Array<Record<string, unknown>>
 }
 
 async function collectByOffset<T>(
@@ -25,14 +34,74 @@ async function collectByOffset<T>(
   return rows
 }
 
-export async function collectHomeLoanAnalyticsRows(
+function normalizeSignatureValue(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+  return String(value)
+}
+
+function dedupeAnalyticsRows(
+  rows: Array<Record<string, unknown>>,
+  fields: string[],
+): Array<Record<string, unknown>> {
+  const seen = new Set<string>()
+  const deduped: Array<Record<string, unknown>> = []
+  for (const row of rows) {
+    const signature = fields.map((field) => normalizeSignatureValue(row[field])).join('||')
+    if (seen.has(signature)) continue
+    seen.add(signature)
+    deduped.push(row)
+  }
+  return deduped
+}
+
+async function resolveRepresentationRows(
+  dataset: DatasetKind,
   dbs: DbPair,
   representation: AnalyticsRepresentation,
+  fetchChangeRows: () => Promise<Array<Record<string, unknown>>>,
+  fetchDayRows: () => Promise<Array<Record<string, unknown>>>,
+): Promise<ResolvedAnalyticsRows> {
+  if (representation !== 'change') {
+    return {
+      requestedRepresentation: representation,
+      representation: 'day',
+      fallbackReason: null,
+      rows: await fetchDayRows(),
+    }
+  }
+
+  const ready = await analyticsProjectionReady(dbs.analyticsDb, dataset)
+  if (!ready) {
+    return {
+      requestedRepresentation: representation,
+      representation: 'day',
+      fallbackReason: 'projection_unavailable',
+      rows: await fetchDayRows(),
+    }
+  }
+
+  try {
+    return {
+      requestedRepresentation: representation,
+      representation: 'change',
+      fallbackReason: null,
+      rows: await fetchChangeRows(),
+    }
+  } catch {
+    return {
+      requestedRepresentation: representation,
+      representation: 'day',
+      fallbackReason: 'projection_query_failed',
+      rows: await fetchDayRows(),
+    }
+  }
+}
+
+async function collectHomeLoanCanonicalRows(
+  dbs: DbPair,
   filters: HomeLoanAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
-  if (representation === 'change') {
-    return collectByOffset((limit, offset) => queryHomeLoanAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset }))
-  }
   return collectAllPages(async (page, size) => {
     const result = await queryRatesPaginated(dbs.canonicalDb, {
       page,
@@ -55,17 +124,26 @@ export async function collectHomeLoanAnalyticsRows(
       sourceMode: filters.sourceMode,
     })
     return { rows: result.data as Array<Record<string, unknown>>, lastPage: result.last_page }
-  })
+  }).then((rows) => dedupeAnalyticsRows(rows, [
+    'series_key',
+    'product_key',
+    'collection_date',
+    'security_purpose',
+    'repayment_type',
+    'rate_structure',
+    'lvr_tier',
+    'feature_set',
+    'interest_rate',
+    'comparison_rate',
+    'annual_fee',
+    'is_removed',
+  ]))
 }
 
-export async function collectSavingsAnalyticsRows(
+async function collectSavingsCanonicalRows(
   dbs: DbPair,
-  representation: AnalyticsRepresentation,
   filters: SavingsAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
-  if (representation === 'change') {
-    return collectByOffset((limit, offset) => querySavingsAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset }))
-  }
   return collectAllPages(async (page, size) => {
     const result = await querySavingsRatesPaginated(dbs.canonicalDb, {
       page,
@@ -84,17 +162,26 @@ export async function collectSavingsAnalyticsRows(
       sourceMode: filters.sourceMode,
     })
     return { rows: result.data as Array<Record<string, unknown>>, lastPage: result.last_page }
-  })
+  }).then((rows) => dedupeAnalyticsRows(rows, [
+    'series_key',
+    'product_key',
+    'collection_date',
+    'account_type',
+    'rate_type',
+    'deposit_tier',
+    'interest_rate',
+    'min_balance',
+    'max_balance',
+    'conditions',
+    'monthly_fee',
+    'is_removed',
+  ]))
 }
 
-export async function collectTdAnalyticsRows(
+async function collectTdCanonicalRows(
   dbs: DbPair,
-  representation: AnalyticsRepresentation,
   filters: TdAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
-  if (representation === 'change') {
-    return collectByOffset((limit, offset) => queryTdAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset }))
-  }
   return collectAllPages(async (page, size) => {
     const result = await queryTdRatesPaginated(dbs.canonicalDb, {
       page,
@@ -113,7 +200,111 @@ export async function collectTdAnalyticsRows(
       sourceMode: filters.sourceMode,
     })
     return { rows: result.data as Array<Record<string, unknown>>, lastPage: result.last_page }
-  })
+  }).then((rows) => dedupeAnalyticsRows(rows, [
+    'series_key',
+    'product_key',
+    'collection_date',
+    'term_months',
+    'deposit_tier',
+    'interest_payment',
+    'interest_rate',
+    'min_deposit',
+    'max_deposit',
+    'is_removed',
+  ]))
+}
+
+export async function collectHomeLoanAnalyticsRowsResolved(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: HomeLoanAnalyticsInput,
+): Promise<ResolvedAnalyticsRows> {
+  return resolveRepresentationRows(
+    'home_loans',
+    dbs,
+    representation,
+    () => collectByOffset((limit, offset) => queryHomeLoanAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset })),
+    () => collectHomeLoanCanonicalRows(dbs, filters),
+  )
+}
+
+export async function collectHomeLoanAnalyticsRows(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: HomeLoanAnalyticsInput,
+): Promise<Array<Record<string, unknown>>> {
+  return (await collectHomeLoanAnalyticsRowsResolved(dbs, representation, filters)).rows
+}
+
+export async function collectSavingsAnalyticsRowsResolved(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: SavingsAnalyticsInput,
+): Promise<ResolvedAnalyticsRows> {
+  return resolveRepresentationRows(
+    'savings',
+    dbs,
+    representation,
+    () => collectByOffset((limit, offset) => querySavingsAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset })),
+    () => collectSavingsCanonicalRows(dbs, filters),
+  )
+}
+
+export async function collectSavingsAnalyticsRows(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: SavingsAnalyticsInput,
+): Promise<Array<Record<string, unknown>>> {
+  return (await collectSavingsAnalyticsRowsResolved(dbs, representation, filters)).rows
+}
+
+export async function collectTdAnalyticsRowsResolved(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: TdAnalyticsInput,
+): Promise<ResolvedAnalyticsRows> {
+  return resolveRepresentationRows(
+    'term_deposits',
+    dbs,
+    representation,
+    () => collectByOffset((limit, offset) => queryTdAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset })),
+    () => collectTdCanonicalRows(dbs, filters),
+  )
+}
+
+export async function collectTdAnalyticsRows(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: TdAnalyticsInput,
+): Promise<Array<Record<string, unknown>>> {
+  return (await collectTdAnalyticsRowsResolved(dbs, representation, filters)).rows
+}
+
+export async function queryHomeLoanRepresentationTimeseriesResolved(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: HomeLoanAnalyticsInput,
+): Promise<ResolvedAnalyticsRows> {
+  return resolveRepresentationRows(
+    'home_loans',
+    dbs,
+    representation,
+    () => queryHomeLoanAnalyticsRows(dbs.analyticsDb, filters),
+    async () => dedupeAnalyticsRows(await queryTimeseries(dbs.canonicalDb, filters), [
+      'series_key',
+      'product_key',
+      'collection_date',
+      'security_purpose',
+      'repayment_type',
+      'rate_structure',
+      'lvr_tier',
+      'feature_set',
+      'interest_rate',
+      'comparison_rate',
+      'annual_fee',
+      'is_removed',
+    ]),
+  )
 }
 
 export async function queryHomeLoanRepresentationTimeseries(
@@ -121,10 +312,34 @@ export async function queryHomeLoanRepresentationTimeseries(
   representation: AnalyticsRepresentation,
   filters: HomeLoanAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
-  if (representation === 'change') {
-    return queryHomeLoanAnalyticsRows(dbs.analyticsDb, filters)
-  }
-  return queryTimeseries(dbs.canonicalDb, filters)
+  return (await queryHomeLoanRepresentationTimeseriesResolved(dbs, representation, filters)).rows
+}
+
+export async function querySavingsRepresentationTimeseriesResolved(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: SavingsAnalyticsInput,
+): Promise<ResolvedAnalyticsRows> {
+  return resolveRepresentationRows(
+    'savings',
+    dbs,
+    representation,
+    () => querySavingsAnalyticsRows(dbs.analyticsDb, filters),
+    async () => dedupeAnalyticsRows(await querySavingsTimeseries(dbs.canonicalDb, filters), [
+      'series_key',
+      'product_key',
+      'collection_date',
+      'account_type',
+      'rate_type',
+      'deposit_tier',
+      'interest_rate',
+      'min_balance',
+      'max_balance',
+      'conditions',
+      'monthly_fee',
+      'is_removed',
+    ]),
+  )
 }
 
 export async function querySavingsRepresentationTimeseries(
@@ -132,10 +347,32 @@ export async function querySavingsRepresentationTimeseries(
   representation: AnalyticsRepresentation,
   filters: SavingsAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
-  if (representation === 'change') {
-    return querySavingsAnalyticsRows(dbs.analyticsDb, filters)
-  }
-  return querySavingsTimeseries(dbs.canonicalDb, filters)
+  return (await querySavingsRepresentationTimeseriesResolved(dbs, representation, filters)).rows
+}
+
+export async function queryTdRepresentationTimeseriesResolved(
+  dbs: DbPair,
+  representation: AnalyticsRepresentation,
+  filters: TdAnalyticsInput,
+): Promise<ResolvedAnalyticsRows> {
+  return resolveRepresentationRows(
+    'term_deposits',
+    dbs,
+    representation,
+    () => queryTdAnalyticsRows(dbs.analyticsDb, filters),
+    async () => dedupeAnalyticsRows(await queryTdTimeseries(dbs.canonicalDb, filters), [
+      'series_key',
+      'product_key',
+      'collection_date',
+      'term_months',
+      'deposit_tier',
+      'interest_payment',
+      'interest_rate',
+      'min_deposit',
+      'max_deposit',
+      'is_removed',
+    ]),
+  )
 }
 
 export async function queryTdRepresentationTimeseries(
@@ -143,8 +380,5 @@ export async function queryTdRepresentationTimeseries(
   representation: AnalyticsRepresentation,
   filters: TdAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
-  if (representation === 'change') {
-    return queryTdAnalyticsRows(dbs.analyticsDb, filters)
-  }
-  return queryTdTimeseries(dbs.canonicalDb, filters)
+  return (await queryTdRepresentationTimeseriesResolved(dbs, representation, filters)).rows
 }

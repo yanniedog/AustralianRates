@@ -6,7 +6,7 @@ import { guardPublicExportJob } from './public-write-gates'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 import { csvEscape } from '../utils/csv'
-import { collectSavingsAnalyticsRows, querySavingsRepresentationTimeseries } from './analytics-data'
+import { collectSavingsAnalyticsRowsResolved, querySavingsRepresentationTimeseriesResolved } from './analytics-data'
 import {
   exportContentType,
   exportFileExtension,
@@ -99,6 +99,7 @@ async function buildSavingsArtifact(
   const jsonState = { firstRow: true }
   let rowCount = 0
   const representation = filters.representation ?? 'day'
+  let effectiveRepresentation = representation
   const dbs = { canonicalDb: env.DB, analyticsDb: getReadDb(env) }
 
   if (scope === 'timeseries') {
@@ -107,7 +108,7 @@ async function buildSavingsArtifact(
     }
     let offset = 0
     while (true) {
-      const rows = await querySavingsRepresentationTimeseries(dbs, representation, {
+      const result = await querySavingsRepresentationTimeseriesResolved(dbs, representation, {
         bank: filters.bank,
         banks: filters.banks,
         productKey: filters.productKey,
@@ -125,6 +126,8 @@ async function buildSavingsArtifact(
         limit: 1000,
         offset,
       })
+      const rows = result.rows
+      effectiveRepresentation = result.representation
       if (rows.length === 0) break
       rowCount += rows.length
       if (format === 'csv') appendCsvChunk(csvLines, csvState, rows as Array<Record<string, unknown>>)
@@ -133,9 +136,9 @@ async function buildSavingsArtifact(
       offset += rows.length
     }
   } else {
-    const rows =
+    const result =
       representation === 'change'
-        ? await collectSavingsAnalyticsRows(dbs, representation, {
+        ? await collectSavingsAnalyticsRowsResolved(dbs, representation, {
             startDate: filters.startDate,
             endDate: filters.endDate,
             bank: filters.bank,
@@ -149,35 +152,42 @@ async function buildSavingsArtifact(
             mode: filters.mode,
             sourceMode: filters.sourceMode,
           })
-        : await (async () => {
-            const pages: Array<Record<string, unknown>> = []
-            let page = 1
-            let lastPage = 1
-            do {
-              const result = await querySavingsRatesPaginated(env.DB, {
-                page,
-                size: 1000,
-                startDate: filters.startDate,
-                endDate: filters.endDate,
-                bank: filters.bank,
-                banks: filters.banks,
-                accountType: filters.accountType,
-                rateType: filters.rateType,
-                depositTier: filters.depositTier,
-                minRate: filters.minRate,
-                maxRate: filters.maxRate,
-                includeRemoved: filters.includeRemoved,
-                sort: filters.sort,
-                dir: filters.dir,
-                mode: filters.mode,
-                sourceMode: filters.sourceMode,
-              })
-              lastPage = result.last_page
-              pages.push(...(result.data as Array<Record<string, unknown>>))
-              page += 1
-            } while (page <= lastPage)
-            return pages
-          })()
+        : {
+            requestedRepresentation: representation,
+            representation: 'day' as const,
+            fallbackReason: null,
+            rows: await (async () => {
+              const pages: Array<Record<string, unknown>> = []
+              let page = 1
+              let lastPage = 1
+              do {
+                const result = await querySavingsRatesPaginated(env.DB, {
+                  page,
+                  size: 1000,
+                  startDate: filters.startDate,
+                  endDate: filters.endDate,
+                  bank: filters.bank,
+                  banks: filters.banks,
+                  accountType: filters.accountType,
+                  rateType: filters.rateType,
+                  depositTier: filters.depositTier,
+                  minRate: filters.minRate,
+                  maxRate: filters.maxRate,
+                  includeRemoved: filters.includeRemoved,
+                  sort: filters.sort,
+                  dir: filters.dir,
+                  mode: filters.mode,
+                  sourceMode: filters.sourceMode,
+                })
+                lastPage = result.last_page
+                pages.push(...(result.data as Array<Record<string, unknown>>))
+                page += 1
+              } while (page <= lastPage)
+              return pages
+            })(),
+          }
+    const rows = result.rows
+    effectiveRepresentation = result.representation
     rowCount += rows.length
     if (format === 'csv') appendCsvChunk(csvLines, csvState, rows as Array<Record<string, unknown>>)
     else appendJsonChunk(jsonRows, jsonState, rows as Array<Record<string, unknown>>)
@@ -188,7 +198,7 @@ async function buildSavingsArtifact(
   }
 
   return {
-    body: `{"ok":true,"dataset":"savings","export_scope":"${scope}","count":${rowCount},"rows":[${jsonRows.join('')}]}`,
+    body: `{"ok":true,"dataset":"savings","export_scope":"${scope}","representation":"${effectiveRepresentation}","count":${rowCount},"rows":[${jsonRows.join('')}]}`,
     rowCount,
   }
 }

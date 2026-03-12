@@ -16,6 +16,7 @@ type RebuildInput = {
   toDate?: string
   batchSize?: number
   limitRows?: number
+  resume?: boolean
 }
 
 type ProjectionStateRow = {
@@ -110,6 +111,24 @@ async function listProjectionStates(
     .bind(...(dataset ? [dataset] : []))
     .all<ProjectionStateRow>()
   return result.results ?? []
+}
+
+async function getProjectionState(
+  db: D1Database,
+  dataset: DatasetKind,
+): Promise<ProjectionStateRow | null> {
+  const row = await db
+    .prepare(
+      `SELECT
+         state_key, dataset_kind, status, last_series_key, last_collection_date, last_parsed_at,
+         last_run_id, notes, updated_at
+       FROM analytics_projection_state
+       WHERE state_key = ?1
+       LIMIT 1`,
+    )
+    .bind(stateKey(dataset))
+    .first<ProjectionStateRow>()
+  return row ?? null
 }
 
 async function readNextBatch(
@@ -286,14 +305,32 @@ export async function rebuildAnalyticsProjections(
     const config = getAnalyticsDatasetConfig(dataset)
     let processedRows = 0
     let batches = 0
-    let cursor: ProjectionCursor | null = null
+    let exhausted = false
+    const existingState = input.resume === false ? null : await getProjectionState(db, dataset)
+    let cursor: ProjectionCursor | null =
+      existingState?.last_collection_date && existingState.last_parsed_at && existingState.last_series_key
+        ? {
+            collectionDate: existingState.last_collection_date,
+            parsedAt: existingState.last_parsed_at,
+            seriesKey: existingState.last_series_key,
+          }
+        : null
     try {
-      await upsertProjectionState(db, { dataset, status: 'processing', notes: 'Replay in progress' })
+      await upsertProjectionState(db, {
+        dataset,
+        status: 'processing',
+        cursor,
+        lastRunId: startedAt,
+        notes: cursor ? 'Replay resume in progress' : 'Replay in progress',
+      })
       while (true) {
         const remaining = input.limitRows == null ? null : Math.max(0, input.limitRows - processedRows)
         if (remaining === 0) break
         const rows = await readNextBatch(db, config, input, cursor, Math.max(1, Math.min(1000, remaining ?? input.batchSize ?? 250)))
-        if (!rows.length) break
+        if (!rows.length) {
+          exhausted = true
+          break
+        }
         for (const row of rows) {
           await replayRow(db, dataset, row)
           processedRows += 1
@@ -309,9 +346,9 @@ export async function rebuildAnalyticsProjections(
       }
       await upsertProjectionState(db, {
         dataset,
-        status: 'completed',
+        status: exhausted ? 'completed' : 'processing',
         cursor,
-        notes: `Replay completed rows=${processedRows}`,
+        notes: exhausted ? `Replay completed rows=${processedRows}` : `Replay checkpoint rows=${processedRows}`,
       })
       results.push({
         dataset,

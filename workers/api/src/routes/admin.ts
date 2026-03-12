@@ -455,12 +455,16 @@ adminRoutes.post('/analytics/projections/rebuild', async (c) => {
   const limitRows = body.limit_rows == null && body.limitRows == null
     ? undefined
     : clampInt(String(body.limit_rows ?? body.limitRows ?? 0), 0, 0, 1_000_000)
+  const resume = body.resume == null
+    ? true
+    : !(String(body.resume).trim().toLowerCase() === 'false' || String(body.resume).trim() === '0')
   const result = await rebuildAnalyticsProjections(c.env.DB, {
     dataset,
     fromDate: typeof body.from_date === 'string' ? body.from_date : typeof body.fromDate === 'string' ? body.fromDate : undefined,
     toDate: typeof body.to_date === 'string' ? body.to_date : typeof body.toDate === 'string' ? body.toDate : undefined,
     batchSize,
     limitRows: limitRows && limitRows > 0 ? limitRows : undefined,
+    resume,
   })
   return c.json({
     ok: true,

@@ -432,6 +432,8 @@
         var response = await fetchAnalyticsRows(baseParams);
         var rows = Array.isArray(response.rows) ? response.rows : [];
         var total = Number(response.total || rows.length || 0);
+        var representation = String(response.representation || (baseParams && baseParams.representation) || 'day');
+        var fallbackReason = response.fallback_reason ? String(response.fallback_reason) : '';
 
         if (typeof onProgress === 'function') {
             onProgress({
@@ -447,6 +449,8 @@
             rows: rows,
             total: total || rows.length,
             truncated: false,
+            representation: representation,
+            fallbackReason: fallbackReason,
         };
     }
 

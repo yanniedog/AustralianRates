@@ -21,6 +21,7 @@
         totalRows: 0,
         truncated: false,
         stale: false,
+        fallbackReason: '',
         selectedSeriesKeys: [],
         spotlightSeriesKey: '',
         spotlightDate: '',
@@ -70,6 +71,7 @@
     function statusText(model, currentFields) {
         if (!model || !model.meta) return 'WAIT';
         var parts = [Number(chartState.totalRows || 0).toLocaleString() + ' rows'];
+        if (chartState.fallbackReason) parts.push('day fallback');
         if (currentFields.view === 'lenders') {
             parts.push(model.meta.visibleLenders.toLocaleString() + '/' + model.meta.totalLenders.toLocaleString() + ' lenders');
         } else {
@@ -216,6 +218,7 @@
     async function drawChart() {
         if (!els.chartOutput) return;
         disposeCharts();
+        chartState.fallbackReason = '';
         if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
@@ -230,6 +233,10 @@
             chartState.totalRows = Number(payload.total || chartState.rows.length || 0);
             chartState.truncated = !!payload.truncated;
             chartState.stale = false;
+            chartState.fallbackReason = payload.fallbackReason || '';
+            if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
+                els.chartRepresentation.value = payload.representation;
+            }
             resetSelection();
 
             if (!chartState.rows.length) {
@@ -245,6 +252,7 @@
                 truncated: chartState.truncated,
             });
         } catch (error) {
+            chartState.fallbackReason = '';
             clearOutput('ERR');
             if (chartUi.setStatus) chartUi.setStatus('ERR ' + String(error && error.message ? error.message : error));
             clientLog('error', 'Chart load failed', {

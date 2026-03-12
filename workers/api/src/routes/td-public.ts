@@ -11,7 +11,6 @@ import {
   queryTdRatesPaginated,
   queryTdTimeseries,
 } from '../db/td-queries'
-import { queryAnalyticsRateChanges } from '../db/analytics/change-reads'
 import { getReadDb } from '../db/read-db'
 import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
@@ -24,10 +23,11 @@ import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/re
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
-import { queryTdRateChangeIntegrity } from '../db/rate-change-log'
+import { queryTdRateChangeIntegrity, queryTdRateChanges } from '../db/rate-change-log'
 import { registerTdAnalyticsRoutes } from './td-analytics'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
-import { queryTdRepresentationTimeseries } from './analytics-data'
+import { queryTdRepresentationTimeseriesResolved } from './analytics-data'
+import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
 import { registerTdExportRoutes } from './td-exports'
 import {
   matchLatestCache,
@@ -76,15 +76,16 @@ tdPublicRoutes.get('/changes', async (c) => {
   const q = c.req.query()
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
-  const [result, integrity] = await Promise.all([
-    queryAnalyticsRateChanges(getReadDb(c.env), 'term_deposits', { limit, offset }),
-    queryTdRateChangeIntegrity(c.env.DB),
+  const [changeResult, integrity] = await Promise.all([
+    queryChangesWithFallback(c.env.DB, getReadDb(c.env), 'term_deposits', { limit, offset }, queryTdRateChanges),
+    queryIntegritySafely('term_deposits', () => queryTdRateChangeIntegrity(c.env.DB)),
   ])
   return c.json({
     ok: true,
-    count: result.rows.length,
-    total: result.total,
-    rows: result.rows,
+    source: changeResult.source,
+    count: changeResult.result.rows.length,
+    total: changeResult.result.total,
+    rows: changeResult.result.rows,
     integrity,
   })
 })
@@ -323,7 +324,7 @@ tdPublicRoutes.get('/timeseries', async (c) => {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
-  const rows = await queryTdRepresentationTimeseries(
+  const result = await queryTdRepresentationTimeseriesResolved(
     { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
     representation,
     {
@@ -345,7 +346,7 @@ tdPublicRoutes.get('/timeseries', async (c) => {
     offset: cursor,
     },
   )
-  const paged = paginateRows(rows, cursor, pageSize)
+  const paged = paginateRows(result.rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
     totalRows: paged.rows.length,
@@ -355,7 +356,9 @@ tdPublicRoutes.get('/timeseries', async (c) => {
   })
   return c.json({
     ok: true,
-    representation,
+    representation: result.representation,
+    requested_representation: result.requestedRepresentation,
+    fallback_reason: result.fallbackReason,
     count: paged.rows.length,
     rows: paged.rows,
     next_cursor: paged.nextCursor,

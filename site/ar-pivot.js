@@ -142,6 +142,8 @@
         }).then(function (payload) {
             var rows = Array.isArray(payload.rows) ? payload.rows : [];
             var total = Number(payload.total || rows.length || 0);
+            var representation = String(payload.representation || params.representation || 'day');
+            var fallbackReason = payload.fallback_reason ? String(payload.fallback_reason) : '';
             if (typeof onProgress === 'function') {
                 onProgress({
                     page: 1,
@@ -151,7 +153,13 @@
                     truncated: false,
                 });
             }
-            return { rows: rows, total: total, truncated: false };
+            return {
+                rows: rows,
+                total: total,
+                truncated: false,
+                representation: representation,
+                fallbackReason: fallbackReason,
+            };
         });
     }
 
@@ -160,7 +168,7 @@
         if (!els.pivotOutput) return Promise.resolve();
 
         var fp = buildFilterParams();
-        var fingerprint = JSON.stringify(stableParams(fp));
+        var fingerprint = currentPivotFingerprint();
 
         if (!opts.force && isPivotFresh(fingerprint)) {
             return Promise.resolve({ reused: true });
@@ -197,6 +205,11 @@
             if (requestToken !== pivotRequestToken) return { superseded: true };
 
             var data = payload.rows || [];
+            var effectiveRepresentation = String(payload.representation || (els.pivotRepresentation ? els.pivotRepresentation.value : 'change') || 'change');
+            if (els.pivotRepresentation && els.pivotRepresentation.value !== effectiveRepresentation) {
+                els.pivotRepresentation.value = effectiveRepresentation;
+            }
+            fingerprint = currentPivotFingerprint();
             if (data.length === 0) {
                 setPivotStatus('No data returned. Try broadening your filters or date range.');
                 tabState.pivotLoaded = false;
@@ -206,7 +219,9 @@
             }
 
             setPivotStatus(
-                'Loaded ' + data.length.toLocaleString() + ' rows. Drag fields to refine the default grid.'
+                'Loaded ' + data.length.toLocaleString() + ' rows.' +
+                (payload.fallbackReason ? ' Daily fallback applied.' : '') +
+                ' Drag fields to refine the default grid.'
             );
 
             clientLog('info', 'Pivot load completed', {

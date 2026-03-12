@@ -2,7 +2,7 @@ import type { Hono } from 'hono'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { parseSourceMode } from '../utils/source-mode'
-import { collectTdAnalyticsRows } from './analytics-data'
+import { collectTdAnalyticsRowsResolved } from './analytics-data'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 
@@ -25,24 +25,40 @@ function buildFilters(query: Record<string, string | undefined>) {
 
 export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void {
   publicRoutes.get('/analytics/series', async (c) => {
-    const representation = parseAnalyticsRepresentation(c.req.query('representation'))
-    const rows = await collectTdAnalyticsRows(
+    const requestedRepresentation = parseAnalyticsRepresentation(c.req.query('representation'))
+    const result = await collectTdAnalyticsRowsResolved(
       { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
-      representation,
+      requestedRepresentation,
       buildFilters(c.req.query()),
     )
-    return c.json({ ok: true, representation, count: rows.length, total: rows.length, rows })
+    return c.json({
+      ok: true,
+      representation: result.representation,
+      requested_representation: result.requestedRepresentation,
+      fallback_reason: result.fallbackReason,
+      count: result.rows.length,
+      total: result.rows.length,
+      rows: result.rows,
+    })
   })
 
   publicRoutes.post('/analytics/pivot', async (c) => {
     const body = (await c.req.json<Record<string, string | undefined>>().catch(() => ({}))) as Record<string, string | undefined>
     const merged = { ...c.req.query(), ...body }
-    const representation = parseAnalyticsRepresentation(merged.representation)
-    const rows = await collectTdAnalyticsRows(
+    const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
+    const result = await collectTdAnalyticsRowsResolved(
       { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
-      representation,
+      requestedRepresentation,
       buildFilters(merged),
     )
-    return c.json({ ok: true, representation, count: rows.length, total: rows.length, rows })
+    return c.json({
+      ok: true,
+      representation: result.representation,
+      requested_representation: result.requestedRepresentation,
+      fallback_reason: result.fallbackReason,
+      count: result.rows.length,
+      total: result.rows.length,
+      rows: result.rows,
+    })
   })
 }

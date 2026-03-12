@@ -29,7 +29,7 @@ import {
   storePublicReadCache,
 } from './latest-response'
 import { toCsv } from '../utils/csv'
-import { queryHomeLoanRepresentationTimeseries } from './analytics-data'
+import { queryHomeLoanRepresentationTimeseriesResolved } from './analytics-data'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
@@ -387,7 +387,7 @@ publicRoutes.get('/timeseries', async (c) => {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
-  const rows = await queryHomeLoanRepresentationTimeseries(
+  const result = await queryHomeLoanRepresentationTimeseriesResolved(
     { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
     representation,
     {
@@ -413,7 +413,7 @@ publicRoutes.get('/timeseries', async (c) => {
     offset: cursor,
     },
   )
-  const paged = paginateRows(rows, cursor, pageSize)
+  const paged = paginateRows(result.rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
     totalRows: paged.rows.length,
@@ -425,7 +425,9 @@ publicRoutes.get('/timeseries', async (c) => {
 
   return c.json({
     ok: true,
-    representation,
+    representation: result.representation,
+    requested_representation: result.requestedRepresentation,
+    fallback_reason: result.fallbackReason,
     count: paged.rows.length,
     rows: paged.rows,
     next_cursor: paged.nextCursor,

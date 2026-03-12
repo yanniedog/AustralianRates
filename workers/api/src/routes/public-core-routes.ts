@@ -1,13 +1,13 @@
 import type { Hono } from 'hono'
 import { API_BASE_PATH, MELBOURNE_TIMEZONE } from '../constants'
-import { queryAnalyticsRateChanges } from '../db/analytics/change-reads'
 import { getReadDb } from '../db/read-db'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { getLenderStaleness, getQualityDiagnostics } from '../db/queries'
-import { queryHomeLoanRateChangeIntegrity } from '../db/rate-change-log'
+import { queryHomeLoanRateChangeIntegrity, queryHomeLoanRateChanges } from '../db/rate-change-log'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
+import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
 
 export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
   publicRoutes.get('/health', async (c) => {
@@ -75,15 +75,16 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
     const q = c.req.query()
     const limit = Number(q.limit || 200)
     const offset = Number(q.offset || 0)
-    const [result, integrity] = await Promise.all([
-      queryAnalyticsRateChanges(getReadDb(c.env), 'home_loans', { limit, offset }),
-      queryHomeLoanRateChangeIntegrity(c.env.DB),
+    const [changeResult, integrity] = await Promise.all([
+      queryChangesWithFallback(c.env.DB, getReadDb(c.env), 'home_loans', { limit, offset }, queryHomeLoanRateChanges),
+      queryIntegritySafely('home_loans', () => queryHomeLoanRateChangeIntegrity(c.env.DB)),
     ])
     return c.json({
       ok: true,
-      count: result.rows.length,
-      total: result.total,
-      rows: result.rows,
+      source: changeResult.source,
+      count: changeResult.result.rows.length,
+      total: changeResult.result.total,
+      rows: changeResult.result.rows,
       integrity,
     })
   })
