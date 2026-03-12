@@ -10,6 +10,11 @@ import {
 } from '../db/admin-download-jobs'
 import { keyColumnsForTable, streamTables, streamScopeDatasets } from '../db/analytics/download-config'
 import { gzipCompressText } from '../utils/compression'
+import {
+  isOperationalInternalTable,
+  isProtectedOperationalTableError,
+  listOperationalTables,
+} from './admin-download-operational'
 
 type AdminDownloadEnv = {
   DB: D1Database
@@ -55,27 +60,20 @@ function buildKey(tableName: string, row: Record<string, unknown>): Record<strin
   return key
 }
 
-async function listOperationalTables(db: D1Database): Promise<string[]> {
-  const result = await db
-    .prepare(
-      `SELECT name
-       FROM sqlite_master
-       WHERE type = 'table'
-         AND name NOT LIKE 'sqlite_%'
-       ORDER BY name ASC`,
-    )
-    .all<{ name: string }>()
-  return (result.results ?? []).map((row) => String(row.name || '').trim()).filter(Boolean)
-}
-
 async function readAllTableRows(db: D1Database, tableName: string): Promise<Array<Record<string, unknown>>> {
   const rows: Array<Record<string, unknown>> = []
   let offset = 0
   while (true) {
-    const result = await db
-      .prepare(`SELECT * FROM ${tableName} LIMIT ?1 OFFSET ?2`)
-      .bind(ROW_BATCH_SIZE, offset)
-      .all<Record<string, unknown>>()
+    let result: D1Result<Record<string, unknown>>
+    try {
+      result = await db
+        .prepare(`SELECT * FROM ${tableName} LIMIT ?1 OFFSET ?2`)
+        .bind(ROW_BATCH_SIZE, offset)
+        .all<Record<string, unknown>>()
+    } catch (error) {
+      if (isOperationalInternalTable(tableName) || isProtectedOperationalTableError(error)) return rows
+      throw error
+    }
     const chunk = result.results ?? []
     rows.push(...chunk)
     if (chunk.length < ROW_BATCH_SIZE) break

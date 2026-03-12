@@ -86,7 +86,7 @@ async function waitForExplorerTableReady(page, timeout = 25000) {
         if (table.querySelectorAll('.tabulator-row').length > 0) return true;
         const placeholder = table.querySelector('.tabulator-placeholder');
         return !!(placeholder && String(placeholder.textContent || '').trim().length > 0);
-    }, { timeout });
+    }, null, { timeout });
 }
 
 async function waitForChartReady(page, timeout = 90000) {
@@ -97,7 +97,7 @@ async function waitForChartReady(page, timeout = 90000) {
         if (!rendered) return false;
         const status = String((document.getElementById('chart-status') || {}).textContent || '').trim().toLowerCase();
         return status.indexOf('err') === -1;
-    }, { timeout });
+    }, null, { timeout });
     await page.waitForTimeout(1200);
 }
 
@@ -220,7 +220,7 @@ async function verifyHeroStats(page, results, label) {
             const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
             return text.length > 0 && text.indexOf('...') === -1;
         });
-    }, { timeout: 15000 }).catch(() => null);
+    }, null, { timeout: 15000 }).catch(() => null);
 
     const stats = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('#hero-stats .terminal-stat')).map((el) => String(el.textContent || '').replace(/\s+/g, ' ').trim());
@@ -263,7 +263,7 @@ async function verifyFooterDeployStatus(page, results, label) {
     await page.waitForFunction(() => {
         const text = String(document.getElementById('footer-commit')?.textContent || '').trim();
         return text.length > 0 && text !== 'Loading commit info...';
-    }, { timeout: 15000 }).catch(() => null);
+    }, null, { timeout: 15000 }).catch(() => null);
 
     const text = await page.locator('#footer-commit').textContent().catch(() => '');
     const value = String(text || '').trim();
@@ -444,7 +444,7 @@ async function verifyPivotLoad(page, results, label) {
     await page.click('#load-pivot');
     await page.waitForFunction(() => {
         return !!document.querySelector('#pivot-output .pvtUi');
-    }, { timeout: 45000 }).catch(() => null);
+    }, null, { timeout: 45000 }).catch(() => null);
 
     const pivotReady = await page.evaluate(() => {
         return {
@@ -475,7 +475,7 @@ async function verifyExportRequest(page, results, label) {
     page.context().on('request', handler);
     try {
         await page.selectOption('#download-format', 'csv');
-        await page.waitForFunction(() => String(document.getElementById('download-format')?.value || '') === '', { timeout: 30000 }).catch(() => null);
+        await page.waitForFunction(() => String(document.getElementById('download-format')?.value || '') === '', null, { timeout: 30000 }).catch(() => null);
         await page.waitForTimeout(600);
     } finally {
         page.context().off('request', handler);
