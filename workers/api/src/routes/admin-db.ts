@@ -4,6 +4,7 @@
  */
 
 import { Hono } from 'hono'
+import { emitHistoricalDeleteTombstones, readHistoricalDeleteKeys } from '../db/analytics/admin-tombstones'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -351,9 +352,16 @@ adminDbRoutes.delete('/db/tables/:tableName/rows', async (c) => {
   }
   const where = whereParts.join(' AND ')
   const db = c.env.DB
+  const tombstoneBinds = values.map((value) => (typeof value === 'number' ? value : String(value ?? '')))
+  const deletedKeys = isRateTableReadOnly(tableName)
+    ? await readHistoricalDeleteKeys(db, tableName, where, tombstoneBinds)
+    : []
   const result = await db.prepare(`DELETE FROM ${tableName} WHERE ${where}`).bind(...values).run()
   if ((result.meta.changes ?? 0) === 0) {
     return jsonError(c, 404, 'NOT_FOUND', 'No row matched the key')
+  }
+  if (deletedKeys.length > 0) {
+    await emitHistoricalDeleteTombstones(db, tableName, deletedKeys)
   }
   return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode ?? null, deleted: true })
 })

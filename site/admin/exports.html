@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Admin Exports | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=1cc1151">
+    <link rel="stylesheet" href="../public-shell.css?v=1cc1151">
+    <link rel="stylesheet" href="admin-layout.css?v=1cc1151">
+    <link rel="stylesheet" href="admin-pages.css?v=1cc1151">
+    <script src="../theme.js?v=1cc1151"></script>
+</head>
+<body class="ar-admin">
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide admin-exports" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Export center</p>
+            <h1>Incremental downloads</h1>
+            <p class="admin-subtitle">Create snapshot and delta packs for canonical, optimized, and operational data.</p>
+        </div>
+        <div class="admin-message" id="exports-msg"></div>
+        <div class="export-grid">
+            <section class="admin-card">
+                <h2>Canonical data</h2>
+                <p class="hint">Raw historical tables with optional payload-body companion packs.</p>
+                <div class="export-actions">
+                    <label for="canonical-scope">Scope</label>
+                    <select id="canonical-scope">
+                        <option value="all">All datasets</option>
+                        <option value="home_loans">Home loans</option>
+                        <option value="savings">Savings</option>
+                        <option value="term_deposits">Term deposits</option>
+                    </select>
+                    <label for="canonical-since-cursor">Delta since cursor</label>
+                    <input type="number" id="canonical-since-cursor" min="0" step="1" placeholder="0">
+                    <label><input type="checkbox" id="canonical-payloads"> Include payload bodies</label>
+                    <button type="button" class="primary" data-create-job="canonical:snapshot">Create snapshot</button>
+                    <button type="button" class="secondary" data-create-job="canonical:delta">Create delta</button>
+                    <button type="button" class="secondary" data-refresh-section="canonical">Refresh</button>
+                </div>
+                <div class="export-summary" id="canonical-summary"></div>
+                <div class="export-job-list" id="canonical-jobs"></div>
+            </section>
+
+            <section class="admin-card">
+                <h2>Optimized analytics</h2>
+                <p class="hint">Compact change/event and interval projection packs for charts, history, and pivot queries.</p>
+                <div class="export-actions">
+                    <label for="optimized-scope">Scope</label>
+                    <select id="optimized-scope">
+                        <option value="all">All datasets</option>
+                        <option value="home_loans">Home loans</option>
+                        <option value="savings">Savings</option>
+                        <option value="term_deposits">Term deposits</option>
+                    </select>
+                    <label for="optimized-since-cursor">Delta since cursor</label>
+                    <input type="number" id="optimized-since-cursor" min="0" step="1" placeholder="0">
+                    <button type="button" class="primary" data-create-job="optimized:snapshot">Create snapshot</button>
+                    <button type="button" class="secondary" data-create-job="optimized:delta">Create delta</button>
+                    <button type="button" class="secondary" data-refresh-section="optimized">Refresh</button>
+                </div>
+                <div class="export-summary" id="optimized-summary"></div>
+                <div class="export-job-list" id="optimized-jobs"></div>
+            </section>
+
+            <section class="admin-card">
+                <h2>Operational backup</h2>
+                <p class="hint">Logical full-database snapshot bundle for operational recovery checks.</p>
+                <div class="export-actions">
+                    <label for="operational-scope">Scope</label>
+                    <select id="operational-scope" disabled>
+                        <option value="all">All datasets</option>
+                    </select>
+                    <button type="button" class="primary" data-create-job="operational:snapshot">Create snapshot</button>
+                    <button type="button" class="secondary" data-refresh-section="operational">Refresh</button>
+                </div>
+                <div class="export-summary" id="operational-summary"></div>
+                <div class="export-job-list" id="operational-jobs"></div>
+            </section>
+        </div>
+    </main>
+    <script src="../ar-time.js?v=1cc1151"></script>
+    <script src="admin-portal.js?v=1cc1151"></script>
+    <script src="../ui-icons.js?v=1cc1151"></script>
+    <script src="../frame.js?v=1cc1151"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var timeUtils = window.AR.time || {};
+            var msgEl = document.getElementById('exports-msg');
+            var pollTimer = null;
+            var POLL_MS = 5000;
+            var sections = {
+                canonical: {
+                    stream: 'canonical',
+                    scopeEl: document.getElementById('canonical-scope'),
+                    sinceCursorEl: document.getElementById('canonical-since-cursor'),
+                    payloadsEl: document.getElementById('canonical-payloads'),
+                    summaryEl: document.getElementById('canonical-summary'),
+                    jobsEl: document.getElementById('canonical-jobs')
+                },
+                optimized: {
+                    stream: 'optimized',
+                    scopeEl: document.getElementById('optimized-scope'),
+                    sinceCursorEl: document.getElementById('optimized-since-cursor'),
+                    payloadsEl: null,
+                    summaryEl: document.getElementById('optimized-summary'),
+                    jobsEl: document.getElementById('optimized-jobs')
+                },
+                operational: {
+                    stream: 'operational',
+                    scopeEl: document.getElementById('operational-scope'),
+                    sinceCursorEl: null,
+                    payloadsEl: null,
+                    summaryEl: document.getElementById('operational-summary'),
+                    jobsEl: document.getElementById('operational-jobs')
+                }
+            };
+
+            function escapeHtml(value) {
+                var div = document.createElement('div');
+                div.textContent = value == null ? '' : String(value);
+                return div.innerHTML;
+            }
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.classList.remove('visible'); }, 5000);
+            }
+
+            function formatTimestamp(value) {
+                if (!value) return '--';
+                if (!timeUtils.formatCheckedAt) return String(value);
+                return timeUtils.formatCheckedAt(value).text || String(value);
+            }
+
+            function asInt(value) {
+                var n = Number(value);
+                if (!isFinite(n)) return 0;
+                return Math.max(0, Math.floor(n));
+            }
+
+            function currentScope(sectionKey) {
+                var section = sections[sectionKey];
+                return section && section.scopeEl ? String(section.scopeEl.value || 'all') : 'all';
+            }
+
+            async function requestJson(path, options) {
+                var response = await portal.fetchAdmin(path, options);
+                var payload = await response.json().catch(function () { return {}; });
+                if (!response.ok || !payload || payload.ok !== true) {
+                    throw new Error(payload && payload.error && payload.error.message ? payload.error.message : ('Request failed (' + response.status + ')'));
+                }
+                return payload;
+            }
+
+            function triggerBlobDownload(blob, filename) {
+                var href = URL.createObjectURL(blob);
+                var link = document.createElement('a');
+                link.href = href;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(function () { URL.revokeObjectURL(href); }, 1000);
+            }
+
+            async function downloadArtifact(path, fileName) {
+                var response = await fetch(portal.apiBase() + path, {
+                    cache: 'no-store',
+                    headers: portal.authHeaders()
+                });
+                if (!response.ok) throw new Error('Download failed (' + response.status + ')');
+                var blob = await response.blob();
+                triggerBlobDownload(blob, fileName || 'admin-download.jsonl.gz');
+            }
+
+            function latestCursor(entries) {
+                var values = entries
+                    .map(function (entry) { return Number(entry.job && entry.job.end_cursor); })
+                    .filter(function (value) { return isFinite(value) && value >= 0; });
+                if (!values.length) return '--';
+                return String(Math.max.apply(null, values));
+            }
+
+            function renderSummary(sectionKey, entries) {
+                var section = sections[sectionKey];
+                var latest = entries[0] || null;
+                var cells = [
+                    { label: 'Latest cursor', value: latestCursor(entries) },
+                    { label: 'Jobs shown', value: entries.length },
+                    { label: 'Latest status', value: latest && latest.job ? latest.job.status : '--' },
+                    { label: 'Latest requested', value: latest && latest.job ? formatTimestamp(latest.job.requested_at) : '--' },
+                    { label: 'Latest completed', value: latest && latest.job ? formatTimestamp(latest.job.completed_at) : '--' }
+                ];
+                section.summaryEl.innerHTML = cells.map(function (cell) {
+                    return '<div class="summary-cell"><div class="label">' + escapeHtml(cell.label) + '</div><div class="value">' + escapeHtml(cell.value) + '</div></div>';
+                }).join('');
+            }
+
+            function renderJobs(sectionKey, entries) {
+                var section = sections[sectionKey];
+                if (!entries.length) {
+                    section.jobsEl.innerHTML = '<div class="export-empty">No jobs yet for this stream and scope.</div>';
+                    return;
+                }
+                section.jobsEl.innerHTML = entries.map(function (entry) {
+                    var job = entry.job || {};
+                    var artifacts = Array.isArray(entry.artifacts) ? entry.artifacts : [];
+                    return ''
+                        + '<div class="export-job">'
+                        + '  <div class="export-job-head"><strong>' + escapeHtml(job.job_id || '') + '</strong><span>' + escapeHtml(job.status || '') + '</span></div>'
+                        + '  <div class="export-job-meta">'
+                        + '    Mode: ' + escapeHtml(job.mode || '--') + ' | Scope: ' + escapeHtml(job.scope || '--') + ' | Requested: ' + escapeHtml(formatTimestamp(job.requested_at)) + '<br>'
+                        + '    Started: ' + escapeHtml(formatTimestamp(job.started_at)) + ' | Completed: ' + escapeHtml(formatTimestamp(job.completed_at)) + '<br>'
+                        + '    Since cursor: ' + escapeHtml(job.since_cursor == null ? '--' : job.since_cursor) + ' | End cursor: ' + escapeHtml(job.end_cursor == null ? '--' : job.end_cursor)
+                        + (job.error_message ? '<br>Error: ' + escapeHtml(job.error_message) : '')
+                        + '  </div>'
+                        + '  <div class="export-job-actions">'
+                        + '    <button type="button" class="secondary" data-action="poll-job" data-section="' + escapeHtml(sectionKey) + '" data-job-id="' + escapeHtml(job.job_id || '') + '">Poll</button>'
+                        + (job.end_cursor == null ? '' : '<button type="button" class="secondary" data-action="copy-cursor" data-cursor="' + escapeHtml(job.end_cursor) + '">Copy cursor</button>')
+                        + '  </div>'
+                        + '  <div class="export-artifacts">'
+                        + (artifacts.length
+                            ? artifacts.map(function (artifact) {
+                                return '<button type="button" class="secondary" data-action="download-artifact"'
+                                    + ' data-path="' + escapeHtml(artifact.download_path || '') + '"'
+                                    + ' data-file-name="' + escapeHtml(artifact.file_name || '') + '">'
+                                    + escapeHtml(artifact.artifact_kind === 'payload_bodies' ? 'Download payloads' : 'Download ' + artifact.artifact_kind)
+                                    + '</button>';
+                            }).join('')
+                            : '<span class="export-empty">No artifacts yet.</span>')
+                        + '  </div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            async function loadSection(sectionKey) {
+                var section = sections[sectionKey];
+                section.jobsEl.innerHTML = '<div class="export-empty">Loading...</div>';
+                var payload = await requestJson(
+                    '/downloads?stream=' + encodeURIComponent(section.stream)
+                    + '&scope=' + encodeURIComponent(currentScope(sectionKey))
+                    + '&limit=8'
+                );
+                var entries = Array.isArray(payload.jobs) ? payload.jobs : [];
+                renderSummary(sectionKey, entries);
+                renderJobs(sectionKey, entries);
+                return entries;
+            }
+
+            async function loadAllSections() {
+                var results = await Promise.all([
+                    loadSection('canonical'),
+                    loadSection('optimized'),
+                    loadSection('operational')
+                ]);
+                var pending = results.some(function (entries) {
+                    return entries.some(function (entry) {
+                        var status = entry && entry.job ? String(entry.job.status || '') : '';
+                        return status === 'queued' || status === 'processing';
+                    });
+                });
+                if (pollTimer) clearTimeout(pollTimer);
+                if (pending) {
+                    pollTimer = setTimeout(loadAllSections, POLL_MS);
+                }
+            }
+
+            async function createJob(sectionKey, mode) {
+                var section = sections[sectionKey];
+                var body = {
+                    stream: section.stream,
+                    scope: currentScope(sectionKey),
+                    mode: mode
+                };
+                if (mode === 'delta' && section.sinceCursorEl) {
+                    body.since_cursor = Math.max(0, asInt(section.sinceCursorEl.value || 0));
+                }
+                if (section.payloadsEl) {
+                    body.include_payload_bodies = !!section.payloadsEl.checked;
+                }
+                var payload = await requestJson('/downloads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                var jobId = payload && payload.job ? payload.job.job_id : '';
+                showMsg('Download job queued: ' + jobId, false);
+                await loadAllSections();
+            }
+
+            async function pollJob(jobId) {
+                var payload = await requestJson('/downloads/' + encodeURIComponent(jobId));
+                var status = payload && payload.job ? payload.job.status : 'unknown';
+                showMsg('Job ' + jobId + ': ' + status, false);
+                await loadAllSections();
+            }
+
+            document.body.addEventListener('click', function (event) {
+                var target = event.target;
+                if (!target || !target.getAttribute) return;
+
+                var createJobSpec = target.getAttribute('data-create-job');
+                if (createJobSpec) {
+                    var parts = createJobSpec.split(':');
+                    createJob(parts[0], parts[1]).catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to create job.', true);
+                    });
+                    return;
+                }
+
+                var refreshSectionKey = target.getAttribute('data-refresh-section');
+                if (refreshSectionKey) {
+                    loadSection(refreshSectionKey).catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to refresh jobs.', true);
+                    });
+                    return;
+                }
+
+                var action = target.getAttribute('data-action');
+                if (action === 'poll-job') {
+                    pollJob(target.getAttribute('data-job-id') || '').catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to poll job.', true);
+                    });
+                    return;
+                }
+                if (action === 'copy-cursor') {
+                    var cursor = String(target.getAttribute('data-cursor') || '').trim();
+                    navigator.clipboard.writeText(cursor).then(function () {
+                        showMsg('Copied cursor ' + cursor, false);
+                    }).catch(function () {
+                        showMsg('Failed to copy cursor.', true);
+                    });
+                    return;
+                }
+                if (action === 'download-artifact') {
+                    downloadArtifact(
+                        target.getAttribute('data-path') || '',
+                        target.getAttribute('data-file-name') || ''
+                    ).catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to download artifact.', true);
+                    });
+                }
+            });
+
+            ['canonical', 'optimized'].forEach(function (sectionKey) {
+                var section = sections[sectionKey];
+                if (section.scopeEl) {
+                    section.scopeEl.addEventListener('change', function () {
+                        loadSection(sectionKey).catch(function (error) {
+                            showMsg(error && error.message ? error.message : 'Failed to refresh jobs.', true);
+                        });
+                    });
+                }
+            });
+
+            loadAllSections().catch(function (error) {
+                showMsg(error && error.message ? error.message : 'Failed to load export jobs.', true);
+            });
+        })();
+    </script>
+</body>
+</html>

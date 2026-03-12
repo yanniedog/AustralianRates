@@ -75,7 +75,6 @@
         } else {
             parts.push(model.meta.visibleSeries.toLocaleString() + '/' + model.meta.totalSeries.toLocaleString() + ' series');
         }
-        if (chartState.truncated) parts.push('10K cap');
         return parts.join(' | ');
     }
 
@@ -207,8 +206,10 @@
 
     function buildBaseParams() {
         var params = buildFilterParams() || {};
+        var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
+        params.representation = currentFields.representation || 'change';
         return params;
     }
 
@@ -253,6 +254,10 @@
     }
 
     function refreshFromCache(reason) {
+        if (reason === 'representation') {
+            drawChart();
+            return;
+        }
         if (!chartState.rows.length) {
             if (chartUi.setStatus) chartUi.setStatus('READY');
             return;

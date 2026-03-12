@@ -11,6 +11,8 @@ import {
   querySavingsRatesPaginated,
   querySavingsTimeseries,
 } from '../db/savings-queries'
+import { queryAnalyticsRateChanges } from '../db/analytics/change-reads'
+import { getReadDb } from '../db/read-db'
 import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
@@ -22,7 +24,10 @@ import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/re
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
-import { querySavingsRateChangeIntegrity, querySavingsRateChanges } from '../db/rate-change-log'
+import { querySavingsRateChangeIntegrity } from '../db/rate-change-log'
+import { registerSavingsAnalyticsRoutes } from './savings-analytics'
+import { parseAnalyticsRepresentation } from './analytics-route-utils'
+import { querySavingsRepresentationTimeseries } from './analytics-data'
 import { registerSavingsExportRoutes } from './savings-exports'
 import {
   matchLatestCache,
@@ -47,6 +52,7 @@ savingsPublicRoutes.use('*', async (c, next) => {
 })
 
 registerSavingsExportRoutes(savingsPublicRoutes)
+registerSavingsAnalyticsRoutes(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/health', (c) => {
   withPublicCache(c, 30)
@@ -71,7 +77,7 @@ savingsPublicRoutes.get('/changes', async (c) => {
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
   const [result, integrity] = await Promise.all([
-    querySavingsRateChanges(c.env.DB, { limit, offset }),
+    queryAnalyticsRateChanges(getReadDb(c.env), 'savings', { limit, offset }),
     querySavingsRateChangeIntegrity(c.env.DB),
   ])
   return c.json({
@@ -307,6 +313,7 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
   const productKey = q.product_key || q.productKey || q.series_key
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const representation = parseAnalyticsRepresentation(q.representation)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const pageSize = parsePageSize(String(q.page_size || q.limit || ''), 1000, 1000)
   const cursor = parseCursorOffset(q.cursor)
@@ -315,13 +322,17 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
-  const rows = await querySavingsTimeseries(c.env.DB, {
+  const rows = await querySavingsRepresentationTimeseries(
+    { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    representation,
+    {
     bank: q.bank,
     banks,
     productKey,
     seriesKey: q.series_key,
     accountType: q.account_type,
     rateType: q.rate_type,
+    depositTier: q.deposit_tier,
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved: parseIncludeRemoved(q.include_removed),
@@ -331,7 +342,8 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
     endDate: q.end_date,
     limit: pageSize + 1,
     offset: cursor,
-  })
+    },
+  )
   const paged = paginateRows(rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
@@ -340,7 +352,15 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
     sourceMix: sourceMixFromRows(paged.rows as Array<Record<string, unknown>>),
     limited: paged.partial,
   })
-  return c.json({ ok: true, count: paged.rows.length, rows: paged.rows, next_cursor: paged.nextCursor, partial: paged.partial, meta })
+  return c.json({
+    ok: true,
+    representation,
+    count: paged.rows.length,
+    rows: paged.rows,
+    next_cursor: paged.nextCursor,
+    partial: paged.partial,
+    meta,
+  })
 })
 
 savingsPublicRoutes.get('/coverage', async (c) => {

@@ -45,6 +45,7 @@
             groupField: els.chartGroup ? els.chartGroup.value : defaults.groupField || 'product_key',
             chartType: els.chartType ? els.chartType.value : defaults.chartType || 'scatter',
             density: els.chartSeriesLimit ? els.chartSeriesLimit.value : defaults.density || 'standard',
+            representation: els.chartRepresentation ? els.chartRepresentation.value : 'change',
         };
     }
 
@@ -141,14 +142,12 @@
         var pills = [];
         pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
         pills.push('<span class="chart-summary-pill">' + esc(chartConfig.fieldLabel(fields.yField)) + '</span>');
+        pills.push('<span class="chart-summary-pill">' + esc(fields.representation === 'day' ? 'Daily basis' : 'Change basis') + '</span>');
         pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
         pills.push('<span class="chart-summary-pill">' + esc(model.meta.densityLabel) + ' density</span>');
         pills = pills.concat(currentSlicePills(fields));
         if (payloadMeta && Number.isFinite(Number(payloadMeta.totalRows))) {
             pills.push('<span class="chart-summary-pill">' + esc(Number(payloadMeta.totalRows).toLocaleString()) + ' rows loaded</span>');
-        }
-        if (payloadMeta && payloadMeta.truncated) {
-            pills.push('<span class="chart-summary-pill is-warning">10k row cap</span>');
         }
         if (stale) {
             pills.push('<span class="chart-summary-pill is-warning">Stale</span>');
@@ -349,10 +348,10 @@
             });
         }
 
-        [els.chartX, els.chartY, els.chartGroup, els.chartType, els.chartSeriesLimit].forEach(function (control) {
+        [els.chartX, els.chartY, els.chartGroup, els.chartType, els.chartSeriesLimit, els.chartRepresentation].forEach(function (control) {
             if (!control) return;
             control.addEventListener('change', function () {
-                controlHandler('advanced');
+                controlHandler(control === els.chartRepresentation ? 'representation' : 'advanced');
             });
         });
 

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { requireAdmin } from '../auth/admin'
+import { getAnalyticsProjectionDiagnostics, rebuildAnalyticsProjections } from '../db/analytics/rebuild'
 import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
 import { getFetchEventById, getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
@@ -12,6 +13,7 @@ import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
+import { adminDownloadRoutes } from './admin-downloads'
 import { adminHealthRoutes } from './admin-health'
 import { adminLiveCdrRepairRoutes } from './admin-live-cdr-repair'
 import { adminLogRoutes } from './admin-logs'
@@ -51,6 +53,13 @@ function backlogTotal(rows: BacklogRow[]): number {
   return rows.reduce((sum, row) => sum + Number(row.count || 0), 0)
 }
 
+function parseDatasetFilter(value: string | undefined): DatasetKind | 'all' | null {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized || normalized === 'all') return 'all'
+  if (normalized === 'home_loans' || normalized === 'savings' || normalized === 'term_deposits') return normalized
+  return null
+}
+
 adminRoutes.use('*', async (c, next) => {
   withNoStore(c)
   await next()
@@ -60,6 +69,7 @@ adminRoutes.use('*', requireAdmin())
 
 adminRoutes.route('/', adminConfigRoutes)
 adminRoutes.route('/', adminDbRoutes)
+adminRoutes.route('/', adminDownloadRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)
@@ -419,6 +429,43 @@ adminRoutes.get('/diagnostics/series', async (c) => {
     auth_mode: c.get('adminAuthState')?.mode || null,
     count: (result.results ?? []).length,
     rows: result.results ?? [],
+  })
+})
+
+adminRoutes.get('/analytics/projections/diagnostics', async (c) => {
+  const dataset = parseDatasetFilter(c.req.query('dataset'))
+  if (dataset == null) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'dataset must be all, home_loans, savings, or term_deposits')
+  }
+  const diagnostics = await getAnalyticsProjectionDiagnostics(c.env.DB, dataset)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    diagnostics,
+  })
+})
+
+adminRoutes.post('/analytics/projections/rebuild', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const dataset = parseDatasetFilter(String(body.dataset ?? body.scope ?? 'all'))
+  if (dataset == null) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'dataset must be all, home_loans, savings, or term_deposits')
+  }
+  const batchSize = clampInt(String(body.batch_size ?? body.batchSize ?? 250), 250, 1, 1000)
+  const limitRows = body.limit_rows == null && body.limitRows == null
+    ? undefined
+    : clampInt(String(body.limit_rows ?? body.limitRows ?? 0), 0, 0, 1_000_000)
+  const result = await rebuildAnalyticsProjections(c.env.DB, {
+    dataset,
+    fromDate: typeof body.from_date === 'string' ? body.from_date : typeof body.fromDate === 'string' ? body.fromDate : undefined,
+    toDate: typeof body.to_date === 'string' ? body.to_date : typeof body.toDate === 'string' ? body.toDate : undefined,
+    batchSize,
+    limitRows: limitRows && limitRows > 0 ? limitRows : undefined,
+  })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    result,
   })
 })
 

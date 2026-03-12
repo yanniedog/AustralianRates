@@ -3,6 +3,8 @@ import { log } from '../utils/logger'
 import { deriveRetrievalType } from '../utils/retrieval-type'
 import { homeLoanDimensionJson, homeLoanSeriesKey, legacyProductKey } from '../utils/series-identity'
 import { upsertProductCatalog, upsertSeriesCatalog } from './catalog'
+import { emitCanonicalHistoricalUpsert } from './analytics/canonical-feed'
+import { writeHomeLoanProjection } from './analytics/projection-write'
 import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestHomeLoanSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
@@ -17,6 +19,14 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
   const parsedAt = nowIso()
   const seriesKey = homeLoanSeriesKey(row)
   const productCode = row.productId
+  const productKey = legacyProductKey('home_loans', {
+    bankName: row.bankName,
+    productId: row.productId,
+    securityPurpose: row.securityPurpose,
+    repaymentType: row.repaymentType,
+    lvrTier: row.lvrTier,
+    rateStructure: row.rateStructure,
+  })
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
   const cdrProductDetailHash =
     row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
@@ -100,6 +110,23 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
     )
     .run()
 
+  await emitCanonicalHistoricalUpsert(
+    db,
+    'home_loans',
+    {
+      bank_name: row.bankName,
+      collection_date: row.collectionDate,
+      product_id: row.productId,
+      lvr_tier: row.lvrTier,
+      rate_structure: row.rateStructure,
+      security_purpose: row.securityPurpose,
+      repayment_type: row.repaymentType,
+      run_source: row.runSource ?? 'scheduled',
+    },
+    row.runId ?? null,
+    row.collectionDate,
+  )
+
   await upsertProductCatalog(db, {
     dataset: 'home_loans',
     bankName: row.bankName,
@@ -167,14 +194,34 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
     runId: row.runId ?? null,
     runSource: row.runSource ?? 'scheduled',
     seriesKey,
-    productKey: legacyProductKey('home_loans', {
-      bankName: row.bankName,
-      productId: row.productId,
-      securityPurpose: row.securityPurpose,
-      repaymentType: row.repaymentType,
-      lvrTier: row.lvrTier,
-      rateStructure: row.rateStructure,
-    }),
+    productKey,
+  })
+
+  await writeHomeLoanProjection(db, {
+    seriesKey,
+    productKey,
+    bankName: row.bankName,
+    productId: row.productId,
+    productName: row.productName,
+    collectionDate: row.collectionDate,
+    parsedAt,
+    securityPurpose: row.securityPurpose,
+    repaymentType: row.repaymentType,
+    rateStructure: row.rateStructure,
+    lvrTier: row.lvrTier,
+    featureSet: row.featureSet,
+    interestRate: row.interestRate,
+    comparisonRate: row.comparisonRate,
+    annualFee: row.annualFee,
+    sourceUrl: row.sourceUrl,
+    productUrl: row.productUrl ?? row.sourceUrl,
+    publishedAt: row.publishedAt ?? null,
+    cdrProductDetailHash,
+    dataQualityFlag: row.dataQualityFlag,
+    confidenceScore: row.confidenceScore,
+    retrievalType,
+    runId: row.runId ?? null,
+    runSource: row.runSource ?? 'scheduled',
   })
 }
 

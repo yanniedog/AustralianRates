@@ -3,6 +3,8 @@ import { log } from '../utils/logger'
 import { deriveRetrievalType } from '../utils/retrieval-type'
 import { tdDimensionJson, tdSeriesKey, legacyProductKey } from '../utils/series-identity'
 import { upsertProductCatalog, upsertSeriesCatalog } from './catalog'
+import { emitCanonicalHistoricalUpsert } from './analytics/canonical-feed'
+import { writeTdProjection } from './analytics/projection-write'
 import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestTdSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
@@ -17,6 +19,13 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
   const parsedAt = nowIso()
   const seriesKey = tdSeriesKey(row)
   const productCode = row.productId
+  const productKey = legacyProductKey('term_deposits', {
+    bankName: row.bankName,
+    productId: row.productId,
+    termMonths: row.termMonths,
+    depositTier: row.depositTier,
+    interestPayment: row.interestPayment,
+  })
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
   const cdrProductDetailHash =
     row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
@@ -78,6 +87,22 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
       row.runSource ?? 'scheduled',
     )
     .run()
+
+  await emitCanonicalHistoricalUpsert(
+    db,
+    'term_deposits',
+    {
+      bank_name: row.bankName,
+      collection_date: row.collectionDate,
+      product_id: row.productId,
+      term_months: row.termMonths,
+      deposit_tier: row.depositTier,
+      interest_payment: row.interestPayment,
+      run_source: row.runSource ?? 'scheduled',
+    },
+    row.runId ?? null,
+    row.collectionDate,
+  )
 
   await upsertProductCatalog(db, {
     dataset: 'term_deposits',
@@ -143,13 +168,32 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
     runId: row.runId ?? null,
     runSource: row.runSource ?? 'scheduled',
     seriesKey,
-    productKey: legacyProductKey('term_deposits', {
-      bankName: row.bankName,
-      productId: row.productId,
-      termMonths: row.termMonths,
-      depositTier: row.depositTier,
-      interestPayment: row.interestPayment,
-    }),
+    productKey,
+  })
+
+  await writeTdProjection(db, {
+    seriesKey,
+    productKey,
+    bankName: row.bankName,
+    productId: row.productId,
+    productName: row.productName,
+    collectionDate: row.collectionDate,
+    parsedAt,
+    termMonths: row.termMonths,
+    depositTier: row.depositTier,
+    interestPayment: row.interestPayment,
+    interestRate: row.interestRate,
+    minDeposit: row.minDeposit,
+    maxDeposit: row.maxDeposit,
+    sourceUrl: row.sourceUrl,
+    productUrl: row.productUrl ?? row.sourceUrl,
+    publishedAt: row.publishedAt ?? null,
+    cdrProductDetailHash,
+    dataQualityFlag: row.dataQualityFlag,
+    confidenceScore: row.confidenceScore,
+    retrievalType,
+    runId: row.runId ?? null,
+    runSource: row.runSource ?? 'scheduled',
   })
 }
 

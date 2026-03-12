@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { DEFAULT_PUBLIC_CACHE_SECONDS } from '../constants'
 import type { RatesPaginatedFilters } from '../db/queries'
 import { getFilters, queryLatestAllRates, queryLatestRates, queryLatestRatesCount, queryRatesForExport, queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { getReadDb } from '../db/read-db'
 import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
@@ -15,6 +16,7 @@ import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { registerHomeLoanExportRoutes } from './home-loan-exports'
+import { registerHomeLoanAnalyticsRoutes } from './home-loan-analytics'
 import { HOME_LOAN_COMPARISON_RATE_DISCLOSURE } from './home-loan-disclosures'
 import {
   matchLatestCache,
@@ -27,6 +29,8 @@ import {
   storePublicReadCache,
 } from './latest-response'
 import { toCsv } from '../utils/csv'
+import { queryHomeLoanRepresentationTimeseries } from './analytics-data'
+import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
 
@@ -40,6 +44,7 @@ publicRoutes.use('*', async (c, next) => {
 })
 
 registerHomeLoanExportRoutes(publicRoutes)
+registerHomeLoanAnalyticsRoutes(publicRoutes)
 registerPublicCoreRoutes(publicRoutes)
 
 publicRoutes.post('/trigger-run', async (c) => {
@@ -372,6 +377,7 @@ publicRoutes.get('/timeseries', async (c) => {
   const productKey = query.product_key || query.productKey || query.series_key
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const representation = parseAnalyticsRepresentation(query.representation)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const pageSize = parsePageSize(String(query.page_size || query.limit || ''), 1000, 1000)
   const cursor = parseCursorOffset(query.cursor)
@@ -381,13 +387,18 @@ publicRoutes.get('/timeseries', async (c) => {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
-  const rows = await queryTimeseries(c.env.DB, {
+  const rows = await queryHomeLoanRepresentationTimeseries(
+    { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    representation,
+    {
     bank: query.bank,
     banks,
     productKey,
     seriesKey: query.series_key,
     securityPurpose: query.security_purpose,
     repaymentType: query.repayment_type,
+    rateStructure: query.rate_structure,
+    lvrTier: query.lvr_tier,
     featureSet: query.feature_set,
     minRate: parseOptionalNumber(query.min_rate),
     maxRate: parseOptionalNumber(query.max_rate),
@@ -400,7 +411,8 @@ publicRoutes.get('/timeseries', async (c) => {
     endDate: query.end_date,
     limit: pageSize + 1,
     offset: cursor,
-  })
+    },
+  )
   const paged = paginateRows(rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
@@ -413,6 +425,7 @@ publicRoutes.get('/timeseries', async (c) => {
 
   return c.json({
     ok: true,
+    representation,
     count: paged.rows.length,
     rows: paged.rows,
     next_cursor: paged.nextCursor,

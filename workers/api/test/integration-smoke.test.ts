@@ -55,10 +55,16 @@ describe('api route integration smoke', () => {
   })
 
   it('requires authentication for admin endpoints', async () => {
-    const { status, json } = await fetchJson('/api/home-loan-rates/admin/runs')
-    expect(status).toBe(401)
-    expect(json.ok).toBe(false)
-    expect(json.error?.code).toBe('UNAUTHORIZED')
+    for (const endpoint of [
+      '/api/home-loan-rates/admin/runs',
+      '/api/home-loan-rates/admin/downloads',
+      '/api/home-loan-rates/admin/analytics/projections/diagnostics',
+    ]) {
+      const { status, json } = await fetchJson(endpoint)
+      expect(status).toBe(401)
+      expect(json.ok).toBe(false)
+      expect(json.error?.code).toBe('UNAUTHORIZED')
+    }
   })
 
   it('requires authentication for admin CDR audit endpoints', async () => {
@@ -76,5 +82,20 @@ describe('api route integration smoke', () => {
       expect(json.ok).toBe(false)
       expect(json.error?.code).toBe('UNAUTHORIZED')
     }
+  })
+
+  it('requires authentication for admin download creation endpoints', async () => {
+    const fetchHandler = worker.fetch?.bind(worker)
+    if (!fetchHandler) throw new Error('worker fetch handler is missing')
+    const request = new Request('https://example.com/api/home-loan-rates/admin/downloads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stream: 'canonical', scope: 'all', mode: 'snapshot' }),
+    }) as unknown as Request<unknown, IncomingRequestCfProperties<unknown>>
+    const response = await fetchHandler(request, makeEnv(), makeExecutionContext())
+    const json = (await response.json()) as { ok?: boolean; error?: { code?: string } }
+    expect(response.status).toBe(401)
+    expect(json.ok).toBe(false)
+    expect(json.error?.code).toBe('UNAUTHORIZED')
   })
 })

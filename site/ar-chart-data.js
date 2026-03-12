@@ -5,7 +5,6 @@
     var config = window.AR.config || {};
     var chartConfig = window.AR.chartConfig || {};
     var apiBase = config.apiBase || '';
-    var MAX_FETCH_ROWS = 10000;
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -421,58 +420,33 @@
         };
     }
 
-    function fetchRatesPage(params) {
+    function fetchAnalyticsRows(params) {
         var query = new URLSearchParams(params || {});
-        return fetch(apiBase + '/rates?' + query.toString(), { cache: 'no-store' }).then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
+        return fetch(apiBase + '/analytics/series?' + query.toString(), { cache: 'no-store' }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/series');
             return response.json();
         });
     }
 
     async function fetchAllRateRows(baseParams, onProgress) {
-        var page = 1;
-        var lastPage = 1;
-        var total = 0;
-        var rows = [];
-        var truncated = false;
+        var response = await fetchAnalyticsRows(baseParams);
+        var rows = Array.isArray(response.rows) ? response.rows : [];
+        var total = Number(response.total || rows.length || 0);
 
-        do {
-            var params = {};
-            Object.keys(baseParams || {}).forEach(function (key) {
-                params[key] = baseParams[key];
+        if (typeof onProgress === 'function') {
+            onProgress({
+                page: 1,
+                lastPage: 1,
+                loaded: rows.length,
+                total: total,
+                truncated: false,
             });
-            params.page = String(page);
-            params.size = '1000';
-
-            var response = await fetchRatesPage(params);
-            var chunk = Array.isArray(response.data) ? response.data : [];
-            total = Number(response.total || total || chunk.length || 0);
-            lastPage = Math.max(1, Number(response.last_page || 1));
-            rows = rows.concat(chunk);
-
-            if (rows.length >= MAX_FETCH_ROWS) {
-                rows = rows.slice(0, MAX_FETCH_ROWS);
-                truncated = true;
-            }
-
-            if (typeof onProgress === 'function') {
-                onProgress({
-                    page: page,
-                    lastPage: lastPage,
-                    loaded: rows.length,
-                    total: total,
-                    truncated: truncated,
-                });
-            }
-
-            if (truncated) break;
-            page += 1;
-        } while (page <= lastPage);
+        }
 
         return {
             rows: rows,
             total: total || rows.length,
-            truncated: truncated,
+            truncated: false,
         };
     }
 

@@ -21,6 +21,32 @@ function chunkValues<T>(values: T[], size: number): T[][] {
   return chunks
 }
 
+export async function findMissingSeriesKeys(
+  db: D1Database,
+  input: {
+    dataset: DatasetKind
+    bankName: string
+    activeSeriesKeys: string[]
+  },
+): Promise<string[]> {
+  const keys = uniqueSeriesKeys(input.activeSeriesKeys)
+  const activeSet = new Set(keys)
+  const currentResult = await db
+    .prepare(
+      `SELECT series_key
+       FROM series_presence_status
+       WHERE dataset_kind = ?1
+         AND bank_name = ?2
+         AND is_removed = 0`,
+    )
+    .bind(input.dataset, input.bankName)
+    .all<{ series_key: string }>()
+
+  return (currentResult.results ?? [])
+    .map((row) => String(row.series_key || '').trim())
+    .filter((seriesKey) => seriesKey.length > 0 && !activeSet.has(seriesKey))
+}
+
 export async function markSeriesSeen(
   db: D1Database,
   input: {
@@ -88,22 +114,7 @@ export async function markMissingSeriesRemoved(
     return Number(result.meta?.changes ?? 0)
   }
 
-  const activeSet = new Set(keys)
-  const currentResult = await db
-    .prepare(
-      `SELECT series_key
-       FROM series_presence_status
-       WHERE dataset_kind = ?1
-         AND bank_name = ?2
-         AND is_removed = 0`,
-    )
-    .bind(input.dataset, input.bankName)
-    .all<{ series_key: string }>()
-
-  const missingKeys = (currentResult.results ?? [])
-    .map((row) => String(row.series_key || '').trim())
-    .filter((seriesKey) => seriesKey.length > 0 && !activeSet.has(seriesKey))
-
+  const missingKeys = await findMissingSeriesKeys(db, input)
   if (missingKeys.length === 0) return 0
 
   let removed = 0

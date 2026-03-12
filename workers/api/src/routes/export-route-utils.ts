@@ -55,6 +55,11 @@ export function requestSource(payload: RequestPayload): SourceMode {
   return parseSourceMode(requestString(payload, 'source_mode'), requestString(payload, 'include_manual'))
 }
 
+export function requestRepresentation(payload: RequestPayload): 'day' | 'change' {
+  const value = String(payload.representation ?? '').trim().toLowerCase()
+  return value === 'change' ? 'change' : 'day'
+}
+
 export function requestExportFormat(payload: RequestPayload): ExportFormat | null {
   const format = String(payload.format ?? 'csv').trim().toLowerCase()
   return format === 'csv' || format === 'json' ? format : null

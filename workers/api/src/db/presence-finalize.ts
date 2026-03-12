@@ -1,7 +1,8 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
+import { writeRemovedSeriesProjections } from './analytics/removal-write'
 import { insertMissingProductCatalogFromRunSeenProducts } from './catalog'
 import { markMissingProductsRemoved, markProductsSeen } from './product-status'
-import { markMissingSeriesRemoved } from './series-status'
+import { findMissingSeriesKeys, markMissingSeriesRemoved } from './series-status'
 
 function sectionForDataset(dataset: DatasetKind): 'home_loans' | 'savings' | 'term_deposits' {
   return dataset
@@ -49,6 +50,11 @@ export async function finalizePresenceForRun(
 
   const productIds = (seenProducts.results ?? []).map((row) => String(row.product_id || '').trim()).filter(Boolean)
   const seriesKeys = (seenSeries.results ?? []).map((row) => String(row.series_key || '').trim()).filter(Boolean)
+  const removedSeriesKeys = await findMissingSeriesKeys(db, {
+    dataset: input.dataset,
+    bankName: input.bankName,
+    activeSeriesKeys: seriesKeys,
+  })
 
   const seenTouched = await markProductsSeen(db, {
     section: sectionForDataset(input.dataset),
@@ -67,6 +73,13 @@ export async function finalizePresenceForRun(
     bankName: input.bankName,
     activeSeriesKeys: seriesKeys,
   })
+  if (removedSeriesKeys.length > 0) {
+    await writeRemovedSeriesProjections(db, {
+      dataset: input.dataset,
+      collectionDate: input.collectionDate,
+      seriesKeys: removedSeriesKeys,
+    })
+  }
 
   await db
     .prepare(

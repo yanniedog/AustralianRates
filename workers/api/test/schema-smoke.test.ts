@@ -88,4 +88,15 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE VIEW vw_latest_td_rates AS')
     expect(sql).toContain('CREATE VIEW vw_td_timeseries AS')
   })
+
+  it('includes analytics projection and admin download migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0026_analytics_projection_and_admin_downloads.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS home_loan_rate_events')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS home_loan_rate_intervals')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS analytics_projection_state')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS download_change_feed')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin_download_jobs')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin_download_artifacts')
+  })
 })

@@ -4,6 +4,7 @@
  */
 
 import { Hono } from 'hono'
+import { emitHistoricalDeleteTombstones, readHistoricalDeleteKeys } from '../db/analytics/admin-tombstones'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -107,7 +108,11 @@ adminClearRoutes.post('/db/clear', async (c) => {
 
   if (scope === 'entire') {
     for (const table of tables) {
+      const deletedKeys = await readHistoricalDeleteKeys(db, table)
       const r = await db.prepare(`DELETE FROM ${table}`).run()
+      if (deletedKeys.length > 0) {
+        await emitHistoricalDeleteTombstones(db, table, deletedKeys)
+      }
       results.push({ table, deleted: r.meta.changes ?? 0 })
     }
     return c.json({
@@ -138,7 +143,11 @@ adminClearRoutes.post('/db/clear', async (c) => {
         values.push(v)
       }
       const where = whereParts.join(' AND ')
+      const deletedKeys = await readHistoricalDeleteKeys(db, table, where, values as Array<string | number>)
       const r = await db.prepare(`DELETE FROM ${table} WHERE ${where}`).bind(...values).run()
+      if (deletedKeys.length > 0) {
+        await emitHistoricalDeleteTombstones(db, table, deletedKeys)
+      }
       results.push({ table, deleted: r.meta.changes ?? 0 })
     }
     return c.json({
@@ -161,10 +170,14 @@ adminClearRoutes.post('/db/clear', async (c) => {
       if (!allowed || !allowed.includes(groupBy)) {
         return jsonError(c, 400, 'BAD_REQUEST', `group_by must be one of: ${(allowed || []).join(', ')} for ${table}`)
       }
+      const deletedKeys = await readHistoricalDeleteKeys(db, table, `${groupBy} = ?1`, [String(value)])
       const r = await db
         .prepare(`DELETE FROM ${table} WHERE ${groupBy} = ?`)
         .bind(String(value))
         .run()
+      if (deletedKeys.length > 0) {
+        await emitHistoricalDeleteTombstones(db, table, deletedKeys)
+      }
       results.push({ table, deleted: r.meta.changes ?? 0 })
     }
     return c.json({
@@ -186,6 +199,7 @@ adminClearRoutes.post('/db/clear', async (c) => {
       const keyCols = TABLE_KEY_COLUMNS[table]
       if (!keyCols) continue
       let totalDeleted = 0
+      const deletedKeys: Array<Record<string, unknown>> = []
       for (const key of keys) {
         if (!key || typeof key !== 'object') continue
         const whereParts: string[] = []
@@ -198,8 +212,12 @@ adminClearRoutes.post('/db/clear', async (c) => {
         }
         if (whereParts.length !== keyCols.length) continue
         const where = whereParts.join(' AND ')
+        deletedKeys.push(...(await readHistoricalDeleteKeys(db, table, where, values as Array<string | number>)))
         const r = await db.prepare(`DELETE FROM ${table} WHERE ${where}`).bind(...values).run()
         totalDeleted += r.meta.changes ?? 0
+      }
+      if (deletedKeys.length > 0) {
+        await emitHistoricalDeleteTombstones(db, table, deletedKeys)
       }
       results.push({ table, deleted: totalDeleted })
     }

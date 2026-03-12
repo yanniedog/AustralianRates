@@ -169,6 +169,23 @@
             }
         });
     }
+    if (els.pivotRepresentation) {
+        els.pivotRepresentation.addEventListener('change', function () {
+            if (pivot && pivot.invalidatePivot) {
+                pivot.invalidatePivot({
+                    message: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid...' : 'Default pivot grid queued for refresh.',
+                });
+            }
+            if (tabState.activeTab === 'pivot' && pivot && pivot.loadPivotData) {
+                pivot.loadPivotData({
+                    force: true,
+                    reason: 'representation-change',
+                    statusMessage: 'Refreshing default pivot grid...',
+                    statusPrefix: 'Refreshing default pivot grid... ',
+                });
+            }
+        });
+    }
     if (els.drawChart) {
         els.drawChart.addEventListener('click', function () {
             if (filters && filters.validateInputs && !filters.validateInputs()) return;

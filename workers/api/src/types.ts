@@ -213,6 +213,7 @@ export type RunReportRow = {
 
 export type EnvBindings = {
   DB: D1Database
+  READ_DB?: D1Database
   RAW_BUCKET: R2Bucket
   INGEST_QUEUE: Queue<IngestMessage>
   IDEMPOTENCY_KV?: KVNamespace

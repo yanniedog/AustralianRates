@@ -1,8 +1,10 @@
 import type { Hono } from 'hono'
 import { API_BASE_PATH, MELBOURNE_TIMEZONE } from '../constants'
+import { queryAnalyticsRateChanges } from '../db/analytics/change-reads'
+import { getReadDb } from '../db/read-db'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { getLenderStaleness, getQualityDiagnostics } from '../db/queries'
-import { queryHomeLoanRateChangeIntegrity, queryHomeLoanRateChanges } from '../db/rate-change-log'
+import { queryHomeLoanRateChangeIntegrity } from '../db/rate-change-log'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -74,7 +76,7 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
     const limit = Number(q.limit || 200)
     const offset = Number(q.offset || 0)
     const [result, integrity] = await Promise.all([
-      queryHomeLoanRateChanges(c.env.DB, { limit, offset }),
+      queryAnalyticsRateChanges(getReadDb(c.env), 'home_loans', { limit, offset }),
       queryHomeLoanRateChangeIntegrity(c.env.DB),
     ])
     return c.json({

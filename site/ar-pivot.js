@@ -13,7 +13,6 @@
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
-    var MAX_PIVOT_ROWS = 10000;
 
     var pivotFieldLabels = sc.pivotFieldLabels || {};
     var pivotLoadPromise = null;
@@ -70,7 +69,9 @@
     }
 
     function currentPivotFingerprint() {
-        return JSON.stringify(stableParams(buildFilterParams()));
+        var params = stableParams(buildFilterParams());
+        params.representation = els.pivotRepresentation ? String(els.pivotRepresentation.value || 'change') : 'change';
+        return JSON.stringify(params);
     }
 
     function setPivotStatus(message) {
@@ -126,48 +127,32 @@
         if (!opts.skipStatus) setPivotStatus(opts.message || 'Refreshing default pivot grid...');
     }
 
-    function fetchRatesPage(params) {
-        var q = new URLSearchParams(params || {});
-        return fetch(apiBase + '/rates?' + q.toString(), { cache: 'no-store' })
-            .then(function (response) {
-                if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
-                return response.json();
-            });
-    }
-
-    async function fetchAllRateRows(baseParams, onProgress) {
-        var page = 1;
-        var lastPage = 1;
-        var total = 0;
-        var rows = [];
-        var truncated = false;
-        do {
-            var params = {};
-            Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
-            params.page = String(page);
-            params.size = '1000';
-            var response = await fetchRatesPage(params);
-            var chunk = Array.isArray(response.data) ? response.data : [];
-            total = Number(response.total || total || chunk.length || 0);
-            lastPage = Math.max(1, Number(response.last_page || 1));
-            rows = rows.concat(chunk);
-            if (rows.length >= MAX_PIVOT_ROWS) {
-                rows = rows.slice(0, MAX_PIVOT_ROWS);
-                truncated = true;
-            }
+    function fetchAllRateRows(baseParams, onProgress) {
+        var params = {};
+        Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
+        params.representation = els.pivotRepresentation ? String(els.pivotRepresentation.value || 'change') : 'change';
+        return fetch(apiBase + '/analytics/pivot', {
+            method: 'POST',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/pivot');
+            return response.json();
+        }).then(function (payload) {
+            var rows = Array.isArray(payload.rows) ? payload.rows : [];
+            var total = Number(payload.total || rows.length || 0);
             if (typeof onProgress === 'function') {
                 onProgress({
-                    page: page,
-                    lastPage: lastPage,
+                    page: 1,
+                    lastPage: 1,
                     loaded: rows.length,
                     total: total,
-                    truncated: truncated,
+                    truncated: false,
                 });
             }
-            if (truncated) break;
-            page += 1;
-        } while (page <= lastPage);
-        return { rows: rows, total: total || rows.length, truncated: truncated };
+            return { rows: rows, total: total, truncated: false };
+        });
     }
 
     function loadPivotData(options) {
@@ -220,16 +205,9 @@
                 return { rows: 0 };
             }
 
-            if (payload.truncated) {
-                setPivotStatus(
-                    'Loaded ' + data.length.toLocaleString() + ' of ' + Number(payload.total || data.length).toLocaleString() +
-                    ' rows (capped at 10,000). Drag fields to refine the default grid.'
-                );
-            } else {
-                setPivotStatus(
-                    'Loaded ' + data.length.toLocaleString() + ' rows. Drag fields to refine the default grid.'
-                );
-            }
+            setPivotStatus(
+                'Loaded ' + data.length.toLocaleString() + ' rows. Drag fields to refine the default grid.'
+            );
 
             clientLog('info', 'Pivot load completed', {
                 rows: data.length,

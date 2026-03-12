@@ -1,6 +1,7 @@
 .admin-login-card form,
 .admin-clear,
 .admin-config,
+.admin-exports,
 .admin-logs,
 .admin-runs,
 .admin-status {
@@ -175,6 +176,7 @@
 }
 
 .admin-runs .run-item .meta,
+.admin-exports .export-job-meta,
 .admin-logs .log-stats {
     color: var(--ar-text-muted);
     font-size: 0.86rem;
@@ -263,6 +265,77 @@
     background: color-mix(in srgb, var(--ar-accent-soft) 38%, var(--ar-surface-3)) !important;
 }
 
+.admin-exports .export-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.admin-exports .export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-exports .export-actions label {
+    color: var(--ar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-exports .export-actions input[type="number"],
+.admin-exports .export-actions select {
+    width: min(100%, 220px);
+}
+
+.admin-exports .export-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.admin-exports .export-job-list {
+    display: grid;
+    gap: 12px;
+}
+
+.admin-exports .export-job {
+    border: 1px solid var(--ar-line);
+    border-radius: var(--ar-radius-2);
+    background: var(--ar-surface-soft);
+    padding: 14px;
+}
+
+.admin-exports .export-job-head,
+.admin-exports .export-artifacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.admin-exports .export-job-head {
+    margin-bottom: 8px;
+}
+
+.admin-exports .export-job-actions,
+.admin-exports .export-artifacts {
+    margin-top: 10px;
+}
+
+.admin-exports .export-job-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-exports .export-empty {
+    color: var(--ar-text-muted);
+}
+
 @media (max-width: 760px) {
     .admin-status .grid,
     .admin-status #overall-grid,
@@ -270,6 +343,7 @@
         grid-template-columns: 1fr;
     }
 
+    .admin-exports .export-actions,
     .admin-config .add-row,
     .admin-config .rate-check-row,
     .admin-status .hint-links,

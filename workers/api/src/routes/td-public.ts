@@ -11,6 +11,8 @@ import {
   queryTdRatesPaginated,
   queryTdTimeseries,
 } from '../db/td-queries'
+import { queryAnalyticsRateChanges } from '../db/analytics/change-reads'
+import { getReadDb } from '../db/read-db'
 import { getLenderDatasetCoverage } from '../db/lender-coverage'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
 import { HISTORICAL_TRIGGER_DEPRECATION_CODE, HISTORICAL_TRIGGER_DEPRECATION_MESSAGE, hasDeprecatedHistoricalTriggerPayload } from './historical-deprecation'
@@ -22,7 +24,10 @@ import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/re
 import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
-import { queryTdRateChangeIntegrity, queryTdRateChanges } from '../db/rate-change-log'
+import { queryTdRateChangeIntegrity } from '../db/rate-change-log'
+import { registerTdAnalyticsRoutes } from './td-analytics'
+import { parseAnalyticsRepresentation } from './analytics-route-utils'
+import { queryTdRepresentationTimeseries } from './analytics-data'
 import { registerTdExportRoutes } from './td-exports'
 import {
   matchLatestCache,
@@ -47,6 +52,7 @@ tdPublicRoutes.use('*', async (c, next) => {
 })
 
 registerTdExportRoutes(tdPublicRoutes)
+registerTdAnalyticsRoutes(tdPublicRoutes)
 
 tdPublicRoutes.get('/health', (c) => {
   withPublicCache(c, 30)
@@ -71,7 +77,7 @@ tdPublicRoutes.get('/changes', async (c) => {
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
   const [result, integrity] = await Promise.all([
-    queryTdRateChanges(c.env.DB, { limit, offset }),
+    queryAnalyticsRateChanges(getReadDb(c.env), 'term_deposits', { limit, offset }),
     queryTdRateChangeIntegrity(c.env.DB),
   ])
   return c.json({
@@ -308,6 +314,7 @@ tdPublicRoutes.get('/timeseries', async (c) => {
   const seriesKey = q.series_key
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const representation = parseAnalyticsRepresentation(q.representation)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const pageSize = parsePageSize(String(q.page_size || q.limit || ''), 1000, 1000)
   const cursor = parseCursorOffset(q.cursor)
@@ -316,7 +323,10 @@ tdPublicRoutes.get('/timeseries', async (c) => {
     return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries queries.')
   }
 
-  const rows = await queryTdTimeseries(c.env.DB, {
+  const rows = await queryTdRepresentationTimeseries(
+    { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    representation,
+    {
     bank: q.bank,
     banks,
     productKey,
@@ -333,7 +343,8 @@ tdPublicRoutes.get('/timeseries', async (c) => {
     endDate: q.end_date,
     limit: pageSize + 1,
     offset: cursor,
-  })
+    },
+  )
   const paged = paginateRows(rows, cursor, pageSize)
   const meta = buildListMeta({
     sourceMode,
@@ -342,7 +353,15 @@ tdPublicRoutes.get('/timeseries', async (c) => {
     sourceMix: sourceMixFromRows(paged.rows as Array<Record<string, unknown>>),
     limited: paged.partial,
   })
-  return c.json({ ok: true, count: paged.rows.length, rows: paged.rows, next_cursor: paged.nextCursor, partial: paged.partial, meta })
+  return c.json({
+    ok: true,
+    representation,
+    count: paged.rows.length,
+    rows: paged.rows,
+    next_cursor: paged.nextCursor,
+    partial: paged.partial,
+    meta,
+  })
 })
 
 tdPublicRoutes.get('/coverage', async (c) => {

@@ -1,10 +1,12 @@
 import type { Hono } from 'hono'
 import { createExportJob, getExportJob, markExportJobProcessing, completeExportJob, failExportJob, type ExportFormat, type ExportScope } from '../db/export-jobs'
-import { queryTdRatesPaginated, queryTdTimeseries } from '../db/td-queries'
+import { queryTdRatesPaginated } from '../db/td-queries'
+import { getReadDb } from '../db/read-db'
 import { guardPublicExportJob } from './public-write-gates'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 import { csvEscape } from '../utils/csv'
+import { collectTdAnalyticsRows, queryTdRepresentationTimeseries } from './analytics-data'
 import {
   exportContentType,
   exportFileExtension,
@@ -17,6 +19,7 @@ import {
   requestExportScope,
   requestMode,
   requestNumber,
+  requestRepresentation,
   requestSource,
   requestString,
   requestStringArray,
@@ -40,6 +43,7 @@ type TdExportFilters = {
   sourceMode?: ReturnType<typeof requestSource>
   productKey?: string
   seriesKey?: string
+  representation?: 'day' | 'change'
 }
 
 function buildTdFilters(payload: Record<string, unknown>): TdExportFilters {
@@ -60,6 +64,7 @@ function buildTdFilters(payload: Record<string, unknown>): TdExportFilters {
     sourceMode: requestSource(payload),
     productKey: requestString(payload, 'product_key') ?? requestString(payload, 'productKey'),
     seriesKey: requestString(payload, 'series_key'),
+    representation: requestRepresentation(payload),
   }
 }
 
@@ -83,7 +88,7 @@ function appendJsonChunk(parts: string[], state: { firstRow: boolean }, rows: Ar
 }
 
 async function buildTdArtifact(
-  db: D1Database,
+  env: AppContext['Bindings'],
   scope: ExportScope,
   format: ExportFormat,
   filters: TdExportFilters,
@@ -93,6 +98,8 @@ async function buildTdArtifact(
   const csvState = { headers: null as string[] | null }
   const jsonState = { firstRow: true }
   let rowCount = 0
+  const representation = filters.representation ?? 'day'
+  const dbs = { canonicalDb: env.DB, analyticsDb: getReadDb(env) }
 
   if (scope === 'timeseries') {
     if (!filters.productKey && !filters.seriesKey) {
@@ -100,7 +107,7 @@ async function buildTdArtifact(
     }
     let offset = 0
     while (true) {
-      const rows = await queryTdTimeseries(db, {
+      const rows = await queryTdRepresentationTimeseries(dbs, representation, {
         bank: filters.bank,
         banks: filters.banks,
         productKey: filters.productKey,
@@ -126,33 +133,54 @@ async function buildTdArtifact(
       offset += rows.length
     }
   } else {
-    let page = 1
-    let lastPage = 1
-    do {
-      const result = await queryTdRatesPaginated(db, {
-        page,
-        size: 1000,
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        bank: filters.bank,
-        banks: filters.banks,
-        termMonths: filters.termMonths,
-        depositTier: filters.depositTier,
-        interestPayment: filters.interestPayment,
-        minRate: filters.minRate,
-        maxRate: filters.maxRate,
-        includeRemoved: filters.includeRemoved,
-        sort: filters.sort,
-        dir: filters.dir,
-        mode: filters.mode,
-        sourceMode: filters.sourceMode,
-      })
-      lastPage = result.last_page
-      rowCount += result.data.length
-      if (format === 'csv') appendCsvChunk(csvLines, csvState, result.data as Array<Record<string, unknown>>)
-      else appendJsonChunk(jsonRows, jsonState, result.data as Array<Record<string, unknown>>)
-      page += 1
-    } while (page <= lastPage)
+    const rows =
+      representation === 'change'
+        ? await collectTdAnalyticsRows(dbs, representation, {
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+            bank: filters.bank,
+            banks: filters.banks,
+            termMonths: filters.termMonths,
+            depositTier: filters.depositTier,
+            interestPayment: filters.interestPayment,
+            minRate: filters.minRate,
+            maxRate: filters.maxRate,
+            includeRemoved: filters.includeRemoved,
+            mode: filters.mode,
+            sourceMode: filters.sourceMode,
+          })
+        : await (async () => {
+            const pages: Array<Record<string, unknown>> = []
+            let page = 1
+            let lastPage = 1
+            do {
+              const result = await queryTdRatesPaginated(env.DB, {
+                page,
+                size: 1000,
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+                bank: filters.bank,
+                banks: filters.banks,
+                termMonths: filters.termMonths,
+                depositTier: filters.depositTier,
+                interestPayment: filters.interestPayment,
+                minRate: filters.minRate,
+                maxRate: filters.maxRate,
+                includeRemoved: filters.includeRemoved,
+                sort: filters.sort,
+                dir: filters.dir,
+                mode: filters.mode,
+                sourceMode: filters.sourceMode,
+              })
+              lastPage = result.last_page
+              pages.push(...(result.data as Array<Record<string, unknown>>))
+              page += 1
+            } while (page <= lastPage)
+            return pages
+          })()
+    rowCount += rows.length
+    if (format === 'csv') appendCsvChunk(csvLines, csvState, rows as Array<Record<string, unknown>>)
+    else appendJsonChunk(jsonRows, jsonState, rows as Array<Record<string, unknown>>)
   }
 
   if (format === 'csv') {
@@ -176,7 +204,7 @@ async function runTdExportJob(
 ): Promise<void> {
   await markExportJobProcessing(env.DB, input.jobId)
   try {
-    const artifact = await buildTdArtifact(env.DB, input.scope, input.format, input.filters)
+    const artifact = await buildTdArtifact(env, input.scope, input.format, input.filters)
     const fileName = `term-deposit-rates-${input.scope}-${input.jobId}.${exportFileExtension(input.format)}`
     const contentType = exportContentType(input.format)
     const r2Key = exportR2Key('term_deposits', input.jobId, input.format)

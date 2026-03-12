@@ -1,10 +1,12 @@
 import type { Hono } from 'hono'
 import { createExportJob, getExportJob, markExportJobProcessing, completeExportJob, failExportJob, type ExportFormat, type ExportScope } from '../db/export-jobs'
-import { queryRatesPaginated, queryTimeseries } from '../db/queries'
+import { queryRatesPaginated } from '../db/queries'
+import { getReadDb } from '../db/read-db'
 import { guardPublicExportJob } from './public-write-gates'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 import { csvEscape } from '../utils/csv'
+import { collectHomeLoanAnalyticsRows, queryHomeLoanRepresentationTimeseries } from './analytics-data'
 import {
   exportContentType,
   exportFileExtension,
@@ -17,6 +19,7 @@ import {
   requestExportScope,
   requestMode,
   requestNumber,
+  requestRepresentation,
   requestSource,
   requestString,
   requestStringArray,
@@ -44,6 +47,7 @@ type HomeLoanExportFilters = {
   sourceMode?: ReturnType<typeof requestSource>
   productKey?: string
   seriesKey?: string
+  representation?: 'day' | 'change'
 }
 
 function buildHomeLoanFilters(payload: Record<string, unknown>): HomeLoanExportFilters {
@@ -68,6 +72,7 @@ function buildHomeLoanFilters(payload: Record<string, unknown>): HomeLoanExportF
     sourceMode: requestSource(payload),
     productKey: requestString(payload, 'product_key') ?? requestString(payload, 'productKey') ?? requestString(payload, 'series_key'),
     seriesKey: requestString(payload, 'series_key'),
+    representation: requestRepresentation(payload),
   }
 }
 
@@ -91,7 +96,7 @@ function appendJsonChunk(parts: string[], state: { firstRow: boolean }, rows: Ar
 }
 
 async function buildHomeLoanArtifact(
-  db: D1Database,
+  env: AppContext['Bindings'],
   scope: ExportScope,
   format: ExportFormat,
   filters: HomeLoanExportFilters,
@@ -101,6 +106,8 @@ async function buildHomeLoanArtifact(
   const csvState = { headers: null as string[] | null }
   const jsonState = { firstRow: true }
   let rowCount = 0
+  const representation = filters.representation ?? 'day'
+  const dbs = { canonicalDb: env.DB, analyticsDb: getReadDb(env) }
 
   if (scope === 'timeseries') {
     if (!filters.productKey && !filters.seriesKey) {
@@ -108,13 +115,15 @@ async function buildHomeLoanArtifact(
     }
     let offset = 0
     while (true) {
-      const rows = await queryTimeseries(db, {
+      const rows = await queryHomeLoanRepresentationTimeseries(dbs, representation, {
         bank: filters.bank,
         banks: filters.banks,
         productKey: filters.productKey,
         seriesKey: filters.seriesKey,
         securityPurpose: filters.securityPurpose,
         repaymentType: filters.repaymentType,
+        rateStructure: filters.rateStructure,
+        lvrTier: filters.lvrTier,
         featureSet: filters.featureSet,
         minRate: filters.minRate,
         maxRate: filters.maxRate,
@@ -136,37 +145,62 @@ async function buildHomeLoanArtifact(
       offset += rows.length
     }
   } else {
-    let page = 1
-    let lastPage = 1
-    do {
-      const result = await queryRatesPaginated(db, {
-        page,
-        size: 1000,
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        bank: filters.bank,
-        banks: filters.banks,
-        securityPurpose: filters.securityPurpose,
-        repaymentType: filters.repaymentType,
-        rateStructure: filters.rateStructure,
-        lvrTier: filters.lvrTier,
-        featureSet: filters.featureSet,
-        minRate: filters.minRate,
-        maxRate: filters.maxRate,
-        minComparisonRate: filters.minComparisonRate,
-        maxComparisonRate: filters.maxComparisonRate,
-        includeRemoved: filters.includeRemoved,
-        sort: filters.sort,
-        dir: filters.dir,
-        mode: filters.mode,
-        sourceMode: filters.sourceMode,
-      })
-      lastPage = result.last_page
-      rowCount += result.data.length
-      if (format === 'csv') appendCsvChunk(csvLines, csvState, result.data as Array<Record<string, unknown>>)
-      else appendJsonChunk(jsonRows, jsonState, result.data as Array<Record<string, unknown>>)
-      page += 1
-    } while (page <= lastPage)
+    const rows =
+      representation === 'change'
+        ? await collectHomeLoanAnalyticsRows(dbs, representation, {
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+            bank: filters.bank,
+            banks: filters.banks,
+            securityPurpose: filters.securityPurpose,
+            repaymentType: filters.repaymentType,
+            rateStructure: filters.rateStructure,
+            lvrTier: filters.lvrTier,
+            featureSet: filters.featureSet,
+            minRate: filters.minRate,
+            maxRate: filters.maxRate,
+            minComparisonRate: filters.minComparisonRate,
+            maxComparisonRate: filters.maxComparisonRate,
+            includeRemoved: filters.includeRemoved,
+            mode: filters.mode,
+            sourceMode: filters.sourceMode,
+          })
+        : await (async () => {
+            const pages: Array<Record<string, unknown>> = []
+            let page = 1
+            let lastPage = 1
+            do {
+              const result = await queryRatesPaginated(env.DB, {
+                page,
+                size: 1000,
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+                bank: filters.bank,
+                banks: filters.banks,
+                securityPurpose: filters.securityPurpose,
+                repaymentType: filters.repaymentType,
+                rateStructure: filters.rateStructure,
+                lvrTier: filters.lvrTier,
+                featureSet: filters.featureSet,
+                minRate: filters.minRate,
+                maxRate: filters.maxRate,
+                minComparisonRate: filters.minComparisonRate,
+                maxComparisonRate: filters.maxComparisonRate,
+                includeRemoved: filters.includeRemoved,
+                sort: filters.sort,
+                dir: filters.dir,
+                mode: filters.mode,
+                sourceMode: filters.sourceMode,
+              })
+              lastPage = result.last_page
+              pages.push(...(result.data as Array<Record<string, unknown>>))
+              page += 1
+            } while (page <= lastPage)
+            return pages
+          })()
+    rowCount += rows.length
+    if (format === 'csv') appendCsvChunk(csvLines, csvState, rows as Array<Record<string, unknown>>)
+    else appendJsonChunk(jsonRows, jsonState, rows as Array<Record<string, unknown>>)
   }
 
   if (format === 'csv') {
@@ -191,7 +225,7 @@ async function runHomeLoanExportJob(
 ): Promise<void> {
   await markExportJobProcessing(env.DB, input.jobId)
   try {
-    const artifact = await buildHomeLoanArtifact(env.DB, input.scope, input.format, input.filters)
+    const artifact = await buildHomeLoanArtifact(env, input.scope, input.format, input.filters)
     const fileName = `home-loan-rates-${input.scope}-${input.jobId}.${exportFileExtension(input.format)}`
     const contentType = exportContentType(input.format)
     const r2Key = exportR2Key('home_loans', input.jobId, input.format)

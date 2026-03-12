@@ -3,6 +3,8 @@ import { log } from '../utils/logger'
 import { deriveRetrievalType } from '../utils/retrieval-type'
 import { savingsDimensionJson, savingsSeriesKey, legacyProductKey } from '../utils/series-identity'
 import { upsertProductCatalog, upsertSeriesCatalog } from './catalog'
+import { emitCanonicalHistoricalUpsert } from './analytics/canonical-feed'
+import { writeSavingsProjection } from './analytics/projection-write'
 import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestSavingsSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
@@ -17,6 +19,13 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
   const parsedAt = nowIso()
   const seriesKey = savingsSeriesKey(row)
   const productCode = row.productId
+  const productKey = legacyProductKey('savings', {
+    bankName: row.bankName,
+    productId: row.productId,
+    accountType: row.accountType,
+    rateType: row.rateType,
+    depositTier: row.depositTier,
+  })
   const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
   const cdrProductDetailHash =
     row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
@@ -82,6 +91,22 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
       row.runSource ?? 'scheduled',
     )
     .run()
+
+  await emitCanonicalHistoricalUpsert(
+    db,
+    'savings',
+    {
+      bank_name: row.bankName,
+      collection_date: row.collectionDate,
+      product_id: row.productId,
+      account_type: row.accountType,
+      rate_type: row.rateType,
+      deposit_tier: row.depositTier,
+      run_source: row.runSource ?? 'scheduled',
+    },
+    row.runId ?? null,
+    row.collectionDate,
+  )
 
   await upsertProductCatalog(db, {
     dataset: 'savings',
@@ -149,13 +174,34 @@ export async function upsertSavingsRateRow(db: D1Database, row: NormalizedSaving
     runId: row.runId ?? null,
     runSource: row.runSource ?? 'scheduled',
     seriesKey,
-    productKey: legacyProductKey('savings', {
-      bankName: row.bankName,
-      productId: row.productId,
-      accountType: row.accountType,
-      rateType: row.rateType,
-      depositTier: row.depositTier,
-    }),
+    productKey,
+  })
+
+  await writeSavingsProjection(db, {
+    seriesKey,
+    productKey,
+    bankName: row.bankName,
+    productId: row.productId,
+    productName: row.productName,
+    collectionDate: row.collectionDate,
+    parsedAt,
+    accountType: row.accountType,
+    rateType: row.rateType,
+    depositTier: row.depositTier,
+    interestRate: row.interestRate,
+    minBalance: row.minBalance,
+    maxBalance: row.maxBalance,
+    conditions: row.conditions,
+    monthlyFee: row.monthlyFee,
+    sourceUrl: row.sourceUrl,
+    productUrl: row.productUrl ?? row.sourceUrl,
+    publishedAt: row.publishedAt ?? null,
+    cdrProductDetailHash,
+    dataQualityFlag: row.dataQualityFlag,
+    confidenceScore: row.confidenceScore,
+    retrievalType,
+    runId: row.runId ?? null,
+    runSource: row.runSource ?? 'scheduled',
   })
 }
 
