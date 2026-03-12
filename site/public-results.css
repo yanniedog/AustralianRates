@@ -40,6 +40,17 @@
     gap: 8px;
 }
 
+.terminal-filter-panel {
+    gap: 12px;
+}
+
+.terminal-filter-panel .terminal-filter-grid,
+.terminal-filter-panel .terminal-inline-inputs,
+.terminal-filter-panel .terminal-action-row,
+.terminal-filter-panel .terminal-export-row {
+    gap: 8px;
+}
+
 .terminal-field-toggle {
     grid-template-columns: 1fr auto;
     align-items: center;
@@ -51,6 +62,11 @@
 
 .terminal-inline-inputs {
     grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.terminal-inline-inputs-bank {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
 }
 
 .terminal-action-row {
@@ -91,6 +107,69 @@
 
 .filter-chip-empty {
     cursor: default;
+}
+
+.filter-bank-count {
+    justify-content: center;
+    min-width: 56px;
+}
+
+.bank-native-select {
+    display: none !important;
+}
+
+.bank-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    max-height: 196px;
+    padding: 4px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: var(--ar-surface-2);
+    overflow-y: auto;
+}
+
+.bank-option-card {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 8px 10px;
+    border-color: transparent;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--ar-surface-2) 82%, var(--ar-surface-3));
+    justify-content: flex-start;
+}
+
+.bank-option-card:hover {
+    background: color-mix(in srgb, var(--ar-accent-soft) 18%, var(--ar-surface-3));
+}
+
+.bank-option-card.is-selected {
+    border-color: rgba(37, 99, 235, 0.32);
+    background: color-mix(in srgb, var(--ar-accent-soft) 58%, var(--ar-surface-2));
+}
+
+.bank-option-card .bank-badge {
+    width: 100%;
+}
+
+.bank-option-card .bank-badge-copy {
+    flex: 1 1 auto;
+}
+
+.bank-picker-empty {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 12px 8px;
+    color: var(--ar-text-muted);
+    font-size: 0.74rem;
+    text-align: center;
+}
+
+.terminal-filter-panel .terminal-action-row > button {
+    min-height: 38px;
+    padding-inline: 8px;
 }
 
 .terminal-stat-grid {
@@ -149,6 +228,11 @@
 .quick-empty {
     color: var(--ar-text-soft);
     font-size: 0.74rem;
+}
+
+.ladder-bank {
+    display: inline-flex;
+    align-items: center;
 }
 
 .terminal-rate-table {
@@ -328,5 +412,13 @@
 
     .terminal-export-row {
         grid-template-columns: 1fr;
+    }
+
+    .terminal-filter-panel .terminal-action-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .bank-picker-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

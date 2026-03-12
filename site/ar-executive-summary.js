@@ -7,6 +7,7 @@
     var utils = window.AR.utils || {};
     var esc = window._arEsc || function (v) { return String(v == null ? '' : v); };
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
+    var bankBrand = window.AR.bankBrand || {};
 
     function getStatusEl() {
         return (els && els.executiveSummaryStatus) || document.getElementById('executive-summary-status');
@@ -39,7 +40,10 @@
 
     function standoutText(example, label) {
         if (!example) return label + ': none';
-        return label + ': ' + esc(example.bank_name || '') + ' (' + fmt(example.delta_bps, 2) + ' bps, ' + changeWindow(example) + ')';
+        var bank = bankBrand && typeof bankBrand.shortLabel === 'function'
+            ? bankBrand.shortLabel(example.bank_name || '')
+            : String(example.bank_name || '');
+        return label + ': ' + esc(bank) + ' (' + fmt(example.delta_bps, 2) + ' bps, ' + changeWindow(example) + ')';
     }
 
     function renderMetric(label, value) {
@@ -88,7 +92,7 @@
             var windowStart = ymd(section.window_start || '');
             var windowEnd = ymd(section.window_end || '');
             var topLenderText = topLender
-                ? (esc(topLender.bank_name || '') + ' (' + fmt(topLender.change_count, 0) + ' changes, ' + fmt(topLender.share_pct, 1) + '%)')
+                ? (esc(bankBrand && typeof bankBrand.shortLabel === 'function' ? bankBrand.shortLabel(topLender.bank_name || '') : (topLender.bank_name || '')) + ' (' + fmt(topLender.change_count, 0) + ' changes, ' + fmt(topLender.share_pct, 1) + '%)')
                 : 'none';
             var metricGrid = [
                 renderMetric('Total changes through ' + windowEnd, fmt(metrics.total_changes, 0)),

@@ -21,6 +21,8 @@
         filterBank: document.getElementById('filter-bank'),
         filterBankSearch: document.getElementById('filter-bank-search'),
         filterBankClear: document.getElementById('filter-bank-clear'),
+        filterBankOptions: document.getElementById('filter-bank-options'),
+        filterBankCount: document.getElementById('filter-bank-count'),
         filterSecurity: document.getElementById('filter-security'),
         filterRepayment: document.getElementById('filter-repayment'),
         filterStructure: document.getElementById('filter-structure'),

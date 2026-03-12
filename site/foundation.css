@@ -426,6 +426,80 @@ pre {
     height: 0.95rem;
 }
 
+.bank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.bank-badge-logo-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.bank-badge-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.bank-badge-fallback {
+    color: #0f172a;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.bank-badge-copy {
+    display: inline-grid;
+    min-width: 0;
+}
+
+.bank-badge-label,
+.bank-badge-sub {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bank-badge-label {
+    color: var(--ar-text);
+    font-size: 0.76rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.bank-badge-sub {
+    color: var(--ar-text-muted);
+    font-size: 0.65rem;
+    line-height: 1.1;
+}
+
+.bank-badge.is-compact {
+    gap: 6px;
+}
+
+.bank-badge.is-compact .bank-badge-logo-wrap {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+}
+
+.bank-badge.is-compact .bank-badge-label {
+    font-size: 0.72rem;
+}
+
 .chip,
 .pill {
     display: inline-flex;

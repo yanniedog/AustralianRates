@@ -8,6 +8,7 @@
     var els = dom && dom.els ? dom.els : {};
     var clientLog = utils.clientLog || function () {};
     var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
+    var bankBrand = window.AR.bankBrand || {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
 
     function getStatusEl() {
@@ -78,11 +79,15 @@
         listEl.innerHTML = rows.map(function (row) {
             var delta = Number(row.delta_bps);
             var deltaText = Number.isFinite(delta) ? ((delta > 0 ? '+' : '') + delta.toFixed(1) + 'bps') : '';
+            var bankName = String(row.bank_name || '').trim() || '-';
+            var bankLabel = bankBrand && typeof bankBrand.badge === 'function'
+                ? bankBrand.badge(bankName, { compact: true })
+                : esc(bankName);
             return (
                 '<li class="rate-change-item">' +
                     '<div class="rate-change-main">' +
                         '<span class="rate-change-date">' + esc(changeWindow(row)) + '</span>' +
-                        '<span class="rate-change-bank">' + esc(row.bank_name || '-') + '</span>' +
+                        '<span class="rate-change-bank">' + bankLabel + '</span>' +
                         (deltaText ? '<span class="rate-change-delta ' + tone(delta) + '">' + esc(deltaText) + '</span>' : '') +
                     '</div>' +
                     '<div class="rate-change-sub">' +

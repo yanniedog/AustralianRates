@@ -176,6 +176,12 @@
     }
 
     function formatFilterValue(field, value) {
+        if (field === 'banks' || field === 'bank_name') {
+            var bankBrand = window.AR && window.AR.bankBrand;
+            if (bankBrand && typeof bankBrand.shortLabel === 'function') {
+                return bankBrand.shortLabel(value);
+            }
+        }
         if (field === 'deposit_tier') return formatDepositTier(value);
         return formatEnum(field, value) || asText(value);
     }

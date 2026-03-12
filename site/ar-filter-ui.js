@@ -4,9 +4,11 @@
 
     var dom = window.AR.dom || {};
     var els = dom.els || {};
+    var bankBrand = window.AR.bankBrand || {};
     var DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     var bound = false;
     var defaultDateStatus = 'YYYY-MM-DD';
+    var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
 
     function pad2(value) {
         var num = Number(value);
@@ -68,15 +70,83 @@
         };
     }
 
-    function refreshBankOptions() {
-        if (!els.filterBank) return;
-        var query = String(els.filterBankSearch && els.filterBankSearch.value || '').trim().toLowerCase();
+    function selectedBankCount() {
+        if (!els.filterBank) return 0;
+        var count = 0;
+        for (var i = 0; i < els.filterBank.options.length; i++) {
+            if (els.filterBank.options[i].selected) count++;
+        }
+        return count;
+    }
+
+    function updateBankCount() {
+        if (!els.filterBankCount || !els.filterBank) return;
+        var total = els.filterBank.options.length;
+        var selected = selectedBankCount();
+        els.filterBankCount.textContent = selected ? (selected + '/' + total) : 'All';
+        els.filterBankCount.title = selected ? (selected + ' banks selected') : 'All banks';
+    }
+
+    function bankMatchesQuery(value, query) {
+        if (bankBrand && typeof bankBrand.matchesQuery === 'function') {
+            return bankBrand.matchesQuery(value, query);
+        }
+        return String(value || '').toLowerCase().indexOf(String(query || '').toLowerCase()) >= 0;
+    }
+
+    function bankBadgeMarkup(value) {
+        if (bankBrand && typeof bankBrand.badge === 'function') {
+            return bankBrand.badge(value, { compact: true });
+        }
+        return '<span class="bank-option-text">' + esc(value || '-') + '</span>';
+    }
+
+    function renderBankOptions() {
+        if (!els.filterBankOptions || !els.filterBank) {
+            updateBankCount();
+            return;
+        }
+
+        var query = String(els.filterBankSearch && els.filterBankSearch.value || '').trim();
+        var markup = [];
+        var visibleCount = 0;
+
         for (var i = 0; i < els.filterBank.options.length; i++) {
             var option = els.filterBank.options[i];
-            var label = String(option.textContent || option.label || option.value || '').trim().toLowerCase();
-            var visible = !query || label.indexOf(query) >= 0 || option.selected;
+            var value = String(option.value || '').trim();
+            if (!value) continue;
+            var visible = !query || bankMatchesQuery(value, query) || option.selected;
             option.hidden = !visible;
+            if (!visible) continue;
+            visibleCount++;
+            markup.push(
+                '<button class="bank-option-card' + (option.selected ? ' is-selected' : '') + '"' +
+                    ' type="button"' +
+                    ' data-bank-value="' + esc(value) + '"' +
+                    ' aria-label="' + esc(value) + '"' +
+                    ' aria-pressed="' + (option.selected ? 'true' : 'false') + '"' +
+                    ' title="' + esc(value) + '">' +
+                    bankBadgeMarkup(value) +
+                '</button>'
+            );
         }
+
+        if (!visibleCount) {
+            markup.push('<p class="bank-picker-empty">No bank match</p>');
+        }
+
+        els.filterBankOptions.innerHTML = markup.join('');
+        updateBankCount();
+    }
+
+    function refreshBankOptions() {
+        if (!els.filterBank) return;
+        for (var i = 0; i < els.filterBank.options.length; i++) {
+            var option = els.filterBank.options[i];
+            var value = String(option.value || '').trim();
+            option.hidden = !!value && !bankMatchesQuery(value, els.filterBankSearch && els.filterBankSearch.value) && !option.selected;
+        }
+        renderBankOptions();
     }
 
     function clearBankSearch() {
@@ -91,6 +161,11 @@
         }
     }
 
+    function dispatchBankChange() {
+        if (!els.filterBank) return;
+        els.filterBank.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     function clearBankSelection() {
         if (els.filterBank) {
             for (var i = 0; i < els.filterBank.options.length; i++) {
@@ -98,7 +173,22 @@
             }
         }
         clearBankSearch();
+        dispatchBankChange();
         notifyFilterUiRefresh();
+    }
+
+    function toggleBankSelection(value) {
+        if (!els.filterBank) return;
+        var target = String(value || '').trim();
+        if (!target) return;
+        for (var i = 0; i < els.filterBank.options.length; i++) {
+            var option = els.filterBank.options[i];
+            if (String(option.value || '').trim() !== target) continue;
+            option.selected = !option.selected;
+            break;
+        }
+        refreshBankOptions();
+        dispatchBankChange();
     }
 
     function validateDateInputs(options) {
@@ -183,6 +273,15 @@
         if (els.filterBank) {
             els.filterBank.addEventListener('change', refreshBankOptions);
         }
+        if (els.filterBankOptions) {
+            els.filterBankOptions.addEventListener('click', function (event) {
+                var button = event.target && event.target.closest
+                    ? event.target.closest('[data-bank-value]')
+                    : null;
+                if (!button) return;
+                toggleBankSelection(button.getAttribute('data-bank-value'));
+            });
+        }
     }
 
     function bindDateControls() {
@@ -232,6 +331,7 @@
         setDateInvalid(els.filterStartDate, false);
         setDateInvalid(els.filterEndDate, false);
         setDateStatus(defaultDateStatus);
+        updateBankCount();
     }
 
     window.AR.filterUi = {
@@ -240,6 +340,7 @@
         init: init,
         normalizeDateValue: normalizeDateValue,
         refreshBankOptions: refreshBankOptions,
+        renderBankOptions: renderBankOptions,
         resetUi: resetUi,
         validateDateInputs: validateDateInputs,
     };

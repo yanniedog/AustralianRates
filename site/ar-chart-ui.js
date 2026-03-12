@@ -212,7 +212,7 @@
                 var isSpotlight = selectionState && selectionState.spotlightSeriesKey === entry.seriesKey;
                 return seriesCardMarkup({
                     key: entry.seriesKey,
-                    title: entry.bankName,
+                    title: chartConfig.formatFieldValue('bank_name', entry.bankName, entry.row || null),
                     valueText: chartConfig.formatMetricValue(fields.yField, entry.value),
                     caption: entry.productName || 'Best matching product',
                     metaLeft: entry.latestDate ? chartConfig.formatFieldValue('collection_date', entry.latestDate, entry.row || null) : 'Latest',
@@ -263,7 +263,9 @@
         var spotlight = model.spotlight;
         var lenderEntry = fields.view === 'lenders' && model.lenderRanking ? model.lenderRanking.activeEntry : null;
         var row = spotlight.row || {};
-        var title = lenderEntry ? lenderEntry.bankName : spotlight.series.name;
+        var title = lenderEntry
+            ? chartConfig.formatFieldValue('bank_name', lenderEntry.bankName, lenderEntry.row || null)
+            : spotlight.series.name;
         var subtitle = lenderEntry
             ? 'Best current ' + chartConfig.fieldLabel(fields.yField).toLowerCase()
             : (spotlight.series.subtitle || 'product_key');
@@ -282,7 +284,7 @@
                     (lenderEntry ? '<span class="chart-summary-pill is-config">Best product by bank</span>' : '') +
                 '</div>' +
                 '<div class="chart-spotlight-grid">' +
-                    '<span><strong>Bank</strong> ' + esc(row.bank_name || '-') + '</span>' +
+                    '<span><strong>Bank</strong> ' + esc(chartConfig.formatFieldValue('bank_name', row.bank_name || '-', row)) + '</span>' +
                     '<span><strong>Product</strong> ' + esc(row.product_name || '-') + '</span>' +
                     '<span><strong>Delta</strong> ' + esc(Number.isFinite(Number(spotlight.series.delta)) ? chartConfig.formatMetricValue(fields.yField, spotlight.series.delta) : '-') + '</span>' +
                     '<span><strong>product_key</strong> ' + esc(String(row.product_key || spotlight.series.key || '-')) + '</span>' +

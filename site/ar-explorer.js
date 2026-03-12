@@ -26,6 +26,7 @@
     };
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
     var esc = window._arEsc;
+    var bankBrand = window.AR.bankBrand || {};
     var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
     var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var ORDER_FIRST = ['found_at', 'comparison_rate', 'interest_rate', 'bank_name'];
@@ -108,6 +109,16 @@
 
     function linkHtml(href, label, title) {
         return '<a href="' + safeHref(href) + '" target="_blank" rel="noopener noreferrer" title="' + safeEsc(title) + '">' + safeEsc(label) + '</a>';
+    }
+
+    function bankCellFormatter(cell) {
+        var value = String(cell && cell.getValue ? cell.getValue() : '').trim();
+        var cellEl = cell && cell.getElement ? cell.getElement() : null;
+        if (cellEl) cellEl.setAttribute('title', value || '-');
+        if (bankBrand && typeof bankBrand.badge === 'function') {
+            return bankBrand.badge(value || '-', { compact: true });
+        }
+        return safeEsc(value || '-');
     }
 
     function urlsFormatter(cell) {
@@ -276,7 +287,7 @@
             { title: 'Found at', field: 'found_at', headerSort: true, minWidth: 126, formatter: parsedAtFormatter },
             { title: 'Comparison Rate', field: 'comparison_rate', formatter: pctFormatter, headerSort: true, minWidth: 108 },
             { title: 'Headline Rate', field: 'interest_rate', formatter: pctFormatter, headerSort: true, minWidth: 104 },
-            { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 98 },
+            { title: 'Bank', field: 'bank_name', headerSort: true, minWidth: 112, formatter: bankCellFormatter },
         ];
     }
 

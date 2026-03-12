@@ -14,6 +14,7 @@
     var pct = utils.pct || function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
     var clientLog = utils.clientLog || function () {};
+    var bankBrand = window.AR.bankBrand || {};
     var uiIcons = (window.AR && window.AR.uiIcons) ? window.AR.uiIcons : {};
     var iconText = typeof uiIcons.text === 'function'
         ? uiIcons.text
@@ -84,7 +85,10 @@
     }
 
     function ladderCard(row) {
-        var bank = esc(row.bank_name || '-');
+        var bankName = String(row.bank_name || '').trim() || '-';
+        var bank = bankBrand && typeof bankBrand.badge === 'function'
+            ? bankBrand.badge(bankName, { compact: true })
+            : esc(bankName);
         var product = esc(row.product_name || '-');
         var rate = pct(row.interest_rate);
         var detail = section === 'home-loans'
@@ -94,7 +98,7 @@
                 : [row.term_months ? row.term_months + 'm' : '', row.deposit_tier, row.interest_payment].filter(Boolean).join(' · ');
 
         return '' +
-            '<article class="ladder-card" data-bank="' + bank.toLowerCase() + '" data-product="' + product.toLowerCase() + '">' +
+            '<article class="ladder-card" data-bank="' + esc(bankName.toLowerCase()) + '" data-product="' + product.toLowerCase() + '">' +
                 '<div class="ladder-card-top">' +
                     '<strong class="ladder-rate">' + esc(rate) + '</strong>' +
                     '<span class="ladder-bank">' + bank + '</span>' +

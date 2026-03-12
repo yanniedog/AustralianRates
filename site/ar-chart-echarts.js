@@ -161,7 +161,7 @@
                     var data = params.data || {};
                     var row = data.row || {};
                     return [
-                        '<strong>' + (data.bankName || row.bank_name || 'Lender') + '</strong>',
+                        '<strong>' + chartConfig.formatFieldValue('bank_name', data.bankName || row.bank_name || 'Lender', row) + '</strong>',
                         data.productName || row.product_name || '',
                         'Date: ' + chartConfig.formatFieldValue('collection_date', data.date || row.collection_date, row),
                         chartConfig.fieldLabel(fields.yField) + ': ' + tooltipMetric(fields.yField, row, data.value),
@@ -201,7 +201,10 @@
                     width: compact ? 104 : (narrow ? 128 : 180),
                     overflow: 'truncate',
                 },
-                data: entries.map(function (entry) { return trimAxisLabel(entry.bankName, compact ? 14 : (narrow ? 18 : 28)); }),
+                data: entries.map(function (entry) {
+                    var label = chartConfig.formatFieldValue('bank_name', entry.bankName, entry.row || null);
+                    return trimAxisLabel(label, compact ? 14 : (narrow ? 18 : 28));
+                }),
             },
             series: [{
                 name: 'Best product by bank',

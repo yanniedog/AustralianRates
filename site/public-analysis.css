@@ -176,6 +176,11 @@
     font-weight: 700;
 }
 
+.rate-change-bank {
+    display: inline-flex;
+    align-items: center;
+}
+
 .chart-series-caption,
 .chart-series-note,
 .chart-series-meta,

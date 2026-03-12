@@ -7,6 +7,7 @@
     var chartConfig = window.AR.chartConfig || {};
     var els = dom.els || {};
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
+    var bankBrand = window.AR.bankBrand || {};
 
     function emptyState(message) {
         if (!els.chartDataSummary) return;
@@ -35,6 +36,13 @@
         var href = row && /^https?:\/\//i.test(String(row.product_url || '')) ? String(row.product_url) : '';
         if (!href) return '<span class="chart-summary-link is-muted">No product page</span>';
         return '<a class="chart-summary-link" href="' + hrefValue(href) + '" target="_blank" rel="noopener noreferrer">Open</a>';
+    }
+
+    function bankCell(value) {
+        if (bankBrand && typeof bankBrand.badge === 'function') {
+            return bankBrand.badge(value || '-', { compact: true });
+        }
+        return esc(value || '-');
     }
 
     function tableMarkup(title, description, headers, rows) {
@@ -97,7 +105,7 @@
             : [];
         var rows = ranking.map(function (entry) {
             return [
-                esc(entry.bankName || '-'),
+                bankCell(entry.bankName || '-'),
                 esc(entry.productName || '-'),
                 esc(formatMetric(fields.yField, entry.value)),
                 esc(formatDate(entry.latestDate, entry.row || null)),
