@@ -99,4 +99,19 @@ describe('api route integration smoke', () => {
     expect(json.ok).toBe(false)
     expect(json.error?.code).toBe('UNAUTHORIZED')
   })
+
+  it('requires authentication for admin download deletion endpoints', async () => {
+    const fetchHandler = worker.fetch?.bind(worker)
+    if (!fetchHandler) throw new Error('worker fetch handler is missing')
+    const request = new Request('https://example.com/api/home-loan-rates/admin/downloads', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_ids: ['job-1'] }),
+    }) as unknown as Request<unknown, IncomingRequestCfProperties<unknown>>
+    const response = await fetchHandler(request, makeEnv(), makeExecutionContext())
+    const json = (await response.json()) as { ok?: boolean; error?: { code?: string } }
+    expect(response.status).toBe(401)
+    expect(json.ok).toBe(false)
+    expect(json.error?.code).toBe('UNAUTHORIZED')
+  })
 })

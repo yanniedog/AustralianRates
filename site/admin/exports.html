@@ -46,6 +46,15 @@
                     <button type="button" class="secondary" data-refresh-section="canonical">Refresh</button>
                 </div>
                 <div class="export-summary" id="canonical-summary"></div>
+                <div class="export-history-bar">
+                    <div class="export-history-meta" id="canonical-history">Loading recent jobs...</div>
+                    <div class="export-history-actions">
+                        <button type="button" class="secondary" id="canonical-load-more" data-action="load-more" data-section="canonical">Show older</button>
+                        <button type="button" class="secondary" id="canonical-select-visible" data-action="select-visible" data-section="canonical">Select visible</button>
+                        <button type="button" class="secondary" id="canonical-clear-selection" data-action="clear-selection" data-section="canonical">Clear selection</button>
+                        <button type="button" class="secondary" id="canonical-delete-selected" data-action="delete-selected" data-section="canonical">Delete selected</button>
+                    </div>
+                </div>
                 <div class="export-job-list" id="canonical-jobs"></div>
             </section>
 
@@ -67,6 +76,15 @@
                     <button type="button" class="secondary" data-refresh-section="optimized">Refresh</button>
                 </div>
                 <div class="export-summary" id="optimized-summary"></div>
+                <div class="export-history-bar">
+                    <div class="export-history-meta" id="optimized-history">Loading recent jobs...</div>
+                    <div class="export-history-actions">
+                        <button type="button" class="secondary" id="optimized-load-more" data-action="load-more" data-section="optimized">Show older</button>
+                        <button type="button" class="secondary" id="optimized-select-visible" data-action="select-visible" data-section="optimized">Select visible</button>
+                        <button type="button" class="secondary" id="optimized-clear-selection" data-action="clear-selection" data-section="optimized">Clear selection</button>
+                        <button type="button" class="secondary" id="optimized-delete-selected" data-action="delete-selected" data-section="optimized">Delete selected</button>
+                    </div>
+                </div>
                 <div class="export-job-list" id="optimized-jobs"></div>
             </section>
 
@@ -82,6 +100,15 @@
                     <button type="button" class="secondary" data-refresh-section="operational">Refresh</button>
                 </div>
                 <div class="export-summary" id="operational-summary"></div>
+                <div class="export-history-bar">
+                    <div class="export-history-meta" id="operational-history">Loading recent jobs...</div>
+                    <div class="export-history-actions">
+                        <button type="button" class="secondary" id="operational-load-more" data-action="load-more" data-section="operational">Show older</button>
+                        <button type="button" class="secondary" id="operational-select-visible" data-action="select-visible" data-section="operational">Select visible</button>
+                        <button type="button" class="secondary" id="operational-clear-selection" data-action="clear-selection" data-section="operational">Clear selection</button>
+                        <button type="button" class="secondary" id="operational-delete-selected" data-action="delete-selected" data-section="operational">Delete selected</button>
+                    </div>
+                </div>
                 <div class="export-job-list" id="operational-jobs"></div>
             </section>
         </div>
@@ -104,26 +131,62 @@
             var sections = {
                 canonical: {
                     stream: 'canonical',
+                    pageSize: 12,
+                    limit: 12,
+                    entries: [],
+                    loaded: false,
+                    loading: false,
+                    renderKey: '',
+                    selection: Object.create(null),
                     scopeEl: document.getElementById('canonical-scope'),
                     sinceCursorEl: document.getElementById('canonical-since-cursor'),
                     payloadsEl: document.getElementById('canonical-payloads'),
                     summaryEl: document.getElementById('canonical-summary'),
+                    historyEl: document.getElementById('canonical-history'),
+                    loadMoreBtn: document.getElementById('canonical-load-more'),
+                    selectVisibleBtn: document.getElementById('canonical-select-visible'),
+                    clearSelectionBtn: document.getElementById('canonical-clear-selection'),
+                    deleteSelectedBtn: document.getElementById('canonical-delete-selected'),
                     jobsEl: document.getElementById('canonical-jobs')
                 },
                 optimized: {
                     stream: 'optimized',
+                    pageSize: 12,
+                    limit: 12,
+                    entries: [],
+                    loaded: false,
+                    loading: false,
+                    renderKey: '',
+                    selection: Object.create(null),
                     scopeEl: document.getElementById('optimized-scope'),
                     sinceCursorEl: document.getElementById('optimized-since-cursor'),
                     payloadsEl: null,
                     summaryEl: document.getElementById('optimized-summary'),
+                    historyEl: document.getElementById('optimized-history'),
+                    loadMoreBtn: document.getElementById('optimized-load-more'),
+                    selectVisibleBtn: document.getElementById('optimized-select-visible'),
+                    clearSelectionBtn: document.getElementById('optimized-clear-selection'),
+                    deleteSelectedBtn: document.getElementById('optimized-delete-selected'),
                     jobsEl: document.getElementById('optimized-jobs')
                 },
                 operational: {
                     stream: 'operational',
+                    pageSize: 12,
+                    limit: 12,
+                    entries: [],
+                    loaded: false,
+                    loading: false,
+                    renderKey: '',
+                    selection: Object.create(null),
                     scopeEl: document.getElementById('operational-scope'),
                     sinceCursorEl: null,
                     payloadsEl: null,
                     summaryEl: document.getElementById('operational-summary'),
+                    historyEl: document.getElementById('operational-history'),
+                    loadMoreBtn: document.getElementById('operational-load-more'),
+                    selectVisibleBtn: document.getElementById('operational-select-visible'),
+                    clearSelectionBtn: document.getElementById('operational-clear-selection'),
+                    deleteSelectedBtn: document.getElementById('operational-delete-selected'),
                     jobsEl: document.getElementById('operational-jobs')
                 }
             };
@@ -155,6 +218,91 @@
             function currentScope(sectionKey) {
                 var section = sections[sectionKey];
                 return section && section.scopeEl ? String(section.scopeEl.value || 'all') : 'all';
+            }
+
+            function preserveWindowScroll(mutator) {
+                var x = window.scrollX || window.pageXOffset || 0;
+                var y = window.scrollY || window.pageYOffset || 0;
+                mutator();
+                window.requestAnimationFrame(function () {
+                    window.scrollTo(x, y);
+                });
+            }
+
+            function hasPendingEntries(entries) {
+                return entries.some(function (entry) {
+                    var status = entry && entry.job ? String(entry.job.status || '') : '';
+                    return status === 'queued' || status === 'processing';
+                });
+            }
+
+            function schedulePolling() {
+                if (pollTimer) clearTimeout(pollTimer);
+                var pending = Object.keys(sections).some(function (sectionKey) {
+                    return hasPendingEntries(sections[sectionKey].entries);
+                });
+                if (pending) {
+                    pollTimer = setTimeout(loadAllSections, POLL_MS);
+                }
+            }
+
+            function isJobSelectable(job) {
+                var status = String(job && job.status || '');
+                return status === 'completed' || status === 'failed';
+            }
+
+            function sectionSelectedIds(sectionKey) {
+                var section = sections[sectionKey];
+                if (!section) return [];
+                return Object.keys(section.selection).filter(function (jobId) {
+                    return !!section.selection[jobId];
+                });
+            }
+
+            function cleanupSelection(sectionKey, entries) {
+                var section = sections[sectionKey];
+                var visible = Object.create(null);
+                entries.forEach(function (entry) {
+                    var jobId = entry && entry.job ? String(entry.job.job_id || '') : '';
+                    if (jobId) visible[jobId] = true;
+                });
+                Object.keys(section.selection).forEach(function (jobId) {
+                    if (!visible[jobId]) delete section.selection[jobId];
+                });
+            }
+
+            function selectedVisibleCount(sectionKey, entries) {
+                var section = sections[sectionKey];
+                return entries.reduce(function (count, entry) {
+                    var job = entry && entry.job ? entry.job : null;
+                    var jobId = job ? String(job.job_id || '') : '';
+                    return count + (jobId && section.selection[jobId] ? 1 : 0);
+                }, 0);
+            }
+
+            function sectionRenderKey(entries) {
+                return JSON.stringify(entries.map(function (entry) {
+                    var job = entry && entry.job ? entry.job : {};
+                    var artifacts = Array.isArray(entry && entry.artifacts) ? entry.artifacts : [];
+                    return {
+                        job_id: job.job_id || '',
+                        status: job.status || '',
+                        started_at: job.started_at || '',
+                        completed_at: job.completed_at || '',
+                        error_message: job.error_message || '',
+                        end_cursor: job.end_cursor == null ? null : job.end_cursor,
+                        download_path: entry && entry.download_path ? entry.download_path : '',
+                        download_file_name: entry && entry.download_file_name ? entry.download_file_name : '',
+                        artifacts: artifacts.map(function (artifact) {
+                            return [
+                                artifact.artifact_id || '',
+                                artifact.file_name || '',
+                                artifact.created_at || '',
+                                artifact.download_path || ''
+                            ].join('|');
+                        })
+                    };
+                }));
             }
 
             async function requestJson(path, options) {
@@ -253,6 +401,22 @@
                 }).join('');
             }
 
+            function updateSectionHistory(sectionKey, entries) {
+                var section = sections[sectionKey];
+                var selectedCount = selectedVisibleCount(sectionKey, entries);
+                var text = entries.length
+                    ? ('Showing ' + entries.length + ' recent jobs'
+                        + (selectedCount ? ' | ' + selectedCount + ' selected' : '')
+                        + (section.loading ? ' | Refreshing...' : ''))
+                    : (section.loading ? 'Loading recent jobs...' : 'No jobs loaded yet.');
+                section.historyEl.textContent = text;
+                section.loadMoreBtn.disabled = section.loading || entries.length < section.limit || section.limit >= 250;
+                section.selectVisibleBtn.disabled = section.loading || !entries.some(function (entry) { return isJobSelectable(entry.job); });
+                section.clearSelectionBtn.disabled = section.loading || selectedCount === 0;
+                section.deleteSelectedBtn.disabled = section.loading || selectedCount === 0;
+                section.deleteSelectedBtn.textContent = selectedCount ? ('Delete selected (' + selectedCount + ')') : 'Delete selected';
+            }
+
             function renderJobs(sectionKey, entries) {
                 var section = sections[sectionKey];
                 if (sectionKey === 'operational') {
@@ -268,9 +432,13 @@
                     var bundle = sectionKey === 'operational'
                         ? buildOperationalBundle(entry, job, artifacts)
                         : null;
+                    var jobId = String(job.job_id || '');
+                    var selectable = isJobSelectable(job);
+                    var checked = !!section.selection[jobId];
                     return ''
                         + '<div class="export-job">'
                         + '  <div class="export-job-head"><strong>' + escapeHtml(job.job_id || '') + '</strong><span>' + escapeHtml(job.status || '') + '</span></div>'
+                        + '  <label class="export-job-select"><input type="checkbox" data-action="toggle-job-selection" data-section="' + escapeHtml(sectionKey) + '" data-job-id="' + escapeHtml(jobId) + '"' + (checked ? ' checked' : '') + (selectable ? '' : ' disabled') + '> Select</label>'
                         + '  <div class="export-job-meta">'
                         + '    Mode: ' + escapeHtml(job.mode || '--') + ' | Scope: ' + escapeHtml(job.scope || '--') + ' | Requested: ' + escapeHtml(formatTimestamp(job.requested_at)) + '<br>'
                         + '    Started: ' + escapeHtml(formatTimestamp(job.started_at)) + ' | Completed: ' + escapeHtml(formatTimestamp(job.completed_at)) + '<br>'
@@ -327,34 +495,45 @@
 
             async function loadSection(sectionKey) {
                 var section = sections[sectionKey];
-                section.jobsEl.innerHTML = '<div class="export-empty">Loading...</div>';
-                var payload = await requestJson(
-                    '/downloads?stream=' + encodeURIComponent(section.stream)
-                    + '&scope=' + encodeURIComponent(currentScope(sectionKey))
-                    + '&limit=8'
-                );
-                var entries = Array.isArray(payload.jobs) ? payload.jobs : [];
-                renderSummary(sectionKey, entries);
-                renderJobs(sectionKey, entries);
-                return entries;
+                if (!section.loaded) {
+                    section.jobsEl.innerHTML = '<div class="export-empty">Loading...</div>';
+                }
+                section.loading = true;
+                updateSectionHistory(sectionKey, section.entries);
+                try {
+                    var payload = await requestJson(
+                        '/downloads?stream=' + encodeURIComponent(section.stream)
+                        + '&scope=' + encodeURIComponent(currentScope(sectionKey))
+                        + '&limit=' + encodeURIComponent(section.limit)
+                    );
+                    var entries = Array.isArray(payload.jobs) ? payload.jobs : [];
+                    cleanupSelection(sectionKey, entries);
+                    section.entries = entries;
+                    var nextKey = sectionRenderKey(entries);
+                    var shouldRender = !section.loaded || section.renderKey !== nextKey;
+                    section.renderKey = nextKey;
+                    if (shouldRender) {
+                        preserveWindowScroll(function () {
+                            renderSummary(sectionKey, entries);
+                            renderJobs(sectionKey, entries);
+                        });
+                    }
+                    section.loaded = true;
+                    return entries;
+                } finally {
+                    section.loading = false;
+                    updateSectionHistory(sectionKey, section.entries);
+                    schedulePolling();
+                }
             }
 
             async function loadAllSections() {
-                var results = await Promise.all([
+                await Promise.all([
                     loadSection('canonical'),
                     loadSection('optimized'),
                     loadSection('operational')
                 ]);
-                var pending = results.some(function (entries) {
-                    return entries.some(function (entry) {
-                        var status = entry && entry.job ? String(entry.job.status || '') : '';
-                        return status === 'queued' || status === 'processing';
-                    });
-                });
-                if (pollTimer) clearTimeout(pollTimer);
-                if (pending) {
-                    pollTimer = setTimeout(loadAllSections, POLL_MS);
-                }
+                schedulePolling();
             }
 
             async function createJob(sectionKey, mode) {
@@ -377,14 +556,66 @@
                 });
                 var jobId = payload && payload.job ? payload.job.job_id : '';
                 showMsg('Download job queued: ' + jobId, false);
-                await loadAllSections();
+                await loadSection(sectionKey);
             }
 
-            async function pollJob(jobId) {
+            async function pollJob(jobId, sectionKey) {
                 var payload = await requestJson('/downloads/' + encodeURIComponent(jobId));
                 var status = payload && payload.job ? payload.job.status : 'unknown';
                 showMsg('Job ' + jobId + ': ' + status, false);
+                if (sectionKey && sections[sectionKey]) {
+                    await loadSection(sectionKey);
+                    return;
+                }
                 await loadAllSections();
+            }
+
+            function selectVisible(sectionKey) {
+                var section = sections[sectionKey];
+                section.entries.forEach(function (entry) {
+                    var job = entry && entry.job ? entry.job : null;
+                    var jobId = job ? String(job.job_id || '') : '';
+                    if (jobId && isJobSelectable(job)) section.selection[jobId] = true;
+                });
+                preserveWindowScroll(function () {
+                    renderJobs(sectionKey, section.entries);
+                });
+                updateSectionHistory(sectionKey, section.entries);
+            }
+
+            function clearSelection(sectionKey) {
+                var section = sections[sectionKey];
+                section.selection = Object.create(null);
+                preserveWindowScroll(function () {
+                    renderJobs(sectionKey, section.entries);
+                });
+                updateSectionHistory(sectionKey, section.entries);
+            }
+
+            async function deleteSelected(sectionKey) {
+                var section = sections[sectionKey];
+                var jobIds = sectionSelectedIds(sectionKey);
+                if (!jobIds.length) {
+                    showMsg('Select one or more completed jobs first.', true);
+                    return;
+                }
+                if (!confirm('Delete ' + jobIds.length + ' selected export job(s)? This removes their stored files and cannot be undone.')) {
+                    return;
+                }
+                var payload = await requestJson('/downloads', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_ids: jobIds })
+                });
+                section.selection = Object.create(null);
+                showMsg('Deleted ' + Number(payload.deleted_job_count || 0) + ' export job(s).', false);
+                await loadSection(sectionKey);
+            }
+
+            async function loadMoreJobs(sectionKey) {
+                var section = sections[sectionKey];
+                section.limit = Math.min(250, section.limit + section.pageSize);
+                await loadSection(sectionKey);
             }
 
             document.body.addEventListener('click', function (event) {
@@ -410,8 +641,31 @@
 
                 var action = target.getAttribute('data-action');
                 if (action === 'poll-job') {
-                    pollJob(target.getAttribute('data-job-id') || '').catch(function (error) {
+                    pollJob(
+                        target.getAttribute('data-job-id') || '',
+                        target.getAttribute('data-section') || ''
+                    ).catch(function (error) {
                         showMsg(error && error.message ? error.message : 'Failed to poll job.', true);
+                    });
+                    return;
+                }
+                if (action === 'load-more') {
+                    loadMoreJobs(target.getAttribute('data-section') || '').catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to load older jobs.', true);
+                    });
+                    return;
+                }
+                if (action === 'select-visible') {
+                    selectVisible(target.getAttribute('data-section') || '');
+                    return;
+                }
+                if (action === 'clear-selection') {
+                    clearSelection(target.getAttribute('data-section') || '');
+                    return;
+                }
+                if (action === 'delete-selected') {
+                    deleteSelected(target.getAttribute('data-section') || '').catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to delete selected jobs.', true);
                     });
                     return;
                 }
@@ -442,10 +696,26 @@
                 }
             });
 
+            document.body.addEventListener('change', function (event) {
+                var target = event.target;
+                if (!target || !target.getAttribute) return;
+                if (target.getAttribute('data-action') !== 'toggle-job-selection') return;
+                var sectionKey = target.getAttribute('data-section') || '';
+                var section = sections[sectionKey];
+                var jobId = String(target.getAttribute('data-job-id') || '').trim();
+                if (!section || !jobId) return;
+                section.selection[jobId] = !!target.checked;
+                if (!target.checked) delete section.selection[jobId];
+                updateSectionHistory(sectionKey, section.entries);
+            });
+
             ['canonical', 'optimized'].forEach(function (sectionKey) {
                 var section = sections[sectionKey];
                 if (section.scopeEl) {
                     section.scopeEl.addEventListener('change', function () {
+                        section.limit = section.pageSize;
+                        section.selection = Object.create(null);
+                        section.renderKey = '';
                         loadSection(sectionKey).catch(function (error) {
                             showMsg(error && error.message ? error.message : 'Failed to refresh jobs.', true);
                         });

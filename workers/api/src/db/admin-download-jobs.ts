@@ -35,6 +35,14 @@ export type AdminDownloadArtifactRow = {
   created_at: string
 }
 
+function normalizeJobIds(jobIds: string[]): string[] {
+  return Array.from(new Set(jobIds.map((jobId) => String(jobId || '').trim()).filter(Boolean)))
+}
+
+function inClausePlaceholders(count: number): string {
+  return Array.from({ length: count }, (_, index) => `?${index + 1}`).join(', ')
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -236,7 +244,8 @@ export async function listAdminDownloadJobs(
     where.push(`status = ?${binds.length + 1}`)
     binds.push(input.status)
   }
-  binds.push(Math.max(1, Math.min(100, Math.floor(Number(input?.limit ?? 20)))))
+  const limit = Math.max(1, Math.min(250, Math.floor(Number(input?.limit ?? 20))))
+  binds.push(limit)
   const result = await db
     .prepare(
       `SELECT
@@ -248,6 +257,23 @@ export async function listAdminDownloadJobs(
        LIMIT ?${binds.length}`,
     )
     .bind(...binds)
+    .all<AdminDownloadJobRow>()
+  return result.results ?? []
+}
+
+export async function listAdminDownloadJobsByIds(db: D1Database, jobIds: string[]): Promise<AdminDownloadJobRow[]> {
+  const ids = normalizeJobIds(jobIds)
+  if (!ids.length) return []
+  const result = await db
+    .prepare(
+      `SELECT
+         job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
+         status, requested_at, started_at, completed_at, error_message
+       FROM admin_download_jobs
+       WHERE job_id IN (${inClausePlaceholders(ids.length)})
+       ORDER BY requested_at DESC`,
+    )
+    .bind(...ids)
     .all<AdminDownloadJobRow>()
   return result.results ?? []
 }
@@ -266,6 +292,25 @@ export async function listAdminDownloadArtifacts(db: D1Database, jobId: string):
   return result.results ?? []
 }
 
+export async function listAdminDownloadArtifactsForJobs(
+  db: D1Database,
+  jobIds: string[],
+): Promise<AdminDownloadArtifactRow[]> {
+  const ids = normalizeJobIds(jobIds)
+  if (!ids.length) return []
+  const result = await db
+    .prepare(
+      `SELECT
+         artifact_id, job_id, artifact_kind, file_name, content_type, row_count, byte_size, cursor_start, cursor_end, r2_key, created_at
+       FROM admin_download_artifacts
+       WHERE job_id IN (${inClausePlaceholders(ids.length)})
+       ORDER BY created_at ASC, artifact_kind ASC`,
+    )
+    .bind(...ids)
+    .all<AdminDownloadArtifactRow>()
+  return result.results ?? []
+}
+
 export async function getAdminDownloadArtifact(db: D1Database, artifactId: string): Promise<AdminDownloadArtifactRow | null> {
   const row = await db
     .prepare(
@@ -277,4 +322,30 @@ export async function getAdminDownloadArtifact(db: D1Database, artifactId: strin
     .bind(artifactId)
     .first<AdminDownloadArtifactRow>()
   return row ?? null
+}
+
+export async function deleteAdminDownloadArtifactsForJobs(db: D1Database, jobIds: string[]): Promise<number> {
+  const ids = normalizeJobIds(jobIds)
+  if (!ids.length) return 0
+  const result = await db
+    .prepare(
+      `DELETE FROM admin_download_artifacts
+       WHERE job_id IN (${inClausePlaceholders(ids.length)})`,
+    )
+    .bind(...ids)
+    .run()
+  return result.meta.changes ?? 0
+}
+
+export async function deleteAdminDownloadJobsByIds(db: D1Database, jobIds: string[]): Promise<number> {
+  const ids = normalizeJobIds(jobIds)
+  if (!ids.length) return 0
+  const result = await db
+    .prepare(
+      `DELETE FROM admin_download_jobs
+       WHERE job_id IN (${inClausePlaceholders(ids.length)})`,
+    )
+    .bind(...ids)
+    .run()
+  return result.meta.changes ?? 0
 }

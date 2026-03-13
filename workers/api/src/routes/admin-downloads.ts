@@ -2,9 +2,13 @@ import { Hono, type Context } from 'hono'
 import {
   claimAdminDownloadJobProcessing,
   createAdminDownloadJob,
+  deleteAdminDownloadArtifactsForJobs,
+  deleteAdminDownloadJobsByIds,
   getAdminDownloadArtifact,
   getAdminDownloadJob,
+  listAdminDownloadArtifactsForJobs,
   listAdminDownloadJobs,
+  listAdminDownloadJobsByIds,
   listAdminDownloadArtifacts,
   requeueStaleAdminDownloadJob,
   type AdminDownloadMode,
@@ -26,6 +30,7 @@ import {
 const VALID_STREAMS = new Set<AdminDownloadStream>(['canonical', 'optimized', 'operational'])
 const VALID_SCOPES = new Set<AdminDownloadScope>(['all', 'home_loans', 'savings', 'term_deposits'])
 const VALID_MODES = new Set<AdminDownloadMode>(['snapshot', 'delta'])
+const MAX_DELETE_JOB_IDS = 100
 
 function parseBoolean(value: unknown): boolean {
   const normalized = String(value ?? '').trim().toLowerCase()
@@ -35,7 +40,12 @@ function parseBoolean(value: unknown): boolean {
 function parseLimit(value: string | undefined, fallback: number): number {
   const parsed = Math.floor(Number(value))
   if (!Number.isFinite(parsed)) return fallback
-  return Math.max(1, Math.min(100, parsed))
+  return Math.max(1, Math.min(250, parsed))
+}
+
+function parseJobIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.map((jobId) => String(jobId || '').trim()).filter(Boolean)))
 }
 
 function statusBody(job: Awaited<ReturnType<typeof getAdminDownloadJob>>, artifacts: Awaited<ReturnType<typeof listAdminDownloadArtifacts>>) {
@@ -80,6 +90,15 @@ async function continueAdminDownloadIfPending(c: Context<AppContext>, jobId: str
   const task = runAdminDownloadJob(c.env, claimedJob)
   if (!scheduleBackgroundTask(c, task)) {
     await task
+  }
+}
+
+async function deleteArtifactKeys(bucket: R2Bucket, r2Keys: string[]): Promise<void> {
+  const keys = Array.from(new Set(r2Keys.map((r2Key) => String(r2Key || '').trim()).filter(Boolean)))
+  if (!keys.length) return
+  const chunkSize = 500
+  for (let index = 0; index < keys.length; index += chunkSize) {
+    await bucket.delete(keys.slice(index, index + chunkSize))
   }
 }
 
@@ -171,6 +190,54 @@ adminDownloadRoutes.post('/downloads', async (c) => {
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, jobId)
   const updatedJob = await getAdminDownloadJob(c.env.DB, jobId)
   return c.json(statusBody(updatedJob, artifacts), 202)
+})
+
+adminDownloadRoutes.delete('/downloads', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const jobIds = parseJobIds(body.job_ids ?? body.jobIds)
+  if (!jobIds.length) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'job_ids must contain at least one job id')
+  }
+  if (jobIds.length > MAX_DELETE_JOB_IDS) {
+    return jsonError(c, 400, 'BAD_REQUEST', `job_ids cannot exceed ${MAX_DELETE_JOB_IDS} entries`)
+  }
+
+  const jobs = await listAdminDownloadJobsByIds(c.env.DB, jobIds)
+  const existingIds = new Set(jobs.map((job) => job.job_id))
+  const missingJobIds = jobIds.filter((jobId) => !existingIds.has(jobId))
+  const blockedJobIds = jobs
+    .filter((job) => job.status === 'queued' || job.status === 'processing')
+    .map((job) => job.job_id)
+
+  if (blockedJobIds.length) {
+    return jsonError(
+      c,
+      409,
+      'DOWNLOAD_JOBS_ACTIVE',
+      'Queued or processing download jobs cannot be deleted.',
+      {
+        blocked_job_ids: blockedJobIds,
+        missing_job_ids: missingJobIds,
+      },
+    )
+  }
+
+  const deletableJobIds = jobs.map((job) => job.job_id)
+  const artifacts = await listAdminDownloadArtifactsForJobs(c.env.DB, deletableJobIds)
+  await deleteArtifactKeys(
+    c.env.RAW_BUCKET,
+    artifacts.map((artifact) => artifact.r2_key),
+  )
+  const deletedArtifactRows = await deleteAdminDownloadArtifactsForJobs(c.env.DB, deletableJobIds)
+  const deletedJobRows = await deleteAdminDownloadJobsByIds(c.env.DB, deletableJobIds)
+
+  return c.json({
+    ok: true,
+    deleted_job_ids: deletableJobIds,
+    missing_job_ids: missingJobIds,
+    deleted_job_count: deletedJobRows,
+    deleted_artifact_count: deletedArtifactRows,
+  })
 })
 
 adminDownloadRoutes.get('/downloads/:jobId', async (c) => {
