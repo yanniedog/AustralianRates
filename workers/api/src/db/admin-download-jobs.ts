@@ -121,6 +121,21 @@ export async function requeueAdminDownloadJob(db: D1Database, jobId: string): Pr
     .run()
 }
 
+export async function resetAdminDownloadJobForRetry(db: D1Database, jobId: string): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE admin_download_jobs
+       SET status = 'queued',
+           started_at = NULL,
+           completed_at = NULL,
+           end_cursor = NULL,
+           error_message = NULL
+       WHERE job_id = ?1`,
+    )
+    .bind(jobId)
+    .run()
+}
+
 export async function requeueStaleAdminDownloadJob(
   db: D1Database,
   input: { jobId: string; staleBeforeIso: string },

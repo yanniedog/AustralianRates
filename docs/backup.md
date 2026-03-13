@@ -52,3 +52,13 @@ Writing inside the repo is blocked by default. If you intentionally want that be
 ## Production safety
 
 - `wrangler d1 export` is read-only and does not mutate production data.
+
+## Admin exports vs D1 backups
+
+The admin export center is not the same as a full D1 backup.
+
+- `wrangler d1 export` is the disaster-recovery path for exact database restore.
+- Admin exports are JSONL application exports for canonical, optimized, and operational data.
+- Admin exports do not include DDL and are not, by themselves, sufficient to recreate the full database from scratch.
+
+See `docs/admin-export-api.md` and `docs/admin-export-reconstruction.md`.

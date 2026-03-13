@@ -11,6 +11,7 @@ import {
   listAdminDownloadJobsByIds,
   listAdminDownloadArtifacts,
   requeueStaleAdminDownloadJob,
+  resetAdminDownloadJobForRetry,
   type AdminDownloadMode,
   type AdminDownloadScope,
   type AdminDownloadStatus,
@@ -26,45 +27,21 @@ import {
   operationalBundleFileName,
   sortOperationalArtifactsForBundle,
 } from './admin-download-operational'
+import {
+  buildAdminDownloadStatusBody,
+  isRetryableAdminDownloadJob,
+  MAX_DELETE_JOB_IDS,
+  normalizeAdminDownloadSinceCursor,
+  parseAdminDownloadBoolean,
+  parseAdminDownloadJobIds,
+  parseAdminDownloadLimit,
+  VALID_ADMIN_DOWNLOAD_STATUSES,
+} from './admin-download-route-helpers'
 
 const VALID_STREAMS = new Set<AdminDownloadStream>(['canonical', 'optimized', 'operational'])
 const VALID_SCOPES = new Set<AdminDownloadScope>(['all', 'home_loans', 'savings', 'term_deposits'])
 const VALID_MODES = new Set<AdminDownloadMode>(['snapshot', 'delta'])
-const MAX_DELETE_JOB_IDS = 100
-
-function parseBoolean(value: unknown): boolean {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes'
-}
-
-function parseLimit(value: string | undefined, fallback: number): number {
-  const parsed = Math.floor(Number(value))
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(1, Math.min(250, parsed))
-}
-
-function parseJobIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return Array.from(new Set(value.map((jobId) => String(jobId || '').trim()).filter(Boolean)))
-}
-
-function statusBody(job: Awaited<ReturnType<typeof getAdminDownloadJob>>, artifacts: Awaited<ReturnType<typeof listAdminDownloadArtifacts>>) {
-  const downloadPath =
-    job && job.stream === 'operational' && job.mode === 'snapshot' && job.status === 'completed'
-      ? `/admin/downloads/${job.job_id}/download`
-      : null
-  const downloadFileName = downloadPath && job ? operationalBundleFileName(job) : null
-  return {
-    ok: true,
-    job,
-    download_path: downloadPath,
-    download_file_name: downloadFileName,
-    artifacts: artifacts.map((artifact) => ({
-      ...artifact,
-      download_path: `/admin/downloads/${job?.job_id}/artifacts/${artifact.artifact_id}/download`,
-    })),
-  }
-}
+const VALID_STATUSES = new Set<AdminDownloadStatus>(VALID_ADMIN_DOWNLOAD_STATUSES)
 
 async function continueAdminDownloadIfPending(c: Context<AppContext>, jobId: string): Promise<void> {
   let job = await getAdminDownloadJob(c.env.DB, jobId)
@@ -108,7 +85,7 @@ adminDownloadRoutes.get('/downloads', async (c) => {
   const stream = String(c.req.query('stream') || '').trim().toLowerCase() as AdminDownloadStream | ''
   const scope = String(c.req.query('scope') || '').trim().toLowerCase() as AdminDownloadScope | ''
   const status = String(c.req.query('status') || '').trim().toLowerCase() as AdminDownloadStatus | ''
-  const limit = parseLimit(c.req.query('limit'), 12)
+  const limit = parseAdminDownloadLimit(c.req.query('limit'), 12)
 
   if (stream && !VALID_STREAMS.has(stream)) {
     return jsonError(c, 400, 'BAD_REQUEST', 'stream must be canonical, optimized, or operational')
@@ -116,7 +93,7 @@ adminDownloadRoutes.get('/downloads', async (c) => {
   if (scope && !VALID_SCOPES.has(scope)) {
     return jsonError(c, 400, 'BAD_REQUEST', 'scope must be all, home_loans, savings, or term_deposits')
   }
-  if (status && !new Set<AdminDownloadStatus>(['queued', 'processing', 'completed', 'failed']).has(status)) {
+  if (status && !VALID_STATUSES.has(status)) {
     return jsonError(c, 400, 'BAD_REQUEST', 'status must be queued, processing, completed, or failed')
   }
 
@@ -130,7 +107,7 @@ adminDownloadRoutes.get('/downloads', async (c) => {
     jobs.map(async (job) => {
       const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
       return {
-        ...statusBody(job, artifacts),
+        ...buildAdminDownloadStatusBody(job, artifacts),
       }
     }),
   )
@@ -154,7 +131,7 @@ adminDownloadRoutes.post('/downloads', async (c) => {
   const scope = String(body.scope || 'all').trim().toLowerCase() as AdminDownloadScope
   const mode = String(body.mode || 'snapshot').trim().toLowerCase() as AdminDownloadMode
   const sinceCursor = Number(body.since_cursor ?? body.sinceCursor ?? 0)
-  const includePayloadBodies = parseBoolean(body.include_payload_bodies ?? body.includePayloadBodies)
+  const includePayloadBodies = parseAdminDownloadBoolean(body.include_payload_bodies ?? body.includePayloadBodies)
 
   if (!VALID_STREAMS.has(stream)) {
     return jsonError(c, 400, 'BAD_REQUEST', 'stream must be canonical, optimized, or operational')
@@ -176,7 +153,7 @@ adminDownloadRoutes.post('/downloads', async (c) => {
     scope,
     mode,
     format: 'jsonl_gzip',
-    sinceCursor: mode === 'delta' ? Math.max(0, Math.floor(sinceCursor || 0)) : null,
+    sinceCursor: mode === 'delta' ? normalizeAdminDownloadSinceCursor(sinceCursor) : null,
     includePayloadBodies: stream === 'canonical' && includePayloadBodies,
   })
 
@@ -188,13 +165,40 @@ adminDownloadRoutes.post('/downloads', async (c) => {
   await continueAdminDownloadIfPending(c, job.job_id)
 
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, jobId)
+  const updatedJob = (await getAdminDownloadJob(c.env.DB, jobId)) ?? job
+  return c.json(buildAdminDownloadStatusBody(updatedJob, artifacts), 202)
+})
+
+adminDownloadRoutes.post('/downloads/:jobId/retry', async (c) => {
+  const jobId = c.req.param('jobId')
+  const job = await getAdminDownloadJob(c.env.DB, jobId)
+  if (!job) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
+  }
+  if (!isRetryableAdminDownloadJob(job)) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'Only failed download jobs can be retried.')
+  }
+
+  const artifacts = await listAdminDownloadArtifacts(c.env.DB, jobId)
+  await deleteArtifactKeys(
+    c.env.RAW_BUCKET,
+    artifacts.map((artifact) => artifact.r2_key),
+  )
+  await deleteAdminDownloadArtifactsForJobs(c.env.DB, [jobId])
+  await resetAdminDownloadJobForRetry(c.env.DB, jobId)
+  await continueAdminDownloadIfPending(c, jobId)
+
   const updatedJob = await getAdminDownloadJob(c.env.DB, jobId)
-  return c.json(statusBody(updatedJob, artifacts), 202)
+  if (!updatedJob) {
+    return jsonError(c, 500, 'DOWNLOAD_JOB_MISSING', 'Download job was not persisted.')
+  }
+  const updatedArtifacts = await listAdminDownloadArtifacts(c.env.DB, jobId)
+  return c.json(buildAdminDownloadStatusBody(updatedJob, updatedArtifacts), 202)
 })
 
 adminDownloadRoutes.delete('/downloads', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const jobIds = parseJobIds(body.job_ids ?? body.jobIds)
+  const jobIds = parseAdminDownloadJobIds(body.job_ids ?? body.jobIds)
   if (!jobIds.length) {
     return jsonError(c, 400, 'BAD_REQUEST', 'job_ids must contain at least one job id')
   }
@@ -248,7 +252,7 @@ adminDownloadRoutes.get('/downloads/:jobId', async (c) => {
     return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
   }
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
-  return c.json(statusBody(job, artifacts))
+  return c.json(buildAdminDownloadStatusBody(job, artifacts))
 })
 
 adminDownloadRoutes.get('/downloads/:jobId/artifacts/:artifactId/download', async (c) => {
