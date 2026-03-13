@@ -1,3 +1,19 @@
+.admin-exports .admin-message.visible {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.admin-exports .admin-message-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.admin-exports .admin-message-dismiss {
+    flex: 0 0 auto;
+}
+
 .admin-exports .export-cursor-input {
     display: flex;
     flex: 1 1 100%;
@@ -115,6 +131,10 @@
 }
 
 @media (max-width: 760px) {
+    .admin-exports .admin-message.visible {
+        flex-direction: column;
+    }
+
     .admin-exports .export-job-head,
     .admin-exports .export-artifact-head {
         align-items: stretch;

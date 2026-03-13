@@ -27,7 +27,10 @@
             <h1>Incremental downloads</h1>
             <p class="admin-subtitle">Create snapshot and delta packs for canonical, optimized, and operational data.</p>
         </div>
-        <div class="admin-message" id="exports-msg" role="status" aria-live="polite"></div>
+        <div class="admin-message" id="exports-msg" role="status" aria-live="polite">
+            <span class="admin-message-copy" id="exports-msg-copy"></span>
+            <button type="button" class="secondary admin-message-dismiss" id="exports-msg-dismiss" aria-label="Dismiss message">Dismiss</button>
+        </div>
         <div class="export-grid">
             <section class="admin-card">
                 <h2>Canonical data</h2>
@@ -45,7 +48,7 @@
                         <input type="number" id="canonical-since-cursor" min="0" step="1" placeholder="0" aria-describedby="canonical-cursor-hint">
                         <button type="button" class="secondary" data-action="use-latest-cursor" data-section="canonical">Use latest</button>
                     </div>
-                    <p class="hint export-cursor-hint" id="canonical-cursor-hint">Change-feed cursor. Use 0 for a full delta, or paste a previous job's end cursor. <span id="canonical-cursor-state">Loading latest completed cursor...</span></p>
+                    <p class="hint export-cursor-hint" id="canonical-cursor-hint">Change-feed cursor. Use 0 for a full delta, or paste a previous job's end cursor. Saved per section and scope in this browser. <span id="canonical-cursor-state">Loading latest completed cursor...</span></p>
                     <label><input type="checkbox" id="canonical-payloads"> Include payload bodies</label>
                     <button type="button" class="primary" data-create-job="canonical:snapshot">Create snapshot</button>
                     <button type="button" class="secondary" data-create-job="canonical:delta">Create delta</button>
@@ -80,7 +83,7 @@
                         <input type="number" id="optimized-since-cursor" min="0" step="1" placeholder="0" aria-describedby="optimized-cursor-hint">
                         <button type="button" class="secondary" data-action="use-latest-cursor" data-section="optimized">Use latest</button>
                     </div>
-                    <p class="hint export-cursor-hint" id="optimized-cursor-hint">Change-feed cursor. Use 0 for a full delta, or paste a previous job's end cursor. <span id="optimized-cursor-state">Loading latest completed cursor...</span></p>
+                    <p class="hint export-cursor-hint" id="optimized-cursor-hint">Change-feed cursor. Use 0 for a full delta, or paste a previous job's end cursor. Saved per section and scope in this browser. <span id="optimized-cursor-state">Loading latest completed cursor...</span></p>
                     <button type="button" class="primary" data-create-job="optimized:snapshot">Create snapshot</button>
                     <button type="button" class="secondary" data-create-job="optimized:delta">Create delta</button>
                     <button type="button" class="secondary" data-refresh-section="optimized">Refresh</button>

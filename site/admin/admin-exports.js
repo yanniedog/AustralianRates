@@ -92,9 +92,21 @@
 
     async function downloadOperationalBundle(jobId) {
         var bundle = operationalBundles[jobId];
-        await runtime.downloadOperationalBundle(bundle, function (current, total) {
-            runtime.showMsg('Downloading snapshot part ' + current + ' of ' + total + '...', false);
+        await runtime.downloadOperationalBundle(bundle, function (current, total, partName) {
+            runtime.showMsg('Downloading snapshot part ' + current + ' of ' + total + (partName ? (': ' + partName) : '') + '...', false);
         });
+    }
+
+    function syncStoredCursor(sectionKey) {
+        var section = sections[sectionKey];
+        if (!section || !section.sinceCursorEl) return;
+        section.sinceCursorEl.value = runtime.readStoredCursor(sectionKey, currentScope(sectionKey));
+    }
+
+    function persistCursor(sectionKey) {
+        var section = sections[sectionKey];
+        if (!section || !section.sinceCursorEl) return;
+        runtime.writeStoredCursor(sectionKey, currentScope(sectionKey), section.sinceCursorEl.value);
     }
 
     function updateCursorState(sectionKey, entries) {
@@ -104,6 +116,7 @@
         cursor = view.latestCompletedCursorValue(entries);
         section.autoCursorValue = cursor == null ? '' : String(cursor);
         section.cursorStateEl.textContent = section.autoCursorValue ? ('Latest completed cursor: ' + section.autoCursorValue + '.') : 'No completed jobs yet for this scope.';
+        if (section.sinceCursorEl && !String(section.sinceCursorEl.value || '').trim()) section.sinceCursorEl.placeholder = section.autoCursorValue || '0';
         if (section.useLatestBtn) section.useLatestBtn.disabled = !section.autoCursorValue || section.loading;
     }
 
@@ -176,7 +189,10 @@
         var payload;
         var section = sections[sectionKey];
         body = { stream: section.stream, scope: currentScope(sectionKey), mode: mode };
-        if (mode === 'delta' && section.sinceCursorEl) body.since_cursor = asInt(section.sinceCursorEl.value || 0);
+        if (mode === 'delta' && section.sinceCursorEl) {
+            body.since_cursor = asInt(section.sinceCursorEl.value || 0);
+            persistCursor(sectionKey);
+        }
         if (section.payloadsEl) body.include_payload_bodies = !!section.payloadsEl.checked;
         payload = await requestJson('/downloads', {
             method: 'POST',
@@ -249,6 +265,7 @@
             return;
         }
         section.sinceCursorEl.value = section.autoCursorValue;
+        persistCursor(sectionKey);
         showMsg('Filled delta cursor with ' + section.autoCursorValue + '.', false);
     }
 
@@ -308,10 +325,17 @@
     ['canonical', 'optimized'].forEach(function (sectionKey) {
         var section = sections[sectionKey];
         if (!section.scopeEl) return;
+        syncStoredCursor(sectionKey);
+        if (section.sinceCursorEl) {
+            section.sinceCursorEl.addEventListener('input', function () {
+                persistCursor(sectionKey);
+            });
+        }
         section.scopeEl.addEventListener('change', function () {
             section.limit = section.pageSize;
             section.selection = Object.create(null);
             section.renderKey = '';
+            syncStoredCursor(sectionKey);
             loadSection(sectionKey).catch(function (error) {
                 showMsg(error && error.message ? error.message : 'Failed to refresh jobs.', true);
             });

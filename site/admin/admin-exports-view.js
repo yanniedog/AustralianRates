@@ -151,7 +151,7 @@
 
         if (!artifacts.length) {
             if (job && (job.status === 'queued' || job.status === 'processing')) return 'Artifacts pending while the job runs.';
-            if (job && job.status === 'failed') return 'No artifacts were created for this failed job.';
+            if (job && job.status === 'failed') return 'No artifacts were created for this failed job. Use Retry to queue it again.';
             return 'No artifacts available for this job yet.';
         }
 
@@ -209,12 +209,12 @@
             return '<div class="export-bundle-panel"><strong>Full snapshot bundle</strong><div class="export-bundle-copy">The single-file snapshot appears when the job completes. Until then, auto-refresh keeps checking every 5 seconds.</div></div>';
         }
         if (!bundle) {
-            return '<div class="export-bundle-panel"><strong>Full snapshot bundle</strong><div class="export-bundle-copy">No snapshot bundle is available for this job.</div></div>';
+            return '<div class="export-bundle-panel"><strong>Full snapshot bundle</strong><div class="export-bundle-copy">No snapshot bundle is available for this job. Download the table artifacts individually or retry the job if it failed.</div></div>';
         }
         return ''
             + '<div class="export-bundle-panel">'
             + '  <strong>Full snapshot bundle</strong>'
-            + '  <div class="export-bundle-copy">' + escapeHtml(bundle.downloadPath ? 'Single-file download is ready.' : ('Client-side bundle from ' + bundle.parts.length + ' stored parts.')) + '</div>'
+            + '  <div class="export-bundle-copy">' + escapeHtml(bundle.downloadPath ? 'Single-file download is ready.' : ('Client-side bundle will be assembled from ' + bundle.parts.length + ' stored parts.')) + '</div>'
             + '  <button type="button" class="secondary" data-action="download-operational-bundle" data-job-id="' + escapeHtml(job.job_id || '') + '">Download full snapshot</button>'
             + '</div>';
     }
