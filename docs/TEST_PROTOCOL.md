@@ -17,7 +17,7 @@ Configuration:
 - `TEST_URL`: site base URL (default `https://www.australianrates.com/`)
 - `API_BASE`: optional API base override for diagnostics
 - `HEADLESS=0`: run Playwright in headed mode
-- `ADMIN_TEST_TOKEN`: required for authenticated admin portal audit (`npm run test:admin-portal`)
+- `ADMIN_TEST_TOKEN` or `ADMIN_API_TOKEN`: required for authenticated admin portal audit (`npm run test:admin-portal`)
 
 ## 1. Rendering and layout
 
@@ -109,7 +109,7 @@ Explicitly out of scope in this audit command:
 ## One-page checklist
 
 1. Run `npm run test:homepage`.
-2. Run `npm run test:admin-portal` with `ADMIN_TEST_TOKEN` set.
+2. Run `npm run test:admin-portal` with `ADMIN_TEST_TOKEN` or `ADMIN_API_TOKEN` set.
 3. Run `npm run diagnose:api`.
 4. Run `npm run verify:prod-hosting`.
 5. Optionally run `npm run test:site`.

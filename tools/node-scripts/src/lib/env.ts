@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DEFAULT_ENV_PATTERN = /^\s*(CLOUDFLARE_[A-Za-z0-9_]+|CF_API_TOKEN|CF_ACCOUNT_ID)\s*=\s*(.+)\s*$/;
+const DEFAULT_ENV_PATTERN = /^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.+)\s*$/;
 
 export function normalizeEnvValue(raw: string): string {
   return raw.replace(/^["']|["']$/g, '').trim();

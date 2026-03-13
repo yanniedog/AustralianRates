@@ -1,2 +1,9 @@
 # Required secret
 ADMIN_API_TOKEN="replace-me"
+
+# Optional additional bearer tokens accepted by the admin auth middleware.
+# ADMIN_API_TOKENS="token-two,token-three"
+
+# Optional Cloudflare Access configuration for JWT-based admin auth.
+# CF_ACCESS_TEAM_DOMAIN=""
+# CF_ACCESS_AUD=""

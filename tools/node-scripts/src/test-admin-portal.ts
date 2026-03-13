@@ -7,7 +7,9 @@
 const { chromium } = require('playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
-const ADMIN_TEST_TOKEN = String(process.env.ADMIN_TEST_TOKEN || '').trim();
+const ADMIN_TEST_TOKEN = String(
+  process.env.ADMIN_TEST_TOKEN || process.env.ADMIN_API_TOKEN || process.env.LOCAL_ADMIN_API_TOKEN || '',
+).trim();
 const ORIGIN = new URL(TEST_URL).origin;
 const ADMIN_BASE = `${ORIGIN}/admin`;
 const ADMIN_API_BASE = `${ORIGIN}/api/home-loan-rates/admin`;
@@ -297,7 +299,7 @@ async function main() {
   const results = { passed: [] as string[], failed: [] as string[] };
 
   if (!ADMIN_TEST_TOKEN) {
-    results.failed.push('ADMIN_TEST_TOKEN is required');
+    results.failed.push('ADMIN_TEST_TOKEN or ADMIN_API_TOKEN is required');
     summaryAndExit(results);
   }
 

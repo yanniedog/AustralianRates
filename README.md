@@ -55,6 +55,8 @@ The admin portal is a separate UI for managing database, configuration, and inge
   2. On the login page, paste your admin API token into the "API token" field and submit.
   3. The token is validated against the API; if it matches, you are redirected to the dashboard (Database, Configuration, Runs).
 - **Getting the token:** For production it is the secret you set with `wrangler secret put ADMIN_API_TOKEN` when deploying the API worker. For local dev it is the value in `workers/api/.dev.vars` (see `workers/api/.dev.vars.example`). Only people with access to that secret (or `.dev.vars`) can log in.
+- **Root `.env` for admin tooling:** The repo-level `.env` can hold `ADMIN_API_TOKEN` for general admin scripts, `ADMIN_TEST_TOKEN` for `npm run test:admin-portal`, and `LOCAL_ADMIN_API_TOKEN` if you keep a separate local worker token. The node-script runner now loads repo `.env` automatically for these tools.
+- **Optional Cloudflare Access mode:** Admin API requests can also authenticate with a Cloudflare Access JWT when the worker is configured with `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`.
 
 ## Local Setup
 
@@ -108,7 +110,7 @@ Comprehensive tests for the site and API:
 - **API diagnostics:** `npm run diagnose:api` - health, filters, rates, latest, latest-all, timeseries, export.csv, homepage.
 - **Full site:** `npm run test:site` - runs test:homepage then diagnose:api; exits with failure if either fails.
 
-**Configuration:** `TEST_URL` (e.g. `TEST_URL=http://localhost:8788/`) for frontend and API base; `API_BASE` to override API only; `HEADLESS=0` to show browser; `ADMIN_TEST_TOKEN` for `npm run test:admin-portal`.
+**Configuration:** `TEST_URL` (e.g. `TEST_URL=http://localhost:8788/`) for frontend and API base; `API_BASE` to override API only; `HEADLESS=0` to show browser; `ADMIN_TEST_TOKEN` or `ADMIN_API_TOKEN` for `npm run test:admin-portal`.
 
 `npm run test:admin-portal` is intentionally production read-only and must not trigger mutating admin actions (run trigger, clear data, wipe logs, config save/delete, backfill, historical pull).
 
