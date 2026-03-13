@@ -34,29 +34,40 @@ In handoffs, ask specialists to consider the task from the perspectives that app
 
 Read AGENTS.md and always-applied rules in .cursor/rules (e.g. fix-commit-verify-loop, deployment, no-mock-test-data). Use them in every handoff and in the final verification step.
 
-## 2. Split the task
+## 2. Commit–sync–verify loop (mandatory when there are changes)
+
+When the task results in **code or config changes** (or when deploy or production is involved), the workflow **must always** run this loop and **iterate until everything is fixed**:
+
+1. **Git commit** – Stage and commit all relevant changes with a clear message.
+2. **Git sync** – Push to the remote (e.g. `git push` or "Sync" so the site deploys).
+3. **Test the deployed site** – Run the project's test commands against the deployed site (e.g. `npm run test:homepage`, `npm run test:api`, `npm run test:archive` from AGENTS.md or deployment rules).
+4. **Iterate** – If any check fails, fix the cause, then repeat from step 1. Do not consider the task complete until this loop has been run and all checks pass.
+
+Use the **deploy-verify-loop** subagent to run this loop, or run it yourself (e.g. via shell) when you have production-affecting changes. Never present an assumption as a completed verification.
+
+## 3. Split the task
 
 Break the request into clear subtasks (e.g. explore codebase, implement changes, run tests, deploy, verify on production, refactor). If the user mentions deploy, production, or fixing the live site, one subtask must be "deploy and verify on production" and the deploy-verify-loop handoff must include: production URL, test commands from project config, and "do not mark complete until these checks pass."
 
-## 3. Delegate to specialists
+## 4. Delegate to specialists
 
 Assign each subtask to the right subagent:
 
 - **explore**: Fast codebase search, "where is X?", "what uses Y?", tracing references.
 - **generalPurpose**: Deeper research, multi-step design or implementation, or when the task doesn't fit explore/shell.
 - **shell**: Git, npm, wrangler, builds, tests, commits, terminal verification.
-- **deploy-verify-loop**: After code or config that affects production: commit, deploy, verify on live site, fix and repeat until checks pass. Pass project rules and explicit test commands + production URL in the handoff.
+- **deploy-verify-loop**: Run the **commit–sync–verify loop**: git commit, git sync (push), test the deployed site (project test commands against production), then fix and repeat until all checks pass. Pass project rules and explicit test commands + production URL in the handoff. Do not mark complete until the loop has succeeded.
 - **refactor-guardian** / **smart-refactor**: When the task is about structure, modularity, file size, or cross-file cleanup.
 
-## 4. Order and parallelism
+## 5. Order and parallelism
 
-Run dependent steps in order; wait for each result before starting the next. For independent subtasks (e.g. explore two different areas), launch subagents in parallel (max 4 concurrent). Default sequence when unsure: explore first, then generalPurpose or direct implementation, then shell, then deploy-verify-loop if the change affects production.
+Run dependent steps in order; wait for each result before starting the next. For independent subtasks (e.g. explore two different areas), launch subagents in parallel (max 4 concurrent). Default sequence when unsure: explore first, then generalPurpose or direct implementation, then shell, then **commit–sync–verify loop** (via deploy-verify-loop or shell) when the change affects production or results in commits.
 
-## 5. Handoffs
+## 6. Handoffs
 
 For every delegation, include: user goal, repo constraints (or "see AGENTS.md and .cursor/rules"), files/subsystems to inspect, previous specialists' findings, exact deliverable expected, and—where relevant—**which expertise perspectives to consider** (e.g. "consider from UX, Cloudflare cost, and mobile layout"). Use the Team expertise and perspectives list above; name the dimensions that apply to that subtask. Keep handoffs short but self-contained.
 
-## 6. Summarize
+## 7. Summarize
 
 Report in four parts:
 

@@ -1,0 +1,117 @@
+.admin-exports .export-cursor-input {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-exports .export-cursor-input input[type="number"] {
+    flex: 1 1 180px;
+    min-width: 0;
+}
+
+.admin-exports .export-cursor-hint {
+    flex: 1 1 100%;
+    margin-top: -2px;
+}
+
+.admin-exports .export-job-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-exports .export-status {
+    border: 1px solid var(--ar-line-strong);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.admin-exports .export-status--queued,
+.admin-exports .export-status--processing {
+    background: color-mix(in srgb, var(--ar-warning) 12%, var(--ar-surface));
+    color: var(--ar-warning);
+}
+
+.admin-exports .export-status--completed {
+    background: color-mix(in srgb, var(--ar-positive) 12%, var(--ar-surface));
+    color: var(--ar-positive);
+}
+
+.admin-exports .export-status--failed {
+    background: color-mix(in srgb, var(--ar-danger) 12%, var(--ar-surface));
+    color: var(--ar-danger);
+}
+
+.admin-exports .export-job-error {
+    margin-top: 8px;
+    color: var(--ar-danger);
+    font-size: 0.86rem;
+}
+
+.admin-exports .export-bundle-panel,
+.admin-exports .export-artifact-card {
+    border: 1px solid var(--ar-line);
+    border-radius: var(--ar-radius-2);
+    background: var(--ar-surface);
+    padding: 12px;
+}
+
+.admin-exports .export-bundle-panel {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.admin-exports .export-artifact-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.admin-exports .export-artifact-card {
+    display: grid;
+    gap: 8px;
+}
+
+.admin-exports .export-artifact-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.admin-exports .export-artifact-kind {
+    color: var(--ar-text-muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.admin-exports .export-artifact-meta,
+.admin-exports .export-bundle-copy {
+    color: var(--ar-text-muted);
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+@media (max-width: 760px) {
+    .admin-exports .export-job-head,
+    .admin-exports .export-artifact-head {
+        align-items: stretch;
+    }
+
+    .admin-exports .export-job-heading,
+    .admin-exports .export-cursor-input {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
