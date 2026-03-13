@@ -139,6 +139,56 @@
         return parts.join(' | ');
     }
 
+    function jobArtifactSummary(job, artifacts) {
+        var cursorEnd = null;
+        var cursorStart = null;
+        var hasBytes = false;
+        var hasRows = false;
+        var index;
+        var parts = [];
+        var totalBytes = 0;
+        var totalRows = 0;
+
+        if (!artifacts.length) {
+            if (job && (job.status === 'queued' || job.status === 'processing')) return 'Artifacts pending while the job runs.';
+            if (job && job.status === 'failed') return 'No artifacts were created for this failed job.';
+            return 'No artifacts available for this job yet.';
+        }
+
+        parts.push('Artifacts ' + formatInteger(artifacts.length));
+        for (index = 0; index < artifacts.length; index += 1) {
+            var artifact = artifacts[index] || {};
+            var byteSize = Number(artifact.byte_size);
+            var rowCount = Number(artifact.row_count);
+            var nextCursorEnd = Number(artifact.cursor_end);
+            var nextCursorStart = Number(artifact.cursor_start);
+
+            if (isFinite(rowCount) && rowCount >= 0) {
+                totalRows += Math.floor(rowCount);
+                hasRows = true;
+            }
+            if (isFinite(byteSize) && byteSize >= 0) {
+                totalBytes += byteSize;
+                hasBytes = true;
+            }
+            if (isFinite(nextCursorStart) && nextCursorStart >= 0) {
+                nextCursorStart = Math.floor(nextCursorStart);
+                cursorStart = cursorStart == null ? nextCursorStart : Math.min(cursorStart, nextCursorStart);
+            }
+            if (isFinite(nextCursorEnd) && nextCursorEnd >= 0) {
+                nextCursorEnd = Math.floor(nextCursorEnd);
+                cursorEnd = cursorEnd == null ? nextCursorEnd : Math.max(cursorEnd, nextCursorEnd);
+            }
+        }
+
+        if (hasRows) parts.push('Rows ' + formatInteger(totalRows));
+        if (hasBytes) parts.push('Size ' + formatByteSize(totalBytes));
+        if (cursorStart != null || cursorEnd != null) {
+            parts.push('Cursor ' + formatInteger(cursorStart) + ' -> ' + formatInteger(cursorEnd));
+        }
+        return parts.join(' | ');
+    }
+
     function renderArtifactCard(artifact, timeUtils) {
         var label = artifact.file_name || artifact.artifact_kind || 'artifact';
         return ''
@@ -200,6 +250,7 @@
                 + '    <label class="export-job-select"><input type="checkbox" data-action="toggle-job-selection" data-section="' + escapeHtml(sectionKey) + '" data-job-id="' + escapeHtml(jobId) + '"' + (checked ? ' checked' : '') + (selectable ? '' : ' disabled') + '> Select</label>'
                 + '  </div>'
                 + '  <div class="export-job-meta">' + renderJobMeta(job, timeUtils) + '</div>'
+                + '  <div class="export-job-artifact-summary">' + escapeHtml(jobArtifactSummary(job, artifacts)) + '</div>'
                 + (job.error_message ? '<div class="export-job-error">Error: ' + escapeHtml(job.error_message) + '</div>' : '')
                 + '  <div class="export-job-actions">' + renderJobActions(sectionKey, job) + '</div>'
                 + (sectionKey === 'operational' ? renderBundlePanel(bundle, job) : '')

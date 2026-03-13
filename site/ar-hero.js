@@ -35,8 +35,35 @@
         if (help) el.setAttribute('data-help', help);
     }
 
+    function setInlineError(el, message) {
+        var text = String(message || '').trim();
+        if (!el) return;
+        el.textContent = text;
+        el.hidden = !text;
+    }
+
+    function setStatUnavailable(el) {
+        var valueEl;
+        if (!el) return;
+        valueEl = el.querySelector('strong');
+        if (valueEl) valueEl.textContent = 'Unavailable';
+    }
+
+    function clearHeroError() {
+        setInlineError(els.heroError, '');
+    }
+
+    function showHeroError() {
+        setInlineError(els.heroError, 'Overview metrics are temporarily unavailable. Refresh to try again.');
+        [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
+    }
+
     async function loadHeroStats() {
-        if (!apiBase) return;
+        if (!apiBase) {
+            showHeroError();
+            return;
+        }
+        clearHeroError();
         try {
             var query = new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' });
             var filterParams = buildFilterParams();
@@ -66,6 +93,7 @@
                 }
             }
         } catch (err) {
+            showHeroError();
             clientLog('error', 'Hero stats load failed', {
                 message: err && err.message ? err.message : String(err),
             });
@@ -134,7 +162,10 @@
     }
 
     async function loadQuickCompare() {
-        if (!els.quickCompareCards || !apiBase) return;
+        if (!els.quickCompareCards || !apiBase) {
+            if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
+            return;
+        }
         try {
             var params = buildFilterParams();
             params.limit = String(QUICK_COMPARE_LIMIT);

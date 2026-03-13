@@ -80,6 +80,10 @@
         return parts.join(' | ');
     }
 
+    function chartErrorMessage() {
+        return 'Chart unavailable right now. Refresh to try again.';
+    }
+
     function ensureCharts() {
         if (!els.chartOutput || !els.chartDetailOutput) return;
         if (!chartState.mainChart) {
@@ -145,6 +149,7 @@
 
     function renderFromCache() {
         if (!chartState.rows.length) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('WAIT');
             return;
         }
@@ -152,16 +157,19 @@
         var currentFields = fields();
         var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
         if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No lender match');
             if (chartUi.setStatus) chartUi.setStatus('No lender match');
             return;
         }
         if (!model.visibleSeries.length || !model.surface.cells.length) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No numeric values');
             if (chartUi.setStatus) chartUi.setStatus('No numeric values');
             return;
         }
 
+        if (chartUi.clearErrorState) chartUi.clearErrorState();
         chartState.selectedSeriesKeys = model.selectedKeys.slice();
         if (model.spotlight && model.spotlight.series) {
             chartState.spotlightSeriesKey = model.spotlight.series.key;
@@ -219,6 +227,7 @@
         if (!els.chartOutput) return;
         disposeCharts();
         chartState.fallbackReason = '';
+        if (chartUi.clearErrorState) chartUi.clearErrorState();
         if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
@@ -240,6 +249,7 @@
             resetSelection();
 
             if (!chartState.rows.length) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
                 clearOutput('No data');
                 if (chartUi.setStatus) chartUi.setStatus('No data');
                 return;
@@ -253,8 +263,9 @@
             });
         } catch (error) {
             chartState.fallbackReason = '';
-            clearOutput('ERR');
-            if (chartUi.setStatus) chartUi.setStatus('ERR ' + String(error && error.message ? error.message : error));
+            clearOutput('Error loading chart');
+            if (chartUi.setErrorState) chartUi.setErrorState(chartErrorMessage());
+            if (chartUi.setStatus) chartUi.setStatus('Error loading chart');
             clientLog('error', 'Chart load failed', {
                 message: error && error.message ? error.message : String(error),
             });
@@ -267,6 +278,7 @@
             return;
         }
         if (!chartState.rows.length) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
             if (chartUi.setStatus) chartUi.setStatus('READY');
             return;
         }

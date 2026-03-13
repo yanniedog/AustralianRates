@@ -25,12 +25,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - Frontend talks to production API by default (`window.location.origin`); doc note in AGENTS.md that “frontend talks to production API by default” is correct—local API testing requires changing API base (e.g. query param or host).
 - Vendor scripts (Tabulator, Pivot, ECharts, jQuery) are loaded from site; version pinning and upgrade path are not documented in a single place.
 
-**Recommendations**
-
-1. Document script load order and `AR.*` module dependencies in `site/` (e.g. README or AGENTS.md subsection) so new pages and scripts stay consistent.
-2. Add a short “Local development” note: to hit local API, use `?apiBase=http://localhost:8787/api/home-loan-rates` (or equivalent) and ensure CORS allows it.
-3. Consider a simple inventory of vendor libs and versions (e.g. in docs or package.json if any are ever npm-installed) for security and compatibility.
-
 ---
 
 ## 2. UX (ease of use, clarity, flow, accessibility)
@@ -50,12 +44,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - No site-wide accessibility audit (focus order, keyboard-only nav, screen-reader testing); some ARIA is present but coverage is not systematically documented.
 - Chart and pivot flows depend on multiple requests; no explicit “loading” or error recovery messaging is documented for all states.
 
-**Recommendations**
-
-1. Implement admin export retry: “Retry” button and `POST /admin/downloads/:jobId/retry` as in [docs/admin-export-critique.md](admin-export-critique.md) (P0).
-2. Improve admin delta cursor: hint text and optional “Use latest” that pre-fills from latest completed job; show artifact metadata (row count, size, cursor range) in job cards (P1).
-3. Add a short “Accessibility” subsection to docs (or AGENTS.md): what’s done (skip link, ARIA on key controls), and what’s not (full keyboard nav, screen-reader testing).
-4. Ensure all major async flows (hero, table, chart, pivot, export) have visible loading/error states and that they’re described in USER_INTERACTION_FLOWCHART or equivalent.
 
 ---
 
@@ -76,13 +64,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - No D1 import or R2 restore path from admin exports; exports are JSONL without DDL—reconstruction requires migrations + import script (see admin-export-critique and MISSION_AND_TECHNICAL_SPEC).
 - Public trigger-run and historical pull are feature-flagged and deprecated where applicable; gates live in `public-write-gates` and route handlers—ensure any new public write path is similarly gated.
 
-**Recommendations**
-
-1. Add `POST /admin/downloads/:jobId/retry` for failed jobs (requeue + continue) and document in admin API docs (see admin-export-critique).
-2. Document admin API: error codes, HTTP usage, list/job/artifact/bundle response shapes, GET/DELETE query params and limits (e.g. in docs/admin-api.md or AGENTS.md).
-3. Add docs/admin-export-reconstruction.md: what each export stream contains, that DDL is not included, and that full reconstruction requires migrations + D1 import script + optional R2 script; differentiate from wrangler D1 export (disaster recovery).
-4. Consider a D1 import script that applies operational (or canonical/optimized) JSONL to an existing schema, referenced from reconstruction docs.
-
 ---
 
 ## 4. Cloudflare (Workers, D1, R2, limits, config)
@@ -101,11 +82,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - Archive worker env vars (e.g. FEATURE_ARCHIVE_* ) are set but feature behavior is not summarized in a single “Archive worker” doc; discovery/collection flow is in code only.
 - KV idempotency is configured but FEATURE_QUEUE_IDEMPOTENCY_ENABLED is false in vars; if enabled later, behavior and TTL should be documented.
 
-**Recommendations**
-
-1. Add a short “Cloudflare limits” note to AGENTS.md or docs: point to Workers/D1/Queues limit pages and recommend checking before adding heavy batch or export endpoints.
-2. Document archive worker: purpose (discovery + collection), envs (dev/prod), and main entry points (e.g. in workers/archive/README or docs).
-3. If queue idempotency is enabled, document TTL and expectations in AGENTS.md or pipeline docs.
 
 ---
 
@@ -124,11 +100,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - No explicit “Sign up” or “Notify me” for consumers; site is informational and link-sharing driven—retention is implicit (bookmarks, return visits) rather than captured.
 - Admin exports are powerful but delta cursor and retry UX can frustrate repeated use (see admin-export-critique); improving those supports operator retention.
 
-**Recommendations**
-
-1. Keep focusing on shareable URLs and clear value copy; if you add email or notifications later, document the retention strategy.
-2. Prioritize admin export retry and cursor/metadata UX to reduce operator friction and support repeated use.
-
 ---
 
 ## 6. Browser and device / responsive
@@ -145,11 +116,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 
 - Breakpoints are scattered (e.g. 760px in mobile-host and alternate link); no single “responsive breakpoints” doc—changes could be inconsistent.
 - Mobile host (m.australianrates.com) is referenced in markup and site-variant; routing and deployment for m. are not described in the reviewed docs (assumed handled at DNS/Pages).
-
-**Recommendations**
-
-1. Document primary breakpoint(s) (e.g. 760px) and mobile-host behavior in AGENTS.md or site README so new UI respects them.
-2. If m. is served by the same Pages project, note that in deployment docs; otherwise document how m. is served.
 
 ---
 
@@ -168,10 +134,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - Exports alone do not allow full DB reconstruction without schema and import path (admin-export-critique); operators may assume otherwise.
 - Public historical pull and trigger-run are disabled or deprecated via feature flags; documented so, but public “usefulness” for ad-hoc runs is intentionally limited.
 
-**Recommendations**
-
-1. Publish reconstruction doc (admin-export-reconstruction.md) so operators understand what exports provide and what’s needed for full restore.
-2. Keep public write gates and deprecation messages so usefulness stays aligned with intended product (read-first, operator-triggered runs).
 
 ---
 
@@ -191,11 +153,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - Section-specific HTML and JS share a lot of structure; any new section (e.g. a fourth product type) would need consistent updates across HTML, ar-section-config, and API bases—no single “add a section” checklist in the reviewed docs.
 - Admin export UI and API logic are spread across site/admin/exports.html and workers/api (admin-downloads, admin-download-jobs); changes require touching both.
 
-**Recommendations**
-
-1. Periodically check line counts for `workers/api/src/routes/public.ts`, `workers/api/src/routes/admin.ts`, and large site JS files; extract helpers or sub-routes when over 300 lines.
-2. Add a short “Adding a new section” checklist: HTML shell, ar-section-config, API base path, wrangler route, public routes registration.
-3. Keep admin export behavior documented in one place (admin-export-critique + eventual admin-api.md) so front-end and back-end changes stay in sync.
 
 ---
 
@@ -214,10 +171,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - No dedicated “Why AustralianRates” or comparison to alternatives; value is implicit in product and about copy.
 - Schema.org and meta could be extended (e.g. more variableMeasured or FAQ) if search/product features are prioritized—optional.
 
-**Recommendations**
-
-1. Keep canonical, meta, and schema.org in sync when adding new sections or export URLs.
-2. If marketing or SEO is expanded, consider a short “Value proposition” doc (internal or in about) to keep messaging consistent.
 
 ---
 
@@ -236,10 +189,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - Cost and egress are not documented in repo; D1 read units, R2 operations, and Worker invocations depend on traffic and cron—no baseline or budget note.
 - Large admin exports (operational full DB) could be heavy; R2 storage and egress scale with usage—operators should be aware.
 
-**Recommendations**
-
-1. Add a short “Cost and limits” note to docs or AGENTS.md: point to Cloudflare pricing/limits; recommend monitoring D1 reads, R2, and Worker invocations after large features or traffic growth.
-2. In admin-export or reconstruction doc, mention that operational exports can be large and that R2 storage/egress apply.
 
 ---
 
@@ -258,11 +207,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - If CF Access is used, CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD must be set; empty in wrangler.toml—document that admin can be used with Bearer-only or with Access.
 - Public API has no rate limiting in the reviewed code; abuse could increase cost or load (mitigated by cache and pagination).
 
-**Recommendations**
-
-1. Document admin auth options: Bearer (ADMIN_API_TOKEN / ADMIN_API_TOKENS) and/or CF Access (CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD) in AGENTS.md or deployment docs.
-2. If public API abuse becomes a concern, consider rate limiting or additional caching at edge; document in security or ops docs.
-
 ---
 
 ## 12. Visual and layout / style and design
@@ -280,10 +224,6 @@ Structured critique of the australianrates site (frontend, API worker, archive w
 - New components could introduce one-off colors or spacing; no component-level design doc (e.g. “use --ar-* only”) beyond what’s in foundation.
 - Admin and public share foundation but have separate layout CSS (admin-layout.css, public-shell.css); duplication of layout patterns is possible over time.
 
-**Recommendations**
-
-1. In AGENTS.md or a short “Front-end” doc, state that new UI should use foundation CSS variables and avoid hard-coded colors/spacing.
-2. When adding new admin or public layouts, prefer shared patterns (e.g. shell, panel) to keep visual consistency.
 
 ---
 

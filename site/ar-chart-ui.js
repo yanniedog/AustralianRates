@@ -296,6 +296,17 @@
         if (els.chartStatus) els.chartStatus.textContent = String(message || '');
     }
 
+    function setErrorState(message) {
+        var text = String(message || '').trim();
+        if (!els.chartError) return;
+        els.chartError.textContent = text;
+        els.chartError.hidden = !text;
+    }
+
+    function clearErrorState() {
+        setErrorState('');
+    }
+
     function setCanvasPlaceholder(message) {
         if (els.chartOutput) {
             els.chartOutput.removeAttribute('data-chart-rendered');
@@ -310,6 +321,7 @@
 
     function setIdleState() {
         setActiveView(defaultViewFallback());
+        clearErrorState();
         renderSummary(null, getChartFields(), null, false);
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
@@ -318,6 +330,7 @@
     }
 
     function setPendingState(message) {
+        clearErrorState();
         renderSummary(null, getChartFields(), null, false);
         setStatus(message || 'Loading');
         setCanvasPlaceholder('Loading');
@@ -325,6 +338,7 @@
 
     function markStale(message) {
         if (!tabState.chartDrawn) return;
+        clearErrorState();
         renderSummary(null, getChartFields(), null, true);
         setStatus(message || 'Stale');
     }
@@ -373,8 +387,10 @@
         renderSeriesRail: renderSeriesRail,
         renderSpotlight: renderSpotlight,
         renderSummary: renderSummary,
+        clearErrorState: clearErrorState,
         setActiveView: setActiveView,
         setCanvasPlaceholder: setCanvasPlaceholder,
+        setErrorState: setErrorState,
         setIdleState: setIdleState,
         setPendingState: setPendingState,
         setStatus: setStatus,
