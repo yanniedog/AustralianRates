@@ -10,6 +10,7 @@ const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const ADMIN_TEST_TOKEN = String(
   process.env.ADMIN_TEST_TOKEN || process.env.ADMIN_API_TOKEN || process.env.LOCAL_ADMIN_API_TOKEN || '',
 ).trim();
+const ADMIN_TOKEN_ENV_NAMES = ['ADMIN_TEST_TOKEN', 'ADMIN_API_TOKEN', 'LOCAL_ADMIN_API_TOKEN'];
 const ORIGIN = new URL(TEST_URL).origin;
 const ADMIN_BASE = `${ORIGIN}/admin`;
 const ADMIN_API_BASE = `${ORIGIN}/api/home-loan-rates/admin`;
@@ -52,19 +53,30 @@ async function checkNoAuthApi401(results: { passed: string[]; failed: string[] }
     '/logs/system/actionable?limit=5',
   ];
 
-  for (const endpoint of endpoints) {
-    const res = await fetch(ADMIN_API_BASE + endpoint);
-    const json = await res.json().catch(() => null);
-    const code = json && json.error ? json.error.code : null;
-    const reason = json && json.error && json.error.details ? json.error.details.reason : null;
-    const ok = res.status === 401 && code === 'UNAUTHORIZED' && reason === 'admin_token_or_access_jwt_required';
-    if (ok) {
-      results.passed.push(`unauth API ${endpoint} returns 401 UNAUTHORIZED`);
-    } else {
-      results.failed.push(
-        `unauth API ${endpoint} expected 401/UNAUTHORIZED/admin_token_or_access_jwt_required but got status=${res.status} code=${code} reason=${reason}`,
-      );
+  const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${ADMIN_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+    for (const endpoint of endpoints) {
+      const payload = await page.evaluate(async (url: string) => {
+        const res = await fetch(url, { credentials: 'omit' });
+        const json = await res.json().catch(() => null);
+        return { status: res.status, json };
+      }, ADMIN_API_BASE + endpoint);
+      const code = payload.json && payload.json.error ? payload.json.error.code : null;
+      const reason = payload.json && payload.json.error && payload.json.error.details ? payload.json.error.details.reason : null;
+      const ok = payload.status === 401 && code === 'UNAUTHORIZED' && reason === 'admin_token_or_access_jwt_required';
+      if (ok) {
+        results.passed.push(`unauth API ${endpoint} returns 401 UNAUTHORIZED`);
+      } else {
+        results.failed.push(
+          `unauth API ${endpoint} expected 401/UNAUTHORIZED/admin_token_or_access_jwt_required but got status=${payload.status} code=${code} reason=${reason}`,
+        );
+      }
     }
+  } finally {
+    await browser.close();
   }
 }
 
@@ -107,6 +119,13 @@ async function checkGuardRedirects(results: { passed: string[]; failed: string[]
 }
 
 async function checkAuthedPortal(results: { passed: string[]; failed: string[] }) {
+  if (!ADMIN_TEST_TOKEN) {
+    results.failed.push(
+      `authenticated admin checks require one of ${ADMIN_TOKEN_ENV_NAMES.join(', ')} in the process environment`,
+    );
+    return;
+  }
+
   const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
@@ -149,14 +168,24 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
   }
 
   try {
+    let authReady = false;
+
     await runStep('valid token login redirects to dashboard', async () => {
       await page.goto(`${ADMIN_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.fill('#admin-token', ADMIN_TEST_TOKEN);
-      await Promise.all([
-        page.waitForURL(/\/admin\/dashboard(\.html)?$/, { timeout: 25000 }),
-        page.click('#login-btn'),
-      ]);
+      await page.click('#login-btn');
+      try {
+        await page.waitForURL(/\/admin\/dashboard(\.html)?$/, { timeout: 25000 });
+      } catch (error) {
+        const loginError = await page
+          .$eval('#login-error', (el: HTMLElement) => (el.textContent || '').trim())
+          .catch(() => '');
+        throw new Error(loginError || (error instanceof Error ? error.message : String(error)));
+      }
+      authReady = true;
     });
+
+    if (!authReady) return;
 
     await runStep('dashboard navigation cards render', async () => {
       await page.goto(`${ADMIN_BASE}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 45000 });

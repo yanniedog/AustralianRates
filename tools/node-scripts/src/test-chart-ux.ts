@@ -30,6 +30,16 @@ function withSharedQuery(path, apiBasePath) {
     return baseOrigin + path + (query ? ('?' + query) : '');
 }
 
+async function waitForExplorerReady(page) {
+    await page.waitForFunction(() => {
+        const table = document.getElementById('rate-table');
+        if (!table) return false;
+        if (table.querySelectorAll('.tabulator-row').length > 0) return true;
+        const placeholder = table.querySelector('.tabulator-placeholder');
+        return !!(placeholder && String(placeholder.textContent || '').trim().length > 0);
+    }, null, { timeout: 45000 });
+}
+
 async function gotoSection(page, section) {
     await page.goto(withSharedQuery(section.path, section.apiBasePath), {
         waitUntil: 'domcontentloaded',
@@ -37,16 +47,39 @@ async function gotoSection(page, section) {
     });
     await page.waitForSelector('#main-content', { timeout: 15000 });
     await page.waitForTimeout(2500);
+    await waitForExplorerReady(page).catch(() => null);
 }
 
 async function drawChart(page) {
-    await page.click('#draw-chart');
-    await page.waitForFunction(() => {
-        const output = document.getElementById('chart-output');
-        if (!output) return false;
-        return output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
-    }, undefined, { timeout: 90000 });
-    await page.waitForTimeout(1500);
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        await page.click('#draw-chart');
+        try {
+            await page.waitForFunction(() => {
+                const output = document.getElementById('chart-output');
+                if (!output) return false;
+                const rendered = output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
+                if (!rendered) return false;
+                const status = String((document.getElementById('chart-status') || {}).textContent || '').trim().toLowerCase();
+                return status.indexOf('err') === -1;
+            }, undefined, { timeout: 120000 });
+            await page.waitForTimeout(1200);
+            return;
+        } catch (error) {
+            if (attempt === 2) {
+                const snapshot = await page.evaluate(() => ({
+                    rows: document.querySelectorAll('#rate-table .tabulator-row').length,
+                    placeholder: String(document.querySelector('#rate-table .tabulator-placeholder')?.textContent || '').trim(),
+                    status: String(document.getElementById('chart-status')?.textContent || '').trim(),
+                    error: String(document.getElementById('chart-error')?.textContent || '').trim(),
+                    summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
+                    recentLogs: typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries().slice(-10) : [],
+                }));
+                throw new Error(`chart did not become ready: ${JSON.stringify(snapshot)}`);
+            }
+            await waitForExplorerReady(page).catch(() => null);
+            await page.waitForTimeout(1000);
+        }
+    }
 }
 
 async function switchViewWithoutRatesFetch(page, view) {
@@ -59,7 +92,11 @@ async function switchViewWithoutRatesFetch(page, view) {
     try {
         await page.click(`[data-chart-view="${view}"]`);
         await page.waitForFunction((nextView) => {
-            return String(document.getElementById('chart-output')?.getAttribute('data-chart-view') || '') === String(nextView || '');
+            const output = document.getElementById('chart-output');
+            const renderedView = output?.getAttribute('data-chart-render-view')
+                || document.querySelector('[data-chart-view].is-active')?.getAttribute('data-chart-view')
+                || '';
+            return String(renderedView) === String(nextView || '');
         }, view, { timeout: 15000 });
         await page.waitForTimeout(800);
     } finally {
@@ -93,7 +130,11 @@ async function collectChartMetrics(page) {
 
         return {
             pageFits: document.documentElement.scrollWidth <= window.innerWidth,
-            view: String(document.getElementById('chart-output')?.getAttribute('data-chart-view') || ''),
+            view: String(
+                document.getElementById('chart-output')?.getAttribute('data-chart-render-view')
+                || document.querySelector('[data-chart-view].is-active')?.getAttribute('data-chart-view')
+                || ''
+            ),
             status: String(document.getElementById('chart-status')?.textContent || '').trim(),
             guidance: String(document.getElementById('chart-guidance')?.textContent || '').trim(),
             summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
