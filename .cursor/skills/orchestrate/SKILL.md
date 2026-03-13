@@ -67,6 +67,8 @@ Run dependent steps in order; wait for each result before starting the next. For
 
 For every delegation, include: user goal, repo constraints (or "see AGENTS.md and .cursor/rules"), files/subsystems to inspect, previous specialists' findings, exact deliverable expected, and—where relevant—**which expertise perspectives to consider** (e.g. "consider from UX, Cloudflare cost, and mobile layout"). Use the Team expertise and perspectives list above; name the dimensions that apply to that subtask. Keep handoffs short but self-contained.
 
+When a specialist (or the orchestrator) saves any document file—e.g. a critique, report, or generated deliverable—they **must** give the **exact complete raw path** to that file in their response (e.g. absolute path like `c:\code\australianrates\docs\admin-export-critique.md` or repo-root path like `docs/admin-export-critique.md`). Include this requirement in handoffs when the deliverable is a saved document.
+
 ## 7. Summarize
 
 Report in four parts:
@@ -77,6 +79,8 @@ Report in four parts:
 4. **Perspectives considered** – For each expertise dimension that was relevant to the task (from the Team expertise list), briefly note what was checked and any findings or recommendations (e.g. "Cloudflare cost: no new D1 reads in hot path"; "UX: CTA visible on mobile"; "Maintainability: new file 120 lines"; "Security: no PII in new endpoint"). Surfaces the elite-team review across front end, UX, backend, Cloudflare, cost, security, visual, business, maintainability, and other dimensions.
 
 For deploy-related work, include verification evidence in part 1 or 2: exact commands run, exit codes, and pass/fail summary; never present an assumption as a completed verification.
+
+When any document was saved (e.g. a critique, report, or generated deliverable), the summary **must** include the **exact complete raw path** to that file (e.g. `c:\code\australianrates\docs\admin-export-critique.md` or `docs/admin-export-critique.md`).
 
 ---
 
