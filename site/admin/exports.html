@@ -98,6 +98,7 @@
             var portal = window.AR.AdminPortal;
             var timeUtils = window.AR.time || {};
             var msgEl = document.getElementById('exports-msg');
+            var operationalBundles = Object.create(null);
             var pollTimer = null;
             var POLL_MS = 5000;
             var sections = {
@@ -186,6 +187,49 @@
                 triggerBlobDownload(blob, fileName || 'admin-download.jsonl.gz');
             }
 
+            function operationalBundleParts(artifacts) {
+                return artifacts
+                    .filter(function (artifact) {
+                        var kind = String(artifact && artifact.artifact_kind || '');
+                        return kind === 'main' || kind === 'manifest';
+                    })
+                    .slice()
+                    .sort(function (left, right) {
+                        var leftManifest = String(left && left.artifact_kind || '') === 'manifest';
+                        var rightManifest = String(right && right.artifact_kind || '') === 'manifest';
+                        if (leftManifest || rightManifest) {
+                            if (leftManifest && rightManifest) return String(left.file_name || '').localeCompare(String(right.file_name || ''));
+                            return leftManifest ? 1 : -1;
+                        }
+                        return String(left && left.file_name || '').localeCompare(String(right && right.file_name || ''));
+                    });
+            }
+
+            async function downloadOperationalBundle(jobId) {
+                var bundle = operationalBundles[jobId];
+                if (!bundle) throw new Error('Operational snapshot bundle is not available.');
+                if (bundle.downloadPath) {
+                    await downloadArtifact(bundle.downloadPath, bundle.fileName);
+                    return;
+                }
+                if (!bundle.parts || !bundle.parts.length) {
+                    throw new Error('Operational snapshot parts are not available.');
+                }
+
+                showMsg('Preparing single-file download from ' + bundle.parts.length + ' snapshot parts...', false);
+                var blobs = [];
+                for (var i = 0; i < bundle.parts.length; i += 1) {
+                    var part = bundle.parts[i];
+                    var response = await fetch(portal.apiBase() + String(part.download_path || ''), {
+                        cache: 'no-store',
+                        headers: portal.authHeaders()
+                    });
+                    if (!response.ok) throw new Error('Snapshot part download failed (' + response.status + ')');
+                    blobs.push(await response.blob());
+                }
+                triggerBlobDownload(new Blob(blobs, { type: 'application/gzip' }), bundle.fileName || 'operational-all-snapshot.jsonl.gz');
+            }
+
             function latestCursor(entries) {
                 var values = entries
                     .map(function (entry) { return Number(entry.job && entry.job.end_cursor); })
@@ -211,6 +255,9 @@
 
             function renderJobs(sectionKey, entries) {
                 var section = sections[sectionKey];
+                if (sectionKey === 'operational') {
+                    operationalBundles = Object.create(null);
+                }
                 if (!entries.length) {
                     section.jobsEl.innerHTML = '<div class="export-empty">No jobs yet for this stream and scope.</div>';
                     return;
@@ -218,6 +265,9 @@
                 section.jobsEl.innerHTML = entries.map(function (entry) {
                     var job = entry.job || {};
                     var artifacts = Array.isArray(entry.artifacts) ? entry.artifacts : [];
+                    var bundle = sectionKey === 'operational'
+                        ? buildOperationalBundle(entry, job, artifacts)
+                        : null;
                     return ''
                         + '<div class="export-job">'
                         + '  <div class="export-job-head"><strong>' + escapeHtml(job.job_id || '') + '</strong><span>' + escapeHtml(job.status || '') + '</span></div>'
@@ -233,7 +283,7 @@
                         + '  </div>'
                         + '  <div class="export-artifacts">'
                         + (sectionKey === 'operational'
-                            ? renderOperationalDownload(entry, job)
+                            ? renderOperationalDownload(bundle, job)
                             : (artifacts.length
                             ? artifacts.map(function (artifact) {
                                 var label = artifact.file_name || artifact.artifact_kind || 'artifact';
@@ -249,11 +299,23 @@
                 }).join('');
             }
 
-            function renderOperationalDownload(entry, job) {
-                if (entry && entry.download_path) {
-                    return '<button type="button" class="secondary" data-action="download-artifact"'
-                        + ' data-path="' + escapeHtml(entry.download_path || '') + '"'
-                        + ' data-file-name="' + escapeHtml(entry.download_file_name || 'operational-all-snapshot.jsonl.gz') + '">'
+            function buildOperationalBundle(entry, job, artifacts) {
+                if (!job || !job.job_id) return null;
+                var parts = operationalBundleParts(artifacts);
+                if (!entry.download_path && !parts.length) return null;
+                var bundle = {
+                    fileName: entry.download_file_name || 'operational-all-snapshot.jsonl.gz',
+                    downloadPath: entry.download_path || '',
+                    parts: parts
+                };
+                operationalBundles[job.job_id] = bundle;
+                return bundle;
+            }
+
+            function renderOperationalDownload(bundle, job) {
+                if (bundle) {
+                    return '<button type="button" class="secondary" data-action="download-operational-bundle"'
+                        + ' data-job-id="' + escapeHtml(job.job_id || '') + '">'
                         + 'Download full snapshot'
                         + '</button>';
                 }
@@ -368,6 +430,14 @@
                         target.getAttribute('data-file-name') || ''
                     ).catch(function (error) {
                         showMsg(error && error.message ? error.message : 'Failed to download artifact.', true);
+                    });
+                    return;
+                }
+                if (action === 'download-operational-bundle') {
+                    downloadOperationalBundle(target.getAttribute('data-job-id') || '').then(function () {
+                        showMsg('Full operational snapshot download started.', false);
+                    }).catch(function (error) {
+                        showMsg(error && error.message ? error.message : 'Failed to prepare snapshot bundle.', true);
                     });
                 }
             });
