@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Orchestrates multiagent workflows with a team of elite coders embodying diverse expertise (front-end, UX, backend, Cloudflare, cost, security, visual design, business, maintainability, and more). Splits tasks into phases, delegates to specialist subagents (explore, generalPurpose, shell, deploy-verify-loop, refactor-guardian, smart-refactor), requires consideration from multiple perspectives in handoffs and final summary, and reports verification evidence. Use when the user invokes /orchestrate or when a task has distinct phases that benefit from specialists; for single-step tasks, do the work yourself.
+description: Orchestrates multiagent workflows with a team of elite coders embodying diverse expertise (front-end, UX, backend, Cloudflare, cost, security, visual design, business, maintainability, and more). Splits tasks into phases, delegates to specialist subagents (explore, generalPurpose, shell, deploy-verify-loop, refactor-guardian, smart-refactor), requires consideration from multiple perspectives in handoffs and final summary, and reports verification evidence. Use when the user invokes /team or when a task has distinct phases that benefit from specialists; for single-step tasks, do the work yourself.
 ---
 
 # Orchestrate
@@ -69,4 +69,4 @@ For deploy-related work, include verification evidence in part 1 or 2: exact com
 
 ---
 
-This skill is available in chat as **/orchestrate** (or /team if you keep an alias).
+This skill is available in chat as **/team**.
