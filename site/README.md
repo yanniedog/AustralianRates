@@ -7,7 +7,7 @@ The frontend is plain HTML, CSS, and browser JS under `site/`. There is no bundl
 Public section pages (`/`, `/savings/`, `/term-deposits/`) use this dependency chain:
 
 1. Vendor libraries first: Tabulator, jQuery, jQuery UI, PivotTable, Plotly, ECharts, SheetJS.
-2. Core namespace and shared helpers: `ar-utils.js`, `ar-bank-brand.js`, `ui-icons.js`, `ar-time.js`, `ar-section-config.js`, `ar-config.js`, `ar-public-page.js`, `ar-dom.js`.
+2. Core namespace and shared helpers: `ar-utils.js`, `ar-bank-brand.js`, `ui-icons.js`, `ar-time.js`, `ar-section-config.js`, `ar-config.js`, `ar-public-page.js`, `ar-public-intro.js`, `ar-dom.js`.
 3. State and interaction modules: `ar-layout-resize.js`, `ar-ui-scale.js`, `ar-state.js`, `ar-tabs.js`, `ar-filter-ui.js`, `ar-filters.js`, `ar-hero.js`, `ar-explorer.js`, `ar-pivot.js`.
 4. Chart stack: `ar-chart-config.js`, `ar-chart-data.js`, `ar-chart-echarts-helpers.js`, `ar-chart-echarts.js`, `ar-chart-ui.js`, `ar-chart-summary.js`, `ar-charts.js`.
 5. Final orchestration: `ar-refresh.js`, `ar-export.js`, `ar-rate-changes.js`, `ar-executive-summary.js` where present, `ar-mobile-table-nav.js`, `ar-ux.js`, `app.js`, `frame.js`, `site-variant-ui.js`.
