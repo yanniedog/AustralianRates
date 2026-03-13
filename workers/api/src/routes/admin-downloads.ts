@@ -1,10 +1,12 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import {
+  claimAdminDownloadJobProcessing,
   createAdminDownloadJob,
   getAdminDownloadArtifact,
   getAdminDownloadJob,
   listAdminDownloadJobs,
   listAdminDownloadArtifacts,
+  requeueStaleAdminDownloadJob,
   type AdminDownloadMode,
   type AdminDownloadScope,
   type AdminDownloadStatus,
@@ -14,6 +16,7 @@ import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 import { scheduleBackgroundTask } from './export-route-utils'
 import { runAdminDownloadJob } from './admin-download-builder'
+import { adminDownloadStaleBeforeIso } from './admin-download-operational'
 
 const VALID_STREAMS = new Set<AdminDownloadStream>(['canonical', 'optimized', 'operational'])
 const VALID_SCOPES = new Set<AdminDownloadScope>(['all', 'home_loans', 'savings', 'term_deposits'])
@@ -38,6 +41,33 @@ function statusBody(job: Awaited<ReturnType<typeof getAdminDownloadJob>>, artifa
       ...artifact,
       download_path: `/admin/downloads/${job?.job_id}/artifacts/${artifact.artifact_id}/download`,
     })),
+  }
+}
+
+async function continueAdminDownloadIfPending(c: Context<AppContext>, jobId: string): Promise<void> {
+  let job = await getAdminDownloadJob(c.env.DB, jobId)
+  if (!job || job.status === 'completed' || job.status === 'failed') return
+
+  if (job.status === 'processing') {
+    await requeueStaleAdminDownloadJob(c.env.DB, {
+      jobId,
+      staleBeforeIso: adminDownloadStaleBeforeIso(),
+    })
+    job = await getAdminDownloadJob(c.env.DB, jobId)
+    if (!job || job.status === 'processing') return
+  }
+
+  if (job.status !== 'queued') return
+
+  const claimed = await claimAdminDownloadJobProcessing(c.env.DB, jobId)
+  if (!claimed) return
+
+  const claimedJob = await getAdminDownloadJob(c.env.DB, jobId)
+  if (!claimedJob) return
+
+  const task = runAdminDownloadJob(c.env, claimedJob)
+  if (!scheduleBackgroundTask(c, task)) {
+    await task
   }
 }
 
@@ -73,6 +103,12 @@ adminDownloadRoutes.get('/downloads', async (c) => {
       }
     }),
   )
+
+  for (const job of jobs) {
+    if (job.status === 'queued' || job.status === 'processing') {
+      await continueAdminDownloadIfPending(c, job.job_id)
+    }
+  }
 
   return c.json({
     ok: true,
@@ -118,17 +154,17 @@ adminDownloadRoutes.post('/downloads', async (c) => {
     return jsonError(c, 500, 'DOWNLOAD_JOB_MISSING', 'Download job was not persisted.')
   }
 
-  const task = runAdminDownloadJob(c.env, job)
-  if (!scheduleBackgroundTask(c, task)) {
-    await task
-  }
+  await continueAdminDownloadIfPending(c, job.job_id)
 
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, jobId)
-  return c.json(statusBody(job, artifacts), 202)
+  const updatedJob = await getAdminDownloadJob(c.env.DB, jobId)
+  return c.json(statusBody(updatedJob, artifacts), 202)
 })
 
 adminDownloadRoutes.get('/downloads/:jobId', async (c) => {
-  const job = await getAdminDownloadJob(c.env.DB, c.req.param('jobId'))
+  const jobId = c.req.param('jobId')
+  await continueAdminDownloadIfPending(c, jobId)
+  const job = await getAdminDownloadJob(c.env.DB, jobId)
   if (!job) {
     return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
   }

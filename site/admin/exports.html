@@ -234,10 +234,11 @@
                         + '  <div class="export-artifacts">'
                         + (artifacts.length
                             ? artifacts.map(function (artifact) {
+                                var label = artifact.file_name || artifact.artifact_kind || 'artifact';
                                 return '<button type="button" class="secondary" data-action="download-artifact"'
                                     + ' data-path="' + escapeHtml(artifact.download_path || '') + '"'
                                     + ' data-file-name="' + escapeHtml(artifact.file_name || '') + '">'
-                                    + escapeHtml(artifact.artifact_kind === 'payload_bodies' ? 'Download payloads' : 'Download ' + artifact.artifact_kind)
+                                    + escapeHtml('Download ' + label)
                                     + '</button>';
                             }).join('')
                             : '<span class="export-empty">No artifacts yet.</span>')

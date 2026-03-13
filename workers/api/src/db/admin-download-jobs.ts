@@ -75,11 +75,62 @@ export async function markAdminDownloadJobProcessing(db: D1Database, jobId: stri
     .prepare(
       `UPDATE admin_download_jobs
        SET status = 'processing',
-           started_at = COALESCE(started_at, ?1)
+           started_at = ?1,
+           completed_at = NULL,
+           error_message = NULL
        WHERE job_id = ?2`,
     )
     .bind(nowIso(), jobId)
     .run()
+}
+
+export async function claimAdminDownloadJobProcessing(db: D1Database, jobId: string): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE admin_download_jobs
+       SET status = 'processing',
+           started_at = ?1,
+           completed_at = NULL,
+           error_message = NULL
+       WHERE job_id = ?2
+         AND status = 'queued'`,
+    )
+    .bind(nowIso(), jobId)
+    .run()
+  return (result.meta.changes ?? 0) > 0
+}
+
+export async function requeueAdminDownloadJob(db: D1Database, jobId: string): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE admin_download_jobs
+       SET status = 'queued',
+           completed_at = NULL,
+           error_message = NULL
+       WHERE job_id = ?1`,
+    )
+    .bind(jobId)
+    .run()
+}
+
+export async function requeueStaleAdminDownloadJob(
+  db: D1Database,
+  input: { jobId: string; staleBeforeIso: string },
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE admin_download_jobs
+       SET status = 'queued',
+           completed_at = NULL,
+           error_message = NULL
+       WHERE job_id = ?1
+         AND status = 'processing'
+         AND started_at IS NOT NULL
+         AND started_at <= ?2`,
+    )
+    .bind(input.jobId, input.staleBeforeIso)
+    .run()
+  return (result.meta.changes ?? 0) > 0
 }
 
 export async function completeAdminDownloadJob(
