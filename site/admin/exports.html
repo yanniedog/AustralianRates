@@ -232,7 +232,9 @@
                         + (job.end_cursor == null ? '' : '<button type="button" class="secondary" data-action="copy-cursor" data-cursor="' + escapeHtml(job.end_cursor) + '">Copy cursor</button>')
                         + '  </div>'
                         + '  <div class="export-artifacts">'
-                        + (artifacts.length
+                        + (sectionKey === 'operational'
+                            ? renderOperationalDownload(entry, job)
+                            : (artifacts.length
                             ? artifacts.map(function (artifact) {
                                 var label = artifact.file_name || artifact.artifact_kind || 'artifact';
                                 return '<button type="button" class="secondary" data-action="download-artifact"'
@@ -241,10 +243,24 @@
                                     + escapeHtml('Download ' + label)
                                     + '</button>';
                             }).join('')
-                            : '<span class="export-empty">No artifacts yet.</span>')
+                            : '<span class="export-empty">No artifacts yet.</span>'))
                         + '  </div>'
                         + '</div>';
                 }).join('');
+            }
+
+            function renderOperationalDownload(entry, job) {
+                if (entry && entry.download_path) {
+                    return '<button type="button" class="secondary" data-action="download-artifact"'
+                        + ' data-path="' + escapeHtml(entry.download_path || '') + '"'
+                        + ' data-file-name="' + escapeHtml(entry.download_file_name || 'operational-all-snapshot.jsonl.gz') + '">'
+                        + 'Download full snapshot'
+                        + '</button>';
+                }
+                if (job && (job.status === 'queued' || job.status === 'processing')) {
+                    return '<span class="export-empty">Snapshot bundle will appear when the job completes.</span>';
+                }
+                return '<span class="export-empty">No snapshot bundle available.</span>';
             }
 
             async function loadSection(sectionKey) {

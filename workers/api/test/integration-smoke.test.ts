@@ -58,6 +58,7 @@ describe('api route integration smoke', () => {
     for (const endpoint of [
       '/api/home-loan-rates/admin/runs',
       '/api/home-loan-rates/admin/downloads',
+      '/api/home-loan-rates/admin/downloads/test-job/download',
       '/api/home-loan-rates/admin/analytics/projections/diagnostics',
     ]) {
       const { status, json } = await fetchJson(endpoint)

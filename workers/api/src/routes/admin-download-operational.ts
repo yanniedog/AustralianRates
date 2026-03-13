@@ -39,6 +39,10 @@ export function operationalManifestFileName(job: AdminDownloadJobRow): string {
   return `${job.stream}-${job.scope}-${job.mode}-manifest.jsonl.gz`
 }
 
+export function operationalBundleFileName(job: AdminDownloadJobRow): string {
+  return `${job.stream}-${job.scope}-${job.mode}.jsonl.gz`
+}
+
 export function operationalSnapshotR2Key(jobId: string, fileName: string): string {
   return `admin-downloads/${jobId}/${fileName}`
 }
@@ -67,6 +71,35 @@ export function operationalProgressByTable(artifacts: AdminDownloadArtifactRow[]
     if (endOffset > current) progress.set(tableName, endOffset)
   }
   return progress
+}
+
+export function sortOperationalArtifactsForBundle(
+  tableNames: string[],
+  artifacts: AdminDownloadArtifactRow[],
+): AdminDownloadArtifactRow[] {
+  const tableOrder = new Map(tableNames.map((tableName, index) => [tableName, index]))
+  return artifacts
+    .filter((artifact) => artifact.artifact_kind === 'main' || artifact.artifact_kind === 'manifest')
+    .sort((left, right) => {
+      const leftIsManifest = left.artifact_kind === 'manifest'
+      const rightIsManifest = right.artifact_kind === 'manifest'
+      if (leftIsManifest || rightIsManifest) {
+        if (leftIsManifest && rightIsManifest) return left.file_name.localeCompare(right.file_name)
+        return leftIsManifest ? 1 : -1
+      }
+
+      const leftTable = operationalArtifactTableName(left.file_name) ?? ''
+      const rightTable = operationalArtifactTableName(right.file_name) ?? ''
+      const leftOrder = tableOrder.get(leftTable) ?? Number.MAX_SAFE_INTEGER
+      const rightOrder = tableOrder.get(rightTable) ?? Number.MAX_SAFE_INTEGER
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder
+
+      const leftOffset = operationalArtifactOffset(left.file_name) ?? 0
+      const rightOffset = operationalArtifactOffset(right.file_name) ?? 0
+      if (leftOffset !== rightOffset) return leftOffset - rightOffset
+
+      return left.file_name.localeCompare(right.file_name)
+    })
 }
 
 export async function listOperationalTables(db: D1Database): Promise<string[]> {

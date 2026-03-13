@@ -16,7 +16,12 @@ import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 import { scheduleBackgroundTask } from './export-route-utils'
 import { runAdminDownloadJob } from './admin-download-builder'
-import { adminDownloadStaleBeforeIso } from './admin-download-operational'
+import {
+  adminDownloadStaleBeforeIso,
+  listOperationalTables,
+  operationalBundleFileName,
+  sortOperationalArtifactsForBundle,
+} from './admin-download-operational'
 
 const VALID_STREAMS = new Set<AdminDownloadStream>(['canonical', 'optimized', 'operational'])
 const VALID_SCOPES = new Set<AdminDownloadScope>(['all', 'home_loans', 'savings', 'term_deposits'])
@@ -34,9 +39,16 @@ function parseLimit(value: string | undefined, fallback: number): number {
 }
 
 function statusBody(job: Awaited<ReturnType<typeof getAdminDownloadJob>>, artifacts: Awaited<ReturnType<typeof listAdminDownloadArtifacts>>) {
+  const downloadPath =
+    job && job.stream === 'operational' && job.mode === 'snapshot' && job.status === 'completed'
+      ? `/admin/downloads/${job.job_id}/download`
+      : null
+  const downloadFileName = downloadPath && job ? operationalBundleFileName(job) : null
   return {
     ok: true,
     job,
+    download_path: downloadPath,
+    download_file_name: downloadFileName,
     artifacts: artifacts.map((artifact) => ({
       ...artifact,
       download_path: `/admin/downloads/${job?.job_id}/artifacts/${artifact.artifact_id}/download`,
@@ -188,4 +200,60 @@ adminDownloadRoutes.get('/downloads/:jobId/artifacts/:artifactId/download', asyn
   c.header('Content-Type', artifact.content_type || 'application/gzip')
   c.header('Content-Disposition', `attachment; filename="${artifact.file_name}"`)
   return c.body(await object.arrayBuffer())
+})
+
+adminDownloadRoutes.get('/downloads/:jobId/download', async (c) => {
+  const jobId = c.req.param('jobId')
+  await continueAdminDownloadIfPending(c, jobId)
+  const job = await getAdminDownloadJob(c.env.DB, jobId)
+  if (!job) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
+  }
+  if (job.stream !== 'operational' || job.mode !== 'snapshot') {
+    return jsonError(c, 400, 'BAD_REQUEST', 'Single-file download is only available for operational snapshots.')
+  }
+  if (job.status !== 'completed') {
+    return jsonError(c, 409, 'DOWNLOAD_NOT_READY', 'Operational snapshot is still being prepared.')
+  }
+
+  const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
+  const orderedArtifacts = sortOperationalArtifactsForBundle(await listOperationalTables(c.env.DB), artifacts)
+  if (orderedArtifacts.length === 0) {
+    return jsonError(c, 404, 'DOWNLOAD_ARTIFACT_MISSING', 'Operational snapshot parts are missing from storage.')
+  }
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for (const artifact of orderedArtifacts) {
+          const object = await c.env.RAW_BUCKET.get(artifact.r2_key)
+          if (!object) {
+            throw new Error(`Missing operational snapshot part: ${artifact.file_name}`)
+          }
+          if (!object.body) {
+            controller.enqueue(new Uint8Array(await object.arrayBuffer()))
+            continue
+          }
+
+          const reader = object.body.getReader()
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value) controller.enqueue(value)
+          }
+        }
+        controller.close()
+      } catch (error) {
+        controller.error(error)
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Disposition': `attachment; filename="${operationalBundleFileName(job)}"`,
+      'Content-Type': 'application/gzip',
+    },
+  })
 })
