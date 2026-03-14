@@ -34,6 +34,7 @@
     var QUICK_COMPARE_LIMIT = 20;
     var ladderRows = [];
     var publicIntro = window.AR.publicIntro || null;
+    var heroStatsReady = false;
 
     function syncPublicIntro() {
         publicIntro = window.AR.publicIntro || publicIntro;
@@ -75,57 +76,71 @@
         [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
     }
 
-    async function loadHeroStats() {
-        if (!apiBase) {
+    function applyHeroSnapshot(total, latest) {
+        if (!Number.isFinite(Number(total))) return false;
+        clearHeroError();
+        renderStat(els.statRecords, 'rows', 'Rows', Number(total).toLocaleString(), 'Total rows in the active slice.');
+        setIntroMetric('rows', Number(total).toLocaleString(), 'Rows in the current filtered slice.');
+
+        if (els.statUpdated) {
+            if (latest && latest.collection_date) {
+                var renderedDate = timeUtils.formatSourceDateWithLocal
+                    ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
+                    : { text: String(latest.collection_date) };
+                renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
+                setIntroMetric('updated', renderedDate.text, 'Latest collection in the current filtered slice.');
+            } else {
+                renderStat(els.statUpdated, 'calendar', 'Updated', 'Unavailable', 'Last collection date in the active slice.');
+            }
+        }
+
+        if (els.statCashRate) {
+            if (section === 'home-loans' && latest && latest.rba_cash_rate != null) {
+                renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), 'Current RBA cash rate.');
+            } else if (section === 'home-loans') {
+                renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
+            } else if (section !== 'home-loans') {
+                renderStat(els.statCashRate, 'continuity', 'Series continuity', 'Healthy', 'Series continuity by canonical product_key.');
+            }
+        }
+
+        heroStatsReady = true;
+        return true;
+    }
+
+    function syncHeroStatsFromExplorer(snapshot) {
+        var currentExplorer = window.AR.explorer || {};
+        var state = snapshot && typeof snapshot === 'object'
+            ? snapshot
+            : (currentExplorer && typeof currentExplorer.getExplorerState === 'function' ? currentExplorer.getExplorerState() : null);
+        if (!state || state.status !== 'ready') return false;
+        return applyHeroSnapshot(state.total, state.latestRow);
+    }
+
+    function loadHeroStats() {
+        if (!syncHeroStatsFromExplorer()) {
+            clearHeroError();
+        }
+    }
+
+    window.addEventListener('ar:explorer-state', function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        if (detail.status === 'ready') {
+            syncHeroStatsFromExplorer(detail);
+            return;
+        }
+        if (detail.status === 'error') {
+            if (heroStatsReady) {
+                setInlineError(els.heroError, 'Overview metrics may be stale because the live table could not refresh.');
+                return;
+            }
             showHeroError();
             return;
         }
-        clearHeroError();
-        try {
-            var query = new URLSearchParams({ page: '1', size: '1', sort: 'collection_date', dir: 'desc' });
-            var filterParams = buildFilterParams();
-            Object.keys(filterParams || {}).forEach(function (key) {
-                query.set(key, filterParams[key]);
-            });
-            var ratesData = requestJson
-                ? (await requestJson(apiBase + '/rates?' + query.toString(), {
-                    requestLabel: 'Overview metrics',
-                    timeoutMs: 10000,
-                    retryCount: 1,
-                    retryDelayMs: 700,
-                })).data
-                : await fetch(apiBase + '/rates?' + query.toString(), { cache: 'no-store' }).then(function (ratesRes) {
-                    if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
-                    return ratesRes.json();
-                });
-            if (!ratesData || ratesData.total == null) return;
-
-            var total = Number(ratesData.total || 0);
-            renderStat(els.statRecords, 'rows', 'Rows', total.toLocaleString(), 'Total rows in the active slice.');
-            setIntroMetric('rows', total.toLocaleString(), 'Rows in the current filtered slice.');
-
-            if (ratesData.data && ratesData.data.length > 0) {
-                var latest = ratesData.data[0];
-                if (els.statUpdated && latest.collection_date) {
-                    var renderedDate = timeUtils.formatSourceDateWithLocal
-                        ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
-                        : { text: String(latest.collection_date) };
-                    renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
-                    setIntroMetric('updated', renderedDate.text, 'Latest collection in the current filtered slice.');
-                }
-                if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
-                    renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), 'Current RBA cash rate.');
-                } else if (els.statCashRate) {
-                    renderStat(els.statCashRate, 'continuity', 'Series continuity', 'Healthy', 'Series continuity by canonical product_key.');
-                }
-            }
-        } catch (err) {
-            showHeroError();
-            clientLog('error', 'Hero stats load failed', {
-                message: describeError(err, 'Overview metrics are temporarily unavailable.'),
-            });
+        if (detail.status === 'loading') {
+            clearHeroError();
         }
-    }
+    });
 
     function sortRows(rows) {
         var bestIsLowest = section === 'home-loans';

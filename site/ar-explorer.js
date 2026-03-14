@@ -525,6 +525,7 @@
         currentPage: 1,
         totalPages: 1,
         message: '',
+        latestRow: null,
     };
 
     function emitExplorerTableUpdated(reason) {
@@ -930,6 +931,7 @@
             currentPage: 1,
             totalPages: 1,
             message: '',
+            latestRow: null,
         });
 
         var apiBase = (config && config.apiBase) ? config.apiBase : (window.location.origin + (window.AR.sectionConfig && window.AR.sectionConfig.apiPath ? window.AR.sectionConfig.apiPath : '/api/home-loan-rates'));
@@ -1010,6 +1012,7 @@
                         rows: 0,
                         total: 0,
                         message: message,
+                        latestRow: null,
                     });
                     clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', {
                         message: message,
@@ -1065,6 +1068,7 @@
                         currentPage: Number(_params && _params.page != null ? _params.page : 1) || 1,
                         totalPages: Math.max(1, lastPage),
                         message: '',
+                        latestRow: rows.length ? rows[0] : null,
                     });
                     return { last_page: Math.max(1, lastPage), last_row: total, data: rows };
                 } catch (e) {
@@ -1076,6 +1080,7 @@
                         rows: 0,
                         total: 0,
                         message: errMsg,
+                        latestRow: null,
                     });
                     return { last_page: 1, last_row: 0, data: [] };
                 }
@@ -1098,6 +1103,7 @@
                     rows: 0,
                     total: 0,
                     message: errData.message || 'Explorer data load failed',
+                    latestRow: null,
                 });
                 if (rateTable) {
                     try {
@@ -1253,6 +1259,7 @@
         reloadExplorer: reloadExplorer,
         applyUiMode: applyUiMode,
         getCurrentSort: getCurrentSort,
+        getExplorerState: function () { return Object.assign({}, explorerState); },
     };
 
     window.addEventListener('ar:tab-changed', function (event) {
