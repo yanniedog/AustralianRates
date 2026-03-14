@@ -64,6 +64,9 @@ body.ar-public .market-intro-command-head {
 body.ar-public .market-intro-prompt,
 body.ar-public .market-intro-command-prompt,
 body.ar-public .market-intro-console-log-prompt { color: var(--ar-accent); }
+:root[data-theme="light"] body.ar-public .market-intro-prompt,
+:root[data-theme="light"] body.ar-public .market-intro-command-prompt,
+:root[data-theme="light"] body.ar-public .market-intro-console-log-prompt { color: #0b5a47; }
 body.ar-public .market-intro-caret {
     width: 10px;
     height: 1.05em;
