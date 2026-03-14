@@ -764,7 +764,7 @@ async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
     const nonIgnorableFailures = requestFailures.filter((failure) => !isIgnorableTelemetryFailure(failure));
     const telemetryFailures = requestFailures.length - nonIgnorableFailures.length;
 
-    if (telemetryFailures > 0) pass(results, `ignored ${telemetryFailures} Cloudflare Insights telemetry DNS failure(s)`);
+    if (telemetryFailures > 0) pass(results, `ignored ${telemetryFailures} telemetry request failure(s) from Clarity or Cloudflare Insights`);
     if (nonIgnorableFailures.length > 0) {
         fail(results, `non-ignorable request failures: ${nonIgnorableFailures.map((failure) => failure.url).join(', ')}`);
     } else {
