@@ -469,6 +469,12 @@ body.is-resizing-panels * {
     margin-top: 12px;
 }
 
+.site-help-head h2 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
 body.ar-legal .shell {
     width: min(960px, calc(100vw - 24px));
 }

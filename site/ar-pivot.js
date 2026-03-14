@@ -8,11 +8,16 @@
     var state = window.AR.state;
     var sc = window.AR.sectionConfig || {};
     var utils = window.AR.utils || {};
+    var network = window.AR.network || {};
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
 
     var pivotFieldLabels = sc.pivotFieldLabels || {};
     var pivotLoadPromise = null;
@@ -131,15 +136,26 @@
         var params = {};
         Object.keys(baseParams || {}).forEach(function (key) { params[key] = baseParams[key]; });
         params.representation = els.pivotRepresentation ? String(els.pivotRepresentation.value || 'change') : 'change';
-        return fetch(apiBase + '/analytics/pivot', {
-            method: 'POST',
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(params),
-        }).then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/pivot');
-            return response.json();
-        }).then(function (payload) {
+        var request = requestJson
+            ? requestJson(apiBase + '/analytics/pivot', {
+                method: 'POST',
+                cache: 'no-store',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params),
+                requestLabel: 'Pivot rows',
+                timeoutMs: 20000,
+                retryCount: 0,
+            }).then(function (result) { return result.data; })
+            : fetch(apiBase + '/analytics/pivot', {
+                method: 'POST',
+                cache: 'no-store',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params),
+            }).then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/pivot');
+                return response.json();
+            });
+        return request.then(function (payload) {
             var rows = Array.isArray(payload.rows) ? payload.rows : [];
             var total = Number(payload.total || rows.length || 0);
             var representation = String(payload.representation || params.representation || 'day');
@@ -237,11 +253,11 @@
             return { rows: data.length };
         }).catch(function (err) {
             if (requestToken !== pivotRequestToken) return { superseded: true };
-            setPivotStatus('Error loading pivot data: ' + String(err.message || err));
+            setPivotStatus('Error loading pivot data: ' + describeError(err, 'Pivot rows could not be loaded.'));
             tabState.pivotLoaded = false;
             tabState.pivotFingerprint = '';
             clientLog('error', 'Pivot load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Pivot rows could not be loaded.'),
                 reason: opts.reason || 'manual',
             });
             return { error: true };

@@ -330,11 +330,14 @@
     function setIdleState() {
         setActiveView(defaultViewFallback());
         clearErrorState();
-        renderSummary(null, getChartFields(), null, false);
+        if (els.chartGuidance) els.chartGuidance.textContent = 'On demand';
+        if (els.chartSummary) {
+            els.chartSummary.innerHTML = '<span class="chart-summary-pill">Load chart when ready</span>';
+        }
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
-        setCanvasPlaceholder('Loading');
-        setStatus('Ready');
+        setCanvasPlaceholder('Choose a view and press Update chart.');
+        setStatus('Idle');
     }
 
     function setPendingState(message) {

@@ -456,10 +456,10 @@
     function helpSheetHtml(title, body) {
         return '' +
             '<div class="site-help-backdrop" data-help-close></div>' +
-            '<div class="site-help-panel" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+            '<div class="site-help-panel" role="dialog" aria-modal="true" aria-labelledby="site-help-title">' +
                 '<div class="site-help-head">' +
-                    '<strong>' + esc(title) + '</strong>' +
-                    '<button type="button" class="icon-btn secondary" data-help-close aria-label="Close help">x</button>' +
+                    '<h2 id="site-help-title" tabindex="-1">' + esc(title) + '</h2>' +
+                    '<button type="button" id="site-help-close" class="icon-btn secondary" data-help-close aria-label="Close help">x</button>' +
                 '</div>' +
                 '<div class="site-help-body">' + body + '</div>' +
             '</div>';
@@ -485,6 +485,12 @@
         sheet.innerHTML = helpSheetHtml(title, '<p>' + esc(text) + '</p>');
         sheet.hidden = false;
         document.body.classList.add('has-help-open');
+        var focusTarget = sheet.querySelector('#site-help-close') || sheet.querySelector('#site-help-title');
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            window.setTimeout(function () {
+                focusTarget.focus();
+            }, 0);
+        }
     }
 
     function closeHelpSheet() {

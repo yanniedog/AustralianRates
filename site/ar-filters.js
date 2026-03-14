@@ -12,6 +12,7 @@
     var filterElMap = dom && dom.filterElMap ? dom.filterElMap : {};
     var tabState = state && state.state ? state.state : {};
     var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
+    var network = window.AR.network || {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
     var apiOverride = config && config.apiOverride ? config.apiOverride : null;
     var isAnalystMode = state && typeof state.isAnalystMode === 'function'
@@ -21,6 +22,10 @@
     var esc = utils.esc || window._arEsc;
     var formatFilterValue = utils.formatFilterValue || function (_field, value) { return String(value == null ? '' : value); };
     var clientLog = utils.clientLog || function () {};
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
 
     var filterFields = sc.filterFields || [];
     var filterApiMap = sc.filterApiMap || {};
@@ -557,10 +562,22 @@
 
     async function loadFilters() {
         clientLog('info', 'Loading filter options', { apiBase: apiBase });
+        var loadResult = { ok: true, error: null };
         try {
-            var r = await fetch(apiBase + '/filters', { cache: 'no-store' });
-            if (!r.ok) throw new Error('HTTP ' + r.status + ' for /filters');
-            var data = await r.json();
+            var result = requestJson
+                ? await requestJson(apiBase + '/filters', {
+                    requestLabel: 'Filter controls',
+                    timeoutMs: 10000,
+                    retryCount: 0,
+                    retryDelayMs: 700,
+                })
+                : null;
+            var data = result ? result.data : null;
+            if (!data) {
+                var r = await fetch(apiBase + '/filters', { cache: 'no-store' });
+                if (!r.ok) throw new Error('HTTP ' + r.status + ' for /filters');
+                data = await r.json();
+            }
             if (!data || !data.filters) {
                 clientLog('warn', 'Filter options response missing filters payload');
             } else {
@@ -593,8 +610,9 @@
             bindInteractionListeners();
             markFiltersApplied();
         } catch (err) {
+            loadResult = { ok: false, error: err };
             clientLog('error', 'Filter options load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Filter controls could not be loaded.'),
             });
             restoreUrlState();
             applyDefaultMinRateIfEmpty();
@@ -603,6 +621,7 @@
             bindInteractionListeners();
             markFiltersApplied();
         }
+        return loadResult;
     }
 
     function applyDefaultMinRateIfEmpty() {

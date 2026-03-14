@@ -5,11 +5,16 @@
     var dom = window.AR.dom;
     var config = window.AR.config;
     var utils = window.AR.utils || {};
+    var network = window.AR.network || {};
     var els = dom && dom.els ? dom.els : {};
     var clientLog = utils.clientLog || function () {};
     var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
     var bankBrand = window.AR.bankBrand || {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
     var ymd = utils.ymdDate || function (value) { return String(value == null ? '' : value).trim() || '-'; };
     var formatChangeWindow = utils.formatChangeWindow || function (previousValue, currentValue) {
         var previous = ymd(previousValue);
@@ -132,9 +137,17 @@
 
         statusEl.textContent = 'WAIT';
         try {
-            var res = await fetch(apiBase + '/changes?limit=200&offset=0', { cache: 'no-store' });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            var data = await res.json();
+            var data = requestJson
+                ? (await requestJson(apiBase + '/changes?limit=200&offset=0', {
+                    requestLabel: 'Recent changes',
+                    timeoutMs: 10000,
+                    retryCount: 1,
+                    retryDelayMs: 700,
+                })).data
+                : await fetch(apiBase + '/changes?limit=200&offset=0', { cache: 'no-store' }).then(function (res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                });
             var rows = Array.isArray(data && data.rows) ? data.rows : [];
             var integrity = data && data.integrity ? data.integrity : null;
             var total = Number(data && data.total) || rows.length;
@@ -148,7 +161,7 @@
             renderHeadline([], 0, null);
             renderIntegrityWarning(null);
             clientLog('error', 'Rate change log load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Recent changes are temporarily unavailable.'),
             });
         }
     }

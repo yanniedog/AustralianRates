@@ -7,6 +7,7 @@
     var filters = window.AR.filters;
     var state = window.AR.state;
     var utils = window.AR.utils;
+    var network = window.AR.network || {};
     var timeUtils = window.AR.time || {};
     var els = dom && dom.els ? dom.els : {};
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
@@ -25,6 +26,10 @@
         return text.length <= max ? text : text.slice(0, max - 1) + '...';
     };
     var clientLog = utils && utils.clientLog ? utils.clientLog : function () {};
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
     var esc = window._arEsc;
     var bankBrand = window.AR.bankBrand || {};
     var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
@@ -932,7 +937,15 @@
         if (sharedFilters && Array.isArray(sharedFilters.single_value_columns)) {
             singleValueColumns = sharedFilters.single_value_columns;
         } else {
-            fetch(apiBase + '/filters', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            var filterRequest = requestJson
+                ? requestJson(apiBase + '/filters', {
+                    requestLabel: 'Explorer filter metadata',
+                    timeoutMs: 10000,
+                    retryCount: 0,
+                    retryDelayMs: 700,
+                }).then(function (result) { return result.data; })
+                : fetch(apiBase + '/filters', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; });
+            filterRequest.then(function (data) {
                 if (!data || !data.filters || !Array.isArray(data.filters.single_value_columns)) return;
                 singleValueColumns = data.filters.single_value_columns;
                 if (rateTable) {
@@ -971,6 +984,39 @@
                 });
 
                 return url + '?' + q.toString();
+            },
+            ajaxRequestFunc: function (url, ajaxConfig) {
+                var request = requestJson
+                    ? requestJson(url, {
+                        method: ajaxConfig && ajaxConfig.method ? ajaxConfig.method : 'GET',
+                        headers: ajaxConfig && ajaxConfig.headers ? ajaxConfig.headers : undefined,
+                        cache: 'no-store',
+                        requestLabel: 'Live rates table',
+                        timeoutMs: 10000,
+                        retryCount: 0,
+                        retryDelayMs: 700,
+                    }).then(function (result) {
+                        return result.data;
+                    })
+                    : fetch(url, ajaxConfig || { method: 'GET', cache: 'no-store' }).then(function (response) {
+                        if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
+                        return response.json();
+                    });
+
+                return request.catch(function (error) {
+                    var message = describeError(error, 'Live rates table could not be loaded.');
+                    emitExplorerState({
+                        status: 'error',
+                        rows: 0,
+                        total: 0,
+                        message: message,
+                    });
+                    clientLog('error', 'EXPLORER_TABLE_ABNORMALITY: Explorer data load failed', {
+                        message: message,
+                        status: error && error.status ? error.status : null,
+                    });
+                    throw error;
+                });
             },
             ajaxResponse: function (_url, _params, response) {
                 try {
@@ -1035,7 +1081,12 @@
                 }
             },
             ajaxError: function (xhr, textStatus, errorThrown) {
-                var errData = { status: xhr && xhr.status ? xhr.status : null, textStatus: textStatus || null, message: errorThrown ? String(errorThrown) : null };
+                var candidate = errorThrown || xhr;
+                var errData = {
+                    status: xhr && xhr.status ? xhr.status : (candidate && candidate.status ? candidate.status : null),
+                    textStatus: textStatus || null,
+                    message: describeError(candidate, 'Live rates table could not be loaded.'),
+                };
                 if (isAbortLikeAjaxError(xhr, textStatus, errorThrown)) {
                     clientLog('info', 'Explorer request aborted (non-fatal)', errData);
                     return;

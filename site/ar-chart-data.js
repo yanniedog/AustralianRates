@@ -4,7 +4,9 @@
 
     var config = window.AR.config || {};
     var chartConfig = window.AR.chartConfig || {};
+    var network = window.AR.network || {};
     var apiBase = config.apiBase || '';
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -422,6 +424,13 @@
 
     function fetchAnalyticsRows(params) {
         var query = new URLSearchParams(params || {});
+        if (requestJson) {
+            return requestJson(apiBase + '/analytics/series?' + query.toString(), {
+                requestLabel: 'Chart history',
+                timeoutMs: 20000,
+                retryCount: 0,
+            }).then(function (result) { return result.data; });
+        }
         return fetch(apiBase + '/analytics/series?' + query.toString(), { cache: 'no-store' }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/series');
             return response.json();

@@ -98,6 +98,28 @@
     color: var(--ar-danger);
 }
 
+.terminal-inline-feedback.is-warning {
+    border-color: color-mix(in srgb, var(--ar-warning) 24%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-warning) 10%, var(--ar-surface-2));
+    color: var(--ar-text);
+}
+
+.workspace-status {
+    display: grid;
+    gap: 10px;
+}
+
+.workspace-status-copy {
+    display: grid;
+    gap: 4px;
+}
+
+.workspace-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .chart-summary-pill {
     display: inline-flex;
     align-items: center;

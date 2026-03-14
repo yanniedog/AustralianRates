@@ -11,10 +11,14 @@
     var chartSummary = window.AR.chartSummary || {};
     var chartUi = window.AR.chartUi || {};
     var utils = window.AR.utils || {};
+    var network = window.AR.network || {};
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var clientLog = utils.clientLog || function () {};
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
 
     var chartState = {
         rows: [],
@@ -30,6 +34,7 @@
     };
     var responsiveSyncTimer = 0;
     var resizeObserver = null;
+    var chartLoadPromise = null;
 
     function fields() {
         var defaultView = (window.AR.chartConfig && window.AR.chartConfig.defaultView) ? window.AR.chartConfig.defaultView() : 'lenders';
@@ -81,7 +86,7 @@
     }
 
     function chartErrorMessage() {
-        return 'Chart unavailable right now. Refresh to try again.';
+        return 'Chart unavailable right now. Try Update chart again.';
     }
 
     function ensureCharts() {
@@ -225,13 +230,14 @@
 
     async function drawChart() {
         if (!els.chartOutput) return;
+        if (chartLoadPromise) return chartLoadPromise;
         disposeCharts();
         chartState.fallbackReason = '';
         if (chartUi.clearErrorState) chartUi.clearErrorState();
         if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
-        try {
+        chartLoadPromise = (async function () {
             var payload = await chartData.fetchAllRateRows(buildBaseParams(), function (progress) {
                 if (chartUi.setStatus) {
                     chartUi.setStatus('LOAD ' + progress.loaded.toLocaleString() + '/' + progress.total.toLocaleString() + ' ' + progress.page + '/' + progress.lastPage);
@@ -261,15 +267,19 @@
                 totalRows: chartState.totalRows,
                 truncated: chartState.truncated,
             });
-        } catch (error) {
+        })().catch(function (error) {
             chartState.fallbackReason = '';
             clearOutput('Error loading chart');
-            if (chartUi.setErrorState) chartUi.setErrorState(chartErrorMessage());
+            if (chartUi.setErrorState) chartUi.setErrorState(describeError(error, chartErrorMessage()));
             if (chartUi.setStatus) chartUi.setStatus('Error loading chart');
             clientLog('error', 'Chart load failed', {
-                message: error && error.message ? error.message : String(error),
+                message: describeError(error, chartErrorMessage()),
             });
-        }
+        }).finally(function () {
+            chartLoadPromise = null;
+        });
+
+        return chartLoadPromise;
     }
 
     function refreshFromCache(reason) {
@@ -279,7 +289,7 @@
         }
         if (!chartState.rows.length) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
-            if (chartUi.setStatus) chartUi.setStatus('READY');
+            if (chartUi.setIdleState) chartUi.setIdleState();
             return;
         }
         if (chartState.stale) {

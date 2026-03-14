@@ -14,12 +14,15 @@
     var executiveSummary = window.AR.executiveSummary;
     var hero = window.AR.hero;
     var utils = window.AR.utils || {};
+    var network = window.AR.network || {};
     var clientLog = utils.clientLog || function () {};
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
 
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var appInitialized = false;
-    var initialChartRequested = false;
     var liveApplyTimerId = 0;
     var liveApplyDelayMs = 280;
     var liveApplyInProgress = false;
@@ -34,6 +37,53 @@
         els.filterLiveStatus.textContent = String(text || 'Live sync on');
         els.filterLiveStatus.classList.remove('is-live', 'is-pending', 'is-error');
         if (tone) els.filterLiveStatus.classList.add(String(tone));
+    }
+
+    function hideWorkspaceStatus() {
+        if (!els.workspaceStatus) return;
+        els.workspaceStatus.hidden = true;
+        if (els.workspaceStatusRetry) els.workspaceStatusRetry.disabled = false;
+    }
+
+    function setWorkspaceStatus(title, message, tone, disableRetry) {
+        if (!els.workspaceStatus) return;
+        if (els.workspaceStatusTitle) els.workspaceStatusTitle.textContent = String(title || 'Startup degraded');
+        if (els.workspaceStatusMessage) els.workspaceStatusMessage.textContent = String(message || 'Some controls are taking longer than expected.');
+        els.workspaceStatus.classList.remove('is-warning', 'is-error');
+        els.workspaceStatus.classList.add(tone === 'is-error' ? 'is-error' : 'is-warning');
+        els.workspaceStatus.hidden = false;
+        if (els.workspaceStatusRetry) els.workspaceStatusRetry.disabled = !!disableRetry;
+    }
+
+    function handleFilterBootstrapResult(result, successSource, failureSource) {
+        var ok = !result || result.ok !== false;
+        if (ok) {
+            hideWorkspaceStatus();
+            setFilterLiveStatus('Live sync on', 'is-live');
+            if (!appInitialized) finishAppInit(successSource || 'filters-loaded');
+            return;
+        }
+
+        setFilterLiveStatus('Retry startup', 'is-error');
+        setWorkspaceStatus(
+            'Startup degraded',
+            describeError(result.error, 'Filter controls timed out. Rates are still loading with a reduced startup path.'),
+            'is-warning',
+            false
+        );
+        if (!appInitialized) finishAppInit(failureSource || 'filters-load-failed');
+    }
+
+    function retryStartup() {
+        if (!filters || !filters.loadFilters) return;
+        setFilterLiveStatus('Retrying filters...', 'is-pending');
+        setWorkspaceStatus('Retrying startup', 'Refreshing filter controls...', 'is-warning', true);
+        filters.loadFilters().then(function (result) {
+            handleFilterBootstrapResult(result, 'filters-retried', 'filters-retry-failed');
+        }).catch(function (error) {
+            setFilterLiveStatus('Retry startup', 'is-error');
+            setWorkspaceStatus('Startup degraded', describeError(error, 'Filter controls could not be retried.'), 'is-error', false);
+        });
     }
 
     function clearLiveApplyTimer() {
@@ -57,15 +107,6 @@
             if (filters && filters.syncUrlState) filters.syncUrlState();
             if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
         }
-    }
-
-    function drawChartIfReady(force) {
-        if (!charts || !charts.drawChart || !els.chartOutput) return;
-        if (initialChartRequested && !force) return;
-        initialChartRequested = true;
-        window.setTimeout(function () {
-            charts.drawChart();
-        }, 120);
     }
 
     function scheduleLiveApply(reason) {
@@ -102,7 +143,9 @@
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (pivot && pivot.invalidatePivot) {
             pivot.invalidatePivot({
-                message: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid...' : 'Default pivot grid queued for refresh.',
+                message: tabState.activeTab === 'pivot'
+                    ? 'Pivot stale. Press Refresh pivot to reload.'
+                    : 'Pivot grid queued until you open the Pivot tab.',
             });
         } else if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'STALE';
@@ -111,17 +154,6 @@
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
-        }
-        drawChartIfReady(true);
-        if (pivot && pivot.preloadPivotData) {
-            pivot.preloadPivotData({
-                delay: tabState.activeTab === 'pivot' ? 0 : 900,
-                force: true,
-                immediate: tabState.activeTab === 'pivot',
-                reason: 'filters-applied',
-                statusMessage: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid...' : 'Preparing default pivot grid...',
-                statusPrefix: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid... ' : 'Preparing default pivot grid... ',
-            });
         }
         window.setTimeout(function () {
             liveApplyInProgress = false;
@@ -158,15 +190,8 @@
             executiveSummary.loadExecutiveSummary();
         }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
-        drawChartIfReady(false);
-        if (pivot && pivot.preloadPivotData) {
-            pivot.preloadPivotData({
-                delay: tabState.activeTab === 'pivot' ? 0 : 1200,
-                immediate: tabState.activeTab === 'pivot',
-                reason: 'app-init',
-            });
-        }
-        setFilterLiveStatus('Live sync on', 'is-live');
+        if (String(source || '').indexOf('failed') >= 0) setFilterLiveStatus('Retry startup', 'is-error');
+        else setFilterLiveStatus('Live sync on', 'is-live');
 
         clientLog('info', 'App init complete', {
             activeTab: tabState.activeTab || 'explorer',
@@ -175,6 +200,11 @@
     }
 
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
+    if (els.workspaceStatusRetry) {
+        els.workspaceStatusRetry.addEventListener('click', function () {
+            retryStartup();
+        });
+    }
     if (els.resetFilters) {
         els.resetFilters.addEventListener('click', function (event) {
             if (event) event.preventDefault();
@@ -217,7 +247,9 @@
         els.pivotRepresentation.addEventListener('change', function () {
             if (pivot && pivot.invalidatePivot) {
                 pivot.invalidatePivot({
-                    message: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid...' : 'Default pivot grid queued for refresh.',
+                    message: tabState.activeTab === 'pivot'
+                        ? 'Pivot stale. Press Refresh pivot to reload.'
+                        : 'Pivot grid queued until you open the Pivot tab.',
                 });
             }
             if (tabState.activeTab === 'pivot' && pivot && pivot.loadPivotData) {
@@ -269,8 +301,9 @@
     });
     window.addEventListener('ar:tab-changed', function (event) {
         var tab = event && event.detail && event.detail.tab;
-        if (tab === 'history' && charts && charts.markStale && tabState.chartDrawn) {
-            charts.markStale('LIVE');
+        if (tab === 'history' && charts) {
+            if (!tabState.chartDrawn && charts.drawChart) charts.drawChart();
+            else if (charts.refreshFromCache) charts.refreshFromCache('history-tab');
         }
         if (tab === 'pivot' && pivot && pivot.ensurePivotLoaded) {
             pivot.ensurePivotLoaded({ reason: 'pivot-tab-activated' });
@@ -288,12 +321,14 @@
     applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst', { skipRefresh: true });
 
     if (filters && filters.loadFilters) {
-        filters.loadFilters().then(function () {
-            finishAppInit('filters-loaded');
+        filters.loadFilters().then(function (result) {
+            handleFilterBootstrapResult(result, 'filters-loaded', 'filters-load-failed');
         }).catch(function (err) {
             clientLog('error', 'App init failed while loading filters', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Filter controls could not be loaded.'),
             });
+            setFilterLiveStatus('Retry startup', 'is-error');
+            setWorkspaceStatus('Startup degraded', describeError(err, 'Filter controls could not be loaded.'), 'is-error', false);
             finishAppInit('filters-load-failed');
         });
     } else {

@@ -6,6 +6,7 @@
     var config = window.AR.config;
     var filters = window.AR.filters;
     var utils = window.AR.utils || {};
+    var network = window.AR.network || {};
     var timeUtils = window.AR.time || {};
     var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
@@ -14,6 +15,10 @@
     var pct = utils.pct || function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
     var clientLog = utils.clientLog || function () {};
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
     var bankBrand = window.AR.bankBrand || {};
     var uiIcons = (window.AR && window.AR.uiIcons) ? window.AR.uiIcons : {};
     var iconText = typeof uiIcons.text === 'function'
@@ -82,9 +87,17 @@
             Object.keys(filterParams || {}).forEach(function (key) {
                 query.set(key, filterParams[key]);
             });
-            var ratesRes = await fetch(apiBase + '/rates?' + query.toString(), { cache: 'no-store' });
-            if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
-            var ratesData = await ratesRes.json();
+            var ratesData = requestJson
+                ? (await requestJson(apiBase + '/rates?' + query.toString(), {
+                    requestLabel: 'Overview metrics',
+                    timeoutMs: 10000,
+                    retryCount: 1,
+                    retryDelayMs: 700,
+                })).data
+                : await fetch(apiBase + '/rates?' + query.toString(), { cache: 'no-store' }).then(function (ratesRes) {
+                    if (!ratesRes.ok) throw new Error('HTTP ' + ratesRes.status + ' for /rates');
+                    return ratesRes.json();
+                });
             if (!ratesData || ratesData.total == null) return;
 
             var total = Number(ratesData.total || 0);
@@ -109,7 +122,7 @@
         } catch (err) {
             showHeroError();
             clientLog('error', 'Hero stats load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Overview metrics are temporarily unavailable.'),
             });
         }
     }
@@ -184,9 +197,17 @@
             var params = buildFilterParams();
             params.limit = String(QUICK_COMPARE_LIMIT);
             params.order_by = 'rate_desc';
-            var response = await fetch(apiBase + '/latest?' + new URLSearchParams(params).toString(), { cache: 'no-store' });
-            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
-            var data = await response.json();
+            var data = requestJson
+                ? (await requestJson(apiBase + '/latest?' + new URLSearchParams(params).toString(), {
+                    requestLabel: 'Leaders rail',
+                    timeoutMs: 10000,
+                    retryCount: 1,
+                    retryDelayMs: 700,
+                })).data
+                : await fetch(apiBase + '/latest?' + new URLSearchParams(params).toString(), { cache: 'no-store' }).then(function (response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
+                    return response.json();
+                });
             ladderRows = sortRows(Array.isArray(data && data.rows) ? data.rows : []);
             applyLadderSearch();
             if (ladderRows.length > 0) {
@@ -198,7 +219,7 @@
             }
         } catch (err) {
             clientLog('error', 'Quick compare load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Leaders rail is temporarily unavailable.'),
             });
             if (els.quickCompareCards) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
         }

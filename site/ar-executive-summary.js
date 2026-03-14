@@ -3,12 +3,18 @@
     window.AR = window.AR || {};
 
     var dom = window.AR.dom;
+    var config = window.AR.config || {};
     var els = dom && dom.els ? dom.els : {};
     var utils = window.AR.utils || {};
+    var network = window.AR.network || {};
     var esc = window._arEsc || function (v) { return String(v == null ? '' : v); };
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
     var bankBrand = window.AR.bankBrand || {};
     var ymd = utils.ymdDate || function (value) { return String(value == null ? '' : value).trim() || '-'; };
+    var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
     var formatChangeWindow = utils.formatChangeWindow || function (previousValue, currentValue, options) {
         var settings = options || {};
         var previous = ymd(previousValue);
@@ -116,6 +122,19 @@
         }).join('');
     }
 
+    function executiveSummaryEndpoint() {
+        var apiBase = String(config.apiBase || '').trim() || (window.location.origin + '/api/home-loan-rates');
+        try {
+            var url = new URL(apiBase, window.location.origin);
+            url.pathname = '/api/home-loan-rates/executive-summary';
+            url.search = '';
+            url.hash = '';
+            return url.toString() + '?window_days=30';
+        } catch (_error) {
+            return window.location.origin + '/api/home-loan-rates/executive-summary?window_days=30';
+        }
+    }
+
     async function loadExecutiveSummary() {
         var statusEl = getStatusEl();
         var container = getContainerEl();
@@ -123,10 +142,18 @@
 
         statusEl.textContent = 'WAIT';
         try {
-            var endpoint = window.location.origin + '/api/home-loan-rates/executive-summary?window_days=30';
-            var res = await fetch(endpoint, { cache: 'no-store' });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            var data = await res.json();
+            var endpoint = executiveSummaryEndpoint();
+            var data = requestJson
+                ? (await requestJson(endpoint, {
+                    requestLabel: 'Executive summary',
+                    timeoutMs: 10000,
+                    retryCount: 1,
+                    retryDelayMs: 700,
+                })).data
+                : await fetch(endpoint, { cache: 'no-store' }).then(function (res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                });
             var sections = Array.isArray(data && data.sections) ? data.sections : [];
             renderSections(pickPrimarySections(sections));
             statusEl.textContent = esc(data.generated_at || 'n/a');
@@ -134,7 +161,7 @@
             statusEl.textContent = 'ERR';
             container.innerHTML = '<p class="exec-empty">Unavailable</p>';
             clientLog('error', 'Executive summary load failed', {
-                message: err && err.message ? err.message : String(err),
+                message: describeError(err, 'Executive summary is temporarily unavailable.'),
             });
         }
     }
