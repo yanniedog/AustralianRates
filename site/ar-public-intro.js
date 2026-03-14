@@ -67,7 +67,7 @@
         return '<a class="buttonish secondary market-intro-nav-link' + (active ? ' is-active' : '') + '" href="' + esc(href) + '"' + (active ? ' aria-current="page"' : '') + '>' + esc(label) + '</a>';
     }
 
-    function stepCard(index, step) {
+    function stepCard(step, index) {
         return '' +
             '<article class="market-intro-step">' +
                 '<span class="market-intro-step-index">0' + (index + 1) + '</span>' +

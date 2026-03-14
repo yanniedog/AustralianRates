@@ -165,6 +165,8 @@ async function verifyHeader(page, results, label, expectedTitle) {
 async function verifyWorkspaceShell(page, results, label) {
     const shell = await page.evaluate(() => ({
         marketTerminal: !!document.querySelector('.market-terminal'),
+        introSteps: Array.from(document.querySelectorAll('.market-intro-step-index')).map((el) => String(el.textContent || '').trim()),
+        hasObjectStringLeak: String(document.body.textContent || '').indexOf('[object Object]') >= 0,
         chartViews: Array.from(document.querySelectorAll('[data-chart-view]')).map((el) => ({
             label: String(el.getAttribute('data-ui-label') || el.textContent || '').trim(),
             hasIcon: !!el.querySelector('.ar-icon'),
@@ -187,6 +189,12 @@ async function verifyWorkspaceShell(page, results, label) {
 
     if (shell.marketTerminal) pass(results, `${label}: market workspace renders`);
     else fail(results, `${label}: market workspace missing`);
+
+    if (shell.introSteps.join(',') === '01,02,03' && !shell.hasObjectStringLeak) {
+        pass(results, `${label}: intro steps render stable numeric badges without object-string leakage`);
+    } else {
+        fail(results, `${label}: intro steps are malformed (${shell.introSteps.join(', ') || 'missing'})`);
+    }
 
     const expectedChartViews = ['Leaders', 'Movement', 'Compare', 'Distribution'];
     const actualChartViews = shell.chartViews.map((view) => view.label);
