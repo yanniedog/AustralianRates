@@ -271,7 +271,7 @@
         var context = getPageContext();
         inner.innerHTML =
             '<div class="site-brand-lockup">' +
-                '<a href="/" class="site-brand-mark" aria-label="AustralianRates home">' + iconOnly('brand', 'AustralianRates home') + '</a>' +
+                '<a href="/" class="site-brand-mark" aria-label="AustralianRates home"><img src="/assets/branding/ar-mark.svg" alt="" class="site-brand-logo"></a>' +
                 '<div class="site-brand-copy">' +
                     '<a href="/" class="site-brand">AustralianRates</a>' +
                     '<span class="site-brand-tagline">' + esc(currentPageLabel(context)) + '</span>' +

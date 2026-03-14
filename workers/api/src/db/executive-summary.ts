@@ -130,6 +130,7 @@ function describeRow(row: GenericChangeRow, dataset: ExecutiveSummarySection['da
 function formatChangeWindow(example: ExecutiveSummaryExample): string {
   const current = String(example.collection_date || '').trim()
   const previous = String(example.previous_collection_date || '').trim()
+  if (previous && current && previous > current) return `${current} -> ${previous}`
   if (previous && previous !== current) return `${previous} -> ${current}`
   if (current) return `through ${current}`
   return 'date unavailable'

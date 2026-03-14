@@ -30,6 +30,39 @@
         return String(value).trim();
     }
 
+    function ymdDate(value) {
+        var raw = asText(value);
+        var match = raw.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+        return match ? (match[1] + '/' + match[2] + '/' + match[3]) : (raw || '-');
+    }
+
+    function dateOnlyKey(value) {
+        var raw = asText(value);
+        var match = raw.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+        return match ? (match[1] + '-' + match[2] + '-' + match[3]) : '';
+    }
+
+    function orderDates(firstValue, secondValue) {
+        var first = ymdDate(firstValue);
+        var second = ymdDate(secondValue);
+        var firstKey = dateOnlyKey(firstValue);
+        var secondKey = dateOnlyKey(secondValue);
+        if (first !== '-' && second !== '-' && firstKey && secondKey && firstKey > secondKey) {
+            return { first: second, second: first };
+        }
+        return { first: first, second: second };
+    }
+
+    function formatChangeWindow(previousValue, currentValue, options) {
+        var settings = options || {};
+        var missingText = asText(settings.missingText) || '-';
+        var throughPrefix = settings.throughPrefix != null ? String(settings.throughPrefix) : 'Through ';
+        var ordered = orderDates(previousValue, currentValue);
+        if (ordered.second === '-') return missingText;
+        if (ordered.first !== '-' && ordered.first !== ordered.second) return ordered.first + ' -> ' + ordered.second;
+        return throughPrefix + ordered.second;
+    }
+
     function toTitleWords(value) {
         return String(value || '')
             .split(' ')
@@ -232,6 +265,9 @@
         pct: pct,
         money: money,
         esc: esc,
+        ymdDate: ymdDate,
+        orderDates: orderDates,
+        formatChangeWindow: formatChangeWindow,
         formatEnum: formatEnum,
         formatDepositTier: formatDepositTier,
         cleanConditionsText: cleanConditionsText,

@@ -10,6 +10,14 @@
     var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
     var bankBrand = window.AR.bankBrand || {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
+    var ymd = utils.ymdDate || function (value) { return String(value == null ? '' : value).trim() || '-'; };
+    var formatChangeWindow = utils.formatChangeWindow || function (previousValue, currentValue) {
+        var previous = ymd(previousValue);
+        var current = ymd(currentValue);
+        if (current === '-') return '-';
+        if (previous !== '-' && previous !== current) return previous + ' -> ' + current;
+        return 'Through ' + current;
+    };
 
     function getStatusEl() {
         return (els && els.rateChangeStatus) || document.getElementById('rate-change-status');
@@ -31,18 +39,12 @@
         return (els && els.rateChangeWarning) || document.getElementById('rate-change-warning');
     }
 
-    function ymd(value) {
-        var raw = String(value == null ? '' : value).trim();
-        var match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        return match ? (match[1] + '/' + match[2] + '/' + match[3]) : (raw || '-');
-    }
-
     function changeWindow(row) {
-        var current = ymd(row.collection_date || row.changed_at);
-        var previous = ymd(row.previous_collection_date || row.previous_changed_at);
-        if (current === '-') return '-';
-        if (previous !== '-' && previous !== current) return previous + ' -> ' + current;
-        return 'Through ' + current;
+        return formatChangeWindow(
+            row.previous_collection_date || row.previous_changed_at,
+            row.collection_date || row.changed_at,
+            { missingText: '-', throughPrefix: 'Through ' }
+        );
     }
 
     function pct(value) {

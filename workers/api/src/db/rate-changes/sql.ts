@@ -43,11 +43,15 @@ function buildNormalizedSelectColumns(config: RateChangeDatasetConfig): string[]
   return Array.from(new Set([...config.keyDimensions, ...config.detailColumns])).filter((column) => !baseColumns.has(column))
 }
 
-export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartDate?: string): CteBuildResult {
+function buildPrefixedSelect(columns: string[], alias: string): string {
+  return columns.map((column) => `${alias}.${column}`).join(',\n        ')
+}
+
+export function buildRateChangeCte(config: RateChangeDatasetConfig): CteBuildResult {
   const selectColumns = buildNormalizedSelectColumns(config)
-  const normalizedSelect = selectColumns.map((column) => `h.${column}`).join(',\n        ')
-  const detailSelect = config.detailSelect.join(',\n        ')
-  const includeWindow = typeof windowStartDate === 'string' && windowStartDate.length > 0
+  const normalizedSelect = buildPrefixedSelect(selectColumns, 'h')
+  const orderedDetailSelect = buildPrefixedSelect(config.detailColumns, 'o')
+  const changedDetailSelect = buildPrefixedSelect(config.detailColumns, 'c')
   const cte = `
     WITH normalized AS (
       SELECT
@@ -71,7 +75,6 @@ export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartD
       WHERE interest_rate BETWEEN ? AND ?
         AND confidence_score >= ?
         AND ${buildPresentKeyClause(config)}
-        ${includeWindow ? 'AND collection_date >= ?' : ''}
     ),
     ordered AS (
       SELECT
@@ -79,39 +82,50 @@ export function buildRateChangeCte(config: RateChangeDatasetConfig, windowStartD
         LAG(i.interest_rate) OVER (
           PARTITION BY i.series_key
           ORDER BY i.collection_date ASC, i.parsed_at ASC
-        ) AS previous_rate,
-        LAG(i.parsed_at) OVER (
-          PARTITION BY i.series_key
-          ORDER BY i.collection_date ASC, i.parsed_at ASC
-        ) AS previous_changed_at,
-        LAG(i.collection_date) OVER (
-          PARTITION BY i.series_key
-          ORDER BY i.collection_date ASC, i.parsed_at ASC
-        ) AS previous_collection_date
+        ) AS prior_snapshot_rate
       FROM included i
     ),
-    changed AS (
+    change_events AS (
       SELECT
         o.parsed_at AS changed_at,
-        o.previous_changed_at,
         o.collection_date,
-        o.previous_collection_date,
         o.bank_name,
         o.product_name,
         o.series_key,
         o.product_key,
-        ${detailSelect},
-        o.previous_rate,
+        ${orderedDetailSelect},
+        o.prior_snapshot_rate AS previous_rate,
         o.interest_rate AS new_rate,
-        ROUND((o.interest_rate - o.previous_rate) * 100, 3) AS delta_bps,
         o.run_source
       FROM ordered o
-      WHERE o.previous_rate IS NOT NULL
-        AND o.interest_rate != o.previous_rate
+      WHERE o.prior_snapshot_rate IS NOT NULL
+        AND o.interest_rate != o.prior_snapshot_rate
+    ),
+    changed AS (
+      SELECT
+        c.changed_at,
+        LAG(c.changed_at) OVER (
+          PARTITION BY c.series_key
+          ORDER BY c.collection_date ASC, c.changed_at ASC
+        ) AS previous_changed_at,
+        c.collection_date,
+        LAG(c.collection_date) OVER (
+          PARTITION BY c.series_key
+          ORDER BY c.collection_date ASC, c.changed_at ASC
+        ) AS previous_collection_date,
+        c.bank_name,
+        c.product_name,
+        c.series_key,
+        c.product_key,
+        ${changedDetailSelect},
+        c.previous_rate,
+        c.new_rate,
+        ROUND((c.new_rate - c.previous_rate) * 100, 3) AS delta_bps,
+        c.run_source
+      FROM change_events c
     )
   `
   const bindings: Array<string | number> = [config.minRate, config.maxRate, config.minConfidence]
-  if (includeWindow && windowStartDate) bindings.push(windowStartDate)
   return { cte, bindings }
 }
 
@@ -119,10 +133,11 @@ export function buildRateChangeCountSql(
   config: RateChangeDatasetConfig,
   windowStartDate?: string,
 ): { sql: string; bindings: Array<string | number> } {
-  const { cte, bindings } = buildRateChangeCte(config, windowStartDate)
+  const includeWindow = typeof windowStartDate === 'string' && windowStartDate.length > 0
+  const { cte, bindings } = buildRateChangeCte(config)
   return {
-    sql: `${cte} SELECT COUNT(*) AS total FROM changed`,
-    bindings,
+    sql: `${cte} SELECT COUNT(*) AS total FROM changed${includeWindow ? ' WHERE collection_date >= ?' : ''}`,
+    bindings: includeWindow && windowStartDate ? [...bindings, windowStartDate] : bindings,
   }
 }
 
@@ -133,15 +148,22 @@ export function buildRateChangeDataSql(
   const maxLimit = Number.isFinite(input.maxLimit) ? Math.max(1, Math.floor(Number(input.maxLimit))) : 1000
   const limit = safeRateChangeLimit(input.limit, 200, maxLimit)
   const offset = safeRateChangeOffset(input.offset)
-  const { cte, bindings } = buildRateChangeCte(config, input.windowStartDate)
+  const includeWindow = typeof input.windowStartDate === 'string' && input.windowStartDate.length > 0
+  const { cte, bindings } = buildRateChangeCte(config)
   return {
     sql: `${cte}
       SELECT *
       FROM changed
+      ${includeWindow ? 'WHERE collection_date >= ?' : ''}
       ORDER BY changed_at DESC
       LIMIT ? OFFSET ?
     `,
-    bindings: [...bindings, limit, offset],
+    bindings: [
+      ...bindings,
+      ...(includeWindow && input.windowStartDate ? [input.windowStartDate] : []),
+      limit,
+      offset,
+    ],
     limit,
     offset,
   }

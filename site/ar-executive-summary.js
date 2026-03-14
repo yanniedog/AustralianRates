@@ -8,6 +8,15 @@
     var esc = window._arEsc || function (v) { return String(v == null ? '' : v); };
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
     var bankBrand = window.AR.bankBrand || {};
+    var ymd = utils.ymdDate || function (value) { return String(value == null ? '' : value).trim() || '-'; };
+    var formatChangeWindow = utils.formatChangeWindow || function (previousValue, currentValue, options) {
+        var settings = options || {};
+        var previous = ymd(previousValue);
+        var current = ymd(currentValue);
+        if (current === '-') return settings.missingText || 'Date unavailable';
+        if (previous !== '-' && previous !== current) return previous + ' -> ' + current;
+        return (settings.throughPrefix != null ? String(settings.throughPrefix) : 'Through ') + current;
+    };
 
     function getStatusEl() {
         return (els && els.executiveSummaryStatus) || document.getElementById('executive-summary-status');
@@ -23,19 +32,12 @@
         return n.toFixed(Number.isFinite(digits) ? digits : 1);
     }
 
-    function ymd(value) {
-        var raw = String(value == null ? '' : value).trim();
-        var match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        return match ? (match[1] + '/' + match[2] + '/' + match[3]) : (raw || '-');
-    }
-
     function changeWindow(example) {
         if (!example) return 'Date unavailable';
-        var current = ymd(example.collection_date);
-        var previous = ymd(example.previous_collection_date);
-        if (current === '-') return 'Date unavailable';
-        if (previous !== '-' && previous !== current) return previous + ' -> ' + current;
-        return 'Through ' + current;
+        return formatChangeWindow(example.previous_collection_date, example.collection_date, {
+            missingText: 'Date unavailable',
+            throughPrefix: 'Through ',
+        });
     }
 
     function standoutText(example, label) {
