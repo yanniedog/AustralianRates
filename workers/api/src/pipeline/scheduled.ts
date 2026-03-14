@@ -4,6 +4,7 @@ import {
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
 import { runCoverageGapAudit } from './coverage-gap-audit'
+import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import type { EnvBindings } from '../types'
@@ -40,6 +41,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
 
   let reconciliation: Awaited<ReturnType<typeof runLifecycleReconciliation>> | null = null
   let coverageAudit: Awaited<ReturnType<typeof runCoverageGapAudit>> | null = null
+  let coverageRemediation: Awaited<ReturnType<typeof runCoverageGapRemediation>> | null = null
   let lenderUniverseAudit: Awaited<ReturnType<typeof runLenderUniverseAudit>> | null = null
   try {
     reconciliation = await runLifecycleReconciliation(env.DB, {
@@ -132,6 +134,24 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   })
   log.info('scheduler', `Rate check run result`, { context: JSON.stringify(result) })
 
+  if (coverageAudit && !coverageAudit.ok) {
+    try {
+      coverageRemediation = await runCoverageGapRemediation(env, {
+        auditReport: coverageAudit,
+        dailyRunResult: result,
+        scopeLimit: 12,
+        replayLimit: 25,
+        persist: true,
+      })
+    } catch (error) {
+      log.error('scheduler', 'Coverage gap auto-remediation failed', {
+        code: 'coverage_slo_breach',
+        error,
+        context: (error as Error)?.message || String(error),
+      })
+    }
+  }
+
   const skipped = (result as { skipped?: unknown }).skipped === true
 
   if (result.ok && !skipped) {
@@ -142,6 +162,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     ...result,
     reconciliation,
     coverageAudit,
+    coverageRemediation,
     lenderUniverseAudit,
     melbourne: melbourneParts,
     intervalMinutes: 0,

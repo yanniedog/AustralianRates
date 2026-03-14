@@ -91,6 +91,29 @@
     white-space: normal;
 }
 
+.admin-status .coverage-gap-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.admin-status .coverage-gap-action-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ar-text-muted);
+    font-size: 0.82rem;
+}
+
+.admin-status .coverage-gap-action-state--failed {
+    color: var(--ar-danger);
+}
+
+.admin-status .coverage-gap-action-state--running {
+    color: var(--ar-warning);
+}
+
 .admin-db #db-grid {
     min-height: 320px;
     border: 1px solid var(--ar-line);

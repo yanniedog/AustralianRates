@@ -17,6 +17,7 @@
     var cdrAuditStatusEl = document.getElementById('cdr-audit-status');
     var cdrAuditOverviewEl = document.getElementById('cdr-audit-overview');
     var cdrAuditWrapEl = document.getElementById('cdr-audit-wrap');
+    var coverageGapRemediationStatusEl = document.getElementById('coverage-gap-remediation-status');
     var coverageGapOverviewEl = document.getElementById('coverage-gap-overview');
     var coverageGapWrapEl = document.getElementById('coverage-gap-wrap');
     var lenderUniverseOverviewEl = document.getElementById('lender-universe-overview');
@@ -268,6 +269,10 @@
     }
 
     function renderCoverageGapAudit(report) {
+        if (coverageGapManager) {
+            coverageGapManager.render(report, latestCoverageGapRemediation);
+            return;
+        }
         if (!report) {
             coverageGapOverviewEl.innerHTML = '';
             coverageGapWrapEl.innerHTML = '<div>No coverage-gap audit report available.</div>';
@@ -302,6 +307,22 @@
             }).join('')
             + '</tbody></table>';
     }
+
+    var latestCoverageGapRemediation = null;
+    var coverageGapManager = window.AR && window.AR.AdminStatusCoverageGaps && typeof window.AR.AdminStatusCoverageGaps.createManager === 'function'
+        ? window.AR.AdminStatusCoverageGaps.createManager({
+            portal: portal,
+            overviewEl: coverageGapOverviewEl,
+            wrapEl: coverageGapWrapEl,
+            remediationStatusEl: coverageGapRemediationStatusEl,
+            datasetLabel: datasetLabel,
+            cardCell: cardCell,
+            esc: esc,
+            refreshCoverage: loadCoverageGapAudit,
+            refreshReplayQueue: loadReplayQueue,
+            refreshStatus: loadStatus
+        })
+        : null;
 
     function renderLenderUniverse(report) {
         if (!report) {
@@ -457,10 +478,15 @@
             var res = await portal.fetchAdmin('/diagnostics/coverage-gaps' + (forceRefresh ? '?refresh=1' : ''), { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            latestCoverageGapRemediation = data.last_remediation || null;
             renderCoverageGapAudit(data.report || null);
         } catch (err) {
+            latestCoverageGapRemediation = null;
             coverageGapOverviewEl.innerHTML = '';
             coverageGapWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+            if (coverageGapRemediationStatusEl) {
+                coverageGapRemediationStatusEl.textContent = 'Failed to load automatic coverage-gap remediation status.';
+            }
         }
     }
 
@@ -530,6 +556,10 @@
     });
     document.addEventListener('click', function (event) {
         var target = event.target;
+        if (coverageGapManager && coverageGapManager.handleClick(target)) {
+            event.preventDefault();
+            return;
+        }
         var button = target && target.closest ? target.closest('.js-payload-link') : null;
         if (!button) return;
         event.preventDefault();

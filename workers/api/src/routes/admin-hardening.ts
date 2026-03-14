@@ -8,6 +8,10 @@ import {
   runCoverageGapAudit,
 } from '../pipeline/coverage-gap-audit'
 import {
+  getCachedCoverageGapRemediationReport,
+  loadCoverageGapRemediationReport,
+} from '../pipeline/coverage-gap-remediation'
+import {
   getCachedLenderUniverseAuditReport,
   loadLenderUniverseAuditReport,
   runLenderUniverseAudit,
@@ -45,6 +49,9 @@ adminHardeningRoutes.get('/diagnostics/coverage-gaps', async (c) => {
   const lenderCode = String(c.req.query('lender_code') || '').trim() || undefined
   const collectionDate = String(c.req.query('collection_date') || '').trim() || undefined
   const limit = Math.max(1, Math.min(500, Math.floor(Number(c.req.query('limit') || 100))))
+  const lastRemediation =
+    getCachedCoverageGapRemediationReport() ||
+    await loadCoverageGapRemediationReport(c.env.DB)
 
   if (c.req.query('dataset') && !dataset) {
     return jsonError(c, 400, 'BAD_REQUEST', 'dataset must be home_loans, savings, or term_deposits')
@@ -61,6 +68,7 @@ adminHardeningRoutes.get('/diagnostics/coverage-gaps', async (c) => {
     return c.json({
       ok: true,
       auth_mode: c.get('adminAuthState')?.mode || null,
+      last_remediation: lastRemediation,
       report: {
         collection_date: collectionDate || null,
         totals: {
@@ -87,6 +95,7 @@ adminHardeningRoutes.get('/diagnostics/coverage-gaps', async (c) => {
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
+    last_remediation: lastRemediation,
     report,
   })
 })
