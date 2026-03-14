@@ -68,8 +68,6 @@
     function showHeroError() {
         setInlineError(els.heroError, 'Overview metrics are temporarily unavailable. Refresh to try again.');
         [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
-        setIntroMetric('updated', 'Unavailable', 'Latest collection could not be loaded.');
-        setIntroMetric('rows', 'Unavailable', 'Slice counts are temporarily unavailable.');
     }
 
     async function loadHeroStats() {
@@ -180,7 +178,6 @@
     async function loadQuickCompare() {
         if (!els.quickCompareCards || !apiBase) {
             if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
-            setIntroMetric('leader', 'Unavailable', 'Current leader data could not be loaded.');
             return;
         }
         try {
@@ -198,15 +195,12 @@
                     ? bankBrand.shortLabel(lead.bank_name)
                     : String(lead.bank_name || '').trim();
                 setIntroMetric('leader', pct(lead.interest_rate), (leadBank || 'Current leader') + ' in the active slice.');
-            } else {
-                setIntroMetric('leader', 'No match', 'Adjust filters to find current leaders.');
             }
         } catch (err) {
             clientLog('error', 'Quick compare load failed', {
                 message: err && err.message ? err.message : String(err),
             });
             if (els.quickCompareCards) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
-            setIntroMetric('leader', 'Unavailable', 'Current leader data could not be loaded.');
         }
     }
 

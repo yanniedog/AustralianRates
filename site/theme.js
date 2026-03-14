@@ -6,15 +6,23 @@
     var boundToggleAttr = 'data-ar-theme-bound';
     var themeTransitionTimer = null;
 
+    function getDefaultTheme() {
+        var path = (typeof window !== 'undefined' && window.location && window.location.pathname)
+            ? String(window.location.pathname).toLowerCase()
+            : '';
+        return path.indexOf('/admin') === 0 ? 'dark' : 'light';
+    }
+
     function normalizeTheme(value) {
         return String(value || '').toLowerCase() === 'light' ? 'light' : 'dark';
     }
 
     function readStoredTheme() {
         try {
-            return normalizeTheme(window.localStorage.getItem(STORAGE_KEY));
+            var stored = window.localStorage.getItem(STORAGE_KEY);
+            return stored ? normalizeTheme(stored) : getDefaultTheme();
         } catch (_err) {
-            return 'dark';
+            return getDefaultTheme();
         }
     }
 

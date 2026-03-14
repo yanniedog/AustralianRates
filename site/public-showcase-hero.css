@@ -1,0 +1,255 @@
+body.ar-public .market-intro {
+    position: relative;
+    display: grid;
+    gap: 20px;
+    margin-bottom: 24px;
+    padding: 22px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--ar-showcase-glow) 88%, transparent), transparent 34%),
+        linear-gradient(135deg, color-mix(in srgb, var(--ar-surface) 98%, transparent), color-mix(in srgb, var(--ar-surface-2) 94%, transparent));
+}
+
+body.ar-public .market-intro::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, transparent 0, transparent 49%, color-mix(in srgb, var(--ar-line) 42%, transparent) 50%, transparent 51%),
+        linear-gradient(180deg, transparent 0, transparent 68%, color-mix(in srgb, var(--ar-line) 38%, transparent) 69%, transparent 70%);
+    pointer-events: none;
+}
+
+body.ar-public .market-intro-grid,
+body.ar-public .market-intro-live-grid,
+body.ar-public .market-intro-proof-grid {
+    display: grid;
+    gap: 14px;
+}
+
+body.ar-public .market-intro-grid {
+    position: relative;
+    z-index: 1;
+    grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+    align-items: stretch;
+}
+
+body.ar-public .market-intro-copy {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+}
+
+body.ar-public .market-intro-title {
+    max-width: 7.2ch;
+    font-family: var(--ar-font-display);
+    font-size: clamp(2.6rem, 5.1vw, 4.9rem);
+    line-height: 0.92;
+    letter-spacing: -0.05em;
+    text-wrap: balance;
+}
+
+body.ar-public .market-intro-summary {
+    max-width: 46ch;
+    color: var(--ar-text-soft);
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+body.ar-public .market-intro-actions,
+body.ar-public .market-intro-principles,
+body.ar-public .market-intro-nav,
+body.ar-public .market-intro-bank-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+body.ar-public .market-intro-actions .buttonish,
+body.ar-public .market-intro-nav-link,
+body.ar-public .market-intro-principle,
+body.ar-public .market-intro-bank-chip {
+    border-radius: 999px;
+}
+
+body.ar-public .market-intro-live-grid,
+body.ar-public .market-intro-proof-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.ar-public .market-intro-live-card,
+body.ar-public .market-intro-step {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--ar-line);
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+}
+
+body.ar-public .market-intro-live-label,
+body.ar-public .market-intro-bank-strip-label,
+body.ar-public .market-intro-step-index {
+    color: var(--ar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+body.ar-public .market-intro-live-card strong,
+body.ar-public .market-intro-signal-title {
+    font-family: var(--ar-font-display);
+    font-size: clamp(1.2rem, 2.2vw, 1.85rem);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+}
+
+body.ar-public .market-intro-live-note,
+body.ar-public .market-intro-step p,
+body.ar-public .market-intro-signal-summary {
+    color: var(--ar-text-soft);
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+body.ar-public .market-intro-signal {
+    display: grid;
+    gap: 16px;
+    padding: 18px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 96%, black 4%), #0a1828);
+    color: #eef4fb;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+body.ar-public .market-intro-signal-title,
+body.ar-public .market-intro-bank-chip .bank-badge-label,
+body.ar-public .market-intro-bank-chip .bank-badge-sub {
+    color: #eef4fb;
+}
+
+body.ar-public .market-intro-signal .eyebrow,
+body.ar-public .market-intro-signal-summary,
+body.ar-public .market-intro-signal .metric-code {
+    color: rgba(226, 236, 246, 0.78);
+}
+
+body.ar-public .market-intro-visual {
+    position: relative;
+    min-height: 180px;
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.12), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+    overflow: hidden;
+}
+
+body.ar-public .market-intro-visual-line,
+body.ar-public .market-intro-visual-dot {
+    position: absolute;
+    display: block;
+}
+
+body.ar-public .market-intro-visual-line {
+    left: 8%;
+    right: 8%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.68), transparent);
+}
+
+body.ar-public .market-intro-visual-line.is-one { top: 28%; transform: rotate(-8deg); }
+body.ar-public .market-intro-visual-line.is-two { top: 52%; transform: rotate(3deg); }
+body.ar-public .market-intro-visual-line.is-three { top: 74%; transform: rotate(-5deg); }
+
+body.ar-public .market-intro-visual-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #f0bf62;
+    box-shadow: 0 0 0 8px rgba(240, 191, 98, 0.14);
+}
+
+body.ar-public .market-intro-visual-dot.is-alpha { top: 24%; left: 22%; }
+body.ar-public .market-intro-visual-dot.is-beta { top: 48%; right: 24%; background: #78a9ff; box-shadow: 0 0 0 8px rgba(120, 169, 255, 0.14); }
+body.ar-public .market-intro-visual-dot.is-gamma { bottom: 18%; left: 46%; background: #93d7c1; box-shadow: 0 0 0 8px rgba(147, 215, 193, 0.12); }
+
+body.ar-public .market-intro-lower {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 14px;
+}
+
+body.ar-public .market-intro-step strong {
+    font-size: 0.98rem;
+}
+
+body.ar-public .market-intro-bank-chip {
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+body.ar-public .market-intro-nav-link {
+    min-height: 42px;
+    padding-inline: 16px;
+    border: 1px solid var(--ar-line);
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+}
+
+body.ar-public .market-intro-nav-link.is-active {
+    border-color: color-mix(in srgb, var(--ar-accent) 34%, transparent);
+    background: color-mix(in srgb, var(--ar-accent-soft) 76%, var(--ar-surface-2));
+}
+
+body.ar-public .market-intro-principle {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--ar-line);
+    background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent);
+}
+
+@media (max-width: 1200px) {
+    body.ar-public .market-intro-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 980px) {
+    body.ar-public .market-intro-live-grid,
+    body.ar-public .market-intro-proof-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    body.ar-public .market-intro-nav,
+    body.ar-public .market-intro-bank-strip {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    body.ar-public .market-intro {
+        padding: 18px;
+    }
+
+    body.ar-public .market-intro-title {
+        max-width: none;
+        font-size: clamp(2.2rem, 12vw, 3.5rem);
+    }
+}
+
+@media (max-width: 560px) {
+    body.ar-public .market-intro-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.ar-public .market-intro-actions .buttonish {
+        width: 100%;
+    }
+}
