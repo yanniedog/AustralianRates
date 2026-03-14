@@ -328,6 +328,17 @@ export function renderMarkdownReport(report: AuditReport): string {
       ]),
     ),
     '',
+    '## Overlap Summary',
+    '',
+    ...tableLine(
+      ['Dataset', 'Overlapping series-dates', 'Conflicting series-dates'],
+      report.overlap_summary.map((row) => [
+        asText(row.dataset),
+        String(asNumber(row.overlapping_series_dates)),
+        String(asNumber(row.overlapping_series_dates_with_conflicts)),
+      ]),
+    ),
+    '',
   ]
   for (const dataset of report.datasets) lines.push(...renderDatasetSection(dataset))
   lines.push(

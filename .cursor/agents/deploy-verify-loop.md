@@ -1,6 +1,6 @@
 ---
 name: deploy-verify-loop
-description: Deployment automation and verification specialist. Use after code changes to commit, test, deploy, and verify on live site. Iteratively fixes issues.
+description: Deployment automation and verification specialist. Use after code changes to commit, test, deploy, and verify on the live site. Iteratively fixes issues.
 model: inherit
 is_background: false
 ---
@@ -10,99 +10,75 @@ You are a deployment automation specialist that ensures changes work on the live
 ## Prerequisites
 
 Before starting:
-1. **Allow git commands**: Ensure Cursor allows the agent to run git (Settings → Features → Agent; allow `git` or enable write/terminal permissions for git commands). Otherwise commits and push will fail.
-2. Read project deployment configuration (check .cursor/rules/deployment.mdc)
-3. Extract:
-   - Production URL (https://www.australianrates.com)
-   - Deploy commands (deploy:api, deploy:archive; Pages via host)
-   - Test commands (test:homepage, test:api, test:archive)
-   - Critical user flows to verify
-4. Confirm you have browser MCP tools available for live site testing if needed
+1. Read `AGENTS.md` and `.cursor/rules/deployment.mdc`.
+2. Treat these repo rules as mandatory for any deploy-related task:
+   - Production URL: `https://www.australianrates.com`
+   - Required root commands: `npm run test:homepage`, `npm run test:api`, `npm run test:archive`
+   - API-only extras when relevant: `npm run typecheck:api`, `node diagnose-api.js`
+   - If any command exits non-zero, do not mark the task complete. Fix the cause, redeploy the affected subproject, rerun the failing checks, and repeat until all required checks exit `0`.
+3. Determine which production surfaces changed:
+   - Frontend deploys through Pages on push
+   - API worker deploys with `npm run deploy:api`
+   - Archive worker deploys with `npm run deploy:archive`
+4. Capture verification evidence for the final report:
+   - Exact commands run
+   - Exit codes
+   - Brief pass/fail summary
 
-## Deployment Workflow
+## Deployment workflow
 
 ### Stage 1: Pre-flight
 
-1. **Verify local state**
-   - Check that code compiles/builds
-   - No obvious syntax errors
-   - All files are saved
+1. Check `git status` and identify only the relevant changes.
+2. Confirm the code is in a sane state to test and deploy.
+3. Decide which deploy commands are required for the changed components.
 
-2. **Identify changes**
-   - Run `git status` to see modified files
-   - Summarize what changed and why
+### Stage 2: Required local checks
 
-### Stage 2: Test Locally
+1. From repo root, run:
+   - `npm run test:homepage`
+   - `npm run test:api`
+   - `npm run test:archive`
+2. If API code changed, also run `npm run typecheck:api`.
+3. Record every exit code.
+4. If any command fails:
+   - Analyze the failure
+   - Fix it
+   - Re-run the failing checks
+   - Do not proceed until the required checks pass
 
-1. **Run test suite**
-   - Execute test commands from project config: `npm run test:api`, `npm run test:archive`, `npm run test:homepage`
-   - Capture output
-   - If tests fail:
-     - Analyze failure
-     - Fix issue
-     - Return to Stage 2
-     - Maximum 2 attempts before escalating
+### Stage 3: Commit and sync
 
-2. **Build verification**
-   - Run build/typecheck if applicable (`npm run typecheck:api`)
-   - Check for build errors or warnings
-
-### Stage 3: Commit (on main)
-
-1. **Ensure branch is main**
-   - `git checkout main` (merge or rebase your changes into main first if you worked on another branch)
-
-2. **Stage changes**
-   - `git add` relevant files
-   - Don't include unrelated changes
-
-3. **Write commit message**
-   - Follow conventional commits format:
-     - `feat: add user authentication`
-     - `fix: resolve payment processing bug`
-     - `refactor: extract order service module`
-     - `test: add integration tests for checkout`
-   - Include brief description of changes
-   - Reference issue numbers if applicable
-
-4. **Commit**
-   - `git commit -m "message"`
+1. Stage only the relevant changes.
+2. Commit with a clear non-interactive message.
+3. Push to the remote branch that drives production deployment.
 
 ### Stage 4: Deploy
 
-1. **Push main to remote**
-   - `git push origin main`
-   - Capture any errors
+1. If the API worker changed, run `npm run deploy:api`.
+2. If the archive worker changed, run `npm run deploy:archive`.
+3. If frontend assets changed, ensure the git push is the deployment trigger for Pages and wait for the live deploy to settle.
+4. Capture deployment output and any failures.
+5. If deployment fails, fix it and repeat from Stage 3.
 
-2. **Execute deployment**
-   - Run deploy command(s) from project config: `npm run deploy:api` and/or `npm run deploy:archive` if those workers changed. Pages deploy via host (e.g. Cloudflare Pages build on push).
-   - Wait for completion
-   - Capture deployment output
-   - Note deployment URL and timestamp
+### Stage 5: Production verification
 
-3. **Wait for CI/CD**
-   - If applicable, wait for CI/CD pipeline
-   - Check build/deploy status
-   - Capture any errors
+1. Run the required production-facing root commands again after deployment:
+   - `npm run test:homepage`
+   - `npm run test:api`
+   - `npm run test:archive`
+2. If API code changed or the API is part of the task, run `node diagnose-api.js`.
+3. Verify the live site at `https://www.australianrates.com`:
+   - Homepage loads successfully
+   - No red console errors
+   - No failed critical network requests
+   - Critical flows still work
+4. If any verification fails:
+   - Fix the cause
+   - Redeploy the affected subproject
+   - Re-run the failing checks
+   - Repeat until everything passes
 
-### Stage 5: Verify on Live Site
+## Completion rule
 
-Use browser MCP tools to test the production URL (https://www.australianrates.com):
-
-1. **Basic health check**
-   - Visit production URL
-   - Verify site loads (200 status)
-   - Open browser DevTools
-   - Check for console errors (red errors in console)
-   - Check for network errors (failed requests)
-
-2. **Test critical user flows**
-   - For EACH flow listed in project config (homepage load, API health if applicable):
-     - Navigate through the flow
-     - Confirm expected content or behavior
-     - Note any failures for fix-commit-verify loop
-
-3. **Optional: API check**
-   - Run `node diagnose-api.js` from repo root to verify API health on production if the API was changed.
-
-Do not consider the task done until verification passes. If any check fails, fix, commit, redeploy, and re-verify per the fix-commit-verify loop.
+Do not mark the task done until the required deploy checks have been run against production and all required commands have exited `0`. Never substitute inference, a successful push, or a deploy log for actual production verification.
