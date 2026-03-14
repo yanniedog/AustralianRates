@@ -73,6 +73,7 @@
             id: 'filter-mode',
             label: 'Data scope',
             icon: 'filter',
+            padGrid: false,
             help: 'Show all rows, daily-only rows, or historical-only rows.',
             options: [
                 { value: 'all', label: 'All rows', selected: true },
@@ -92,6 +93,7 @@
             id: 'refresh-interval',
             label: 'Auto refresh',
             icon: 'refresh',
+            padGrid: false,
             help: 'Auto-refresh interval in minutes. Off disables background refresh.',
             options: [
                 { value: '0', label: 'Off' },
@@ -237,6 +239,14 @@
         return iconText(field.icon || 'filter', field.label || field.code || 'Field', 'field-code');
     }
 
+    function filterPadMarkup(field, label) {
+        return '' +
+            '<div class="filter-pad-shell">' +
+                '<div id="' + field.id + '-pads" class="filter-pad-grid" data-filter-pads-for="' + field.id + '" role="group" aria-label="' + esc(label) + '"></div>' +
+                '<select id="' + field.id + '" class="filter-native-select">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
+            '</div>';
+    }
+
     function fieldMarkup(field) {
         var label = field.label || field.code || 'Field';
         var attrs = helpAttrs(label, field.help);
@@ -252,6 +262,13 @@
                 '<label class="terminal-field"' + attrs + '>' +
                     fieldLabelMarkup(field) +
                     '<input id="' + field.id + '" type="number" step="0.001" min="0" placeholder="' + field.placeholder + '">' +
+                '</label>';
+        }
+        if (field.padGrid !== false) {
+            return '' +
+                '<label class="terminal-field terminal-field-pad"' + attrs + '>' +
+                    fieldLabelMarkup(field) +
+                    filterPadMarkup(field, label) +
                 '</label>';
         }
         return '' +
