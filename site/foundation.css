@@ -20,7 +20,7 @@ body {
     --ar-motion-base: 240ms;
     --ar-motion-slow: 300ms;
     --ar-ease: cubic-bezier(0.22, 1, 0.36, 1);
-    --ar-font-ui: "Space Grotesk", "Segoe UI", sans-serif;
+    --ar-font-ui: "Public Sans", "Segoe UI Variable", "Segoe UI", sans-serif;
     --ar-header-height: 60px;
     --ar-sidebar-width: 268px;
     --ar-admin-sidebar-width: 232px;
@@ -172,7 +172,7 @@ button,
     border-radius: var(--ar-radius-1);
     background: var(--ar-surface-2);
     color: var(--ar-text);
-    font-size: 0.82rem;
+    font-size: 0.86rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     cursor: pointer;
@@ -238,7 +238,7 @@ button.small,
 select.small {
     min-height: 36px;
     padding-inline: 12px;
-    font-size: 0.78rem;
+    font-size: 0.82rem;
 }
 
 button.chip-btn,
@@ -343,7 +343,7 @@ summary {
 .field-help,
 .status-note {
     color: var(--ar-text-muted);
-    font-size: 0.76rem;
+    font-size: 0.8rem;
 }
 
 .mono,
@@ -366,7 +366,7 @@ pre {
     align-items: center;
     gap: 8px;
     color: var(--ar-text-soft);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     line-height: 1.25;
@@ -409,8 +409,9 @@ pre {
 
 .ar-icon-label-text {
     min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
 }
 
 .field-code .ar-icon,
@@ -463,27 +464,31 @@ pre {
 .bank-badge-copy {
     display: inline-grid;
     min-width: 0;
+    gap: 2px;
 }
 
 .bank-badge-label,
 .bank-badge-sub {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
 }
 
 .bank-badge-label {
     color: var(--ar-text);
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    line-height: 1.1;
+    line-height: 1.2;
 }
 
 .bank-badge-sub {
     color: var(--ar-text-muted);
-    font-size: 0.65rem;
-    line-height: 1.1;
+    font-size: 0.7rem;
+    line-height: 1.2;
 }
 
 .bank-badge.is-compact {
@@ -497,7 +502,7 @@ pre {
 }
 
 .bank-badge.is-compact .bank-badge-label {
-    font-size: 0.72rem;
+    font-size: 0.76rem;
 }
 
 .chip,

@@ -7,7 +7,7 @@
     var bankBrand = window.AR.bankBrand || {};
     var DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     var bound = false;
-    var defaultDateStatus = 'YYYY-MM-DD';
+    var defaultDateStatus = 'Choose a date or type YYYY-MM-DD';
     var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
 
     function pad2(value) {
@@ -96,9 +96,18 @@
 
     function bankBadgeMarkup(value) {
         if (bankBrand && typeof bankBrand.badge === 'function') {
-            return bankBrand.badge(value, { compact: true });
+            return bankBrand.badge(value, { showName: true, className: 'bank-option-badge' });
         }
         return '<span class="bank-option-text">' + esc(value || '-') + '</span>';
+    }
+
+    function showNativeDatePicker(input) {
+        if (!input || input.type !== 'date' || typeof input.showPicker !== 'function') return;
+        try {
+            input.showPicker();
+        } catch (_err) {
+            // Some browsers require a narrower user gesture contract. The native input still works.
+        }
     }
 
     function renderBankOptions() {
@@ -287,6 +296,15 @@
     function bindDateControls() {
         [els.filterStartDate, els.filterEndDate].forEach(function (input) {
             if (!input) return;
+            input.addEventListener('click', function () {
+                showNativeDatePicker(input);
+            });
+            input.addEventListener('keydown', function (event) {
+                if (!event) return;
+                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                    showNativeDatePicker(input);
+                }
+            });
             input.addEventListener('blur', function () {
                 validateDateInputs({ focusInvalid: false });
             });

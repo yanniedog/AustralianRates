@@ -151,7 +151,7 @@
 }
 
 .terminal-filter-grid-primary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
 }
 
 .terminal-filter-grid-primary .terminal-field-bank {
@@ -159,7 +159,7 @@
 }
 
 .terminal-filter-grid-advanced {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
     margin-top: 12px;
 }
 
@@ -194,12 +194,16 @@
 }
 
 .terminal-inline-inputs-bank {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+}
+
+.terminal-inline-inputs-bank > input {
+    grid-column: 1 / -1;
 }
 
 .terminal-action-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
 }
 
 .terminal-export-row {
@@ -249,7 +253,7 @@
 
 .bank-picker-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
     gap: 8px;
     max-height: 196px;
     padding: 4px;
@@ -262,13 +266,15 @@
 button.bank-option-card {
     width: 100%;
     min-width: 0;
-    min-height: 42px;
-    padding: 8px 10px;
+    min-height: 56px;
+    padding: 10px 12px;
     border-color: transparent;
     border-radius: 12px;
     background: var(--ar-surface-2) !important;
     color: var(--ar-text) !important;
     justify-content: flex-start;
+    align-items: flex-start;
+    text-align: left;
 }
 
 button.bank-option-card:hover {
@@ -288,10 +294,23 @@ button.bank-option-card.is-selected .bank-badge-sub {
 
 .bank-option-card .bank-badge {
     width: 100%;
+    align-items: flex-start;
 }
 
 .bank-option-card .bank-badge-copy {
     flex: 1 1 auto;
+    gap: 3px;
+}
+
+.bank-option-card .bank-badge-label,
+.bank-option-card .bank-badge-sub {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.bank-option-card .bank-badge-sub {
+    color: var(--ar-text-soft);
 }
 
 .bank-picker-empty {
@@ -309,7 +328,7 @@ button.bank-option-card.is-selected .bank-badge-sub {
 }
 
 .terminal-stat-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .terminal-stat {
@@ -319,10 +338,16 @@ button.bank-option-card.is-selected .bank-badge-sub {
     border: 1px solid var(--ar-line);
     border-radius: 12px;
     background: var(--ar-surface-2);
+    align-content: start;
+    min-width: 0;
 }
 
 .terminal-stat strong {
-    font-size: 0.95rem;
+    font-size: 1rem;
+    line-height: 1.35;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
 }
 
 .terminal-ladder-search {
@@ -558,7 +583,6 @@ button.bank-option-card.is-selected .bank-badge-sub {
 @media (max-width: 980px) {
     .terminal-filter-grid-primary,
     .terminal-filter-grid-advanced,
-    .terminal-stat-grid,
     .terminal-history-grid,
     .terminal-changes-grid {
         grid-template-columns: 1fr;
@@ -566,19 +590,13 @@ button.bank-option-card.is-selected .bank-badge-sub {
 }
 
 @media (max-width: 760px) {
-    .terminal-action-row {
-        grid-template-columns: 1fr;
-    }
-
     .terminal-export-row {
         grid-template-columns: 1fr;
     }
 
-    .terminal-filter-panel .terminal-action-row {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
+    .terminal-action-row,
+    .terminal-filter-panel .terminal-action-row,
     .bank-picker-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
     }
 }

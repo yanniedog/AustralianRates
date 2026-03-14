@@ -7,7 +7,6 @@
 
 .chart-guidance-wrap,
 .chart-summary,
-.terminal-chart-controls,
 .terminal-bottom-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -16,12 +15,14 @@
 }
 
 .terminal-chart-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+    gap: 10px;
     align-items: end;
 }
 
 .terminal-chart-controls .terminal-field {
-    min-width: 96px;
-    flex: 1 1 110px;
+    min-width: 0;
 }
 
 .chart-preset,
@@ -38,6 +39,9 @@
 
 .control-chip-label {
     justify-content: center;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
 }
 
 .control-chip-label .ar-icon {
@@ -214,8 +218,9 @@
 .chart-summary-pill,
 .chart-point-link,
 .chart-spotlight-grid span {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
 }
 
 .chart-spotlight-grid span {
@@ -330,14 +335,13 @@
 }
 
 @media (max-width: 760px) {
-    .terminal-chart-controls,
     .terminal-bottom-tabs {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .terminal-chart-controls .terminal-field {
-        min-width: 0;
+    .terminal-chart-controls {
+        grid-template-columns: 1fr;
     }
 
     .terminal-chart-surface,

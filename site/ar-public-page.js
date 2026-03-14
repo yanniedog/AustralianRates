@@ -337,16 +337,16 @@
                                 iconText('summary', 'Maximum rate', 'field-code'),
                                 '<input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="' + ui.maxRatePlaceholder + '">' +
                             '</label>',
-                            '<label class="terminal-field" data-help="Start date in YYYY-MM-DD format." data-help-label="From date">',
+                            '<label class="terminal-field" data-help="Choose a start date or type YYYY-MM-DD." data-help-label="From date">',
                                 iconText('calendar', 'From date', 'field-code'),
-                                '<input id="filter-start-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD">' +
+                                '<input id="filter-start-date" type="date" autocomplete="off">' +
                             '</label>',
-                            '<label class="terminal-field" data-help="End date in YYYY-MM-DD format." data-help-label="To date">',
+                            '<label class="terminal-field" data-help="Choose an end date or type YYYY-MM-DD." data-help-label="To date">',
                                 iconText('calendar', 'To date', 'field-code'),
-                                '<input id="filter-end-date" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD">' +
+                                '<input id="filter-end-date" type="date" autocomplete="off">' +
                             '</label>',
                         '</div>',
-                        '<p id="filter-date-status" class="field-help">Use YYYY-MM-DD</p>',
+                        '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>',
                         '<div class="terminal-action-row">',
                             '<button id="apply-filters" class="primary" type="button" data-help="Refresh the current slice across the dashboard." data-help-label="Apply filters">' + iconText('apply', 'Apply', 'control-chip-label') + '</button>',
                             '<button id="reset-filters" class="secondary" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>',
