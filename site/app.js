@@ -26,6 +26,12 @@
     var liveApplyTimerId = 0;
     var liveApplyDelayMs = 280;
     var liveApplyInProgress = false;
+    var startupRetryTimerId = 0;
+    var startupRetryAttempts = 0;
+    var maxStartupRetryAttempts = 2;
+    var startupRetryDelayMs = 3500;
+    var hasFiltersReadyOnce = false;
+    var hasExplorerReadyOnce = false;
 
     clientLog('info', 'App init start', {
         section: window.AR.section || 'home-loans',
@@ -55,34 +61,89 @@
         if (els.workspaceStatusRetry) els.workspaceStatusRetry.disabled = !!disableRetry;
     }
 
+    function clearStartupRetryTimer() {
+        if (!startupRetryTimerId) return;
+        window.clearTimeout(startupRetryTimerId);
+        startupRetryTimerId = 0;
+    }
+
+    function maybeCompleteStartupRecovery() {
+        if (!hasFiltersReadyOnce || !hasExplorerReadyOnce) return;
+        clearStartupRetryTimer();
+        startupRetryAttempts = 0;
+    }
+
+    function scheduleStartupRetry(message) {
+        if (startupRetryTimerId) return;
+        if (startupRetryAttempts >= maxStartupRetryAttempts) return;
+        if (hasFiltersReadyOnce && hasExplorerReadyOnce) return;
+
+        startupRetryAttempts += 1;
+        setFilterLiveStatus('Retry queued', 'is-pending');
+        setWorkspaceStatus(
+            'Startup degraded',
+            String(message || 'Startup requests timed out.') + ' Retrying automatically.',
+            'is-warning',
+            false
+        );
+        startupRetryTimerId = window.setTimeout(function () {
+            startupRetryTimerId = 0;
+            retryStartup({ auto: true });
+        }, startupRetryDelayMs);
+    }
+
+    function reloadStartupSurfaces() {
+        if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
+        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
+        if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
+            executiveSummary.loadExecutiveSummary();
+        }
+    }
+
     function handleFilterBootstrapResult(result, successSource, failureSource) {
         var ok = !result || result.ok !== false;
         if (ok) {
+            hasFiltersReadyOnce = true;
             hideWorkspaceStatus();
             setFilterLiveStatus('Live sync on', 'is-live');
+            maybeCompleteStartupRecovery();
             if (!appInitialized) finishAppInit(successSource || 'filters-loaded');
             return;
         }
 
         setFilterLiveStatus('Retry startup', 'is-error');
+        var message = describeError(result.error, 'Filter controls timed out. Rates are still loading with a reduced startup path.');
         setWorkspaceStatus(
             'Startup degraded',
-            describeError(result.error, 'Filter controls timed out. Rates are still loading with a reduced startup path.'),
+            message,
             'is-warning',
             false
         );
+        scheduleStartupRetry(message);
         if (!appInitialized) finishAppInit(failureSource || 'filters-load-failed');
     }
 
-    function retryStartup() {
+    function retryStartup(options) {
+        var opts = options || {};
         if (!filters || !filters.loadFilters) return;
-        setFilterLiveStatus('Retrying filters...', 'is-pending');
-        setWorkspaceStatus('Retrying startup', 'Refreshing filter controls...', 'is-warning', true);
+        clearStartupRetryTimer();
+        setFilterLiveStatus('Retrying startup...', 'is-pending');
+        setWorkspaceStatus(
+            'Retrying startup',
+            opts.auto ? 'Retrying startup automatically...' : 'Refreshing filter controls...',
+            'is-warning',
+            true
+        );
         filters.loadFilters().then(function (result) {
             handleFilterBootstrapResult(result, 'filters-retried', 'filters-retry-failed');
+            reloadStartupSurfaces();
         }).catch(function (error) {
             setFilterLiveStatus('Retry startup', 'is-error');
-            setWorkspaceStatus('Startup degraded', describeError(error, 'Filter controls could not be retried.'), 'is-error', false);
+            var message = describeError(error, 'Filter controls could not be retried.');
+            setWorkspaceStatus('Startup degraded', message, 'is-error', false);
+            reloadStartupSurfaces();
+            scheduleStartupRetry(message);
         });
     }
 
@@ -313,6 +374,17 @@
         if (tabState.chartDrawn && charts && charts.drawChart) {
             charts.drawChart();
         }
+    });
+    window.addEventListener('ar:explorer-state', function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        if (detail.status === 'ready') {
+            hasExplorerReadyOnce = true;
+            maybeCompleteStartupRecovery();
+            return;
+        }
+        if (detail.status !== 'error') return;
+        if (hasFiltersReadyOnce && hasExplorerReadyOnce) return;
+        scheduleStartupRetry(describeError({ userMessage: detail.message }, 'Live rates table could not be loaded.'));
     });
     document.addEventListener('keydown', applyFiltersShortcut);
 
