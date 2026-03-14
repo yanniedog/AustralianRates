@@ -55,16 +55,16 @@ Writing inside the repo is blocked by default. If you intentionally want that be
 
 ## Admin export center vs Wrangler D1 export
 
-- Wrangler D1 export is still the primary disaster-recovery path for an exact database clone.
-- Admin export center downloads are structured JSONL application exports. They are useful for portability and analysis, but they do not include schema creation SQL.
-- See [admin-export-reconstruction.md](admin-export-reconstruction.md) before treating admin exports as restore artifacts.
+- The admin export center now creates one export type only: a full-database `.sql.gz` dump for D1 restore or replacement.
+- The admin UI download is a single file, even if the worker assembles it from multiple stored parts behind the scenes.
+- `wrangler d1 export` remains useful when you want the backup artifact written directly to your own machine outside the admin UI.
 
-## Admin exports vs D1 backups
+## Admin exports vs CLI backups
 
-The admin export center is not the same as a full D1 backup.
+Both paths now target the same operational goal: a restorable SQL dump.
 
-- `wrangler d1 export` is the disaster-recovery path for exact database restore.
-- Admin exports are JSONL application exports for canonical, optimized, and operational data.
-- Admin exports do not include DDL and are not, by themselves, sufficient to recreate the full database from scratch.
+- `npm run backup:api-db` creates the dump locally from the CLI.
+- The admin export center creates the dump through the authenticated admin UI/API.
+- Both should be restored by decompressing to `.sql` and running `wrangler d1 execute --file`.
 
-See `docs/admin-export-api.md` and `docs/admin-export-reconstruction.md`.
+For the admin flow and restore steps, see [admin-export-api.md](admin-export-api.md) and [admin-export-reconstruction.md](admin-export-reconstruction.md).

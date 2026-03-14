@@ -52,32 +52,32 @@ describe('admin download route helpers', () => {
         {
           artifact_id: 'artifact-1',
           job_id: 'job-1',
-          artifact_kind: 'manifest',
-          file_name: 'operational-all-snapshot-manifest.jsonl.gz',
+          artifact_kind: 'main',
+          file_name: 'database-dump-header.sql.gz',
           content_type: 'application/gzip',
-          row_count: 1,
+          row_count: 0,
           byte_size: 512,
           cursor_start: null,
           cursor_end: null,
-          r2_key: 'admin-downloads/job-1/manifest.jsonl.gz',
+          r2_key: 'admin-downloads/job-1/database-dump-header.sql.gz',
           created_at: '2026-03-13T00:00:03.000Z',
         },
       ],
     )
 
     expect(operational.download_path).toBe('/admin/downloads/job-1/download')
-    expect(operational.download_file_name).toBe('operational-all-snapshot.jsonl.gz')
+    expect(operational.download_file_name).toBe('australianrates-database-full-20260313T000000Z.sql.gz')
     expect(operational.artifacts[0]?.download_path).toBe('/admin/downloads/job-1/artifacts/artifact-1/download')
 
-    const canonical = buildAdminDownloadStatusBody(
+    const legacyOperational = buildAdminDownloadStatusBody(
       {
         job_id: 'job-2',
-        stream: 'canonical',
-        scope: 'home_loans',
-        mode: 'delta',
+        stream: 'operational',
+        scope: 'all',
+        mode: 'snapshot',
         format: 'jsonl_gzip',
-        since_cursor: 10,
-        end_cursor: 15,
+        since_cursor: null,
+        end_cursor: null,
         include_payload_bodies: 0,
         status: 'completed',
         requested_at: '2026-03-13T00:00:00.000Z',
@@ -85,10 +85,24 @@ describe('admin download route helpers', () => {
         completed_at: '2026-03-13T00:00:02.000Z',
         error_message: null,
       },
-      [],
+      [
+        {
+          artifact_id: 'artifact-2',
+          job_id: 'job-2',
+          artifact_kind: 'manifest',
+          file_name: 'operational-all-snapshot-manifest.jsonl.gz',
+          content_type: 'application/gzip',
+          row_count: 1,
+          byte_size: 256,
+          cursor_start: null,
+          cursor_end: null,
+          r2_key: 'admin-downloads/job-2/manifest.jsonl.gz',
+          created_at: '2026-03-13T00:00:03.000Z',
+        },
+      ],
     )
 
-    expect(canonical.download_path).toBeNull()
-    expect(canonical.download_file_name).toBeNull()
+    expect(legacyOperational.download_path).toBe('/admin/downloads/job-2/download')
+    expect(legacyOperational.download_file_name).toBe('operational-all-snapshot.jsonl.gz')
   })
 })

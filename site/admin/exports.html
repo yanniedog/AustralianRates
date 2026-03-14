@@ -24,8 +24,8 @@
         <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
         <div class="admin-page-head">
             <p class="eyebrow">Export center</p>
-            <h1>Incremental downloads</h1>
-            <p class="admin-subtitle">Create snapshot and delta packs for canonical, optimized, and operational data.</p>
+            <h1>Full database dump</h1>
+            <p class="admin-subtitle">Create one single-file SQL dump of the entire D1 database for restore or replacement.</p>
         </div>
         <div class="admin-message" id="exports-msg" role="status" aria-live="polite">
             <span class="admin-message-copy" id="exports-msg-copy"></span>
@@ -33,92 +33,29 @@
         </div>
         <div class="export-grid">
             <section class="admin-card">
-                <h2>Canonical data</h2>
-                <p class="hint">Raw historical tables with optional payload-body companion packs.</p>
+                <h2>Restorable D1 dump</h2>
+                <p class="hint">New jobs now build a single `.sql.gz` restore artifact with schema and data. The public download is one file even when the worker assembles it from multiple stored parts behind the scenes.</p>
                 <div class="export-actions">
-                    <label for="canonical-scope">Scope</label>
-                    <select id="canonical-scope">
-                        <option value="all">All datasets</option>
-                        <option value="home_loans">Home loans</option>
-                        <option value="savings">Savings</option>
-                        <option value="term_deposits">Term deposits</option>
-                    </select>
-                    <label for="canonical-since-cursor">Delta since cursor</label>
-                    <div class="export-cursor-input">
-                        <input type="number" id="canonical-since-cursor" min="0" step="1" placeholder="0" aria-describedby="canonical-cursor-hint">
-                        <button type="button" class="secondary" data-action="use-latest-cursor" data-section="canonical">Use latest</button>
-                    </div>
-                    <p class="hint export-cursor-hint" id="canonical-cursor-hint">Change-feed cursor. Use 0 for a full delta, or paste a previous job's end cursor. Saved per section and scope in this browser. <span id="canonical-cursor-state">Loading latest completed cursor...</span></p>
-                    <label><input type="checkbox" id="canonical-payloads"> Include payload bodies</label>
-                    <button type="button" class="primary" data-create-job="canonical:snapshot">Create snapshot</button>
-                    <button type="button" class="secondary" data-create-job="canonical:delta">Create delta</button>
-                    <button type="button" class="secondary" data-refresh-section="canonical">Refresh</button>
+                    <button type="button" class="primary" data-create-job="database-dump">Create full dump</button>
+                    <button type="button" class="secondary" data-refresh-section="database-dump">Refresh</button>
                 </div>
-                <div class="export-summary" id="canonical-summary"></div>
+                <div class="export-restore-note">
+                    <strong>Restore flow</strong>
+                    <p>Download the dump, decompress it to `.sql`, then apply it with Wrangler against a blank or replacement D1 database.</p>
+                    <pre class="export-restore-command">gunzip -c australianrates-database-full.sql.gz &gt; australianrates-database-full.sql
+npx wrangler d1 execute australianrates_api --remote --file ./australianrates-database-full.sql</pre>
+                </div>
+                <div class="export-summary" id="database-dump-summary"></div>
                 <div class="export-history-bar">
-                    <div class="export-history-meta" id="canonical-history">Loading recent jobs...</div>
+                    <div class="export-history-meta" id="database-dump-history">Loading recent jobs...</div>
                     <div class="export-history-actions">
-                        <button type="button" class="secondary" id="canonical-load-more" data-action="load-more" data-section="canonical">Show older</button>
-                        <button type="button" class="secondary" id="canonical-select-visible" data-action="select-visible" data-section="canonical">Select visible</button>
-                        <button type="button" class="secondary" id="canonical-clear-selection" data-action="clear-selection" data-section="canonical">Clear selection</button>
-                        <button type="button" class="secondary" id="canonical-delete-selected" data-action="delete-selected" data-section="canonical">Delete selected</button>
+                        <button type="button" class="secondary" id="database-dump-load-more" data-action="load-more">Show older</button>
+                        <button type="button" class="secondary" id="database-dump-select-visible" data-action="select-visible">Select visible</button>
+                        <button type="button" class="secondary" id="database-dump-clear-selection" data-action="clear-selection">Clear selection</button>
+                        <button type="button" class="secondary" id="database-dump-delete-selected" data-action="delete-selected">Delete selected</button>
                     </div>
                 </div>
-                <div class="export-job-list" id="canonical-jobs"></div>
-            </section>
-
-            <section class="admin-card">
-                <h2>Optimized analytics</h2>
-                <p class="hint">Compact change/event and interval projection packs for charts, history, and pivot queries.</p>
-                <div class="export-actions">
-                    <label for="optimized-scope">Scope</label>
-                    <select id="optimized-scope">
-                        <option value="all">All datasets</option>
-                        <option value="home_loans">Home loans</option>
-                        <option value="savings">Savings</option>
-                        <option value="term_deposits">Term deposits</option>
-                    </select>
-                    <label for="optimized-since-cursor">Delta since cursor</label>
-                    <div class="export-cursor-input">
-                        <input type="number" id="optimized-since-cursor" min="0" step="1" placeholder="0" aria-describedby="optimized-cursor-hint">
-                        <button type="button" class="secondary" data-action="use-latest-cursor" data-section="optimized">Use latest</button>
-                    </div>
-                    <p class="hint export-cursor-hint" id="optimized-cursor-hint">Change-feed cursor. Use 0 for a full delta, or paste a previous job's end cursor. Saved per section and scope in this browser. <span id="optimized-cursor-state">Loading latest completed cursor...</span></p>
-                    <button type="button" class="primary" data-create-job="optimized:snapshot">Create snapshot</button>
-                    <button type="button" class="secondary" data-create-job="optimized:delta">Create delta</button>
-                    <button type="button" class="secondary" data-refresh-section="optimized">Refresh</button>
-                </div>
-                <div class="export-summary" id="optimized-summary"></div>
-                <div class="export-history-bar">
-                    <div class="export-history-meta" id="optimized-history">Loading recent jobs...</div>
-                    <div class="export-history-actions">
-                        <button type="button" class="secondary" id="optimized-load-more" data-action="load-more" data-section="optimized">Show older</button>
-                        <button type="button" class="secondary" id="optimized-select-visible" data-action="select-visible" data-section="optimized">Select visible</button>
-                        <button type="button" class="secondary" id="optimized-clear-selection" data-action="clear-selection" data-section="optimized">Clear selection</button>
-                        <button type="button" class="secondary" id="optimized-delete-selected" data-action="delete-selected" data-section="optimized">Delete selected</button>
-                    </div>
-                </div>
-                <div class="export-job-list" id="optimized-jobs"></div>
-            </section>
-
-            <section class="admin-card">
-                <h2>Operational backup</h2>
-                <p class="hint">Logical full-database snapshot bundle for operational recovery checks. Operational exports always include all user tables and currently support snapshot mode only.</p>
-                <div class="export-actions">
-                    <button type="button" class="primary" data-create-job="operational:snapshot">Create snapshot</button>
-                    <button type="button" class="secondary" data-refresh-section="operational">Refresh</button>
-                </div>
-                <div class="export-summary" id="operational-summary"></div>
-                <div class="export-history-bar">
-                    <div class="export-history-meta" id="operational-history">Loading recent jobs...</div>
-                    <div class="export-history-actions">
-                        <button type="button" class="secondary" id="operational-load-more" data-action="load-more" data-section="operational">Show older</button>
-                        <button type="button" class="secondary" id="operational-select-visible" data-action="select-visible" data-section="operational">Select visible</button>
-                        <button type="button" class="secondary" id="operational-clear-selection" data-action="clear-selection" data-section="operational">Clear selection</button>
-                        <button type="button" class="secondary" id="operational-delete-selected" data-action="delete-selected" data-section="operational">Delete selected</button>
-                    </div>
-                </div>
-                <div class="export-job-list" id="operational-jobs"></div>
+                <div class="export-job-list" id="database-dump-jobs"></div>
             </section>
         </div>
     </main>

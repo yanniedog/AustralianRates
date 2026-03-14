@@ -1,34 +1,13 @@
 import {
-  addAdminDownloadArtifact,
   completeAdminDownloadJob,
   failAdminDownloadJob,
-  listAdminDownloadArtifacts,
-  requeueAdminDownloadJob,
-  type AdminDownloadArtifactKind,
   type AdminDownloadJobRow,
   type AdminDownloadScope,
   type AdminDownloadStream,
 } from '../db/admin-download-jobs'
 import { keyColumnsForTable, streamTables, streamScopeDatasets } from '../db/analytics/download-config'
-import { gzipCompressText } from '../utils/compression'
-import {
-  OPERATIONAL_SNAPSHOT_CHUNKS_PER_PASS,
-  OPERATIONAL_SNAPSHOT_ROW_BATCH_SIZE,
-  isOperationalInternalTable,
-  isProtectedOperationalTableError,
-  listOperationalTables,
-  operationalArtifactTableName,
-  operationalManifestFileName,
-  operationalProgressByTable,
-  operationalSnapshotFileName,
-  operationalSnapshotR2Key,
-} from './admin-download-operational'
-
-type AdminDownloadEnv = {
-  DB: D1Database
-  READ_DB?: D1Database
-  RAW_BUCKET: R2Bucket
-}
+import { type AdminDownloadEnv, writeAdminDownloadArtifact } from './admin-download-artifact-writer'
+import { runDatabaseDumpPass } from './admin-download-dump-builder'
 
 type ChangeFeedRow = {
   cursor_id: number
@@ -45,16 +24,7 @@ type PayloadObjectRow = {
   r2_key: string
 }
 
-const CONTENT_TYPE = 'application/gzip'
 const ROW_BATCH_SIZE = 500
-
-function artifactFileName(job: AdminDownloadJobRow, artifactKind: AdminDownloadArtifactKind): string {
-  return `${job.stream}-${job.scope}-${job.mode}${artifactKind === 'payload_bodies' ? '-payloads' : ''}.jsonl.gz`
-}
-
-function artifactR2Key(jobId: string, artifactKind: AdminDownloadArtifactKind): string {
-  return `admin-downloads/${jobId}/${artifactKind}.jsonl.gz`
-}
 
 function targetDb(env: AdminDownloadEnv, stream: AdminDownloadStream): D1Database {
   return stream === 'optimized' ? env.READ_DB ?? env.DB : env.DB
@@ -72,49 +42,16 @@ async function readAllTableRows(db: D1Database, tableName: string): Promise<Arra
   const rows: Array<Record<string, unknown>> = []
   let offset = 0
   while (true) {
-    let result: D1Result<Record<string, unknown>>
-    try {
-      result = await db
-        .prepare(`SELECT * FROM ${tableName} LIMIT ?1 OFFSET ?2`)
-        .bind(ROW_BATCH_SIZE, offset)
-        .all<Record<string, unknown>>()
-    } catch (error) {
-      if (isOperationalInternalTable(tableName) || isProtectedOperationalTableError(error)) return rows
-      throw error
-    }
+    const result = await db
+      .prepare(`SELECT * FROM ${tableName} LIMIT ?1 OFFSET ?2`)
+      .bind(ROW_BATCH_SIZE, offset)
+      .all<Record<string, unknown>>()
     const chunk = result.results ?? []
     rows.push(...chunk)
     if (chunk.length < ROW_BATCH_SIZE) break
     offset += chunk.length
   }
   return rows
-}
-
-async function readTableRowsChunk(
-  db: D1Database,
-  tableName: string,
-  input: { limit: number; offset: number },
-): Promise<Array<Record<string, unknown>>> {
-  try {
-    const result = await db
-      .prepare(`SELECT * FROM ${tableName} LIMIT ?1 OFFSET ?2`)
-      .bind(input.limit, input.offset)
-      .all<Record<string, unknown>>()
-    return result.results ?? []
-  } catch (error) {
-    if (isOperationalInternalTable(tableName) || isProtectedOperationalTableError(error)) return []
-    throw error
-  }
-}
-
-async function countTableRows(db: D1Database, tableName: string): Promise<number> {
-  try {
-    const result = await db.prepare(`SELECT COUNT(*) AS n FROM ${tableName}`).first<{ n: number }>()
-    return Math.max(0, Number(result?.n ?? 0))
-  } catch (error) {
-    if (isOperationalInternalTable(tableName) || isProtectedOperationalTableError(error)) return 0
-    throw error
-  }
 }
 
 async function readRowByKey(
@@ -240,38 +177,6 @@ async function datasetForPayload(db: D1Database, contentHash: string): Promise<'
   return row?.dataset_kind ?? null
 }
 
-async function writeArtifact(
-  env: AdminDownloadEnv,
-  db: D1Database,
-  job: AdminDownloadJobRow,
-  artifactKind: AdminDownloadArtifactKind,
-  lines: string[],
-  rowCount: number,
-  cursorStart?: number | null,
-  cursorEnd?: number | null,
-  options?: { fileName?: string; r2Key?: string },
-): Promise<void> {
-  const body = `${lines.join('\n')}\n`
-  const compressed = await gzipCompressText(body)
-  const artifactId = crypto.randomUUID()
-  const r2Key = options?.r2Key || artifactR2Key(job.job_id, artifactKind)
-  await env.RAW_BUCKET.put(r2Key, compressed, {
-    httpMetadata: { contentType: CONTENT_TYPE },
-  })
-  await addAdminDownloadArtifact(db, {
-    artifactId,
-    jobId: job.job_id,
-    artifactKind,
-    fileName: options?.fileName || artifactFileName(job, artifactKind),
-    contentType: CONTENT_TYPE,
-    rowCount,
-    byteSize: compressed.byteLength,
-    cursorStart,
-    cursorEnd,
-    r2Key,
-  })
-}
-
 async function buildSnapshotLines(env: AdminDownloadEnv, job: AdminDownloadJobRow): Promise<{ lines: string[]; rowCount: number }> {
   const db = targetDb(env, job.stream)
   const tables = streamTables(job.stream, job.scope)
@@ -296,106 +201,6 @@ async function buildSnapshotLines(env: AdminDownloadEnv, job: AdminDownloadJobRo
   return { lines, rowCount }
 }
 
-async function buildOperationalManifestLines(
-  db: D1Database,
-  job: AdminDownloadJobRow,
-): Promise<{ lines: string[]; rowCount: number }> {
-  const tables = await listOperationalTables(db)
-  const artifacts = await listAdminDownloadArtifacts(db, job.job_id)
-  const parts = artifacts
-    .filter((artifact) => artifact.artifact_kind === 'main')
-    .map((artifact) => ({
-      file_name: artifact.file_name,
-      table: operationalArtifactTableName(artifact.file_name),
-      row_count: artifact.row_count ?? 0,
-      row_start: artifact.cursor_start ?? 0,
-      row_end: artifact.cursor_end ?? 0,
-    }))
-
-  return {
-    lines: [
-      JSON.stringify({
-        record_type: 'manifest',
-        stream: job.stream,
-        scope: job.scope,
-        mode: job.mode,
-        generated_at: new Date().toISOString(),
-        tables,
-        parts,
-      }),
-    ],
-    rowCount: parts.length,
-  }
-}
-
-async function runOperationalSnapshotPass(
-  env: AdminDownloadEnv,
-  job: AdminDownloadJobRow,
-): Promise<{ done: boolean }> {
-  const db = env.DB
-  const tables = await listOperationalTables(db)
-  const artifacts = await listAdminDownloadArtifacts(db, job.job_id)
-  const manifestExists = artifacts.some((artifact) => artifact.artifact_kind === 'manifest')
-  const progress = operationalProgressByTable(artifacts)
-  let chunksProcessed = 0
-
-  for (const tableName of tables) {
-    let offset = progress.get(tableName) ?? 0
-    const totalRows = await countTableRows(db, tableName)
-    if (offset >= totalRows) continue
-
-    while (offset < totalRows && chunksProcessed < OPERATIONAL_SNAPSHOT_CHUNKS_PER_PASS) {
-      const rows = await readTableRowsChunk(db, tableName, {
-        limit: OPERATIONAL_SNAPSHOT_ROW_BATCH_SIZE,
-        offset,
-      })
-      if (rows.length === 0) {
-        offset = totalRows
-        break
-      }
-
-      const nextOffset = offset + rows.length
-      const lines = [
-        JSON.stringify({
-          record_type: 'manifest',
-          stream: job.stream,
-          scope: job.scope,
-          mode: job.mode,
-          generated_at: new Date().toISOString(),
-          table: tableName,
-          row_start: offset,
-          row_end: nextOffset,
-          total_rows: totalRows,
-        }),
-        ...rows.map((row) => JSON.stringify({ record_type: 'upsert', table: tableName, key: buildKey(tableName, row), row })),
-      ]
-
-      const fileName = operationalSnapshotFileName(job, tableName, offset)
-      await writeArtifact(env, db, job, 'main', lines, rows.length, offset, nextOffset, {
-        fileName,
-        r2Key: operationalSnapshotR2Key(job.job_id, fileName),
-      })
-
-      offset = nextOffset
-      chunksProcessed += 1
-      if (chunksProcessed >= OPERATIONAL_SNAPSHOT_CHUNKS_PER_PASS) {
-        await requeueAdminDownloadJob(db, job.job_id)
-        return { done: false }
-      }
-    }
-  }
-
-  if (!manifestExists) {
-    const manifest = await buildOperationalManifestLines(db, job)
-    const fileName = operationalManifestFileName(job)
-    await writeArtifact(env, db, job, 'manifest', manifest.lines, manifest.rowCount, null, null, {
-      fileName,
-      r2Key: operationalSnapshotR2Key(job.job_id, fileName),
-    })
-  }
-
-  return { done: true }
-}
 
 async function buildDeltaLines(env: AdminDownloadEnv, job: AdminDownloadJobRow): Promise<{ lines: string[]; rowCount: number; endCursor: number | null; changes: ChangeFeedRow[] }> {
   const changes = await readChangeFeed(env.DB, {
@@ -477,8 +282,8 @@ async function buildPayloadLines(
 export async function runAdminDownloadJob(env: AdminDownloadEnv, job: AdminDownloadJobRow): Promise<void> {
   try {
     if (job.stream === 'operational' && job.mode === 'snapshot') {
-      const operational = await runOperationalSnapshotPass(env, job)
-      if (!operational.done) return
+      const dump = await runDatabaseDumpPass(env, job)
+      if (!dump.done) return
       await completeAdminDownloadJob(env.DB, { jobId: job.job_id, endCursor: null })
       return
     }
@@ -488,7 +293,7 @@ export async function runAdminDownloadJob(env: AdminDownloadEnv, job: AdminDownl
         ? { kind: 'snapshot' as const, ...(await buildSnapshotLines(env, job)) }
         : { kind: 'delta' as const, ...(await buildDeltaLines(env, job)) }
     const endCursor = main.kind === 'delta' ? main.endCursor : null
-    await writeArtifact(
+    await writeAdminDownloadArtifact(
       env,
       env.DB,
       job,
@@ -500,7 +305,7 @@ export async function runAdminDownloadJob(env: AdminDownloadEnv, job: AdminDownl
     )
     if (job.stream === 'canonical' && job.include_payload_bodies === 1) {
       const payloads = await buildPayloadLines(env, job, main.kind === 'delta' ? main.changes : null)
-      await writeArtifact(
+      await writeAdminDownloadArtifact(
         env,
         env.DB,
         job,

@@ -22,6 +22,12 @@ import { jsonError } from '../utils/http'
 import { scheduleBackgroundTask } from './export-route-utils'
 import { runAdminDownloadJob } from './admin-download-builder'
 import {
+  fullDatabaseDumpFileName,
+  hasSqlDumpArtifacts,
+  listDatabaseDumpTables,
+  sortDatabaseDumpArtifactsForBundle,
+} from './admin-download-dump'
+import {
   adminDownloadStaleBeforeIso,
   listOperationalTables,
   operationalBundleFileName,
@@ -31,8 +37,6 @@ import {
   buildAdminDownloadStatusBody,
   isRetryableAdminDownloadJob,
   MAX_DELETE_JOB_IDS,
-  normalizeAdminDownloadSinceCursor,
-  parseAdminDownloadBoolean,
   parseAdminDownloadJobIds,
   parseAdminDownloadLimit,
   VALID_ADMIN_DOWNLOAD_STATUSES,
@@ -42,6 +46,9 @@ const VALID_STREAMS = new Set<AdminDownloadStream>(['canonical', 'optimized', 'o
 const VALID_SCOPES = new Set<AdminDownloadScope>(['all', 'home_loans', 'savings', 'term_deposits'])
 const VALID_MODES = new Set<AdminDownloadMode>(['snapshot', 'delta'])
 const VALID_STATUSES = new Set<AdminDownloadStatus>(VALID_ADMIN_DOWNLOAD_STATUSES)
+const DATABASE_DUMP_STREAM: AdminDownloadStream = 'operational'
+const DATABASE_DUMP_SCOPE: AdminDownloadScope = 'all'
+const DATABASE_DUMP_MODE: AdminDownloadMode = 'snapshot'
 
 async function continueAdminDownloadIfPending(c: Context<AppContext>, jobId: string): Promise<void> {
   let job = await getAdminDownloadJob(c.env.DB, jobId)
@@ -127,34 +134,46 @@ adminDownloadRoutes.get('/downloads', async (c) => {
 
 adminDownloadRoutes.post('/downloads', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
-  const stream = String(body.stream || '').trim().toLowerCase() as AdminDownloadStream
-  const scope = String(body.scope || 'all').trim().toLowerCase() as AdminDownloadScope
-  const mode = String(body.mode || 'snapshot').trim().toLowerCase() as AdminDownloadMode
-  const sinceCursor = Number(body.since_cursor ?? body.sinceCursor ?? 0)
-  const includePayloadBodies = parseAdminDownloadBoolean(body.include_payload_bodies ?? body.includePayloadBodies)
+  const stream = String(body.stream || DATABASE_DUMP_STREAM).trim().toLowerCase() as AdminDownloadStream
+  const scope = String(body.scope || DATABASE_DUMP_SCOPE).trim().toLowerCase() as AdminDownloadScope
+  const mode = String(body.mode || DATABASE_DUMP_MODE).trim().toLowerCase() as AdminDownloadMode
+  const sinceCursorRaw = body.since_cursor ?? body.sinceCursor
+  const includePayloadBodiesRaw = body.include_payload_bodies ?? body.includePayloadBodies
 
   if (!VALID_STREAMS.has(stream)) {
-    return jsonError(c, 400, 'BAD_REQUEST', 'stream must be canonical, optimized, or operational')
+    return jsonError(c, 400, 'BAD_REQUEST', 'stream must be operational for the full database dump')
   }
   if (!VALID_SCOPES.has(scope)) {
-    return jsonError(c, 400, 'BAD_REQUEST', 'scope must be all, home_loans, savings, or term_deposits')
+    return jsonError(c, 400, 'BAD_REQUEST', 'scope must be all for the full database dump')
   }
   if (!VALID_MODES.has(mode)) {
-    return jsonError(c, 400, 'BAD_REQUEST', 'mode must be snapshot or delta')
+    return jsonError(c, 400, 'BAD_REQUEST', 'mode must be snapshot for the full database dump')
   }
-  if (stream === 'operational' && mode !== 'snapshot') {
-    return jsonError(c, 400, 'BAD_REQUEST', 'operational downloads currently support snapshot mode only')
+  if (stream !== DATABASE_DUMP_STREAM || scope !== DATABASE_DUMP_SCOPE || mode !== DATABASE_DUMP_MODE) {
+    return jsonError(
+      c,
+      400,
+      'BAD_REQUEST',
+      'Admin exports now support one job type only: a full database dump of the whole database.',
+    )
+  }
+  if (sinceCursorRaw != null && String(sinceCursorRaw).trim() !== '' && Number(sinceCursorRaw) !== 0) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'Delta cursors are not supported for the full database dump.')
+  }
+  if (includePayloadBodiesRaw != null && String(includePayloadBodiesRaw).trim() !== '' && String(includePayloadBodiesRaw).trim() !== '0' && String(includePayloadBodiesRaw).trim().toLowerCase() !== 'false') {
+    return jsonError(c, 400, 'BAD_REQUEST', 'Payload-body exports are not supported for the full database dump.')
   }
 
   const jobId = crypto.randomUUID()
+  // The persisted format field is legacy metadata; the actual download file name determines the public artifact type.
   await createAdminDownloadJob(c.env.DB, {
     jobId,
-    stream,
-    scope,
-    mode,
+    stream: DATABASE_DUMP_STREAM,
+    scope: DATABASE_DUMP_SCOPE,
+    mode: DATABASE_DUMP_MODE,
     format: 'jsonl_gzip',
-    sinceCursor: mode === 'delta' ? normalizeAdminDownloadSinceCursor(sinceCursor) : null,
-    includePayloadBodies: stream === 'canonical' && includePayloadBodies,
+    sinceCursor: null,
+    includePayloadBodies: false,
   })
 
   const job = await getAdminDownloadJob(c.env.DB, jobId)
@@ -177,6 +196,9 @@ adminDownloadRoutes.post('/downloads/:jobId/retry', async (c) => {
   }
   if (!isRetryableAdminDownloadJob(job)) {
     return jsonError(c, 400, 'BAD_REQUEST', 'Only failed download jobs can be retried.')
+  }
+  if (job.stream !== DATABASE_DUMP_STREAM || job.mode !== DATABASE_DUMP_MODE || job.scope !== DATABASE_DUMP_SCOPE) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'Only full database dump jobs can be retried.')
   }
 
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, jobId)
@@ -281,16 +303,19 @@ adminDownloadRoutes.get('/downloads/:jobId/download', async (c) => {
     return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
   }
   if (job.stream !== 'operational' || job.mode !== 'snapshot') {
-    return jsonError(c, 400, 'BAD_REQUEST', 'Single-file download is only available for operational snapshots.')
+    return jsonError(c, 400, 'BAD_REQUEST', 'Single-file download is only available for operational dump jobs.')
   }
   if (job.status !== 'completed') {
-    return jsonError(c, 409, 'DOWNLOAD_NOT_READY', 'Operational snapshot is still being prepared.')
+    return jsonError(c, 409, 'DOWNLOAD_NOT_READY', 'The database dump is still being prepared.')
   }
 
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
-  const orderedArtifacts = sortOperationalArtifactsForBundle(await listOperationalTables(c.env.DB), artifacts)
+  const sqlDumpArtifacts = hasSqlDumpArtifacts(artifacts)
+  const orderedArtifacts = sqlDumpArtifacts
+    ? sortDatabaseDumpArtifactsForBundle(await listDatabaseDumpTables(c.env.DB), artifacts)
+    : sortOperationalArtifactsForBundle(await listOperationalTables(c.env.DB), artifacts)
   if (orderedArtifacts.length === 0) {
-    return jsonError(c, 404, 'DOWNLOAD_ARTIFACT_MISSING', 'Operational snapshot parts are missing from storage.')
+    return jsonError(c, 404, 'DOWNLOAD_ARTIFACT_MISSING', 'Database dump parts are missing from storage.')
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -299,7 +324,7 @@ adminDownloadRoutes.get('/downloads/:jobId/download', async (c) => {
         for (const artifact of orderedArtifacts) {
           const object = await c.env.RAW_BUCKET.get(artifact.r2_key)
           if (!object) {
-            throw new Error(`Missing operational snapshot part: ${artifact.file_name}`)
+            throw new Error(`Missing database dump part: ${artifact.file_name}`)
           }
           if (!object.body) {
             controller.enqueue(new Uint8Array(await object.arrayBuffer()))
@@ -323,7 +348,7 @@ adminDownloadRoutes.get('/downloads/:jobId/download', async (c) => {
   return new Response(stream, {
     headers: {
       'Cache-Control': 'no-store',
-      'Content-Disposition': `attachment; filename="${operationalBundleFileName(job)}"`,
+      'Content-Disposition': `attachment; filename="${sqlDumpArtifacts ? fullDatabaseDumpFileName(job) : operationalBundleFileName(job)}"`,
       'Content-Type': 'application/gzip',
     },
   })

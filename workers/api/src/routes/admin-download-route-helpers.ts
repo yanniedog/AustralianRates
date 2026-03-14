@@ -1,4 +1,5 @@
 import type { AdminDownloadArtifactRow, AdminDownloadJobRow } from '../db/admin-download-jobs'
+import { fullDatabaseDumpFileName, hasSqlDumpArtifacts } from './admin-download-dump'
 import { operationalBundleFileName } from './admin-download-operational'
 
 export const DEFAULT_ADMIN_DOWNLOAD_LIMIT = 12
@@ -37,7 +38,11 @@ export function buildAdminDownloadStatusBody(job: AdminDownloadJobRow, artifacts
     job.stream === 'operational' && job.mode === 'snapshot' && job.status === 'completed'
       ? `/admin/downloads/${job.job_id}/download`
       : null
-  const downloadFileName = downloadPath ? operationalBundleFileName(job) : null
+  const downloadFileName = downloadPath
+    ? hasSqlDumpArtifacts(artifacts)
+      ? fullDatabaseDumpFileName(job)
+      : operationalBundleFileName(job)
+    : null
 
   return {
     ok: true,

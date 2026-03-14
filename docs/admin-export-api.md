@@ -2,20 +2,26 @@
 
 The admin export center uses the authenticated admin API under `/api/home-loan-rates/admin/downloads`.
 
+New job creation now supports one export type only:
+
+- A full-database dump of the D1 database
+- Downloaded as one `.sql.gz` file
+- Intended for restore or replacement with `wrangler d1 execute --file`
+
 ## Endpoints
 
 ### `GET /admin/downloads`
 
-Lists jobs for the requested filters.
+Lists recent admin download jobs.
 
 Query params:
 
-- `stream`: `canonical`, `optimized`, or `operational`
-- `scope`: `all`, `home_loans`, `savings`, or `term_deposits`
+- `stream`: optional; existing data may still contain legacy `canonical`, `optimized`, or `operational` jobs
+- `scope`: optional; existing data may still contain legacy scopes
 - `status`: `queued`, `processing`, `completed`, or `failed`
 - `limit`: `1` to `250` (default `12`)
 
-Response:
+Response shape:
 
 ```json
 {
@@ -26,19 +32,19 @@ Response:
       "ok": true,
       "job": {
         "job_id": "uuid",
-        "stream": "canonical",
+        "stream": "operational",
         "scope": "all",
         "mode": "snapshot",
         "status": "completed"
       },
-      "download_path": null,
-      "download_file_name": null,
+      "download_path": "/admin/downloads/uuid/download",
+      "download_file_name": "australianrates-database-full-20260314T010203Z.sql.gz",
       "artifacts": [
         {
           "artifact_id": "uuid",
           "artifact_kind": "main",
-          "file_name": "canonical-all-snapshot.jsonl.gz",
-          "row_count": 123,
+          "file_name": "database-dump-header.sql.gz",
+          "row_count": 0,
           "byte_size": 456,
           "cursor_start": null,
           "cursor_end": null,
@@ -52,54 +58,60 @@ Response:
 
 ### `POST /admin/downloads`
 
-Creates a new export job.
+Creates a new full-database dump job.
 
-Body:
+Accepted body:
 
-- `stream`: required
-- `scope`: optional, defaults to `all`
-- `mode`: `snapshot` or `delta`
-- `since_cursor` or `sinceCursor`: optional non-negative integer for delta jobs
-- `include_payload_bodies` or `includePayloadBodies`: optional boolean, canonical-only
+- Empty object, or
+- `stream: "operational"`, `scope: "all"`, `mode: "snapshot"`
 
-Notes:
+Rejected inputs:
 
-- `operational` currently supports `snapshot` only.
-- `since_cursor` is normalized to a non-negative integer; there is currently no explicit upper bound beyond numeric coercion.
+- `canonical` or `optimized` streams
+- Any delta cursor
+- Payload-body options
+- Any scope other than `all`
+- Any mode other than `snapshot`
 
 Returns `202 Accepted` with the same job/artifact shape used by `GET /admin/downloads/:jobId`.
 
 ### `POST /admin/downloads/:jobId/retry`
 
-Retries a failed job.
+Retries a failed full-database dump job.
 
 Behavior:
 
-- Allowed only when `status === "failed"`.
-- Deletes any stored artifacts for that job from D1 and R2 before re-queueing.
-- Resets the job back to `queued` and immediately attempts to continue processing.
+- Allowed only when `status === "failed"`
+- Allowed only for the full-database dump job shape (`operational` + `all` + `snapshot`)
+- Deletes stored dump parts for that job from D1 and R2 before re-queueing
 
 Returns `202 Accepted` with the current job/artifact status body.
 
 ### `GET /admin/downloads/:jobId`
 
-Returns a single job in the same shape used by list responses.
+Returns one job in the same shape used by list responses.
 
 ### `GET /admin/downloads/:jobId/artifacts/:artifactId/download`
 
-Downloads one artifact as binary content. The response sets:
+Downloads one stored artifact part as binary content.
 
-- `Content-Type` from artifact metadata
-- `Content-Disposition` using the artifact file name
+This is primarily for diagnostics. The admin UI is expected to use the single-file bundle route instead.
 
 ### `GET /admin/downloads/:jobId/download`
 
-Streams a single concatenated `.jsonl.gz` file for completed `operational` snapshot jobs only.
+Streams one concatenated gzip file for completed operational dump jobs.
+
+For new jobs, this is the public single-file SQL dump:
+
+- Filename: `australianrates-database-full-<timestamp>.sql.gz`
+- Contents: SQL DDL + SQL inserts for the D1 database
+
+Legacy operational JSONL bundle jobs can still use the same route until they are deleted.
 
 Returns:
 
-- `400` when the job is not an operational snapshot
-- `409` while the snapshot is still being prepared
+- `400` when the job is not an operational dump job
+- `409` while the dump is still being prepared
 - `404` when the job or required artifacts are missing
 
 ### `DELETE /admin/downloads`
@@ -120,6 +132,19 @@ Limits and behavior:
 - Maximum `100` job ids per request
 - Returns `409` if any requested job is still `queued` or `processing`
 - Deletes both D1 artifact rows and backing R2 objects
+
+## Restore Use
+
+1. Download the `.sql.gz` file from the admin export center.
+2. Decompress it to `.sql`.
+3. Apply it to the target D1 database with Wrangler:
+
+```bash
+gunzip -c australianrates-database-full.sql.gz > australianrates-database-full.sql
+npx wrangler d1 execute australianrates_api --remote --file ./australianrates-database-full.sql
+```
+
+For the most exact clone, create the dump during a quiet period when writes are paused or minimal.
 
 ## Error contract
 
@@ -142,12 +167,5 @@ Common codes:
 - `NOT_FOUND`: missing job or artifact
 - `DOWNLOAD_JOB_MISSING`: job row unexpectedly missing after create/retry
 - `DOWNLOAD_JOBS_ACTIVE`: delete blocked by queued or processing jobs
-- `DOWNLOAD_NOT_READY`: operational bundle requested before completion
+- `DOWNLOAD_NOT_READY`: bundle requested before completion
 - `DOWNLOAD_ARTIFACT_MISSING`: artifact metadata exists but storage object is missing
-
-HTTP usage:
-
-- `400` for validation or state preconditions
-- `404` for missing jobs or artifacts
-- `409` for active-job delete conflicts or bundle-not-ready states
-- `500` for unexpected persistence failures

@@ -1,6 +1,6 @@
 # Admin API Notes
 
-This document covers the authenticated admin download/export surface mounted under `/api/home-loan-rates/admin`.
+This document covers the authenticated admin API surface mounted under `/api/home-loan-rates/admin`.
 
 ## Authentication
 
@@ -8,121 +8,27 @@ This document covers the authenticated admin download/export surface mounted und
 - `Cf-Access-Jwt-Assertion: <jwt>` is accepted when both `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are configured and the JWT verifies against Cloudflare Access.
 - If neither auth path succeeds, the API returns `401` with `code: "UNAUTHORIZED"` and a `details.reason` value such as `admin_token_or_access_jwt_required`, `invalid_bearer_token`, or `invalid_access_jwt`.
 
-## Download Endpoints
+## Download endpoints
 
-### `GET /downloads`
+The admin export center now creates one export type only: a full-database D1 dump delivered as a single `.sql.gz` file.
 
-Lists recent admin download jobs.
+See [admin-export-api.md](admin-export-api.md) for the full request and response contract.
 
-Query params:
+Key points:
 
-- `stream`: optional; `canonical`, `optimized`, or `operational`
-- `scope`: optional; `all`, `home_loans`, `savings`, or `term_deposits`
-- `status`: optional; `queued`, `processing`, `completed`, or `failed`
-- `limit`: optional; clamped to `1..250`, default `12`
+- `POST /downloads` now accepts only the full-database dump job shape.
+- `GET /downloads/:jobId/download` is the public single-file download route.
+- The download is intended to be decompressed and restored with `wrangler d1 execute --file`.
+- Existing legacy operational JSONL bundle jobs can still be downloaded until they are deleted.
 
-Response:
-
-```json
-{
-  "ok": true,
-  "count": 2,
-  "jobs": [
-    {
-      "ok": true,
-      "job": {
-        "job_id": "uuid",
-        "stream": "canonical",
-        "scope": "all",
-        "mode": "snapshot",
-        "format": "jsonl_gzip",
-        "since_cursor": null,
-        "end_cursor": 4123,
-        "include_payload_bodies": 0,
-        "status": "completed",
-        "requested_at": "2026-03-13T00:00:00.000Z",
-        "started_at": "2026-03-13T00:00:01.000Z",
-        "completed_at": "2026-03-13T00:00:30.000Z",
-        "error_message": null
-      },
-      "download_path": null,
-      "download_file_name": null,
-      "artifacts": [
-        {
-          "artifact_id": "uuid",
-          "artifact_kind": "main",
-          "file_name": "canonical-all-snapshot.jsonl.gz",
-          "row_count": 10000,
-          "byte_size": 123456,
-          "cursor_start": 0,
-          "cursor_end": 4123,
-          "download_path": "/admin/downloads/uuid/artifacts/uuid/download"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### `POST /downloads`
-
-Creates a new admin download job.
-
-Body fields:
-
-- `stream`: required; `canonical`, `optimized`, or `operational`
-- `scope`: optional; defaults to `all`
-- `mode`: optional; defaults to `snapshot`; `operational` currently supports `snapshot` only
-- `since_cursor` or `sinceCursor`: optional; normalized to a non-negative integer for `delta`
-- `include_payload_bodies` or `includePayloadBodies`: optional boolean; only applies to canonical jobs
-
-Returns `202` with the same job payload shape shown above.
-
-### `POST /downloads/:jobId/retry`
-
-Retries a failed job in-place.
-
-- Only jobs with `status === "failed"` are accepted.
-- Existing stored artifacts for that job are deleted before the job is reset to `queued`.
-- Returns `202` with the updated job payload.
-
-### `GET /downloads/:jobId`
-
-Returns a single job payload, including artifact metadata and download paths.
-
-### `GET /downloads/:jobId/artifacts/:artifactId/download`
-
-Returns the stored artifact body with the recorded `Content-Type` and an attachment filename.
-
-### `GET /downloads/:jobId/download`
-
-Returns a single gzip stream for completed operational snapshots.
-
-- Only valid for `stream === "operational"` and `mode === "snapshot"`.
-- Returns `409` with `code: "DOWNLOAD_NOT_READY"` until the bundle is complete.
-
-### `DELETE /downloads`
-
-Deletes one or more completed or failed jobs and their stored artifacts.
-
-Body fields:
-
-- `job_ids` or `jobIds`: required array of job ids
-
-Limits and behavior:
-
-- At least one job id is required.
-- The array is capped at `100` unique ids per request.
-- Jobs in `queued` or `processing` state are rejected with `409` and `code: "DOWNLOAD_JOBS_ACTIVE"`.
-
-## Error Codes
+## Error codes
 
 - `UNAUTHORIZED`: auth failed or is missing
-- `BAD_REQUEST`: invalid stream/scope/mode/status, invalid delete payload, non-retryable retry request
+- `BAD_REQUEST`: invalid download shape, invalid delete payload, or non-retryable retry request
 - `NOT_FOUND`: job or artifact id does not exist
 - `DOWNLOAD_JOB_MISSING`: the job disappeared before a success response could be built
 - `DOWNLOAD_JOBS_ACTIVE`: delete request included queued or processing jobs
-- `DOWNLOAD_NOT_READY`: operational bundle requested before completion
+- `DOWNLOAD_NOT_READY`: bundle requested before completion
 - `DOWNLOAD_ARTIFACT_MISSING`: artifact metadata exists but the R2 object is missing
 
 All admin errors use:
@@ -138,13 +44,9 @@ All admin errors use:
 }
 ```
 
-## Operational Notes
+## Operational notes
 
-- Canonical and optimized jobs expose artifact-by-artifact downloads.
-- Operational snapshot jobs expose both part downloads and a single bundle download path when the bundle is ready.
-- Large admin exports are bounded by current row/page guards, but they still consume Worker CPU, D1 reads, R2 operations, and egress.
-- Before expanding export scope or batch size, check the official Cloudflare limits pages:
-  - Workers: https://developers.cloudflare.com/workers/platform/limits/
-  - D1: https://developers.cloudflare.com/d1/platform/limits/
-  - Queues: https://developers.cloudflare.com/queues/platform/limits/
-  - R2: https://developers.cloudflare.com/r2/platform/limits/
+- The admin UI exposes only the single-file full-database dump flow.
+- Under the hood, the worker may assemble the final download from multiple stored gzip parts, but the operator-facing download remains one file.
+- For the most exact restore artifact, create the dump during a quiet period when writes are paused or minimal.
+- The CLI backup path in [backup.md](backup.md) remains available when you want a local operational backup workflow outside the admin UI.
