@@ -11,6 +11,7 @@
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
     var bankBrand = window.AR.bankBrand || {};
     var ymd = utils.ymdDate || function (value) { return String(value == null ? '' : value).trim() || '-'; };
+    var sectionConfig = window.AR.sectionConfig || {};
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
     var describeError = typeof network.describeError === 'function'
         ? network.describeError
@@ -23,6 +24,8 @@
         if (previous !== '-' && previous !== current) return previous + ' -> ' + current;
         return (settings.throughPrefix != null ? String(settings.throughPrefix) : 'Through ') + current;
     };
+    var requestTimeoutMs = Number(sectionConfig.requestTimeoutMs);
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) requestTimeoutMs = 10000;
 
     function getStatusEl() {
         return (els && els.executiveSummaryStatus) || document.getElementById('executive-summary-status');
@@ -126,12 +129,12 @@
         var apiBase = String(config.apiBase || '').trim() || (window.location.origin + '/api/home-loan-rates');
         try {
             var url = new URL(apiBase, window.location.origin);
-            url.pathname = '/api/home-loan-rates/executive-summary';
+            url.pathname = url.pathname.replace(/\/+$/, '') + '/executive-summary';
             url.search = '';
             url.hash = '';
             return url.toString() + '?window_days=30';
         } catch (_error) {
-            return window.location.origin + '/api/home-loan-rates/executive-summary?window_days=30';
+            return String(apiBase).replace(/\/+$/, '') + '/executive-summary?window_days=30';
         }
     }
 
@@ -146,7 +149,7 @@
             var data = requestJson
                 ? (await requestJson(endpoint, {
                     requestLabel: 'Executive summary',
-                    timeoutMs: 10000,
+                    timeoutMs: requestTimeoutMs,
                     retryCount: 1,
                     retryDelayMs: 700,
                 })).data

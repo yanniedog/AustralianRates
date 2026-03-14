@@ -145,6 +145,7 @@
             section: body.getAttribute('data-ar-section') || (window.AR && window.AR.section) || 'home-loans',
             admin: body.classList.contains('ar-admin'),
             legal: body.classList.contains('ar-legal'),
+            notFound: body.classList.contains('ar-not-found') || !!(window.AR && window.AR.routeState && window.AR.routeState.notFound),
         };
     }
 
@@ -155,6 +156,7 @@
     }
 
     function currentPageLabel(context) {
+        if (context.notFound) return 'Not Found';
         if (context.admin) {
             var path = window.location.pathname.toLowerCase();
             if (path.indexOf('/admin/status') >= 0) return 'Status';
@@ -278,7 +280,7 @@
                 '</div>' +
             '</div>' +
             '<div class="site-header-context">' +
-                '<span class="eyebrow">' + esc(context.admin ? 'Admin' : (context.legal ? 'Reference' : 'Markets')) + '</span>' +
+                '<span class="eyebrow">' + esc(context.admin ? 'Admin' : (context.legal ? 'Reference' : (context.notFound ? 'Not found' : 'Markets'))) + '</span>' +
                 '<strong class="site-header-title">' + esc(currentPageLabel(context)) + '</strong>' +
             '</div>' +
             headerActionsMarkup(context);

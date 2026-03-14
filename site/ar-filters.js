@@ -29,6 +29,8 @@
 
     var filterFields = sc.filterFields || [];
     var filterApiMap = sc.filterApiMap || {};
+    var requestTimeoutMs = Number(sc.requestTimeoutMs);
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) requestTimeoutMs = 10000;
     var consumerFilterIds = getConsumerFilterIds();
     var appliedFilterSignature = '';
     var latestFilterPayload = null;
@@ -567,7 +569,7 @@
             var result = requestJson
                 ? await requestJson(apiBase + '/filters', {
                     requestLabel: 'Filter controls',
-                    timeoutMs: 10000,
+                    timeoutMs: requestTimeoutMs,
                     retryCount: 0,
                     retryDelayMs: 700,
                 })

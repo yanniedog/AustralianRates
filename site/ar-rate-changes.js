@@ -11,6 +11,9 @@
     var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
     var bankBrand = window.AR.bankBrand || {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
+    var sectionConfig = window.AR.sectionConfig || {};
+    var requestTimeoutMs = Number(sectionConfig.requestTimeoutMs);
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) requestTimeoutMs = 10000;
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
     var describeError = typeof network.describeError === 'function'
         ? network.describeError
@@ -140,7 +143,7 @@
             var data = requestJson
                 ? (await requestJson(apiBase + '/changes?limit=200&offset=0', {
                     requestLabel: 'Recent changes',
-                    timeoutMs: 10000,
+                    timeoutMs: requestTimeoutMs,
                     retryCount: 1,
                     retryDelayMs: 700,
                 })).data

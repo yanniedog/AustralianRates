@@ -8,6 +8,7 @@ const testUrlObj = new URL(TEST_URL);
 const baseOrigin = testUrlObj.origin;
 const sharedParams = new URLSearchParams(testUrlObj.search || '');
 const isProductionUrl = /^https:\/\/www\.australianrates\.com\/?/i.test(TEST_URL);
+const INVALID_ROUTE_PATH = '/does-not-exist';
 const CLARITY_PROJECT_ID = 'vt4vtenviy';
 const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 const REQUIRED_HEADERS = ['Found at', 'Headline Rate', 'Bank', 'Product Code', 'Rate Confirmed', 'URLs'];
@@ -244,6 +245,8 @@ async function verifyClarityPresent(page, results, label) {
 
     if (state.hasApi && state.scriptId === 'ar-clarity-tag' && state.scriptSrc === CLARITY_SRC && state.matchingScripts === 1) {
         pass(results, `${label}: Clarity bootstrap is present with the enforced project id`);
+    } else if (!isProductionUrl) {
+        warn(results, `${label}: Clarity bootstrap is not enforced on local/non-production test URLs`);
     } else {
         fail(results, `${label}: Clarity bootstrap missing or incorrect (id="${state.scriptId}", src="${state.scriptSrc}", count=${state.matchingScripts})`);
     }
@@ -266,6 +269,35 @@ async function verifyHeroStats(page, results, label) {
         pass(results, `${label}: summary stats loaded`);
     } else {
         fail(results, `${label}: summary stats incomplete (${stats.join(' | ') || 'none'})`);
+    }
+}
+
+async function verifyNoPrimaryMobileHostArtifacts(page, results, label) {
+    const state = await page.evaluate(() => {
+        const switchLinks = Array.from(document.querySelectorAll('a[href]')).map((el) => ({
+            text: String(el.textContent || '').replace(/\s+/g, ' ').trim(),
+            href: String(el.getAttribute('href') || '').trim(),
+        })).filter((link) => {
+            return /^MOB$/i.test(link.text)
+                || /^Mobile site$/i.test(link.text)
+                || /(^|\/\/)m\.australianrates\.com/i.test(link.href);
+        });
+        const alternateLinks = Array.from(document.querySelectorAll('link[rel="alternate"][href]')).map((el) => String(el.getAttribute('href') || '').trim())
+            .filter((href) => /(^|\/\/)m\.australianrates\.com/i.test(href));
+        return {
+            switchLinks,
+            alternateLinks,
+        };
+    }).catch(() => ({
+        switchLinks: [],
+        alternateLinks: [],
+    }));
+
+    if (state.switchLinks.length === 0 && state.alternateLinks.length === 0) {
+        pass(results, `${label}: primary host does not expose dead mobile-host links`);
+    } else {
+        const details = state.switchLinks.map((link) => `${link.text || 'link'} -> ${link.href}`).concat(state.alternateLinks);
+        fail(results, `${label}: dead mobile-host links still exposed (${details.join(' | ')})`);
     }
 }
 
@@ -293,6 +325,32 @@ async function verifyExplorerTable(page, results, label, expectComparisonRate) {
     else fail(results, `${label}: explorer table did not render rows or a placeholder`);
 
     verifyHeaders(results, label, table.headers, expectComparisonRate);
+}
+
+async function verifyStartupSettled(page, results, label) {
+    await page.waitForFunction(() => {
+        const workspace = document.getElementById('workspace-status');
+        const liveStatus = String(document.getElementById('filter-live-status')?.textContent || '').trim();
+        return liveStatus === 'Live sync on' && (!workspace || workspace.hidden);
+    }, null, { timeout: 20000 }).catch(() => null);
+
+    const state = await page.evaluate(() => ({
+        liveStatus: String(document.getElementById('filter-live-status')?.textContent || '').trim(),
+        workspaceHidden: !!document.getElementById('workspace-status')?.hidden,
+        workspaceTitle: String(document.getElementById('workspace-status-title')?.textContent || '').trim(),
+        workspaceMessage: String(document.getElementById('workspace-status-message')?.textContent || '').trim(),
+    })).catch(() => ({
+        liveStatus: '',
+        workspaceHidden: false,
+        workspaceTitle: '',
+        workspaceMessage: '',
+    }));
+
+    if (state.liveStatus === 'Live sync on' && state.workspaceHidden) {
+        pass(results, `${label}: startup settles without a visible degraded state`);
+    } else {
+        fail(results, `${label}: startup did not settle cleanly (live="${state.liveStatus}", status="${state.workspaceTitle}", message="${state.workspaceMessage}")`);
+    }
 }
 
 async function verifyBankBadgeLogos(page, results, label) {
@@ -739,6 +797,7 @@ async function verifyLegalPages(page, results) {
         const url = withSharedQuery(legal.path);
         await gotoPublic(page, url);
         await verifyClarityPresent(page, results, legal.name);
+        await verifyNoPrimaryMobileHostArtifacts(page, results, legal.name);
         const state = await page.evaluate(() => ({
             title: document.title,
             body: String(document.body.textContent || '').replace(/\s+/g, ' ').trim(),
@@ -758,6 +817,54 @@ async function verifyLegalPages(page, results) {
             }
         }
     }
+}
+
+async function verifyNotFoundRoute(page, results) {
+    const url = withSharedQuery(INVALID_ROUTE_PATH, '/api/home-loan-rates');
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForSelector('#main-content', { timeout: 15000 });
+    await page.waitForSelector('.site-header .site-brand', { timeout: 15000 });
+    await page.waitForFunction(() => {
+        return document.body.classList.contains('ar-not-found')
+            && !!document.querySelector('.missing-route-panel')
+            && String(document.title || '').trim() === 'Page not found | AustralianRates';
+    }, null, { timeout: 15000 }).catch(() => null);
+
+    const state = await page.evaluate(() => ({
+        title: String(document.title || '').trim(),
+        eyebrow: String(document.querySelector('.site-header .eyebrow')?.textContent || '').trim(),
+        headerTitle: String(document.querySelector('.site-header .site-header-title')?.textContent || '').trim(),
+        heading: String(document.querySelector('.missing-route-panel h2')?.textContent || '').trim(),
+        subtitle: String(document.querySelector('.missing-route-panel .subtitle')?.textContent || '').trim(),
+        bodyClass: document.body.classList.contains('ar-not-found'),
+        robots: String(document.querySelector('meta[name="robots"]')?.getAttribute('content') || '').trim(),
+    })).catch(() => ({
+        title: '',
+        eyebrow: '',
+        headerTitle: '',
+        heading: '',
+        subtitle: '',
+        bodyClass: false,
+        robots: '',
+    }));
+
+    if (
+        state.bodyClass
+        && state.title === 'Page not found | AustralianRates'
+        && state.eyebrow === 'Not found'
+        && state.headerTitle === 'Not Found'
+        && state.heading === 'Page not found.'
+        && /not available on AustralianRates/i.test(state.subtitle)
+        && /noindex/i.test(state.robots)
+    ) {
+        pass(results, 'Invalid route: not-found page renders with dedicated copy and metadata');
+    } else {
+        fail(results, `Invalid route: not-found experience is incomplete (title="${state.title}", eyebrow="${state.eyebrow}", heading="${state.heading}")`);
+    }
+
+    const status = response ? response.status() : 0;
+    if (status === 404) pass(results, 'Invalid route: HTTP status is 404');
+    else fail(results, `Invalid route: expected HTTP 404 but received ${status || 'no response'}`);
 }
 
 async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
@@ -783,9 +890,11 @@ async function verifySectionSmoke(page, results, section) {
     await gotoPublic(page, url);
     await verifyClarityPresent(page, results, section.name);
     await verifyHeader(page, results, section.name, section.name);
+    await verifyNoPrimaryMobileHostArtifacts(page, results, section.name);
     await verifyWorkspaceShell(page, results, section.name);
-    await verifyHeroStats(page, results, section.name);
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
+    await verifyHeroStats(page, results, section.name);
+    await verifyStartupSettled(page, results, section.name);
     await verifyFooterDeployStatus(page, results, section.name);
     await verifyFooterLogControls(page, results, section.name);
     await verifyFooterLegalLinks(page, results, section.name);
@@ -843,9 +952,11 @@ async function runTests() {
         await verifySkipLink(page, results, 'Homepage');
         await verifyClarityPresent(page, results, 'Homepage');
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
+        await verifyNoPrimaryMobileHostArtifacts(page, results, 'Homepage');
         await verifyWorkspaceShell(page, results, 'Homepage');
-        await verifyHeroStats(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
+        await verifyHeroStats(page, results, 'Homepage');
+        await verifyStartupSettled(page, results, 'Homepage');
         await verifyBankBadgeLogos(page, results, 'Homepage');
         await verifyFooterDeployStatus(page, results, 'Homepage');
         await verifyFooterLogControls(page, results, 'Homepage');
@@ -874,6 +985,7 @@ async function runTests() {
         }
 
         await verifyLegalPages(page, results);
+        await verifyNotFoundRoute(page, results);
         await verifyRuntimeHealth(results, requestFailures, pageErrors);
     } catch (error) {
         fail(results, `fatal error during testing: ${error.message}`);

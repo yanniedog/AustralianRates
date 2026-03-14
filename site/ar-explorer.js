@@ -9,6 +9,7 @@
     var utils = window.AR.utils;
     var network = window.AR.network || {};
     var timeUtils = window.AR.time || {};
+    var sectionConfig = window.AR.sectionConfig || {};
     var els = dom && dom.els ? dom.els : {};
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var isAnalystMode = state && typeof state.isAnalystMode === 'function'
@@ -34,6 +35,8 @@
     var bankBrand = window.AR.bankBrand || {};
     var section = window.AR.section || (window.location.pathname.indexOf('/savings') !== -1 ? 'savings' : window.location.pathname.indexOf('/term-deposits') !== -1 ? 'term-deposits' : 'home-loans');
     var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
+    var requestTimeoutMs = Number(sectionConfig.requestTimeoutMs);
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) requestTimeoutMs = 10000;
     var ORDER_FIRST = ['found_at', 'comparison_rate', 'interest_rate', 'bank_name'];
     var ORDER_LAST = ['rate_confirmed_at', 'urls'];
     var WAYBACK_PREFIX = 'https://web.archive.org/web/*/';
@@ -942,7 +945,7 @@
             var filterRequest = requestJson
                 ? requestJson(apiBase + '/filters', {
                     requestLabel: 'Explorer filter metadata',
-                    timeoutMs: 10000,
+                    timeoutMs: requestTimeoutMs,
                     retryCount: 0,
                     retryDelayMs: 700,
                 }).then(function (result) { return result.data; })
@@ -994,7 +997,7 @@
                         headers: ajaxConfig && ajaxConfig.headers ? ajaxConfig.headers : undefined,
                         cache: 'no-store',
                         requestLabel: 'Live rates table',
-                        timeoutMs: 10000,
+                        timeoutMs: requestTimeoutMs,
                         retryCount: 0,
                         retryDelayMs: 700,
                     }).then(function (result) {

@@ -8,9 +8,12 @@
     var utils = window.AR.utils || {};
     var network = window.AR.network || {};
     var timeUtils = window.AR.time || {};
+    var sectionConfig = window.AR.sectionConfig || {};
     var section = window.AR.section || 'home-loans';
     var els = dom && dom.els ? dom.els : {};
     var apiBase = config && config.apiBase ? config.apiBase : '';
+    var requestTimeoutMs = Number(sectionConfig.requestTimeoutMs);
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) requestTimeoutMs = 10000;
     var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var pct = utils.pct || function (v) { var n = Number(v); return Number.isFinite(n) ? n.toFixed(3) + '%' : '-'; };
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
@@ -215,7 +218,7 @@
             var data = requestJson
                 ? (await requestJson(apiBase + '/latest?' + new URLSearchParams(params).toString(), {
                     requestLabel: 'Leaders rail',
-                    timeoutMs: 10000,
+                    timeoutMs: requestTimeoutMs,
                     retryCount: 1,
                     retryDelayMs: 700,
                 })).data

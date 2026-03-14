@@ -18,6 +18,7 @@
     }
 
     function enhanceHeader() {
+        if (!variant.hasCounterpartHost) return;
         var actions = document.querySelector('.site-header-actions');
         if (!actions || actions.querySelector('.site-host-switch')) return;
         actions.insertBefore(
@@ -31,6 +32,7 @@
     }
 
     function enhanceFooter() {
+        if (!variant.hasCounterpartHost) return;
         var meta = document.querySelector('.site-footer-meta');
         if (!meta || meta.querySelector('.footer-host-switch')) return;
         meta.appendChild(

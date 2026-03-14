@@ -2,6 +2,7 @@
     'use strict';
 
     var section = (window.AR && window.AR.section) || document.body.getAttribute('data-ar-section') || 'home-loans';
+    var routeState = (window.AR && window.AR.routeState) || {};
     var root = document.getElementById('ar-section-root');
     if (!root) return;
 
@@ -39,6 +40,60 @@
     var iconText = typeof uiIcons.text === 'function' ? uiIcons.text : fallbackText;
     var panelIcon = typeof uiIcons.panel === 'function' ? uiIcons.panel : fallbackPanel;
     var iconOnly = typeof uiIcons.icon === 'function' ? uiIcons.icon : fallbackIcon;
+
+    function setMeta(selector, attr, value) {
+        var el = document.querySelector(selector);
+        if (!el || value == null) return;
+        el.setAttribute(attr, String(value));
+    }
+
+    function ensureMeta(name) {
+        var el = document.querySelector('meta[name="' + name + '"]');
+        if (el) return el;
+        el = document.createElement('meta');
+        el.setAttribute('name', name);
+        document.head.appendChild(el);
+        return el;
+    }
+
+    function applyNotFoundDocumentState() {
+        document.title = 'Page not found | AustralianRates';
+        document.body.classList.add('ar-not-found');
+        ensureMeta('description').setAttribute('content', 'The requested AustralianRates page could not be found.');
+        ensureMeta('robots').setAttribute('content', 'noindex');
+        setMeta('link[rel="canonical"]', 'href', window.location.href);
+        setMeta('meta[property="og:title"]', 'content', 'Page not found | AustralianRates');
+        setMeta('meta[property="og:description"]', 'content', 'The requested AustralianRates page could not be found.');
+        setMeta('meta[property="og:url"]', 'content', window.location.href);
+    }
+
+    function renderNotFound() {
+        var requestedPath = routeState.normalizedPath || window.location.pathname || '/';
+        root.innerHTML = '' +
+            '<section class="panel legal-hero missing-route-panel" aria-label="Page not found">' +
+                '<div class="legal-hero-copy">' +
+                    '<p class="eyebrow">404</p>' +
+                    '<h2>Page not found.</h2>' +
+                    '<p class="subtitle">The page you requested is not available on AustralianRates.</p>' +
+                    '<div class="legal-badge-row">' +
+                        '<span class="legal-badge">Requested path: ' + esc(requestedPath) + '</span>' +
+                        '<span class="legal-badge">Use the links below to keep exploring</span>' +
+                    '</div>' +
+                    '<div class="market-intro-actions">' +
+                        '<a class="buttonish primary" href="/">Home loans</a>' +
+                        '<a class="buttonish secondary" href="/savings/">Savings</a>' +
+                        '<a class="buttonish secondary" href="/term-deposits/">Term deposits</a>' +
+                        '<a class="buttonish secondary" href="/about/">About</a>' +
+                    '</div>' +
+                '</div>' +
+            '</section>';
+    }
+
+    if (routeState.notFound) {
+        applyNotFoundDocumentState();
+        renderNotFound();
+        return;
+    }
 
     var BASE_CHART_TYPES = [
         { value: 'scatter', label: 'Line chart', selected: true },

@@ -15,6 +15,7 @@
     var hero = window.AR.hero;
     var utils = window.AR.utils || {};
     var network = window.AR.network || {};
+    var routeState = (window.AR && window.AR.routeState) || {};
     var clientLog = utils.clientLog || function () {};
     var describeError = typeof network.describeError === 'function'
         ? network.describeError
@@ -37,6 +38,13 @@
         section: window.AR.section || 'home-loans',
         activeTab: tabState.activeTab || 'explorer',
     });
+
+    if (routeState.notFound) {
+        clientLog('info', 'Skipping app init for not-found route', {
+            path: routeState.normalizedPath || window.location.pathname || '/',
+        });
+        return;
+    }
 
     function setFilterLiveStatus(text, tone) {
         if (!els.filterLiveStatus) return;
@@ -67,29 +75,47 @@
         startupRetryTimerId = 0;
     }
 
-    function maybeCompleteStartupRecovery() {
-        if (!hasFiltersReadyOnce || !hasExplorerReadyOnce) return;
-        clearStartupRetryTimer();
-        startupRetryAttempts = 0;
-    }
-
-    function scheduleStartupRetry(message) {
-        if (startupRetryTimerId) return;
-        if (startupRetryAttempts >= maxStartupRetryAttempts) return;
-        if (hasFiltersReadyOnce && hasExplorerReadyOnce) return;
-
-        startupRetryAttempts += 1;
-        setFilterLiveStatus('Retry queued', 'is-pending');
+    function showStartupDegraded(message, tone) {
+        setFilterLiveStatus('Retry startup', 'is-error');
         setWorkspaceStatus(
             'Startup degraded',
-            String(message || 'Startup requests timed out.') + ' Retrying automatically.',
+            String(message || 'Some controls are taking longer than expected.'),
+            tone === 'is-error' ? 'is-error' : 'is-warning',
+            false
+        );
+    }
+
+    function showStartupRetryPending() {
+        setFilterLiveStatus(appInitialized ? 'Retry queued' : 'Retrying startup...', 'is-pending');
+        setWorkspaceStatus(
+            'Retrying startup',
+            'Some controls are taking longer than expected. Retrying automatically.',
             'is-warning',
             false
         );
+    }
+
+    function maybeCompleteStartupRecovery() {
+        if (!hasFiltersReadyOnce || !hasExplorerReadyOnce) return false;
+        clearStartupRetryTimer();
+        startupRetryAttempts = 0;
+        hideWorkspaceStatus();
+        setFilterLiveStatus('Live sync on', 'is-live');
+        return true;
+    }
+
+    function scheduleStartupRetry(_message) {
+        if (startupRetryTimerId) return true;
+        if (startupRetryAttempts >= maxStartupRetryAttempts) return false;
+        if (hasFiltersReadyOnce && hasExplorerReadyOnce) return false;
+
+        startupRetryAttempts += 1;
+        showStartupRetryPending();
         startupRetryTimerId = window.setTimeout(function () {
             startupRetryTimerId = 0;
             retryStartup({ auto: true });
         }, startupRetryDelayMs);
+        return true;
     }
 
     function reloadStartupSurfaces() {
@@ -105,22 +131,22 @@
         var ok = !result || result.ok !== false;
         if (ok) {
             hasFiltersReadyOnce = true;
-            hideWorkspaceStatus();
-            setFilterLiveStatus('Live sync on', 'is-live');
-            maybeCompleteStartupRecovery();
             if (!appInitialized) finishAppInit(successSource || 'filters-loaded');
+            else if (!maybeCompleteStartupRecovery() && startupRetryAttempts > 0 && !hasExplorerReadyOnce) {
+                showStartupRetryPending();
+            } else if (startupRetryAttempts === 0) {
+                hideWorkspaceStatus();
+                setFilterLiveStatus('Live sync on', 'is-live');
+            }
             return;
         }
 
-        setFilterLiveStatus('Retry startup', 'is-error');
         var message = describeError(result.error, 'Filter controls timed out. Rates are still loading with a reduced startup path.');
-        setWorkspaceStatus(
-            'Startup degraded',
-            message,
-            'is-warning',
-            false
-        );
-        scheduleStartupRetry(message);
+        if (scheduleStartupRetry(message)) {
+            if (!appInitialized) finishAppInit((failureSource || 'filters-load-failed') + '-pending');
+            return;
+        }
+        showStartupDegraded(message, 'is-warning');
         if (!appInitialized) finishAppInit(failureSource || 'filters-load-failed');
     }
 
@@ -139,11 +165,11 @@
             handleFilterBootstrapResult(result, 'filters-retried', 'filters-retry-failed');
             reloadStartupSurfaces();
         }).catch(function (error) {
-            setFilterLiveStatus('Retry startup', 'is-error');
             var message = describeError(error, 'Filter controls could not be retried.');
-            setWorkspaceStatus('Startup degraded', message, 'is-error', false);
             reloadStartupSurfaces();
-            scheduleStartupRetry(message);
+            if (!scheduleStartupRetry(message)) {
+                showStartupDegraded(message, 'is-error');
+            }
         });
     }
 
@@ -251,7 +277,9 @@
             executiveSummary.loadExecutiveSummary();
         }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
-        if (String(source || '').indexOf('failed') >= 0) setFilterLiveStatus('Retry startup', 'is-error');
+        var sourceText = String(source || '');
+        if (sourceText.indexOf('pending') >= 0) showStartupRetryPending();
+        else if (sourceText.indexOf('failed') >= 0) setFilterLiveStatus('Retry startup', 'is-error');
         else setFilterLiveStatus('Live sync on', 'is-live');
 
         clientLog('info', 'App init complete', {
@@ -384,7 +412,10 @@
         }
         if (detail.status !== 'error') return;
         if (hasFiltersReadyOnce && hasExplorerReadyOnce) return;
-        scheduleStartupRetry(describeError({ userMessage: detail.message }, 'Live rates table could not be loaded.'));
+        var message = describeError({ userMessage: detail.message }, 'Live rates table could not be loaded.');
+        if (!scheduleStartupRetry(message)) {
+            showStartupDegraded(message, 'is-warning');
+        }
     });
     document.addEventListener('keydown', applyFiltersShortcut);
 
@@ -399,8 +430,12 @@
             clientLog('error', 'App init failed while loading filters', {
                 message: describeError(err, 'Filter controls could not be loaded.'),
             });
-            setFilterLiveStatus('Retry startup', 'is-error');
-            setWorkspaceStatus('Startup degraded', describeError(err, 'Filter controls could not be loaded.'), 'is-error', false);
+            var message = describeError(err, 'Filter controls could not be loaded.');
+            if (scheduleStartupRetry(message)) {
+                finishAppInit('filters-load-pending');
+                return;
+            }
+            showStartupDegraded(message, 'is-error');
             finishAppInit('filters-load-failed');
         });
     } else {

@@ -3,14 +3,40 @@
     window.AR = window.AR || {};
 
     var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
-    var sectionFromPath = (path.indexOf('/savings') !== -1) ? 'savings' : (path.indexOf('/term-deposits') !== -1) ? 'term-deposits' : null;
     var bodyEl = (typeof document !== 'undefined' && document.body) ? document.body : null;
+
+    function normalizePath(value) {
+        var next = String(value || '').trim() || '/';
+        next = next.replace(/\/{2,}/g, '/');
+        if (next !== '/' && !/\.[a-z0-9]+$/i.test(next) && next.charAt(next.length - 1) !== '/') {
+            next += '/';
+        }
+        return next;
+    }
+
+    var normalizedPath = normalizePath(path);
+    var publicSectionByPath = {
+        '/': 'home-loans',
+        '/index.html': 'home-loans',
+        '/savings/': 'savings',
+        '/savings/index.html': 'savings',
+        '/term-deposits/': 'term-deposits',
+        '/term-deposits/index.html': 'term-deposits',
+    };
+    var sectionFromPath = publicSectionByPath[normalizedPath] || null;
     var sectionFromBody = bodyEl ? bodyEl.getAttribute('data-ar-section') : null;
     var section = sectionFromBody || window.AR_SECTION || sectionFromPath || 'home-loans';
+    var routeState = {
+        path: path,
+        normalizedPath: normalizedPath,
+        publicRouteSection: sectionFromPath,
+        notFound: !!(bodyEl && bodyEl.classList.contains('ar-public') && !sectionFromPath),
+    };
 
     var sections = {
         'home-loans': {
             apiPath: '/api/home-loan-rates',
+            requestTimeoutMs: 15000,
             heroEyebrow: 'Australian Home Loan Rate Tracker',
             heroHeading: 'Compare mortgage rates from major banks',
             heroSubtitle: 'Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart rates across all collection dates.',
@@ -48,6 +74,7 @@
         },
         'savings': {
             apiPath: '/api/savings-rates',
+            requestTimeoutMs: 15000,
             heroEyebrow: 'Australian Savings Rate Tracker',
             heroHeading: 'Compare savings rates from major banks',
             heroSubtitle: 'Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart savings rates across all banks.',
@@ -77,6 +104,7 @@
         },
         'term-deposits': {
             apiPath: '/api/term-deposit-rates',
+            requestTimeoutMs: 15000,
             heroEyebrow: 'Australian Term Deposit Rate Tracker',
             heroHeading: 'Compare term deposit rates from major banks',
             heroSubtitle: 'Updated daily from official Consumer Data Right (CDR) feeds. Explore, pivot, and chart term deposit rates.',
@@ -107,6 +135,7 @@
     };
 
     window.AR.section = section;
+    window.AR.routeState = routeState;
     window.AR.sectionConfig = sections[section] || sections['home-loans'];
     window.AR.allSections = sections;
 })();

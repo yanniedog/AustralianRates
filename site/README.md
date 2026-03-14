@@ -30,9 +30,9 @@ Local API testing still depends on the API worker allowing the origin in CORS.
 
 ## Responsive Rules
 
-- `760px` is the primary breakpoint used by the admin layout, `mobile-host.css`, and mobile-host switching logic.
-- Keep `site-variant.js`, `mobile-host.css`, and the canonical/alternate `m.australianrates.com` links in sync when changing responsive behavior.
-- Routing for the `m.` host is handled outside this folder, so document deployment changes whenever host behavior changes.
+- `760px` is the primary breakpoint used by the admin layout and public responsive styles.
+- The public site is responsive on the primary host. Do not add `m.australianrates.com` alternates or host-switch UI unless that host is actually deployed again.
+- `site-variant.js` still preserves desktop/mobile counterpart behavior when a page is already being served from an `m.` host.
 
 ## Accessibility and Async States
 
