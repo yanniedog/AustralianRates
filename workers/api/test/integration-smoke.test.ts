@@ -59,6 +59,7 @@ describe('api route integration smoke', () => {
       '/api/home-loan-rates/admin/runs',
       '/api/home-loan-rates/admin/downloads',
       '/api/home-loan-rates/admin/downloads/test-job/download',
+      '/api/home-loan-rates/admin/downloads/test-job/restore/analysis',
       '/api/home-loan-rates/admin/analytics/projections/diagnostics',
     ]) {
       const { status, json } = await fetchJson(endpoint)
@@ -126,5 +127,24 @@ describe('api route integration smoke', () => {
     expect(response.status).toBe(401)
     expect(json.ok).toBe(false)
     expect(json.error?.code).toBe('UNAUTHORIZED')
+  })
+
+  it('requires authentication for admin download restore endpoints', async () => {
+    const fetchHandler = worker.fetch?.bind(worker)
+    if (!fetchHandler) throw new Error('worker fetch handler is missing')
+    for (const request of [
+      new Request('https://example.com/api/home-loan-rates/admin/downloads/test-job/restore/analysis'),
+      new Request('https://example.com/api/home-loan-rates/admin/downloads/test-job/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      }),
+    ]) {
+      const response = await fetchHandler(request as unknown as Request<unknown, IncomingRequestCfProperties<unknown>>, makeEnv(), makeExecutionContext())
+      const json = (await response.json()) as { ok?: boolean; error?: { code?: string } }
+      expect(response.status).toBe(401)
+      expect(json.ok).toBe(false)
+      expect(json.error?.code).toBe('UNAUTHORIZED')
+    }
   })
 })

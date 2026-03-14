@@ -41,9 +41,8 @@
                 </div>
                 <div class="export-restore-note">
                     <strong>Restore flow</strong>
-                    <p>Download the dump, decompress it to `.sql`, then apply it with Wrangler against a blank or replacement D1 database.</p>
-                    <pre class="export-restore-command">gunzip -c australianrates-database-full.sql.gz &gt; australianrates-database-full.sql
-npx wrangler d1 execute australianrates_api --remote --file ./australianrates-database-full.sql</pre>
+                    <p>Use <strong>Analyze restore</strong> and <strong>Restore this dump</strong> to repair the current D1 database in place. For a blank or replacement D1 database, download the dump and run the import script below.</p>
+                    <pre class="export-restore-command">node scripts/import-d1-backup.js --db australianrates_api --input ./australianrates-database-full.sql.gz --remote</pre>
                 </div>
                 <div class="export-summary" id="database-dump-summary"></div>
                 <div class="export-history-bar">

@@ -65,6 +65,7 @@ Both paths now target the same operational goal: a restorable SQL dump.
 
 - `npm run backup:api-db` creates the dump locally from the CLI.
 - The admin export center creates the dump through the authenticated admin UI/API.
-- Both should be restored by decompressing to `.sql` and running `wrangler d1 execute --file`.
+- The admin UI can also analyze and restore a completed dump back into the current database in place.
+- For blank or replacement databases, use `node scripts/import-d1-backup.js --db <name> --input <dump.sql.gz>`.
 
 For the admin flow and restore steps, see [admin-export-api.md](admin-export-api.md) and [admin-export-reconstruction.md](admin-export-reconstruction.md).

@@ -17,6 +17,9 @@
         loading: false,
         renderKey: '',
         selection: Object.create(null),
+        restoreAnalysis: Object.create(null),
+        analysisBusy: Object.create(null),
+        restoreBusy: Object.create(null),
         summaryEl: document.getElementById('database-dump-summary'),
         historyEl: document.getElementById('database-dump-history'),
         loadMoreBtn: document.getElementById('database-dump-load-more'),
@@ -47,6 +50,15 @@
         });
         Object.keys(section.selection).forEach(function (jobId) {
             if (!visible[jobId]) delete section.selection[jobId];
+        });
+        Object.keys(section.restoreAnalysis).forEach(function (jobId) {
+            if (!visible[jobId]) delete section.restoreAnalysis[jobId];
+        });
+        Object.keys(section.analysisBusy).forEach(function (jobId) {
+            if (!visible[jobId]) delete section.analysisBusy[jobId];
+        });
+        Object.keys(section.restoreBusy).forEach(function (jobId) {
+            if (!visible[jobId]) delete section.restoreBusy[jobId];
         });
     }
 
@@ -124,6 +136,68 @@
         await loadSection();
     }
 
+    function restoreSummaryText(analysis) {
+        var restoreRows = Number(analysis && analysis.impact && analysis.impact.rows_to_restore || 0);
+        var removeRows = Number(analysis && analysis.impact && analysis.impact.rows_to_remove || 0);
+        return 'rows to restore ' + restoreRows.toLocaleString() + ', rows to remove ' + removeRows.toLocaleString();
+    }
+
+    async function analyzeRestore(jobId, suppressMessage) {
+        var payload;
+        section.analysisBusy[jobId] = true;
+        preserveWindowScroll(function () { renderSection(true); });
+        try {
+            payload = await requestJson('/downloads/' + encodeURIComponent(jobId) + '/restore/analysis');
+            section.restoreAnalysis[jobId] = payload.analysis || null;
+            if (!suppressMessage && payload.analysis) {
+                showMsg((payload.analysis.ready ? 'Restore analysis ready: ' : 'Restore analysis blocked: ') + restoreSummaryText(payload.analysis), !payload.analysis.ready);
+            }
+            return payload.analysis || null;
+        } catch (error) {
+            if (error && error.details && error.details.analysis) section.restoreAnalysis[jobId] = error.details.analysis;
+            if (!suppressMessage) showMsg(error && error.message ? error.message : 'Failed to analyze restore.', true);
+            throw error;
+        } finally {
+            delete section.analysisBusy[jobId];
+            preserveWindowScroll(function () { renderSection(true); });
+        }
+    }
+
+    async function restoreJob(jobId) {
+        var analysis = section.restoreAnalysis[jobId] || await analyzeRestore(jobId, true);
+        var payload;
+        var prompt;
+        if (!analysis || analysis.ready !== true) {
+            showMsg('Restore is blocked. Review the latest analysis on this job card.', true);
+            return;
+        }
+        prompt = 'Restore this dump into the current database?\n\n'
+            + 'This will overwrite the current D1 state using the selected dump.\n'
+            + 'Review summary: ' + restoreSummaryText(analysis);
+        if (analysis.requires_force) prompt += '\n\nWarnings were found. Proceed only if you want the dump to replace missing or obsolete data.';
+        if (!confirm(prompt)) return;
+
+        section.restoreBusy[jobId] = true;
+        preserveWindowScroll(function () { renderSection(true); });
+        try {
+            payload = await requestJson('/downloads/' + encodeURIComponent(jobId) + '/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true })
+            });
+            section.restoreAnalysis[jobId] = payload.analysis || null;
+            showMsg('Database restore completed. Verified ' + String(payload.restore && payload.restore.verified_tables || 0) + ' table(s).', false);
+            await loadSection();
+        } catch (error) {
+            if (error && error.details && error.details.analysis) section.restoreAnalysis[jobId] = error.details.analysis;
+            showMsg(error && error.message ? error.message : 'Failed to restore dump.', true);
+            throw error;
+        } finally {
+            delete section.restoreBusy[jobId];
+            preserveWindowScroll(function () { renderSection(true); });
+        }
+    }
+
     function selectVisible() {
         section.entries.forEach(function (entry) {
             var job = entry && entry.job ? entry.job : null;
@@ -187,6 +261,8 @@
         }).catch(function (error) {
             showMsg(error && error.message ? error.message : 'Failed to download dump.', true);
         });
+        if (action === 'analyze-restore') analyzeRestore(target.getAttribute('data-job-id') || '', false).catch(function () {});
+        if (action === 'restore-job') restoreJob(target.getAttribute('data-job-id') || '').catch(function () {});
     }
 
     function handleChange(event) {

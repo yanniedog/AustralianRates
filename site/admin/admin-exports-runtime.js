@@ -37,7 +37,12 @@
         return portal.fetchAdmin(path, options).then(function (response) {
             return response.json().catch(function () { return {}; }).then(function (payload) {
                 if (!response.ok || !payload || payload.ok !== true) {
-                    throw new Error(payload && payload.error && payload.error.message ? payload.error.message : ('Request failed (' + response.status + ')'));
+                    var error = new Error(payload && payload.error && payload.error.message ? payload.error.message : ('Request failed (' + response.status + ')'));
+                    if (payload && payload.error) {
+                        error.code = payload.error.code || '';
+                        error.details = payload.error.details;
+                    }
+                    throw error;
                 }
                 return payload;
             });

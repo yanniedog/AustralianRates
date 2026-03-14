@@ -91,6 +91,10 @@
         return fileName.endsWith('.jsonl.gz');
     }
 
+    function isRestorableDump(entry, job) {
+        return !!entry && !!job && String(job.status || '') === 'completed' && !isLegacyBundle(entry);
+    }
+
     function jobArtifactSummary(job, artifacts) {
         var parts = [];
         if (!artifacts.length) {
@@ -107,6 +111,11 @@
     function statusBadge(job) {
         var status = String(job && job.status || 'unknown');
         return '<span class="export-status export-status--' + escapeHtml(status) + '">' + escapeHtml(status) + '</span>';
+    }
+
+    function restoreStatusBadge(analysis) {
+        var status = analysis && analysis.ready ? (analysis.requires_force ? 'review' : 'ready') : 'blocked';
+        return '<span class="export-status export-status--restore-' + escapeHtml(status) + '">' + escapeHtml(status) + '</span>';
     }
 
     function renderJobMeta(job, timeUtils) {
@@ -135,10 +144,36 @@
             + '</div>';
     }
 
-    function renderJobActions(job) {
-        var html = '<button type="button" class="secondary" data-action="poll-job" data-job-id="' + escapeHtml(job.job_id || '') + '">Poll</button>';
+    function renderRestorePanel(section, entry, job) {
+        var analysis = section.restoreAnalysis[String(job && job.job_id || '')];
+        var firstMessage = '';
+        var missingTables = 0;
+        var extraTables = 0;
+        if (!analysis) return '';
+        if (Array.isArray(analysis.errors) && analysis.errors.length) firstMessage = analysis.errors[0];
+        if (!firstMessage && Array.isArray(analysis.warnings) && analysis.warnings.length) firstMessage = analysis.warnings[0];
+        missingTables = analysis.target && Array.isArray(analysis.target.missing_tables) ? analysis.target.missing_tables.length : 0;
+        extraTables = analysis.target && Array.isArray(analysis.target.extra_tables) ? analysis.target.extra_tables.length : 0;
+        return ''
+            + '<div class="export-restore-panel">'
+            + '  <div class="export-restore-head"><strong>Restore analysis</strong>' + restoreStatusBadge(analysis) + '</div>'
+            + '  <div class="export-download-copy">Rows to restore: ' + escapeHtml(formatInteger(analysis.impact && analysis.impact.rows_to_restore)) + ' | Rows to remove: ' + escapeHtml(formatInteger(analysis.impact && analysis.impact.rows_to_remove)) + ' | Missing tables: ' + escapeHtml(formatInteger(missingTables)) + ' | Extra tables: ' + escapeHtml(formatInteger(extraTables)) + '</div>'
+            + (firstMessage ? '<div class="export-download-copy">' + escapeHtml(firstMessage) + '</div>' : '')
+            + (!analysis.ready ? '<div class="export-download-copy">Fix the blocked conditions before restoring this dump.</div>' : analysis.requires_force ? '<div class="export-download-copy">This dump is restorable, but it will overwrite the current database state and asks for confirmation.</div>' : '<div class="export-download-copy">This dump can be restored into the current database without any additional warnings.</div>')
+            + '</div>';
+    }
+
+    function renderJobActions(section, entry, job) {
+        var jobId = escapeHtml(job.job_id || '');
+        var analyzeBusy = !!section.analysisBusy[String(job.job_id || '')];
+        var restoreBusy = !!section.restoreBusy[String(job.job_id || '')];
+        var html = '<button type="button" class="secondary" data-action="poll-job" data-job-id="' + jobId + '">Poll</button>';
         if (String(job.status || '') === 'failed') {
-            html += '<button type="button" class="secondary" data-action="retry-job" data-job-id="' + escapeHtml(job.job_id || '') + '">Retry</button>';
+            html += '<button type="button" class="secondary" data-action="retry-job" data-job-id="' + jobId + '">Retry</button>';
+        }
+        if (isRestorableDump(entry, job)) {
+            html += '<button type="button" class="secondary" data-action="analyze-restore" data-job-id="' + jobId + '"' + (analyzeBusy || restoreBusy ? ' disabled' : '') + '>' + (analyzeBusy ? 'Analyzing...' : 'Analyze restore') + '</button>';
+            html += '<button type="button" class="secondary" data-action="restore-job" data-job-id="' + jobId + '"' + (restoreBusy ? ' disabled' : '') + '>' + (restoreBusy ? 'Restoring...' : 'Restore this dump') + '</button>';
         }
         return html;
     }
@@ -158,8 +193,9 @@
             + '  <div class="export-job-meta">' + renderJobMeta(job, timeUtils) + '</div>'
             + '  <div class="export-job-artifact-summary">' + escapeHtml(jobArtifactSummary(job, artifacts)) + '</div>'
             + (job.error_message ? '<div class="export-job-error">Error: ' + escapeHtml(job.error_message) + '</div>' : '')
-            + '  <div class="export-job-actions">' + renderJobActions(job) + '</div>'
+            + '  <div class="export-job-actions">' + renderJobActions(section, entry, job) + '</div>'
             + renderDownloadPanel(entry, job, artifacts)
+            + renderRestorePanel(section, entry, job)
             + '</div>';
     }
 
@@ -210,6 +246,7 @@
     window.AR.AdminExportsView = {
         hasPendingEntries: hasPendingEntries,
         isJobSelectable: isJobSelectable,
+        isRestorableDump: isRestorableDump,
         renderHistory: renderHistory,
         renderJobs: renderJobs,
         renderSummary: renderSummary,

@@ -17,26 +17,31 @@ The dump excludes internal SQLite and Cloudflare tables such as `sqlite_%` and `
 
 ## Restore workflow
 
-1. Download the dump from the admin export center.
-2. Decompress it to a `.sql` file.
-3. Apply it to the target D1 database.
+### Repair the current database in place
 
-Example:
+1. Create or select a completed dump job in the admin export center.
+2. Run `Analyze restore`.
+3. Confirm the reported missing rows, obsolete rows, and any blocked conditions.
+4. Run `Restore this dump` once the analysis is ready.
+
+The restore path drops the current D1 schema and data, replays the dump, and verifies the restored row counts against the dump metadata.
+
+### Import into a blank or replacement database
+
+1. Download the dump from the admin export center.
+2. Run the import script against the target D1 database.
 
 ```bash
-gunzip -c australianrates-database-full.sql.gz > australianrates-database-full.sql
-npx wrangler d1 execute australianrates_api --remote --file ./australianrates-database-full.sql
+node scripts/import-d1-backup.js --db australianrates_api --input ./australianrates-database-full.sql.gz --remote
 ```
 
 ## Replace an existing corrupted database
 
-The dump includes `DROP ... IF EXISTS` statements before recreating objects and loading data.
+The admin restore path and the CLI import path are intended for different operator situations:
 
-That means the same file can be used to:
-
-- Restore into a blank database
-- Replace an existing corrupted database
-- Rebuild a stale database with the contents captured in the dump
+- Use the admin restore path when the current database is still reachable and you want the worker to analyze missing or obsolete data first.
+- Use the CLI import path when you are restoring into a blank database, a replacement D1 database, or a disaster-recovery target outside the current admin worker.
+- Both paths replay the same single-file dump artifact.
 
 ## Consistency note
 

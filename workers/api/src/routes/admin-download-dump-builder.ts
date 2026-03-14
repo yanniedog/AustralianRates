@@ -16,35 +16,9 @@ import {
   isProtectedDatabaseDumpTableError,
   listDatabaseDumpTables,
 } from './admin-download-dump'
-type SchemaObjectType = 'table' | 'index' | 'trigger' | 'view'
-type SchemaObject = {
-  type: SchemaObjectType
-  name: string
-  tbl_name: string
-  sql: string
-}
-type TableSchema = {
-  name: string
-  sql: string
-}
-
-type DatabaseSchema = {
-  tables: TableSchema[]
-  indexes: SchemaObject[]
-  triggers: SchemaObject[]
-  views: SchemaObject[]
-}
-
-type TableColumnRow = {
-  cid: number
-  name: string
-}
+import { countTableRows, quoteSqlIdentifier, readDatabaseSchema, readTableColumns, type DatabaseSchema, type SchemaObject } from './admin-download-schema'
 
 const INSERT_ROWS_PER_STATEMENT = 50
-
-function quoteSqlIdentifier(value: string): string {
-  return `"${String(value || '').replace(/"/g, '""')}"`
-}
 
 function sqlComment(value: string): string {
   return `-- ${String(value || '').trim()}`
@@ -127,49 +101,28 @@ function secondarySchemaLines(label: string, objects: SchemaObject[]): string[] 
   return objects.map((object) => withTrailingSemicolon(object.sql)).filter(Boolean)
 }
 
-async function readDatabaseSchema(db: D1Database): Promise<DatabaseSchema> {
-  const result = await db
-    .prepare(
-      `SELECT type, name, tbl_name, sql
-       FROM sqlite_master
-       WHERE sql IS NOT NULL
-         AND type IN ('table', 'index', 'trigger', 'view')
-         AND name NOT LIKE 'sqlite_%'
-         AND name NOT LIKE '_cf_%'
-       ORDER BY type ASC, name ASC`,
-    )
-    .all<SchemaObject>()
-
-  const rows = (result.results ?? []).filter((row) => !isDatabaseDumpInternalTable(row.name))
-  return {
-    tables: rows
-      .filter((row) => row.type === 'table')
-      .map((row) => ({ name: row.name, sql: row.sql })),
-    indexes: rows.filter((row) => row.type === 'index'),
-    triggers: rows.filter((row) => row.type === 'trigger'),
-    views: rows.filter((row) => row.type === 'view'),
+function jobScopedWhereClause(tableName: string, jobId: string): { sql: string; bind: string[] } {
+  if (tableName === 'admin_download_jobs' || tableName === 'admin_download_artifacts') {
+    return {
+      sql: 'WHERE job_id <> ?1',
+      bind: [jobId],
+    }
   }
-}
-
-async function readTableColumns(db: D1Database, tableName: string): Promise<string[]> {
-  const result = await db.prepare(`PRAGMA table_info(${quoteSqlIdentifier(tableName)})`).all<TableColumnRow>()
-  return (result.results ?? [])
-    .slice()
-    .sort((left, right) => Number(left.cid ?? 0) - Number(right.cid ?? 0))
-    .map((row) => String(row.name || '').trim())
-    .filter(Boolean)
+  return { sql: '', bind: [] }
 }
 
 async function readTableRowsChunk(
   db: D1Database,
+  job: AdminDownloadJobRow,
   tableName: string,
   limit: number,
   offset: number,
 ): Promise<Array<Record<string, unknown>>> {
   try {
+    const scope = jobScopedWhereClause(tableName, job.job_id)
     const result = await db
-      .prepare(`SELECT * FROM ${quoteSqlIdentifier(tableName)} LIMIT ?1 OFFSET ?2`)
-      .bind(limit, offset)
+      .prepare(`SELECT * FROM ${quoteSqlIdentifier(tableName)} ${scope.sql} LIMIT ?${scope.bind.length + 1} OFFSET ?${scope.bind.length + 2}`)
+      .bind(...scope.bind, limit, offset)
       .all<Record<string, unknown>>()
     return result.results ?? []
   } catch (error) {
@@ -178,10 +131,12 @@ async function readTableRowsChunk(
   }
 }
 
-async function countTableRows(db: D1Database, tableName: string): Promise<number> {
+async function countDumpTableRows(db: D1Database, job: AdminDownloadJobRow, tableName: string): Promise<number> {
   try {
+    const scope = jobScopedWhereClause(tableName, job.job_id)
     const result = await db
-      .prepare(`SELECT COUNT(*) AS n FROM ${quoteSqlIdentifier(tableName)}`)
+      .prepare(`SELECT COUNT(*) AS n FROM ${quoteSqlIdentifier(tableName)} ${scope.sql}`)
+      .bind(...scope.bind)
       .first<{ n: number }>()
     return Math.max(0, Number(result?.n ?? 0))
   } catch (error) {
@@ -272,12 +227,12 @@ export async function runDatabaseDumpPass(env: AdminDownloadEnv, job: AdminDownl
 
   for (const tableName of tables) {
     let offset = tableProgress.get(tableName) ?? 0
-    const totalRows = await countTableRows(db, tableName)
+    const totalRows = await countDumpTableRows(db, job, tableName)
     if (offset >= totalRows) continue
 
     const columnNames = await readTableColumns(db, tableName)
     while (offset < totalRows) {
-      const rows = await readTableRowsChunk(db, tableName, DATABASE_DUMP_ROW_BATCH_SIZE, offset)
+      const rows = await readTableRowsChunk(db, job, tableName, DATABASE_DUMP_ROW_BATCH_SIZE, offset)
       if (!rows.length) break
 
       const nextOffset = offset + rows.length

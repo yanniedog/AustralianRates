@@ -126,11 +126,17 @@ export function hasSqlDumpArtifacts(artifacts: AdminDownloadArtifactRow[]): bool
   return artifacts.some((artifact) => isSqlDumpArtifact(artifact))
 }
 
-export function sortDatabaseDumpArtifactsForBundle(
-  tableNames: string[],
-  artifacts: AdminDownloadArtifactRow[],
-): AdminDownloadArtifactRow[] {
-  const tableOrder = new Map(tableNames.map((tableName, index) => [sanitizeFileSegment(tableName), index]))
+export function listDatabaseDumpArtifactTables(artifacts: AdminDownloadArtifactRow[]): string[] {
+  return Array.from(
+    new Set(
+      artifacts
+        .map((artifact) => databaseDumpPartTableName(artifact.file_name))
+        .filter((tableName): tableName is string => !!tableName),
+    ),
+  ).sort((left, right) => left.localeCompare(right))
+}
+
+export function sortDatabaseDumpArtifactsForBundle(artifacts: AdminDownloadArtifactRow[]): AdminDownloadArtifactRow[] {
   const phaseOrder: Record<DatabaseDumpPartKind, number> = {
     header: 0,
     schema: 1,
@@ -150,9 +156,8 @@ export function sortDatabaseDumpArtifactsForBundle(
 
       const leftTable = databaseDumpPartTableName(left.file_name) ?? ''
       const rightTable = databaseDumpPartTableName(right.file_name) ?? ''
-      const leftOrder = tableOrder.get(leftTable) ?? Number.MAX_SAFE_INTEGER
-      const rightOrder = tableOrder.get(rightTable) ?? Number.MAX_SAFE_INTEGER
-      if (leftOrder !== rightOrder) return leftOrder - rightOrder
+      const tableCompare = leftTable.localeCompare(rightTable)
+      if (tableCompare !== 0) return tableCompare
 
       const leftOffset = databaseDumpPartOffset(left.file_name) ?? 0
       const rightOffset = databaseDumpPartOffset(right.file_name) ?? 0

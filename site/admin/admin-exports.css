@@ -109,6 +109,38 @@
     line-height: 1.55;
 }
 
+.admin-exports .export-restore-panel {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--ar-surface) 82%, var(--ar-surface-2));
+}
+
+.admin-exports .export-restore-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-exports .export-status--restore-ready {
+    background: color-mix(in srgb, var(--ar-positive) 12%, var(--ar-surface));
+    color: var(--ar-positive);
+}
+
+.admin-exports .export-status--restore-review {
+    background: color-mix(in srgb, var(--ar-warning) 12%, var(--ar-surface));
+    color: var(--ar-warning);
+}
+
+.admin-exports .export-status--restore-blocked {
+    background: color-mix(in srgb, var(--ar-danger) 12%, var(--ar-surface));
+    color: var(--ar-danger);
+}
+
 @media (max-width: 760px) {
     .admin-exports .admin-message.visible {
         flex-direction: column;

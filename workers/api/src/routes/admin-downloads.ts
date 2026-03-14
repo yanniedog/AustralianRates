@@ -24,9 +24,10 @@ import { runAdminDownloadJob } from './admin-download-builder'
 import {
   fullDatabaseDumpFileName,
   hasSqlDumpArtifacts,
-  listDatabaseDumpTables,
   sortDatabaseDumpArtifactsForBundle,
 } from './admin-download-dump'
+import { analyzeDatabaseDumpRestore } from './admin-download-restore-analysis'
+import { executeDatabaseDumpRestore } from './admin-download-restore-execute'
 import {
   adminDownloadStaleBeforeIso,
   listOperationalTables,
@@ -37,6 +38,7 @@ import {
   buildAdminDownloadStatusBody,
   isRetryableAdminDownloadJob,
   MAX_DELETE_JOB_IDS,
+  parseAdminDownloadBoolean,
   parseAdminDownloadJobIds,
   parseAdminDownloadLimit,
   VALID_ADMIN_DOWNLOAD_STATUSES,
@@ -84,6 +86,14 @@ async function deleteArtifactKeys(bucket: R2Bucket, r2Keys: string[]): Promise<v
   for (let index = 0; index < keys.length; index += chunkSize) {
     await bucket.delete(keys.slice(index, index + chunkSize))
   }
+}
+
+async function loadAdminDownloadJobWithArtifacts(c: Context<AppContext>, jobId: string) {
+  await continueAdminDownloadIfPending(c, jobId)
+  const job = await getAdminDownloadJob(c.env.DB, jobId)
+  if (!job) return null
+  const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
+  return { job, artifacts }
 }
 
 export const adminDownloadRoutes = new Hono<AppContext>()
@@ -268,13 +278,65 @@ adminDownloadRoutes.delete('/downloads', async (c) => {
 
 adminDownloadRoutes.get('/downloads/:jobId', async (c) => {
   const jobId = c.req.param('jobId')
-  await continueAdminDownloadIfPending(c, jobId)
-  const job = await getAdminDownloadJob(c.env.DB, jobId)
-  if (!job) {
+  const state = await loadAdminDownloadJobWithArtifacts(c, jobId)
+  if (!state) {
     return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
   }
-  const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
-  return c.json(buildAdminDownloadStatusBody(job, artifacts))
+  return c.json(buildAdminDownloadStatusBody(state.job, state.artifacts))
+})
+
+adminDownloadRoutes.get('/downloads/:jobId/restore/analysis', async (c) => {
+  const state = await loadAdminDownloadJobWithArtifacts(c, c.req.param('jobId'))
+  if (!state) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
+  }
+  const analysis = await analyzeDatabaseDumpRestore(c.env, state.job, state.artifacts)
+  return c.json({
+    ok: true,
+    analysis,
+  })
+})
+
+adminDownloadRoutes.post('/downloads/:jobId/restore', async (c) => {
+  const state = await loadAdminDownloadJobWithArtifacts(c, c.req.param('jobId'))
+  if (!state) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Download job not found.')
+  }
+
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const force = parseAdminDownloadBoolean(
+    body.force ?? body.confirmRestore ?? body.confirm_restore ?? body.confirmReplace ?? body.confirm_replace,
+  )
+  const analysis = await analyzeDatabaseDumpRestore(c.env, state.job, state.artifacts)
+  if (!analysis.ready) {
+    return jsonError(c, 409, 'DOWNLOAD_RESTORE_BLOCKED', 'Dump restore is blocked until the listed issues are fixed.', {
+      analysis,
+    })
+  }
+  if (analysis.requires_force && !force) {
+    return jsonError(
+      c,
+      409,
+      'DOWNLOAD_RESTORE_CONFIRMATION_REQUIRED',
+      'This restore will replace or remove current data. Re-submit with force=true after reviewing the analysis.',
+      {
+        analysis,
+      },
+    )
+  }
+
+  try {
+    const restored = await executeDatabaseDumpRestore(c.env, state.job, state.artifacts, { force, analysis })
+    return c.json({
+      ok: true,
+      analysis: restored.analysis,
+      restore: restored.result,
+    })
+  } catch (error) {
+    return jsonError(c, 500, 'DOWNLOAD_RESTORE_FAILED', (error as Error)?.message || 'Dump restore failed.', {
+      analysis,
+    })
+  }
 })
 
 adminDownloadRoutes.get('/downloads/:jobId/artifacts/:artifactId/download', async (c) => {
@@ -312,7 +374,7 @@ adminDownloadRoutes.get('/downloads/:jobId/download', async (c) => {
   const artifacts = await listAdminDownloadArtifacts(c.env.DB, job.job_id)
   const sqlDumpArtifacts = hasSqlDumpArtifacts(artifacts)
   const orderedArtifacts = sqlDumpArtifacts
-    ? sortDatabaseDumpArtifactsForBundle(await listDatabaseDumpTables(c.env.DB), artifacts)
+    ? sortDatabaseDumpArtifactsForBundle(artifacts)
     : sortOperationalArtifactsForBundle(await listOperationalTables(c.env.DB), artifacts)
   if (orderedArtifacts.length === 0) {
     return jsonError(c, 404, 'DOWNLOAD_ARTIFACT_MISSING', 'Database dump parts are missing from storage.')

@@ -18,7 +18,9 @@ Key points:
 
 - `POST /downloads` now accepts only the full-database dump job shape.
 - `GET /downloads/:jobId/download` is the public single-file download route.
-- The download is intended to be decompressed and restored with `wrangler d1 execute --file`.
+- `GET /downloads/:jobId/restore/analysis` analyzes in-place restore safety and impact.
+- `POST /downloads/:jobId/restore` restores the dump into the current database when the analysis is ready.
+- For blank or replacement databases, use `node scripts/import-d1-backup.js --db <name> --input <dump.sql.gz>`.
 - Existing legacy operational JSONL bundle jobs can still be downloaded until they are deleted.
 
 ## Error codes
@@ -30,6 +32,9 @@ Key points:
 - `DOWNLOAD_JOBS_ACTIVE`: delete request included queued or processing jobs
 - `DOWNLOAD_NOT_READY`: bundle requested before completion
 - `DOWNLOAD_ARTIFACT_MISSING`: artifact metadata exists but the R2 object is missing
+- `DOWNLOAD_RESTORE_BLOCKED`: restore analysis found blocking conditions
+- `DOWNLOAD_RESTORE_CONFIRMATION_REQUIRED`: restore warnings require explicit confirmation
+- `DOWNLOAD_RESTORE_FAILED`: restore execution failed after analysis passed
 
 All admin errors use:
 
@@ -48,5 +53,6 @@ All admin errors use:
 
 - The admin UI exposes only the single-file full-database dump flow.
 - Under the hood, the worker may assemble the final download from multiple stored gzip parts, but the operator-facing download remains one file.
+- The admin export page now also exposes the restore-analysis and in-place restore flow for completed SQL dump jobs.
 - For the most exact restore artifact, create the dump during a quiet period when writes are paused or minimal.
 - The CLI backup path in [backup.md](backup.md) remains available when you want a local operational backup workflow outside the admin UI.
