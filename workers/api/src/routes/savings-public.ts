@@ -28,6 +28,7 @@ import { registerSavingsAnalyticsRoutes } from './savings-analytics'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { querySavingsRepresentationTimeseriesResolved } from './analytics-data'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
+import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { registerSavingsExportRoutes } from './savings-exports'
 import {
   matchLatestCache,
@@ -69,6 +70,18 @@ savingsPublicRoutes.get('/staleness', async (c) => {
 savingsPublicRoutes.get('/quality/diagnostics', async (c) => {
   const diagnostics = await getSavingsQualityDiagnostics(c.env.DB)
   return c.json({ ok: true, diagnostics })
+})
+
+savingsPublicRoutes.get('/executive-summary', async (c) => {
+  withPublicCache(c, 120)
+  const requestedWindowDays = Number(c.req.query('window_days') || 30)
+  const report = await queryExecutiveSummaryReport(c.env.DB, {
+    windowDays: requestedWindowDays,
+  })
+  return c.json({
+    ok: true,
+    ...report,
+  })
 })
 
 savingsPublicRoutes.get('/changes', async (c) => {

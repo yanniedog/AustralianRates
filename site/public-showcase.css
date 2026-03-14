@@ -43,8 +43,8 @@ body.ar-legal {
     --ar-surface-3: rgba(238, 245, 249, 0.98);
     --ar-surface-soft: rgba(250, 253, 255, 0.94);
     --ar-text: #102131;
-    --ar-text-soft: #405465;
-    --ar-text-muted: #647789;
+    --ar-text-soft: #314454;
+    --ar-text-muted: #4b5f70;
     --ar-line: rgba(16, 33, 49, 0.1);
     --ar-line-strong: rgba(16, 33, 49, 0.17);
     --ar-accent: #168f72;
@@ -150,6 +150,18 @@ body.ar-legal .site-brand-tagline {
     font-weight: 700;
     letter-spacing: 0.16em;
     text-transform: uppercase;
+}
+
+body.ar-public button.primary,
+body.ar-public button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn),
+body.ar-public .buttonish.primary {
+    color: #04110f;
+}
+
+body.ar-public button.primary:hover,
+body.ar-public button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):hover,
+body.ar-public .buttonish.primary:hover {
+    color: #04110f;
 }
 
 body.ar-public .site-header-context,

@@ -160,7 +160,7 @@
         + '    <div class="market-intro-status-row" aria-label="Key product qualities">' + copy.principles.map(principleItem).join('') + '</div>'
         + '    <div class="market-intro-command-block">'
         + '      <div class="market-intro-command-head"><span class="market-intro-prompt">$</span><span class="market-intro-command-head-text">' + esc(copy.command) + '</span><span class="market-intro-caret" aria-hidden="true"></span></div>'
-        + '      <p class="eyebrow">' + esc(copy.eyebrow) + '</p><h2 class="market-intro-title">' + esc(copy.title) + '</h2><p class="market-intro-summary">' + esc(copy.summary) + '</p>'
+        + '      <p class="eyebrow">' + esc(copy.eyebrow) + '</p><h1 class="market-intro-title">' + esc(copy.title) + '</h1><p class="market-intro-summary">' + esc(copy.summary) + '</p>'
         + '    </div>'
         + '    <ol class="market-intro-command-list">' + copy.commands.map(commandLine).join('') + '</ol>'
         + '    <div class="market-intro-actions">' + buttonLink('#scenario', 'Launch filters', 'primary') + buttonLink('#ladder', 'Open leaders', 'secondary') + buttonLink('/about/', 'Read methodology', 'secondary') + '</div>'

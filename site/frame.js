@@ -401,7 +401,27 @@
             var rendered = timeUtils.formatCheckedAt(iso);
             if (rendered && rendered.text) return rendered.text;
         }
-        return String(iso || '');
+        var raw = String(iso || '').trim();
+        if (!raw) return '';
+        var normalized = raw;
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw)) normalized = raw.replace(' ', 'T') + 'Z';
+        else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw)) normalized = raw + 'Z';
+        var date = new Date(normalized);
+        if (!isFinite(date.getTime())) return raw;
+        try {
+            var timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            return new Intl.DateTimeFormat('en-AU', {
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: timeZone,
+            }).format(date) + ' (' + timeZone + ')';
+        } catch (_err) {
+            return raw;
+        }
     }
 
     function renderCommitStatus(el, info) {

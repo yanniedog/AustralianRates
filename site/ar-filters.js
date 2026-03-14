@@ -34,6 +34,7 @@
     var consumerFilterIds = getConsumerFilterIds();
     var appliedFilterSignature = '';
     var latestFilterPayload = null;
+    var filtersPayloadEventName = 'ar:filters-payload-loaded';
     var interactionBound = false;
 
     function defaultColumnPrefs() {
@@ -273,6 +274,14 @@
             activeCount: getActiveFilterCount(),
             dirty: isFilterDirty(),
         };
+    }
+
+    function emitFiltersPayloadLoaded(payload) {
+        window.dispatchEvent(new CustomEvent(filtersPayloadEventName, {
+            detail: {
+                filters: payload || null,
+            },
+        }));
     }
 
     function resetFilters() {
@@ -604,6 +613,7 @@
                     keys: Object.keys(f),
                     bankCount: Array.isArray(f.banks) ? f.banks.length : 0,
                 });
+                emitFiltersPayloadLoaded(f);
             }
             restoreUrlState();
             applyDefaultMinRateIfEmpty();
@@ -652,6 +662,7 @@
         },
         getStateSnapshot: getStateSnapshot,
         getFiltersPayload: function () { return latestFilterPayload; },
+        filtersPayloadEventName: filtersPayloadEventName,
         readColumnPrefs: readColumnPrefs,
         writeColumnPrefs: writeColumnPrefs,
     };

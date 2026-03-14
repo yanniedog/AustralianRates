@@ -40,6 +40,7 @@
     var ORDER_FIRST = ['found_at', 'comparison_rate', 'interest_rate', 'bank_name'];
     var ORDER_LAST = ['rate_confirmed_at', 'urls'];
     var WAYBACK_PREFIX = 'https://web.archive.org/web/*/';
+    var filtersPayloadEventName = filters && filters.filtersPayloadEventName ? filters.filtersPayloadEventName : 'ar:filters-payload-loaded';
 
     function defaultColumnPrefs() {
         return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
@@ -941,23 +942,6 @@
         var sharedFilters = filters && typeof filters.getFiltersPayload === 'function' ? filters.getFiltersPayload() : null;
         if (sharedFilters && Array.isArray(sharedFilters.single_value_columns)) {
             singleValueColumns = sharedFilters.single_value_columns;
-        } else {
-            var filterRequest = requestJson
-                ? requestJson(apiBase + '/filters', {
-                    requestLabel: 'Explorer filter metadata',
-                    timeoutMs: requestTimeoutMs,
-                    retryCount: 0,
-                    retryDelayMs: 700,
-                }).then(function (result) { return result.data; })
-                : fetch(apiBase + '/filters', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; });
-            filterRequest.then(function (data) {
-                if (!data || !data.filters || !Array.isArray(data.filters.single_value_columns)) return;
-                singleValueColumns = data.filters.single_value_columns;
-                if (rateTable) {
-                    applyColumnPreferences();
-                    renderSettingsPopover();
-                }
-            }).catch(function () {});
         }
 
         rateTable = new Tabulator('#rate-table', {
@@ -1245,6 +1229,16 @@
         reloadExplorer();
     }
 
+    function applySingleValueColumnsFromPayload(payload) {
+        if (!payload || !Array.isArray(payload.single_value_columns)) return false;
+        singleValueColumns = payload.single_value_columns;
+        if (rateTable) {
+            applyColumnPreferences();
+            renderSettingsPopover();
+        }
+        return true;
+    }
+
     function reloadExplorer() {
         if (rateTable) {
             clientLog('info', 'Explorer reload requested');
@@ -1274,6 +1268,11 @@
             if (columnPrefs.moveColumnsMode) scheduleUpdateMoveColumnHeaders();
             emitExplorerTableUpdated('tab-activated');
         }, 60);
+    });
+
+    window.addEventListener(filtersPayloadEventName, function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        applySingleValueColumnsFromPayload(detail.filters || null);
     });
 
     window.addEventListener('error', function (event) {

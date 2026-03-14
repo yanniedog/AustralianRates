@@ -28,6 +28,7 @@ import { registerTdAnalyticsRoutes } from './td-analytics'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { queryTdRepresentationTimeseriesResolved } from './analytics-data'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
+import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { registerTdExportRoutes } from './td-exports'
 import {
   matchLatestCache,
@@ -69,6 +70,18 @@ tdPublicRoutes.get('/staleness', async (c) => {
 tdPublicRoutes.get('/quality/diagnostics', async (c) => {
   const diagnostics = await getTdQualityDiagnostics(c.env.DB)
   return c.json({ ok: true, diagnostics })
+})
+
+tdPublicRoutes.get('/executive-summary', async (c) => {
+  withPublicCache(c, 120)
+  const requestedWindowDays = Number(c.req.query('window_days') || 30)
+  const report = await queryExecutiveSummaryReport(c.env.DB, {
+    windowDays: requestedWindowDays,
+  })
+  return c.json({
+    ok: true,
+    ...report,
+  })
 })
 
 tdPublicRoutes.get('/changes', async (c) => {

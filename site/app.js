@@ -31,6 +31,7 @@
     var startupRetryAttempts = 0;
     var maxStartupRetryAttempts = 2;
     var startupRetryDelayMs = 3500;
+    var initialBootstrapStarted = false;
     var hasFiltersReadyOnce = false;
     var hasExplorerReadyOnce = false;
 
@@ -163,10 +164,9 @@
         );
         filters.loadFilters().then(function (result) {
             handleFilterBootstrapResult(result, 'filters-retried', 'filters-retry-failed');
-            reloadStartupSurfaces();
+            if (!result || result.ok !== false) reloadStartupSurfaces();
         }).catch(function (error) {
             var message = describeError(error, 'Filter controls could not be retried.');
-            reloadStartupSurfaces();
             if (!scheduleStartupRetry(message)) {
                 showStartupDegraded(message, 'is-error');
             }
@@ -286,6 +286,31 @@
             activeTab: tabState.activeTab || 'explorer',
             source: source || 'unknown',
         });
+    }
+
+    function beginInitialBootstrap() {
+        if (initialBootstrapStarted) return;
+        initialBootstrapStarted = true;
+
+        if (filters && filters.loadFilters) {
+            filters.loadFilters().then(function (result) {
+                handleFilterBootstrapResult(result, 'filters-loaded', 'filters-load-failed');
+            }).catch(function (err) {
+                clientLog('error', 'App init failed while loading filters', {
+                    message: describeError(err, 'Filter controls could not be loaded.'),
+                });
+                var message = describeError(err, 'Filter controls could not be loaded.');
+                if (scheduleStartupRetry(message)) {
+                    finishAppInit('filters-load-pending');
+                    return;
+                }
+                showStartupDegraded(message, 'is-error');
+                finishAppInit('filters-load-failed');
+            });
+            return;
+        }
+
+        finishAppInit('no-filter-module');
     }
 
     if (els.applyFilters) els.applyFilters.addEventListener('click', applyFilters);
@@ -423,22 +448,12 @@
     collapsePanelsByDefault();
     applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst', { skipRefresh: true });
 
-    if (filters && filters.loadFilters) {
-        filters.loadFilters().then(function (result) {
-            handleFilterBootstrapResult(result, 'filters-loaded', 'filters-load-failed');
-        }).catch(function (err) {
-            clientLog('error', 'App init failed while loading filters', {
-                message: describeError(err, 'Filter controls could not be loaded.'),
-            });
-            var message = describeError(err, 'Filter controls could not be loaded.');
-            if (scheduleStartupRetry(message)) {
-                finishAppInit('filters-load-pending');
-                return;
-            }
-            showStartupDegraded(message, 'is-error');
-            finishAppInit('filters-load-failed');
-        });
+    if (document.readyState === 'complete') {
+        window.setTimeout(beginInitialBootstrap, 120);
     } else {
-        finishAppInit('no-filter-module');
+        window.addEventListener('load', function handleInitialBootstrap() {
+            window.removeEventListener('load', handleInitialBootstrap);
+            window.setTimeout(beginInitialBootstrap, 120);
+        });
     }
 })();
