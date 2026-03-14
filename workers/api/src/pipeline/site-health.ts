@@ -9,6 +9,7 @@ import { log, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
 import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
 import { captureProbePayload, type ProbeCapturePolicy } from './probe-capture'
+import { resolveProbeCapturePolicy } from './probe-capture-policy'
 import { isJsonObject, parseJsonText, parseRowsPayload } from './probe-payloads'
 import { detectUpstreamBlock } from '../utils/upstream-block'
 
@@ -305,7 +306,7 @@ export async function runSiteHealthChecks(
   const runId = `health:${input.triggerSource}:${checkedAt}:${crypto.randomUUID()}`
   const startedAt = Date.now()
   const origin = normalizeOrigin(input.origin)
-  const capturePolicy: ProbeCapturePolicy = input.triggerSource === 'manual' ? 'always' : 'sample_success'
+  const capturePolicy: ProbeCapturePolicy = await resolveProbeCapturePolicy(env, input.triggerSource)
   const actionableSinceTs = new Date(Date.parse(checkedAt) - ACTIONABLE_LOG_LOOKBACK_MINUTES * 60 * 1000).toISOString()
   const pauseConfigPromise = getIngestPauseConfig(env.DB).catch(() => ({ mode: 'active' as const, reason: null }))
   const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne', {

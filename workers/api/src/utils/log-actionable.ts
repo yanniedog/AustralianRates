@@ -62,6 +62,30 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Apply pending migrations and verify D1 binding/database health.',
     links: ['/admin/database.html', '/admin/logs.html'],
   },
+  coverage_slo_breach: {
+    code: 'coverage_slo_breach',
+    title: 'Coverage gap audit detected lender/day gaps',
+    action: 'Review coverage diagnostics, inspect replay backlog, and run targeted lender/day reconciliation for affected scope.',
+    links: ['/admin/status.html', '/admin/runs.html'],
+  },
+  lender_universe_drift: {
+    code: 'lender_universe_drift',
+    title: 'Configured lender universe drifted from the register',
+    action: 'Review lender universe diagnostics and update lender config or endpoint mappings before relying on completeness claims.',
+    links: ['/admin/status.html', '/admin/config.html'],
+  },
+  replay_queue_incident_opened: {
+    code: 'replay_queue_incident_opened',
+    title: 'Replay queue exhausted its repair budget',
+    action: 'Inspect replay queue diagnostics, investigate the failing lender/product scope, and run a forced lender/day reconciliation after fixing the root cause.',
+    links: ['/admin/runs.html', '/admin/logs.html'],
+  },
+  replay_queue_dispatch_failed: {
+    code: 'replay_queue_dispatch_failed',
+    title: 'Replay queue dispatch failed',
+    action: 'Check queue binding health and replay queue diagnostics, then retry replay dispatch.',
+    links: ['/admin/runs.html', '/admin/logs.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
@@ -73,6 +97,10 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('backfill run') && normalized.includes('failed')) return 'backfill_run_failed'
   if (normalized.includes('unknown cron expression')) return 'unknown_cron_expression'
   if (normalized.includes('app_config') && normalized.includes('unavailable')) return 'app_config_unavailable'
+  if (normalized.includes('coverage_gap_audit_detected_gaps') || normalized.includes('coverage_slo_breach')) return 'coverage_slo_breach'
+  if (normalized.includes('lender_universe') && normalized.includes('drift')) return 'lender_universe_drift'
+  if (normalized.includes('replay_queue_incident_opened')) return 'replay_queue_incident_opened'
+  if (normalized.includes('replay_queue_dispatch_failed')) return 'replay_queue_dispatch_failed'
   return DEFAULT_ISSUE.code
 }
 

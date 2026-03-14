@@ -99,7 +99,12 @@ export type ExecutiveSummaryReport = {
   sections: [ExecutiveSummarySection, ExecutiveSummarySection, ExecutiveSummarySection]
 }
 
-export type DailyLenderJob = {
+type ReplayMetadata = {
+  replayTicketId?: string
+  replayAttempt?: number
+}
+
+export type DailyLenderJob = ReplayMetadata & {
   kind: 'daily_lender_fetch'
   runId: string
   runSource: RunSource
@@ -109,7 +114,7 @@ export type DailyLenderJob = {
   idempotencyKey: string
 }
 
-export type ProductDetailJob = {
+export type ProductDetailJob = ReplayMetadata & {
   kind: 'product_detail_fetch'
   runId: string
   runSource: RunSource
@@ -123,7 +128,7 @@ export type ProductDetailJob = {
   idempotencyKey: string
 }
 
-export type LenderFinalizeJob = {
+export type LenderFinalizeJob = ReplayMetadata & {
   kind: 'lender_finalize'
   runId: string
   runSource: RunSource
@@ -134,7 +139,7 @@ export type LenderFinalizeJob = {
   idempotencyKey: string
 }
 
-export type BackfillSnapshotJob = {
+export type BackfillSnapshotJob = ReplayMetadata & {
   kind: 'backfill_snapshot_fetch'
   runId: string
   runSource: RunSource
@@ -145,7 +150,7 @@ export type BackfillSnapshotJob = {
   idempotencyKey: string
 }
 
-export type BackfillDayJob = {
+export type BackfillDayJob = ReplayMetadata & {
   kind: 'backfill_day_fetch'
   runId: string
   runSource: RunSource
@@ -155,7 +160,7 @@ export type BackfillDayJob = {
   idempotencyKey: string
 }
 
-export type DailySavingsLenderJob = {
+export type DailySavingsLenderJob = ReplayMetadata & {
   kind: 'daily_savings_lender_fetch'
   runId: string
   runSource: RunSource
@@ -166,7 +171,7 @@ export type DailySavingsLenderJob = {
   idempotencyKey: string
 }
 
-export type HistoricalTaskExecuteJob = {
+export type HistoricalTaskExecuteJob = ReplayMetadata & {
   kind: 'historical_task_execute'
   runId: string
   runSource: RunSource
@@ -244,6 +249,9 @@ export type EnvBindings = {
   FEATURE_INTEGRITY_PROBES_ENABLED?: string
   FEATURE_QUEUE_IDEMPOTENCY_ENABLED?: string
   IDEMPOTENCY_TTL_SECONDS?: string
+  IDEMPOTENCY_LEASE_SECONDS?: string
+  MAX_REPLAY_ATTEMPTS?: string
+  REPLAY_BASE_DELAY_SECONDS?: string
   FETCH_TIMEOUT_MS?: string
   FETCH_MAX_RETRIES?: string
   FETCH_RETRY_BASE_MS?: string

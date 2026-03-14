@@ -1,6 +1,7 @@
 import { deriveTerminalRunStatus, loadRunInvariantSummary, type SummaryTotals } from '../db/run-terminal-state'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
+import { isLenderDatasetReadyForFinalization } from '../utils/lender-dataset-invariants'
 import { nowIso } from '../utils/time'
 
 export { deriveTerminalRunStatus } from '../db/run-terminal-state'
@@ -19,8 +20,14 @@ type LenderDatasetFinalizeCandidate = {
   bank_name: string
   collection_date: string
   expected_detail_count: number
+  index_fetch_succeeded: number
+  accepted_row_count: number
+  written_row_count: number
+  detail_fetch_event_count: number
+  lineage_error_count: number
   completed_detail_count: number
   failed_detail_count: number
+  finalized_at: string | null
   updated_at: string
 }
 
@@ -149,15 +156,17 @@ export async function reconcileReadyFinalizations(
          bank_name,
          collection_date,
          expected_detail_count,
+         index_fetch_succeeded,
+         accepted_row_count,
+         written_row_count,
+         detail_fetch_event_count,
+         lineage_error_count,
          completed_detail_count,
          failed_detail_count,
+         finalized_at,
          updated_at
        FROM lender_dataset_runs
        WHERE finalized_at IS NULL
-         AND (
-           expected_detail_count <= 0
-           OR (completed_detail_count + failed_detail_count) >= expected_detail_count
-         )
          AND updated_at <= ?1
        ORDER BY updated_at ASC
        LIMIT ?2`,
@@ -166,6 +175,12 @@ export async function reconcileReadyFinalizations(
     .all<LenderDatasetFinalizeCandidate>()
 
   for (const row of rows.results ?? []) {
+    const readiness = isLenderDatasetReadyForFinalization(row)
+    if (!readiness.ready) {
+      skippedRows += 1
+      continue
+    }
+
     if (dryRun) {
       finalizedRows += 1
       continue

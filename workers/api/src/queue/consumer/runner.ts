@@ -1,13 +1,56 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS } from '../../constants'
 import { recordRunQueueOutcome } from '../../db/run-reports'
 import type { EnvBindings, IngestMessage } from '../../types'
+import {
+  handleReplayAttemptFailure,
+  handleReplayAttemptSuccess,
+  scheduleReplayForExhaustedMessage,
+} from '../../pipeline/replay-queue'
 import { log } from '../../utils/logger'
 import { parseIntegerEnv } from '../../utils/time'
 import { processMessage } from './dispatch'
-import { claimIdempotency } from './idempotency'
+import { claimIdempotency, completeIdempotencyClaim, releaseIdempotencyClaim } from './idempotency'
 import { elapsedMs, serializeForLog } from './log-helpers'
 import { extractRunContext, isIngestMessage, isObject } from './message-shape'
 import { calculateRetryDelaySeconds, isNonRetryableErrorMessage } from './retry-config'
+
+async function tryCompleteIdempotency(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string | null; context: string; runId: string | null; lenderCode: string | null },
+): Promise<void> {
+  try {
+    await completeIdempotencyClaim(env, {
+      kind: input.kind,
+      idempotencyKey: input.idempotencyKey,
+    })
+  } catch (error) {
+    log.warn('consumer', 'queue_idempotency_complete_failed', {
+      error,
+      runId: input.runId ?? undefined,
+      lenderCode: input.lenderCode ?? undefined,
+      context: `${input.context} error=${(error as Error)?.message || String(error)}`,
+    })
+  }
+}
+
+async function tryReleaseIdempotency(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string | null; context: string; runId: string | null; lenderCode: string | null },
+): Promise<void> {
+  try {
+    await releaseIdempotencyClaim(env, {
+      kind: input.kind,
+      idempotencyKey: input.idempotencyKey,
+    })
+  } catch (error) {
+    log.warn('consumer', 'queue_idempotency_release_failed', {
+      error,
+      runId: input.runId ?? undefined,
+      lenderCode: input.lenderCode ?? undefined,
+      context: `${input.context} error=${(error as Error)?.message || String(error)}`,
+    })
+  }
+}
 
 export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env: EnvBindings): Promise<void> {
   const startedAt = Date.now()
@@ -35,10 +78,14 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
     const messageKind = isObject(body) && typeof body.kind === 'string' ? body.kind : 'unknown'
     const bodyAttempt = isObject(body) && Number.isFinite(Number(body.attempt)) ? Number(body.attempt) : null
     const idempotencyKey = isObject(body) && typeof body.idempotencyKey === 'string' ? body.idempotencyKey : null
+    const replayTicketId = isObject(body) && typeof body.replayTicketId === 'string' ? body.replayTicketId : null
+    const replayAttempt = isObject(body) && Number.isFinite(Number(body.replayAttempt)) ? Number(body.replayAttempt) : null
     const messageContext =
       `kind=${messageKind}` +
       ` queue_attempt=${attempts}/${maxAttempts}` +
       ` body_attempt=${bodyAttempt ?? 'na'}` +
+      ` replay_attempt=${replayAttempt ?? 'na'}` +
+      ` replay_ticket=${replayTicketId ?? 'na'}` +
       ` idempotency=${idempotencyKey ?? 'na'}`
 
     log.info('consumer', 'queue_message_start', {
@@ -77,16 +124,28 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
         msg.ack()
         metrics.acked += 1
         log.info('consumer', 'queue_message_duplicate_ack', {
+          code: 'queue_idempotency_duplicate_claim',
           runId: context.runId ?? undefined,
           lenderCode: context.lenderCode ?? undefined,
           context:
-            `${messageContext} key=${claim.key ?? 'none'}` +
+            `${messageContext} reason=${claim.reason} key=${claim.key ?? 'none'}` +
             ` ttl=${claim.ttlSeconds} elapsed_ms=${elapsedMs(messageStartedAt)}`,
         })
         continue
       }
 
       await processMessage(env, body)
+      await tryCompleteIdempotency(env, {
+        kind: body.kind,
+        idempotencyKey,
+        context: messageContext,
+        runId: context.runId,
+        lenderCode: context.lenderCode,
+      })
+
+      if (replayTicketId) {
+        await handleReplayAttemptSuccess(env, replayTicketId)
+      }
 
       if (context.runId && context.lenderCode) {
         await recordRunQueueOutcome(env.DB, {
@@ -115,13 +174,33 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       })
 
       if (isNonRetryableErrorMessage(errorMessage)) {
+        await tryReleaseIdempotency(env, {
+          kind: isIngestMessage(body) ? body.kind : 'daily_lender_fetch',
+          idempotencyKey,
+          context: messageContext,
+          runId: context.runId,
+          lenderCode: context.lenderCode,
+        })
         metrics.nonRetryable += 1
         log.warn('consumer', 'queue_message_non_retryable', {
           runId: context.runId ?? undefined,
           lenderCode: context.lenderCode ?? undefined,
           context: `${messageContext} error=${errorMessage}`,
         })
-        if (context.runId && context.lenderCode) {
+        if (replayTicketId) {
+          const replayRow = await handleReplayAttemptFailure(env, {
+            replayTicketId,
+            errorMessage,
+          })
+          if (replayRow && replayRow.status === 'failed' && context.runId && context.lenderCode) {
+            await recordRunQueueOutcome(env.DB, {
+              runId: context.runId,
+              lenderCode: context.lenderCode,
+              success: false,
+              errorMessage,
+            })
+          }
+        } else if (context.runId && context.lenderCode) {
           await recordRunQueueOutcome(env.DB, {
             runId: context.runId,
             lenderCode: context.lenderCode,
@@ -135,6 +214,13 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       }
 
       if (attempts >= maxAttempts) {
+        await tryReleaseIdempotency(env, {
+          kind: isIngestMessage(body) ? body.kind : 'daily_lender_fetch',
+          idempotencyKey,
+          context: messageContext,
+          runId: context.runId,
+          lenderCode: context.lenderCode,
+        })
         metrics.exhausted += 1
         log.error('consumer', `queue_message_exhausted max_attempts=${maxAttempts}`, {
           error,
@@ -142,19 +228,68 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
           lenderCode: context.lenderCode ?? undefined,
           context: `${messageContext} error=${errorMessage}`,
         })
-        if (context.runId && context.lenderCode) {
-          await recordRunQueueOutcome(env.DB, {
-            runId: context.runId,
-            lenderCode: context.lenderCode,
-            success: false,
-            errorMessage,
-          })
+        if (isIngestMessage(body)) {
+          if (replayTicketId) {
+            const replayRow = await handleReplayAttemptFailure(env, {
+              replayTicketId,
+              errorMessage,
+            })
+            if (replayRow?.status === 'failed') {
+              log.error('consumer', 'replay_queue_incident_opened', {
+                code: 'replay_queue_incident_opened',
+                runId: context.runId ?? undefined,
+                lenderCode: context.lenderCode ?? undefined,
+                context:
+                  `${messageContext} replay_id=${replayRow.replay_id}` +
+                  ` replay_attempts=${replayRow.replay_attempt_count}/${replayRow.max_replay_attempts}` +
+                  ` error=${errorMessage}`,
+              })
+              if (context.runId && context.lenderCode) {
+                await recordRunQueueOutcome(env.DB, {
+                  runId: context.runId,
+                  lenderCode: context.lenderCode,
+                  success: false,
+                  errorMessage,
+                })
+              }
+            }
+          } else {
+            const replayRow = await scheduleReplayForExhaustedMessage(env, {
+              message: body,
+              errorMessage,
+            })
+            log.error('consumer', 'replay_queue_scheduled', {
+              code: 'replay_queue_scheduled',
+              runId: context.runId ?? undefined,
+              lenderCode: context.lenderCode ?? undefined,
+              context:
+                `${messageContext} replay_id=${replayRow.replay_id}` +
+                ` replay_status=${replayRow.status}` +
+                ` next_attempt_at=${replayRow.next_attempt_at}` +
+                ` error=${errorMessage}`,
+            })
+            if (replayRow.status === 'failed' && context.runId && context.lenderCode) {
+              await recordRunQueueOutcome(env.DB, {
+                runId: context.runId,
+                lenderCode: context.lenderCode,
+                success: false,
+                errorMessage,
+              })
+            }
+          }
         }
         msg.ack()
         metrics.acked += 1
         continue
       }
 
+      await tryReleaseIdempotency(env, {
+        kind: isIngestMessage(body) ? body.kind : 'daily_lender_fetch',
+        idempotencyKey,
+        context: messageContext,
+        runId: context.runId,
+        lenderCode: context.lenderCode,
+      })
       const retryDelaySeconds = calculateRetryDelaySeconds(attempts)
       msg.retry({
         delaySeconds: retryDelaySeconds,

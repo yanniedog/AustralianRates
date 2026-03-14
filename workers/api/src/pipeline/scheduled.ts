@@ -3,6 +3,8 @@ import {
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
+import { runCoverageGapAudit } from './coverage-gap-audit'
+import { runLenderUniverseAudit } from './lender-universe-audit'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -37,6 +39,8 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     : new Date().toISOString()
 
   let reconciliation: Awaited<ReturnType<typeof runLifecycleReconciliation>> | null = null
+  let coverageAudit: Awaited<ReturnType<typeof runCoverageGapAudit>> | null = null
+  let lenderUniverseAudit: Awaited<ReturnType<typeof runLenderUniverseAudit>> | null = null
   try {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
@@ -73,6 +77,30 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     })
   }
 
+  try {
+    coverageAudit = await runCoverageGapAudit(env, {
+      runSource: 'scheduled',
+      idleMinutes: 120,
+      limit: 200,
+    })
+  } catch (error) {
+    log.error('scheduler', 'Coverage gap audit failed', {
+      code: 'coverage_slo_breach',
+      error,
+      context: (error as Error)?.message || String(error),
+    })
+  }
+
+  try {
+    lenderUniverseAudit = await runLenderUniverseAudit(env)
+  } catch (error) {
+    log.error('scheduler', 'Lender universe audit failed', {
+      code: 'lender_universe_drift',
+      error,
+      context: (error as Error)?.message || String(error),
+    })
+  }
+
   const pause = await getIngestPauseConfig(env.DB)
   if (pause.mode === 'repair_pause') {
     log.warn('scheduler', 'Scheduled daily ingest paused by app config', {
@@ -89,6 +117,8 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       reason: 'ingest_paused',
       pause,
       reconciliation,
+      coverageAudit,
+      lenderUniverseAudit,
       melbourne: melbourneParts,
       intervalMinutes: 0,
     }
@@ -111,6 +141,8 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   return {
     ...result,
     reconciliation,
+    coverageAudit,
+    lenderUniverseAudit,
     melbourne: melbourneParts,
     intervalMinutes: 0,
   }

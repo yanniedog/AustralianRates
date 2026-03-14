@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest'
+import {
+  assessLenderDatasetCoverage,
+  isLenderDatasetCollectionComplete,
+  isLenderDatasetReadyForFinalization,
+} from '../src/utils/lender-dataset-invariants'
+
+describe('lender dataset invariants', () => {
+  it('treats successful zero-expected rows as ready and complete only after finalization', () => {
+    const base = {
+      expected_detail_count: 0,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 0,
+      written_row_count: 0,
+      detail_fetch_event_count: 0,
+      lineage_error_count: 0,
+      completed_detail_count: 0,
+      failed_detail_count: 0,
+      finalized_at: null,
+    }
+
+    expect(isLenderDatasetReadyForFinalization(base)).toEqual({ ready: true, reason: null })
+    expect(isLenderDatasetCollectionComplete(base)).toBe(false)
+    expect(isLenderDatasetCollectionComplete({ ...base, finalized_at: '2026-03-14T00:00:00.000Z' })).toBe(true)
+  })
+
+  it('flags failed detail fetches and missing writes as coverage gaps', () => {
+    const assessment = assessLenderDatasetCoverage({
+      expected_detail_count: 2,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 0,
+      written_row_count: 0,
+      detail_fetch_event_count: 2,
+      lineage_error_count: 0,
+      completed_detail_count: 1,
+      failed_detail_count: 1,
+      finalized_at: null,
+    })
+
+    expect(assessment.severity).toBe('error')
+    expect(assessment.reasons).toContain('failed_detail_fetches_present')
+    expect(assessment.reasons).toContain('zero_written_rows_for_nonzero_expected_details')
+    expect(assessment.reasons).toContain('dataset_not_finalized')
+  })
+})

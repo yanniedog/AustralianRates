@@ -212,6 +212,10 @@ body.ar-public .market-intro-step:nth-child(3) {
 }
 
 @media (max-width: 760px) {
+    body.ar-public .market-terminal {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     body.ar-public .site-header,
     body.ar-legal .site-header {
         width: calc(100vw - 18px);
@@ -234,6 +238,11 @@ body.ar-public .market-intro-step:nth-child(3) {
     body.ar-legal .shell {
         width: calc(100vw - 18px);
         padding-top: 24px;
+    }
+
+    body.ar-public .terminal-column-right {
+        grid-column: auto;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     body.ar-public .terminal-panel,

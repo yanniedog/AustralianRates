@@ -11,7 +11,7 @@ export type RegisterBrand = {
   endpointUrl: string
 }
 
-function extractBrands(payload: unknown): RegisterBrand[] {
+export function extractBrands(payload: unknown): RegisterBrand[] {
   const out: RegisterBrand[] = []
   const dataArray = isRecord(payload) ? asArray((payload as JsonRecord).data) : asArray(payload)
   for (const item of dataArray) {

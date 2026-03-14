@@ -17,6 +17,11 @@
     var cdrAuditStatusEl = document.getElementById('cdr-audit-status');
     var cdrAuditOverviewEl = document.getElementById('cdr-audit-overview');
     var cdrAuditWrapEl = document.getElementById('cdr-audit-wrap');
+    var coverageGapOverviewEl = document.getElementById('coverage-gap-overview');
+    var coverageGapWrapEl = document.getElementById('coverage-gap-wrap');
+    var lenderUniverseOverviewEl = document.getElementById('lender-universe-overview');
+    var lenderUniverseWrapEl = document.getElementById('lender-universe-wrap');
+    var replayQueueWrapEl = document.getElementById('replay-queue-wrap');
 
     function esc(v) {
         return String(v == null ? '' : v)
@@ -262,6 +267,96 @@
         }).join('');
     }
 
+    function renderCoverageGapAudit(report) {
+        if (!report) {
+            coverageGapOverviewEl.innerHTML = '';
+            coverageGapWrapEl.innerHTML = '<div>No coverage-gap audit report available.</div>';
+            return;
+        }
+
+        coverageGapOverviewEl.innerHTML = '<div class="grid">'
+            + cardCell('Collection date', '<span class="mono">' + esc(report.collection_date || 'n/a') + '</span>')
+            + cardCell('Gap rows', esc(String(report.totals && report.totals.gaps || 0)))
+            + cardCell('Errors', esc(String(report.totals && report.totals.errors || 0)))
+            + cardCell('Warnings', esc(String(report.totals && report.totals.warns || 0)))
+            + '</div>';
+
+        var rows = Array.isArray(report.rows) ? report.rows : [];
+        if (!rows.length) {
+            coverageGapWrapEl.innerHTML = '<div>No eligible lender/day coverage gaps are currently open.</div>';
+            return;
+        }
+
+        coverageGapWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Dataset</th><th>Severity</th><th>Expected</th><th>Processed</th><th>Written</th><th>Reasons</th><th>Updated</th></tr></thead><tbody>'
+            + rows.map(function (row) {
+                return '<tr>'
+                    + '<td>' + esc(row.lender_code || row.bank_name || '') + '</td>'
+                    + '<td>' + esc(datasetLabel(row.dataset_kind)) + '</td>'
+                    + '<td class="mono">' + esc(row.severity || '') + '</td>'
+                    + '<td>' + esc(String(row.expected_detail_count || 0)) + '</td>'
+                    + '<td>' + esc(String(row.processed_detail_count || 0)) + '</td>'
+                    + '<td>' + esc(String(row.written_row_count || 0)) + '</td>'
+                    + '<td class="mono">' + esc((row.reasons || []).join(', ')) + '</td>'
+                    + '<td class="mono">' + esc(row.updated_at || '') + '</td>'
+                    + '</tr>';
+            }).join('')
+            + '</tbody></table>';
+    }
+
+    function renderLenderUniverse(report) {
+        if (!report) {
+            lenderUniverseOverviewEl.innerHTML = '';
+            lenderUniverseWrapEl.innerHTML = '<div>No lender-universe audit report available.</div>';
+            return;
+        }
+
+        lenderUniverseOverviewEl.innerHTML = '<div class="grid">'
+            + cardCell('Register source', '<span class="mono">' + esc(report.register_source_url || 'n/a') + '</span>')
+            + cardCell('Configured lenders', esc(String(report.totals && report.totals.configured_lenders || 0)))
+            + cardCell('Missing', esc(String(report.totals && report.totals.missing_from_register || 0)))
+            + cardCell('Endpoint drift', esc(String(report.totals && report.totals.endpoint_drift || 0)))
+            + '</div>';
+
+        var rows = Array.isArray(report.rows) ? report.rows : [];
+        if (!rows.length) {
+            lenderUniverseWrapEl.innerHTML = '<div class="mono">' + esc(report.error || 'No lender rows returned.') + '</div>';
+            return;
+        }
+
+        lenderUniverseWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Status</th><th>Configured endpoint</th><th>Register endpoint</th></tr></thead><tbody>'
+            + rows.map(function (row) {
+                return '<tr>'
+                    + '<td>' + esc(row.lender_code || '') + '</td>'
+                    + '<td class="mono">' + esc(row.status || '') + '</td>'
+                    + '<td class="mono">' + esc(row.configured_endpoint || '--') + '</td>'
+                    + '<td class="mono">' + esc(row.register_endpoint || '--') + '</td>'
+                    + '</tr>';
+            }).join('')
+            + '</tbody></table>';
+    }
+
+    function renderReplayQueue(data) {
+        var rows = data && Array.isArray(data.rows) ? data.rows : [];
+        if (!rows.length) {
+            replayQueueWrapEl.innerHTML = '<div>No replay queue rows currently exist.</div>';
+            return;
+        }
+        replayQueueWrapEl.innerHTML = '<table><thead><tr><th>Status</th><th>Kind</th><th>Lender</th><th>Dataset</th><th>Collection date</th><th>Attempts</th><th>Next attempt</th><th>Last error</th></tr></thead><tbody>'
+            + rows.map(function (row) {
+                return '<tr>'
+                    + '<td class="mono">' + esc(row.status || '') + '</td>'
+                    + '<td class="mono">' + esc(row.message_kind || '') + '</td>'
+                    + '<td>' + esc(row.lender_code || '--') + '</td>'
+                    + '<td>' + esc(datasetLabel(row.dataset_kind)) + '</td>'
+                    + '<td class="mono">' + esc(row.collection_date || '--') + '</td>'
+                    + '<td>' + esc(String(row.replay_attempt_count || 0)) + '/' + esc(String(row.max_replay_attempts || 0)) + '</td>'
+                    + '<td class="mono">' + esc(row.next_attempt_at || '--') + '</td>'
+                    + '<td class="mono">' + esc(row.last_error || '--') + '</td>'
+                    + '</tr>';
+            }).join('')
+            + '</tbody></table>';
+    }
+
     async function loadPayload(fetchEventId, mode) {
         payloadViewerStatusEl.textContent = 'Loading payload ' + String(fetchEventId) + '...';
         payloadViewerEl.textContent = '';
@@ -357,6 +452,41 @@
         }
     }
 
+    async function loadCoverageGapAudit(forceRefresh) {
+        try {
+            var res = await portal.fetchAdmin('/diagnostics/coverage-gaps' + (forceRefresh ? '?refresh=1' : ''), { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+            renderCoverageGapAudit(data.report || null);
+        } catch (err) {
+            coverageGapOverviewEl.innerHTML = '';
+            coverageGapWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+        }
+    }
+
+    async function loadLenderUniverse(forceRefresh) {
+        try {
+            var res = await portal.fetchAdmin('/diagnostics/lender-universe' + (forceRefresh ? '?refresh=1' : ''), { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+            renderLenderUniverse(data.report || null);
+        } catch (err) {
+            lenderUniverseOverviewEl.innerHTML = '';
+            lenderUniverseWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+        }
+    }
+
+    async function loadReplayQueue() {
+        try {
+            var res = await portal.fetchAdmin('/diagnostics/replay-queue?limit=40', { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+            renderReplayQueue(data);
+        } catch (err) {
+            replayQueueWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+        }
+    }
+
     async function runCdrAuditNow() {
         cdrAuditStatusEl.textContent = 'Running CDR audit...';
         var btn = document.getElementById('run-cdr-audit-btn');
@@ -373,11 +503,18 @@
         }
     }
 
-    async function refreshAll() {
-        await Promise.all([loadStatus(), loadCdrAudit(), loadProbePayloads()]);
+    async function refreshAll(forceRefresh) {
+        await Promise.all([
+            loadStatus(),
+            loadCdrAudit(),
+            loadProbePayloads(),
+            loadCoverageGapAudit(!!forceRefresh),
+            loadLenderUniverse(!!forceRefresh),
+            loadReplayQueue()
+        ]);
     }
 
-    document.getElementById('refresh-btn').addEventListener('click', refreshAll);
+    document.getElementById('refresh-btn').addEventListener('click', function () { refreshAll(true); });
     document.getElementById('run-check-btn').addEventListener('click', runNow);
     document.getElementById('run-cdr-audit-btn').addEventListener('click', runCdrAuditNow);
     document.getElementById('copy-diagnose-btn').addEventListener('click', function () {
@@ -399,5 +536,5 @@
         loadPayload(button.getAttribute('data-fetch-event-id'), button.getAttribute('data-mode'));
     });
 
-    refreshAll();
+    refreshAll(false);
 })();

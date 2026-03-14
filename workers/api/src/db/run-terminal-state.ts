@@ -38,34 +38,33 @@ export async function loadRunInvariantSummary(db: D1Database, runId: string): Pr
            SUM(CASE WHEN COALESCE(lineage_error_count, 0) > 0 THEN 1 ELSE 0 END) AS lineage_error_rows,
            SUM(
              CASE
-               WHEN COALESCE(written_row_count, 0) = 0
-                AND NOT (
-                  COALESCE(index_fetch_succeeded, 0) = 1
-                  AND COALESCE(expected_detail_count, 0) = 0
-                  AND COALESCE(lineage_error_count, 0) = 0
-                )
+               WHEN COALESCE(index_fetch_succeeded, 0) = 0
+                 OR COALESCE(failed_detail_count, 0) > 0
+                 OR COALESCE(lineage_error_count, 0) > 0
+                 OR (
+                   COALESCE(written_row_count, 0) = 0
+                   AND COALESCE(expected_detail_count, 0) > 0
+                 )
                THEN 1 ELSE 0
              END
            ) AS zero_write_problem_rows,
            SUM(
              CASE
-               WHEN COALESCE(written_row_count, 0) = 0
-                AND COALESCE(index_fetch_succeeded, 0) = 1
+               WHEN COALESCE(index_fetch_succeeded, 0) = 1
                 AND COALESCE(expected_detail_count, 0) = 0
                 AND COALESCE(lineage_error_count, 0) = 0
+                AND COALESCE(failed_detail_count, 0) = 0
                THEN 1 ELSE 0
              END
            ) AS successful_zero_product_rows,
            SUM(
              CASE
-               WHEN COALESCE(lineage_error_count, 0) > 0
+               WHEN COALESCE(index_fetch_succeeded, 0) = 0
+                 OR COALESCE(failed_detail_count, 0) > 0
+                 OR COALESCE(lineage_error_count, 0) > 0
                  OR (
                    COALESCE(written_row_count, 0) = 0
-                   AND NOT (
-                     COALESCE(index_fetch_succeeded, 0) = 1
-                     AND COALESCE(expected_detail_count, 0) = 0
-                     AND COALESCE(lineage_error_count, 0) = 0
-                   )
+                   AND COALESCE(expected_detail_count, 0) > 0
                  )
                THEN 1 ELSE 0
              END

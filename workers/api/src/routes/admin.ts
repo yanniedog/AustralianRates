@@ -14,6 +14,7 @@ import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
 import { adminDownloadRoutes } from './admin-downloads'
+import { adminHardeningRoutes } from './admin-hardening'
 import { adminHealthRoutes } from './admin-health'
 import { adminLiveCdrRepairRoutes } from './admin-live-cdr-repair'
 import { adminLogRoutes } from './admin-logs'
@@ -73,6 +74,7 @@ adminRoutes.route('/', adminDownloadRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)
+adminRoutes.route('/', adminHardeningRoutes)
 adminRoutes.route('/', adminLiveCdrRepairRoutes)
 adminRoutes.route('/', adminRemediationRoutes)
 

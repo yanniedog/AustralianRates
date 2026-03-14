@@ -4,6 +4,7 @@ import { parseIntegerEnv } from '../../utils/time'
 const DEFAULT_IDEMPOTENCY_TTL_SECONDS = 7 * 24 * 60 * 60
 const MIN_IDEMPOTENCY_TTL_SECONDS = 60
 const MAX_IDEMPOTENCY_TTL_SECONDS = 30 * 24 * 60 * 60
+const DEFAULT_IDEMPOTENCY_LEASE_SECONDS = 15 * 60
 
 type IdempotencyReason =
   | 'feature_disabled'
@@ -11,7 +12,19 @@ type IdempotencyReason =
   | 'kv_missing'
   | 'kv_error'
   | 'claimed'
+  | 'active_claim'
   | 'duplicate'
+
+type StoredIdempotencyClaim = {
+  state: 'in_progress' | 'completed'
+  kind: IngestMessage['kind']
+  idempotency_key: string
+  run_id: string | null
+  lender_code: string | null
+  claimed_at: string
+  lease_until: string
+  completed_at?: string
+}
 
 export type IdempotencyClaimResult = {
   shouldProcess: boolean
@@ -19,6 +32,7 @@ export type IdempotencyClaimResult = {
   enforced: boolean
   key: string | null
   ttlSeconds: number
+  leaseSeconds: number
   reason: IdempotencyReason
   error?: string
 }
@@ -33,8 +47,28 @@ function idempotencyTtlSeconds(env: EnvBindings): number {
   return Math.max(MIN_IDEMPOTENCY_TTL_SECONDS, Math.min(MAX_IDEMPOTENCY_TTL_SECONDS, parsed))
 }
 
+function idempotencyLeaseSeconds(env: EnvBindings): number {
+  return Math.max(MIN_IDEMPOTENCY_TTL_SECONDS, parseIntegerEnv(env.IDEMPOTENCY_LEASE_SECONDS, DEFAULT_IDEMPOTENCY_LEASE_SECONDS))
+}
+
 function keyFor(kind: IngestMessage['kind'], idempotencyKey: string): string {
   return `idem:${kind}:${idempotencyKey}`
+}
+
+function parseStoredClaim(raw: string | null): StoredIdempotencyClaim | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as StoredIdempotencyClaim
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function leaseActive(leaseUntil: string | undefined): boolean {
+  const leaseMs = Date.parse(String(leaseUntil || ''))
+  return Number.isFinite(leaseMs) && leaseMs > Date.now()
 }
 
 export async function claimIdempotency(
@@ -47,6 +81,7 @@ export async function claimIdempotency(
   },
 ): Promise<IdempotencyClaimResult> {
   const ttlSeconds = idempotencyTtlSeconds(env)
+  const leaseSeconds = idempotencyLeaseSeconds(env)
   if (!isEnabled(env.FEATURE_QUEUE_IDEMPOTENCY_ENABLED)) {
     return {
       shouldProcess: true,
@@ -54,6 +89,7 @@ export async function claimIdempotency(
       enforced: false,
       key: null,
       ttlSeconds,
+      leaseSeconds,
       reason: 'feature_disabled',
     }
   }
@@ -66,6 +102,7 @@ export async function claimIdempotency(
       enforced: true,
       key: null,
       ttlSeconds,
+      leaseSeconds,
       reason: 'missing_key',
     }
   }
@@ -77,32 +114,50 @@ export async function claimIdempotency(
       enforced: true,
       key: keyFor(input.kind, keyPart),
       ttlSeconds,
+      leaseSeconds,
       reason: 'kv_missing',
     }
   }
 
   const key = keyFor(input.kind, keyPart)
   try {
-    const existing = await env.IDEMPOTENCY_KV.get(key)
-    if (existing != null) {
+    const existing = parseStoredClaim(await env.IDEMPOTENCY_KV.get(key))
+    if (existing?.state === 'completed') {
       return {
         shouldProcess: false,
         duplicate: true,
         enforced: true,
         key,
         ttlSeconds,
+        leaseSeconds,
         reason: 'duplicate',
       }
     }
+    if (existing?.state === 'in_progress' && leaseActive(existing.lease_until)) {
+      return {
+        shouldProcess: false,
+        duplicate: true,
+        enforced: true,
+        key,
+        ttlSeconds,
+        leaseSeconds,
+        reason: 'active_claim',
+      }
+    }
+
+    const claimedAt = new Date().toISOString()
+    const leaseUntil = new Date(Date.now() + leaseSeconds * 1000).toISOString()
 
     await env.IDEMPOTENCY_KV.put(
       key,
       JSON.stringify({
+        state: 'in_progress',
         kind: input.kind,
         idempotency_key: keyPart,
         run_id: input.runId ?? null,
         lender_code: input.lenderCode ?? null,
-        claimed_at: new Date().toISOString(),
+        claimed_at: claimedAt,
+        lease_until: leaseUntil,
       }),
       { expirationTtl: ttlSeconds },
     )
@@ -113,6 +168,7 @@ export async function claimIdempotency(
       enforced: true,
       key,
       ttlSeconds,
+      leaseSeconds,
       reason: 'claimed',
     }
   } catch (error) {
@@ -122,8 +178,49 @@ export async function claimIdempotency(
       enforced: true,
       key,
       ttlSeconds,
+      leaseSeconds,
       reason: 'kv_error',
       error: (error as Error)?.message || String(error),
     }
   }
+}
+
+export async function completeIdempotencyClaim(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string | null },
+): Promise<void> {
+  if (!isEnabled(env.FEATURE_QUEUE_IDEMPOTENCY_ENABLED)) return
+  if (!env.IDEMPOTENCY_KV) return
+  const keyPart = String(input.idempotencyKey || '').trim()
+  if (!keyPart) return
+  const key = keyFor(input.kind, keyPart)
+  const ttlSeconds = idempotencyTtlSeconds(env)
+  const existing = parseStoredClaim(await env.IDEMPOTENCY_KV.get(key))
+  const now = new Date().toISOString()
+  await env.IDEMPOTENCY_KV.put(
+    key,
+    JSON.stringify({
+      ...(existing || {
+        kind: input.kind,
+        idempotency_key: keyPart,
+        run_id: null,
+        lender_code: null,
+      }),
+      state: 'completed',
+      lease_until: now,
+      completed_at: now,
+    }),
+    { expirationTtl: ttlSeconds },
+  )
+}
+
+export async function releaseIdempotencyClaim(
+  env: EnvBindings,
+  input: { kind: IngestMessage['kind']; idempotencyKey: string | null },
+): Promise<void> {
+  if (!isEnabled(env.FEATURE_QUEUE_IDEMPOTENCY_ENABLED)) return
+  if (!env.IDEMPOTENCY_KV || typeof env.IDEMPOTENCY_KV.delete !== 'function') return
+  const keyPart = String(input.idempotencyKey || '').trim()
+  if (!keyPart) return
+  await env.IDEMPOTENCY_KV.delete(keyFor(input.kind, keyPart))
 }

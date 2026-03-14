@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claimIdempotency } from '../src/queue/consumer/idempotency'
+import { claimIdempotency, completeIdempotencyClaim, releaseIdempotencyClaim } from '../src/queue/consumer/idempotency'
 import type { EnvBindings, IngestMessage } from '../src/types'
 
 class MemoryKv {
@@ -13,6 +13,10 @@ class MemoryKv {
   async put(key: string, value: string): Promise<void> {
     this.putCalls += 1
     this.values.set(key, value)
+  }
+
+  async delete(key: string): Promise<void> {
+    this.values.delete(key)
   }
 }
 
@@ -54,8 +58,56 @@ describe('queue idempotency claim', () => {
     })
     expect(second.shouldProcess).toBe(false)
     expect(second.duplicate).toBe(true)
-    expect(second.reason).toBe('duplicate')
+    expect(second.reason).toBe('active_claim')
     expect(kv.putCalls).toBe(1)
+
+    await completeIdempotencyClaim(env, {
+      kind: 'daily_lender_fetch',
+      idempotencyKey: 'run:abc:lender:anz',
+    })
+
+    const completedDuplicate = await claimIdempotency(env, {
+      kind: 'daily_lender_fetch',
+      idempotencyKey: 'run:abc:lender:anz',
+      runId: 'run:abc',
+      lenderCode: 'anz',
+    })
+    expect(completedDuplicate.shouldProcess).toBe(false)
+    expect(completedDuplicate.duplicate).toBe(true)
+    expect(completedDuplicate.reason).toBe('duplicate')
+  })
+
+  it('releases the claim so retries can process again', async () => {
+    const kv = new MemoryKv()
+    const env = makeEnv({
+      FEATURE_QUEUE_IDEMPOTENCY_ENABLED: 'true',
+      IDEMPOTENCY_TTL_SECONDS: '604800',
+      IDEMPOTENCY_LEASE_SECONDS: '900',
+      IDEMPOTENCY_KV: kv as unknown as KVNamespace,
+    })
+
+    const first = await claimIdempotency(env, {
+      kind: 'product_detail_fetch',
+      idempotencyKey: 'run:abc:detail:1',
+      runId: 'run:abc',
+      lenderCode: 'anz',
+    })
+    expect(first.shouldProcess).toBe(true)
+
+    await releaseIdempotencyClaim(env, {
+      kind: 'product_detail_fetch',
+      idempotencyKey: 'run:abc:detail:1',
+    })
+
+    const retryClaim = await claimIdempotency(env, {
+      kind: 'product_detail_fetch',
+      idempotencyKey: 'run:abc:detail:1',
+      runId: 'run:abc',
+      lenderCode: 'anz',
+    })
+    expect(retryClaim.shouldProcess).toBe(true)
+    expect(retryClaim.duplicate).toBe(false)
+    expect(retryClaim.reason).toBe('claimed')
   })
 
   it('passes through when feature is disabled', async () => {

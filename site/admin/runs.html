@@ -85,6 +85,26 @@
         </section>
 
         <section class="section-card admin-card">
+            <h2>Forced lender/day reconciliation</h2>
+            <div class="actions admin-actions">
+                <input type="date" id="reconcile-collection-date" title="Collection date">
+                <input type="text" id="reconcile-lender-code" placeholder="lender code">
+                <select id="reconcile-dataset">
+                    <option value="">All datasets</option>
+                    <option value="home_loans">Home loans</option>
+                    <option value="savings">Savings</option>
+                    <option value="term_deposits">Term deposits</option>
+                </select>
+                <button type="button" class="primary" id="run-targeted-reconcile">Run forced reconcile</button>
+            </div>
+            <div class="status admin-status-line" id="targeted-reconcile-status">Targeted reconcile idle.</div>
+            <details>
+                <summary>Latest targeted reconcile payload</summary>
+                <pre id="targeted-reconcile-output">No targeted reconcile run yet.</pre>
+            </details>
+        </section>
+
+        <section class="section-card admin-card">
             <h2>Recent completed runs</h2>
             <div id="recent-runs" class="run-grid"></div>
         </section>
@@ -131,6 +151,12 @@
             var lineageLookbackDays = document.getElementById('lineage-lookback-days');
             var dryRunLineageBtn = document.getElementById('dry-run-lineage');
             var runLineageBtn = document.getElementById('run-lineage');
+            var reconcileCollectionDate = document.getElementById('reconcile-collection-date');
+            var reconcileLenderCode = document.getElementById('reconcile-lender-code');
+            var reconcileDataset = document.getElementById('reconcile-dataset');
+            var targetedReconcileBtn = document.getElementById('run-targeted-reconcile');
+            var targetedReconcileStatus = document.getElementById('targeted-reconcile-status');
+            var targetedReconcileOutput = document.getElementById('targeted-reconcile-output');
             var inFlight = false;
             var pollTimer = null;
             var pollIntervalMs = 10000;
@@ -143,6 +169,7 @@
             }
             if (historicalStart) historicalStart.value = isoDate(30);
             if (historicalEnd) historicalEnd.value = isoDate(0);
+            if (reconcileCollectionDate) reconcileCollectionDate.value = isoDate(0);
 
             function esc(value) {
                 var div = document.createElement('div');
@@ -458,6 +485,43 @@
                     'Running lineage repair...',
                     'Lineage repair completed.'
                 );
+            });
+
+            targetedReconcileBtn.addEventListener('click', function () {
+                var collectionDate = String(reconcileCollectionDate && reconcileCollectionDate.value || '').trim();
+                var lenderCode = String(reconcileLenderCode && reconcileLenderCode.value || '').trim();
+                var dataset = String(reconcileDataset && reconcileDataset.value || '').trim();
+                if (!collectionDate || !lenderCode) {
+                    targetedReconcileStatus.textContent = 'Enter collection date and lender code.';
+                    return;
+                }
+                targetedReconcileBtn.disabled = true;
+                targetedReconcileStatus.textContent = 'Running forced lender/day reconciliation...';
+                var payload = {
+                    collection_date: collectionDate,
+                    lender_code: lenderCode
+                };
+                if (dataset) payload.datasets = [dataset];
+                portal.fetchAdmin('/runs/reconcile-lender-day', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || !d.ok) {
+                            throw new Error(d && d.error && d.error.message ? d.error.message : 'Forced reconcile failed');
+                        }
+                        targetedReconcileOutput.textContent = JSON.stringify(d, null, 2);
+                        targetedReconcileStatus.textContent = 'Forced lender/day reconciliation completed.';
+                        return Promise.all([loadRealtime(), loadBacklog()]);
+                    })
+                    .catch(function (e) {
+                        targetedReconcileStatus.textContent = e && e.message ? e.message : 'Forced reconcile failed';
+                    })
+                    .finally(function () {
+                        targetedReconcileBtn.disabled = false;
+                    });
             });
 
             Promise.all([loadRealtime(), loadBacklog()]);

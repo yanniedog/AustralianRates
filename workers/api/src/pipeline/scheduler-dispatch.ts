@@ -3,6 +3,7 @@ import { insertHealthCheckRun } from '../db/health-check-runs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
+import { dispatchReplayQueue } from './replay-queue'
 import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
 
@@ -61,12 +62,25 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     context: `scheduled_time=${scheduledIso} cron=${cron || 'unknown'}`,
   })
 
+  const replayDispatch = await dispatchReplayQueue(env, { limit: 50 }).catch((error) => {
+    log.error('scheduler', 'Replay queue dispatch failed', {
+      code: 'replay_queue_dispatch_failed',
+      error,
+      context: `scheduled_time=${scheduledIso} cron=${cron || 'unknown'}`,
+    })
+    return null
+  })
+
   const tasks = scheduledTasksForCron(cron)
   if (tasks.length === 1 && tasks[0] === 'daily') {
     log.info('scheduler', `Dispatching daily ingest cron (${cron || 'unknown'})`, {
       context: `scheduled_time=${scheduledIso}`,
     })
-    return handleScheduledDaily(event, env)
+    const result = await handleScheduledDaily(event, env)
+    return {
+      replay_dispatch: replayDispatch,
+      ...result,
+    }
   }
 
   if (tasks.includes('site_health')) {
@@ -108,6 +122,7 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       ok: true,
       skipped: false,
       kind: 'coverage_and_site_health',
+      replay_dispatch: replayDispatch,
       hourly_wayback: coverageResult.value,
       site_health: siteHealthResult.value,
     }
@@ -122,5 +137,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     skipped: true,
     reason: 'unknown_cron_expression',
     cron,
+    replay_dispatch: replayDispatch,
   }
 }

@@ -11,6 +11,7 @@ import {
   markRunFailed,
   setRunEnqueuedSummary,
 } from '../db/run-reports'
+import { getCompletedLenderCodesForDailyCollection } from '../db/lender-dataset-status'
 import { collectRbaCashRateForDate } from '../ingest/rba'
 import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
 import { enqueueBackfillJobs, enqueueDailyLenderJobs, enqueueDailySavingsLenderJobs } from '../queue/producer'
@@ -25,6 +26,7 @@ type DailyRunOptions = {
   force?: boolean
   /** When set, use this as runId (e.g. for interval-based runs so each run is unique). */
   runIdOverride?: string
+  collectionDateOverride?: string
   lenderCodes?: string[]
   datasets?: DatasetKind[]
 }
@@ -33,95 +35,6 @@ type BackfillRunRequest = {
   lenderCodes?: string[]
   monthCursor?: string
   maxSnapshotsPerMonth?: number
-}
-
-function sourceWhere(runSource: 'scheduled' | 'manual'): string {
-  if (runSource === 'manual') return `run_source = 'manual'`
-  return `(run_source IS NULL OR run_source = 'scheduled')`
-}
-
-function lenderCodeByBankName(lenders: LenderConfig[]): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const lender of lenders) {
-    map.set(lender.canonical_bank_name, lender.code)
-    map.set(lender.name, lender.code)
-  }
-  return map
-}
-
-async function getCompletedMortgageLenders(
-  db: D1Database,
-  lenders: LenderConfig[],
-  collectionDate: string,
-  runSource: 'scheduled' | 'manual',
-): Promise<Set<string>> {
-  const where = sourceWhere(runSource)
-  const result = await db
-    .prepare(
-      `SELECT DISTINCT bank_name
-       FROM historical_loan_rates
-       WHERE collection_date = ?1 AND ${where}`,
-    )
-    .bind(collectionDate)
-    .all<{ bank_name: string }>()
-
-  const bankToCode = lenderCodeByBankName(lenders)
-  const completed = new Set<string>()
-  for (const row of result.results ?? []) {
-    const code = bankToCode.get(row.bank_name)
-    if (code) completed.add(code)
-  }
-  return completed
-}
-
-async function getCompletedSavingsLenders(
-  db: D1Database,
-  lenders: LenderConfig[],
-  collectionDate: string,
-  runSource: 'scheduled' | 'manual',
-): Promise<Set<string>> {
-  const where = sourceWhere(runSource)
-  const result = await db
-    .prepare(
-      `SELECT DISTINCT bank_name
-       FROM historical_savings_rates
-       WHERE collection_date = ?1 AND ${where}`,
-    )
-    .bind(collectionDate)
-    .all<{ bank_name: string }>()
-
-  const bankToCode = lenderCodeByBankName(lenders)
-  const completed = new Set<string>()
-  for (const row of result.results ?? []) {
-    const code = bankToCode.get(row.bank_name)
-    if (code) completed.add(code)
-  }
-  return completed
-}
-
-async function getCompletedTdLenders(
-  db: D1Database,
-  lenders: LenderConfig[],
-  collectionDate: string,
-  runSource: 'scheduled' | 'manual',
-): Promise<Set<string>> {
-  const where = sourceWhere(runSource)
-  const result = await db
-    .prepare(
-      `SELECT DISTINCT bank_name
-       FROM historical_term_deposit_rates
-       WHERE collection_date = ?1 AND ${where}`,
-    )
-    .bind(collectionDate)
-    .all<{ bank_name: string }>()
-
-  const bankToCode = lenderCodeByBankName(lenders)
-  const completed = new Set<string>()
-  for (const row of result.results ?? []) {
-    const code = bankToCode.get(row.bank_name)
-    if (code) completed.add(code)
-  }
-  return completed
 }
 
 function filterLenders(codes?: string[]): LenderConfig[] {
@@ -203,7 +116,7 @@ function isMonthCursor(value: string | undefined): value is string {
 
 export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions) {
   const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || MELBOURNE_TIMEZONE)
-  const collectionDate = melbourneParts.date
+  const collectionDate = options.collectionDateOverride || melbourneParts.date
   const baseRunId = buildDailyRunId(collectionDate)
   const runId =
     options.runIdOverride ??
@@ -248,9 +161,21 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
     }
 
     const [doneLoans, doneSavings, doneTd] = await Promise.all([
-      getCompletedMortgageLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
-      getCompletedSavingsLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
-      getCompletedTdLenders(env.DB, TARGET_LENDERS, collectionDate, options.source),
+      getCompletedLenderCodesForDailyCollection(env.DB, {
+        collectionDate,
+        dataset: 'home_loans',
+        runSource: options.source,
+      }),
+      getCompletedLenderCodesForDailyCollection(env.DB, {
+        collectionDate,
+        dataset: 'savings',
+        runSource: options.source,
+      }),
+      getCompletedLenderCodesForDailyCollection(env.DB, {
+        collectionDate,
+        dataset: 'term_deposits',
+        runSource: options.source,
+      }),
     ])
     const pendingLoanLenders = datasetSelection.homeLoans
       ? pendingSelectedLenders(selectedLenders, doneLoans, Boolean(options.force))

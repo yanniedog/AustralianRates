@@ -1,6 +1,7 @@
 import { getLenderDatasetRun, markLenderDatasetDetailProcessed, tryMarkLenderDatasetFinalized } from '../../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../../db/presence-finalize'
 import type { EnvBindings } from '../../types'
+import { isLenderDatasetReadyForFinalization } from '../../utils/lender-dataset-invariants'
 import { log } from '../../utils/logger'
 import type { DatasetKind } from '../../../../../packages/shared/src'
 
@@ -86,6 +87,14 @@ export async function finalizeLenderDataset(
   }
 
   const expected = Number(run.expected_detail_count || 0)
+  const readiness = isLenderDatasetReadyForFinalization(run)
+  if (!readiness.ready) {
+    if (options?.throwIfNotReady) {
+      throw new Error(`lender_finalize_not_ready:${input.lenderCode}:${input.dataset}:${readiness.reason || 'unknown'}`)
+    }
+    return false
+  }
+
   if (expected <= 0) {
     const marked = await runWithTransientRetry(
       {
@@ -111,13 +120,6 @@ export async function finalizeLenderDataset(
         ` presence_skipped=1`,
     })
     return true
-  }
-  const detailProcessed = Number(run.completed_detail_count || 0) + Number(run.failed_detail_count || 0)
-  if (detailProcessed < expected) {
-    if (options?.throwIfNotReady) {
-      throw new Error(`lender_finalize_not_ready:${input.lenderCode}:${input.dataset}:${detailProcessed}/${expected}`)
-    }
-    return false
   }
 
   const presenceSummary = await runWithTransientRetry(

@@ -99,4 +99,13 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin_download_jobs')
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS admin_download_artifacts')
   })
+
+  it('includes ingest replay queue migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0027_ingest_replay_queue.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS ingest_replay_queue')
+    expect(sql).toContain("status IN ('queued', 'dispatching', 'succeeded', 'failed')")
+    expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_ingest_replay_queue_dispatch')
+    expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_ingest_replay_queue_scope')
+  })
 })
