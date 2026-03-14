@@ -247,6 +247,14 @@
         return '<a class="chart-point-link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">Open</a>';
     }
 
+    function spotlightField(label, value) {
+        return '' +
+            '<span class="chart-spotlight-field">' +
+                '<strong>' + esc(label) + '</strong>' +
+                '<span class="chart-spotlight-value">' + esc(value) + '</span>' +
+            '</span>';
+    }
+
     function renderSpotlight(model, fields) {
         if (!els.chartPointDetails) return;
         if (!model || !model.spotlight || !model.spotlight.series) {
@@ -283,10 +291,10 @@
                     (lenderEntry ? '<span class="chart-summary-pill is-config">Best product by bank</span>' : '') +
                 '</div>' +
                 '<div class="chart-spotlight-grid">' +
-                    '<span><strong>Bank</strong> ' + esc(chartConfig.formatFieldValue('bank_name', row.bank_name || '-', row)) + '</span>' +
-                    '<span><strong>Product</strong> ' + esc(row.product_name || '-') + '</span>' +
-                    '<span><strong>Delta</strong> ' + esc(Number.isFinite(Number(spotlight.series.delta)) ? chartConfig.formatMetricValue(fields.yField, spotlight.series.delta) : '-') + '</span>' +
-                    '<span><strong>product_key</strong> ' + esc(String(row.product_key || spotlight.series.key || '-')) + '</span>' +
+                    spotlightField('Bank', chartConfig.formatFieldValue('bank_name', row.bank_name || '-', row)) +
+                    spotlightField('Product', row.product_name || '-') +
+                    spotlightField('Delta', Number.isFinite(Number(spotlight.series.delta)) ? chartConfig.formatMetricValue(fields.yField, spotlight.series.delta) : '-') +
+                    spotlightField('product_key', String(row.product_key || spotlight.series.key || '-')) +
                 '</div>' +
                 '<div class="chart-spotlight-link-row">' + productLink(row) + '</div>' +
             '</div>';

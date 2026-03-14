@@ -377,6 +377,11 @@ savingsPublicRoutes.get('/coverage', async (c) => {
 })
 
 savingsPublicRoutes.get('/export', async (c) => {
+  const { cacheKey, response: cachedResponse } = await matchPublicReadCache(c, shouldBypassPublicReadCache(c, false))
+  if (cachedResponse) {
+    return cachedResponse
+  }
+
   const q = c.req.query()
   const format = String(q.format || 'json').toLowerCase()
   if (format !== 'csv' && format !== 'json') {
@@ -418,11 +423,15 @@ savingsPublicRoutes.get('/export', async (c) => {
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', 'attachment; filename="savings-export.csv"')
     setCsvMetaHeaders(c, meta)
-    return c.body(toCsv(data as Array<Record<string, unknown>>))
+    const response = c.body(toCsv(data as Array<Record<string, unknown>>))
+    storePublicReadCache(c, cacheKey, response)
+    return response
   }
   c.header('Content-Type', 'application/json; charset=utf-8')
   c.header('Content-Disposition', 'attachment; filename="savings-export.json"')
-  return c.json({ data, total, last_page: 1, meta })
+  const response = c.json({ data, total, last_page: 1, meta })
+  storePublicReadCache(c, cacheKey, response)
+  return response
 })
 
 savingsPublicRoutes.get('/export.csv', async (c) => {

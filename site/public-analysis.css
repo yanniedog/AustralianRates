@@ -217,15 +217,29 @@
 .chart-spotlight-subtitle,
 .chart-summary-pill,
 .chart-point-link,
-.chart-spotlight-grid span {
-    overflow-wrap: normal;
-    word-break: normal;
-    hyphens: none;
+.chart-spotlight-copy strong,
+.chart-spotlight-field,
+.chart-spotlight-value {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
 }
 
-.chart-spotlight-grid span {
+.chart-spotlight-grid span,
+.chart-spotlight-field {
     min-width: 0;
     flex: 1 1 180px;
+}
+
+.chart-spotlight-field {
+    display: grid;
+    gap: 4px;
+    align-content: start;
+}
+
+.chart-spotlight-value {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .chart-point-link {
