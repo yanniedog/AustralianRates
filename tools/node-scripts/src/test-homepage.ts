@@ -8,6 +8,8 @@ const testUrlObj = new URL(TEST_URL);
 const baseOrigin = testUrlObj.origin;
 const sharedParams = new URLSearchParams(testUrlObj.search || '');
 const isProductionUrl = /^https:\/\/www\.australianrates\.com\/?/i.test(TEST_URL);
+const CLARITY_PROJECT_ID = 'vt4vtenviy';
+const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 const REQUIRED_HEADERS = ['Found at', 'Headline Rate', 'Bank', 'Product Code', 'Rate Confirmed', 'URLs'];
 const HOME_ONLY_HEADERS = ['Comparison Rate'];
 const VIEWPORTS = [
@@ -48,6 +50,7 @@ function isIgnorableTelemetryFailure(failure) {
     const url = String(failure.url);
     const error = String(failure.error || '');
     if (url.includes('static.cloudflareinsights.com/beacon.min.js') && error.includes('ERR_NAME_NOT_RESOLVED')) return true;
+    if (url.includes('clarity.ms/') && /^net::ERR_|ERR_/.test(error)) return true;
     if (error.includes('ERR_ABORTED')) return true;
     return false;
 }
@@ -218,6 +221,32 @@ async function verifyWorkspaceShell(page, results, label) {
 
     if (Object.values(shell.controls).every(Boolean)) pass(results, `${label}: core controls are present`);
     else fail(results, `${label}: one or more core controls are missing`);
+}
+
+async function verifyClarityPresent(page, results, label) {
+    const state = await page.evaluate((expectedSrc) => {
+        const script = document.getElementById('ar-clarity-tag');
+        return {
+            hasApi: typeof window.clarity === 'function',
+            scriptId: String(script?.id || ''),
+            scriptSrc: String(script?.getAttribute('src') || script?.src || ''),
+            matchingScripts: Array.from(document.scripts).filter((node) => {
+                const src = String(node.getAttribute('src') || node.src || '');
+                return src === expectedSrc;
+            }).length,
+        };
+    }, CLARITY_SRC).catch(() => ({
+        hasApi: false,
+        scriptId: '',
+        scriptSrc: '',
+        matchingScripts: 0,
+    }));
+
+    if (state.hasApi && state.scriptId === 'ar-clarity-tag' && state.scriptSrc === CLARITY_SRC && state.matchingScripts === 1) {
+        pass(results, `${label}: Clarity bootstrap is present with the enforced project id`);
+    } else {
+        fail(results, `${label}: Clarity bootstrap missing or incorrect (id="${state.scriptId}", src="${state.scriptSrc}", count=${state.matchingScripts})`);
+    }
 }
 
 async function verifyHeroStats(page, results, label) {
@@ -709,6 +738,7 @@ async function verifyLegalPages(page, results) {
     for (const legal of LEGAL_PAGES) {
         const url = withSharedQuery(legal.path);
         await gotoPublic(page, url);
+        await verifyClarityPresent(page, results, legal.name);
         const state = await page.evaluate(() => ({
             title: document.title,
             body: String(document.body.textContent || '').replace(/\s+/g, ' ').trim(),
@@ -718,6 +748,14 @@ async function verifyLegalPages(page, results) {
             pass(results, `${legal.name}: legal page is reachable with distinct content`);
         } else {
             fail(results, `${legal.name}: legal page content/title mismatch`);
+        }
+
+        if (legal.name === 'Privacy') {
+            if (state.body.includes('Microsoft Clarity') && state.body.includes('Clarity may use cookies or similar browser storage')) {
+                pass(results, 'Privacy: Clarity disclosure is visible on the live privacy page');
+            } else {
+                fail(results, 'Privacy: live privacy page is missing the Clarity disclosure');
+            }
         }
     }
 }
@@ -743,6 +781,7 @@ async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
 async function verifySectionSmoke(page, results, section) {
     const url = withSharedQuery(section.path, section.apiBasePath);
     await gotoPublic(page, url);
+    await verifyClarityPresent(page, results, section.name);
     await verifyHeader(page, results, section.name, section.name);
     await verifyWorkspaceShell(page, results, section.name);
     await verifyHeroStats(page, results, section.name);
@@ -802,6 +841,7 @@ async function runTests() {
         }
 
         await verifySkipLink(page, results, 'Homepage');
+        await verifyClarityPresent(page, results, 'Homepage');
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
         await verifyWorkspaceShell(page, results, 'Homepage');
         await verifyHeroStats(page, results, 'Homepage');

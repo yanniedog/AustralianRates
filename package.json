@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "install:all": "npm install --workspaces",
-    "build": "npm run build:site-version",
+    "build": "npm run check:public-assets && npm run check:clarity && npm run build:site-version",
     "build:site-version": "node write-deploy-version.js",
     "dev:api": "npm run dev -w workers/api",
     "dev:archive": "npm run dev -w workers/archive",
@@ -31,6 +31,7 @@
     "pages:trigger": "node scripts/trigger-pages-deploy.js",
     "pages:create-full-token": "node create-full-access-token.js",
     "check:public-assets": "node scripts/check-public-assets.js",
+    "check:clarity": "node scripts/check-clarity-installation.js",
     "typecheck:scripts": "npx tsc -p tools/node-scripts/tsconfig.json --noEmit",
     "typecheck:api": "npm run typecheck -w workers/api",
     "backup:api-db": "node scripts/export-d1-backup.js --db australianrates_api --remote",

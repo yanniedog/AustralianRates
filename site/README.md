@@ -2,6 +2,8 @@
 
 The frontend is plain HTML, CSS, and browser JS under `site/`. There is no bundler. New pages should follow the existing script order and reuse the `window.AR` modules instead of creating alternate boot paths.
 
+`site-variant.js` is also the required bootstrap for public-page Clarity analytics. `npm run build` and `npm run check:clarity` fail if that integration or its privacy disclosure is removed.
+
 ## Public Page Load Order
 
 Public section pages (`/`, `/savings/`, `/term-deposits/`) use this dependency chain:

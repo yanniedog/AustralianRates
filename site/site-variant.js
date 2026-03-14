@@ -6,9 +6,11 @@
     var loc = window.location;
     var host = String((loc && loc.hostname) || '');
     var isMobileHost = /^m\./i.test(host);
-    var isLocalHost = /(^|\.)localhost$/i.test(host);
+    var isLocalHost = /(^|\.)localhost$/i.test(host) || /^127(?:\.\d{1,3}){3}$/.test(host) || host === '::1';
     var desktopHost = isMobileHost ? host.replace(/^m\./i, 'www.') : (isLocalHost ? 'www.localhost' : 'www.australianrates.com');
     var mobileHost = isMobileHost ? host : (isLocalHost ? 'm.localhost' : 'm.australianrates.com');
+    // Public-page analytics is enforced by scripts/check-clarity-installation.js and homepage QA.
+    var clarityProjectId = 'vt4vtenviy';
 
     function swapHost(nextHost, path) {
         var url = new URL(String(path || loc.href), loc.origin);
@@ -16,18 +18,44 @@
         return url.toString();
     }
 
+    function initClarity(projectId) {
+        if (!projectId || isLocalHost || typeof document === 'undefined') return false;
+        if (document.getElementById('ar-clarity-tag')) return true;
+
+        window.clarity = window.clarity || function () {
+            (window.clarity.q = window.clarity.q || []).push(arguments);
+        };
+
+        var script = document.createElement('script');
+        var firstScript = document.getElementsByTagName('script')[0];
+
+        script.async = true;
+        script.src = 'https://www.clarity.ms/tag/' + projectId;
+        script.id = 'ar-clarity-tag';
+
+        if (firstScript && firstScript.parentNode) firstScript.parentNode.insertBefore(script, firstScript);
+        else if (document.head) document.head.appendChild(script);
+
+        return true;
+    }
+
     document.documentElement.setAttribute('data-ar-host-variant', isMobileHost ? 'mobile' : 'desktop');
+    initClarity(clarityProjectId);
 
     window.AR.siteVariant = {
         host: host,
         isMobileHost: isMobileHost,
         isDesktopHost: !isMobileHost,
+        isLocalHost: isLocalHost,
         desktopHost: desktopHost,
         mobileHost: mobileHost,
+        clarityProjectId: clarityProjectId,
+        clarityEnabled: !isLocalHost,
         desktopUrl: function (path) { return swapHost(desktopHost, path); },
         mobileUrl: function (path) { return swapHost(mobileHost, path); },
         counterpartUrl: function (path) {
             return isMobileHost ? swapHost(desktopHost, path) : swapHost(mobileHost, path);
-        }
+        },
+        initClarity: initClarity,
     };
 })();
