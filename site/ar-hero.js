@@ -28,6 +28,18 @@
         };
     var QUICK_COMPARE_LIMIT = 20;
     var ladderRows = [];
+    var publicIntro = window.AR.publicIntro || null;
+
+    function syncPublicIntro() {
+        publicIntro = window.AR.publicIntro || publicIntro;
+        return publicIntro;
+    }
+
+    function setIntroMetric(id, value, note) {
+        var intro = syncPublicIntro();
+        if (!intro || typeof intro.setLiveMetric !== 'function') return;
+        intro.setLiveMetric(id, value, note);
+    }
 
     function renderStat(el, icon, label, value, help) {
         if (!el) return;
@@ -56,6 +68,8 @@
     function showHeroError() {
         setInlineError(els.heroError, 'Overview metrics are temporarily unavailable. Refresh to try again.');
         [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
+        setIntroMetric('updated', 'Unavailable', 'Latest collection could not be loaded.');
+        setIntroMetric('rows', 'Unavailable', 'Slice counts are temporarily unavailable.');
     }
 
     async function loadHeroStats() {
@@ -77,6 +91,7 @@
 
             var total = Number(ratesData.total || 0);
             renderStat(els.statRecords, 'rows', 'Rows', total.toLocaleString(), 'Total rows in the active slice.');
+            setIntroMetric('rows', total.toLocaleString(), 'Rows in the current filtered slice.');
 
             if (ratesData.data && ratesData.data.length > 0) {
                 var latest = ratesData.data[0];
@@ -85,6 +100,7 @@
                         ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
                         : { text: String(latest.collection_date) };
                     renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
+                    setIntroMetric('updated', renderedDate.text, 'Latest collection in the current filtered slice.');
                 }
                 if (section === 'home-loans' && els.statCashRate && latest.rba_cash_rate != null) {
                     renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), 'Current RBA cash rate.');
@@ -164,6 +180,7 @@
     async function loadQuickCompare() {
         if (!els.quickCompareCards || !apiBase) {
             if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
+            setIntroMetric('leader', 'Unavailable', 'Current leader data could not be loaded.');
             return;
         }
         try {
@@ -175,11 +192,21 @@
             var data = await response.json();
             ladderRows = sortRows(Array.isArray(data && data.rows) ? data.rows : []);
             applyLadderSearch();
+            if (ladderRows.length > 0) {
+                var lead = ladderRows[0];
+                var leadBank = bankBrand && typeof bankBrand.shortLabel === 'function'
+                    ? bankBrand.shortLabel(lead.bank_name)
+                    : String(lead.bank_name || '').trim();
+                setIntroMetric('leader', pct(lead.interest_rate), (leadBank || 'Current leader') + ' in the active slice.');
+            } else {
+                setIntroMetric('leader', 'No match', 'Adjust filters to find current leaders.');
+            }
         } catch (err) {
             clientLog('error', 'Quick compare load failed', {
                 message: err && err.message ? err.message : String(err),
             });
             if (els.quickCompareCards) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
+            setIntroMetric('leader', 'Unavailable', 'Current leader data could not be loaded.');
         }
     }
 
