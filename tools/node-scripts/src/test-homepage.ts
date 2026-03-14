@@ -266,6 +266,131 @@ async function verifyExplorerTable(page, results, label, expectComparisonRate) {
     verifyHeaders(results, label, table.headers, expectComparisonRate);
 }
 
+async function verifyBankBadgeLogos(page, results, label) {
+    await page.waitForFunction(() => {
+        const logos = Array.from(document.querySelectorAll('#rate-table img.bank-badge-logo')).slice(0, 8);
+        return logos.length >= 4 && logos.every((img) => img.complete && img.naturalWidth > 0 && String(img.getAttribute('loading') || '').toLowerCase() !== 'lazy');
+    }, null, { timeout: 15000 }).catch(() => null);
+
+    const logos = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('#rate-table img.bank-badge-logo')).slice(0, 8).map((img) => ({
+            complete: !!img.complete,
+            loading: String(img.getAttribute('loading') || '').toLowerCase(),
+            naturalWidth: Number(img.naturalWidth || 0),
+        }));
+    }).catch(() => []);
+
+    const stable = logos.length >= 4 && logos.every((logo) => logo.complete && logo.naturalWidth > 0 && logo.loading !== 'lazy');
+    if (stable) pass(results, `${label}: visible bank logos render eagerly without broken-image states`);
+    else fail(results, `${label}: bank logo badges are incomplete or still lazy-loaded`);
+}
+
+async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await gotoPublic(page, baseUrl);
+    await waitForExplorerTableReady(page);
+
+    async function dragRail(selector, cssVar, delta, controlLabel) {
+        await page.locator(selector).scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(150);
+        const before = await page.evaluate((payload) => {
+            const handle = document.querySelector(payload.selector);
+            const terminal = document.querySelector('.market-terminal');
+            const header = document.querySelector('.site-header');
+            if (!handle || !terminal) return null;
+            const rect = handle.getBoundingClientRect();
+            const headerBottom = header ? header.getBoundingClientRect().bottom : 0;
+            const x = rect.left + (rect.width / 2);
+            const y = Math.max(headerBottom + 24, Math.min(window.innerHeight - 40, Math.max(rect.top + 40, 200)));
+            const target = document.elementFromPoint(x, y);
+            return {
+                probeTargetId: target ? String(target.id || '') : '',
+                value: getComputedStyle(terminal).getPropertyValue(payload.cssVar).trim(),
+                x,
+                y,
+            };
+        }, { selector, cssVar }).catch(() => null);
+
+        if (!before || before.probeTargetId !== selector.replace(/^#/, '')) {
+            fail(results, `${label}: ${controlLabel} could not be targeted for drag verification`);
+            return;
+        }
+
+        await page.mouse.move(before.x, before.y);
+        await page.mouse.down();
+        await page.mouse.move(before.x + delta, before.y, { steps: 12 });
+        await page.mouse.up();
+        await page.waitForTimeout(250);
+
+        const after = await page.evaluate((varName) => {
+            const terminal = document.querySelector('.market-terminal');
+            return terminal ? getComputedStyle(terminal).getPropertyValue(varName).trim() : '';
+        }, cssVar).catch(() => '');
+
+        if (after && after !== before.value) pass(results, `${label}: ${controlLabel} drag updates panel width`);
+        else fail(results, `${label}: ${controlLabel} drag did not change the panel width`);
+    }
+
+    await dragRail('#left-rail-resizer', '--ar-left-rail-width', 60, 'left rail resizer');
+    await dragRail('#right-rail-resizer', '--ar-right-rail-width', -60, 'right rail resizer');
+
+    await page.locator('#rate-table').scrollIntoViewIfNeeded().catch(() => {});
+    await page.click('#table-settings-btn');
+    await page.locator('#table-settings-popover input[data-setting="move-columns"]').check();
+    await page.waitForTimeout(500);
+
+    const moveModeState = await page.evaluate(() => {
+        const columns = document.querySelectorAll('#rate-table .tabulator-header .tabulator-col').length;
+        const customTitles = Array.from(document.querySelectorAll('#rate-table .ar-move-col-title')).slice(0, 4).map((el) => {
+            const rect = el.getBoundingClientRect();
+            return {
+                text: String(el.textContent || '').trim(),
+                width: Number(rect.width || 0),
+            };
+        });
+        return {
+            columns,
+            customCount: document.querySelectorAll('#rate-table .ar-move-col-title').length,
+            tabulatorTitleCount: document.querySelectorAll('#rate-table .tabulator-header .tabulator-col .tabulator-col-title').length,
+            customTitles,
+        };
+    }).catch(() => null);
+
+    const moveModeLabelsVisible = !!moveModeState
+        && moveModeState.customCount === moveModeState.columns
+        && moveModeState.tabulatorTitleCount === moveModeState.columns
+        && moveModeState.customTitles.length >= 4
+        && moveModeState.customTitles.every((title) => title.text.length > 0 && title.width >= 16);
+
+    if (moveModeLabelsVisible) pass(results, `${label}: move-column mode keeps a single visible label per header`);
+    else fail(results, `${label}: move-column mode header labels are duplicated or collapsed`);
+
+    const orderBefore = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('#rate-table .ar-move-col-title')).slice(0, 4).map((el) => String(el.textContent || '').trim());
+    }).catch(() => []);
+
+    await page.locator('#rate-table .ar-move-col-btn-right').first().click().catch(() => {});
+    await page.waitForTimeout(400);
+
+    const orderAfter = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('#rate-table .ar-move-col-title')).slice(0, 4).map((el) => String(el.textContent || '').trim());
+    }).catch(() => []);
+
+    const moved = orderBefore.length >= 2
+        && orderAfter.length >= 2
+        && orderAfter[0] === orderBefore[1]
+        && orderAfter[1] === orderBefore[0];
+
+    if (moved) pass(results, `${label}: move-column controls reorder the leading headers`);
+    else fail(results, `${label}: move-column controls did not reorder the leading headers`);
+
+    await page.evaluate(() => {
+        try { window.localStorage.removeItem('ar-layout-widths:home-loans'); } catch (_) {}
+    }).catch(() => {});
+    await gotoPublic(page, baseUrl);
+    await waitForExplorerTableReady(page);
+}
+
 async function verifyFooterDeployStatus(page, results, label) {
     await openFooterTechnical(page);
     await page.waitForFunction(() => {
@@ -681,6 +806,7 @@ async function runTests() {
         await verifyWorkspaceShell(page, results, 'Homepage');
         await verifyHeroStats(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
+        await verifyBankBadgeLogos(page, results, 'Homepage');
         await verifyFooterDeployStatus(page, results, 'Homepage');
         await verifyFooterLogControls(page, results, 'Homepage');
         await verifyFooterLegalLinks(page, results, 'Homepage');
@@ -691,6 +817,7 @@ async function runTests() {
         await verifyChartSmoke(page, results, 'Homepage');
         await verifyPivotLoad(page, results, 'Homepage');
         await verifyExportRequest(page, results, 'Homepage');
+        await verifyDesktopWorkspaceControls(page, results, 'Homepage', homeUrl);
         await verifyTabsAndHash(page, results, 'Homepage', homeUrl);
         await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);
         await verifyMobileRail(page, results, 'Homepage', homeUrl);

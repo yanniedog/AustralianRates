@@ -7,10 +7,7 @@
     var themeTransitionTimer = null;
 
     function getDefaultTheme() {
-        var path = (typeof window !== 'undefined' && window.location && window.location.pathname)
-            ? String(window.location.pathname).toLowerCase()
-            : '';
-        return path.indexOf('/admin') === 0 ? 'dark' : 'light';
+        return 'dark';
     }
 
     function normalizeTheme(value) {

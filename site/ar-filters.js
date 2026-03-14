@@ -624,9 +624,9 @@
         refreshFilterUiState: refreshFilterUiState,
         markFiltersApplied: markFiltersApplied,
         bindInteractionListeners: bindInteractionListeners,
-        validateInputs: function () {
+        validateInputs: function (options) {
             return filterUi && filterUi.validateDateInputs
-                ? filterUi.validateDateInputs()
+                ? filterUi.validateDateInputs(options || {})
                 : true;
         },
         getStateSnapshot: getStateSnapshot,

@@ -1,72 +1,83 @@
-body.ar-public,
+body.ar-public {
+    --ar-font-display: "Space Grotesk", "Segoe UI Variable", "Segoe UI", sans-serif;
+    --ar-font-ui: "Space Grotesk", "Segoe UI Variable", "Segoe UI", sans-serif;
+    --ar-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+    position: relative;
+}
+
 body.ar-legal {
     --ar-font-display: "Merriweather", "Iowan Old Style", "Times New Roman", serif;
     --ar-font-ui: "Space Grotesk", "Segoe UI Variable", "Segoe UI", sans-serif;
+    --ar-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
     position: relative;
 }
 
 :root[data-theme="dark"] body.ar-public,
 :root[data-theme="dark"] body.ar-legal {
-    --ar-bg: #07111a;
-    --ar-bg-elevated: #0b1621;
-    --ar-surface: rgba(10, 21, 34, 0.88);
-    --ar-surface-2: rgba(14, 28, 45, 0.92);
-    --ar-surface-3: rgba(18, 35, 55, 0.96);
-    --ar-surface-soft: rgba(10, 20, 31, 0.9);
-    --ar-text: #edf3fb;
-    --ar-text-soft: #c2d2e4;
-    --ar-text-muted: #89a0b7;
-    --ar-line: rgba(226, 234, 244, 0.12);
-    --ar-line-strong: rgba(226, 234, 244, 0.2);
-    --ar-accent: #6aa7ff;
-    --ar-accent-hover: #4d8cf2;
-    --ar-accent-2: #c28a2b;
-    --ar-accent-soft: rgba(106, 167, 255, 0.14);
-    --ar-overlay: rgba(4, 9, 16, 0.7);
-    --ar-shadow: 0 30px 90px rgba(2, 6, 10, 0.34);
-    --ar-shadow-soft: 0 14px 36px rgba(2, 6, 10, 0.18);
+    --ar-bg: #03070c;
+    --ar-bg-elevated: #07111a;
+    --ar-surface: rgba(6, 12, 19, 0.88);
+    --ar-surface-2: rgba(9, 18, 28, 0.92);
+    --ar-surface-3: rgba(13, 25, 38, 0.96);
+    --ar-surface-soft: rgba(5, 10, 16, 0.9);
+    --ar-text: #e9f4ff;
+    --ar-text-soft: #b3c8dc;
+    --ar-text-muted: #70859a;
+    --ar-line: rgba(202, 221, 240, 0.12);
+    --ar-line-strong: rgba(202, 221, 240, 0.21);
+    --ar-accent: #66f6cf;
+    --ar-accent-hover: #3fddb6;
+    --ar-accent-2: #f1b55d;
+    --ar-accent-soft: rgba(102, 246, 207, 0.12);
+    --ar-overlay: rgba(2, 5, 9, 0.76);
+    --ar-shadow: 0 34px 90px rgba(0, 0, 0, 0.42);
+    --ar-shadow-soft: 0 16px 44px rgba(0, 0, 0, 0.26);
 }
 
 :root[data-theme="light"] body.ar-public,
 :root[data-theme="light"] body.ar-legal {
-    --ar-bg: #f4efe6;
-    --ar-bg-elevated: #faf7f2;
-    --ar-surface: rgba(255, 252, 248, 0.92);
-    --ar-surface-2: rgba(248, 243, 236, 0.96);
-    --ar-surface-3: rgba(238, 232, 223, 0.98);
-    --ar-surface-soft: rgba(252, 248, 242, 0.92);
-    --ar-text: #162232;
-    --ar-text-soft: #405062;
-    --ar-text-muted: #6e7b89;
-    --ar-line: rgba(22, 34, 50, 0.1);
-    --ar-line-strong: rgba(22, 34, 50, 0.18);
-    --ar-accent: #256ff2;
-    --ar-accent-hover: #1558cb;
-    --ar-accent-2: #966014;
-    --ar-accent-soft: rgba(37, 111, 242, 0.12);
-    --ar-overlay: rgba(22, 34, 50, 0.22);
-    --ar-shadow: 0 30px 80px rgba(45, 35, 20, 0.1);
-    --ar-shadow-soft: 0 12px 28px rgba(45, 35, 20, 0.08);
+    --ar-bg: #eef3f6;
+    --ar-bg-elevated: #f8fbfd;
+    --ar-surface: rgba(255, 255, 255, 0.92);
+    --ar-surface-2: rgba(247, 251, 253, 0.96);
+    --ar-surface-3: rgba(238, 245, 249, 0.98);
+    --ar-surface-soft: rgba(250, 253, 255, 0.94);
+    --ar-text: #102131;
+    --ar-text-soft: #405465;
+    --ar-text-muted: #647789;
+    --ar-line: rgba(16, 33, 49, 0.1);
+    --ar-line-strong: rgba(16, 33, 49, 0.17);
+    --ar-accent: #168f72;
+    --ar-accent-hover: #0f775f;
+    --ar-accent-2: #a46516;
+    --ar-accent-soft: rgba(22, 143, 114, 0.11);
+    --ar-overlay: rgba(16, 33, 49, 0.18);
+    --ar-shadow: 0 28px 72px rgba(25, 47, 66, 0.12);
+    --ar-shadow-soft: 0 12px 30px rgba(25, 47, 66, 0.08);
 }
 
 body.ar-section-home-loans {
-    --ar-showcase-ink: #0d2237;
-    --ar-showcase-glow: rgba(208, 161, 74, 0.24);
+    --ar-showcase-ink: #081722;
+    --ar-showcase-glow: rgba(241, 181, 93, 0.18);
+    --ar-showcase-spark: #f1b55d;
 }
 
 body.ar-section-savings {
-    --ar-showcase-ink: #0c2a34;
-    --ar-showcase-glow: rgba(127, 180, 98, 0.22);
+    --ar-showcase-ink: #071918;
+    --ar-showcase-glow: rgba(102, 246, 207, 0.16);
+    --ar-showcase-spark: #66f6cf;
 }
 
 body.ar-section-term-deposits {
-    --ar-showcase-ink: #0e223a;
-    --ar-showcase-glow: rgba(121, 161, 225, 0.22);
+    --ar-showcase-ink: #091625;
+    --ar-showcase-glow: rgba(126, 188, 255, 0.18);
+    --ar-showcase-spark: #7ebcff;
 }
 
 body.ar-legal {
-    --ar-showcase-ink: #0d2237;
-    --ar-showcase-glow: rgba(208, 161, 74, 0.2);
+    --ar-showcase-ink: #081722;
+    --ar-showcase-glow: rgba(241, 181, 93, 0.16);
+    --ar-showcase-spark: #f1b55d;
 }
 
 body.ar-public::before,
@@ -76,35 +87,45 @@ body.ar-legal::before {
     inset: 0;
     pointer-events: none;
     background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.62), transparent 28%),
-        radial-gradient(circle at 82% 10%, var(--ar-showcase-glow), transparent 26%),
-        linear-gradient(180deg, transparent, rgba(10, 18, 28, 0.02));
+        radial-gradient(circle at 16% 0, color-mix(in srgb, var(--ar-accent) 16%, transparent), transparent 22%),
+        radial-gradient(circle at 82% 8%, var(--ar-showcase-glow), transparent 26%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-text) 6%, transparent), transparent 18%),
+        repeating-linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--ar-text) 4%, transparent) 0,
+            color-mix(in srgb, var(--ar-text) 4%, transparent) 1px,
+            transparent 1px,
+            transparent 4px
+        );
+    opacity: 0.76;
     z-index: 0;
 }
 
 body.ar-public .bg-layer,
 body.ar-legal .bg-layer {
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 26%),
-        radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.4), transparent 24%),
-        linear-gradient(180deg, var(--ar-bg) 0%, color-mix(in srgb, var(--ar-bg) 88%, #ffffff) 100%);
+        radial-gradient(circle at 18% 0, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 24%),
+        radial-gradient(circle at 82% 10%, var(--ar-showcase-glow), transparent 24%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 78%, #060a10) 0%, #050b11 54%, #02050a 100%);
 }
 
 body.ar-public .site-header,
 body.ar-legal .site-header {
-    top: 10px;
+    top: 12px;
     z-index: 120;
     width: min(var(--ar-shell-max), calc(100vw - 28px));
     margin: 8px auto 0;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 84%, transparent);
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--ar-surface) 94%, transparent);
-    box-shadow: var(--ar-shadow-soft);
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
+    border-radius: 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 94%, transparent));
+    box-shadow:
+        var(--ar-shadow-soft),
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 5%, transparent);
 }
 
 body.ar-public .site-header-inner,
 body.ar-legal .site-header-inner {
-    min-height: 62px;
+    min-height: 64px;
     padding: 12px 16px;
     gap: 16px;
     grid-template-columns: minmax(0, 1fr) auto auto;
@@ -112,19 +133,22 @@ body.ar-legal .site-header-inner {
 
 body.ar-public .site-brand-mark,
 body.ar-legal .site-brand-mark {
-    width: 40px;
-    height: 40px;
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-line) 72%, transparent);
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface) 88%, transparent));
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--ar-line) 72%, transparent),
+        0 0 24px color-mix(in srgb, var(--ar-accent) 10%, transparent);
 }
 
 body.ar-public .site-brand-tagline,
 body.ar-legal .site-brand-tagline {
     color: var(--ar-text-muted);
-    font-size: 0.72rem;
+    font-family: var(--ar-font-mono);
+    font-size: 0.68rem;
     font-weight: 700;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
 }
 
@@ -133,8 +157,9 @@ body.ar-legal .site-header-context,
 body.ar-public .site-header-actions,
 body.ar-legal .site-header-actions {
     border: 1px solid var(--ar-line);
-    border-radius: 999px;
+    border-radius: 14px;
     background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
 }
 
 body.ar-public .site-header-context,
@@ -149,23 +174,25 @@ body.ar-legal .site-header-actions {
 
 body.ar-public .site-header-actions > *,
 body.ar-legal .site-header-actions > * {
-    border-radius: 999px !important;
+    border-radius: 10px !important;
 }
 
 body.ar-public .shell-public,
 body.ar-legal .shell {
     position: relative;
     z-index: 1;
-    padding-top: 28px;
+    padding-top: 30px;
     padding-bottom: 48px;
 }
 
 body.ar-public .panel,
 body.ar-legal .panel {
-    border-radius: 24px;
-    border-color: color-mix(in srgb, var(--ar-line-strong) 84%, transparent);
-    background: color-mix(in srgb, var(--ar-surface) 96%, transparent);
-    box-shadow: var(--ar-shadow-soft);
+    border-radius: 22px;
+    border-color: color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 98%, transparent), color-mix(in srgb, var(--ar-surface-2) 96%, transparent));
+    box-shadow:
+        var(--ar-shadow-soft),
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
 }
 
 body.ar-public .site-footer,

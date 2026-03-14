@@ -92,7 +92,7 @@
             '<span class="' + classes.join(' ') + '" title="' + esc(meta.name) + '">' +
                 '<span class="bank-badge-logo-wrap" aria-hidden="true">' +
                     (meta.icon
-                        ? '<img class="bank-badge-logo" src="' + esc(meta.icon) + '" alt="" loading="lazy" decoding="async">'
+                        ? '<img class="bank-badge-logo" src="' + esc(meta.icon) + '" alt="" width="32" height="32" loading="eager" fetchpriority="low" draggable="false">'
                         : '<span class="bank-badge-fallback">' + esc(meta.short.charAt(0) || '?') + '</span>') +
                 '</span>' +
                 '<span class="bank-badge-copy">' +

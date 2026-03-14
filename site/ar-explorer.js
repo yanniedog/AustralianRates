@@ -699,8 +699,11 @@
                 grip.setAttribute('aria-hidden', 'true');
                 grip.textContent = '\u2016'; /* double vertical line: drag to reorder */
                 var titleEl = content.querySelector('.tabulator-col-title');
-                var titleClone = titleEl ? titleEl.cloneNode(true) : document.createElement('span');
-                titleClone.classList.add('ar-move-col-title');
+                var titleText = titleEl ? String(titleEl.textContent || '').trim() : field;
+                var titleClone = document.createElement('span');
+                titleClone.className = 'ar-move-col-title';
+                titleClone.textContent = titleText || field;
+                titleClone.setAttribute('title', titleText || field);
                 var btnLeft = document.createElement('button');
                 btnLeft.type = 'button';
                 btnLeft.className = 'ar-move-col-btn ar-move-col-btn-left';
@@ -863,8 +866,13 @@
             if (setting === 'move-columns') {
                 columnPrefs.moveColumnsMode = !!target.checked;
                 writeColumnPrefs(columnPrefs);
+                if (rateTable) {
+                    applyColumnPreferences();
+                    scheduleUpdateMoveColumnHeaders();
+                } else {
+                    initRateTable();
+                }
                 setSettingsOpen(false);
-                initRateTable();
                 return;
             }
 

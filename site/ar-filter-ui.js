@@ -7,6 +7,8 @@
     var bankBrand = window.AR.bankBrand || {};
     var DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
     var bound = false;
+    var bankOptionButtons = Object.create(null);
+    var bankPickerEmptyEl = null;
     var defaultDateStatus = 'Choose a date or type YYYY-MM-DD';
     var esc = window._arEsc || function (value) { return String(value == null ? '' : value); };
 
@@ -110,6 +112,62 @@
         }
     }
 
+    function bankSelectEntries() {
+        var entries = [];
+        if (!els.filterBank) return entries;
+        for (var i = 0; i < els.filterBank.options.length; i++) {
+            var option = els.filterBank.options[i];
+            var value = String(option.value || '').trim();
+            if (!value) continue;
+            entries.push({
+                option: option,
+                value: value,
+            });
+        }
+        return entries;
+    }
+
+    function createBankOptionButton(value) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'bank-option-card';
+        button.dataset.bankValue = value;
+        button.setAttribute('aria-label', value);
+        button.setAttribute('title', value);
+        button.innerHTML = bankBadgeMarkup(value);
+        return button;
+    }
+
+    function ensureBankOptionElements(entries) {
+        if (!els.filterBankOptions) return;
+        var seen = Object.create(null);
+
+        entries.forEach(function (entry) {
+            seen[entry.value] = true;
+            if (!bankOptionButtons[entry.value]) {
+                bankOptionButtons[entry.value] = createBankOptionButton(entry.value);
+            }
+            entry.button = bankOptionButtons[entry.value];
+            els.filterBankOptions.appendChild(entry.button);
+        });
+
+        Object.keys(bankOptionButtons).forEach(function (value) {
+            if (seen[value]) return;
+            var stale = bankOptionButtons[value];
+            if (stale && stale.parentNode === els.filterBankOptions) {
+                els.filterBankOptions.removeChild(stale);
+            }
+            delete bankOptionButtons[value];
+        });
+
+        if (!bankPickerEmptyEl) {
+            bankPickerEmptyEl = document.createElement('p');
+            bankPickerEmptyEl.className = 'bank-picker-empty';
+            bankPickerEmptyEl.textContent = 'No bank match';
+        }
+        els.filterBankOptions.appendChild(bankPickerEmptyEl);
+    }
+
     function renderBankOptions() {
         if (!els.filterBankOptions || !els.filterBank) {
             updateBankCount();
@@ -117,44 +175,30 @@
         }
 
         var query = String(els.filterBankSearch && els.filterBankSearch.value || '').trim();
-        var markup = [];
+        var entries = bankSelectEntries();
         var visibleCount = 0;
+        ensureBankOptionElements(entries);
 
-        for (var i = 0; i < els.filterBank.options.length; i++) {
-            var option = els.filterBank.options[i];
-            var value = String(option.value || '').trim();
-            if (!value) continue;
-            var visible = !query || bankMatchesQuery(value, query) || option.selected;
+        entries.forEach(function (entry) {
+            var option = entry.option;
+            var selected = !!option.selected;
+            var visible = !query || bankMatchesQuery(entry.value, query) || selected;
             option.hidden = !visible;
-            if (!visible) continue;
-            visibleCount++;
-            markup.push(
-                '<button class="bank-option-card' + (option.selected ? ' is-selected' : '') + '"' +
-                    ' type="button"' +
-                    ' data-bank-value="' + esc(value) + '"' +
-                    ' aria-label="' + esc(value) + '"' +
-                    ' aria-pressed="' + (option.selected ? 'true' : 'false') + '"' +
-                    ' title="' + esc(value) + '">' +
-                    bankBadgeMarkup(value) +
-                '</button>'
-            );
-        }
+            if (entry.button) {
+                entry.button.hidden = !visible;
+                entry.button.tabIndex = visible ? 0 : -1;
+                entry.button.classList.toggle('is-selected', selected);
+                entry.button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+                entry.button.setAttribute('title', entry.value);
+            }
+            if (visible) visibleCount++;
+        });
 
-        if (!visibleCount) {
-            markup.push('<p class="bank-picker-empty">No bank match</p>');
-        }
-
-        els.filterBankOptions.innerHTML = markup.join('');
+        if (bankPickerEmptyEl) bankPickerEmptyEl.hidden = visibleCount > 0;
         updateBankCount();
     }
 
     function refreshBankOptions() {
-        if (!els.filterBank) return;
-        for (var i = 0; i < els.filterBank.options.length; i++) {
-            var option = els.filterBank.options[i];
-            var value = String(option.value || '').trim();
-            option.hidden = !!value && !bankMatchesQuery(value, els.filterBankSearch && els.filterBankSearch.value) && !option.selected;
-        }
         renderBankOptions();
     }
 
@@ -263,7 +307,7 @@
             return;
         }
 
-        if (key === '7' || key === '30') {
+        if (key === '7' || key === '30' || key === '90') {
             setDaysRange(Number(key));
         }
     }

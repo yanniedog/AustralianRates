@@ -20,11 +20,27 @@
     var tabState = state && state.state ? state.state : {};
     var appInitialized = false;
     var initialChartRequested = false;
+    var liveApplyTimerId = 0;
+    var liveApplyDelayMs = 280;
+    var liveApplyInProgress = false;
 
     clientLog('info', 'App init start', {
         section: window.AR.section || 'home-loans',
         activeTab: tabState.activeTab || 'explorer',
     });
+
+    function setFilterLiveStatus(text, tone) {
+        if (!els.filterLiveStatus) return;
+        els.filterLiveStatus.textContent = String(text || 'Live sync on');
+        els.filterLiveStatus.classList.remove('is-live', 'is-pending', 'is-error');
+        if (tone) els.filterLiveStatus.classList.add(String(tone));
+    }
+
+    function clearLiveApplyTimer() {
+        if (!liveApplyTimerId) return;
+        window.clearTimeout(liveApplyTimerId);
+        liveApplyTimerId = 0;
+    }
 
     function applyUiMode(mode, options) {
         var opts = options || {};
@@ -52,14 +68,33 @@
         }, 120);
     }
 
-    function applyFilters() {
-        if (filters && filters.validateInputs && !filters.validateInputs()) {
+    function scheduleLiveApply(reason) {
+        if (!appInitialized) return;
+        clearLiveApplyTimer();
+        setFilterLiveStatus('Sync queued', 'is-pending');
+        liveApplyTimerId = window.setTimeout(function () {
+            liveApplyTimerId = 0;
+            applyFilters({
+                source: 'live',
+                reason: reason || 'filters-state',
+                passiveValidation: true,
+            });
+        }, liveApplyDelayMs);
+    }
+
+    function applyFilters(options) {
+        var opts = options || {};
+        clearLiveApplyTimer();
+        if (filters && filters.validateInputs && !filters.validateInputs(opts.passiveValidation ? { focusInvalid: false } : undefined)) {
+            setFilterLiveStatus('Fix date range', 'is-error');
             clientLog('warn', 'Apply filters blocked by invalid input', {
                 section: window.AR.section || 'home-loans',
             });
             return;
         }
 
+        liveApplyInProgress = true;
+        setFilterLiveStatus(opts.source === 'live' ? 'Syncing...' : 'Refreshing...', 'is-pending');
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
         if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
@@ -88,6 +123,10 @@
                 statusPrefix: tabState.activeTab === 'pivot' ? 'Refreshing default pivot grid... ' : 'Preparing default pivot grid... ',
             });
         }
+        window.setTimeout(function () {
+            liveApplyInProgress = false;
+            setFilterLiveStatus('Live sync on', 'is-live');
+        }, opts.source === 'live' ? 220 : 360);
     }
 
     function applyFiltersShortcut(event) {
@@ -127,6 +166,7 @@
                 reason: 'app-init',
             });
         }
+        setFilterLiveStatus('Live sync on', 'is-live');
 
         clientLog('info', 'App init complete', {
             activeTab: tabState.activeTab || 'explorer',
@@ -139,7 +179,6 @@
         els.resetFilters.addEventListener('click', function (event) {
             if (event) event.preventDefault();
             if (filters && filters.resetFilters) filters.resetFilters();
-            applyFilters();
         });
     }
     if (els.downloadFormat) {
@@ -217,6 +256,16 @@
 
     window.addEventListener('ar:ui-mode-changed', function (event) {
         applyUiMode(event && event.detail ? event.detail.mode : null);
+    });
+    window.addEventListener('ar:filters-state', function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        if (!appInitialized) return;
+        if (!detail.dirty) {
+            if (liveApplyInProgress) return;
+            if (!liveApplyTimerId) setFilterLiveStatus('Live sync on', 'is-live');
+            return;
+        }
+        scheduleLiveApply('filters-state');
     });
     window.addEventListener('ar:tab-changed', function (event) {
         var tab = event && event.detail && event.detail.tab;

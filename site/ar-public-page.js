@@ -46,6 +46,13 @@
         { value: 'box', label: 'Box plot' }
     ];
 
+    var DATE_SHORTCUTS = [
+        { value: 'all', label: 'All time' },
+        { value: '7', label: '7D' },
+        { value: '30', label: '30D' },
+        { value: '90', label: '90D' }
+    ];
+
     var CHART_VIEWS = [
         { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best current product by lender for the active slice.', selected: true },
         { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate movement over time for the active slice.' },
@@ -254,6 +261,32 @@
             '</label>';
     }
 
+    function dateShortcutMarkup() {
+        return '' +
+            '<div class="terminal-date-shortcuts" role="group" aria-label="Quick date ranges">' +
+                DATE_SHORTCUTS.map(function (shortcut) {
+                    return '' +
+                        '<button class="chip-btn secondary" type="button" data-date-range="' + esc(shortcut.value) + '">' +
+                            esc(shortcut.label) +
+                        '</button>';
+                }).join('') +
+            '</div>';
+    }
+
+    function filterGroupMarkup(title, note, fields) {
+        if (!fields || !fields.length) return '';
+        return '' +
+            '<section class="terminal-filter-group">' +
+                '<div class="terminal-filter-group-head">' +
+                    '<strong>' + esc(title) + '</strong>' +
+                    (note ? '<span class="hint">' + esc(note) + '</span>' : '') +
+                '</div>' +
+                '<div class="terminal-filter-grid terminal-filter-grid-advanced terminal-filter-grid-secondary">' +
+                    fields.map(fieldMarkup).join('') +
+                '</div>' +
+            '</section>';
+    }
+
     function chartQuestionMarkup() {
         return '' +
             '<div class="chart-question-row" role="group" aria-label="Chart view">' +
@@ -314,10 +347,14 @@
                         '<div id="market-nav-tree" class="market-nav-tree" aria-label="Market navigation"></div>',
                     '</section>',
                     '<section id="scenario" class="panel terminal-panel terminal-filter-panel">',
-                        '<div class="terminal-panel-head">',
-                            panelIcon('filter', 'Filters'),
-                            '<strong>Slice filters</strong>',
+                        '<div class="terminal-panel-head terminal-panel-head-control">',
+                            '<div class="terminal-panel-head-main">',
+                                panelIcon('filter', 'Filters'),
+                                '<strong>Control panel</strong>',
+                            '</div>',
+                            '<span id="filter-live-status" class="pill filter-live-pill">Live sync on</span>',
                         '</div>',
+                        '<p class="terminal-control-copy">Click a lender or adjust any filter. The table, pivot grid, charts, summary, and export stay locked to the same slice.</p>',
                         '<div class="terminal-filter-grid terminal-filter-grid-primary">',
                             '<label class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">',
                                 iconText('bank', 'Banks', 'field-code'),
@@ -346,9 +383,17 @@
                                 '<input id="filter-end-date" type="date" autocomplete="off">' +
                             '</label>',
                         '</div>',
+                        '<div class="terminal-date-rail">',
+                            '<div class="terminal-filter-group-head">',
+                                '<strong>Quick window</strong>',
+                                '<span class="hint">Jump the date range</span>',
+                            '</div>',
+                            dateShortcutMarkup(),
+                        '</div>',
                         '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>',
+                        filterGroupMarkup('Slice dimensions', 'Live filters', ui.advancedFields),
                         '<div class="terminal-action-row">',
-                            '<button id="apply-filters" class="primary" type="button" data-help="Refresh the current slice across the dashboard." data-help-label="Apply filters">' + iconText('apply', 'Apply', 'control-chip-label') + '</button>',
+                            '<button id="apply-filters" class="secondary" type="button" data-help="Force an immediate refresh. The panel also syncs automatically while you work." data-help-label="Sync now">' + iconText('refresh', 'Sync now', 'control-chip-label') + '</button>',
                             '<button id="reset-filters" class="secondary" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>',
                             '<button id="workspace-copy-link" class="secondary" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>',
                         '</div>',
@@ -357,16 +402,16 @@
                             '<div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>',
                         '</div>',
                         '<details class="terminal-more-filters" id="filter-bar">',
-                            '<summary class="terminal-more-summary" data-help="Open secondary filters and refresh controls." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>',
-                            '<div class="terminal-filter-grid terminal-filter-grid-advanced">',
-                                ui.advancedFields.concat(SHARED_ADVANCED_FIELDS).map(fieldMarkup).join(''),
+                            '<summary class="terminal-more-summary" data-help="Open workspace controls such as data scope, manual runs, and auto refresh." data-help-label="Workspace settings">' + iconText('filter', 'Workspace settings', 'control-chip-label') + '</summary>',
+                            '<div class="terminal-filter-grid terminal-filter-grid-advanced terminal-filter-grid-secondary">',
+                                SHARED_ADVANCED_FIELDS.map(fieldMarkup).join(''),
                             '</div>',
                         '</details>',
                         '<div id="export" class="terminal-export-row">',
                             '<label class="terminal-field" data-help="Export the current table view." data-help-label="Download">',
                                 iconText('download', 'Download', 'field-code'),
                                 '<select id="download-format" class="small" aria-label="Download format">',
-                                    '<option value="">Choose format</option>',
+                                    '<option value="">Format</option>',
                                     '<option value="csv">CSV</option>',
                                     '<option value="xls">Excel</option>',
                                     '<option value="json">JSON</option>',

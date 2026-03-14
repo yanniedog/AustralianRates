@@ -46,6 +46,7 @@
         resetFilters: document.getElementById('reset-filters'),
         activeFilterChips: document.getElementById('active-filter-chips'),
         filterDirtyIndicator: document.getElementById('filter-dirty-indicator'),
+        filterLiveStatus: document.getElementById('filter-live-status'),
         downloadFormat: document.getElementById('download-format'),
         downloadCsv: document.getElementById('download-csv'),
         loadPivot: document.getElementById('load-pivot'),

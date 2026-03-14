@@ -174,6 +174,99 @@
     gap: 12px;
 }
 
+.terminal-panel-head-control,
+.terminal-panel-head-main,
+.terminal-filter-group-head,
+.terminal-date-shortcuts {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.terminal-panel-head-control,
+.terminal-filter-group-head,
+.terminal-date-shortcuts {
+    flex-wrap: wrap;
+}
+
+.terminal-panel-head-control {
+    justify-content: space-between;
+}
+
+.filter-live-pill {
+    border-color: color-mix(in srgb, var(--ar-accent) 32%, transparent);
+    background: color-mix(in srgb, var(--ar-accent-soft) 78%, var(--ar-surface-2));
+    color: var(--ar-text);
+}
+
+.filter-live-pill.is-live {
+    border-color: color-mix(in srgb, var(--ar-accent) 44%, transparent);
+}
+
+.filter-live-pill.is-pending {
+    border-color: color-mix(in srgb, var(--ar-accent-2) 34%, transparent);
+    background: color-mix(in srgb, var(--ar-accent-2) 14%, var(--ar-surface-2));
+}
+
+.filter-live-pill.is-error {
+    border-color: color-mix(in srgb, var(--ar-danger) 34%, transparent);
+    background: color-mix(in srgb, var(--ar-danger) 14%, var(--ar-surface-2));
+    color: var(--ar-danger);
+}
+
+.terminal-control-copy {
+    margin: 0;
+    color: var(--ar-text-soft);
+    font-size: 0.78rem;
+    line-height: 1.6;
+}
+
+.terminal-date-rail,
+.terminal-filter-group,
+.terminal-more-filters {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--ar-line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ar-surface-2) 84%, var(--ar-surface));
+}
+
+.terminal-filter-group-head {
+    justify-content: space-between;
+}
+
+.terminal-filter-group-head strong {
+    color: var(--ar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.terminal-date-shortcuts {
+    justify-content: flex-start;
+}
+
+.terminal-date-shortcuts .chip-btn {
+    flex: 0 0 auto;
+}
+
+.terminal-filter-grid-secondary {
+    grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
+}
+
+.terminal-more-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    list-style: none;
+}
+
+.terminal-more-summary::-webkit-details-marker {
+    display: none;
+}
+
 .terminal-filter-panel .terminal-filter-grid,
 .terminal-filter-panel .terminal-inline-inputs,
 .terminal-filter-panel .terminal-action-row,
@@ -208,8 +301,12 @@
 }
 
 .terminal-export-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+}
+
+.terminal-export-row .hint {
+    justify-self: start;
 }
 
 .terminal-filter-state-row {
@@ -461,6 +558,59 @@ button.bank-option-card.is-selected .bank-badge-sub {
     text-transform: uppercase !important;
 }
 
+.tabulator .tabulator-header .tabulator-col .ar-move-col-wrap {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) 16px 16px;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding-right: 18px;
+}
+
+.tabulator .tabulator-header .tabulator-col .ar-move-col-grip {
+    color: var(--ar-text-muted);
+    font-size: 0.68rem;
+    line-height: 1;
+}
+
+.tabulator .tabulator-header .tabulator-col .ar-move-col-title {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ar-text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tabulator .tabulator-header .tabulator-col .ar-move-col-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 78%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
+    color: var(--ar-text-soft);
+    font-size: 0.62rem;
+    line-height: 1;
+}
+
+.tabulator .tabulator-header .tabulator-col .ar-move-col-btn:disabled {
+    opacity: 0.35;
+}
+
+.tabulator .tabulator-header .tabulator-col .ar-move-col-btn:not(:disabled):hover,
+.tabulator .tabulator-header .tabulator-col .ar-move-col-btn:not(:disabled):focus-visible {
+    border-color: color-mix(in srgb, var(--ar-accent) 38%, transparent);
+    background: var(--ar-accent-soft);
+    color: var(--ar-text);
+}
+
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter,
 .tabulator .tabulator-footer,
 .tabulator .tabulator-footer .tabulator-page-counter,
@@ -584,6 +734,7 @@ button.bank-option-card.is-selected .bank-badge-sub {
 @media (max-width: 980px) {
     .terminal-filter-grid-primary,
     .terminal-filter-grid-advanced,
+    .terminal-filter-grid-secondary,
     .terminal-history-grid,
     .terminal-changes-grid {
         grid-template-columns: 1fr;
@@ -591,8 +742,9 @@ button.bank-option-card.is-selected .bank-badge-sub {
 }
 
 @media (max-width: 760px) {
-    .terminal-export-row {
-        grid-template-columns: 1fr;
+    .terminal-panel-head-control,
+    .terminal-filter-group-head {
+        align-items: flex-start;
     }
 
     .terminal-action-row,
