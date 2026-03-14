@@ -15,6 +15,7 @@
     margin-bottom: 18px;
     padding: 20px;
     overflow: hidden;
+    overflow: clip;
     background:
         radial-gradient(circle at top right, color-mix(in srgb, var(--ar-accent) 18%, transparent), transparent 42%),
         linear-gradient(135deg, color-mix(in srgb, var(--ar-surface) 90%, var(--ar-surface-2)), var(--ar-surface));
@@ -23,9 +24,9 @@
 .market-intro::after {
     content: "";
     position: absolute;
-    inset: auto -40px -60px auto;
-    width: 220px;
-    height: 220px;
+    inset: auto 12px -54px auto;
+    width: 180px;
+    height: 180px;
     border-radius: 50%;
     background: radial-gradient(circle, color-mix(in srgb, var(--ar-accent-2) 24%, transparent), transparent 68%);
     pointer-events: none;

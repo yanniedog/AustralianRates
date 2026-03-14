@@ -33,6 +33,10 @@ body.ar-admin {
     gap: 10px;
 }
 
+.site-brand-lockup {
+    min-width: 0;
+}
+
 .site-brand-copy,
 .site-header-context {
     min-width: 0;
@@ -509,12 +513,17 @@ body.ar-legal .legal-callout {
 
 @media (max-width: 760px) {
     .site-header-inner {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: 1fr;
         gap: 10px;
     }
 
     .site-header-context {
         display: none;
+    }
+
+    .site-header-actions {
+        justify-self: stretch;
+        flex-wrap: wrap;
     }
 
     .shell,
