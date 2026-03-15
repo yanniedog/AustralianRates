@@ -24,11 +24,13 @@
         rows: [],
         totalRows: 0,
         truncated: false,
+        loadedRepresentation: 'change',
         stale: false,
         fallbackReason: '',
         selectedSeriesKeys: [],
         spotlightSeriesKey: '',
         spotlightDate: '',
+        marketFocusKey: '',
         mainChart: null,
         detailChart: null,
     };
@@ -45,6 +47,7 @@
         return {
             totalRows: chartState.totalRows,
             truncated: chartState.truncated,
+            representation: chartState.loadedRepresentation,
         };
     }
 
@@ -52,6 +55,7 @@
         chartState.selectedSeriesKeys = [];
         chartState.spotlightSeriesKey = '';
         chartState.spotlightDate = '';
+        chartState.marketFocusKey = '';
     }
 
     function disposeChart(instance) {
@@ -77,6 +81,11 @@
         if (!model || !model.meta) return 'WAIT';
         var parts = [Number(chartState.totalRows || 0).toLocaleString() + ' rows'];
         if (chartState.fallbackReason) parts.push('day fallback');
+        if (currentFields.view === 'market' && model.market) {
+            parts.push(model.market.categories.length.toLocaleString() + ' curve points');
+            parts.push(model.market.snapshotDateDisplay || '');
+            return parts.filter(Boolean).join(' | ');
+        }
         if (currentFields.view === 'lenders') {
             parts.push(model.meta.visibleLenders.toLocaleString() + '/' + model.meta.totalLenders.toLocaleString() + ' lenders');
         } else {
@@ -161,13 +170,19 @@
 
         var currentFields = fields();
         var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
+        if (currentFields.view === 'market' && (!model.market || !model.market.categories || !model.market.categories.length)) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
+            clearOutput('No curve data');
+            if (chartUi.setStatus) chartUi.setStatus('No curve data');
+            return;
+        }
         if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No lender match');
             if (chartUi.setStatus) chartUi.setStatus('No lender match');
             return;
         }
-        if (!model.visibleSeries.length || !model.surface.cells.length) {
+        if (currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No numeric values');
             if (chartUi.setStatus) chartUi.setStatus('No numeric values');
@@ -179,6 +194,9 @@
         if (model.spotlight && model.spotlight.series) {
             chartState.spotlightSeriesKey = model.spotlight.series.key;
             chartState.spotlightDate = model.spotlight.date || '';
+        }
+        if (model.market && model.market.focusBucket) {
+            chartState.marketFocusKey = model.market.focusBucket.key;
         }
 
         ensureCharts();
@@ -199,6 +217,14 @@
 
     function handleMainChartClick(params) {
         if (!params) return;
+        if (fields().view === 'market') {
+            var nextBucketKey = params.data && params.data.bucketKey
+                ? String(params.data.bucketKey)
+                : (params.name ? String(params.name) : '');
+            if (nextBucketKey) chartState.marketFocusKey = nextBucketKey;
+            if (!chartState.stale) renderFromCache();
+            return;
+        }
         var nextSeriesKey = '';
         if (params.data && params.data.seriesKey) {
             nextSeriesKey = String(params.data.seriesKey);
@@ -224,7 +250,7 @@
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
-        params.representation = currentFields.representation || 'change';
+        params.representation = currentFields.view === 'market' ? 'day' : (currentFields.representation || 'change');
         return params;
     }
 
@@ -247,6 +273,7 @@
             chartState.rows = payload.rows || [];
             chartState.totalRows = Number(payload.total || chartState.rows.length || 0);
             chartState.truncated = !!payload.truncated;
+            chartState.loadedRepresentation = payload.representation || buildBaseParams().representation || 'change';
             chartState.stale = false;
             chartState.fallbackReason = payload.fallbackReason || '';
             if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
@@ -287,6 +314,10 @@
             drawChart();
             return;
         }
+        if (fields().view === 'market' && chartState.loadedRepresentation !== 'day') {
+            drawChart();
+            return;
+        }
         if (!chartState.rows.length) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             if (chartUi.setIdleState) chartUi.setIdleState();
@@ -302,6 +333,11 @@
 
     function toggleSeries(seriesKey) {
         if (!seriesKey) return;
+        if (fields().view === 'market') {
+            chartState.marketFocusKey = seriesKey;
+            if (!chartState.stale) renderFromCache();
+            return;
+        }
         var next = chartState.selectedSeriesKeys.slice();
         var index = next.indexOf(seriesKey);
         if (index >= 0) next.splice(index, 1);

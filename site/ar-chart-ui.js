@@ -125,6 +125,7 @@
         var tags = [];
         if (fields.view === 'surface') tags.push('Movement');
         if (fields.view === 'lenders') tags.push('Leaders');
+        if (fields.view === 'market') tags.push('Curve');
         if (fields.view === 'compare') tags.push('Compare');
         if (fields.view === 'distribution') tags.push('Distribution');
         if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('Limited');
@@ -133,17 +134,28 @@
         return tags.filter(Boolean).join(' | ') || 'Ready';
     }
 
+    function actualRepresentation(fields, payloadMeta) {
+        if (payloadMeta && payloadMeta.representation) return String(payloadMeta.representation);
+        return String(fields.representation || 'change');
+    }
+
     function summaryPills(model, fields, payloadMeta, stale) {
         if (!model) {
             return '' +
                 '<span class="chart-summary-pill">Loading</span>' +
                 (stale ? '<span class="chart-summary-pill is-warning">Stale</span>' : '');
         }
+        var representation = actualRepresentation(fields, payloadMeta);
         var pills = [];
         pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
         pills.push('<span class="chart-summary-pill">' + esc(chartConfig.fieldLabel(fields.yField)) + '</span>');
-        pills.push('<span class="chart-summary-pill">' + esc(fields.representation === 'day' ? 'Daily basis' : 'Change basis') + '</span>');
-        pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
+        pills.push('<span class="chart-summary-pill">' + esc(representation === 'day' ? 'Daily basis' : 'Change basis') + '</span>');
+        if (fields.view === 'market' && model.market) {
+            pills.push('<span class="chart-summary-pill">' + esc(model.market.categories.length + ' ' + model.market.dimensionLabel.toLowerCase() + ' points') + '</span>');
+            pills.push('<span class="chart-summary-pill">' + esc('Snapshot ' + model.market.snapshotDateDisplay) + '</span>');
+        } else {
+            pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
+        }
         pills.push('<span class="chart-summary-pill">' + esc(model.meta.densityLabel) + ' density</span>');
         pills = pills.concat(currentSlicePills(fields));
         if (payloadMeta && Number.isFinite(Number(payloadMeta.totalRows))) {
@@ -167,6 +179,7 @@
     function railNote(fields, model) {
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
+        if (fields.view === 'market' && model.market) return model.market.dimensionLabel + ' curve';
         if (fields.view === 'compare') return 'Selected shortlist';
         if (fields.view === 'distribution') return 'Distribution view';
         return 'Product series';
@@ -194,7 +207,7 @@
     function renderSeriesRail(model, selectionState) {
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
         var fields = getChartFields();
-        if (!model || !model.visibleSeries.length) {
+        if (!model || (fields.view === 'market' ? !(model.market && model.market.categories && model.market.categories.length) : !model.visibleSeries.length)) {
             els.chartSeriesNote.textContent = 'Loading';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
@@ -205,6 +218,23 @@
             : [];
 
         els.chartSeriesNote.textContent = railNote(fields, model);
+        if (fields.view === 'market' && model.market) {
+            els.chartSeriesList.innerHTML = model.market.categories.map(function (category, index) {
+                var isSpotlight = selectionState && selectionState.marketFocusKey === category.key;
+                return seriesCardMarkup({
+                    key: category.key,
+                    title: category.label,
+                    valueText: chartConfig.formatMetricValue(fields.yField, category.bestValue),
+                    caption: category.secondaryLabel || ('Median ' + chartConfig.formatMetricValue(fields.yField, category.median)),
+                    metaLeft: 'Range ' + chartConfig.formatMetricValue(fields.yField, category.min) + ' to ' + chartConfig.formatMetricValue(fields.yField, category.max),
+                    metaRight: category.bankCount.toLocaleString() + ' banks',
+                    isSelected: isSpotlight,
+                    isSpotlight: isSpotlight,
+                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                });
+            }).join('');
+            return;
+        }
         if (fields.view === 'lenders' && model.lenderRanking && model.lenderRanking.entries.length) {
             els.chartSeriesList.innerHTML = model.lenderRanking.entries.map(function (entry, index) {
                 var isSelected = selected.indexOf(entry.seriesKey) >= 0;
@@ -257,6 +287,43 @@
 
     function renderSpotlight(model, fields) {
         if (!els.chartPointDetails) return;
+        if (fields && fields.view === 'market') {
+            var market = model && model.market ? model.market : null;
+            var bucket = market && market.focusBucket ? market.focusBucket : null;
+            if (!bucket) {
+                els.chartPointDetails.hidden = false;
+                els.chartPointDetails.innerHTML =
+                    '<div class="chart-spotlight-empty">' +
+                        '<strong>Waiting</strong>' +
+                        '<span>No curve focus yet</span>' +
+                    '</div>';
+                return;
+            }
+
+            var bestRow = bucket.bestRow || {};
+            els.chartPointDetails.hidden = false;
+            els.chartPointDetails.innerHTML = '' +
+                '<div class="chart-spotlight-card">' +
+                    '<div class="chart-spotlight-copy">' +
+                        '<p class="chart-series-kicker">Market spotlight</p>' +
+                        '<strong>' + esc(bucket.label) + '</strong>' +
+                        '<span class="chart-spotlight-subtitle">' + esc(bucket.secondaryLabel || market.snapshotDateDisplay) + '</span>' +
+                    '</div>' +
+                    '<div class="chart-spotlight-metrics">' +
+                        '<span class="chart-summary-pill is-emphasis">' + esc(chartConfig.formatMetricValue(fields.yField, bucket.bestValue)) + '</span>' +
+                        '<span class="chart-summary-pill">' + esc('Median ' + chartConfig.formatMetricValue(fields.yField, bucket.median)) + '</span>' +
+                        '<span class="chart-summary-pill">' + esc(bucket.bankCount.toLocaleString()) + ' banks</span>' +
+                    '</div>' +
+                    '<div class="chart-spotlight-grid">' +
+                        spotlightField('Leader', chartConfig.formatFieldValue('bank_name', bestRow.bank_name || '-', bestRow)) +
+                        spotlightField('Product', bestRow.product_name || '-') +
+                        spotlightField('Range', chartConfig.formatMetricValue(fields.yField, bucket.min) + ' to ' + chartConfig.formatMetricValue(fields.yField, bucket.max)) +
+                        spotlightField('Snapshot', market.snapshotDateDisplay || '-') +
+                    '</div>' +
+                    '<div class="chart-spotlight-link-row">' + productLink(bestRow) + '</div>' +
+                '</div>';
+            return;
+        }
         if (!model || !model.spotlight || !model.spotlight.series) {
             els.chartPointDetails.hidden = false;
             els.chartPointDetails.innerHTML =

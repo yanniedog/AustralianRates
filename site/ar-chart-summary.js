@@ -150,6 +150,31 @@
         );
     }
 
+    function renderMarketTable(model, fields) {
+        var market = model && model.market ? model.market : null;
+        var rows = [];
+        if (market && Array.isArray(market.categories)) {
+            rows = market.categories.map(function (category) {
+                var bestRow = category.bestRow || {};
+                return [
+                    esc(category.label || '-'),
+                    esc(category.secondaryLabel || market.snapshotDateDisplay || '-'),
+                    esc(formatMetric(fields.yField, category.bestValue)),
+                    esc(formatMetric(fields.yField, category.median)),
+                    esc(formatMetric(fields.yField, category.min) + ' to ' + formatMetric(fields.yField, category.max)),
+                    esc(Number(category.bankCount || 0).toLocaleString()),
+                    bankCell(bestRow.bank_name || '-'),
+                ];
+            });
+        }
+        tableMarkup(
+            'Market curve summary',
+            'Latest snapshot by ' + String((market && market.dimensionLabel ? market.dimensionLabel : 'bucket').toLowerCase()) + '.',
+            ['Bucket', 'Target / snapshot', 'Best', 'Median', 'Range', 'Banks', 'Leader'],
+            rows
+        );
+    }
+
     function render(model, fields) {
         if (!els.chartDataSummary) return;
         if (!model) {
@@ -157,6 +182,10 @@
             return;
         }
 
+        if (fields && fields.view === 'market') {
+            renderMarketTable(model, fields);
+            return;
+        }
         if (fields && fields.view === 'lenders') {
             renderLenderTable(model, fields);
             return;

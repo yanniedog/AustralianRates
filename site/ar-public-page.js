@@ -102,9 +102,9 @@
     }
 
     var BASE_CHART_TYPES = [
-        { value: 'scatter', label: 'Line chart', selected: true },
-        { value: 'bar', label: 'Bar chart' },
-        { value: 'box', label: 'Box plot' }
+        { value: 'scatter', label: 'Line', selected: true },
+        { value: 'bar', label: 'Ribbon' },
+        { value: 'box', label: 'Box-whisker' }
     ];
 
     var DATE_SHORTCUTS = [
@@ -116,6 +116,7 @@
 
     var CHART_VIEWS = [
         { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best current product by lender for the active slice.', selected: true },
+        { value: 'market', label: 'Curve', icon: 'history', help: 'Sector-aware market curve for the latest snapshot.' },
         { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate movement over time for the active slice.' },
         { value: 'compare', label: 'Compare', icon: 'compare', help: 'Track only the spotlight shortlist series.' },
         { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Distribution summary for the current slice.' }
@@ -545,8 +546,8 @@
                                 iconText('history', 'History basis', 'field-code'),
                                 '<select id="chart-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
                             '</label>',
-                            '<label class="terminal-field" data-help="Chart renderer type." data-help-label="Chart type">',
-                                iconText('chart', 'Chart type', 'field-code'),
+                            '<label class="terminal-field" data-help="Use line, ribbon, or box-whisker styling for curve views." data-help-label="Curve style">',
+                                iconText('chart', 'Curve style', 'field-code'),
                                 '<select id="chart-type">' + optionsMarkup(BASE_CHART_TYPES) + '</select>',
                             '</label>',
                             '<button id="draw-chart" type="button" class="primary" data-help="Render the chart for the current slice." data-help-label="Update chart">' + iconText('chart', 'Update chart', 'control-chip-label') + '</button>',

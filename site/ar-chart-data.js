@@ -395,6 +395,10 @@
         var lenderRanking = buildLenderRanking(allSeries, fields, density);
         var selectedKeys = effectiveSelection(visibleSeries, selectionState && selectionState.selectedSeriesKeys, density.compareLimit);
         var spotlight = spotlightEntry(visibleSeries, selectionState, selectedKeys);
+        var marketModule = window.AR.chartMarket || {};
+        var market = typeof marketModule.buildModel === 'function'
+            ? marketModule.buildModel(rows, fields, selectionState)
+            : null;
         lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
             return spotlight && spotlight.series && entry.seriesKey === spotlight.series.key;
         }) || lenderRanking.entries[0] || null;
@@ -418,6 +422,7 @@
             compareSeries: visibleSeries.filter(function (series) {
                 return selectedKeys.indexOf(series.key) >= 0;
             }),
+            market: market,
             spotlight: spotlight,
         };
     }

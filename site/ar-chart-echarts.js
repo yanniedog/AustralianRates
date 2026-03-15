@@ -495,6 +495,10 @@
     }
 
     function optionForView(view, model, fields, size) {
+        var marketModule = window.AR.chartMarket || {};
+        if (view === 'market' && typeof marketModule.buildMainOption === 'function') {
+            return marketModule.buildMainOption(model, fields, size);
+        }
         if (view === 'lenders') return buildLenderOption(model, fields, size);
         if (view === 'compare') return buildCompareOption(model, fields, size);
         if (view === 'distribution') return buildDistributionOption(model, fields, size);
@@ -517,6 +521,11 @@
 
     function renderDetailChart(instance, element, model, fields) {
         if (!instance) return;
+        var marketModule = window.AR.chartMarket || {};
+        if (fields && fields.view === 'market' && typeof marketModule.buildDetailOption === 'function') {
+            instance.setOption(marketModule.buildDetailOption(model, fields, chartSize(element)), true);
+            return;
+        }
         instance.setOption(buildDetailOption(model, fields, chartSize(element)), true);
     }
 

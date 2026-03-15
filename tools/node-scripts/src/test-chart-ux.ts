@@ -12,7 +12,7 @@ const SECTIONS = [
     { name: 'Savings', path: '/savings/', apiBasePath: '/api/savings-rates' },
     { name: 'Term deposits', path: '/term-deposits/', apiBasePath: '/api/term-deposit-rates' },
 ];
-const VIEWS = ['lenders', 'surface', 'compare', 'distribution'];
+const VIEWS = ['lenders', 'market', 'surface', 'compare', 'distribution'];
 
 function withSharedQuery(path, apiBasePath) {
     const params = new URLSearchParams(sharedParams.toString());
