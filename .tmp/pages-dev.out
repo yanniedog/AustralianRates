@@ -1,0 +1,25 @@
+
+ ⛅️ wrangler 4.69.0 (update available 4.73.0)
+─────────────────────────────────────────────
+No Functions. Shimming...
+✨ Parsed 2 valid header rules.
+Using vars defined in .env
+Your Worker has access to the following bindings:
+Binding                                                                                  Resource                  Mode
+env.CF_PAGES ("1")                                                                       Environment Variable      local
+env.CF_PAGES_BRANCH ("main")                                                             Environment Variable      local
+env.CF_PAGES_COMMIT_SHA ("b608007cf2c4cf73f6ff95b8b7a8ab827451d...")                     Environment Variable      local
+env.CF_PAGES_URL ("https://b608007.australianrates.pages...")                            Environment Variable      local
+env.CLOUDFLARE_API_AGENT_LEE_FULL_FULL ("(hidden)")                                      Environment Variable      local
+env.CLOUDFLARE_API_SELFPERMISSION_MOD ("(hidden)")                                       Environment Variable      local
+env.CLOUDFLARE_EDIT_ZONE_DNS ("(hidden)")                                                Environment Variable      local
+env.CLOUDFLARE_MULTI ("(hidden)")                                                        Environment Variable      local
+env.ADMIN_TEST_TOKEN ("(hidden)")                                                        Environment Variable      local
+env.LOCAL_ADMIN_API_TOKEN ("(hidden)")                                                   Environment Variable      local
+
+⎔ Starting local server...
+[wrangler:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-05",
+but you've requested "2026-03-14". Falling back to "2026-03-05"...
+Features enabled by your requested compatibility date may not be available.
+Upgrade to `wrangler@4.73.0` to remove this warning.
+[wrangler:info] Ready on http://127.0.0.1:8788
