@@ -36,4 +36,14 @@ describe('daily home-loan ubank soft-fail', () => {
       }),
     ).toBe(true)
   })
+
+  it('keeps Great Southern on the HTML fallback path even when CDR index discovery succeeds', () => {
+    expect(
+      shouldShortCircuitAfterHomeLoanIndexFetch({
+        lenderCode: 'great_southern',
+        successfulIndexFetch: true,
+        discoveredProductCount: 29,
+      }),
+    ).toBe(false)
+  })
 })

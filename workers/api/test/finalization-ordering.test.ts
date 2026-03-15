@@ -26,10 +26,10 @@ function makeRunRow(overrides: Partial<LenderDatasetRunRow>): LenderDatasetRunRo
     last_error: null,
     updated_at: '2026-03-01T00:00:00.000Z',
     index_fetch_succeeded: 1,
-    accepted_row_count: 0,
-    written_row_count: 0,
+    accepted_row_count: 1,
+    written_row_count: 1,
     dropped_row_count: 0,
-    detail_fetch_event_count: 0,
+    detail_fetch_event_count: 1,
     lineage_error_count: 0,
     ...overrides,
   }
@@ -198,6 +198,40 @@ describe('finalization ordering', () => {
       {
         runId: 'run:5',
         lenderCode: 'anz',
+        dataset: 'home_loans',
+      },
+      { throwIfNotReady: false },
+      deps,
+    )
+
+    expect(result).toBe(false)
+  })
+
+  it('does not finalize when expected detail work wrote zero rows', async () => {
+    const deps = {
+      getLenderDatasetRun: async () =>
+        makeRunRow({
+          run_id: 'run:6',
+          expected_detail_count: 2,
+          completed_detail_count: 2,
+          accepted_row_count: 0,
+          written_row_count: 0,
+          detail_fetch_event_count: 2,
+        }),
+      finalizePresenceForRun: async () => ({
+        seenProducts: 0,
+        removedProducts: 0,
+        removedSeries: 0,
+      }),
+      tryMarkLenderDatasetFinalized: async () => true,
+      markLenderDatasetDetailProcessed: async () => {},
+    } as Parameters<typeof finalizeLenderDataset>[3]
+
+    const result = await finalizeLenderDataset(
+      makeEnv(),
+      {
+        runId: 'run:6',
+        lenderCode: 'great_southern',
         dataset: 'home_loans',
       },
       { throwIfNotReady: false },

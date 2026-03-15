@@ -50,6 +50,19 @@ describe('CDR HTTP helpers', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('treats embedded CDR errorCode payloads as not ok even when status is 200', async () => {
+    const testServer = await startTestServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ errorCode: '400', errorMessage: 'bad request' }))
+    })
+    activeServers.push(testServer)
+
+    const result = await fetchJson(`${testServer.baseUrl}/error-code`)
+
+    expect(result.status).toBe(200)
+    expect(result.ok).toBe(false)
+  })
+
   it('continues CDR version probing when an attempted version returns JSON errors', async () => {
     const requestedVersions: string[] = []
     const testServer = await startTestServer((req, res) => {

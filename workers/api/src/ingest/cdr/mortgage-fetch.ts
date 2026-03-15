@@ -82,7 +82,7 @@ export async function fetchProductDetailRows(input: {
   env?: FetchEnvBindings
   runId?: string
   lenderCode?: string
-}): Promise<{ rows: NormalizedRateRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
+}): Promise<{ ok: boolean; rows: NormalizedRateRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${safeUrl(input.endpointUrl)}/${encodeURIComponent(input.productId)}`
   const versions = input.cdrVersions && input.cdrVersions.length > 0 ? input.cdrVersions : [6, 5, 4, 3]
   const fetched = await fetchCdrJson(detailUrl, versions, {
@@ -98,7 +98,7 @@ export async function fetchProductDetailRows(input: {
   }
 
   if (!fetched.ok || !isRecord(fetched.data)) {
-    return { rows: [], rawPayload }
+    return { ok: false, rows: [], rawPayload }
   }
 
   const detail = isRecord((fetched.data as JsonRecord).data)
@@ -106,6 +106,7 @@ export async function fetchProductDetailRows(input: {
     : (fetched.data as JsonRecord)
 
   return {
+    ok: true,
     rows: parseRatesFromDetail({
       lender: input.lender,
       detail,

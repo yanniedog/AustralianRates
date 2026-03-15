@@ -327,7 +327,7 @@ export async function fetchSavingsProductDetailRows(input: {
   env?: FetchEnvBindings
   runId?: string
   lenderCode?: string
-}): Promise<{ savingsRows: NormalizedSavingsRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
+}): Promise<{ ok: boolean; savingsRows: NormalizedSavingsRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${input.endpointUrl.replace(/\/+$/, '')}/${encodeURIComponent(input.productId)}`
   const versions = input.cdrVersions?.length ? input.cdrVersions : [6, 5, 4, 3]
   const fetched = await fetchCdrJson(detailUrl, versions, {
@@ -338,13 +338,14 @@ export async function fetchSavingsProductDetailRows(input: {
   })
   const rawPayload = { sourceUrl: detailUrl, status: fetched.status, body: fetched.text }
 
-  if (!fetched.ok || !isRecord(fetched.data)) return { savingsRows: [], rawPayload }
+  if (!fetched.ok || !isRecord(fetched.data)) return { ok: false, savingsRows: [], rawPayload }
 
   const detail = isRecord((fetched.data as JsonRecord).data)
     ? ((fetched.data as JsonRecord).data as JsonRecord)
     : (fetched.data as JsonRecord)
 
   return {
+    ok: true,
     savingsRows: parseSavingsRatesFromDetail({
       lender: input.lender,
       detail,
@@ -367,7 +368,7 @@ export async function fetchTdProductDetailRows(input: {
   env?: FetchEnvBindings
   runId?: string
   lenderCode?: string
-}): Promise<{ tdRows: NormalizedTdRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
+}): Promise<{ ok: boolean; tdRows: NormalizedTdRow[]; rawPayload: { sourceUrl: string; status: number; body: string } }> {
   const detailUrl = `${input.endpointUrl.replace(/\/+$/, '')}/${encodeURIComponent(input.productId)}`
   const versions = input.cdrVersions?.length ? input.cdrVersions : [6, 5, 4, 3]
   const fetched = await fetchCdrJson(detailUrl, versions, {
@@ -378,13 +379,14 @@ export async function fetchTdProductDetailRows(input: {
   })
   const rawPayload = { sourceUrl: detailUrl, status: fetched.status, body: fetched.text }
 
-  if (!fetched.ok || !isRecord(fetched.data)) return { tdRows: [], rawPayload }
+  if (!fetched.ok || !isRecord(fetched.data)) return { ok: false, tdRows: [], rawPayload }
 
   const detail = isRecord((fetched.data as JsonRecord).data)
     ? ((fetched.data as JsonRecord).data as JsonRecord)
     : (fetched.data as JsonRecord)
 
   return {
+    ok: true,
     tdRows: parseTermDepositRatesFromDetail({
       lender: input.lender,
       detail,

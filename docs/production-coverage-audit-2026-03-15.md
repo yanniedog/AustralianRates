@@ -1,6 +1,6 @@
 # Production Coverage Audit
 
-- Generated at: `2026-03-15T02:10:29.447Z`
+- Generated at: `2026-03-15T02:26:24.148Z`
 - Target DB: `australianrates_api`
 
 ## Recommendation
@@ -31,9 +31,9 @@
 
 | Dataset | First coverage | Cursor | Status | Empty streak | Last tick status | Last tick message |
 | --- | --- | --- | --- | --- | --- | --- |
-| mortgage | 2026-02-26 | 2023-11-18 | active | 825 | completed_empty | run_status=completed rows=0 |
-| savings | 2026-02-26 | 2023-11-19 | active | 820 | completed_empty | run_status=completed rows=0 |
-| term_deposits | 2026-02-26 | 2023-11-18 | active | 819 | completed_empty | run_status=completed rows=0 |
+| mortgage | 2026-02-26 | 2023-11-17 | active | 826 | completed_empty | run_status=completed rows=0 |
+| savings | 2026-02-26 | 2023-11-18 | active | 821 | completed_empty | run_status=completed rows=0 |
+| term_deposits | 2026-02-26 | 2023-11-17 | active | 820 | completed_empty | run_status=completed rows=0 |
 
 ## Overlap Summary
 

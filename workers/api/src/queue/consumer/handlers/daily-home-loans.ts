@@ -13,6 +13,7 @@ import { persistRawPayload } from '../../../db/raw-payloads'
 import { cdrCollectionNotes, discoverProductsEndpoint, fetchResidentialMortgageProductIds } from '../../../ingest/cdr'
 import { AMP_MORTGAGE_VARIABLES_URL, parseAmpMortgageVariables } from '../../../ingest/amp-mortgage-variables'
 import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
+import { parseGreatSouthernHomeLoanRatesFromHtml } from '../../../ingest/great-southern-html'
 import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../producer'
 import { extractLenderRatesFromHtml } from '../../../ingest/html-rate-parser'
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
@@ -32,10 +33,11 @@ import { splitValidatedRows } from '../validation'
 export { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 
 export function shouldShortCircuitAfterHomeLoanIndexFetch(input: {
+  lenderCode?: string
   successfulIndexFetch: boolean
   discoveredProductCount: number
 }): boolean {
-  return input.successfulIndexFetch && input.discoveredProductCount > 0
+  return input.successfulIndexFetch && input.discoveredProductCount > 0 && input.lenderCode !== 'great_southern'
 }
 
 export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
@@ -240,7 +242,12 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   }
 
   const productIds = Array.from(discoveredProductEndpointMap.keys())
-  if (successfulIndexFetch) {
+  const useCdrDetailFanout = shouldShortCircuitAfterHomeLoanIndexFetch({
+    lenderCode: job.lenderCode,
+    successfulIndexFetch,
+    discoveredProductCount: productIds.length,
+  })
+  if (successfulIndexFetch && useCdrDetailFanout) {
     await setLenderDatasetExpectedDetails(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
@@ -256,10 +263,22 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     })
   }
 
-  if (shouldShortCircuitAfterHomeLoanIndexFetch({
-    successfulIndexFetch,
-    discoveredProductCount: productIds.length,
-  })) {
+  if (successfulIndexFetch && !useCdrDetailFanout) {
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+    log.info('consumer', 'daily_lender_fetch html_fallback_preferred', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context:
+        `date=${job.collectionDate} discovered_products=${productIds.length}` +
+        ` reason=structured_html_fallback_preferred`,
+    })
+  }
+
+  if (useCdrDetailFanout) {
     const endpointUrlByProductId = Object.fromEntries(
       Array.from(discoveredProductEndpointMap.entries()).map(([productId, endpointUrl]) => [productId, endpointUrl]),
     )
@@ -306,6 +325,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
           endpointsTried,
           indexPayloads,
           catalogSupplements,
+          productIdsDiscovered: productIds.length,
         },
         upstreamBlocks: {
           count: observedUpstreamBlocks.length,
@@ -485,14 +505,34 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
               inspected: ampVariableParsed.inspected,
               dropped: ampVariableParsed.dropped,
             }
-          : extractLenderRatesFromHtml({
-              lender,
-              html,
-              sourceUrl: seedUrl,
-              collectionDate: job.collectionDate,
-              mode: 'daily',
-              qualityFlag: 'scraped_fallback_strict',
-            })
+          : lender.code === 'great_southern'
+            ? (() => {
+                const structured = parseGreatSouthernHomeLoanRatesFromHtml({
+                  lender,
+                  html,
+                  sourceUrl: seedUrl,
+                  collectionDate: job.collectionDate,
+                  qualityFlag: 'scraped_fallback_strict',
+                })
+                return structured.rows.length > 0
+                  ? structured
+                  : extractLenderRatesFromHtml({
+                      lender,
+                      html,
+                      sourceUrl: seedUrl,
+                      collectionDate: job.collectionDate,
+                      mode: 'daily',
+                      qualityFlag: 'scraped_fallback_strict',
+                    })
+              })()
+            : extractLenderRatesFromHtml({
+                lender,
+                html,
+                sourceUrl: seedUrl,
+                collectionDate: job.collectionDate,
+                mode: 'daily',
+                qualityFlag: 'scraped_fallback_strict',
+              })
       inspectedHtml += parsed.inspected
       droppedByParser += parsed.dropped
       for (const row of parsed.rows) {
@@ -588,7 +628,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
         collection: {
           endpointsTried,
           indexPayloads,
-          productIdsDiscovered: 0,
+          productIdsDiscovered: productIds.length,
           detailJobsEnqueued,
           fallbackSeedFetches,
         },
@@ -693,7 +733,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       collection: {
         endpointsTried,
         indexPayloads,
-        productIdsDiscovered: 0,
+        productIdsDiscovered: productIds.length,
         detailJobsEnqueued,
         fallbackSeedFetches,
       },

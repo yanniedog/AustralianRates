@@ -111,7 +111,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasCdrErrors(data: unknown): boolean {
   if (!isRecord(data)) return false
-  return Array.isArray(data.errors) && data.errors.length > 0
+  if (Array.isArray(data.errors) && data.errors.length > 0) return true
+  const errorCode = typeof data.errorCode === 'string' ? data.errorCode.trim() : ''
+  const errorMessage = typeof data.errorMessage === 'string' ? data.errorMessage.trim() : ''
+  return errorCode.length > 0 || errorMessage.length > 0
 }
 
 export async function fetchJson(url: string, context?: FetchRequestContext): Promise<FetchJsonResult> {

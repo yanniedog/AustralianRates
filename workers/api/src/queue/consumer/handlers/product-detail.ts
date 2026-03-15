@@ -136,6 +136,16 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
             ` fetch_event_id=${fetchEventId ?? 'none'}`,
         })
       }
+      if (!details.ok) {
+        await recordLenderDatasetWriteStats(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'home_loans',
+          detailFetchEventCount: fetchEventId != null ? 1 : 0,
+          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+        })
+        throw new Error(`detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}`)
+      }
       for (const row of details.rows) {
         row.fetchEventId = resolveRowFetchEventId({
           detailFetchEventId: fetchEventId ?? null,
@@ -243,6 +253,16 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
             ` fetch_event_id=${fetchEventId ?? 'none'}`,
         })
       }
+      if (!details.ok) {
+        await recordLenderDatasetWriteStats(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'savings',
+          detailFetchEventCount: fetchEventId != null ? 1 : 0,
+          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+        })
+        throw new Error(`detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}`)
+      }
       for (const row of details.savingsRows) {
         row.fetchEventId = resolveRowFetchEventId({
           detailFetchEventId: fetchEventId ?? null,
@@ -349,6 +369,16 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
             ` marker=${upstreamBlock.marker || 'none'}` +
             ` fetch_event_id=${fetchEventId ?? 'none'}`,
         })
+      }
+      if (!details.ok) {
+        await recordLenderDatasetWriteStats(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'term_deposits',
+          detailFetchEventCount: fetchEventId != null ? 1 : 0,
+          errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+        })
+        throw new Error(`detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}`)
       }
       for (const row of details.tdRows) {
         row.fetchEventId = resolveRowFetchEventId({

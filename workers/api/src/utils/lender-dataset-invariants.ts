@@ -108,6 +108,9 @@ export function isLenderDatasetReadyForFinalization(
     LenderDatasetInvariantSnapshot,
     | 'expected_detail_count'
     | 'index_fetch_succeeded'
+    | 'accepted_row_count'
+    | 'written_row_count'
+    | 'detail_fetch_event_count'
     | 'lineage_error_count'
     | 'completed_detail_count'
     | 'failed_detail_count'
@@ -125,6 +128,15 @@ export function isLenderDatasetReadyForFinalization(
   const expectedDetails = asCount(snapshot.expected_detail_count)
   if (expectedDetails <= 0) {
     return { ready: true, reason: null }
+  }
+  if (asCount(snapshot.accepted_row_count) <= 0) {
+    return { ready: false, reason: 'zero_accepted_rows_for_nonzero_expected_details' }
+  }
+  if (asCount(snapshot.written_row_count) <= 0) {
+    return { ready: false, reason: 'zero_written_rows_for_nonzero_expected_details' }
+  }
+  if (asCount(snapshot.detail_fetch_event_count) <= 0) {
+    return { ready: false, reason: 'detail_fetch_events_missing' }
   }
   if (asCount(snapshot.completed_detail_count) < expectedDetails) {
     return { ready: false, reason: 'detail_processing_incomplete' }
