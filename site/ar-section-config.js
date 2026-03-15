@@ -70,7 +70,7 @@
                 source_url: 'Source URL', data_quality_flag: 'Quality',
                 retrieval_type: 'Retrieval'
             },
-            chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
+            chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank.'
         },
         'savings': {
             apiPath: '/api/savings-rates',
@@ -100,7 +100,7 @@
                 run_source: 'Source', parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed', source_url: 'Source URL',
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
-            chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
+            chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank.'
         },
         'term-deposits': {
             apiPath: '/api/term-deposit-rates',
@@ -130,7 +130,7 @@
                 run_source: 'Source', parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed', source_url: 'Source URL',
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
-            chartHint: 'For rate over time per product: X = Date, Group by = Product, filter by one bank.'
+            chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank.'
         }
     };
 

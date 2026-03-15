@@ -122,14 +122,21 @@
             });
         });
 
+        var curveTitle = market.curveTitle || '';
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            title: curveTitle ? {
+                text: curveTitle,
+                left: 0,
+                top: 2,
+                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+            } : undefined,
             legend: {
-                top: 0,
+                top: curveTitle ? 20 : 0,
                 left: 0,
                 right: 0,
                 type: 'scroll',
@@ -148,7 +155,7 @@
             grid: {
                 left: compact ? 46 : 58,
                 right: 18,
-                top: 54,
+                top: curveTitle ? 72 : 54,
                 bottom: narrow ? 78 : 64,
                 containLabel: true,
             },
@@ -170,12 +177,19 @@
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
+        var curveTitle = market.curveTitle || '';
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            title: curveTitle ? {
+                text: curveTitle,
+                left: 0,
+                top: 2,
+                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+            } : undefined,
             tooltip: {
                 trigger: 'axis',
                 axisPointer: { type: 'line', lineStyle: { color: theme.shadowAccent } },
@@ -188,7 +202,7 @@
             grid: {
                 left: narrow ? 46 : 58,
                 right: 20,
-                top: 24,
+                top: curveTitle ? 42 : 24,
                 bottom: narrow ? 78 : 64,
                 containLabel: true,
             },
@@ -271,12 +285,19 @@
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
+        var curveTitle = market.curveTitle || '';
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            title: curveTitle ? {
+                text: curveTitle,
+                left: 0,
+                top: 2,
+                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+            } : undefined,
             tooltip: {
                 trigger: 'item',
                 backgroundColor: tooltipStyles().backgroundColor,
@@ -288,7 +309,7 @@
             grid: {
                 left: narrow ? 46 : 58,
                 right: 18,
-                top: 24,
+                top: curveTitle ? 42 : 24,
                 bottom: narrow ? 78 : 64,
                 containLabel: true,
             },

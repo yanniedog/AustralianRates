@@ -129,7 +129,7 @@
     }
 
     function defaultView() {
-        return 'lenders';
+        return 'market';
     }
 
     function defaultMetric() {

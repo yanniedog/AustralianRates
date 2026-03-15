@@ -308,11 +308,13 @@
             };
         });
 
+        var curveTitle = section === 'home-loans' ? 'Borrowing cost by structure' : section === 'term-deposits' ? 'Yield by term' : 'Rate by tier or type';
         return {
             snapshotDate: snapshot.snapshotDate,
             snapshotDateDisplay: humanField('collection_date', snapshot.snapshotDate, null),
             dimensionLabel: categories[0].dimensionLabel,
             dimensionField: section === 'savings' ? chosenSavingsField : (section === 'term-deposits' ? 'term_months' : 'rate_structure'),
+            curveTitle: curveTitle,
             style: curveStyle(fields.chartType),
             direction: direction,
             bestLabel: direction === 'asc' ? 'Lowest' : 'Highest',

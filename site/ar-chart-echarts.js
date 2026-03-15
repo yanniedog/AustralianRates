@@ -160,12 +160,17 @@
                 formatter: function (params) {
                     var data = params.data || {};
                     var row = data.row || {};
-                    return [
+                    var lines = [
                         '<strong>' + chartConfig.formatFieldValue('bank_name', data.bankName || row.bank_name || 'Lender', row) + '</strong>',
                         data.productName || row.product_name || '',
                         'Date: ' + chartConfig.formatFieldValue('collection_date', data.date || row.collection_date, row),
                         chartConfig.fieldLabel(fields.yField) + ': ' + tooltipMetric(fields.yField, row, data.value),
-                    ].filter(Boolean).join('<br>');
+                    ];
+                    if (data.delta != null && Number.isFinite(data.delta)) {
+                        var deltaStr = (data.delta >= 0 ? '+' : '') + chartConfig.formatMetricValue(fields.yField, data.delta);
+                        lines.push('Change: ' + deltaStr);
+                    }
+                    return lines.filter(Boolean).join('<br>');
                 },
             },
             grid: {
@@ -218,6 +223,7 @@
                         bankName: entry.bankName,
                         productName: entry.productName,
                         date: entry.latestDate,
+                        delta: entry.delta,
                         row: entry.row,
                         itemStyle: {
                             color: paletteColor(index),
@@ -232,7 +238,14 @@
                     color: theme.emphasisText,
                     fontSize: compact ? 11 : 12,
                     formatter: function (params) {
-                        return metricAxisLabel(fields.yField, params.value, narrow);
+                        var main = metricAxisLabel(fields.yField, params.value, narrow);
+                        var d = params.data && params.data.delta;
+                        if (d != null && Number.isFinite(d)) {
+                            var arrow = d >= 0 ? '\u2191' : '\u2193';
+                            var deltaStr = chartConfig.formatMetricValue(fields.yField, Math.abs(d));
+                            return main + '  ' + arrow + deltaStr;
+                        }
+                        return main;
                     },
                 },
                 emphasis: {
