@@ -1,0 +1,21 @@
+{
+  "title": "Compare Australian Savings Rates - Daily CDR Data | AustralianRates",
+  "headerActions": [
+    "Theme",
+    "Help",
+    "Source",
+    "Filters"
+  ],
+  "foldStates": [
+    {
+      "cls": "terminal-mobile-fold terminal-chart-fold",
+      "open": true
+    },
+    {
+      "cls": "terminal-context-panel",
+      "open": true
+    }
+  ],
+  "scrollWidth": 1440,
+  "innerWidth": 1440
+}

@@ -170,6 +170,13 @@
     gap: 8px;
 }
 
+.terminal-field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
 .terminal-filter-panel {
     gap: 12px;
 }
@@ -310,6 +317,10 @@
 }
 
 .terminal-export-status {
+    margin: 0;
+}
+
+.terminal-copy-status {
     margin: 0;
 }
 

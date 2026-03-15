@@ -286,16 +286,25 @@
             '</nav>';
     }
 
+    function actionTextMarkup(label) {
+        return '<span class="site-action-text">' + esc(label) + '</span>';
+    }
+
+    function actionIconMarkup(icon, label) {
+        return iconOnly(icon, label, 'site-action-icon') + actionTextMarkup(label);
+    }
+
     function headerActionsMarkup(context) {
+        var menuLabel = context.legal || context.notFound ? 'Sections' : 'Filters';
         var actions = [
-            '<button type="button" class="icon-btn secondary" data-theme-toggle aria-label="Toggle theme"></button>',
-            '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">' + iconOnly('help', 'Open help') + '</button>',
+            '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
+            '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
         ];
         if (context.admin) {
-            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + iconOnly('refresh', 'Reset local site data and reload') + '</button>');
+            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + actionIconMarkup('refresh', 'Reset') + '</button>');
         }
-        actions.push('<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">' + iconOnly('github', 'GitHub repository') + '</a>');
-        actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">' + iconOnly('menu', 'Toggle menu') + '</button>');
+        actions.push('<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link site-action-btn site-action-github" aria-label="GitHub repository" title="GitHub repository">' + actionIconMarkup('github', 'Source') + '</a>');
+        actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
 
@@ -584,7 +593,65 @@
         var visible = shouldShowMenuButton(context);
         menuBtn.hidden = !visible;
         menuBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        menuBtn.setAttribute('aria-expanded', visible && document.body.classList.contains('is-nav-open') ? 'true' : 'false');
         if (!visible) setMenuOpen(false);
+    }
+
+    function getHashTarget(hash) {
+        var targetId = String(hash || '').replace(/^#/, '');
+        if (!targetId) return null;
+        try {
+            targetId = decodeURIComponent(targetId);
+        } catch (_err) {
+            // Keep the raw fragment when decoding fails.
+        }
+        return document.getElementById(targetId);
+    }
+
+    function isPublicMobileMenuContext(context) {
+        return !context.admin && !context.legal && !context.notFound && shouldShowMenuButton(context);
+    }
+
+    function isLeftRailTarget(target) {
+        return !!(target && target.closest && target.closest('.terminal-column-left'));
+    }
+
+    function syncHashTargetVisibility(context) {
+        if (!isPublicMobileMenuContext(context)) return;
+        var target = getHashTarget(window.location.hash);
+        if (!target) return;
+        setMenuOpen(isLeftRailTarget(target));
+    }
+
+    function samePageHashNavigation(context, link) {
+        if (!isPublicMobileMenuContext(context) || !link || !link.href) return null;
+        var url = null;
+        try {
+            url = new URL(link.href, window.location.href);
+        } catch (_err) {
+            return null;
+        }
+        if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || !url.hash) return null;
+
+        var target = getHashTarget(url.hash);
+        if (!target) return null;
+
+        return {
+            hash: url.hash,
+            target: target,
+            openLeftRail: isLeftRailTarget(target),
+        };
+    }
+
+    function goToHashTarget(target, hash, openLeftRail) {
+        setMenuOpen(openLeftRail);
+        if (window.location.hash !== hash) {
+            window.location.hash = hash;
+            return;
+        }
+        if (target && typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ block: 'start', behavior: 'auto' });
+        }
     }
 
     function ensureTooltip() {
@@ -677,6 +744,8 @@
         document.body.classList.toggle('is-nav-open', !!open);
         var drawer = document.getElementById('site-menu-drawer');
         if (drawer) drawer.hidden = !open;
+        var menuBtn = document.getElementById('site-menu-toggle');
+        if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
 
     function bindFrameControls(context) {
@@ -696,6 +765,13 @@
             });
         }
         document.addEventListener('click', function (event) {
+            var link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+            var navigation = samePageHashNavigation(context, link);
+            if (navigation) {
+                event.preventDefault();
+                goToHashTarget(navigation.target, navigation.hash, navigation.openLeftRail);
+                return;
+            }
             if (event.target && event.target.closest && event.target.closest('[data-menu-close]')) {
                 setMenuOpen(false);
             }
@@ -710,6 +786,10 @@
         window.addEventListener('resize', function () {
             syncMenuButtonState(context);
         });
+        window.addEventListener('hashchange', function () {
+            syncHashTargetVisibility(context);
+        });
+        syncHashTargetVisibility(context);
     }
 
     window.addSessionLog = addSessionLog;

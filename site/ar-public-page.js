@@ -46,6 +46,7 @@
     var iconText = typeof uiIcons.text === 'function' ? uiIcons.text : fallbackText;
     var panelIcon = typeof uiIcons.panel === 'function' ? uiIcons.panel : fallbackPanel;
     var iconOnly = typeof uiIcons.icon === 'function' ? uiIcons.icon : fallbackIcon;
+    var compactViewport = !!(window.matchMedia && window.matchMedia('(max-width: 760px)').matches);
 
     function setMeta(selector, attr, value) {
         var el = document.querySelector(selector);
@@ -81,6 +82,7 @@
                     '<p class="eyebrow">404</p>' +
                     '<h1>Page not found.</h1>' +
                     '<p class="subtitle">The page you requested is not available on AustralianRates.</p>' +
+                    '<p class="missing-route-note">If you followed an outdated link, jump back into one of the live rate boards below and continue from the current official data pages.</p>' +
                     '<div class="legal-badge-row">' +
                         '<span class="legal-badge">Requested path: ' + esc(requestedPath) + '</span>' +
                         '<span class="legal-badge">Use the links below to keep exploring</span>' +
@@ -301,11 +303,25 @@
         return iconText(field.icon || 'filter', field.label || field.code || 'Field', 'field-code');
     }
 
-    function filterPadMarkup(field, label) {
+    function fieldLabelId(field) {
+        return String(field && field.id || 'field') + '-label';
+    }
+
+    function fieldLabelBlock(field, opts) {
+        var tag = opts && opts.tagName === 'div' ? 'div' : 'label';
+        var attrs = [
+            'class="terminal-field-label"',
+            'id="' + esc(fieldLabelId(field)) + '"'
+        ];
+        if (tag === 'label' && opts && opts.forId) attrs.push('for="' + esc(opts.forId) + '"');
+        return '<' + tag + ' ' + attrs.join(' ') + '>' + fieldLabelMarkup(field) + '</' + tag + '>';
+    }
+
+    function filterPadMarkup(field, labelId) {
         return '' +
             '<div class="filter-pad-shell">' +
-                '<div id="' + field.id + '-pads" class="filter-pad-grid" data-filter-pads-for="' + field.id + '" role="group" aria-label="' + esc(label) + '"></div>' +
-                '<select id="' + field.id + '" class="filter-native-select">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
+                '<div id="' + field.id + '-pads" class="filter-pad-grid" data-filter-pads-for="' + field.id + '" role="group" aria-labelledby="' + esc(labelId) + '"></div>' +
+                '<select id="' + field.id + '" class="filter-native-select" aria-labelledby="' + esc(labelId) + '">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
             '</div>';
     }
 
@@ -314,30 +330,30 @@
         var attrs = helpAttrs(label, field.help);
         if (field.kind === 'toggle') {
             return '' +
-                '<label class="terminal-field terminal-field-toggle"' + attrs + '>' +
-                    fieldLabelMarkup(field) +
-                    '<input id="' + field.id + '" type="checkbox">' +
-                '</label>';
+                '<div class="terminal-field terminal-field-toggle"' + attrs + '>' +
+                    fieldLabelBlock(field, { forId: field.id }) +
+                    '<input id="' + field.id + '" type="checkbox" aria-labelledby="' + esc(fieldLabelId(field)) + '">' +
+                '</div>';
         }
         if (field.kind === 'number') {
             return '' +
-                '<label class="terminal-field"' + attrs + '>' +
-                    fieldLabelMarkup(field) +
-                    '<input id="' + field.id + '" type="number" step="0.001" min="0" placeholder="' + field.placeholder + '">' +
-                '</label>';
+                '<div class="terminal-field"' + attrs + '>' +
+                    fieldLabelBlock(field, { forId: field.id }) +
+                    '<input id="' + field.id + '" type="number" step="0.001" min="0" placeholder="' + field.placeholder + '" aria-labelledby="' + esc(fieldLabelId(field)) + '">' +
+                '</div>';
         }
         if (field.padGrid !== false) {
             return '' +
-                '<label class="terminal-field terminal-field-pad"' + attrs + '>' +
-                    fieldLabelMarkup(field) +
-                    filterPadMarkup(field, label) +
-                '</label>';
+                '<div class="terminal-field terminal-field-pad"' + attrs + '>' +
+                    fieldLabelBlock(field, { tagName: 'div' }) +
+                    filterPadMarkup(field, fieldLabelId(field)) +
+                '</div>';
         }
         return '' +
-            '<label class="terminal-field"' + attrs + '>' +
-                fieldLabelMarkup(field) +
-                '<select id="' + field.id + '">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
-            '</label>';
+            '<div class="terminal-field"' + attrs + '>' +
+                fieldLabelBlock(field, { forId: field.id }) +
+                '<select id="' + field.id + '" aria-labelledby="' + esc(fieldLabelId(field)) + '">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
+            '</div>';
     }
 
     function dateShortcutMarkup() {
@@ -444,16 +460,16 @@
                             '</div>',
                         '</div>',
                         '<div class="terminal-filter-grid terminal-filter-grid-primary">',
-                            '<label class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">',
-                                iconText('bank', 'Banks', 'field-code'),
+                            '<div class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">',
+                                '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>',
                                 '<div class="terminal-inline-inputs terminal-inline-inputs-bank">',
-                                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes">',
-                                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button">All</button>',
-                                    '<span id="filter-bank-count" class="pill filter-bank-count">All</span>',
+                                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-labelledby="filter-bank-label">',
+                                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>',
+                                    '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>',
                                 '</div>',
-                                '<div id="filter-bank-options" class="bank-picker-grid" role="listbox" aria-label="Banks"></div>',
-                                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true"></select>',
-                            '</label>',
+                                '<div id="filter-bank-options" class="bank-picker-grid" role="group" aria-labelledby="filter-bank-label"></div>',
+                                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>',
+                            '</div>',
                             '<label class="terminal-field" data-help="Minimum visible headline rate." data-help-label="Minimum rate">',
                                 iconText('summary', 'Minimum rate', 'field-code'),
                                 '<input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="' + ui.minRatePlaceholder + '">' +
@@ -485,6 +501,7 @@
                             '<button id="reset-filters" class="secondary" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>',
                             '<button id="workspace-copy-link" class="secondary" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>',
                         '</div>',
+                        '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>',
                         '<div class="terminal-filter-state-row">',
                             '<span id="filter-dirty-indicator" class="pill">0</span>',
                             '<div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>',
@@ -496,15 +513,15 @@
                             '</div>',
                         '</details>',
                         '<div id="export" class="terminal-export-row">',
-                            '<label class="terminal-field" data-help="Export the current table view." data-help-label="Download">',
-                                iconText('download', 'Download', 'field-code'),
-                                '<select id="download-format" class="small" aria-label="Download format">',
+                            '<div class="terminal-field" data-help="Export the current table view." data-help-label="Download">',
+                                '<label id="download-format-label" class="terminal-field-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>',
+                                '<select id="download-format" class="small" aria-labelledby="download-format-label">',
                                     '<option value="">Format</option>',
                                     '<option value="csv">CSV</option>',
                                     '<option value="xls">Excel</option>',
                                     '<option value="json">JSON</option>',
                                 '</select>',
-                            '</label>',
+                            '</div>',
                             '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
                             '<span id="last-refreshed" class="hint"></span>',
                         '</div>',
@@ -524,34 +541,43 @@
                                 '<div id="chart-summary" class="chart-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
                             '</div>',
                         '</div>',
-                        chartQuestionMarkup(),
-                        '<div class="terminal-chart-controls">',
-                            '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
-                                iconText('stats', 'Y axis', 'field-code'),
-                                '<select id="chart-y">' + optionsMarkup(ui.chartMetrics) + '</select>',
-                            '</label>',
-                            '<label class="terminal-field" data-help="Axis or category shown on the X axis." data-help-label="X axis">',
-                                iconText('history', 'X axis', 'field-code'),
-                                '<select id="chart-x">' + optionsMarkup(ui.chartX) + '</select>',
-                            '</label>',
-                            '<label class="terminal-field" data-help="Series grouping field." data-help-label="Group by">',
-                                iconText('series', 'Group by', 'field-code'),
-                                '<select id="chart-group">' + optionsMarkup(ui.chartGroups) + '</select>',
-                            '</label>',
-                            '<label class="terminal-field" data-help="Visible series density." data-help-label="Density">',
-                                iconText('summary', 'Density', 'field-code'),
-                                '<select id="chart-series-limit"><option value="compact">Compact</option><option value="standard" selected>Standard</option><option value="expanded">Expanded</option></select>',
-                            '</label>',
-                            '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="History basis">',
-                                iconText('history', 'History basis', 'field-code'),
-                                '<select id="chart-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
-                            '</label>',
-                            '<label class="terminal-field" data-help="Use line, ribbon, or box-whisker styling for curve views." data-help-label="Curve style">',
-                                iconText('chart', 'Curve style', 'field-code'),
-                                '<select id="chart-type">' + optionsMarkup(BASE_CHART_TYPES) + '</select>',
-                            '</label>',
-                            '<button id="draw-chart" type="button" class="primary" data-help="Render the chart for the current slice." data-help-label="Update chart">' + iconText('chart', 'Update chart', 'control-chip-label') + '</button>',
-                        '</div>',
+                        '<details class="terminal-mobile-fold terminal-chart-fold"' + (compactViewport ? '' : ' open') + '>',
+                            '<summary class="terminal-more-summary" data-help="Open or close the chart controls for the current slice." data-help-label="Chart controls">' +
+                                panelIcon('chart', 'Chart controls') +
+                                panelHeadingMarkup('h3', 'Chart controls') +
+                                '<span class="pill">View, axes, density</span>' +
+                            '</summary>',
+                            '<div class="terminal-mobile-fold-body">',
+                                chartQuestionMarkup(),
+                                '<div class="terminal-chart-controls">',
+                                    '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
+                                        iconText('stats', 'Y axis', 'field-code'),
+                                        '<select id="chart-y">' + optionsMarkup(ui.chartMetrics) + '</select>',
+                                    '</label>',
+                                    '<label class="terminal-field" data-help="Axis or category shown on the X axis." data-help-label="X axis">',
+                                        iconText('history', 'X axis', 'field-code'),
+                                        '<select id="chart-x">' + optionsMarkup(ui.chartX) + '</select>',
+                                    '</label>',
+                                    '<label class="terminal-field" data-help="Series grouping field." data-help-label="Group by">',
+                                        iconText('series', 'Group by', 'field-code'),
+                                        '<select id="chart-group">' + optionsMarkup(ui.chartGroups) + '</select>',
+                                    '</label>',
+                                    '<label class="terminal-field" data-help="Visible series density." data-help-label="Density">',
+                                        iconText('summary', 'Density', 'field-code'),
+                                        '<select id="chart-series-limit"><option value="compact">Compact</option><option value="standard" selected>Standard</option><option value="expanded">Expanded</option></select>',
+                                    '</label>',
+                                    '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="History basis">',
+                                        iconText('history', 'History basis', 'field-code'),
+                                        '<select id="chart-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
+                                    '</label>',
+                                    '<label class="terminal-field" data-help="Use line, ribbon, or box-whisker styling for curve views." data-help-label="Curve style">',
+                                        iconText('chart', 'Curve style', 'field-code'),
+                                        '<select id="chart-type">' + optionsMarkup(BASE_CHART_TYPES) + '</select>',
+                                    '</label>',
+                                    '<button id="draw-chart" type="button" class="primary" data-help="Render the chart for the current slice." data-help-label="Update chart">' + iconText('chart', 'Update chart', 'control-chip-label') + '</button>',
+                                '</div>',
+                            '</div>',
+                        '</details>',
                         '<div class="terminal-chart-surface">',
                             '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
                         '</div>',
@@ -643,15 +669,24 @@
                         '</label>',
                         '<div id="quick-compare-cards" class="quick-compare-cards"></div>',
                     '</section>',
-                    '<section class="panel terminal-panel terminal-spotlight-panel">',
-                        '<div class="terminal-panel-head">' + panelIcon('focus', 'Focus') + panelHeadingMarkup('h2', 'Focus') + '</div>',
-                        '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
-                    '</section>',
-                    '<section class="panel terminal-panel terminal-series-panel">',
-                        '<div class="terminal-panel-head">' + panelIcon('series', 'Product series') + panelHeadingMarkup('h2', 'Product series') + '</div>',
-                        '<p id="chart-series-note" class="hint">Choose a series</p>',
-                        '<div id="chart-series-list" class="chart-series-list"><p class="chart-series-empty">No series yet</p></div>',
-                    '</section>',
+                    '<details class="terminal-context-panel"' + (compactViewport ? '' : ' open') + '>',
+                        '<summary class="terminal-more-summary" data-help="Open or close the secondary context panels for focus details and product series." data-help-label="More context">' +
+                            panelIcon('focus', 'More context') +
+                            panelHeadingMarkup('h3', 'More context') +
+                            '<span class="pill">Focus and series</span>' +
+                        '</summary>',
+                        '<div class="terminal-context-body">',
+                            '<section class="panel terminal-subpanel terminal-spotlight-panel">',
+                                '<div class="terminal-panel-head">' + panelIcon('focus', 'Focus') + panelHeadingMarkup('h3', 'Focus') + '</div>',
+                                '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
+                            '</section>',
+                            '<section class="panel terminal-subpanel terminal-series-panel">',
+                                '<div class="terminal-panel-head">' + panelIcon('series', 'Product series') + panelHeadingMarkup('h3', 'Product series') + '</div>',
+                                '<p id="chart-series-note" class="hint">Choose a series</p>',
+                                '<div id="chart-series-list" class="chart-series-list"><p class="chart-series-empty">No series yet</p></div>',
+                            '</section>',
+                        '</div>',
+                    '</details>',
                 '</aside>',
             '</section>'
         ].join('');

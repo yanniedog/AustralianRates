@@ -762,6 +762,66 @@ async function verifyExportDownload(page, results, label) {
     }
 }
 
+async function verifyCopyLinkFeedback(page, results, label) {
+    await page.click('#workspace-copy-link');
+    await page.waitForFunction(() => {
+        const status = document.getElementById('workspace-copy-status');
+        return !!(status && !status.hidden && /copied/i.test(String(status.textContent || '')));
+    }, null, { timeout: 15000 }).catch(() => null);
+
+    const payload = await page.evaluate(() => {
+        const entries = typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries() : [];
+        return {
+            statusText: String(document.getElementById('workspace-copy-status')?.textContent || '').trim(),
+            statusHidden: !!document.getElementById('workspace-copy-status')?.hidden,
+            buttonText: String(document.querySelector('#workspace-copy-link .ar-icon-label-text')?.textContent || document.getElementById('workspace-copy-link')?.textContent || '').replace(/\s+/g, ' ').trim(),
+            messages: entries.map((entry) => String(entry.message || '')),
+        };
+    }).catch(() => ({
+        statusText: '',
+        statusHidden: true,
+        buttonText: '',
+        messages: [],
+    }));
+
+    if (!payload.statusHidden && /copied/i.test(payload.statusText)) {
+        pass(results, `${label}: copy-link action confirms success in the UI`);
+    } else {
+        fail(results, `${label}: copy-link action did not expose a visible success status`);
+    }
+
+    if (payload.messages.includes('Workspace link copied')) {
+        pass(results, `${label}: copy-link action is reflected in the client log`);
+    } else {
+        fail(results, `${label}: copy-link action did not reach the client log`);
+    }
+
+    await page.waitForTimeout(1700);
+    const restored = await page.evaluate(() => {
+        return String(document.querySelector('#workspace-copy-link .ar-icon-label-text')?.textContent || document.getElementById('workspace-copy-link')?.textContent || '').replace(/\s+/g, ' ').trim();
+    }).catch(() => '');
+
+    if (/^link$/i.test(restored)) pass(results, `${label}: copy-link button resets its label after confirmation`);
+    else fail(results, `${label}: copy-link button did not reset after confirmation`);
+}
+
+async function verifyFilterAccessibleNames(page, results, label) {
+    const checks = [
+        { name: 'bank search', locator: page.locator('#filter-bank-search'), reject: 'All All' },
+        { name: 'purpose filter', locator: page.locator('#filter-security-pads button').first(), reject: 'Purpose Purpose' },
+        { name: 'repayment filter', locator: page.locator('#filter-repayment-pads button').first(), reject: 'Repayment Repayment' },
+        { name: 'structure filter', locator: page.locator('#filter-structure-pads button').first(), reject: 'Structure Structure' },
+        { name: 'LVR filter', locator: page.locator('#filter-lvr-pads button').first(), reject: 'LVR band LVR band' },
+        { name: 'features filter', locator: page.locator('#filter-feature-pads button').first(), reject: 'Features Features' },
+    ];
+
+    for (const check of checks) {
+        const snapshot = await check.locator.ariaSnapshot().catch(() => '');
+        if (snapshot && snapshot.indexOf(check.reject) === -1) pass(results, `${label}: ${check.name} keeps a concise accessible name`);
+        else fail(results, `${label}: ${check.name} accessible name is noisy (${snapshot || 'missing'})`);
+    }
+}
+
 async function verifyTabsAndHash(page, results, label, baseUrl) {
     const scenarios = [
         { tabId: '#tab-pivot', panelId: '#panel-pivot', hash: '#pivot', name: 'pivot' },
@@ -802,6 +862,51 @@ async function verifyResponsiveViewports(page, results, label, baseUrl) {
         const noOverflow = await page.evaluate((expectedWidth) => document.documentElement.scrollWidth <= expectedWidth, viewport.width).catch(() => false);
         if (noOverflow) pass(results, `${label}: ${viewport.name} viewport has no horizontal overflow`);
         else fail(results, `${label}: ${viewport.name} viewport overflowed horizontally`);
+    }
+}
+
+async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await gotoPublic(page, baseUrl);
+    await page.click('a[href="#scenario"]');
+    await page.waitForTimeout(600);
+
+    const launch = await page.evaluate(() => {
+        const scenario = document.getElementById('scenario');
+        if (!scenario) return null;
+        const rect = scenario.getBoundingClientRect();
+        return {
+            hash: window.location.hash,
+            navOpen: document.body.classList.contains('is-nav-open'),
+            left: rect.left,
+            right: rect.right,
+            width: window.innerWidth,
+        };
+    }).catch(() => null);
+
+    if (launch && launch.hash === '#scenario' && launch.navOpen && launch.left >= -1 && launch.right <= launch.width + 1) {
+        pass(results, `${label}: Launch filters opens the mobile filter rail`);
+    } else {
+        fail(results, `${label}: Launch filters did not reveal the mobile filter rail`);
+    }
+
+    await gotoPublic(page, baseUrl + '#scenario');
+    const deepLink = await page.evaluate(() => {
+        const scenario = document.getElementById('scenario');
+        if (!scenario) return null;
+        const rect = scenario.getBoundingClientRect();
+        return {
+            navOpen: document.body.classList.contains('is-nav-open'),
+            left: rect.left,
+            right: rect.right,
+            width: window.innerWidth,
+        };
+    }).catch(() => null);
+
+    if (deepLink && deepLink.navOpen && deepLink.left >= -1 && deepLink.right <= deepLink.width + 1) {
+        pass(results, `${label}: #scenario deep link opens the mobile filter rail`);
+    } else {
+        fail(results, `${label}: #scenario deep link left the mobile filter rail hidden`);
     }
 }
 
@@ -949,6 +1054,7 @@ async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
 
 async function verifySectionSmoke(page, results, section) {
     const url = withSharedQuery(section.path, section.apiBasePath);
+    await page.setViewportSize({ width: 1440, height: 1200 });
     await gotoPublic(page, url);
     await verifyClarityPresent(page, results, section.name);
     await verifyHeader(page, results, section.name, section.name);
@@ -965,6 +1071,8 @@ async function verifySectionSmoke(page, results, section) {
     await verifyNoScriptFallback(url, section.apiBasePath, results, section.name);
     await verifyPublicTriggerRemoval(page, results, section.name);
     await verifyChartSmoke(page, results, section.name);
+    await verifyMobileScenarioAccess(page, results, section.name, url);
+    await page.setViewportSize({ width: 1440, height: 1200 });
 }
 
 async function runTests() {
@@ -1028,12 +1136,15 @@ async function runTests() {
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
         await verifyNoScriptFallback(homeUrl, '/api/home-loan-rates', results, 'Homepage');
         await verifyPublicTriggerRemoval(page, results, 'Homepage');
+        await verifyFilterAccessibleNames(page, results, 'Homepage');
         await verifyChartSmoke(page, results, 'Homepage');
         await verifyPivotLoad(page, results, 'Homepage');
+        await verifyCopyLinkFeedback(page, results, 'Homepage');
         await verifyExportDownload(page, results, 'Homepage');
         await verifyDesktopWorkspaceControls(page, results, 'Homepage', homeUrl);
         await verifyTabsAndHash(page, results, 'Homepage', homeUrl);
         await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);
+        await verifyMobileScenarioAccess(page, results, 'Homepage', homeUrl);
         await verifyMobileRail(page, results, 'Homepage', homeUrl);
 
         await page.setViewportSize({ width: 1440, height: 1200 });

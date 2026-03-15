@@ -36,7 +36,12 @@
     function syncToggleButton(button, theme) {
         if (!button) return;
         var meta = themeMeta(theme);
-        button.textContent = meta.icon;
+        var visibleLabel = button.getAttribute('data-theme-label') || 'Theme';
+        if (button.classList.contains('site-action-btn')) {
+            button.innerHTML = '<span class="site-action-glyph" aria-hidden="true">' + meta.icon + '</span><span class="site-action-text">' + visibleLabel + '</span>';
+        } else {
+            button.textContent = meta.icon;
+        }
         button.setAttribute('aria-label', meta.label);
         button.setAttribute('title', meta.label);
         button.setAttribute('data-theme-current', meta.current);

@@ -5,6 +5,8 @@
     var state = window.AR.state;
     var filters = window.AR.filters;
     var tabs = window.AR.tabs;
+    var utils = window.AR.utils || {};
+    var clientLog = utils.clientLog || function () {};
     var explorerState = {
         status: 'idle',
         rows: 0,
@@ -14,6 +16,7 @@
         message: '',
     };
     var copyResetTimer = null;
+    var copyStatusTimer = null;
 
     function byId(id) {
         return document.getElementById(id);
@@ -68,15 +71,43 @@
 
     function copyCurrentLink() {
         var button = byId('workspace-copy-link');
+        var status = byId('workspace-copy-status');
         var text = window.location.href;
 
-        function showCopiedLabel() {
+        function setButtonLabel(label) {
             if (!button) return;
-            button.textContent = 'DONE';
+            var textEl = button.querySelector('.ar-icon-label-text');
+            if (textEl) textEl.textContent = label;
+            else button.textContent = label;
+        }
+
+        function setCopyStatus(message, isError) {
+            if (!status) return;
+            status.hidden = !message;
+            status.textContent = message || '';
+            status.classList.toggle('is-error', !!isError);
+            if (!message) return;
+            window.clearTimeout(copyStatusTimer);
+            copyStatusTimer = window.setTimeout(function () {
+                status.hidden = true;
+                status.textContent = '';
+                status.classList.remove('is-error');
+            }, 2600);
+        }
+
+        function showCopyResult(ok, errorDetail) {
+            setButtonLabel(ok ? 'Copied' : 'Copy failed');
             window.clearTimeout(copyResetTimer);
             copyResetTimer = window.setTimeout(function () {
-                button.textContent = 'LINK';
+                setButtonLabel('Link');
             }, 1400);
+            if (ok) {
+                setCopyStatus('Link copied to clipboard.', false);
+                clientLog('info', 'Workspace link copied', { url: text });
+                return;
+            }
+            setCopyStatus('Copy failed. Try your browser copy or share controls.', true);
+            clientLog('error', 'Workspace link copy failed', errorDetail || {});
         }
 
         function fallbackCopy() {
@@ -87,18 +118,29 @@
             probe.style.left = '-9999px';
             document.body.appendChild(probe);
             probe.select();
+            var copied = false;
             try {
-                document.execCommand('copy');
-            } catch (_err) {}
+                copied = !!document.execCommand('copy');
+            } catch (_err) {
+                copied = false;
+            }
             probe.remove();
-            showCopiedLabel();
+            return copied;
         }
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(showCopiedLabel).catch(fallbackCopy);
+            navigator.clipboard.writeText(text)
+                .then(function () {
+                    showCopyResult(true);
+                })
+                .catch(function (error) {
+                    showCopyResult(fallbackCopy(), {
+                        message: error && error.message ? error.message : 'clipboard_write_failed',
+                    });
+                });
             return;
         }
-        fallbackCopy();
+        showCopyResult(fallbackCopy());
     }
 
     function refreshShellState() {
@@ -116,7 +158,7 @@
         if (!hash) return;
         var el = document.getElementById(hash);
         if (!el) return;
-        if (hash === 'notes' && el.tagName === 'DETAILS') el.open = true;
+        if (el.tagName === 'DETAILS') el.open = true;
     }
 
     function bindActions() {
