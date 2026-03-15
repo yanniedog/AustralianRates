@@ -61,12 +61,14 @@ type DatasetDescriptor = {
 }
 
 const SUMMARY_LIMIT = 50000
-const FIXED_WINDOW_DAYS = 30
+const DEFAULT_WINDOW_DAYS = 30
+const MIN_WINDOW_DAYS = 1
+const MAX_WINDOW_DAYS = 365
 
-function normalizeWindowDays(inputWindowDays: number | undefined): number {
-  const requested = Number(inputWindowDays)
-  if (!Number.isFinite(requested)) return FIXED_WINDOW_DAYS
-  return FIXED_WINDOW_DAYS
+export function normalizeWindowDays(inputWindowDays: number | undefined): number {
+  const requested = Math.floor(Number(inputWindowDays))
+  if (!Number.isFinite(requested)) return DEFAULT_WINDOW_DAYS
+  return Math.max(MIN_WINDOW_DAYS, Math.min(MAX_WINDOW_DAYS, requested))
 }
 
 function toYmd(value: Date): string {

@@ -14,6 +14,7 @@ export interface Env {
   FEATURE_ARCHIVE_QUEUE_TEST_ENABLED?: string;
   FEATURE_ARCHIVE_ADMIN_ENABLED?: string;
   FEATURE_ARCHIVE_DEBUG_ENABLED?: string;
+  ARCHIVE_OPERATOR_TOKEN?: string;
 }
 
 const KV_KEY = "last_queue_ping";
@@ -65,6 +66,43 @@ function isEnabled(value: string | undefined): boolean {
 
 function featureDisabled(code: string, message: string): Response {
   return jsonNoStore({ ok: false, error: { code, message } }, 404);
+}
+
+function unauthorizedResponse(): Response {
+  return jsonNoStore(
+    {
+      ok: false,
+      error: {
+        code: "ARCHIVE_UNAUTHORIZED",
+        message: "Archive operator authentication required.",
+      },
+    },
+    401
+  );
+}
+
+function hasOperatorAccess(req: Request, env: Env): boolean {
+  const configuredToken = String(env.ARCHIVE_OPERATOR_TOKEN ?? "").trim();
+  if (!configuredToken) return false;
+  const authorization = String(req.headers.get("authorization") ?? "");
+  if (!authorization.startsWith("Bearer ")) return false;
+  return authorization.slice("Bearer ".length).trim() === configuredToken;
+}
+
+function guardProtectedFeature(
+  req: Request,
+  env: Env,
+  enabledValue: string | undefined,
+  disabledCode: string,
+  disabledMessage: string
+): Response | null {
+  if (!isEnabled(enabledValue)) {
+    return featureDisabled(disabledCode, disabledMessage);
+  }
+  if (!hasOperatorAccess(req, env)) {
+    return unauthorizedResponse();
+  }
+  return null;
 }
 
 /** GET /api/admin/lenders */
@@ -192,18 +230,40 @@ export default {
         );
       }
 
-      if (url.pathname.startsWith("/api/admin/") && !isEnabled(env.FEATURE_ARCHIVE_ADMIN_ENABLED)) {
-        return featureDisabled(
+      if (url.pathname.startsWith("/api/admin/")) {
+        const guard = guardProtectedFeature(
+          req,
+          env,
+          env.FEATURE_ARCHIVE_ADMIN_ENABLED,
           "ARCHIVE_ADMIN_DISABLED",
           "Archive admin endpoints are disabled in this environment."
         );
+        if (guard) return guard;
       }
 
-      if (url.pathname.startsWith("/api/debug/") && !isEnabled(env.FEATURE_ARCHIVE_DEBUG_ENABLED)) {
-        return featureDisabled(
+      if (url.pathname.startsWith("/api/debug/")) {
+        const guard = guardProtectedFeature(
+          req,
+          env,
+          env.FEATURE_ARCHIVE_DEBUG_ENABLED,
           "ARCHIVE_DEBUG_DISABLED",
           "Archive debug endpoints are disabled in this environment."
         );
+        if (guard) return guard;
+      }
+
+      if (
+        (url.pathname === "/api/queue-test" && req.method === "POST") ||
+        (url.pathname === "/api/queue-test/result" && req.method === "GET")
+      ) {
+        const guard = guardProtectedFeature(
+          req,
+          env,
+          env.FEATURE_ARCHIVE_QUEUE_TEST_ENABLED,
+          "ARCHIVE_QUEUE_TEST_DISABLED",
+          "Archive queue test endpoint is disabled in this environment."
+        );
+        if (guard) return guard;
       }
 
       if (url.pathname === "/api/health") {

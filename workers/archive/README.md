@@ -41,11 +41,20 @@ Current feature flags:
 - `FEATURE_ARCHIVE_ADMIN_ENABLED`
 - `FEATURE_ARCHIVE_DEBUG_ENABLED`
 
+Sensitive fetch endpoints also require the `ARCHIVE_OPERATOR_TOKEN` secret when their feature flag is enabled.
+Use `Authorization: Bearer <token>` for:
+
+- `/api/admin/*`
+- `/api/debug/*`
+- `/api/queue-test`
+- `/api/queue-test/result`
+
 ## Commands
 
 - Dev: `npm run dev:archive`
 - Test: `npm run test:archive`
-- Deploy: `npm run deploy:archive`
+- Deploy both envs: `npm run deploy:archive`
+- Deploy one env: `npm run deploy:archive -- --env dev` or `npm run deploy:archive -- --env prod`
 - Regenerate types after binding changes: `npm run cf-typegen -w workers/archive`
 
 ## Cloudflare Checks

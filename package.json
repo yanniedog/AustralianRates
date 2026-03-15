@@ -36,7 +36,7 @@
     "typecheck:api": "npm run typecheck -w workers/api",
     "backup:api-db": "node scripts/export-d1-backup.js --db australianrates_api --remote",
     "deploy:api": "node scripts/deploy-api.mjs",
-    "deploy:archive": "npm run deploy -w workers/archive"
+    "deploy:archive": "npm run deploy -w workers/archive --"
   },
   "devDependencies": {
     "playwright": "^1.58.2",

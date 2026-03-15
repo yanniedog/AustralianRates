@@ -121,7 +121,8 @@ See [docs/TEST_PROTOCOL.md](docs/TEST_PROTOCOL.md) for the full test protocol (r
 - API worker:
   - `npm run deploy:api`
 - Archive worker:
-  - `npm run deploy:archive`
+  - `npm run deploy:archive` (deploys `dev` and `prod`)
+  - `npm run deploy:archive -- --env dev` or `npm run deploy:archive -- --env prod` for a single environment
 
 ## Cloudflare Hosting
 
