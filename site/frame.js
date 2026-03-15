@@ -17,6 +17,7 @@
     var tooltipTimer = 0;
     var longPressTimer = 0;
     var helpSheet = null;
+    var navScrim = null;
 
     function addSessionLog(level, message, detail) {
         _sessionLog.push({
@@ -295,7 +296,7 @@
     }
 
     function headerActionsMarkup(context) {
-        var menuLabel = context.legal || context.notFound ? 'Sections' : 'Filters';
+        var menuLabel = context.legal || context.notFound ? 'Sections' : 'Menu';
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
@@ -303,7 +304,6 @@
         if (context.admin) {
             actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + actionIconMarkup('refresh', 'Reset') + '</button>');
         }
-        actions.push('<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link site-action-btn site-action-github" aria-label="GitHub repository" title="GitHub repository">' + actionIconMarkup('github', 'Source') + '</a>');
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
@@ -392,6 +392,7 @@
                 '<div class="site-footer-meta">' +
                     '<strong>AustralianRates</strong>' +
                     '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
+                    '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener">Source</a>' +
                     '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                     '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
                     '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
@@ -533,6 +534,35 @@
             '</div>';
     }
 
+    function ensureNavScrim() {
+        if (navScrim) return navScrim;
+        navScrim = document.createElement('button');
+        navScrim.id = 'site-nav-scrim';
+        navScrim.className = 'site-nav-scrim';
+        navScrim.type = 'button';
+        navScrim.hidden = true;
+        navScrim.setAttribute('aria-label', 'Close panels');
+        navScrim.addEventListener('click', function () {
+            setMenuOpen(false);
+        });
+        document.body.appendChild(navScrim);
+        return navScrim;
+    }
+
+    function isHelpOpen() {
+        return !!(helpSheet && !helpSheet.hidden);
+    }
+
+    function syncOverlayState() {
+        var menuOpen = document.body.classList.contains('is-nav-open');
+        var overlayOpen = menuOpen || isHelpOpen();
+        var scrim = ensureNavScrim();
+        var showNavScrim = menuOpen && isPublicMobileMenuContext(getPageContext());
+        scrim.hidden = !showNavScrim;
+        scrim.setAttribute('aria-hidden', showNavScrim ? 'false' : 'true');
+        document.body.classList.toggle('has-overlay-open', overlayOpen);
+    }
+
     function ensureHelpSheet() {
         if (helpSheet) return helpSheet;
         helpSheet = document.createElement('div');
@@ -549,10 +579,12 @@
     }
 
     function openHelpSheet(title, text) {
+        setMenuOpen(false);
         var sheet = ensureHelpSheet();
         sheet.innerHTML = helpSheetHtml(title, '<p>' + esc(text) + '</p>');
         sheet.hidden = false;
         document.body.classList.add('has-help-open');
+        syncOverlayState();
         var focusTarget = sheet.querySelector('#site-help-close') || sheet.querySelector('#site-help-title');
         if (focusTarget && typeof focusTarget.focus === 'function') {
             window.setTimeout(function () {
@@ -565,6 +597,7 @@
         var sheet = ensureHelpSheet();
         sheet.hidden = true;
         document.body.classList.remove('has-help-open');
+        syncOverlayState();
     }
 
     function pageHelpText(context) {
@@ -573,7 +606,7 @@
             return 'Use the admin sidebar for destinations. Hover or focus controls for field definitions.';
         }
         if (context.legal) return 'Use the menu for Home Loans, Savings, Term Deposits, and reference pages. The header keeps theme, help, and quick links available without interrupting the page content.';
-        return 'Use the left rail to set your scenario, the right rail to review leaders and series, and the lower tabs to switch between the live table, pivot, history, and recent changes. Every view stays on the same filtered slice.';
+        return 'Set the scenario once, then use leaders, charts, table, pivot, and history without losing the same filtered slice.';
     }
 
     function isAdminLoginRoute() {
@@ -741,11 +774,13 @@
     }
 
     function setMenuOpen(open) {
+        if (open && isHelpOpen()) closeHelpSheet();
         document.body.classList.toggle('is-nav-open', !!open);
         var drawer = document.getElementById('site-menu-drawer');
         if (drawer) drawer.hidden = !open;
         var menuBtn = document.getElementById('site-menu-toggle');
         if (menuBtn) menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        syncOverlayState();
     }
 
     function bindFrameControls(context) {

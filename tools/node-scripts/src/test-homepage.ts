@@ -953,6 +953,66 @@ async function verifyMobileRail(page, results, label, baseUrl) {
     }).catch(() => {});
 }
 
+async function verifyMobileOverlays(page, results, label, baseUrl) {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await gotoPublic(page, baseUrl);
+    await waitForExplorerTableReady(page);
+
+    const helpBtn = page.locator('#site-help-btn');
+    const menuBtn = page.locator('#site-menu-toggle');
+    if (!(await helpBtn.isVisible().catch(() => false)) || !(await menuBtn.isVisible().catch(() => false))) {
+        fail(results, `${label}: mobile help or menu control is missing`);
+        return;
+    }
+
+    await helpBtn.click();
+    await page.waitForTimeout(300);
+
+    const helpOpen = await page.evaluate(() => {
+        const sheet = document.getElementById('site-help-sheet');
+        return !!(sheet && !sheet.hidden && sheet.querySelector('.site-help-panel'));
+    }).catch(() => false);
+
+    if (helpOpen) pass(results, `${label}: mobile help opens as an isolated overlay`);
+    else fail(results, `${label}: mobile help did not open`);
+
+    await menuBtn.click();
+    await page.waitForTimeout(300);
+
+    const overlayState = await page.evaluate(() => ({
+        helpOpen: !!(document.getElementById('site-help-sheet') && !document.getElementById('site-help-sheet').hidden),
+        menuOpen: document.body.classList.contains('is-nav-open'),
+        scrimVisible: !!(document.getElementById('site-nav-scrim') && !document.getElementById('site-nav-scrim').hidden),
+        overlayLocked: document.body.classList.contains('has-overlay-open'),
+    })).catch(() => ({
+        helpOpen: true,
+        menuOpen: false,
+        scrimVisible: false,
+        overlayLocked: false,
+    }));
+
+    if (overlayState.menuOpen && !overlayState.helpOpen && overlayState.scrimVisible && overlayState.overlayLocked) {
+        pass(results, `${label}: mobile menu replaces help without stacked overlays`);
+    } else {
+        fail(results, `${label}: mobile overlays stacked or failed to lock the background`);
+    }
+
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(200);
+
+    const overlaysClosed = await page.evaluate(() => {
+        const helpSheet = document.getElementById('site-help-sheet');
+        const scrim = document.getElementById('site-nav-scrim');
+        return !document.body.classList.contains('is-nav-open')
+            && !document.body.classList.contains('has-overlay-open')
+            && (!helpSheet || helpSheet.hidden)
+            && (!scrim || scrim.hidden);
+    }).catch(() => false);
+
+    if (overlaysClosed) pass(results, `${label}: Escape closes mobile overlays cleanly`);
+    else fail(results, `${label}: Escape did not reset mobile overlays`);
+}
+
 async function verifyLegalPages(page, results) {
     for (const legal of LEGAL_PAGES) {
         const url = withSharedQuery(legal.path);
@@ -1146,6 +1206,7 @@ async function runTests() {
         await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);
         await verifyMobileScenarioAccess(page, results, 'Homepage', homeUrl);
         await verifyMobileRail(page, results, 'Homepage', homeUrl);
+        await verifyMobileOverlays(page, results, 'Homepage', homeUrl);
 
         await page.setViewportSize({ width: 1440, height: 1200 });
         await gotoPublic(page, homeUrl);

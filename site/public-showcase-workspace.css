@@ -1,18 +1,18 @@
 body.ar-public .market-terminal {
-    gap: 22px;
+    gap: 18px;
     grid-template-columns:
-        minmax(270px, 300px)
+        minmax(270px, 292px)
         var(--ar-splitter-track)
         minmax(0, 1fr)
         var(--ar-splitter-track)
-        minmax(300px, 344px);
+        minmax(292px, 332px);
 }
 
 body.ar-public .terminal-panel,
 body.ar-public .terminal-subpanel,
 body.ar-public .terminal-notes,
 body.ar-public .rate-change-details {
-    padding: 18px;
+    padding: 16px;
     border-radius: 24px;
 }
 
@@ -47,10 +47,10 @@ body.ar-public .terminal-stage-panel::after {
     content: "";
     position: absolute;
     inset: auto -18% -24% auto;
-    width: 220px;
-    height: 220px;
+    width: 160px;
+    height: 160px;
     border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--ar-showcase-spark) 26%, transparent), transparent 70%);
+    background: radial-gradient(circle, color-mix(in srgb, var(--ar-showcase-spark) 14%, transparent), transparent 70%);
     pointer-events: none;
 }
 
@@ -99,16 +99,14 @@ body.ar-public .ladder-rate {
 body.ar-public .terminal-column-center > .panel,
 body.ar-public .terminal-column-right > .panel {
     transition:
-        transform var(--ar-motion-base) var(--ar-ease),
         box-shadow var(--ar-motion-base) var(--ar-ease),
         border-color var(--ar-motion-base) var(--ar-ease);
 }
 
 body.ar-public .terminal-column-center > .panel:hover,
 body.ar-public .terminal-column-right > .panel:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--ar-showcase-spark) 28%, var(--ar-line-strong));
-    box-shadow: var(--ar-shadow);
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 20%, var(--ar-line-strong));
+    box-shadow: var(--ar-shadow-soft);
 }
 
 body.ar-public .site-footer,
@@ -270,13 +268,13 @@ body.ar-public .market-intro-step:nth-child(3) {
     }
 
     body.ar-public .terminal-column-right {
-        order: 1;
+        order: 2;
         grid-column: auto;
         grid-template-columns: minmax(0, 1fr);
     }
 
     body.ar-public .terminal-column-center {
-        order: 2;
+        order: 1;
     }
 
     body.ar-public .terminal-panel,

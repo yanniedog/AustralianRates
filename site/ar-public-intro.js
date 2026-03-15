@@ -38,26 +38,24 @@
         'home-loans': sectionCopy({
             sessionLabel: 'session::home-loans',
             eyebrow: 'Daily official home loan rate tracking',
-            command: 'compare home loans with live CDR data',
-            title: 'Compare Australian home loan rates with daily official data.',
-            summary: 'Filter by borrower purpose, repayment type, rate structure, LVR, lender, and date, then move from today\'s leaders to product-by-product history without losing the exact scenario you are comparing.',
+            command: 'compare home loans with official CDR data',
+            title: 'Compare Australian home loan rates with official daily data.',
+            summary: 'Set purpose, repayment, structure, LVR, lender, and date once, then compare today\'s leaders and one product\'s history without changing the slice.',
             consoleTitle: 'Home loan rate monitor',
-            consoleCopy: 'The right-hand panels keep the same borrower slice visible while you review the latest collection, leading rates, and longer product history.',
+            consoleCopy: 'Keep the same borrower slice in view while you check the latest collection, the current leader, and product continuity.',
             liveCards: [
                 { id: 'updated', label: 'Latest collection', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
-                { id: 'rows', label: 'Rows in slice', value: 'FILTERED', note: 'Purpose, repayment, structure, LVR, bank, and date remain pinned.' },
                 { id: 'leader', label: 'Lowest live rate', value: 'SCANNING', note: 'The leading live product appears here once the slice is resolved.' }
             ],
-            principles: [{ icon: 'bank', label: 'official lender feeds' }, { icon: 'continuity', label: 'product history intact' }, { icon: 'download', label: 'export ready' }],
+            principles: [{ icon: 'bank', label: 'official lender feeds' }, { icon: 'continuity', label: 'product history intact' }],
             commands: [
-                'filter by purpose, repayment, structure, LVR, lender, and date',
-                'compare current leaders against product-by-product history',
-                'export the exact shortlist once the scenario is ready'
+                'set purpose, repayment, structure, LVR, lender, and date',
+                'compare leaders and product history in the same slice'
             ],
-            consoleLines: ['latest collection loaded', 'product_key continuity preserved', 'charts, table, and export share one slice'],
+            consoleLines: ['latest collection loaded', 'product_key continuity preserved'],
             steps: [
-                { index: '01', label: 'define', title: 'Set the borrowing scenario first', text: 'Owner-occupier versus investor, repayment type, structure, LVR, lender, and date stay locked before ranking begins.' },
-                { index: '02', label: 'compare', title: 'Compare leaders without losing context', text: 'The right rail, chart, and table stay aligned to the same mortgage slice.' },
+                { index: '01', label: 'define', title: 'Set the borrowing scenario first', text: 'Purpose, repayment, structure, LVR, lender, and date stay locked before ranking begins.' },
+                { index: '02', label: 'compare', title: 'Compare leaders without losing context', text: 'The leader rail, chart, and table stay aligned to the same mortgage slice.' },
                 { index: '03', label: 'follow', title: 'Track one product through time', text: 'product_key continuity keeps one real product in view instead of blending unlike offers.' }
             ],
             banks: ['Commonwealth Bank of Australia', 'Westpac Banking Corporation', 'National Australia Bank', 'ANZ', 'Macquarie Bank', 'ING']
@@ -65,23 +63,21 @@
         savings: sectionCopy({
             sessionLabel: 'session::savings',
             eyebrow: 'Daily official savings rate tracking',
-            command: 'compare savings rates with live CDR data',
-            title: 'Compare Australian savings rates with daily official data.',
-            summary: 'Compare base, bonus, and introductory rates without losing the account conditions that create them, so the best-looking yield never detaches from its actual rules.',
+            command: 'compare savings rates with official CDR data',
+            title: 'Compare Australian savings rates with official daily data.',
+            summary: 'Set bank, account type, rate type, tier, and date once, then compare yields without dropping the conditions that create them.',
             consoleTitle: 'Savings rate monitor',
-            consoleCopy: 'The right-hand panels keep account conditions visible while the workspace resolves live yields, filtered rows, and the current leader.',
+            consoleCopy: 'Keep the account rules visible while you check the latest collection, the current leader, and product continuity.',
             liveCards: [
                 { id: 'updated', label: 'Latest collection', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
-                { id: 'rows', label: 'Rows in slice', value: 'FILTERED', note: 'Bank, account type, rate type, tier, and date remain attached.' },
                 { id: 'leader', label: 'Top live yield', value: 'SCANNING', note: 'The leading yield appears here once the slice is resolved.' }
             ],
-            principles: [{ icon: 'bank', label: 'major bank coverage' }, { icon: 'compare', label: 'account conditions attached' }, { icon: 'download', label: 'export ready' }],
+            principles: [{ icon: 'bank', label: 'major bank coverage' }, { icon: 'compare', label: 'account conditions attached' }],
             commands: [
-                'filter by bank, account type, rate type, tier, and date',
-                'compare bonus, base, and intro rates with the rules still attached',
-                'export the exact account setup once the shortlist is ready'
+                'set bank, account type, rate type, tier, and date',
+                'compare bonus, base, and intro rates with the rules still attached'
             ],
-            consoleLines: ['latest savings collection loaded', 'bonus, base, and intro logic retained', 'leaderboard, charts, and export share one slice'],
+            consoleLines: ['latest savings collection loaded', 'bonus, base, and intro logic retained'],
             steps: [
                 { index: '01', label: 'define', title: 'Set the account rules first', text: 'Bank, account type, rate type, tier, and date stay in place before any yield ranking is shown.' },
                 { index: '02', label: 'compare', title: 'Read leaders with the conditions intact', text: 'The leader rail, chart, and table stay aligned with the same savings rule set.' },
@@ -92,23 +88,21 @@
         'term-deposits': sectionCopy({
             sessionLabel: 'session::term-deposits',
             eyebrow: 'Daily official term deposit tracking',
-            command: 'compare term deposits with live CDR data',
-            title: 'Compare Australian term deposit rates with daily official data.',
-            summary: 'Keep term length, deposit tier, and interest payment rhythm pinned while you compare current leaders against longer product history.',
+            command: 'compare term deposits with official CDR data',
+            title: 'Compare Australian term deposit rates with official daily data.',
+            summary: 'Set term, deposit tier, payment pattern, bank, and date once, then compare current leaders without losing the exact maturity profile.',
             consoleTitle: 'Term deposit monitor',
-            consoleCopy: 'The right-hand panels keep term, tier, and payout rhythm visible while the workspace resolves the live leader and longer series context.',
+            consoleCopy: 'Keep term, tier, and payment rhythm visible while you check the latest collection, the current leader, and product continuity.',
             liveCards: [
                 { id: 'updated', label: 'Latest collection', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
-                { id: 'rows', label: 'Rows in slice', value: 'FILTERED', note: 'Bank, term, tier, payment pattern, and date remain attached.' },
                 { id: 'leader', label: 'Top live yield', value: 'SCANNING', note: 'The leading term deposit appears here once the slice is resolved.' }
             ],
-            principles: [{ icon: 'history', label: 'term aware' }, { icon: 'summary', label: 'tier visible' }, { icon: 'download', label: 'export ready' }],
+            principles: [{ icon: 'history', label: 'term aware' }, { icon: 'summary', label: 'tier visible' }],
             commands: [
-                'filter by term, deposit tier, payment pattern, bank, and date',
-                'compare current leaders against longer term-specific history',
-                'export the exact term profile once the shortlist is ready'
+                'set term, deposit tier, payment pattern, bank, and date',
+                'compare current leaders against longer term-specific history'
             ],
-            consoleLines: ['latest term deposit collection loaded', 'deposit tier and payment rhythm retained', 'leaderboard, charts, and export share one slice'],
+            consoleLines: ['latest term deposit collection loaded', 'deposit tier and payment rhythm retained'],
             steps: [
                 { index: '01', label: 'define', title: 'Set the maturity window first', text: 'Term, tier, payment pattern, bank, and date stay locked before any yield ranking is shown.' },
                 { index: '02', label: 'compare', title: 'Read leaders with longer history', text: 'The right rail, chart, and table stay aligned to the same maturity profile.' },
@@ -163,7 +157,7 @@
         + '      <p class="eyebrow">' + esc(copy.eyebrow) + '</p><h1 class="market-intro-title">' + esc(copy.title) + '</h1><p class="market-intro-summary">' + esc(copy.summary) + '</p>'
         + '    </div>'
         + '    <ol class="market-intro-command-list">' + copy.commands.map(commandLine).join('') + '</ol>'
-        + '    <div class="market-intro-actions">' + buttonLink('#scenario', 'Launch filters', 'primary') + buttonLink('#ladder', 'Open leaders', 'secondary') + buttonLink('/about/', 'How we track rates', 'secondary') + '</div>'
+        + '    <div class="market-intro-actions">' + buttonLink('#scenario', 'Open filters', 'primary') + '<div class="market-intro-secondary-actions">' + buttonLink('#ladder', 'See leaders', 'ghost') + buttonLink('/about/', 'Methodology', 'ghost') + '</div></div>'
         + '  </div>'
         + '  <aside class="market-intro-console" aria-label="Live session console">'
         + '    <div class="market-intro-console-head"><div><p class="market-intro-console-kicker">' + esc(copy.consoleKicker) + '</p><h2 class="market-intro-console-title">' + esc(copy.consoleTitle) + '</h2></div><span class="market-intro-console-status">' + esc(copy.consoleStatus) + '</span></div>'
