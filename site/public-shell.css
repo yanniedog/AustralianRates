@@ -24,6 +24,41 @@ body.ar-admin {
     padding: 10px 18px;
 }
 
+.site-header-segment {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.site-header-segment-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: var(--ar-text-soft);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color var(--ar-motion-base) var(--ar-ease), background-color var(--ar-motion-base) var(--ar-ease);
+}
+
+.site-header-segment-link:hover {
+    color: var(--ar-text);
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
+}
+
+.site-header-segment-link.is-active {
+    color: var(--ar-accent);
+    background: color-mix(in srgb, var(--ar-accent) 12%, transparent);
+}
+
+.site-header-segment-link.is-active:hover {
+    color: var(--ar-accent);
+    background: color-mix(in srgb, var(--ar-accent) 18%, transparent);
+}
+
 .site-brand-lockup,
 .site-brand-copy,
 .site-header-context,
