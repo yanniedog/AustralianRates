@@ -24,10 +24,134 @@ type ParsedRateCell = {
   interestRate: number | null
 }
 
+type GreatSouthernProductMeta = {
+  productId: string
+  productName: string
+  productUrl: string
+}
+
 const PRODUCT_URLS: Record<string, string> = {
   'basic variable home loan': 'https://www.greatsouthernbank.com.au/home-loans/basic-variable',
   'offset variable home loan': 'https://www.greatsouthernbank.com.au/home-loans/offset-variable',
   'fixed rate home loan': 'https://www.greatsouthernbank.com.au/home-loans/fixed-rate',
+}
+
+const GREAT_SOUTHERN_PRODUCTS: Record<string, GreatSouthernProductMeta> = {
+  'basic variable home loan|owner_occupied|principal_and_interest|variable': {
+    productId: '4200-0211',
+    productName: 'Basic Variable Home Loan',
+    productUrl: PRODUCT_URLS['basic variable home loan'],
+  },
+  'basic variable home loan|owner_occupied|interest_only|variable': {
+    productId: '4100-0211',
+    productName: 'Basic Variable Home Loan',
+    productUrl: PRODUCT_URLS['basic variable home loan'],
+  },
+  'basic variable home loan|investment|principal_and_interest|variable': {
+    productId: '4300-0211',
+    productName: 'Basic Variable Home Loan',
+    productUrl: PRODUCT_URLS['basic variable home loan'],
+  },
+  'basic variable home loan|investment|interest_only|variable': {
+    productId: '4400-0211',
+    productName: 'Basic Variable Home Loan',
+    productUrl: PRODUCT_URLS['basic variable home loan'],
+  },
+  'offset variable home loan|owner_occupied|principal_and_interest|variable': {
+    productId: '4200-0111',
+    productName: 'Offset Variable Home Loan',
+    productUrl: PRODUCT_URLS['offset variable home loan'],
+  },
+  'offset variable home loan|owner_occupied|interest_only|variable': {
+    productId: '4100-0111',
+    productName: 'Offset Variable Home Loan',
+    productUrl: PRODUCT_URLS['offset variable home loan'],
+  },
+  'offset variable home loan|investment|principal_and_interest|variable': {
+    productId: '4300-0111',
+    productName: 'Offset Variable Home Loan',
+    productUrl: PRODUCT_URLS['offset variable home loan'],
+  },
+  'offset variable home loan|investment|interest_only|variable': {
+    productId: '4400-0111',
+    productName: 'Offset Variable Home Loan',
+    productUrl: PRODUCT_URLS['offset variable home loan'],
+  },
+  'fixed rate home loan|owner_occupied|principal_and_interest|fixed_1yr': {
+    productId: '4200-7102',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|owner_occupied|principal_and_interest|fixed_2yr': {
+    productId: '4200-7202',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|owner_occupied|principal_and_interest|fixed_3yr': {
+    productId: '4200-7302',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|owner_occupied|principal_and_interest|fixed_5yr': {
+    productId: '4200-7502',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|owner_occupied|interest_only|fixed_1yr': {
+    productId: '4100-7102',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|owner_occupied|interest_only|fixed_2yr': {
+    productId: '4100-7202',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|owner_occupied|interest_only|fixed_3yr': {
+    productId: '4100-7302',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|principal_and_interest|fixed_1yr': {
+    productId: '4300-7102',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|principal_and_interest|fixed_2yr': {
+    productId: '4300-7202',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|principal_and_interest|fixed_3yr': {
+    productId: '4300-7302',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|principal_and_interest|fixed_5yr': {
+    productId: '4300-7502',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|interest_only|fixed_1yr': {
+    productId: '4400-7102',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|interest_only|fixed_2yr': {
+    productId: '4400-7202',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|interest_only|fixed_3yr': {
+    productId: '4400-7302',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
+  'fixed rate home loan|investment|interest_only|fixed_5yr': {
+    productId: '4400-7502',
+    productName: 'Fixed Rate Home Loan',
+    productUrl: PRODUCT_URLS['fixed rate home loan'],
+  },
 }
 
 function decodeHtml(text: string): string {
@@ -122,8 +246,21 @@ function parseRateCells(cellHtml: string): ParsedRateCell[] {
   return results
 }
 
-function productUrlForTitle(title: string, fallback: string): string {
-  return PRODUCT_URLS[title.toLowerCase()] || fallback
+function productMetaForRow(input: {
+  title: string
+  securityPurpose: string
+  repaymentType: string
+  rateStructure: string
+  fallbackUrl: string
+}): GreatSouthernProductMeta {
+  const key = [input.title.toLowerCase(), input.securityPurpose, input.repaymentType, input.rateStructure].join('|')
+  return (
+    GREAT_SOUTHERN_PRODUCTS[key] || {
+      productId: `great_southern-html-${slugify(`${input.title}-${input.securityPurpose}-${input.repaymentType}-${input.rateStructure}`)}`,
+      productName: normalizeProductName(input.title),
+      productUrl: PRODUCT_URLS[input.title.toLowerCase()] || input.fallbackUrl,
+    }
+  )
 }
 
 export function parseGreatSouthernHomeLoanRatesFromHtml(input: {
@@ -179,9 +316,14 @@ export function parseGreatSouthernHomeLoanRatesFromHtml(input: {
         const securityPurpose = normalizeSecurityPurpose(rateCell.purpose)
         const rateStructure = normalizeRateStructure(`${title} ${lvrOrTermLabel}`)
         const lvrTier = normalizeLvrTier(lvrOrTermLabel).tier
-        const productName = normalizeProductName(title)
-        const productId = `great_southern-html-${slugify(productName)}`
-        const rowKey = [productId, securityPurpose, repaymentType, lvrTier, rateStructure].join('|')
+        const productMeta = productMetaForRow({
+          title,
+          securityPurpose,
+          repaymentType,
+          rateStructure,
+          fallbackUrl: input.sourceUrl,
+        })
+        const rowKey = [productMeta.productId, securityPurpose, repaymentType, lvrTier, rateStructure].join('|')
         if (seen.has(rowKey)) continue
         seen.add(rowKey)
 
@@ -190,18 +332,18 @@ export function parseGreatSouthernHomeLoanRatesFromHtml(input: {
         rows.push({
           bankName: normalizeBankName(input.lender.canonical_bank_name, input.lender.name),
           collectionDate: input.collectionDate,
-          productId,
-          productName,
+          productId: productMeta.productId,
+          productName: productMeta.productName,
           securityPurpose,
           repaymentType,
           rateStructure,
           lvrTier,
-          featureSet: normalizeFeatureSet(productName, null),
+          featureSet: normalizeFeatureSet(productMeta.productName, null),
           interestRate: rateCell.interestRate,
           comparisonRate,
           annualFee: null,
           sourceUrl: input.sourceUrl,
-          productUrl: productUrlForTitle(productName, input.sourceUrl),
+          productUrl: productMeta.productUrl,
           publishedAt: null,
           dataQualityFlag: input.qualityFlag,
           confidenceScore,

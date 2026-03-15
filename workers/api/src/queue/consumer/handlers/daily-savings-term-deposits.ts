@@ -23,6 +23,7 @@ import { elapsedMs, serializeForLog, shortUrlForLog, summarizeEndpointHosts, sum
 import { maxCdrProductPages } from '../retry-config'
 import { bankNameForLender, markProductsSeenForRun } from '../series-tracking'
 import { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
+import { handleDailyUbankSavingsFallback } from './ubank-fallback'
 
 export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySavingsLenderJob): Promise<void> {
   const startedAt = Date.now()
@@ -65,6 +66,10 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
     )
   }
   await Promise.all(ensureRuns)
+  if (lender.code === 'ubank') {
+    await handleDailyUbankSavingsFallback(env, job, lender, selectedDatasets)
+    return
+  }
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   const discovered = await discoverProductsEndpoint(lender, {

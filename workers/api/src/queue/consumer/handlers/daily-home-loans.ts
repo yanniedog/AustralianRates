@@ -29,6 +29,7 @@ import { maxCdrProductPages } from '../retry-config'
 import { bankNameForLender, markHomeLoanSeriesSeenForRun, markProductsSeenForRun } from '../series-tracking'
 import { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 import { splitValidatedRows } from '../validation'
+import { handleDailyUbankHomeLoanFallback } from './ubank-fallback'
 
 export { shouldSoftFailNoSignals } from '../soft-fail-no-signals'
 
@@ -63,6 +64,10 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
     bankName,
     collectionDate: job.collectionDate,
   })
+  if (lender.code === 'ubank') {
+    await handleDailyUbankHomeLoanFallback(env, job, lender)
+    return
+  }
   const endpointDiscoveryStartedAt = Date.now()
   const endpoint = await getCachedEndpoint(env.DB, job.lenderCode)
   let sourceUrl = ''
