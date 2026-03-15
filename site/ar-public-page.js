@@ -498,6 +498,7 @@
                                     '<option value="json">JSON</option>',
                                 '</select>',
                             '</label>',
+                            '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
                             '<span id="last-refreshed" class="hint"></span>',
                         '</div>',
                     '</section>',

@@ -96,6 +96,10 @@
     }
 
     function clearSiteDataAndReload() {
+        if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+            var confirmed = window.confirm('Reset local site data for AustralianRates and reload? This clears saved theme and workspace preferences in this browser.');
+            if (!confirmed) return;
+        }
         var hostname = typeof location !== 'undefined' && location.hostname ? location.hostname : '';
         var expired = 'expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
 
@@ -258,7 +262,7 @@
             '<div class="site-header-actions">' +
                 '<button type="button" class="icon-btn secondary" data-theme-toggle aria-label="Toggle theme"></button>' +
                 '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">' + iconOnly('help', 'Open help') + '</button>' +
-                '<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Clear cookies and cache and reload" title="Clear cookies, storage and cache for this site, then reload">' + iconOnly('refresh', 'Clear cookies and cache and reload') + '</button>' +
+                '<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + iconOnly('refresh', 'Reset local site data and reload') + '</button>' +
                 '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">' + iconOnly('github', 'GitHub repository') + '</a>' +
                 '<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">' + iconOnly('menu', 'Toggle menu') + '</button>' +
             '</div>';
@@ -522,9 +526,32 @@
     }
 
     function pageHelpText(context) {
-        if (context.admin) return 'Use the left rail for admin destinations. Hover or focus controls for field definitions.';
+        if (context.admin) {
+            if (isAdminLoginRoute()) return 'Enter an admin token to access the dashboard. Hover or focus controls for field definitions.';
+            return 'Use the admin sidebar for destinations. Hover or focus controls for field definitions.';
+        }
         if (context.legal) return 'Use the menu for section links. Theme and utility actions remain in the top bar.';
         return 'Use the left rail for market and pane navigation. Hover or focus short labels for full definitions. Long press on touch devices opens contextual help.';
+    }
+
+    function isAdminLoginRoute() {
+        var path = String(window.location.pathname || '').toLowerCase();
+        return path === '/admin/' || /\/admin\/index\.html$/.test(path);
+    }
+
+    function shouldShowMenuButton(context) {
+        if (context.legal) return true;
+        if (context.admin || context.notFound) return false;
+        return !!(window.matchMedia && window.matchMedia('(max-width: 760px)').matches);
+    }
+
+    function syncMenuButtonState(context) {
+        var menuBtn = document.getElementById('site-menu-toggle');
+        if (!menuBtn) return;
+        var visible = shouldShowMenuButton(context);
+        menuBtn.hidden = !visible;
+        menuBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        if (!visible) setMenuOpen(false);
     }
 
     function ensureTooltip() {
@@ -623,6 +650,7 @@
         var refreshBtn = document.getElementById('refresh-site-btn');
         var helpBtn = document.getElementById('site-help-btn');
         var menuBtn = document.getElementById('site-menu-toggle');
+        syncMenuButtonState(context);
         if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
         if (helpBtn) {
             helpBtn.addEventListener('click', function () {
@@ -645,6 +673,9 @@
                 closeHelpSheet();
                 hideTooltip();
             }
+        });
+        window.addEventListener('resize', function () {
+            syncMenuButtonState(context);
         });
     }
 

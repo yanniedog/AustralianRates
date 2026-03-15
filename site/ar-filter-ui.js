@@ -46,14 +46,14 @@
 
         var match = raw.match(DATE_RE);
         if (!match) {
-            return { ok: false, empty: false, value: raw, message: 'YYYY-MM-DD' };
+            return { ok: false, empty: false, value: raw, message: 'Use YYYY-MM-DD.' };
         }
 
         var year = Number(match[1]);
         var month = Number(match[2]);
         var day = Number(match[3]);
         if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-            return { ok: false, empty: false, value: raw, message: 'YYYY-MM-DD' };
+            return { ok: false, empty: false, value: raw, message: 'Use YYYY-MM-DD.' };
         }
 
         var date = new Date(Date.UTC(year, month - 1, day));
@@ -61,7 +61,7 @@
             date.getUTCMonth() === month - 1 &&
             date.getUTCDate() === day;
         if (!sameDay) {
-            return { ok: false, empty: false, value: raw, message: 'Invalid date' };
+            return { ok: false, empty: false, value: raw, message: 'Enter a real calendar date.' };
         }
 
         return {
@@ -272,7 +272,7 @@
             invalidStart = true;
             invalidEnd = true;
             invalidEl = els.filterStartDate;
-            message = 'FROM <= TO';
+            message = 'End date must be on or after start date.';
         }
 
         setDateInvalid(els.filterStartDate, invalidStart);

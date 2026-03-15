@@ -52,6 +52,7 @@
         workspaceStatusMessage: document.getElementById('workspace-status-message'),
         workspaceStatusRetry: document.getElementById('workspace-status-retry'),
         downloadFormat: document.getElementById('download-format'),
+        downloadStatus: document.getElementById('download-status'),
         downloadCsv: document.getElementById('download-csv'),
         loadPivot: document.getElementById('load-pivot'),
         pivotRepresentation: document.getElementById('pivot-representation'),

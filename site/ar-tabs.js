@@ -21,9 +21,10 @@
     }
 
     function updateHash(tabId) {
-        var target = TAB_MAP[tabId] ? TAB_MAP[tabId].hash : 'table';
-        if (window.location.hash === '#' + target) return;
-        window.history.replaceState(null, '', window.location.pathname + window.location.search + '#' + target);
+        var target = TAB_MAP[tabId] ? TAB_MAP[tabId].hash : '';
+        var nextHash = tabId === 'explorer' ? '' : ('#' + target);
+        if (window.location.hash === nextHash) return;
+        window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
     }
 
     function activateTab(tabId, options) {
@@ -119,7 +120,7 @@
         if (hash === 'pivot') activateTab('pivot', { skipHash: true });
         else if (hash === 'history') activateTab('history', { skipHash: true });
         else if (hash === 'changes') activateTab('changes', { skipHash: true });
-        else if (hash === 'table') activateTab('explorer', { skipHash: true });
+        else if (!hash || hash === 'table') activateTab('explorer', { skipHash: true });
     });
 
     window.AR.tabs = {

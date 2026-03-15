@@ -309,6 +309,10 @@
     justify-self: start;
 }
 
+.terminal-export-status {
+    margin: 0;
+}
+
 .terminal-filter-state-row {
     display: flex;
     align-items: flex-start;

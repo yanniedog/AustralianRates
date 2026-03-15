@@ -214,7 +214,7 @@
         var opts = options || {};
         clearLiveApplyTimer();
         if (filters && filters.validateInputs && !filters.validateInputs(opts.passiveValidation ? { focusInvalid: false } : undefined)) {
-            setFilterLiveStatus('Fix date range', 'is-error');
+            setFilterLiveStatus('Check dates', 'is-error');
             clientLog('warn', 'Apply filters blocked by invalid input', {
                 section: window.AR.section || 'home-loans',
             });

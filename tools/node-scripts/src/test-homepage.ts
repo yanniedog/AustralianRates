@@ -353,6 +353,31 @@ async function verifyStartupSettled(page, results, label) {
     }
 }
 
+async function verifyDefaultUrlState(page, results, label) {
+    const state = await page.evaluate(() => {
+        const url = new URL(window.location.href);
+        return {
+            hasTab: url.searchParams.has('tab'),
+            hasMode: url.searchParams.has('mode'),
+            hasMinRate: url.searchParams.has('min_rate'),
+            hasView: url.searchParams.has('view'),
+            hash: url.hash,
+        };
+    }).catch(() => ({
+        hasTab: true,
+        hasMode: true,
+        hasMinRate: true,
+        hasView: true,
+        hash: '#unexpected',
+    }));
+
+    if (!state.hasTab && !state.hasMode && !state.hasMinRate && !state.hasView && (!state.hash || state.hash === '#main-content')) {
+        pass(results, `${label}: default workspace URL omits internal default state`);
+    } else {
+        fail(results, `${label}: default workspace URL is noisy (tab=${state.hasTab}, mode=${state.hasMode}, min_rate=${state.hasMinRate}, view=${state.hasView}, hash="${state.hash}")`);
+    }
+}
+
 async function verifyBankBadgeLogos(page, results, label) {
     await page.waitForFunction(() => {
         const logos = Array.from(document.querySelectorAll('#rate-table img.bank-badge-logo')).slice(0, 8);
@@ -680,11 +705,11 @@ async function verifyPivotLoad(page, results, label) {
     }
 }
 
-async function verifyExportRequest(page, results, label) {
+async function verifyExportDownload(page, results, label) {
     const requests = [];
     const handler = (request) => {
         const url = String(request.url() || '');
-        if (url.indexOf('/exports') >= 0) {
+        if (url.indexOf('/exports') >= 0 || url.indexOf('/export?') >= 0) {
             requests.push({
                 method: request.method(),
                 url: url,
@@ -696,14 +721,40 @@ async function verifyExportRequest(page, results, label) {
     try {
         await page.selectOption('#download-format', 'csv');
         await page.waitForFunction(() => String(document.getElementById('download-format')?.value || '') === '', null, { timeout: 30000 }).catch(() => null);
-        await page.waitForTimeout(600);
+        await page.waitForFunction(() => {
+            if (typeof window.getSessionLogEntries !== 'function') return false;
+            const messages = window.getSessionLogEntries().map((entry) => String(entry.message || ''));
+            return messages.includes('Export download completed') || messages.includes('Export download failed');
+        }, null, { timeout: 30000 }).catch(() => null);
+        await page.waitForTimeout(800);
     } finally {
         page.context().off('request', handler);
     }
 
-    const started = requests.some((request) => request.method === 'POST' && /\/exports$/.test(new URL(request.url).pathname));
-    if (started) pass(results, `${label}: CSV export starts an async export job`);
-    else fail(results, `${label}: CSV export did not start an export job`);
+    const payload = await page.evaluate(() => {
+        const entries = typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries() : [];
+        const messages = entries
+            .map((entry) => String(entry.message || ''))
+            .filter((message) => message.indexOf('Export download') === 0 || message.indexOf('Async export route unavailable') === 0);
+        return {
+            messages,
+            status: String(document.getElementById('download-status')?.textContent || '').trim(),
+        };
+    }).catch(() => ({ messages: [], status: '' }));
+
+    const startedAsync = requests.some((request) => request.method === 'POST' && /\/exports$/.test(new URL(request.url).pathname));
+    const usedLegacy = requests.some((request) => request.method === 'GET' && /\/export$/.test(new URL(request.url).pathname));
+    const completed = payload.messages.includes('Export download completed');
+    const failed = payload.messages.includes('Export download failed');
+
+    if ((startedAsync || usedLegacy) && completed && !failed) {
+        const transport = startedAsync && usedLegacy
+            ? 'async export with legacy fallback'
+            : (startedAsync ? 'async export' : 'legacy direct export');
+        pass(results, `${label}: CSV export completes via ${transport}`);
+    } else {
+        fail(results, `${label}: CSV export did not complete cleanly (messages="${payload.messages.join(' | ')}", status="${payload.status}")`);
+    }
 }
 
 async function verifyTabsAndHash(page, results, label, baseUrl) {
@@ -711,7 +762,7 @@ async function verifyTabsAndHash(page, results, label, baseUrl) {
         { tabId: '#tab-pivot', panelId: '#panel-pivot', hash: '#pivot', name: 'pivot' },
         { tabId: '#tab-history', panelId: '#panel-history', hash: '#history', name: 'history' },
         { tabId: '#tab-changes', panelId: '#panel-changes', hash: '#changes', name: 'changes' },
-        { tabId: '#tab-explorer', panelId: '#panel-explorer', hash: '#table', name: 'explorer' },
+        { tabId: '#tab-explorer', panelId: '#panel-explorer', hash: '', name: 'explorer' },
     ];
 
     for (const scenario of scenarios) {
@@ -957,6 +1008,7 @@ async function runTests() {
         await verifyExplorerTable(page, results, 'Homepage', true);
         await verifyHeroStats(page, results, 'Homepage');
         await verifyStartupSettled(page, results, 'Homepage');
+        await verifyDefaultUrlState(page, results, 'Homepage');
         await verifyBankBadgeLogos(page, results, 'Homepage');
         await verifyFooterDeployStatus(page, results, 'Homepage');
         await verifyFooterLogControls(page, results, 'Homepage');
@@ -967,7 +1019,7 @@ async function runTests() {
         await verifyPublicTriggerRemoval(page, results, 'Homepage');
         await verifyChartSmoke(page, results, 'Homepage');
         await verifyPivotLoad(page, results, 'Homepage');
-        await verifyExportRequest(page, results, 'Homepage');
+        await verifyExportDownload(page, results, 'Homepage');
         await verifyDesktopWorkspaceControls(page, results, 'Homepage', homeUrl);
         await verifyTabsAndHash(page, results, 'Homepage', homeUrl);
         await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);

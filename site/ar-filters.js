@@ -483,7 +483,6 @@
 
     function syncUrlState() {
         var q = new URLSearchParams();
-        q.set('tab', tabState.activeTab || 'explorer');
 
         var fp = buildFilterParams();
         // Use field.url || field.param so URL keys match what restoreUrlState reads (restoreUrlState uses p.get(field.url || field.param)).
@@ -492,19 +491,21 @@
             if (!isFieldVisibleInMode(field.id)) continue;
             var value = fp[field.param];
             if (value == null || String(value).trim() === '') continue;
+            if (field.param === 'min_rate' && String(value).trim() === '0.01') continue;
             q.set(field.url || field.param, String(value).trim());
         }
         if (fp.start_date) q.set('start_date', fp.start_date);
         if (fp.end_date) q.set('end_date', fp.end_date);
-        if (fp.mode) q.set('mode', fp.mode);
+        if (fp.mode && fp.mode !== 'all') q.set('mode', fp.mode);
         if (fp.include_manual) q.set('include_manual', fp.include_manual);
         if (fp.include_removed) q.set('include_removed', fp.include_removed);
 
         if (els.refreshInterval && els.refreshInterval.value !== '60') q.set('refresh_interval', els.refreshInterval.value);
         if (apiOverride) q.set('apiBase', apiOverride);
-        if (isAnalystMode()) q.set('view', 'analyst');
+        if (!isAnalystMode()) q.set('view', 'consumer');
 
-        window.history.replaceState(null, '', window.location.pathname + '?' + q.toString() + window.location.hash);
+        var query = q.toString();
+        window.history.replaceState(null, '', window.location.pathname + (query ? ('?' + query) : '') + window.location.hash);
     }
 
     function restoreUrlState() {

@@ -27,7 +27,7 @@
         </div>
         <form id="login-form" action="#" method="post">
             <label for="admin-token">API token</label>
-            <input id="admin-token" name="token" type="password" placeholder="Paste ADMIN_API_TOKEN" autocomplete="off" required>
+            <input id="admin-token" name="token" type="password" placeholder="Paste admin token" autocomplete="off" required>
             <button type="submit" id="login-btn">Log in</button>
         </form>
         <div class="admin-message error" id="login-error" role="alert"></div>
@@ -41,6 +41,13 @@
             var btn = document.getElementById('login-btn');
             var errEl = document.getElementById('login-error');
             var apiBase = window.AR && window.AR.AdminPortal ? window.AR.AdminPortal.apiBase() : (window.location.origin + '/api/home-loan-rates');
+
+            function loginErrorMessage(reason) {
+                if (reason === 'invalid_bearer_token') return 'Login failed. The token was not accepted.';
+                if (reason === 'admin_token_not_configured') return 'Admin login is unavailable right now. Please contact the site operator.';
+                if (reason === 'admin_token_or_access_jwt_required') return 'Login failed. Enter a valid admin token.';
+                return 'Login failed. Check your token and try again.';
+            }
 
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
@@ -64,20 +71,15 @@
                         }
                         return r.json().then(function (d) {
                             var reason = (d && d.error && d.error.details && d.error.details.reason) ? d.error.details.reason : '';
-                            var msg = (d && d.error && d.error.message) ? d.error.message : 'Login failed. Check your token.';
-                            if (reason) msg += ' (' + reason + ').';
-                            if (reason === 'admin_token_or_access_jwt_required') msg += ' On production, set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
-                            if (reason === 'invalid_bearer_token') msg = 'The token does not match ADMIN_API_TOKEN on the server. Update it with: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
-                            if (reason === 'admin_token_not_configured') msg = 'Admin token is not configured on the server. Set ADMIN_API_TOKEN in Cloudflare: cd workers/api && wrangler secret put ADMIN_API_TOKEN';
-                            errEl.textContent = msg;
+                            errEl.textContent = loginErrorMessage(reason);
                             errEl.classList.add('visible');
                         }).catch(function () {
                             errEl.textContent = 'Login failed. Check your token.';
                             errEl.classList.add('visible');
                         });
                     })
-                    .catch(function (err) {
-                        errEl.textContent = err && err.message ? err.message : 'Network error.';
+                    .catch(function () {
+                        errEl.textContent = 'Network error. Check your connection and try again.';
                         errEl.classList.add('visible');
                     })
                     .finally(function () {
