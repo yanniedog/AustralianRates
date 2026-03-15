@@ -9,9 +9,15 @@
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
     var bankBrand = window.AR.bankBrand || {};
 
-    function emptyState(message) {
+    function setSummaryMarkup(markup) {
         if (!els.chartDataSummary) return;
-        els.chartDataSummary.innerHTML = '<p class="chart-data-summary-empty">' + esc(message || 'Draw a chart to populate the summary table.') + '</p>';
+        if (els.chartDataSummary.__arChartSummaryMarkup === markup) return;
+        els.chartDataSummary.innerHTML = markup;
+        els.chartDataSummary.__arChartSummaryMarkup = markup;
+    }
+
+    function emptyState(message) {
+        setSummaryMarkup('<p class="chart-data-summary-empty">' + esc(message || 'Draw a chart to populate the summary table.') + '</p>');
     }
 
     function hrefValue(value) {
@@ -61,7 +67,7 @@
             }).join('') + '</tr>';
         }).join('');
 
-        els.chartDataSummary.innerHTML = '' +
+        setSummaryMarkup('' +
             '<div class="chart-data-summary-header">' +
                 '<div>' +
                     '<p class="chart-data-summary-kicker">Chart summary</p>' +
@@ -74,7 +80,7 @@
                     '<thead><tr>' + headerHtml + '</tr></thead>' +
                     '<tbody>' + rowsHtml + '</tbody>' +
                 '</table>' +
-            '</div>';
+            '</div>');
     }
 
     function renderSeriesTable(model, fields) {
