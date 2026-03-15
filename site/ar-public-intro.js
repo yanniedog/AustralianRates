@@ -37,82 +37,82 @@
     var SECTION_COPY = {
         'home-loans': sectionCopy({
             sessionLabel: 'session::home-loans',
-            eyebrow: 'Daily CDR-backed mortgage tracking',
-            command: 'boot session::home-loans --live',
-            title: 'Terminal grade visibility for the Australian home loan market.',
-            summary: 'Slice by borrower purpose, repayment type, rate structure, LVR, bank, and date, then move from current leaders to product-safe history without losing context.',
-            consoleTitle: 'scan/home-loans',
-            consoleCopy: 'The session rail keeps the active mortgage slice, live leader signal, and canonical continuity rules visible while the rest of the workspace resolves.',
+            eyebrow: 'Daily official home loan rate tracking',
+            command: 'compare home loans with live CDR data',
+            title: 'Compare Australian home loan rates with daily official data.',
+            summary: 'Filter by borrower purpose, repayment type, rate structure, LVR, lender, and date, then move from today\'s leaders to product-by-product history without losing the exact scenario you are comparing.',
+            consoleTitle: 'Home loan rate monitor',
+            consoleCopy: 'The right-hand panels keep the same borrower slice visible while you review the latest collection, leading rates, and longer product history.',
             liveCards: [
                 { id: 'updated', label: 'Latest collection', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
                 { id: 'rows', label: 'Rows in slice', value: 'FILTERED', note: 'Purpose, repayment, structure, LVR, bank, and date remain pinned.' },
-                { id: 'leader', label: 'Best live rate', value: 'SCANNING', note: 'The leading live product appears here once the slice is resolved.' }
+                { id: 'leader', label: 'Lowest live rate', value: 'SCANNING', note: 'The leading live product appears here once the slice is resolved.' }
             ],
-            principles: [{ icon: 'bank', label: 'official feeds' }, { icon: 'continuity', label: 'product_key safe' }, { icon: 'download', label: 'export ready' }],
+            principles: [{ icon: 'bank', label: 'official lender feeds' }, { icon: 'continuity', label: 'product history intact' }, { icon: 'download', label: 'export ready' }],
             commands: [
-                'slice by purpose, repayment, structure, LVR, bank, and date',
-                'scan live leaders and historical drift in the same workspace',
-                'export the exact product-safe shortlist when the comparison is ready'
+                'filter by purpose, repayment, structure, LVR, lender, and date',
+                'compare current leaders against product-by-product history',
+                'export the exact shortlist once the scenario is ready'
             ],
-            consoleLines: ['collection stream online', 'canonical product_key continuity locked', 'leaders, charts, and export bound to one slice'],
+            consoleLines: ['latest collection loaded', 'product_key continuity preserved', 'charts, table, and export share one slice'],
             steps: [
-                { index: '01', label: 'slice', title: 'Pin the borrower context', text: 'Owner-occupier versus investor, repayment type, structure, LVR, bank, and date lock before ranking.' },
-                { index: '02', label: 'scan', title: 'Read live leaders with history', text: 'The right rail, chart, and table stay on the same exact mortgage slice.' },
-                { index: '03', label: 'export', title: 'Carry one product through time', text: 'Canonical product_key continuity preserves a real product instead of blended pseudo-history.' }
+                { index: '01', label: 'define', title: 'Set the borrowing scenario first', text: 'Owner-occupier versus investor, repayment type, structure, LVR, lender, and date stay locked before ranking begins.' },
+                { index: '02', label: 'compare', title: 'Compare leaders without losing context', text: 'The right rail, chart, and table stay aligned to the same mortgage slice.' },
+                { index: '03', label: 'follow', title: 'Track one product through time', text: 'product_key continuity keeps one real product in view instead of blending unlike offers.' }
             ],
             banks: ['Commonwealth Bank of Australia', 'Westpac Banking Corporation', 'National Australia Bank', 'ANZ', 'Macquarie Bank', 'ING']
         }),
         savings: sectionCopy({
             sessionLabel: 'session::savings',
-            eyebrow: 'Daily savings market tracking',
-            command: 'boot session::savings --live',
-            title: 'Terminal grade visibility for Australian savings yields.',
-            summary: 'Compare base, bonus, and introductory rates with the condition set still attached, so yield leaders never detach from the account mechanics that create them.',
-            consoleTitle: 'scan/savings',
-            consoleCopy: 'The session rail keeps account conditions visible while the workspace resolves live yields, filtered rows, and the current leader.',
+            eyebrow: 'Daily official savings rate tracking',
+            command: 'compare savings rates with live CDR data',
+            title: 'Compare Australian savings rates with daily official data.',
+            summary: 'Compare base, bonus, and introductory rates without losing the account conditions that create them, so the best-looking yield never detaches from its actual rules.',
+            consoleTitle: 'Savings rate monitor',
+            consoleCopy: 'The right-hand panels keep account conditions visible while the workspace resolves live yields, filtered rows, and the current leader.',
             liveCards: [
                 { id: 'updated', label: 'Latest collection', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
                 { id: 'rows', label: 'Rows in slice', value: 'FILTERED', note: 'Bank, account type, rate type, tier, and date remain attached.' },
-                { id: 'leader', label: 'Best live yield', value: 'SCANNING', note: 'The leading yield appears here once the slice is resolved.' }
+                { id: 'leader', label: 'Top live yield', value: 'SCANNING', note: 'The leading yield appears here once the slice is resolved.' }
             ],
-            principles: [{ icon: 'bank', label: 'major bank coverage' }, { icon: 'compare', label: 'condition aware' }, { icon: 'download', label: 'export ready' }],
+            principles: [{ icon: 'bank', label: 'major bank coverage' }, { icon: 'compare', label: 'account conditions attached' }, { icon: 'download', label: 'export ready' }],
             commands: [
-                'slice by bank, account type, rate type, tier, and date',
-                'compare bonus, base, and intro yields without dropping the rule set',
-                'export the exact account conditions once the shortlist is ready'
+                'filter by bank, account type, rate type, tier, and date',
+                'compare bonus, base, and intro rates with the rules still attached',
+                'export the exact account setup once the shortlist is ready'
             ],
-            consoleLines: ['account condition set pinned', 'bonus, base, and intro logic visible', 'leaderboard, charts, and export reading one slice'],
+            consoleLines: ['latest savings collection loaded', 'bonus, base, and intro logic retained', 'leaderboard, charts, and export share one slice'],
             steps: [
-                { index: '01', label: 'slice', title: 'Lock the account context first', text: 'Bank, account type, rate type, tier, and date come before any yield ranking.' },
-                { index: '02', label: 'scan', title: 'Read leaders without losing conditions', text: 'The leader rail, chart, and table stay aligned with the same account rule set.' },
-                { index: '03', label: 'export', title: 'Share the exact savings setup', text: 'Routes and downloads preserve the same filtered condition set instead of a flattened headline rate.' }
+                { index: '01', label: 'define', title: 'Set the account rules first', text: 'Bank, account type, rate type, tier, and date stay in place before any yield ranking is shown.' },
+                { index: '02', label: 'compare', title: 'Read leaders with the conditions intact', text: 'The leader rail, chart, and table stay aligned with the same savings rule set.' },
+                { index: '03', label: 'share', title: 'Export the exact account setup', text: 'Downloads preserve the same filtered condition set instead of a flattened headline rate.' }
             ],
             banks: ['Commonwealth Bank of Australia', 'UBank', 'ING', 'Macquarie Bank', 'Bank of Queensland', 'HSBC Australia']
         }),
         'term-deposits': sectionCopy({
             sessionLabel: 'session::term-deposits',
-            eyebrow: 'Daily term deposit market tracking',
-            command: 'boot session::term-deposits --live',
-            title: 'Terminal grade visibility for Australian term deposit yields.',
+            eyebrow: 'Daily official term deposit tracking',
+            command: 'compare term deposits with live CDR data',
+            title: 'Compare Australian term deposit rates with daily official data.',
             summary: 'Keep term length, deposit tier, and interest payment rhythm pinned while you compare current leaders against longer product history.',
-            consoleTitle: 'scan/term-deposits',
-            consoleCopy: 'The session rail keeps maturity, tier, and payout rhythm visible while the workspace resolves the live leader and longer series context.',
+            consoleTitle: 'Term deposit monitor',
+            consoleCopy: 'The right-hand panels keep term, tier, and payout rhythm visible while the workspace resolves the live leader and longer series context.',
             liveCards: [
                 { id: 'updated', label: 'Latest collection', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
                 { id: 'rows', label: 'Rows in slice', value: 'FILTERED', note: 'Bank, term, tier, payment pattern, and date remain attached.' },
-                { id: 'leader', label: 'Best live yield', value: 'SCANNING', note: 'The leading term deposit appears here once the slice is resolved.' }
+                { id: 'leader', label: 'Top live yield', value: 'SCANNING', note: 'The leading term deposit appears here once the slice is resolved.' }
             ],
             principles: [{ icon: 'history', label: 'term aware' }, { icon: 'summary', label: 'tier visible' }, { icon: 'download', label: 'export ready' }],
             commands: [
-                'slice by term, deposit tier, payment pattern, bank, and date',
-                'scan live leaders and historical drift within one maturity window',
-                'export the exact term profile when the shortlist is ready'
+                'filter by term, deposit tier, payment pattern, bank, and date',
+                'compare current leaders against longer term-specific history',
+                'export the exact term profile once the shortlist is ready'
             ],
-            consoleLines: ['maturity window pinned to session', 'deposit tier and payment rhythm retained', 'leader scan ready for product-safe export'],
+            consoleLines: ['latest term deposit collection loaded', 'deposit tier and payment rhythm retained', 'leaderboard, charts, and export share one slice'],
             steps: [
-                { index: '01', label: 'slice', title: 'Set the maturity window', text: 'Term, tier, payment pattern, bank, and date lock before any yield ranking is shown.' },
-                { index: '02', label: 'scan', title: 'Read live leaders with longer history', text: 'The right rail, chart, and table stay aligned to the same maturity profile.' },
-                { index: '03', label: 'export', title: 'Carry the same term profile forward', text: 'Routes and downloads preserve the exact term structure instead of blending unlike offers.' }
+                { index: '01', label: 'define', title: 'Set the maturity window first', text: 'Term, tier, payment pattern, bank, and date stay locked before any yield ranking is shown.' },
+                { index: '02', label: 'compare', title: 'Read leaders with longer history', text: 'The right rail, chart, and table stay aligned to the same maturity profile.' },
+                { index: '03', label: 'share', title: 'Carry the same term profile forward', text: 'Downloads preserve the exact term structure instead of blending unlike offers.' }
             ],
             banks: ['Commonwealth Bank of Australia', 'Westpac Banking Corporation', 'National Australia Bank', 'ANZ', 'Bankwest', 'Great Southern Bank']
         })
@@ -135,7 +135,7 @@
     function consoleLine(text) { return '<li class="market-intro-console-log-item"><span class="market-intro-console-log-prompt">&gt;</span><span class="market-intro-console-log-text">' + esc(text) + '</span></li>'; }
 
     function stepCard(step) {
-        return '<article class="market-intro-step"><div class="market-intro-step-meta"><span class="market-intro-step-index">' + esc(step.index) + '</span><span class="market-intro-step-label">' + esc(step.label) + '</span></div><strong>' + esc(step.title) + '</strong><p>' + esc(step.text) + '</p></article>';
+        return '<article class="market-intro-step"><div class="market-intro-step-meta"><span class="market-intro-step-index">' + esc(step.index) + '</span><span class="market-intro-step-label">' + esc(step.label) + '</span></div><h3 class="market-intro-step-title">' + esc(step.title) + '</h3><p>' + esc(step.text) + '</p></article>';
     }
 
     function bankChip(bankName) {
@@ -163,10 +163,10 @@
         + '      <p class="eyebrow">' + esc(copy.eyebrow) + '</p><h1 class="market-intro-title">' + esc(copy.title) + '</h1><p class="market-intro-summary">' + esc(copy.summary) + '</p>'
         + '    </div>'
         + '    <ol class="market-intro-command-list">' + copy.commands.map(commandLine).join('') + '</ol>'
-        + '    <div class="market-intro-actions">' + buttonLink('#scenario', 'Launch filters', 'primary') + buttonLink('#ladder', 'Open leaders', 'secondary') + buttonLink('/about/', 'Read methodology', 'secondary') + '</div>'
+        + '    <div class="market-intro-actions">' + buttonLink('#scenario', 'Launch filters', 'primary') + buttonLink('#ladder', 'Open leaders', 'secondary') + buttonLink('/about/', 'How we track rates', 'secondary') + '</div>'
         + '  </div>'
         + '  <aside class="market-intro-console" aria-label="Live session console">'
-        + '    <div class="market-intro-console-head"><div><p class="market-intro-console-kicker">' + esc(copy.consoleKicker) + '</p><h3 class="market-intro-console-title">' + esc(copy.consoleTitle) + '</h3></div><span class="market-intro-console-status">' + esc(copy.consoleStatus) + '</span></div>'
+        + '    <div class="market-intro-console-head"><div><p class="market-intro-console-kicker">' + esc(copy.consoleKicker) + '</p><h2 class="market-intro-console-title">' + esc(copy.consoleTitle) + '</h2></div><span class="market-intro-console-status">' + esc(copy.consoleStatus) + '</span></div>'
         + '    <p class="market-intro-console-summary">' + esc(copy.consoleCopy) + '</p><div class="market-intro-live-grid">' + copy.liveCards.map(liveCard).join('') + '</div>'
         + '    <div class="market-intro-console-log-shell"><span class="market-intro-console-log-label">Event stream</span><ul class="market-intro-console-log">' + copy.consoleLines.map(consoleLine).join('') + '</ul></div>'
         + '    <div class="market-intro-bank-strip" aria-label="Coverage example"><span class="market-intro-bank-strip-label">Tracked institutions</span>' + copy.banks.map(bankChip).join('') + '</div>'

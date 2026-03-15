@@ -206,7 +206,8 @@ body.ar-public .market-intro-step {
     gap: 10px;
     transition: transform var(--ar-motion-base) var(--ar-ease), border-color var(--ar-motion-base) var(--ar-ease), box-shadow var(--ar-motion-base) var(--ar-ease);
 }
-body.ar-public .market-intro-step strong {
+body.ar-public .market-intro-step .market-intro-step-title {
+    margin: 0;
     font-size: 1rem;
     line-height: 1.32;
 }

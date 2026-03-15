@@ -37,6 +37,12 @@
         return '<span class="' + classes.join(' ') + '" aria-hidden="true">' + esc(String(label || '').charAt(0) || '*') + '</span>';
     }
 
+    function panelHeadingMarkup(tagName, title) {
+        var tag = String(tagName || 'h2').toLowerCase();
+        if (!/^h[1-6]$/.test(tag)) tag = 'h2';
+        return '<' + tag + ' class="terminal-panel-title">' + esc(title) + '</' + tag + '>';
+    }
+
     var iconText = typeof uiIcons.text === 'function' ? uiIcons.text : fallbackText;
     var panelIcon = typeof uiIcons.panel === 'function' ? uiIcons.panel : fallbackPanel;
     var iconOnly = typeof uiIcons.icon === 'function' ? uiIcons.icon : fallbackIcon;
@@ -73,7 +79,7 @@
             '<section class="panel legal-hero missing-route-panel" aria-label="Page not found">' +
                 '<div class="legal-hero-copy">' +
                     '<p class="eyebrow">404</p>' +
-                    '<h2>Page not found.</h2>' +
+                    '<h1>Page not found.</h1>' +
                     '<p class="subtitle">The page you requested is not available on AustralianRates.</p>' +
                     '<div class="legal-badge-row">' +
                         '<span class="legal-badge">Requested path: ' + esc(requestedPath) + '</span>' +
@@ -414,7 +420,7 @@
                     '<section class="panel terminal-panel terminal-nav-panel">',
                         '<div class="terminal-panel-head">',
                             panelIcon('nav', 'Navigation'),
-                            '<strong>' + esc(ui.title) + '</strong>',
+                            panelHeadingMarkup('h2', ui.title),
                         '</div>',
                         '<div id="market-nav-tree" class="market-nav-tree" aria-label="Market navigation"></div>',
                     '</section>',
@@ -422,7 +428,7 @@
                         '<div class="terminal-panel-head terminal-panel-head-control">',
                             '<div class="terminal-panel-head-main">',
                                 panelIcon('filter', 'Filters'),
-                                '<strong>Control panel</strong>',
+                                panelHeadingMarkup('h2', 'Control panel'),
                             '</div>',
                             '<span id="filter-live-status" class="pill filter-live-pill">Live sync on</span>',
                         '</div>',
@@ -466,7 +472,7 @@
                         '</div>',
                         '<div class="terminal-date-rail">',
                             '<div class="terminal-filter-group-head">',
-                                '<strong>Quick window</strong>',
+                                panelHeadingMarkup('h3', 'Quick window'),
                                 '<span class="hint">Jump the date range</span>',
                             '</div>',
                             dateShortcutMarkup(),
@@ -510,7 +516,7 @@
                         '<div class="terminal-stage-top">',
                             '<div class="terminal-panel-head">',
                                 panelIcon('chart', 'Charts'),
-                                '<strong>' + esc(ui.title) + '</strong>',
+                                panelHeadingMarkup('h2', ui.title),
                             '</div>',
                             '<div class="chart-guidance-wrap">',
                                 '<span id="chart-guidance" class="hint">On demand</span>',
@@ -588,14 +594,14 @@
                         '</section>',
                         '<section id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="tab-history" hidden>',
                             '<div class="terminal-history-grid" id="history">',
-                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('focus', 'Spotlight') + '<strong>Spotlight</strong></div><div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div></section>',
-                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('history', 'History') + '<strong>History summary</strong></div><div id="chart-data-summary" class="chart-data-summary" aria-live="polite"><p class="chart-data-summary-empty">History populates after chart load.</p></div></section>',
+                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('focus', 'Spotlight') + panelHeadingMarkup('h3', 'Spotlight') + '</div><div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div></section>',
+                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('history', 'History') + panelHeadingMarkup('h3', 'History summary') + '</div><div id="chart-data-summary" class="chart-data-summary" aria-live="polite"><p class="chart-data-summary-empty">History populates after chart load.</p></div></section>',
                             '</div>',
                         '</section>',
                         '<section id="panel-changes" class="tab-panel" role="tabpanel" aria-labelledby="tab-changes" hidden>',
                             '<div class="terminal-changes-grid" id="changes">',
                                 '<section class="panel terminal-subpanel executive-summary" id="executive-summary-panel" aria-label="Executive summary">',
-                                    '<div class="terminal-panel-head">' + panelIcon('summary', 'Summary') + '<strong>Summary</strong></div>',
+                                    '<div class="terminal-panel-head">' + panelIcon('summary', 'Summary') + panelHeadingMarkup('h3', 'Summary') + '</div>',
                                     '<p id="executive-summary-status" class="hint">Loading summary</p>',
                                     '<div id="executive-summary-sections" class="executive-summary-sections"></div>',
                                 '</section>',
@@ -616,7 +622,7 @@
                     '<section class="panel terminal-panel terminal-stats-panel">',
                         '<div class="terminal-panel-head">',
                             panelIcon('stats', 'Overview'),
-                            '<strong>Overview</strong>',
+                            panelHeadingMarkup('h2', 'Overview'),
                         '</div>',
                         '<p id="hero-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
                         '<div class="terminal-stat-grid" id="hero-stats">',
@@ -628,7 +634,7 @@
                     '<section class="panel terminal-panel terminal-ladder-panel">',
                         '<div class="terminal-panel-head">',
                             panelIcon('ladder', 'Leaders'),
-                            '<strong>' + esc(ui.ladderTitle) + '</strong>',
+                            panelHeadingMarkup('h2', ui.ladderTitle),
                         '</div>',
                         '<label class="terminal-field terminal-ladder-search" data-help="Filter the ladder by lender or product name." data-help-label="Search shortlist">',
                             iconText('search', 'Search shortlist', 'field-code'),
@@ -637,11 +643,11 @@
                         '<div id="quick-compare-cards" class="quick-compare-cards"></div>',
                     '</section>',
                     '<section class="panel terminal-panel terminal-spotlight-panel">',
-                        '<div class="terminal-panel-head">' + panelIcon('focus', 'Focus') + '<strong>Focus</strong></div>',
+                        '<div class="terminal-panel-head">' + panelIcon('focus', 'Focus') + panelHeadingMarkup('h2', 'Focus') + '</div>',
                         '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
                     '</section>',
                     '<section class="panel terminal-panel terminal-series-panel">',
-                        '<div class="terminal-panel-head">' + panelIcon('series', 'Product series') + '<strong>Product series</strong></div>',
+                        '<div class="terminal-panel-head">' + panelIcon('series', 'Product series') + panelHeadingMarkup('h2', 'Product series') + '</div>',
                         '<p id="chart-series-note" class="hint">Choose a series</p>',
                         '<div id="chart-series-list" class="chart-series-list"><p class="chart-series-empty">No series yet</p></div>',
                     '</section>',

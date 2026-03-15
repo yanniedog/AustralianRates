@@ -123,18 +123,6 @@ async function waitForMobileRailVisible(page, timeout = 15000) {
     return false;
 }
 
-async function openFooterTechnical(page) {
-    const summary = page.locator('#footer-technical > summary');
-    const visible = await summary.isVisible().catch(() => false);
-    if (!visible) return false;
-    const alreadyOpen = await page.locator('#footer-technical').evaluate((el) => !!el.open).catch(() => false);
-    if (!alreadyOpen) {
-        await summary.click();
-        await page.waitForTimeout(200);
-    }
-    return true;
-}
-
 async function verifySkipLink(page, results, label) {
     const skip = page.locator('.skip-link');
     if (!(await skip.isVisible().catch(() => false))) {
@@ -503,71 +491,23 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
     await waitForExplorerTableReady(page);
 }
 
-async function verifyFooterDeployStatus(page, results, label) {
-    await openFooterTechnical(page);
-    await page.waitForFunction(() => {
-        const text = String(document.getElementById('footer-commit')?.textContent || '').trim();
-        return text.length > 0 && text !== 'Loading commit info...';
-    }, null, { timeout: 15000 }).catch(() => null);
-
-    const text = await page.locator('#footer-commit').textContent().catch(() => '');
-    const value = String(text || '').trim();
-
-    if (/^LIVE \| deploy [0-9a-f]{7,} \| build /i.test(value)) {
-        pass(results, `${label}: footer deploy status is live with deploy/build details`);
-        return;
-    }
-    if (!isProductionUrl && /UNKNOWN/i.test(value)) {
-        warn(results, `${label}: footer deploy status is Unknown on local/non-production test URL`);
-        return;
-    }
-    fail(results, `${label}: footer deploy status is invalid (${value || 'missing'})`);
-}
-
-async function verifyFooterLogControls(page, results, label) {
-    const opened = await openFooterTechnical(page);
-    if (!opened) {
-        fail(results, `${label}: footer technical section missing`);
-        return;
-    }
-
-    const logLink = page.locator('#footer-log-link');
-    if (!(await logLink.isVisible().catch(() => false))) {
-        fail(results, `${label}: footer log link missing`);
-        return;
-    }
-
-    await logLink.click();
-    await page.waitForTimeout(250);
-
-    const popup = await page.evaluate(() => {
-        const node = document.getElementById('footer-log-popup');
+async function verifyPublicFooter(page, results, label) {
+    const footer = await page.evaluate(() => {
         return {
-            visible: !!(node && !node.hidden),
-            clientAction: String(document.getElementById('footer-log-download-client')?.textContent || '').trim(),
-            systemActionCount: document.querySelectorAll('#footer-log-download-system').length,
+            links: Array.from(document.querySelectorAll('.site-footer-meta a[href]')).map((el) => ({
+                text: String(el.textContent || '').trim(),
+                href: String(el.getAttribute('href') || '').trim(),
+            })),
+            note: String(document.querySelector('.site-footer .footer-note')?.textContent || '').trim(),
+            hasTechnical: !!document.getElementById('footer-technical'),
+            hasLogLink: !!document.getElementById('footer-log-link'),
         };
-    });
-
-    if (popup.visible && popup.clientAction === 'Download client log') {
-        pass(results, `${label}: footer log popup exposes client download only`);
-    } else {
-        fail(results, `${label}: footer log popup is incomplete`);
-    }
-
-    if (popup.systemActionCount === 0) pass(results, `${label}: public system log download remains disabled`);
-    else fail(results, `${label}: public system log download should not be exposed`);
-
-    await page.mouse.click(5, 5).catch(() => {});
-}
-
-async function verifyFooterLegalLinks(page, results, label) {
-    const links = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('.site-footer-meta a[href]')).map((el) => ({
-            text: String(el.textContent || '').trim(),
-            href: String(el.getAttribute('href') || '').trim(),
-        }));
-    });
+    }).catch(() => ({
+        links: [],
+        note: '',
+        hasTechnical: true,
+        hasLogLink: true,
+    }));
 
     const expected = [
         { text: 'About', href: '/about/' },
@@ -575,10 +515,75 @@ async function verifyFooterLegalLinks(page, results, label) {
         { text: 'Privacy', href: '/privacy/' },
         { text: 'Terms', href: '/terms/' },
     ];
+    const missing = expected.filter((item) => !footer.links.some((link) => link.text === item.text && link.href === item.href));
 
-    const missing = expected.filter((item) => !links.some((link) => link.text === item.text && link.href === item.href));
     if (missing.length === 0) pass(results, `${label}: footer legal links render`);
     else fail(results, `${label}: missing footer legal links (${missing.map((item) => item.text).join(', ')})`);
+
+    if (!footer.hasTechnical && !footer.hasLogLink) {
+        pass(results, `${label}: public footer keeps technical diagnostics hidden`);
+    } else {
+        fail(results, `${label}: public footer leaked technical diagnostics`);
+    }
+
+    if (/confirm rates, fees, and eligibility/i.test(footer.note)) {
+        pass(results, `${label}: public footer keeps a user-facing guidance note`);
+    } else {
+        fail(results, `${label}: public footer guidance note is missing`);
+    }
+}
+
+async function verifyNoPublicResetControl(page, results, label) {
+    const count = await page.locator('#refresh-site-btn').count().catch(() => 0);
+    if (count === 0) pass(results, `${label}: public reset-site control remains hidden`);
+    else fail(results, `${label}: public reset-site control leaked into the header`);
+}
+
+async function verifyExplorerHeading(page, results, label) {
+    const state = await page.evaluate(() => ({
+        heading: String(document.querySelector('.market-intro-title')?.textContent || '').trim(),
+        explorerTitle: String(document.getElementById('explorer-overview-title')?.textContent || '').trim(),
+    })).catch(() => ({
+        heading: '',
+        explorerTitle: '',
+    }));
+
+    if (state.heading.length >= 20) pass(results, `${label}: hero heading is descriptive`);
+    else fail(results, `${label}: hero heading is too thin`);
+
+    if (/[A-Za-z]/.test(state.explorerTitle) && !/^\d[\d,]*(\/\d[\d,]*)?$/.test(state.explorerTitle)) {
+        pass(results, `${label}: table overview heading stays descriptive`);
+    } else {
+        fail(results, `${label}: table overview heading degraded to numeric shorthand`);
+    }
+}
+
+async function verifyLegalMenuSimplified(page, results, label) {
+    const toggle = page.locator('#site-menu-toggle');
+    if (!(await toggle.isVisible().catch(() => false))) {
+        fail(results, `${label}: legal menu toggle missing`);
+        return;
+    }
+
+    await toggle.click();
+    await page.waitForTimeout(250);
+
+    const payload = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('#site-menu-drawer a[href]')).map((el) => String(el.getAttribute('href') || '').trim());
+    }).catch(() => []);
+
+    const expected = ['/', '/savings/', '/term-deposits/', '/about/', '/contact/', '/privacy/', '/terms/'];
+    const missing = expected.filter((href) => !payload.includes(href));
+    const extras = payload.filter((href) => expected.indexOf(href) === -1);
+    const hasHashes = payload.some((href) => href.indexOf('#') >= 0);
+
+    if (missing.length === 0 && extras.length === 0 && !hasHashes) {
+        pass(results, `${label}: legal menu stays focused on top-level sections`);
+    } else {
+        fail(results, `${label}: legal menu still exposes workspace-deep links`);
+    }
+
+    await page.keyboard.press('Escape').catch(() => {});
 }
 
 async function verifyClientLog(page, results, label, minCount = 10) {
@@ -849,6 +854,9 @@ async function verifyLegalPages(page, results) {
         await gotoPublic(page, url);
         await verifyClarityPresent(page, results, legal.name);
         await verifyNoPrimaryMobileHostArtifacts(page, results, legal.name);
+        await verifyNoPublicResetControl(page, results, legal.name);
+        await verifyPublicFooter(page, results, legal.name);
+        await verifyLegalMenuSimplified(page, results, legal.name);
         const state = await page.evaluate(() => ({
             title: document.title,
             body: String(document.body.textContent || '').replace(/\s+/g, ' ').trim(),
@@ -885,7 +893,7 @@ async function verifyNotFoundRoute(page, results) {
         title: String(document.title || '').trim(),
         eyebrow: String(document.querySelector('.site-header .eyebrow')?.textContent || '').trim(),
         headerTitle: String(document.querySelector('.site-header .site-header-title')?.textContent || '').trim(),
-        heading: String(document.querySelector('.missing-route-panel h2')?.textContent || '').trim(),
+        heading: String(document.querySelector('.missing-route-panel h1')?.textContent || '').trim(),
         subtitle: String(document.querySelector('.missing-route-panel .subtitle')?.textContent || '').trim(),
         bodyClass: document.body.classList.contains('ar-not-found'),
         robots: String(document.querySelector('meta[name="robots"]')?.getAttribute('content') || '').trim(),
@@ -916,6 +924,9 @@ async function verifyNotFoundRoute(page, results) {
     const status = response ? response.status() : 0;
     if (status === 404) pass(results, 'Invalid route: HTTP status is 404');
     else fail(results, `Invalid route: expected HTTP 404 but received ${status || 'no response'}`);
+
+    await verifyNoPublicResetControl(page, results, 'Invalid route');
+    await verifyPublicFooter(page, results, 'Invalid route');
 }
 
 async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
@@ -942,13 +953,13 @@ async function verifySectionSmoke(page, results, section) {
     await verifyClarityPresent(page, results, section.name);
     await verifyHeader(page, results, section.name, section.name);
     await verifyNoPrimaryMobileHostArtifacts(page, results, section.name);
+    await verifyNoPublicResetControl(page, results, section.name);
     await verifyWorkspaceShell(page, results, section.name);
+    await verifyExplorerHeading(page, results, section.name);
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
     await verifyHeroStats(page, results, section.name);
     await verifyStartupSettled(page, results, section.name);
-    await verifyFooterDeployStatus(page, results, section.name);
-    await verifyFooterLogControls(page, results, section.name);
-    await verifyFooterLegalLinks(page, results, section.name);
+    await verifyPublicFooter(page, results, section.name);
     await verifyClientLog(page, results, section.name);
     await verifyNoPublicAdminSurface(page, results, section.name);
     await verifyNoScriptFallback(url, section.apiBasePath, results, section.name);
@@ -1004,15 +1015,15 @@ async function runTests() {
         await verifyClarityPresent(page, results, 'Homepage');
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
         await verifyNoPrimaryMobileHostArtifacts(page, results, 'Homepage');
+        await verifyNoPublicResetControl(page, results, 'Homepage');
         await verifyWorkspaceShell(page, results, 'Homepage');
+        await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
         await verifyHeroStats(page, results, 'Homepage');
         await verifyStartupSettled(page, results, 'Homepage');
         await verifyDefaultUrlState(page, results, 'Homepage');
         await verifyBankBadgeLogos(page, results, 'Homepage');
-        await verifyFooterDeployStatus(page, results, 'Homepage');
-        await verifyFooterLogControls(page, results, 'Homepage');
-        await verifyFooterLegalLinks(page, results, 'Homepage');
+        await verifyPublicFooter(page, results, 'Homepage');
         await verifyClientLog(page, results, 'Homepage');
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
         await verifyNoScriptFallback(homeUrl, '/api/home-loan-rates', results, 'Homepage');

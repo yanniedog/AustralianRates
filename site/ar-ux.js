@@ -40,25 +40,25 @@
         if (!titleEl || !textEl || !statusEl) return;
 
         if (explorerState.status === 'error') {
-            titleEl.textContent = 'ERR';
-            textEl.textContent = explorerState.message || 'Fetch failed';
+            titleEl.textContent = 'Rate table unavailable';
+            textEl.textContent = explorerState.message || 'The live table could not load right now.';
             statusEl.textContent = 'ERR';
             statusEl.className = 'pill danger';
         } else if (explorerState.status === 'ready' && Number(explorerState.total) === 0) {
-            titleEl.textContent = 'ZERO';
-            textEl.textContent = 'Broaden slice';
+            titleEl.textContent = 'No rates match this slice';
+            textEl.textContent = 'Broaden the filters to see more rates.';
             statusEl.textContent = '0';
             statusEl.className = 'pill warning';
         } else if (explorerState.status === 'ready') {
-            titleEl.textContent = explorerState.total > explorerState.rows
-                ? explorerState.rows.toLocaleString() + '/' + explorerState.total.toLocaleString()
-                : explorerState.total.toLocaleString();
-            textEl.textContent = 'LIVE';
+            titleEl.textContent = 'Current rate table';
+            textEl.textContent = explorerState.total > explorerState.rows
+                ? ('Showing ' + explorerState.rows.toLocaleString() + ' of ' + explorerState.total.toLocaleString() + ' rows in the live slice.')
+                : ('Showing ' + explorerState.total.toLocaleString() + ' rows in the live slice.');
             statusEl.textContent = 'OK';
             statusEl.className = 'pill positive';
         } else {
-            titleEl.textContent = 'LOAD';
-            textEl.textContent = 'SYNC';
+            titleEl.textContent = 'Current rate table';
+            textEl.textContent = 'Loading the latest rates for the active slice.';
             statusEl.textContent = 'WAIT';
             statusEl.className = 'pill';
         }

@@ -159,6 +159,18 @@
         return { label: 'Home Loans', code: 'HL', icon: 'home', path: '/' };
     }
 
+    function publicSections() {
+        return [
+            sectionMeta('home-loans'),
+            sectionMeta('savings'),
+            sectionMeta('term-deposits')
+        ];
+    }
+
+    function isSectionActive(currentPath, item) {
+        return currentPath === item.path || (item.path !== '/' && currentPath.indexOf(item.path) === 0);
+    }
+
     function currentPageLabel(context) {
         if (context.notFound) return 'Not Found';
         if (context.admin) {
@@ -201,17 +213,13 @@
     }
 
     function publicTreeMarkup(context) {
-        var sections = [
-            sectionMeta('home-loans'),
-            sectionMeta('savings'),
-            sectionMeta('term-deposits')
-        ];
+        var sections = publicSections();
         var currentPath = window.location.pathname;
         return '' +
             '<nav class="site-tree" aria-label="Market tree">' +
                 '<div class="site-tree-group">' +
                     sections.map(function (item) {
-                        var activeRoot = currentPath === item.path || (item.path !== '/' && currentPath.indexOf(item.path) === 0);
+                        var activeRoot = isSectionActive(currentPath, item);
                         return '' +
                             '<details class="site-tree-branch"' + (activeRoot ? ' open' : '') + '>' +
                                 '<summary class="site-tree-root' + (activeRoot ? ' is-active' : '') + '">' +
@@ -224,6 +232,27 @@
                                     }).join('') +
                                 '</div>' +
                             '</details>';
+                    }).join('') +
+                '</div>' +
+                '<div class="site-tree-group site-tree-group-secondary">' +
+                    panelIcon('reference', 'Reference') +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('about')) + '">About</a>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
+                    '<a class="site-tree-leaf" href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
+                '</div>' +
+            '</nav>';
+    }
+
+    function legalMenuMarkup() {
+        var currentPath = window.location.pathname;
+        return '' +
+            '<nav class="site-tree" aria-label="Site sections">' +
+                '<div class="site-tree-group">' +
+                    panelIcon('home', 'Markets') +
+                    publicSections().map(function (item) {
+                        var active = isSectionActive(currentPath, item);
+                        return '<a class="site-tree-leaf' + (active ? ' is-active' : '') + '" href="' + esc(item.path) + '"' + (active ? ' aria-current="page"' : '') + '>' + iconText(item.icon || 'home', item.label, 'nav-link-label') + '</a>';
                     }).join('') +
                 '</div>' +
                 '<div class="site-tree-group site-tree-group-secondary">' +
@@ -258,14 +287,16 @@
     }
 
     function headerActionsMarkup(context) {
-        return '' +
-            '<div class="site-header-actions">' +
-                '<button type="button" class="icon-btn secondary" data-theme-toggle aria-label="Toggle theme"></button>' +
-                '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">' + iconOnly('help', 'Open help') + '</button>' +
-                '<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + iconOnly('refresh', 'Reset local site data and reload') + '</button>' +
-                '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">' + iconOnly('github', 'GitHub repository') + '</a>' +
-                '<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">' + iconOnly('menu', 'Toggle menu') + '</button>' +
-            '</div>';
+        var actions = [
+            '<button type="button" class="icon-btn secondary" data-theme-toggle aria-label="Toggle theme"></button>',
+            '<button type="button" id="site-help-btn" class="icon-btn secondary" aria-label="Open help" title="Open help">' + iconOnly('help', 'Open help') + '</button>',
+        ];
+        if (context.admin) {
+            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + iconOnly('refresh', 'Reset local site data and reload') + '</button>');
+        }
+        actions.push('<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener" class="buttonish secondary icon-link" aria-label="GitHub repository" title="GitHub repository">' + iconOnly('github', 'GitHub repository') + '</a>');
+        actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary" aria-label="Toggle menu" title="Toggle menu">' + iconOnly('menu', 'Toggle menu') + '</button>');
+        return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
 
     function buildHeader() {
@@ -335,7 +366,7 @@
                     panelIcon('menu', 'Menu') +
                     '<button type="button" class="icon-btn secondary" data-menu-close aria-label="Close menu">' + iconOnly('close', 'Close menu') + '</button>' +
                 '</div>' +
-                publicTreeMarkup(context) +
+                legalMenuMarkup() +
             '</div>';
         document.body.appendChild(drawer);
     }
@@ -357,19 +388,21 @@
                     '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
                 '</div>' +
                 '<div class="site-footer-tech">' +
-                    '<details class="footer-technical" id="footer-technical">' +
-                        '<summary class="footer-technical-summary">' + iconText('tech', 'Technical', 'nav-link-label') + '</summary>' +
-                        '<div class="footer-technical-body">' +
-                            '<span id="footer-commit">Loading commit info...</span>' +
-                            '<span id="footer-log-info" class="footer-log-wrap">' +
-                                '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log/0</span></a>' +
-                                '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
-                                    '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
-                                '</div>' +
-                            '</span>' +
-                            (context.admin ? '<span class="footer-note">Admin tooling</span>' : '<span class="footer-note">General information only</span>') +
-                        '</div>' +
-                    '</details>' +
+                    (context.admin
+                        ? '<details class="footer-technical" id="footer-technical">' +
+                            '<summary class="footer-technical-summary">' + iconText('tech', 'Technical', 'nav-link-label') + '</summary>' +
+                            '<div class="footer-technical-body">' +
+                                '<span id="footer-commit">Loading commit info...</span>' +
+                                '<span id="footer-log-info" class="footer-log-wrap">' +
+                                    '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log/0</span></a>' +
+                                    '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
+                                        '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
+                                    '</div>' +
+                                '</span>' +
+                                '<span class="footer-note">Admin tooling</span>' +
+                            '</div>' +
+                        '</details>'
+                        : '<span class="footer-note">General information only. Confirm rates, fees, and eligibility directly with the institution.</span>') +
                 '</div>' +
             '</div>';
         document.body.appendChild(footer);
@@ -530,8 +563,8 @@
             if (isAdminLoginRoute()) return 'Enter an admin token to access the dashboard. Hover or focus controls for field definitions.';
             return 'Use the admin sidebar for destinations. Hover or focus controls for field definitions.';
         }
-        if (context.legal) return 'Use the menu for section links. Theme and utility actions remain in the top bar.';
-        return 'Use the left rail for market and pane navigation. Hover or focus short labels for full definitions. Long press on touch devices opens contextual help.';
+        if (context.legal) return 'Use the menu for Home Loans, Savings, Term Deposits, and reference pages. The header keeps theme, help, and quick links available without interrupting the page content.';
+        return 'Use the left rail to set your scenario, the right rail to review leaders and series, and the lower tabs to switch between the live table, pivot, history, and recent changes. Every view stays on the same filtered slice.';
     }
 
     function isAdminLoginRoute() {
