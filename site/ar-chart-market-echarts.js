@@ -162,6 +162,9 @@
             xAxis: categoryAxis(market, compact),
             yAxis: {
                 type: 'value',
+                name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                nameGap: compact ? 10 : (narrow ? 18 : 26),
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: gridStyles().axisLine,
                 splitLine: gridStyles().splitLine,
                 axisLabel: {
@@ -209,6 +212,9 @@
             xAxis: categoryAxis(market, narrow),
             yAxis: {
                 type: 'value',
+                name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                nameGap: narrow ? 18 : 26,
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: gridStyles().axisLine,
                 splitLine: gridStyles().splitLine,
                 axisLabel: {
@@ -316,6 +322,9 @@
             xAxis: categoryAxis(market, narrow),
             yAxis: {
                 type: 'value',
+                name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                nameGap: narrow ? 18 : 26,
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: gridStyles().axisLine,
                 splitLine: gridStyles().splitLine,
                 axisLabel: {

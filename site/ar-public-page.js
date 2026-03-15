@@ -117,11 +117,11 @@
     ];
 
     var CHART_VIEWS = [
-        { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best current product by lender for the active slice.' },
-        { value: 'market', label: 'Curve', icon: 'history', help: 'Sector-aware market curve for the latest snapshot.', selected: true },
-        { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate movement over time for the active slice.' },
-        { value: 'compare', label: 'Compare', icon: 'compare', help: 'Track only the spotlight shortlist series.' },
-        { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Distribution summary for the current slice.' }
+        { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best rate now per lender.' },
+        { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: true },
+        { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate over time (heatmap).' },
+        { value: 'compare', label: 'Compare', icon: 'compare', help: 'Selected products over time.' },
+        { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Spread by group.' }
     ];
 
     var WORKSPACE_TABS = [
@@ -192,8 +192,8 @@
                 { kind: 'number', id: 'filter-max-comparison-rate', label: 'Max comparison rate', icon: 'summary', placeholder: '7.20', help: 'Maximum comparison rate.' }
             ],
             chartMetrics: [
-                { value: 'interest_rate', label: 'Interest rate', selected: true },
-                { value: 'comparison_rate', label: 'Comparison rate' },
+                { value: 'interest_rate', label: 'Interest rate (headline)', selected: true },
+                { value: 'comparison_rate', label: 'Comparison rate (like-for-like)' },
                 { value: 'annual_fee', label: 'Annual fee' },
                 { value: 'rba_cash_rate', label: 'Cash rate' }
             ],
@@ -585,8 +585,8 @@
                                         iconText('history', 'History basis', 'field-code'),
                                         '<select id="chart-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
                                     '</label>',
-                                    '<label class="terminal-field" data-help="Use line, ribbon, or box-whisker styling for curve views." data-help-label="Curve style">',
-                                        iconText('chart', 'Curve style', 'field-code'),
+                                    '<label class="terminal-field" data-help="Line, ribbon, or box-whisker. Applies to Curve view only." data-help-label="Curve style">',
+                                        iconText('chart', 'Curve style (Curve only)', 'field-code'),
                                         '<select id="chart-type">' + optionsMarkup(ui.chartTypes || BASE_CHART_TYPES) + '</select>',
                                     '</label>',
                                     '<button id="draw-chart" type="button" class="primary" data-help="Render the chart for the current slice." data-help-label="Update chart">' + iconText('chart', 'Update chart', 'control-chip-label') + '</button>',
