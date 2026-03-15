@@ -1,6 +1,6 @@
 # Production Coverage Audit
 
-- Generated at: `2026-03-15T02:26:24.148Z`
+- Generated at: `2026-03-15T05:21:18.437Z`
 - Target DB: `australianrates_api`
 
 ## Recommendation
@@ -23,17 +23,17 @@
 
 | Dataset | Rows | Dates | First date | Last date | Distinct series | Distinct products |
 | --- | --- | --- | --- | --- | --- | --- |
-| home_loans | 11870 | 16 | 2026-02-26 | 2026-03-15 | 1110 | 312 |
-| savings | 6762 | 13 | 2026-02-26 | 2026-03-15 | 483 | 151 |
+| home_loans | 11980 | 16 | 2026-02-26 | 2026-03-15 | 1181 | 312 |
+| savings | 6768 | 13 | 2026-02-26 | 2026-03-15 | 485 | 152 |
 | term_deposits | 21498 | 17 | 2026-02-26 | 2026-03-15 | 1786 | 73 |
 
 ## Coverage State
 
 | Dataset | First coverage | Cursor | Status | Empty streak | Last tick status | Last tick message |
 | --- | --- | --- | --- | --- | --- | --- |
-| mortgage | 2026-02-26 | 2023-11-17 | active | 826 | completed_empty | run_status=completed rows=0 |
-| savings | 2026-02-26 | 2023-11-18 | active | 821 | completed_empty | run_status=completed rows=0 |
-| term_deposits | 2026-02-26 | 2023-11-17 | active | 820 | completed_empty | run_status=completed rows=0 |
+| mortgage | 2026-02-26 | 2023-11-05 | active | 838 | completed_empty | run_status=completed rows=0 |
+| savings | 2026-02-26 | 2023-11-06 | active | 833 | completed_empty | run_status=completed rows=0 |
+| term_deposits | 2026-02-26 | 2023-11-05 | active | 831 | enqueued | Queued 16 tasks for 2023-11-06. |
 
 ## Overlap Summary
 
@@ -50,7 +50,7 @@
 | Total banks | 16 |
 | Dates in range | 18 |
 | Observed dates | 16 |
-| Full coverage dates | 2026-03-09 |
+| Full coverage dates | 2026-03-09, 2026-03-15 |
 | Empty dates | 2026-02-28, 2026-03-01 |
 | Always missing on observed days | - |
 
@@ -75,14 +75,14 @@
 | 2026-03-12 | partial | 15/16 | 1 | UBank | 1042 | 1042 | 0 | 0 |
 | 2026-03-13 | partial | 15/16 | 1 | UBank | 1042 | 1042 | 0 | 0 |
 | 2026-03-14 | partial | 14/16 | 2 | Great Southern Bank, UBank | 897 | 897 | 0 | 0 |
-| 2026-03-15 | partial | 14/16 | 2 | Great Southern Bank, UBank | 897 | 897 | 0 | 0 |
+| 2026-03-15 | full | 16/16 | 0 | - | 1007 | 1007 | 0 | 0 |
 
 ### Recurring Gap Banks
 
 | Bank | Missing observed dates | Observed dates | Missing ratio | Missing dates |
 | --- | --- | --- | --- | --- |
-| UBank | 15 | 16 | 0.9375 | 2026-02-26, 2026-02-27, 2026-03-02, 2026-03-03, 2026-03-04, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08, 2026-03-10, 2026-03-11, 2026-03-12, 2026-03-13, 2026-03-14, 2026-03-15 |
-| Great Southern Bank | 11 | 16 | 0.6875 | 2026-02-26, 2026-02-27, 2026-03-02, 2026-03-03, 2026-03-04, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08, 2026-03-14, 2026-03-15 |
+| UBank | 14 | 16 | 0.8750 | 2026-02-26, 2026-02-27, 2026-03-02, 2026-03-03, 2026-03-04, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08, 2026-03-10, 2026-03-11, 2026-03-12, 2026-03-13, 2026-03-14 |
+| Great Southern Bank | 10 | 16 | 0.6250 | 2026-02-26, 2026-02-27, 2026-03-02, 2026-03-03, 2026-03-04, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08, 2026-03-14 |
 | AMP Bank | 9 | 16 | 0.5625 | 2026-02-26, 2026-02-27, 2026-03-02, 2026-03-03, 2026-03-04, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08 |
 | Commonwealth Bank of Australia | 3 | 16 | 0.1875 | 2026-03-02, 2026-03-03, 2026-03-04 |
 | ING | 3 | 16 | 0.1875 | 2026-03-02, 2026-03-03, 2026-03-04 |
@@ -94,7 +94,7 @@
 | Total banks | 16 |
 | Dates in range | 18 |
 | Observed dates | 13 |
-| Full coverage dates | 2026-03-09 |
+| Full coverage dates | 2026-03-09, 2026-03-15 |
 | Empty dates | 2026-02-28, 2026-03-01, 2026-03-02, 2026-03-03, 2026-03-04 |
 | Always missing on observed days | - |
 
@@ -119,13 +119,13 @@
 | 2026-03-12 | partial | 15/16 | 1 | UBank | 470 | 470 | 0 | 0 |
 | 2026-03-13 | partial | 15/16 | 1 | UBank | 469 | 469 | 0 | 0 |
 | 2026-03-14 | partial | 15/16 | 1 | UBank | 449 | 449 | 0 | 0 |
-| 2026-03-15 | partial | 15/16 | 1 | UBank | 464 | 464 | 0 | 0 |
+| 2026-03-15 | full | 16/16 | 0 | - | 470 | 470 | 0 | 0 |
 
 ### Recurring Gap Banks
 
 | Bank | Missing observed dates | Observed dates | Missing ratio | Missing dates |
 | --- | --- | --- | --- | --- |
-| UBank | 12 | 13 | 0.9231 | 2026-02-26, 2026-02-27, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08, 2026-03-10, 2026-03-11, 2026-03-12, 2026-03-13, 2026-03-14, 2026-03-15 |
+| UBank | 11 | 13 | 0.8462 | 2026-02-26, 2026-02-27, 2026-03-05, 2026-03-06, 2026-03-07, 2026-03-08, 2026-03-10, 2026-03-11, 2026-03-12, 2026-03-13, 2026-03-14 |
 | ING | 2 | 13 | 0.1538 | 2026-02-26, 2026-02-27 |
 
 ## Term deposits

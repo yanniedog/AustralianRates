@@ -295,26 +295,24 @@ adminDbRoutes.put('/db/tables/:tableName/rows', async (c) => {
   }
 
   const whereParts: string[] = []
-  const bindValues: unknown[] = []
+  const keyValues: unknown[] = []
   for (const col of keyCols) {
     const v = body[col]
     if (v === undefined || v === null) {
       return jsonError(c, 400, 'BAD_REQUEST', `Missing key column: ${col}`)
     }
     whereParts.push(`${col} = ?`)
-    bindValues.push(v)
+    keyValues.push(v)
   }
   const setParts = setCols.map((col) => `${col} = ?`)
-  for (const col of setCols) {
-    bindValues.push(body[col])
-  }
+  const setValues = setCols.map((col) => body[col])
   const setClause = setParts.join(', ')
   const where = whereParts.join(' AND ')
 
   try {
     const result = await db
       .prepare(`UPDATE ${tableName} SET ${setClause} WHERE ${where}`)
-      .bind(...bindValues)
+      .bind(...setValues, ...keyValues)
       .run()
     if ((result.meta.changes ?? 0) === 0) {
       return jsonError(c, 404, 'NOT_FOUND', 'No row matched the key')

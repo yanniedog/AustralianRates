@@ -1,5 +1,10 @@
 import { persistRawPayload } from '../../../db/raw-payloads'
-import { recordLenderDatasetWriteStats } from '../../../db/lender-dataset-runs'
+import {
+  markLenderDatasetDetailProcessed,
+  markLenderDatasetIndexFetchSucceeded,
+  recordLenderDatasetWriteStats,
+  setLenderDatasetExpectedDetails,
+} from '../../../db/lender-dataset-runs'
 import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { upsertSavingsRateRows } from '../../../db/savings-rates'
 import { extractLenderRatesFromHtml } from '../../../ingest/html-rate-parser'
@@ -159,6 +164,22 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
       elapsed_ms: elapsedMs(pageStartedAt),
     })
   }
+  const parsedProductIds = Array.from(new Set(collectedRows.map((row) => row.productId).filter(Boolean)))
+  if (parsedProductIds.length > 0) {
+    await setLenderDatasetExpectedDetails(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      bankName: lender.canonical_bank_name,
+      collectionDate: job.collectionDate,
+      expectedDetailCount: parsedProductIds.length,
+    })
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+  }
 
   await markProductsSeenForRun(env.DB, {
     runId: job.runId,
@@ -166,7 +187,7 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
     dataset: 'home_loans',
     bankName: lender.canonical_bank_name,
     collectionDate: job.collectionDate,
-    productIds: Array.from(new Set(collectedRows.map((row) => row.productId))),
+    productIds: parsedProductIds,
   })
   await markHomeLoanSeriesSeenForRun(env.DB, {
     runId: job.runId,
@@ -237,7 +258,15 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
     acceptedRows: accepted.length,
     writtenRows: written,
     droppedRows: dropped.length,
+    detailFetchEventCount: parsedProductIds.length,
   })
+  for (let i = 0; i < parsedProductIds.length; i += 1) {
+    await markLenderDatasetDetailProcessed(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+  }
   await persistRawPayload(env, {
     sourceType: 'cdr_products',
     sourceUrl: 'summary://ubank/home-loans',
@@ -332,13 +361,29 @@ export async function handleDailyUbankSavingsFallback(
     for (const row of parsed.rows) {
       row.fetchEventId = pageByUrl[row.sourceUrl]?.fetchEventId ?? null
     }
+    const parsedProductIds = Array.from(new Set(parsed.rows.map((row) => row.productId).filter(Boolean)))
+    if (parsedProductIds.length > 0) {
+      await setLenderDatasetExpectedDetails(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName: lender.canonical_bank_name,
+        collectionDate: job.collectionDate,
+        expectedDetailCount: parsedProductIds.length,
+      })
+      await markLenderDatasetIndexFetchSucceeded(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+      })
+    }
     await markProductsSeenForRun(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
       dataset: 'savings',
       bankName: lender.canonical_bank_name,
       collectionDate: job.collectionDate,
-      productIds: Array.from(new Set(parsed.rows.map((row) => row.productId))),
+      productIds: parsedProductIds,
     })
     await markSavingsSeriesSeenForRun(env.DB, {
       runId: job.runId,
@@ -367,7 +412,15 @@ export async function handleDailyUbankSavingsFallback(
         acceptedRows: accepted.length,
         writtenRows: written,
         droppedRows: dropped.length,
+        detailFetchEventCount: parsedProductIds.length,
       })
+      for (let i = 0; i < parsedProductIds.length; i += 1) {
+        await markLenderDatasetDetailProcessed(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'savings',
+        })
+      }
     }
     await persistRawPayload(env, {
       sourceType: 'cdr_products',
@@ -409,6 +462,19 @@ export async function handleDailyUbankSavingsFallback(
   }
 
   if (selectedDatasets.has('term_deposits')) {
+    await setLenderDatasetExpectedDetails(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'term_deposits',
+      bankName: lender.canonical_bank_name,
+      collectionDate: job.collectionDate,
+      expectedDetailCount: 0,
+    })
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'term_deposits',
+    })
     await recordLenderDatasetWriteStats(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
