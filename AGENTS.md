@@ -104,7 +104,7 @@ See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and 
 
 ### Running locally
 
-- The API worker dev server (`wrangler dev --test-scheduled`) creates a local D1 database automatically on first run. No manual migration step is needed for local development.
+- The API worker dev server (`wrangler dev --test-scheduled`) creates a local D1 database file automatically on first run, but **migrations are not auto-applied**. Run `npx wrangler d1 migrations apply australianrates_api --local` from `workers/api/` before using API endpoints that touch the database (e.g. `/filters`, `/latest`, scheduled triggers). Without this, those endpoints fail with "no such table" errors.
 - The frontend is plain HTML/CSS/JS in `site/` -- no bundler, no build step. Serve it with any static server or `wrangler pages dev`.
 - The frontend talks to the **production** API (`https://www.australianrates.com`) by default, not localhost. To test against the local API, you would need to modify the API base URL in the frontend JS files.
 - Copy `workers/api/.dev.vars.example` to `workers/api/.dev.vars` before running `npm run dev:api`. The `ADMIN_API_TOKEN` secret is required for admin endpoints but the dev server starts without it.
@@ -120,3 +120,4 @@ See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and 
 
 - The archive worker uses `vitest.config.mts` with `@cloudflare/vitest-pool-workers`, while the API worker uses plain vitest with no config file (defaults).
 - The archive worker's `wrangler.jsonc` has `dev` and `prod` environments; the default `npm run dev:archive` uses the dev environment.
+- `npm run test:homepage` hits the **production** URL, which has Cloudflare bot challenge enabled. This test will fail from headless cloud VMs that cannot solve the challenge. It works from local developer machines with a real browser.
