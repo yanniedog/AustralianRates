@@ -6,6 +6,7 @@
     var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var params = config && config.params ? config.params : new URLSearchParams(window.location.search);
     var VALID_TABS = ['explorer', 'pivot', 'history', 'changes'];
+    var MOBILE_BREAKPOINT = 760;
 
     function normalizeUiMode(value) {
         return String(value || '').toLowerCase() === 'consumer' ? 'consumer' : 'analyst';
@@ -25,13 +26,30 @@
         return '';
     }
 
+    function isCompactViewport() {
+        return !!(window.matchMedia && window.matchMedia('(max-width: ' + MOBILE_BREAKPOINT + 'px)').matches);
+    }
+
+    function initialActiveTab() {
+        var requested = hashTab() || params.get('tab');
+        if (requested) return normalizeTab(requested);
+
+        var storedRaw = String(runtimePrefs.activeTab || '').trim();
+        var stored = storedRaw ? normalizeTab(storedRaw) : '';
+        if (isCompactViewport()) {
+            if (stored && stored !== 'explorer') return stored;
+            return 'history';
+        }
+        return stored || 'explorer';
+    }
+
     function currentUiMode() {
         if (params.get('view')) return normalizeUiMode(params.get('view'));
         return normalizeUiMode(runtimePrefs.uiMode || 'analyst');
     }
 
     var state = {
-        activeTab: normalizeTab(hashTab() || params.get('tab') || runtimePrefs.activeTab || 'explorer'),
+        activeTab: initialActiveTab(),
         pivotLoaded: false,
         chartDrawn: false,
         refreshTimerId: null,

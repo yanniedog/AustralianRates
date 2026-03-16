@@ -139,6 +139,14 @@
         return String(fields.representation || 'change');
     }
 
+    function marketDimensionLabel(market) {
+        var label = market && market.dimensionLabel ? String(market.dimensionLabel).trim() : '';
+        if (!label && market && Array.isArray(market.categories) && market.categories.length) {
+            label = String((market.categories[0] && market.categories[0].dimensionLabel) || '').trim();
+        }
+        return label || 'Market';
+    }
+
     function summaryPills(model, fields, payloadMeta, stale) {
         if (!model) {
             return '' +
@@ -151,7 +159,7 @@
         pills.push('<span class="chart-summary-pill">' + esc(chartConfig.fieldLabel(fields.yField)) + '</span>');
         pills.push('<span class="chart-summary-pill">' + esc(representation === 'day' ? 'Daily basis' : 'Change basis') + '</span>');
         if (fields.view === 'market' && model.market) {
-            pills.push('<span class="chart-summary-pill">' + esc(model.market.categories.length + ' ' + model.market.dimensionLabel.toLowerCase() + ' points') + '</span>');
+            pills.push('<span class="chart-summary-pill">' + esc(model.market.categories.length + ' ' + marketDimensionLabel(model.market).toLowerCase() + ' points') + '</span>');
             pills.push('<span class="chart-summary-pill">' + esc('Snapshot ' + model.market.snapshotDateDisplay) + '</span>');
         } else {
             pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
@@ -179,7 +187,7 @@
     function railNote(fields, model) {
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
-        if (fields.view === 'market' && model.market) return model.market.dimensionLabel + ' curve';
+        if (fields.view === 'market' && model.market) return marketDimensionLabel(model.market) + ' curve';
         if (fields.view === 'compare') return 'Selected shortlist';
         if (fields.view === 'distribution') return 'Distribution view';
         return 'Product series';

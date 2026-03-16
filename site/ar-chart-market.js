@@ -271,6 +271,7 @@
                 label: category.label,
                 shortLabel: category.shortLabel,
                 secondaryLabel: category.secondaryLabel,
+                dimensionLabel: category.dimensionLabel,
                 sortValue: category.sortValue,
                 rowCount: category.rows.length,
                 bankCount: bankEntries.length,

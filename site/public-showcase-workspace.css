@@ -291,11 +291,29 @@ body.ar-public .market-intro-step:nth-child(3) {
         flex-direction: row;
         align-items: stretch;
         padding-bottom: 4px;
+        scroll-snap-type: x proximity;
     }
 
     body.ar-public .tab-btn,
     body.ar-public .chart-preset {
         flex: 0 0 auto;
+        scroll-snap-align: start;
+    }
+
+    body.ar-public #tab-history {
+        order: 1;
+    }
+
+    body.ar-public #tab-changes {
+        order: 2;
+    }
+
+    body.ar-public #tab-explorer {
+        order: 3;
+    }
+
+    body.ar-public #tab-pivot {
+        order: 4;
     }
 
     body.ar-public .terminal-mobile-fold,
@@ -329,11 +347,17 @@ body.ar-public .market-intro-step:nth-child(3) {
         grid-column: 1 / -1;
     }
 
-    body.ar-public .terminal-chart-surface,
+    body.ar-public .terminal-chart-surface {
+        min-height: 340px;
+    }
+
     body.ar-public .terminal-chart-output,
-    body.ar-public #chart-output,
+    body.ar-public #chart-output {
+        min-height: 300px;
+    }
+
     body.ar-public #chart-detail-output {
-        min-height: 220px;
+        min-height: 260px;
     }
 
     body.ar-public .terminal-column-left {
