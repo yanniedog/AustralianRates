@@ -486,6 +486,13 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
     })
   } catch (error) {
     const errorMessage = (error as Error)?.message || String(error)
+    log.error('consumer', 'product_detail_fetch_failed', {
+      code: 'detail_fetch_failed',
+      error,
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context: JSON.stringify({ dataset: job.dataset, productId: job.productId, message: errorMessage }),
+    })
     await markDetailProcessedAndFinalize(env, {
       runId: job.runId,
       lenderCode: job.lenderCode,

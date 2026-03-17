@@ -127,7 +127,8 @@ See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and 
 
 When debugging code anywhere on the site (front end, API worker, archive worker, or Cloudflare), **try to access the production logfiles** to gather real errors, warnings, and context. Use the logs API with credentials from the repo root `.env`:
 
-- **Do not use stale logs.** Local log files (e.g. `errors.jsonl`, `warn.jsonl`, `actionable.json`) are stale. Always fetch current logs from the production API before diagnosing: run `node fetch-production-logs.js` from repo root (with `ADMIN_API_TOKEN` in `.env`) or call the logs API directly.
+- **Fresh copy every run. No exceptions.** Always fetch a **fresh copy** of the logfile from the production API for each run. Never use a stale or local logfile. Never read from local files such as `errors.jsonl`, `warn.jsonl`, or `actionable.json`; if they exist, they are stale. Run `node fetch-production-logs.js` from repo root (with `ADMIN_API_TOKEN` in `.env`) or call the logs API directly every time you need logs.
+- **Delete after use.** If you save fetched logs to local files (e.g. by redirecting script output), delete those files after processing and/or after issues have been fixed. Do not leave ephemeral log copies in the repo. (See `.gitignore` for `errors.jsonl`, `warn.jsonl`, `actionable.json`.)
 - **Endpoint:** `GET https://www.australianrates.com/api/home-loan-rates/admin/logs/system`
 - **Auth:** `Authorization: Bearer <ADMIN_API_TOKEN>` (set `ADMIN_API_TOKEN` in repo root `.env`; see `.env.example`).
 - **Query params:** `format=jsonl` or `format=text`, `limit=1000` (max 10000), `level=error` or `level=warn`, `source=...`, `code=...`, `offset=...`.

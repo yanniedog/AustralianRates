@@ -19,6 +19,12 @@ docs/CLOUDFLARE_USAGE.md
 logs/
 *australianrates-log*.txt
 
+# Ephemeral production log downloads: never commit; always fetch fresh; delete after use
+errors.jsonl
+warn.jsonl
+actionable.json
+*-production-logs*.jsonl
+
 # Local DB exports / audit artefacts (do not commit)
 artifacts/*
 !artifacts/.gitkeep

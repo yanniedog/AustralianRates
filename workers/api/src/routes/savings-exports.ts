@@ -5,6 +5,7 @@ import { getReadDb } from '../db/read-db'
 import { guardPublicExportJob } from './public-write-gates'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
+import { log } from '../utils/logger'
 import { csvEscape } from '../utils/csv'
 import { collectSavingsAnalyticsRowsResolved, querySavingsRepresentationTimeseriesResolved } from './analytics-data'
 import {
@@ -229,7 +230,13 @@ async function runSavingsExportJob(
       r2Key,
     })
   } catch (error) {
-    await failExportJob(env.DB, input.jobId, (error as Error)?.message || String(error))
+    const msg = (error as Error)?.message || String(error)
+    log.error('savings-export', 'savings_export_job_failed', {
+      code: 'export_job_failed',
+      error,
+      context: JSON.stringify({ jobId: input.jobId, message: msg }),
+    })
+    await failExportJob(env.DB, input.jobId, msg)
   }
 }
 

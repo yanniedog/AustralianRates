@@ -7,7 +7,15 @@ alwaysApply: true
 
 When debugging code anywhere on the site (front end, API worker, archive worker, pipelines), **try to access the production logfiles** on www.australianrates.com. They often contain the exact error, traceback, and context.
 
-- **Do not use stale logs.** Local log files (e.g. `errors.jsonl`, `warn.jsonl`, `actionable.json` in the repo or workspace) are stale. **Always fetch current logs from the production logs API** before diagnosing or fixing issues. Use `node fetch-production-logs.js` (from repo root, with `.env` loaded) or call the logs API directly.
+## Mandatory: Fresh copy every time. No exceptions.
+
+- **ALWAYS fetch a fresh copy of the logfile from the production API for each run.** Never use a stale or local logfile. No exceptions.
+- **Never read from local log files** (e.g. `errors.jsonl`, `warn.jsonl`, `actionable.json`). Those files are ignored by git and must be treated as ephemeral. If they exist, they are stale; do not use them for diagnosis or fixes.
+- **Fetch method:** Run `node fetch-production-logs.js` from repo root (with `.env` loaded) or call the logs API directly. Every debugging session that needs logs must perform this fetch; do not reuse a previous download.
+- **After processing:** If you save fetched logs to local files (e.g. by redirecting script output), **delete those files after processing and/or after issues have been fixed.** Do not leave ephemeral log copies in the repo or workspace.
+
+## Credentials and API
+
 - **Credentials:** Repo root `.env` must contain `ADMIN_API_TOKEN` (same value as production API worker secret). If missing, add it (see `.env.example`).
 - **Logs API:** `GET https://www.australianrates.com/api/home-loan-rates/admin/logs/system` with header `Authorization: Bearer <ADMIN_API_TOKEN>`. Params: `format=jsonl`, `limit=1000`, `level=error` or `level=warn`, `source`, `code`. Stats: `.../admin/logs/system/stats`; actionable: `.../admin/logs/system/actionable`.
 - If the token is missing, remind the user to add `ADMIN_API_TOKEN` to `.env` (see `.env.example`).

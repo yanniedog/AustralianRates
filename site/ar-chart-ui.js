@@ -504,7 +504,7 @@
         }
         renderSeriesRail(null, null);
         renderSpotlight(null, getChartFields());
-        setCanvasPlaceholder('Choose a view and press Update chart.');
+        setCanvasPlaceholder('Chart syncs with filters and options.');
         setStatus('Idle');
     }
 

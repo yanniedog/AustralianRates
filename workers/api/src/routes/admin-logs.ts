@@ -7,12 +7,12 @@ import { Hono } from 'hono'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
-import { CODE_FILTER_UNSUPPORTED_MESSAGE, extractTraceback, getLogStats, parseLogContext, queryLogs } from '../utils/logger'
+import { CODE_FILTER_UNSUPPORTED_MESSAGE, extractTraceback, getLogStats, log, parseLogContext, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
 
 export const adminLogRoutes = new Hono<AppContext>()
 
-/** GET /admin/logs/system - download system log as text (same format as public /logs) */
+/** GET /admin/logs/system - download system log as text (same format as public /logs). Query: level, source, code, format, limit, offset, since (ISO timestamp). */
 adminLogRoutes.get('/logs/system', async (c) => {
   withNoStore(c)
   const query = c.req.query()
@@ -22,11 +22,13 @@ adminLogRoutes.get('/logs/system', async (c) => {
   const format = String(query.format || 'text').toLowerCase()
   const limit = Math.min(Number(query.limit || 5000) || 5000, 10000)
   const offset = Math.max(Number(query.offset || 0) || 0, 0)
+  const sinceRaw = query.since ?? query.since_ts ?? ''
+  const sinceTs = sinceRaw.trim() ? String(sinceRaw).trim() : undefined
 
   let entries: Array<Record<string, unknown>>
   let total: number
   try {
-    const result = await queryLogs(c.env.DB, { level, source, code, limit, offset })
+    const result = await queryLogs(c.env.DB, { level, source, code, sinceTs, limit, offset })
     entries = result.entries
     total = result.total
   } catch (err) {
@@ -36,6 +38,11 @@ adminLogRoutes.get('/logs/system', async (c) => {
         hint: 'Apply migration 0019_health_checks_and_log_codes.sql to add global_log.code.',
       })
     }
+    log.error('admin-logs', 'query_logs_failed', {
+      code: 'admin_logs_query_failed',
+      error: err,
+      context: JSON.stringify({ path: '/logs/system', message }),
+    })
     throw err
   }
 
@@ -88,7 +95,59 @@ adminLogRoutes.post('/logs/system/wipe', async (c) => {
     return c.json({ ok: true, deleted })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    log.error('admin-logs', 'wipe_failed', {
+      code: 'admin_logs_wipe_failed',
+      error: err,
+      context: message,
+    })
     return jsonError(c, 500, 'WIPE_FAILED', 'Failed to wipe system log.', { message })
+  }
+})
+
+/** POST /admin/logs/ingest - insert one log entry (for archive worker or other services). Body: { level, source, message, code?, context?, run_id?, lender_code? }. Auth: admin. */
+adminLogRoutes.post('/logs/ingest', async (c) => {
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return jsonError(c, 400, 'INVALID_JSON', 'Request body must be valid JSON.')
+  }
+  const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : null
+  if (!o || typeof o.level !== 'string' || typeof o.source !== 'string' || typeof o.message !== 'string') {
+    return jsonError(c, 400, 'BAD_REQUEST', 'Body must include level, source, and message (strings).')
+  }
+  const level = ['debug', 'info', 'warn', 'error'].includes(o.level) ? o.level : 'info'
+  const source = String(o.source).slice(0, 200) || 'ingest'
+  const message = String(o.message).slice(0, 2000)
+  const code = typeof o.code === 'string' ? o.code.slice(0, 100) : null
+  const context = o.context != null ? String(JSON.stringify(o.context)).slice(0, 8000) : null
+  const runId = typeof o.run_id === 'string' ? o.run_id.slice(0, 200) : null
+  const lenderCode = typeof o.lender_code === 'string' ? o.lender_code.slice(0, 100) : null
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO global_log (level, source, message, code, context, run_id, lender_code)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+    )
+      .bind(level, source, message, code, context, runId, lenderCode)
+      .run()
+    return c.json({ ok: true })
+  } catch {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO global_log (level, source, message, context, run_id, lender_code)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+      )
+        .bind(level, source, message, context, runId, lenderCode)
+        .run()
+      return c.json({ ok: true })
+    } catch (err) {
+      log.error('admin-logs', 'ingest_failed', {
+        code: 'admin_logs_ingest_failed',
+        error: err,
+        context: JSON.stringify({ source, message: message.slice(0, 200) }),
+      })
+      return jsonError(c, 500, 'INGEST_FAILED', 'Failed to persist log entry.')
+    }
   }
 })
 

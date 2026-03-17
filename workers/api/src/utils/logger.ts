@@ -128,8 +128,8 @@ async function persist(entry: PersistedLogEntry): Promise<void> {
         entry.lenderCode ?? null,
       )
       .run()
-  } catch {
-    // Backward compatibility for environments without the `code` column.
+  } catch (e1) {
+    console.error('[logger] persist failed:', (e1 as Error)?.message ?? e1)
     try {
       await _db
         .prepare(
@@ -145,8 +145,8 @@ async function persist(entry: PersistedLogEntry): Promise<void> {
           entry.lenderCode ?? null,
         )
         .run()
-    } catch {
-      // avoid recursive logging failures
+    } catch (e2) {
+      console.error('[logger] persist failed (legacy insert):', (e2 as Error)?.message ?? e2)
     }
   }
 }

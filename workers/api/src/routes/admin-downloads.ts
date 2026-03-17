@@ -19,6 +19,7 @@ import {
 } from '../db/admin-download-jobs'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
+import { log } from '../utils/logger'
 import { scheduleBackgroundTask } from './export-route-utils'
 import { runAdminDownloadJob } from './admin-download-builder'
 import {
@@ -402,6 +403,11 @@ adminDownloadRoutes.get('/downloads/:jobId/download', async (c) => {
         }
         controller.close()
       } catch (error) {
+        log.error('admin-downloads', 'download_bundle_stream_failed', {
+          code: 'download_bundle_stream_failed',
+          error,
+          context: JSON.stringify({ jobId, message: (error as Error)?.message || String(error) }),
+        })
         controller.error(error)
       }
     },

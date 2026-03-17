@@ -5,6 +5,7 @@ import {
   type AdminDownloadScope,
   type AdminDownloadStream,
 } from '../db/admin-download-jobs'
+import { log } from '../utils/logger'
 import { keyColumnsForTable, streamTables, streamScopeDatasets } from '../db/analytics/download-config'
 import { type AdminDownloadEnv, writeAdminDownloadArtifact } from './admin-download-artifact-writer'
 import { runDatabaseDumpPass } from './admin-download-dump-builder'
@@ -318,6 +319,12 @@ export async function runAdminDownloadJob(env: AdminDownloadEnv, job: AdminDownl
     }
     await completeAdminDownloadJob(env.DB, { jobId: job.job_id, endCursor })
   } catch (error) {
-    await failAdminDownloadJob(env.DB, job.job_id, (error as Error)?.message || String(error))
+    const msg = (error as Error)?.message || String(error)
+    log.error('admin-download', 'admin_download_job_failed', {
+      code: 'admin_download_failed',
+      error,
+      context: JSON.stringify({ job_id: job.job_id, stream: job.stream, mode: job.mode, message: msg }),
+    })
+    await failAdminDownloadJob(env.DB, job.job_id, msg)
   }
 }

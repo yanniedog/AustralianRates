@@ -188,7 +188,7 @@ async function verifyWorkspaceShell(page, results, label) {
         fail(results, `${label}: intro steps are malformed (${shell.introSteps.join(', ') || 'missing'})`);
     }
 
-    const expectedChartViews = ['Leaders', 'Movement', 'Compare', 'Distribution'];
+    const expectedChartViews = ['Leaders', 'Ladder', 'Curve', 'Slope', 'Movement', 'Compare', 'Distribution'];
     const actualChartViews = shell.chartViews.map((view) => view.label);
     if (expectedChartViews.every((view) => actualChartViews.includes(view)) && shell.chartViews.every((view) => view.hasIcon)) {
         pass(results, `${label}: chart view controls render with icon labels`);

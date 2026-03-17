@@ -1,7 +1,9 @@
 /**
  * Fetch latest production logfile from www.australianrates.com.
  * Requires ADMIN_API_TOKEN in repo root .env.
- * Usage: node fetch-production-logs.js [--errors] [--warn] [--actionable] [--limit=N]
+ * Always fetches a fresh copy from the production API; never reads from local files.
+ * If you redirect output to a local file (e.g. errors.jsonl), delete that file after processing.
+ * Usage: node fetch-production-logs.js [--errors] [--warn] [--actionable] [--stats] [--limit=N] [--since=ISO]
  */
 
 const ORIGIN = process.env.API_BASE
@@ -74,6 +76,15 @@ async function main(): Promise<void> {
   const doWarn = args.includes('--warn');
   const doActionable = args.includes('--actionable') || args.length === 0;
   const doStats = args.includes('--stats') || args.length === 0;
+  const sinceArg = args.find((a) => a.startsWith('--since='));
+  const since = sinceArg ? sinceArg.slice('--since='.length).trim() : '';
+
+  const queryParams = (base: string, extra: Record<string, string> = {}): string => {
+    const params = new URLSearchParams(extra);
+    if (since) params.set('since', since);
+    const sep = base.includes('?') ? '&' : '?';
+    return params.toString() ? `${base}${sep}${params}` : base;
+  };
 
   try {
     if (doStats) {
@@ -89,12 +100,14 @@ async function main(): Promise<void> {
       console.log(JSON.stringify(actionable, null, 2));
     }
     if (doErrors) {
-      const text = await fetchText(`${BASE}?format=jsonl&limit=${limit}&level=error`);
+      const url = queryParams(`${BASE}`, { format: 'jsonl', limit: String(limit), level: 'error' });
+      const text = await fetchText(url);
       process.stdout.write(text);
       if (!text.endsWith('\n') && text.length > 0) process.stdout.write('\n');
     }
     if (doWarn) {
-      const text = await fetchText(`${BASE}?format=jsonl&limit=${limit}&level=warn`);
+      const url = queryParams(`${BASE}`, { format: 'jsonl', limit: String(limit), level: 'warn' });
+      const text = await fetchText(url);
       process.stdout.write(text);
       if (!text.endsWith('\n') && text.length > 0) process.stdout.write('\n');
     }

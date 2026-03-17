@@ -381,12 +381,6 @@
             }
         });
     }
-    if (els.drawChart) {
-        els.drawChart.addEventListener('click', function () {
-            if (filters && filters.validateInputs && !filters.validateInputs()) return;
-            if (charts && charts.drawChart) charts.drawChart();
-        });
-    }
     if (els.filterIncludeManual) {
         els.filterIncludeManual.addEventListener('change', function () {
             if (filters && filters.refreshFilterUiState) filters.refreshFilterUiState();
@@ -421,17 +415,14 @@
     window.addEventListener('ar:tab-changed', function (event) {
         var tab = event && event.detail && event.detail.tab;
         if (tab === 'history' && charts) {
-            if (!tabState.chartDrawn && charts.drawChart) charts.drawChart();
-            else if (charts.refreshFromCache) charts.refreshFromCache('history-tab');
+            if (charts.refreshFromCache) charts.refreshFromCache('history-tab');
         }
         if (tab === 'pivot' && pivot && pivot.ensurePivotLoaded) {
             pivot.ensurePivotLoaded({ reason: 'pivot-tab-activated' });
         }
     });
     window.addEventListener('ar:theme-changed', function () {
-        if (tabState.chartDrawn && charts && charts.drawChart) {
-            charts.drawChart();
-        }
+        if (charts && charts.refreshFromCache) charts.refreshFromCache('theme-changed');
     });
     window.addEventListener('ar:explorer-state', function (event) {
         var detail = event && event.detail ? event.detail : {};

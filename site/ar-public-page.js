@@ -565,7 +565,6 @@
                             '<div class="chart-figure">',
                                 '<div class="chart-toolbar">',
                                     chartQuestionMarkup(),
-                                    '<button id="draw-chart" type="button" class="primary chart-toolbar-btn" data-help="Render the chart for the current slice." data-help-label="Update chart">' + iconText('chart', 'Update chart', 'control-chip-label') + '</button>',
                                 '</div>',
                                 '<div class="terminal-chart-surface">',
                                     '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',

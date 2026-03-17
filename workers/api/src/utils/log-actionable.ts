@@ -93,6 +93,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
       'Check upstream CDR 4xx/5xx (400/406/500). Verify lender endpoint and x-v; for 400/406 confirm product ID is valid and still offered. Use admin logs and coverage-gap report.',
     links: ['/admin/logs.html', '/admin/status.html', '/admin/runs.html'],
   },
+  lender_finalize_not_ready: {
+    code: 'lender_finalize_not_ready',
+    title: 'Lender finalize not ready (detail processing incomplete or failed)',
+    action:
+      'Upstream detail fetches failed or still in progress. Resolve detail_fetch_failed for the lender; then re-run or wait for next daily run. Check logs for lender_code and run_id.',
+    links: ['/admin/logs.html', '/admin/runs.html'],
+  },
   run_lifecycle_reconciliation_stalled: {
     code: 'run_lifecycle_reconciliation_stalled',
     title: 'Run lifecycle reconciliation stalled',
@@ -118,6 +125,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('queue_message_exhausted')) return 'queue_message_exhausted'
   if (normalized.includes('queue_message_failed')) return 'queue_message_failed'
   if (normalized.includes('detail_fetch_failed')) return 'detail_fetch_failed'
+  if (normalized.includes('lender_finalize_not_ready')) return 'lender_finalize_not_ready'
   if (normalized.includes('upsert_failed')) return 'upsert_failed'
   if (normalized.includes('daily run') && normalized.includes('failed')) return 'daily_run_failed'
   if (normalized.includes('backfill run') && normalized.includes('failed')) return 'backfill_run_failed'

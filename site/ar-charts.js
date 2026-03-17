@@ -112,7 +112,7 @@
     }
 
     function chartErrorMessage() {
-        return 'Chart unavailable right now. Try Update chart again.';
+        return 'Chart unavailable right now. It will retry when you change filters or options.';
     }
 
     function ensureCharts() {
@@ -462,11 +462,11 @@
         }
         if (!chartState.rows.length) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
-            if (chartUi.setIdleState) chartUi.setIdleState();
+            drawChart();
             return;
         }
         if (chartState.stale) {
-            if (chartUi.markStale) chartUi.markStale('STALE');
+            drawChart();
             return;
         }
         renderFromCache();
