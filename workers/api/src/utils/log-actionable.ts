@@ -86,6 +86,24 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Check queue binding health and replay queue diagnostics, then retry replay dispatch.',
     links: ['/admin/runs.html', '/admin/logs.html'],
   },
+  run_lifecycle_reconciliation_stalled: {
+    code: 'run_lifecycle_reconciliation_stalled',
+    title: 'Run lifecycle reconciliation stalled',
+    action: 'Review run finalization and replay queue; ensure stale runs are closed or retried so reconciliation can progress.',
+    links: ['/admin/runs.html', '/admin/logs.html'],
+  },
+  analytics_change_query_failed: {
+    code: 'analytics_change_query_failed',
+    title: 'Analytics change query failed',
+    action: 'Check analytics projection schema (e.g. home_loan_rate_events columns) and D1 migrations on the DB used for reads; apply 0026 or fix read DB schema.',
+    links: ['/admin/database.html', '/admin/logs.html'],
+  },
+  analytics_change_query_schema_mismatch: {
+    code: 'analytics_change_query_schema_mismatch',
+    title: 'Analytics change query schema mismatch',
+    action: 'Read DB or analytics table is missing columns (e.g. security_purpose). Apply migrations on the read DB or use a single DB; change endpoint will use legacy path until fixed.',
+    links: ['/admin/database.html', '/admin/logs.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
@@ -101,6 +119,9 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('lender_universe') && normalized.includes('drift')) return 'lender_universe_drift'
   if (normalized.includes('replay_queue_incident_opened')) return 'replay_queue_incident_opened'
   if (normalized.includes('replay_queue_dispatch_failed')) return 'replay_queue_dispatch_failed'
+  if (normalized.includes('run_lifecycle_reconciliation_stalled')) return 'run_lifecycle_reconciliation_stalled'
+  if (normalized.includes('analytics_change_query_failed')) return 'analytics_change_query_failed'
+  if (normalized.includes('analytics_change_query_schema_mismatch')) return 'analytics_change_query_schema_mismatch'
   return DEFAULT_ISSUE.code
 }
 

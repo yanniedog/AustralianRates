@@ -26,12 +26,19 @@ export async function queryChangesWithFallback(
         result: await queryAnalyticsRateChanges(analyticsDb, dataset, input),
       }
     } catch (error) {
-      log.error('public', 'analytics_change_query_failed', {
-        context: JSON.stringify({
-          dataset,
-          message: (error as Error)?.message || String(error),
-        }),
-      })
+      const message = (error as Error)?.message || String(error)
+      const isSchemaMismatch = /no such column:.*\.(security_purpose|repayment_type|rate_structure|lvr_tier|feature_set)/i.test(message)
+      if (isSchemaMismatch) {
+        log.warn('public', 'analytics_change_query_schema_mismatch', {
+          code: 'analytics_change_query_schema_mismatch',
+          context: JSON.stringify({ dataset, message }),
+        })
+      } else {
+        log.error('public', 'analytics_change_query_failed', {
+          code: 'analytics_change_query_failed',
+          context: JSON.stringify({ dataset, message }),
+        })
+      }
     }
   }
 
