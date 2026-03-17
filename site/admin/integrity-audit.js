@@ -12,6 +12,8 @@
     var historyWrap = document.getElementById('history-wrap');
     var runAuditBtn = document.getElementById('run-audit-btn');
     var refreshBtn = document.getElementById('refresh-btn');
+    /** When set, any load() must prefer this as latest if API returned older or no latest (avoids report disappearing). */
+    var lastRunFromManualAudit = null;
 
     function esc(v) {
         return String(v == null ? '' : v)
@@ -131,8 +133,19 @@
         portal.fetchAdmin('/integrity-audit?limit=30', { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (body) {
-                if (body && body.ok) render(body);
-                else setStatus('Failed to load audit data.');
+                if (!body || !body.ok) {
+                    setStatus('Failed to load audit data.');
+                    return;
+                }
+                if (lastRunFromManualAudit) {
+                    var apiLatest = body.latest && body.latest.checked_at ? body.latest.checked_at : '';
+                    if (!apiLatest || apiLatest < lastRunFromManualAudit.checked_at) {
+                        body.latest = lastRunFromManualAudit;
+                        body.history = [lastRunFromManualAudit].concat(body.history || []);
+                    }
+                    lastRunFromManualAudit = null;
+                }
+                render(body);
             })
             .catch(function (err) {
                 setStatus('Error: ' + (err && err.message ? err.message : 'request failed'));
@@ -169,13 +182,9 @@
                     setStatus(body.stored === false ? 'Audit complete but result not saved (see hint below).' : 'Audit complete.');
                     var latestFromRun = latestFromRunResponse(body);
                     if (latestFromRun) {
+                        lastRunFromManualAudit = latestFromRun;
                         render({ latest: latestFromRun, history: [], stored: body.stored });
-                        // Refresh after a short delay so D1 read-after-write sees the new run.
-                        // Immediate load() can return stale "latest" and make the report disappear.
-                        setTimeout(function () {
-                            load();
-                            setStatus('');
-                        }, 2000);
+                        setTimeout(function () { load(); }, 1500);
                         return;
                     }
                     load();

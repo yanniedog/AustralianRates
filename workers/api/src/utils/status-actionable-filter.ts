@@ -6,6 +6,7 @@ const KNOWN_UBANK_NOISE_MESSAGES = new Set([
   'daily_savings_lender_fetch empty_result',
 ])
 const KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES = new Set(['cdr_audit_detected_gaps'])
+const KNOWN_ADMIN_STATUS_DUPLICATE_CODES = new Set(['cdr_audit_detected_gaps'])
 
 function normalizeValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
@@ -35,7 +36,8 @@ export function shouldIgnoreStatusActionableLog(
   }
 
   const lenderCode = normalizeValue(entry.lender_code ?? entry.lenderCode)
-  if (source === 'admin' && KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message)) {
+  const code = normalizeValue(entry.code)
+  if (source === 'admin' && (KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message) || KNOWN_ADMIN_STATUS_DUPLICATE_CODES.has(code))) {
     return true
   }
   if (isHistoricalNoSignalNoise(entry, source, message)) {

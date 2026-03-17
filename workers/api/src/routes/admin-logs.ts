@@ -4,11 +4,13 @@
  */
 
 import { Hono } from 'hono'
+import { getIngestPauseConfig } from '../db/app-config'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
 import { CODE_FILTER_UNSUPPORTED_MESSAGE, extractTraceback, getLogStats, log, parseLogContext, queryLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
+import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
 
 export const adminLogRoutes = new Hono<AppContext>()
 
@@ -158,14 +160,17 @@ adminLogRoutes.get('/logs/system/stats', async (c) => {
   return c.json({ ok: true, ...stats })
 })
 
-/** GET /admin/logs/system/actionable - grouped operational issues with actions */
+/** GET /admin/logs/system/actionable - grouped operational issues with actions. Uses same filter as status health run (status-actionable-filter). */
 adminLogRoutes.get('/logs/system/actionable', async (c) => {
   withNoStore(c)
   const limit = Math.max(1, Math.min(500, Number(c.req.query('limit') || 150)))
+  const pauseConfig = await getIngestPauseConfig(c.env.DB).catch(() => ({ mode: 'active' as const, reason: null }))
   const { entries } = await queryLogs(c.env.DB, { limit })
   const problemRows = entries.filter((entry) => {
     const level = String(entry.level || '').toLowerCase()
-    return level === 'warn' || level === 'error'
+    if (level !== 'warn' && level !== 'error') return false
+    if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
+    return true
   })
   const issues = toActionableIssueSummaries(problemRows)
   return c.json({

@@ -41,6 +41,19 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores admin cdr_audit_detected_gaps by code when message differs', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'admin',
+          code: 'cdr_audit_detected_gaps',
+          message: 'CDR audit detected pipeline gaps',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores no-signal historical task warnings in status summaries', () => {
     expect(
       shouldIgnoreStatusActionableLog(

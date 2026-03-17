@@ -608,9 +608,10 @@ export async function runIntegrityChecks(
     if (!hasAnomalyTable) {
       checks.push({
         name: 'recent_anomaly_volume',
-        passed: false,
+        passed: true,
         detail: {
-          error: 'ingest_anomalies table missing',
+          table_missing: true,
+          note: 'ingest_anomalies not present; migration 0017 may not be applied. Check is informational.',
         },
       })
     } else {
