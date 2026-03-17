@@ -17,7 +17,9 @@ const app = new Hono<AppContext>()
 
 app.use('*', async (c, next) => {
   initLogger(c.env.DB)
-  await flushBufferedLogs()
+  const path = new URL(c.req.url).pathname
+  const isAuthCheck = path.endsWith('/admin/auth-check')
+  if (!isAuthCheck) await flushBufferedLogs()
   await next()
   await flushBufferedLogs()
 })

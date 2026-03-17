@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -105,6 +105,23 @@
         </section>
 
         <section class="section-card admin-card">
+            <h2>Force finalize lender dataset run</h2>
+            <p class="admin-hint">Close a stuck unfinalized run by run_id, lender, and dataset. Use after checking Status or backlog for run_id values.</p>
+            <div class="actions admin-actions">
+                <input type="text" id="force-finalize-run-id" placeholder="run_id (e.g. daily:2026-03-17:...)" title="Run ID" style="min-width: 20rem;">
+                <input type="text" id="force-finalize-lender-code" placeholder="lender code" title="Lender code">
+                <select id="force-finalize-dataset" title="Dataset">
+                    <option value="">Select dataset</option>
+                    <option value="home_loans">Home loans</option>
+                    <option value="savings">Savings</option>
+                    <option value="term_deposits">Term deposits</option>
+                </select>
+                <button type="button" class="primary" id="force-finalize-btn">Force finalize</button>
+            </div>
+            <div class="status admin-status-line" id="force-finalize-status"></div>
+        </section>
+
+        <section class="section-card admin-card">
             <h2>Recent completed runs</h2>
             <div id="recent-runs" class="run-grid"></div>
         </section>
@@ -157,6 +174,11 @@
             var targetedReconcileBtn = document.getElementById('run-targeted-reconcile');
             var targetedReconcileStatus = document.getElementById('targeted-reconcile-status');
             var targetedReconcileOutput = document.getElementById('targeted-reconcile-output');
+            var forceFinalizeRunId = document.getElementById('force-finalize-run-id');
+            var forceFinalizeLenderCode = document.getElementById('force-finalize-lender-code');
+            var forceFinalizeDataset = document.getElementById('force-finalize-dataset');
+            var forceFinalizeBtn = document.getElementById('force-finalize-btn');
+            var forceFinalizeStatus = document.getElementById('force-finalize-status');
             var inFlight = false;
             var pollTimer = null;
             var pollIntervalMs = 10000;
@@ -525,6 +547,10 @@
             });
 
             Promise.all([loadRealtime(), loadBacklog()]);
+            var backlogIntervalId = setInterval(loadBacklog, 60000);
+            document.body.addEventListener('ar:admin-page-unload', function () {
+                if (backlogIntervalId) clearInterval(backlogIntervalId);
+            });
         })();
     </script>
 </body>

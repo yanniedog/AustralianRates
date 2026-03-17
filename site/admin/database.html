@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -81,6 +81,7 @@
             var limit = 50;
             var offset = 0;
             var tabulator = null;
+            var tableRefreshIntervalId = null;
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
@@ -156,14 +157,31 @@
                 });
             }
 
+            function refreshCurrentTable() {
+                if (!currentTable) return;
+                loadTables();
+                var url = '/db/tables/' + encodeURIComponent(currentTable) + '/rows?limit=' + limit + '&offset=' + offset;
+                portal.fetchAdmin(url).then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok || !tabulator) return;
+                    totalRows = d.total || 0;
+                    tabulator.setData(d.rows || []);
+                    renderPagination();
+                }).catch(function () {});
+            }
+            function startTableAutoRefresh() {
+                if (tableRefreshIntervalId) clearInterval(tableRefreshIntervalId);
+                tableRefreshIntervalId = setInterval(refreshCurrentTable, 60000);
+            }
             function selectTable(tableName) {
                 currentTable = tableName;
                 if (!tableName) {
                     addBtn.disabled = editBtn.disabled = deleteBtn.disabled = refreshBtn.disabled = true;
                     if (tabulator) { tabulator.destroy(); tabulator = null; }
                     paginationEl.style.display = 'none';
+                    if (tableRefreshIntervalId) { clearInterval(tableRefreshIntervalId); tableRefreshIntervalId = null; }
                     return;
                 }
+                startTableAutoRefresh();
                 offset = 0;
                 loadSchema(tableName).then(function () {
                     return loadRows(tableName, 0, limit);
@@ -233,6 +251,9 @@
 
             tableSelect.addEventListener('change', function () {
                 selectTable((tableSelect.value || '').trim() || '');
+            });
+            document.body.addEventListener('ar:admin-page-unload', function () {
+                if (tableRefreshIntervalId) clearInterval(tableRefreshIntervalId);
             });
 
             if (dbGrid) {

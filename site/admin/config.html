@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -182,6 +182,10 @@
 
             loadConfig();
             loadEnv();
+            var configRefreshIntervalId = setInterval(function () { loadConfig(); loadEnv(); }, 60000);
+            document.body.addEventListener('ar:admin-page-unload', function () {
+                if (configRefreshIntervalId) clearInterval(configRefreshIntervalId);
+            });
         })();
     </script>
 </body>

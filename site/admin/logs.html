@@ -187,6 +187,12 @@
 
             loadSystemStats();
             updateClientStats();
+            var systemStatsIntervalId = setInterval(loadSystemStats, 30000);
+            var clientStatsIntervalId = setInterval(updateClientStats, 10000);
+            document.body.addEventListener('ar:admin-page-unload', function () {
+                if (systemStatsIntervalId) clearInterval(systemStatsIntervalId);
+                if (clientStatsIntervalId) clearInterval(clientStatsIntervalId);
+            });
         })();
     </script>
 </body>

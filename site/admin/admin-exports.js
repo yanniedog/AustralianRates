@@ -62,6 +62,9 @@
         });
     }
 
+    var BACKGROUND_REFRESH_MS = 30000;
+    var backgroundRefreshId = null;
+
     function schedulePolling() {
         if (pollTimer) clearTimeout(pollTimer);
         if (view.hasPendingEntries(section.entries)) {
@@ -69,6 +72,11 @@
         } else {
             pollTimer = null;
         }
+    }
+
+    function startBackgroundRefresh() {
+        if (backgroundRefreshId) return;
+        backgroundRefreshId = setInterval(loadSection, BACKGROUND_REFRESH_MS);
     }
 
     function renderSection(force) {
@@ -106,6 +114,7 @@
             section.entries = entries;
             section.loaded = true;
             renderSection(false);
+            startBackgroundRefresh();
             return entries;
         } finally {
             section.loading = false;
@@ -279,6 +288,10 @@
 
     document.body.addEventListener('click', handleClick);
     document.body.addEventListener('change', handleChange);
+    document.body.addEventListener('ar:admin-page-unload', function () {
+        if (backgroundRefreshId) clearInterval(backgroundRefreshId);
+        if (pollTimer) clearTimeout(pollTimer);
+    });
 
     loadSection().catch(function (error) {
         showMsg(error && error.message ? error.message : 'Failed to load dump jobs.', true);

@@ -81,6 +81,10 @@ adminRoutes.use('*', requireAdmin())
 
 /** Lightweight auth check for admin login (no DB). Returns 200 when token is valid. */
 adminRoutes.get('/auth-check', async (c) => {
+  log.info('admin', 'auth_check_ok', {
+    code: 'admin_auth_check',
+    context: { path: '/admin/auth-check', mode: c.get('adminAuthState')?.mode ?? null },
+  })
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,

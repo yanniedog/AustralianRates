@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono'
 import type { AdminAuthState, AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
+import { log } from '../utils/logger'
 import { verifyAccessJwtToken } from './access-jwt'
 
 export function parseBearerToken(value: string | null | undefined): string | null {
@@ -119,6 +120,13 @@ export function requireAdmin(): MiddlewareHandler<AppContext> {
     c.set('adminAuthState', authState)
 
     if (!authState.ok) {
+      const path = new URL(c.req.url).pathname
+      if (path.endsWith('/auth-check')) {
+        log.warn('admin', 'auth_check_failed', {
+          code: 'admin_auth_check_failed',
+          context: { path, reason: authState.reason },
+        })
+      }
       return jsonError(c, 401, 'UNAUTHORIZED', 'Admin authentication failed.', {
         reason: authState.reason,
       })

@@ -687,6 +687,8 @@
         ]);
     }
 
+    var AUTO_REFRESH_MS = 45000;
+    var refreshIntervalId = setInterval(function () { refreshAll(false); }, AUTO_REFRESH_MS);
     document.getElementById('refresh-btn').addEventListener('click', function () { refreshAll(true); });
     document.getElementById('run-check-btn').addEventListener('click', runNow);
     document.getElementById('run-cdr-audit-btn').addEventListener('click', runCdrAuditNow);
@@ -714,4 +716,7 @@
     });
 
     refreshAll(false);
+    document.body.addEventListener('ar:admin-page-unload', function () {
+        if (refreshIntervalId) clearInterval(refreshIntervalId);
+    });
 })();

@@ -187,4 +187,8 @@
     if (runAuditBtn) runAuditBtn.addEventListener('click', runAudit);
     if (refreshBtn) refreshBtn.addEventListener('click', load);
     load();
+    var autoRefreshIntervalId = setInterval(load, 60000);
+    document.body.addEventListener('ar:admin-page-unload', function () {
+        if (autoRefreshIntervalId) clearInterval(autoRefreshIntervalId);
+    });
 })();
