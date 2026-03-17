@@ -462,6 +462,7 @@
                         '<div class="terminal-panel-head">',
                             panelIcon('nav', 'Navigation'),
                             panelHeadingMarkup('h2', ui.title),
+                            '<button type="button" class="icon-btn secondary terminal-panel-close-mobile" data-menu-close aria-label="Close menu">' + iconOnly('close', 'Close') + '</button>',
                         '</div>',
                         '<div id="market-nav-tree" class="market-nav-tree" aria-label="Market navigation"></div>',
                     '</section>',

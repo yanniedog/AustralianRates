@@ -57,16 +57,16 @@
                 <div class="export-job-list" id="database-dump-jobs"></div>
             </section>
             <section class="admin-card">
-                <h2>Daily backups</h2>
-                <p class="hint">One file per day (that day's data only). Generated automatically at 09:00 UTC for the previous Melbourne day. Download and apply in date order to reconstruct a range.</p>
+                <h2>Daily backups (day-only, automatic)</h2>
+                <p class="hint">Each backup contains only that day's DB content (small file). Created automatically every day at 09:00 UTC for the previous Melbourne day. The list below is ready for immediate download; use Download to get the .sql.gz file for any date.</p>
                 <div class="export-actions">
-                    <label for="daily-backup-date">Date (YYYY-MM-DD):</label>
+                    <button type="button" class="secondary" id="daily-backups-refresh" data-action="refresh-daily-backups">Refresh list</button>
+                    <label for="daily-backup-date">Or create for date:</label>
                     <input type="date" id="daily-backup-date" data-input="daily-backup-date" />
                     <button type="button" class="secondary" id="daily-backups-create" data-action="create-daily-backup">Create backup for date</button>
-                    <button type="button" class="secondary" id="daily-backups-refresh" data-action="refresh-daily-backups">Refresh list</button>
                 </div>
                 <div class="export-summary" id="daily-backups-summary"></div>
-                <div class="export-job-list" id="daily-backups-list"></div>
+                <div class="export-job-list" id="daily-backups-list" aria-label="List of daily backup dates available for immediate download"></div>
             </section>
         </div>
     </main>

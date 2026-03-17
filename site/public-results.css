@@ -679,6 +679,17 @@ button.bank-option-card.is-selected .bank-badge-sub {
     }
 }
 
+@media (max-width: 760px) {
+    .market-intro {
+        padding: 14px;
+        margin-bottom: 14px;
+    }
+
+    .market-intro-steps {
+        display: none;
+    }
+}
+
 .tabulator .tabulator-row {
     background: var(--ar-surface-2) !important;
 }
