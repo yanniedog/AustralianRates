@@ -28,6 +28,7 @@ import { registerSavingsAnalyticsRoutes } from './savings-analytics'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { querySavingsRepresentationTimeseriesResolved } from './analytics-data'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
+import { getLandingOverview } from '../db/landing-overview'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { registerSavingsExportRoutes } from './savings-exports'
 import {
@@ -54,6 +55,12 @@ savingsPublicRoutes.use('*', async (c, next) => {
 
 registerSavingsExportRoutes(savingsPublicRoutes)
 registerSavingsAnalyticsRoutes(savingsPublicRoutes)
+
+savingsPublicRoutes.get('/overview', async (c) => {
+  withPublicCache(c, 60)
+  const overview = await getLandingOverview(c.env.DB, 'savings')
+  return c.json({ ok: true, ...overview })
+})
 
 savingsPublicRoutes.get('/health', (c) => {
   withPublicCache(c, 30)

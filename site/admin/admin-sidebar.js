@@ -16,6 +16,7 @@
     var items = [
         { href: 'dashboard.html', label: 'Dashboard' },
         { href: 'status.html', label: 'Status' },
+        { href: 'integrity.html', label: 'Data integrity' },
         { href: 'database.html', label: 'Database' },
         { href: 'exports.html', label: 'Exports' },
         { href: 'clear.html', label: 'Clear data' },

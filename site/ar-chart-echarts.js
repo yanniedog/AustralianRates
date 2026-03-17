@@ -6,16 +6,20 @@
     var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize, trimAxisLabel = helpers.trimAxisLabel;
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
     var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, categoryInterval = helpers.categoryInterval;
-    var chartTheme = helpers.chartTheme || function () {
-        return {
+    var axisPointerConfig = helpers.axisPointerConfig, chartTheme = helpers.chartTheme;
+    var themeFallback = function () {
+        return (helpers.chartTheme && helpers.chartTheme()) || {
             emphasisText: '#0f172a',
             mutedText: '#475569',
             shadowAccent: 'rgba(37, 99, 235, 0.18)',
             softText: '#334155',
-            splitLine: 'rgba(148, 163, 184, 0.18)',
+            splitLine: 'rgba(148, 163, 184, 0.12)',
             surfaceScale: ['#eef6ff', '#bfdbfe'],
             text: '#15273c',
             axisLine: 'rgba(148, 163, 184, 0.55)',
+            crosshairLine: 'rgba(37, 99, 235, 0.45)',
+            crosshairLabelBg: 'rgba(255,255,255,0.96)',
+            focusBlurOpacity: 0.22,
         };
     };
     function ensureChart(element, instance) {
@@ -27,7 +31,7 @@
     function buildSurfaceOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
-        var theme = chartTheme();
+        var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var narrow = size && size.width < 760;
         var veryNarrow = size && size.width < 420;
         var denseSurface = model.surface.yLabels.length > (narrow ? 12 : 16);
@@ -56,6 +60,7 @@
                     ].filter(Boolean).join('<br>');
                 },
             },
+            axisPointer: axisPointerConfig(theme),
             grid: {
                 left: veryNarrow ? 84 : (narrow ? 112 : (denseSurface ? 156 : 142)),
                 right: showVisualMap ? 42 : 18,
@@ -124,15 +129,15 @@
                 emphasis: {
                     itemStyle: {
                         borderColor: theme.emphasisText,
-                        borderWidth: 1.5,
-                        shadowBlur: 18,
+                        borderWidth: 2,
+                        shadowBlur: 20,
                         shadowColor: theme.shadowAccent,
                     },
                 },
                 itemStyle: {
                     borderWidth: 1,
                     borderColor: theme.axisLine,
-                    borderRadius: narrow ? 4 : 8,
+                    borderRadius: narrow ? 6 : 10,
                 },
             }],
         };
@@ -140,7 +145,7 @@
     function buildLenderOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
-        var theme = chartTheme();
+        var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
@@ -151,6 +156,7 @@
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
             tooltip: {
                 trigger: 'item',
                 backgroundColor: tooltipStyles().backgroundColor,
@@ -250,7 +256,7 @@
                 },
                 emphasis: {
                     itemStyle: {
-                        shadowBlur: 18,
+                        shadowBlur: 22,
                         shadowColor: theme.shadowAccent,
                     },
                 },
@@ -260,20 +266,22 @@
     function buildCompareOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
-        var theme = chartTheme();
+        var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var showLegend = !narrow && model.compareSeries.length <= 3;
         var showEndLabels = !narrow && model.compareSeries.length <= 2;
+        var focusBlur = theme.focusBlurOpacity != null ? theme.focusBlurOpacity : 0.22;
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
             tooltip: {
                 trigger: 'axis',
-                axisPointer: { type: 'line', lineStyle: { color: theme.shadowAccent } },
+                axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -342,8 +350,8 @@
                         },
                     },
                     labelLayout: { hideOverlap: true },
-                    emphasis: { focus: 'series' },
-                    animationDurationUpdate: 280,
+                    emphasis: { focus: 'series', blurScope: 'coordinateSystem', lineStyle: { width: narrow ? 3 : 3.5 } },
+                    animationDurationUpdate: 320,
                     lineStyle: { width: narrow ? 2.5 : 3, color: paletteColor(index) },
                     itemStyle: { color: paletteColor(index) },
                     data: series.points.map(function (point) {
@@ -360,7 +368,7 @@
     function buildDistributionOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
-        var theme = chartTheme();
+        var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         return {
@@ -369,6 +377,7 @@
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
             tooltip: {
                 trigger: 'item',
                 backgroundColor: tooltipStyles().backgroundColor,
@@ -434,7 +443,7 @@
     }
     function buildDetailOption(model, fields, size) {
         var base = baseTextStyles();
-        var theme = chartTheme();
+        var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var spotlight = model.spotlight;
         var narrow = size && size.width < 340;
         var compact = size && size.width < 420;

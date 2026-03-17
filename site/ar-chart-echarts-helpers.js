@@ -25,7 +25,7 @@
             mutedText: light ? '#5b6d81' : '#9aa9b9',
             shadowAccent: light ? 'rgba(37, 99, 235, 0.18)' : 'rgba(79, 141, 253, 0.24)',
             softText: light ? '#31465c' : '#c5ced8',
-            splitLine: light ? 'rgba(79, 98, 118, 0.18)' : 'rgba(237, 243, 249, 0.1)',
+            splitLine: light ? 'rgba(79, 98, 118, 0.12)' : 'rgba(237, 243, 249, 0.08)',
             surfaceScale: light
                 ? ['#eef6ff', '#bfdbfe']
                 : ['#173256', '#315f9a'],
@@ -33,10 +33,13 @@
             tooltipBackground: light ? '#ffffff' : '#11161d',
             tooltipBorder: light ? 'rgba(37, 99, 235, 0.28)' : 'rgba(79, 141, 253, 0.28)',
             tooltipShadow: light
-                ? 'box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12); border-radius: 12px;'
-                : 'box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24); border-radius: 12px;',
+                ? 'box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.04); border-radius: 14px;'
+                : 'box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255,255,255,0.06); border-radius: 14px;',
             tooltipText: light ? '#0f172a' : '#edf3f9',
             axisLine: light ? 'rgba(79, 98, 118, 0.42)' : 'rgba(237, 243, 249, 0.2)',
+            crosshairLine: light ? 'rgba(37, 99, 235, 0.45)' : 'rgba(79, 141, 253, 0.5)',
+            crosshairLabelBg: light ? 'rgba(255,255,255,0.96)' : 'rgba(17, 22, 29, 0.94)',
+            focusBlurOpacity: 0.22,
         };
     }
 
@@ -44,8 +47,8 @@
         var theme = chartTheme();
         return {
             textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
-            animationDuration: 320,
-            animationDurationUpdate: 240,
+            animationDuration: 380,
+            animationDurationUpdate: 320,
             animationEasing: 'cubicOut',
         };
     }
@@ -64,8 +67,9 @@
         return {
             backgroundColor: theme.tooltipBackground,
             borderColor: theme.tooltipBorder,
-            textStyle: { color: theme.tooltipText },
-            extraCssText: theme.tooltipShadow + '; transition: opacity 0.18s ease-out, transform 0.18s ease-out;',
+            textStyle: { color: theme.tooltipText, fontSize: 13, lineHeight: 1.5 },
+            padding: [12, 16],
+            extraCssText: theme.tooltipShadow + '; transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);',
         };
     }
 
@@ -134,6 +138,21 @@
         return Math.max(0, Math.ceil(total / maxVisible) - 1);
     }
 
+    function axisPointerConfig(theme) {
+        if (!theme) theme = chartTheme();
+        return {
+            type: 'cross',
+            lineStyle: { color: theme.crosshairLine, width: 1.5, type: 'dashed' },
+            crossStyle: { color: theme.crosshairLine, width: 1 },
+            label: {
+                backgroundColor: theme.crosshairLabelBg != null ? theme.crosshairLabelBg : theme.tooltipBackground,
+                borderColor: theme.tooltipBorder,
+                color: theme.tooltipText,
+                fontSize: 11,
+            },
+        };
+    }
+
     function formatSurfaceAxisLabel(value, options) {
         var text = String(value || '');
         var parts = text.split('|').map(function (part) { return part.trim(); }).filter(Boolean);
@@ -150,6 +169,7 @@
     }
 
     window.AR.chartEchartsHelpers = {
+        axisPointerConfig: axisPointerConfig,
         baseTextStyles: baseTextStyles,
         categoryInterval: categoryInterval,
         chartSize: chartSize,

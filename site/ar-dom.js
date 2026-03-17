@@ -79,6 +79,7 @@
         statUpdated: document.getElementById('stat-updated'),
         statCashRate: document.getElementById('stat-cash-rate'),
         statRecords: document.getElementById('stat-records'),
+        statFeeds: document.getElementById('stat-feeds'),
         executiveSummaryPanel: document.getElementById('executive-summary-panel'),
         executiveSummaryStatus: document.getElementById('executive-summary-status'),
         executiveSummarySections: document.getElementById('executive-summary-sections'),

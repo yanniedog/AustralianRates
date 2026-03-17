@@ -678,6 +678,7 @@
                             '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="Updated"><span class="metric-code">' + iconText('calendar', 'Updated') + '</span><strong>...</strong></div>',
                             '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(ui.statSecondaryHelp) + '" data-help-label="' + esc(ui.statSecondaryLabel) + '"><span class="metric-code">' + iconText(ui.statSecondaryIcon, ui.statSecondaryLabel) + '</span><strong>' + esc(ui.statSecondaryValue) + '</strong></div>',
                             '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>...</strong></div>',
+                            '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored; latest bank and product with data." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>...</strong></div>',
                         '</div>',
                     '</section>',
                     '<section class="panel terminal-panel terminal-ladder-panel">',

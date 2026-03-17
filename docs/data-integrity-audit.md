@@ -2,6 +2,13 @@
 
 Full data integrity and verification checks for all data in the API database (D1). The audit detects **dead**, **invalid**, **duplicate**, and **erroneous** data.
 
+## Admin portal
+
+- **Page:** Admin > **Data integrity** (`/admin/integrity.html`).
+- **Traffic lights:** Green = all checks passed; amber = minor/informational issues only; red = issues that require attention.
+- **Manual run:** Use **Run audit now** to re-run the audit and verify fixes.
+- **Daily run:** The audit runs automatically once per day at **04:00 UTC** (scheduled cron). Results are stored and shown on the Data integrity page.
+
 ## What is checked
 
 | Category   | Checks |

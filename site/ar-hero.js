@@ -38,6 +38,7 @@
     var ladderRows = [];
     var publicIntro = window.AR.publicIntro || null;
     var heroStatsReady = false;
+    var landingOverview = null;
 
     function syncPublicIntro() {
         publicIntro = window.AR.publicIntro || publicIntro;
@@ -77,6 +78,43 @@
     function showHeroError() {
         setInlineError(els.heroError, 'Overview metrics are temporarily unavailable. Refresh to try again.');
         [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
+        if (els.statFeeds) setStatUnavailable(els.statFeeds);
+    }
+
+    function formatOverviewDatetime(isoOrSqlite) {
+        if (!isoOrSqlite || typeof isoOrSqlite !== 'string') return '';
+        var s = isoOrSqlite.trim();
+        if (!s) return '';
+        try {
+            var d = new Date(s);
+            if (isNaN(d.getTime())) return s;
+            return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+        } catch (e) {
+            return s;
+        }
+    }
+
+    function applyLandingOverview() {
+        if (!landingOverview) return;
+        if (section === 'home-loans' && els.statCashRate && landingOverview.rba) {
+            var rba = landingOverview.rba;
+            var rateChanged = rba.effective_date ? 'Rate changed: ' + rba.effective_date + '.' : '';
+            var lastChecked = rba.fetched_at ? 'Last checked: ' + formatOverviewDatetime(rba.fetched_at) + '.' : '';
+            var help = ['Current RBA cash rate.', rateChanged, lastChecked].filter(Boolean).join(' ');
+            els.statCashRate.setAttribute('data-help', help);
+            els.statCashRate.setAttribute('title', help);
+        }
+        if (els.statFeeds && landingOverview.feeds) {
+            var f = landingOverview.feeds;
+            var feedDate = f.last_collection_date || f.last_parsed_at;
+            var feedValue = feedDate ? formatOverviewDatetime(f.last_parsed_at || f.last_collection_date) : '...';
+            var feedHelp = 'Last collected and stored: ' + (f.last_parsed_at ? formatOverviewDatetime(f.last_parsed_at) : f.last_collection_date || '—') + '.';
+            if (f.latest_bank || f.latest_product) {
+                feedHelp += ' Latest stored: ' + [f.latest_bank, f.latest_product].filter(Boolean).join(' – ') + '.';
+            }
+            renderStat(els.statFeeds, 'calendar', 'Bank feeds', feedValue, feedHelp);
+            els.statFeeds.setAttribute('title', feedHelp);
+        }
     }
 
     function applyHeroSnapshot(total, latest) {
@@ -99,13 +137,20 @@
 
         if (els.statCashRate) {
             if (section === 'home-loans' && latest && latest.rba_cash_rate != null) {
-                renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), 'Current RBA cash rate.');
+                var cashHelp = 'Current RBA cash rate.';
+                if (landingOverview && landingOverview.rba) {
+                    var r = landingOverview.rba;
+                    cashHelp = ['Current RBA cash rate.', r.effective_date ? 'Rate changed: ' + r.effective_date + '.' : '', r.fetched_at ? 'Last checked: ' + formatOverviewDatetime(r.fetched_at) + '.' : ''].filter(Boolean).join(' ');
+                }
+                renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), cashHelp);
+                els.statCashRate.setAttribute('title', cashHelp);
             } else if (section === 'home-loans') {
                 renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
             } else if (section !== 'home-loans') {
                 renderStat(els.statCashRate, 'continuity', 'Series continuity', 'Healthy', 'Series continuity by canonical product_key.');
             }
         }
+        applyLandingOverview();
 
         heroStatsReady = true;
         return true;
@@ -120,7 +165,31 @@
         return applyHeroSnapshot(state.total, state.latestRow);
     }
 
+    function loadOverview() {
+        if (!apiBase || landingOverview !== null) return;
+        var url = apiBase + '/overview';
+        requestJson
+            ? requestJson(url, { requestLabel: 'Landing overview', timeoutMs: requestTimeoutMs, retryCount: 0 })
+                .then(function (data) {
+                    if (data && data.ok) {
+                        landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
+                        applyLandingOverview();
+                    }
+                })
+                .catch(function () {})
+            : fetch(url, { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (data && data.ok) {
+                        landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
+                        applyLandingOverview();
+                    }
+                })
+                .catch(function () {});
+    }
+
     function loadHeroStats() {
+        loadOverview();
         if (!syncHeroStatsFromExplorer()) {
             clearHeroError();
         }

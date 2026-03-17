@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Data integrity | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=7ecd7b4">
+    <link rel="stylesheet" href="../public-shell.css?v=7ecd7b4">
+    <link rel="stylesheet" href="admin-layout.css?v=7ecd7b4">
+    <link rel="stylesheet" href="admin-pages.css?v=7ecd7b4">
+    <script src="../theme.js?v=7ecd7b4"></script>
+    <style>
+        .integrity-traffic { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+        .integrity-light { width: 48px; height: 48px; border-radius: 50%; border: 3px solid var(--ar-border, #333); }
+        .integrity-light.green { background: #22c55e; box-shadow: 0 0 12px #22c55e; }
+        .integrity-light.amber { background: #eab308; box-shadow: 0 0 12px #eab308; }
+        .integrity-light.red { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
+        .integrity-light.none { background: #64748b; }
+        .integrity-status-text { font-weight: 600; font-size: 1.1rem; }
+        .integrity-summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+        .integrity-summary-cell { padding: 0.5rem; background: var(--ar-bg-secondary, #1e293b); border-radius: 6px; }
+        .integrity-summary-cell .label { font-size: 0.85rem; color: var(--ar-muted, #94a3b8); }
+        .integrity-summary-cell .value { font-weight: 600; }
+        .integrity-findings table { width: 100%; border-collapse: collapse; }
+        .integrity-findings th, .integrity-findings td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--ar-border, #334155); }
+        .integrity-findings .pass { color: #22c55e; }
+        .integrity-findings .fail { color: #ef4444; }
+        .integrity-history { margin-top: 1.5rem; }
+        .integrity-history li { padding: 0.35rem 0; border-bottom: 1px solid var(--ar-border, #334155); }
+    </style>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide admin-integrity" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Data integrity</p>
+            <h1>Data integrity audit</h1>
+            <p class="admin-subtitle">Dead, invalid, duplicate and erroneous data checks. Runs automatically once per day (04:00 UTC).</p>
+        </div>
+        <div class="admin-actions">
+            <button type="button" class="primary" id="run-audit-btn">Run audit now</button>
+            <button type="button" class="secondary" id="refresh-btn">Refresh</button>
+            <span id="status-line" class="admin-status-line">Loading...</span>
+        </div>
+        <section class="card admin-card">
+            <h2>Status</h2>
+            <div id="traffic-wrap" class="integrity-traffic">
+                <div id="traffic-light" class="integrity-light none" aria-hidden="true"></div>
+                <div>
+                    <div id="traffic-status" class="integrity-status-text">No audit run yet</div>
+                    <div id="traffic-meta" class="admin-status-line"></div>
+                </div>
+            </div>
+            <div id="summary-wrap" class="integrity-summary-grid"></div>
+        </section>
+        <section class="card admin-card">
+            <h2>Findings</h2>
+            <div id="findings-wrap" class="integrity-findings"></div>
+        </section>
+        <section class="card admin-card">
+            <h2>History</h2>
+            <ul id="history-wrap" class="integrity-history"></ul>
+        </section>
+    </main>
+    <script src="admin-portal.js?v=7ecd7b4"></script>
+    <script src="admin-sidebar.js?v=7ecd7b4"></script>
+    <script src="integrity-audit.js?v=7ecd7b4"></script>
+</body>
+</html>

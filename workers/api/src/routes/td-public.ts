@@ -29,6 +29,7 @@ import { registerTdAnalyticsRoutes } from './td-analytics'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { queryTdRepresentationTimeseriesResolved } from './analytics-data'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
+import { getLandingOverview } from '../db/landing-overview'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { registerTdExportRoutes } from './td-exports'
 import {
@@ -56,6 +57,12 @@ tdPublicRoutes.use('*', async (c, next) => {
 registerTdExportRoutes(tdPublicRoutes)
 registerDebugLogRoutes(tdPublicRoutes)
 registerTdAnalyticsRoutes(tdPublicRoutes)
+
+tdPublicRoutes.get('/overview', async (c) => {
+  withPublicCache(c, 60)
+  const overview = await getLandingOverview(c.env.DB, 'term_deposits')
+  return c.json({ ok: true, ...overview })
+})
 
 tdPublicRoutes.get('/health', (c) => {
   withPublicCache(c, 30)

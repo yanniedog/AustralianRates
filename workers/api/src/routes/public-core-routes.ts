@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import { API_BASE_PATH, MELBOURNE_TIMEZONE } from '../constants'
 import { getReadDb } from '../db/read-db'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
+import { getLandingOverview } from '../db/landing-overview'
 import { getLenderStaleness, getQualityDiagnostics } from '../db/queries'
 import { queryHomeLoanRateChangeIntegrity, queryHomeLoanRateChanges } from '../db/rate-change-log'
 import type { AppContext } from '../types'
@@ -10,6 +11,14 @@ import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
 
 export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
+  publicRoutes.get('/overview', async (c) => {
+    withPublicCache(c, 60)
+    const section = (c.req.query('section') || 'home_loans').trim() as 'home_loans' | 'savings' | 'term_deposits'
+    const valid = section === 'home_loans' || section === 'savings' || section === 'term_deposits'
+    const overview = await getLandingOverview(c.env.DB, valid ? section : 'home_loans')
+    return c.json({ ok: true, ...overview })
+  })
+
   publicRoutes.get('/health', async (c) => {
     withPublicCache(c, 30)
 
