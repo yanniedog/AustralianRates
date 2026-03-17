@@ -59,6 +59,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       ready_passes: ready.pass_count ?? 1,
       ready_stop: ready.stopped_reason ?? null,
       closed_runs: stale.closed_runs,
+      abandoned_eod: stale.abandoned_eod,
       stale_scanned_runs: stale.scanned_runs,
       force_closed_unfinalized: staleUnfinalized.force_closed_rows,
       stale_unfinalized_scanned: staleUnfinalized.scanned_rows,

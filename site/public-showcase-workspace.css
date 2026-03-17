@@ -335,6 +335,14 @@ body.ar-public .market-intro-step:nth-child(3) {
         order: 1;
     }
 
+    /* Chart full viewport width on mobile */
+    body.ar-public .chart-block {
+        margin-inline: -12px;
+        width: calc(100% + 24px);
+        max-width: 100vw;
+        box-sizing: border-box;
+    }
+
     body.ar-public .terminal-panel,
     body.ar-public .terminal-subpanel,
     body.ar-public .terminal-notes {
@@ -476,44 +484,94 @@ body.ar-public .market-intro-step:nth-child(3) {
 
 /* Mobile: compact footer and status so chart can use more viewport */
 @media (max-width: 760px) {
+    body.ar-public {
+        overflow-x: hidden;
+    }
+
     body.ar-public .site-footer,
     body.ar-legal .site-footer {
         padding-bottom: 12px;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
     }
 
     body.ar-public .site-footer-inner,
     body.ar-legal .site-footer-inner {
         padding-top: 8px;
-        gap: 8px 12px;
+        gap: 6px 0;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
     }
 
+    /* Footer stats: strict thin column of tiny text at bottom; never increase page width */
     body.ar-public .chart-overview-in-footer {
-        margin-bottom: 8px;
-        padding-bottom: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 6px;
+        padding-bottom: 6px;
+        max-width: 100%;
+        min-width: 0;
+        width: 100%;
+        overflow: hidden;
     }
 
     body.ar-public .chart-overview-in-footer .chart-footer-guidance {
-        font-size: 0.62rem;
-        margin-bottom: 4px;
+        font-size: 0.55rem;
+        margin-bottom: 2px;
+        line-height: 1.3;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     body.ar-public .chart-overview-in-footer .chart-footer-stats {
-        margin-bottom: 4px;
-        gap: 6px 10px;
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        gap: 2px 0;
+        margin-bottom: 2px;
+        max-width: 100%;
+        min-width: 0;
     }
 
     body.ar-public .chart-overview-in-footer .chart-footer-stats .terminal-stat {
-        font-size: 0.62rem;
+        font-size: 0.55rem;
+        line-height: 1.25;
+        max-width: 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     body.ar-public .chart-overview-in-footer .chart-footer-stats .terminal-stat strong {
-        font-size: 0.78rem;
+        font-size: 0.6rem;
+    }
+
+    body.ar-public .chart-overview-in-footer .chart-footer-stats .metric-code {
+        font-size: 0.5rem;
+    }
+
+    body.ar-public .chart-overview-in-footer .chart-summary {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px 0;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
     }
 
     body.ar-public .chart-overview-in-footer .chart-summary-pill {
-        font-size: 0.58rem;
-        padding: 0 5px;
-        min-height: 18px;
+        font-size: 0.52rem;
+        padding: 0 4px;
+        min-height: 16px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     body.ar-public .footer-technical-summary,
@@ -527,6 +585,8 @@ body.ar-public .market-intro-step:nth-child(3) {
         font-size: 0.62rem;
         line-height: 1.4;
         margin-top: 6px;
+        max-width: 100%;
+        overflow-wrap: anywhere;
     }
 
     .footer-technical-body {

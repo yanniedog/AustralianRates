@@ -63,6 +63,8 @@ export type StaleRunClosureReconciliation = {
   stale_minutes: number
   scanned_runs: number
   closed_runs: number
+  /** Runs closed because they did not complete by 23:59 on their start day. */
+  abandoned_eod: number
   status_breakdown: {
     ok: number
     partial: number
@@ -110,6 +112,67 @@ function asSummaryTotals(rawSummary: string | null | undefined): SummaryTotals {
 
 function cutoffIso(minutes: number): string {
   return new Date(Date.now() - Math.max(1, minutes) * 60 * 1000).toISOString()
+}
+
+/** True if now is past 23:59 on the calendar day of started_at (UTC). Used for same-day abandonment. */
+function isPastEndOfStartDay(startedAtIso: string): boolean {
+  const s = String(startedAtIso || '').trim()
+  if (!s) return false
+  const day = s.slice(0, 10)
+  const endOfDay = `${day}T23:59:59.999Z`
+  return new Date().toISOString() > endOfDay
+}
+
+type UnfinalizedLenderDatasetRow = {
+  run_id: string
+  lender_code: string
+  dataset_kind: 'home_loans' | 'savings' | 'term_deposits'
+  bank_name: string
+  collection_date: string
+}
+
+/**
+ * Force-finalize all unfinalized lender_dataset_runs for a run (retain as much info as possible when abandoning).
+ */
+async function forceFinalizeAllUnfinalizedForRun(
+  db: D1Database,
+  runId: string,
+): Promise<{ finalized: number; errors: string[] }> {
+  const errors: string[] = []
+  let finalized = 0
+  const rows = await db
+    .prepare(
+      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date
+       FROM lender_dataset_runs
+       WHERE run_id = ?1 AND finalized_at IS NULL`,
+    )
+    .bind(runId)
+    .all<UnfinalizedLenderDatasetRow>()
+
+  for (const row of rows.results ?? []) {
+    try {
+      await finalizePresenceForRun(db, {
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        dataset: row.dataset_kind,
+        bankName: row.bank_name,
+        collectionDate: row.collection_date,
+      })
+    } catch (e) {
+      pushError(errors, `${row.lender_code}:${row.dataset_kind}:presence:${(e as Error)?.message || String(e)}`)
+    }
+    try {
+      const updated = await tryMarkLenderDatasetFinalized(db, {
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        dataset: row.dataset_kind,
+      })
+      if (updated) finalized += 1
+    } catch (e) {
+      pushError(errors, `${row.lender_code}:${row.dataset_kind}:mark:${(e as Error)?.message || String(e)}`)
+    }
+  }
+  return { finalized, errors }
 }
 
 function pushError(target: string[], value: string): void {
@@ -194,10 +257,9 @@ export async function reconcileReadyFinalizations(
     if (!readiness.ready) {
       skippedRows += 1
       log.debug('run_reconciliation', 'Skipped unfinalized row (not ready)', {
-        run_id: row.run_id,
-        lender_code: row.lender_code,
-        dataset: row.dataset_kind,
-        reason: readiness.reason ?? 'unknown',
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        context: { dataset: row.dataset_kind, reason: readiness.reason ?? 'unknown' },
       })
       continue
     }
@@ -264,13 +326,18 @@ export async function closeStaleRunningRuns(
   const errors: string[] = []
   const statusBreakdown = { ok: 0, partial: 0 }
   let closedRuns = 0
+  let abandonedEod = 0
 
+  // Select runs that are (a) stale by time, or (b) past 23:59 on their start day (same-day abandonment).
   const rows = await db
     .prepare(
       `SELECT run_id, started_at, finished_at, per_lender_json, errors_json
        FROM run_reports
        WHERE status = 'running'
-         AND started_at < ?1
+         AND (
+           started_at < ?1
+           OR datetime('now') > (strftime('%Y-%m-%d', started_at) || ' 23:59:59')
+         )
        ORDER BY started_at ASC
        LIMIT ?2`,
     )
@@ -282,19 +349,37 @@ export async function closeStaleRunningRuns(
     const invariantSummary = await loadRunInvariantSummary(db, row.run_id)
     const nextStatus = deriveTerminalRunStatus(totals, invariantSummary)
     const reconciliationTime = nowIso()
-    const note =
-      `[${reconciliationTime}] reconciliation_autoclose: stale_running_run` +
-      ` threshold_minutes=${staleMinutes}` +
-      ` enqueued=${totals.enqueuedTotal}` +
-      ` processed=${totals.processedTotal}` +
-      ` failed=${totals.failedTotal}` +
-      ` invariant_problem_rows=${invariantSummary.problematic_rows}` +
-      ` started_at=${row.started_at}`
+    const eodAbandon = isPastEndOfStartDay(row.started_at)
+    const note = eodAbandon
+      ? `[${reconciliationTime}] reconciliation_autoclose: abandoned_run_not_completed_by_2359_same_day` +
+        ` started_at=${row.started_at}` +
+        ` enqueued=${totals.enqueuedTotal} processed=${totals.processedTotal} failed=${totals.failedTotal}` +
+        ` invariant_problem_rows=${invariantSummary.problematic_rows}`
+      : `[${reconciliationTime}] reconciliation_autoclose: stale_running_run` +
+        ` threshold_minutes=${staleMinutes}` +
+        ` enqueued=${totals.enqueuedTotal}` +
+        ` processed=${totals.processedTotal}` +
+        ` failed=${totals.failedTotal}` +
+        ` invariant_problem_rows=${invariantSummary.problematic_rows}` +
+        ` started_at=${row.started_at}`
 
     if (dryRun) {
       closedRuns += 1
+      if (eodAbandon) abandonedEod += 1
       statusBreakdown[nextStatus] += 1
       continue
+    }
+
+    if (eodAbandon) {
+      const { finalized: nFinalized, errors: eodErrors } = await forceFinalizeAllUnfinalizedForRun(db, row.run_id)
+      abandonedEod += 1
+      if (eodErrors.length > 0) {
+        eodErrors.forEach((e) => pushError(errors, `${row.run_id}:${e}`))
+      }
+      log.info('run_reconciliation', 'Run abandoned past 23:59 same day; force-finalized lender_dataset_runs', {
+        runId: row.run_id,
+        context: { started_at: row.started_at, finalized_lender_datasets: nFinalized },
+      })
     }
 
     try {
@@ -326,6 +411,7 @@ export async function closeStaleRunningRuns(
     stale_minutes: staleMinutes,
     scanned_runs: (rows.results ?? []).length,
     closed_runs: closedRuns,
+    abandoned_eod: abandonedEod,
     status_breakdown: statusBreakdown,
     errors,
     dry_run: dryRun,
@@ -398,10 +484,9 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
       if (updated) {
         forceClosedRows += 1
         log.info('run_reconciliation', 'Stale unfinalized lender_dataset force-closed', {
-          run_id: row.run_id,
-          lender_code: row.lender_code,
-          dataset: row.dataset_kind,
-          updated_at_cutoff: cutoff,
+          runId: row.run_id,
+          lenderCode: row.lender_code,
+          context: { dataset: row.dataset_kind, updated_at_cutoff: cutoff },
         })
       }
     } catch (markError) {
