@@ -87,6 +87,39 @@ const TABLE_KEY_COLUMNS: Record<TableName, string[]> = {
 
 export const adminDbRoutes = new Hono<AppContext>()
 
+const SAFE_TABLE_NAME_RE = /^[a-zA-Z0-9_]+$/
+
+/** GET /admin/db/audit - full table list with row counts (all user tables from sqlite_master). Read-only. */
+adminDbRoutes.get('/db/audit', async (c) => {
+  const db = c.env.DB
+  const list = await db
+    .prepare(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table'
+         AND name NOT LIKE 'sqlite_%'
+         AND name NOT LIKE '_cf_%'
+       ORDER BY name ASC`,
+    )
+    .all<{ name: string }>()
+  const names = (list.results ?? []).map((r) => String(r.name || '').trim()).filter(Boolean)
+  const tables: { name: string; row_count: number }[] = []
+  for (const name of names) {
+    if (!SAFE_TABLE_NAME_RE.test(name)) continue
+    try {
+      const r = await db.prepare(`SELECT COUNT(*) AS n FROM ${name}`).first<{ n: number }>()
+      tables.push({ name, row_count: r?.n ?? 0 })
+    } catch {
+      tables.push({ name, row_count: -1 })
+    }
+  }
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode ?? null,
+    generated_at: new Date().toISOString(),
+    tables,
+  })
+})
+
 /** GET /admin/db/tables - list allowlisted tables with optional row counts */
 adminDbRoutes.get('/db/tables', async (c) => {
   const db = c.env.DB
