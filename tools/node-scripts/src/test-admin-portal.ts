@@ -16,7 +16,7 @@ const ADMIN_BASE = `${ORIGIN}/admin`;
 const ADMIN_API_BASE = `${ORIGIN}/api/home-loan-rates/admin`;
 const CLOUDFLARE_INSIGHTS_BEACON = 'https://static.cloudflareinsights.com/beacon.min.js';
 
-const PAGE_PATHS = ['dashboard', 'status', 'database', 'clear', 'config', 'runs', 'logs'];
+const PAGE_PATHS = ['dashboard', 'status', 'integrity', 'database', 'exports', 'clear', 'config', 'runs', 'logs'];
 
 function asPathname(value: string): string {
   return new URL(value).pathname;
@@ -192,7 +192,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
       const navTexts = await page.$$eval('main.admin-dash .admin-nav-card-title', (nodes: HTMLElement[]) =>
         nodes.map((n) => (n.textContent || '').trim()),
       );
-      const required = ['Status', 'Database', 'Clear data', 'Configuration', 'Runs', 'Logs'];
+      const required = ['Status', 'Data integrity', 'Database', 'Clear data', 'Configuration', 'Runs', 'Logs'];
       const missing = required.filter((v) => !navTexts.includes(v));
       if (missing.length) throw new Error(`missing cards: ${missing.join(', ')}`);
     });
@@ -268,6 +268,24 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
       await page.waitForFunction(() => {
         const txt = (document.getElementById('live-meta')?.textContent || '').trim();
         return txt.includes('Live updates every') && !/^realtime unavailable/i.test(txt);
+      }, null, { timeout: 25000 });
+    });
+
+    await runStep('exports page loads without error', async () => {
+      await page.goto(`${ADMIN_BASE}/exports`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForFunction(() => {
+        const summary = (document.getElementById('database-dump-summary')?.textContent || '').trim();
+        const msg = (document.getElementById('exports-msg-copy')?.textContent || '').trim();
+        return (summary.length > 0 || /loading|no jobs|recent jobs/i.test(summary)) && !/error|failed/i.test(msg);
+      }, null, { timeout: 25000 });
+    });
+
+    await runStep('data integrity page loads without error', async () => {
+      await page.goto(`${ADMIN_BASE}/integrity`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForFunction(() => {
+        const status = (document.getElementById('status-line')?.textContent || '').trim();
+        const traffic = (document.getElementById('traffic-status')?.textContent || '').trim();
+        return (status.length >= 0 || traffic.length > 0) && !/^error:/i.test(status);
       }, null, { timeout: 25000 });
     });
 

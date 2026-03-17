@@ -87,4 +87,29 @@
         fetchAdmin: fetchAdmin,
         apiBase: function () { return API_BASE; },
     };
+
+    function injectAdminThemeToggle() {
+        if (!document.body || !document.body.classList.contains('ar-admin')) return;
+        var inner = document.querySelector('.ar-admin .site-header-inner');
+        if (!inner || inner.querySelector('[data-theme-toggle]')) return;
+        var actions = document.createElement('div');
+        actions.className = 'site-header-actions';
+        actions.setAttribute('aria-label', 'Page actions');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'site-action-btn';
+        btn.setAttribute('data-theme-toggle', '');
+        btn.setAttribute('aria-label', 'Theme');
+        actions.appendChild(btn);
+        inner.appendChild(actions);
+        if (window.ARTheme && typeof window.ARTheme.bindToggle === 'function') {
+            window.ARTheme.bindToggle(btn);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', injectAdminThemeToggle);
+    } else {
+        injectAdminThemeToggle();
+    }
 })();

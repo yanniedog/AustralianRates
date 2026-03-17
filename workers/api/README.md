@@ -36,6 +36,7 @@ Admin (Bearer token or Cloudflare Access JWT):
 4. Apply migrations:
    - `wrangler d1 migrations apply australianrates_api --local`
    - `wrangler d1 migrations apply australianrates_api --remote`
+   - Admin Exports (monthly jobs) need 0028; Data integrity audit history needs 0029. The API tolerates missing tables/columns but applying all migrations is recommended.
 5. Set secret:
    - `wrangler secret put ADMIN_API_TOKEN`
 6. Optional Access vars in `wrangler.toml`:

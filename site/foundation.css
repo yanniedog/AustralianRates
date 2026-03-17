@@ -311,7 +311,7 @@ summary {
 }
 
 .skip-link:focus {
-    top: 14px;
+    top: max(14px, env(safe-area-inset-top, 0px));
 }
 
 .bg-layer {

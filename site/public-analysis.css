@@ -707,6 +707,11 @@
 }
 
 @media (max-width: 760px) {
+    .chart-block,
+    .chart-figure {
+        min-width: 0;
+    }
+
     .terminal-bottom-tabs {
         flex-direction: column;
         align-items: stretch;
@@ -750,5 +755,28 @@
     .chart-spotlight-card {
         min-height: 44px;
         padding: 14px;
+    }
+}
+
+@media (max-width: 420px) {
+    .chart-toolbar {
+        padding: 12px;
+    }
+
+    .chart-footer {
+        padding: 10px 12px;
+        gap: 10px 14px;
+    }
+
+    .terminal-chart-surface,
+    .terminal-chart-output,
+    #chart-output,
+    #chart-detail-output {
+        min-height: 260px;
+    }
+
+    #pivot-output {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 }

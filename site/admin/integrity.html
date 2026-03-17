@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Data integrity | Admin | AustralianRates</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
@@ -13,23 +13,23 @@
     <script src="../theme.js?v=7ecd7b4"></script>
     <style>
         .integrity-traffic { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
-        .integrity-light { width: 48px; height: 48px; border-radius: 50%; border: 3px solid var(--ar-border, #333); }
-        .integrity-light.green { background: #22c55e; box-shadow: 0 0 12px #22c55e; }
-        .integrity-light.amber { background: #eab308; box-shadow: 0 0 12px #eab308; }
-        .integrity-light.red { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
-        .integrity-light.none { background: #64748b; }
+        .integrity-light { width: 48px; height: 48px; border-radius: 50%; border: 3px solid var(--ar-line-strong); }
+        .integrity-light.green { background: var(--ar-positive); box-shadow: 0 0 12px var(--ar-positive); }
+        .integrity-light.amber { background: var(--ar-warning); box-shadow: 0 0 12px var(--ar-warning); }
+        .integrity-light.red { background: var(--ar-danger); box-shadow: 0 0 12px var(--ar-danger); }
+        .integrity-light.none { background: var(--ar-text-muted); }
         .integrity-status-text { font-weight: 600; font-size: 1.1rem; }
         .integrity-summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
-        .integrity-summary-cell { padding: 0.5rem; background: var(--ar-bg-secondary, #1e293b); border-radius: 6px; }
-        .integrity-summary-cell .label { font-size: 0.85rem; color: var(--ar-muted, #94a3b8); }
+        .integrity-summary-cell { padding: 0.5rem; background: var(--ar-surface-2); border-radius: 6px; }
+        .integrity-summary-cell .label { font-size: 0.85rem; color: var(--ar-text-muted); }
         .integrity-summary-cell .value { font-weight: 600; }
         .integrity-findings table { width: 100%; border-collapse: collapse; }
-        .integrity-findings th, .integrity-findings td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--ar-border, #334155); }
-        .integrity-findings .pass { color: #22c55e; }
-        .integrity-findings .fail { color: #ef4444; }
+        .integrity-findings th, .integrity-findings td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--ar-line); }
+        .integrity-findings .pass { color: var(--ar-positive); }
+        .integrity-findings .fail { color: var(--ar-danger); }
         .integrity-history { margin-top: 1.5rem; }
-        .integrity-history li { padding: 0.35rem 0; border-bottom: 1px solid var(--ar-border, #334155); }
-        .integrity-stored-warning { margin: 0.75rem 0; padding: 0.75rem; border-radius: 6px; background: var(--ar-bg-secondary, #1e293b); color: var(--ar-muted, #94a3b8); display: none; }
+        .integrity-history li { padding: 0.35rem 0; border-bottom: 1px solid var(--ar-line); }
+        .integrity-stored-warning { margin: 0.75rem 0; padding: 0.75rem; border-radius: 6px; background: var(--ar-surface-2); color: var(--ar-text-muted); display: none; }
         .integrity-stored-warning.show { display: block; color: #eab308; }
     </style>
 </head>
