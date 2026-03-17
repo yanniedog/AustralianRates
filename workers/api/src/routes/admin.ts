@@ -18,6 +18,8 @@ import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
+import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
+import { finalizePresenceForRun } from '../db/presence-finalize'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
@@ -683,6 +685,58 @@ adminRoutes.post('/runs/reconcile', async (c) => {
     auth_mode: c.get('adminAuthState')?.mode || null,
     result,
   })
+})
+
+/** Force-finalize a stuck lender_dataset_run (e.g. when detail processing is incomplete but run should be closed). Body: { run_id, lender_code, dataset }. */
+adminRoutes.post('/runs/lender-dataset/force-finalize', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const runId = String(body.run_id ?? body.runId ?? '').trim()
+  const lenderCode = String(body.lender_code ?? body.lenderCode ?? '').trim().toLowerCase()
+  const datasetRaw = String(body.dataset ?? '').trim().toLowerCase()
+  const dataset: DatasetKind | null =
+    datasetRaw === 'home_loans' || datasetRaw === 'savings' || datasetRaw === 'term_deposits' ? datasetRaw : null
+  if (!runId || !lenderCode || !dataset) {
+    return jsonError(c, 400, 'BAD_REQUEST', 'run_id, lender_code, and dataset (home_loans|savings|term_deposits) required', {
+      run_id: runId || null,
+      lender_code: lenderCode || null,
+      dataset: dataset ?? (datasetRaw || null),
+    })
+  }
+  const run = await getLenderDatasetRun(c.env.DB, { runId, lenderCode, dataset })
+  if (!run) {
+    return jsonError(c, 404, 'RUN_NOT_FOUND', 'Lender dataset run not found', { run_id: runId, lender_code: lenderCode, dataset })
+  }
+  if (run.finalized_at) {
+    return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, already_finalized: true })
+  }
+  try {
+    if (Number(run.expected_detail_count ?? 0) > 0) {
+      await finalizePresenceForRun(c.env.DB, {
+        runId,
+        lenderCode,
+        dataset,
+        bankName: run.bank_name,
+        collectionDate: run.collection_date,
+      })
+    }
+    const marked = await tryMarkLenderDatasetFinalized(c.env.DB, { runId, lenderCode, dataset })
+    if (!marked) {
+      return jsonError(c, 409, 'CONCURRENT_UPDATE', 'Run was finalized by another request')
+    }
+    log.info('admin', 'lender_dataset_force_finalized', {
+      runId,
+      lenderCode,
+      context: `dataset=${dataset} expected=${run.expected_detail_count} completed=${run.completed_detail_count} failed=${run.failed_detail_count}`,
+    })
+    return c.json({ ok: true, auth_mode: c.get('adminAuthState')?.mode || null, finalized: true })
+  } catch (error) {
+    log.warn('admin', 'lender_dataset_force_finalize_failed', {
+      runId,
+      lenderCode,
+      context: `dataset=${dataset} error=${(error as Error)?.message ?? 'unknown'}`,
+    })
+    return jsonError(c, 500, 'FINALIZE_FAILED', (error as Error)?.message ?? 'Force finalize failed', {})
+  }
 })
 
 adminRoutes.post('/runs/repair-lineage', async (c) => {

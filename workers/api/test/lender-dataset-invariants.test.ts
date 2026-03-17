@@ -57,6 +57,20 @@ describe('lender dataset invariants', () => {
     expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({ ready: true, reason: null })
   })
 
+  it('allows finalization when exactly one detail is missing but at least one completed (e.g. one stuck message)', () => {
+    const snapshot = {
+      expected_detail_count: 5,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 170,
+      written_row_count: 170,
+      detail_fetch_event_count: 4,
+      lineage_error_count: 0,
+      completed_detail_count: 4,
+      failed_detail_count: 0,
+    }
+    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({ ready: true, reason: null })
+  })
+
   it('blocks finalization when completed share is below threshold despite some success', () => {
     const snapshot = {
       expected_detail_count: 10,

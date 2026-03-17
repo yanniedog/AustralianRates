@@ -143,6 +143,10 @@ export function isLenderDatasetReadyForFinalization(
     return { ready: false, reason: 'detail_fetch_events_missing' }
   }
   if (processedDetails < expectedDetails) {
+    const missing = expectedDetails - processedDetails
+    if (missing === 1 && completedDetails >= 1) {
+      return { ready: true, reason: null }
+    }
     return { ready: false, reason: 'detail_processing_incomplete' }
   }
   if (failedDetails > 0) {

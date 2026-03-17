@@ -161,6 +161,12 @@ export async function runLenderUniverseAudit(
       await setAppConfig(env.DB, LENDER_UNIVERSE_REPORT_KEY, JSON.stringify(report))
     }
 
+    const missingWithoutEndpoint = rows.filter(
+      (row) => row.status === 'missing_from_register' && row.configured_endpoint == null,
+    )
+    const shouldError =
+      hasEndpointDrift || missingWithoutEndpoint.length > 0
+
     if (report.ok) {
       log.info('scheduler', 'lender_universe_audit_ok', {
         context: `register_source=${fetched.sourceUrl} configured=${TARGET_LENDERS.length}` +
@@ -168,13 +174,21 @@ export async function runLenderUniverseAudit(
             ? ` missing_but_configured=${missingWithConfiguredEndpoint.length}`
             : ''),
       })
-    } else {
+    } else if (shouldError) {
       log.error('scheduler', 'lender_universe_audit_detected_drift', {
         code: 'lender_universe_drift',
         context: JSON.stringify({
           register_source: fetched.sourceUrl,
           totals: report.totals,
           sample: report.rows.filter((row) => row.status !== 'ok').slice(0, 5),
+        }),
+      })
+    } else {
+      log.info('scheduler', 'lender_universe_audit_missing_but_configured', {
+        context: JSON.stringify({
+          register_source: fetched.sourceUrl,
+          missing_but_configured: missingWithConfiguredEndpoint.length,
+          sample: missingWithConfiguredEndpoint.slice(0, 5).map((r) => r.lender_code),
         }),
       })
     }

@@ -118,6 +118,12 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Read DB or analytics table is missing columns (e.g. security_purpose). Apply migrations on the read DB or use a single DB; change endpoint will use legacy path until fixed.',
     links: ['/admin/database.html', '/admin/logs.html'],
   },
+  cdr_audit_detected_gaps: {
+    code: 'cdr_audit_detected_gaps',
+    title: 'CDR audit detected gaps',
+    action: 'Review CDR pipeline audit results: missing raw objects, fetch_event links, series_key, or presence tracking. Use admin CDR repair and coverage-gap report.',
+    links: ['/admin/logs.html', '/admin/status.html', '/admin/runs.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
@@ -138,6 +144,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('run_lifecycle_reconciliation_stalled')) return 'run_lifecycle_reconciliation_stalled'
   if (normalized.includes('analytics_change_query_failed')) return 'analytics_change_query_failed'
   if (normalized.includes('analytics_change_query_schema_mismatch')) return 'analytics_change_query_schema_mismatch'
+  if (normalized.includes('cdr_audit_detected_gaps')) return 'cdr_audit_detected_gaps'
   return DEFAULT_ISSUE.code
 }
 
