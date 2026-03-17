@@ -1,4 +1,5 @@
 import {
+  DAILY_BACKUP_CRON_EXPRESSION,
   DAILY_SCHEDULE_CRON_EXPRESSION,
   INTEGRITY_AUDIT_CRON_EXPRESSION,
   MONTHLY_EXPORT_CRON_EXPRESSION,
@@ -13,11 +14,13 @@ import { refreshChartPivotCache } from './chart-cache-refresh'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
 import { dispatchReplayQueue } from './replay-queue'
+import { runDailyBackup } from './daily-backup'
 import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
+import { getMelbourneNowParts } from '../utils/time'
 
 type CronEvent = ScheduledController & { cron?: string }
-export type ScheduledTask = 'daily' | 'hourly_wayback' | 'site_health' | 'monthly_export' | 'integrity_audit'
+export type ScheduledTask = 'daily' | 'hourly_wayback' | 'site_health' | 'monthly_export' | 'integrity_audit' | 'daily_backup'
 
 export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   const normalizedCron = String(cron || '').trim()
@@ -32,6 +35,9 @@ export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   }
   if (normalizedCron === INTEGRITY_AUDIT_CRON_EXPRESSION) {
     return ['integrity_audit']
+  }
+  if (normalizedCron === DAILY_BACKUP_CRON_EXPRESSION) {
+    return ['daily_backup']
   }
   return []
 }
@@ -111,6 +117,30 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       reason: monthlyResult.reason,
       job_id: monthlyResult.job_id,
       month_iso: monthlyResult.month_iso,
+    }
+  }
+
+  if (tasks.length === 1 && tasks[0] === 'daily_backup') {
+    const melbourneParts = getMelbourneNowParts(
+      new Date(event.scheduledTime ?? Date.now()),
+      env.MELBOURNE_TIMEZONE || 'Australia/Melbourne',
+    )
+    const d = new Date(melbourneParts.date + 'T12:00:00.000Z')
+    d.setUTCDate(d.getUTCDate() - 1)
+    const backupDate = d.toISOString().slice(0, 10)
+    log.info('scheduler', `Dispatching daily backup cron (${cron})`, {
+      context: `scheduled_time=${scheduledIso} backup_date=${backupDate}`,
+    })
+    const backupResult = await runDailyBackup(env, backupDate)
+    return {
+      replay_dispatch: replayDispatch,
+      ok: backupResult.ok,
+      skipped: false,
+      kind: 'daily_backup',
+      backup_date: backupDate,
+      r2_key: backupResult.r2_key,
+      byte_size: backupResult.byte_size,
+      error: backupResult.error,
     }
   }
 

@@ -23,6 +23,7 @@ import { finalizePresenceForRun } from '../db/presence-finalize'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
 import { adminDbRoutes } from './admin-db'
+import { adminBackupRoutes } from './admin-backups'
 import { adminDownloadRoutes } from './admin-downloads'
 import { adminHardeningRoutes } from './admin-hardening'
 import { adminHealthRoutes } from './admin-health'
@@ -94,6 +95,7 @@ adminRoutes.get('/auth-check', async (c) => {
 adminRoutes.route('/', adminConfigRoutes)
 adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminDownloadRoutes)
+adminRoutes.route('/', adminBackupRoutes)
 adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)

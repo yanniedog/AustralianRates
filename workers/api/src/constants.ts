@@ -22,6 +22,8 @@ export const SITE_HEALTH_CRON_EXPRESSION = '*/15 * * * *'
 export const MONTHLY_EXPORT_CRON_EXPRESSION = '59 23 * * *'
 /** 04:00 UTC daily; data integrity audit for admin UI. */
 export const INTEGRITY_AUDIT_CRON_EXPRESSION = '0 4 * * *'
+/** 09:00 UTC daily; daily DB backup (one day of data) for instant download and reconstruction. */
+export const DAILY_BACKUP_CRON_EXPRESSION = '0 9 * * *'
 export const SCHEDULE_CRON_EXPRESSION = DAILY_SCHEDULE_CRON_EXPRESSION
 // Hourly cron should keep attempting the active Melbourne collection date until coverage is complete.
 export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 0

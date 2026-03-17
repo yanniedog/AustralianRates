@@ -67,8 +67,8 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Rate check every 6 hours; wayback/site health every 15 min; monthly DB export 23:59 last day of month; data integrity audit 04:00 UTC daily.
-crons = ["0 */6 * * *", "*/15 * * * *", "59 23 * * *", "0 4 * * *"]
+# Rate check every 6 hours; wayback/site health every 15 min; monthly DB export 23:59 last day of month; data integrity audit 04:00 UTC daily; daily backup 09:00 UTC.
+crons = ["0 */6 * * *", "*/15 * * * *", "59 23 * * *", "0 4 * * *", "0 9 * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
