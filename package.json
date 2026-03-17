@@ -24,6 +24,7 @@
     "test:site": "node test-homepage.js && node diagnose-api.js",
     "audit:visual": "node visual-audit.js",
     "diagnose:api": "node diagnose-api.js",
+    "test:logs-api": "node test-logs-api.js",
     "verify:prod-hosting": "node scripts/verify-production-hosting.mjs",
     "fix:cloudflare-dns-tls": "node scripts/fix-cloudflare-dns-tls.js",
     "sync:hard-limits": "node scripts/sync-hard-limits.mjs",

@@ -116,6 +116,18 @@ See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and 
 - `npm run test:homepage` runs Playwright E2E tests against the **production** URL and requires network access.
 - Playwright needs Chromium installed (`npx playwright install --with-deps chromium`).
 
+### Debugging and production logfiles
+
+When debugging code anywhere on the site (front end, API worker, archive worker, or Cloudflare), **try to access the production logfiles** to gather real errors, warnings, and context. Use the logs API with credentials from the repo root `.env`:
+
+- **Endpoint:** `GET https://www.australianrates.com/api/home-loan-rates/admin/logs/system`
+- **Auth:** `Authorization: Bearer <ADMIN_API_TOKEN>` (set `ADMIN_API_TOKEN` in repo root `.env`; see `.env.example`).
+- **Query params:** `format=jsonl` or `format=text`, `limit=1000` (max 10000), `level=error` or `level=warn`, `source=...`, `code=...`, `offset=...`.
+- **Stats:** `GET .../admin/logs/system/stats` (same auth) for row count and latest timestamp.
+- **Actionable issues:** `GET .../admin/logs/system/actionable` (same auth) for grouped operational issues.
+
+Ensure `.env` contains `ADMIN_API_TOKEN` (or `ADMIN_API_TOKENS`) so that scripts and agents can fetch logs. If a variable is missing, add it (see `.env.example` for names and comments).
+
 ### Gotchas
 
 - The archive worker uses `vitest.config.mts` with `@cloudflare/vitest-pool-workers`, while the API worker uses plain vitest with no config file (defaults).

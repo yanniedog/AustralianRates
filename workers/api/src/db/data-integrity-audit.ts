@@ -51,20 +51,6 @@ export async function runDataIntegrityAudit(
   db: D1Database,
   timezone = 'Australia/Melbourne',
 ): Promise<IntegrityAuditResult> {
-  // #region agent log
-  fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
-    body: JSON.stringify({
-      sessionId: '6fa854',
-      location: 'data-integrity-audit.ts:runDataIntegrityAudit:entry',
-      message: 'runDataIntegrityAudit entered',
-      data: { timezone },
-      timestamp: Date.now(),
-      hypothesisId: 'H2',
-    }),
-  }).catch(() => {})
-  // #endregion
   const startedAt = Date.now()
   const checkedAt = new Date().toISOString()
   const findings: IntegrityFinding[] = []
@@ -72,20 +58,6 @@ export async function runDataIntegrityAudit(
   let integrity: Awaited<ReturnType<typeof runIntegrityChecks>>
   try {
     integrity = await runIntegrityChecks(db, timezone, { includeAnomalyProbes: true })
-    // #region agent log
-    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
-      body: JSON.stringify({
-        sessionId: '6fa854',
-        location: 'data-integrity-audit.ts:after-runIntegrityChecks',
-        message: 'runIntegrityChecks completed',
-        data: { checksCount: integrity.checks?.length ?? 0 },
-        timestamp: Date.now(),
-        hypothesisId: 'H4',
-      }),
-    }).catch(() => {})
-    // #endregion
   } catch (e) {
     findings.push({
       category: 'erroneous',
