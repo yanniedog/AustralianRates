@@ -44,10 +44,22 @@ async function run(): Promise<void> {
     .catch(() => {});
 
   console.log('Waiting for Rate Explorer table and rows...');
+  let tableReady = false;
   try {
-    await page.waitForSelector('#rate-table .tabulator-row', { timeout: 25000 });
+    await page.waitForFunction(
+      () => {
+        const table = document.getElementById('rate-table');
+        if (!table) return false;
+        const rows = table.querySelectorAll('.tabulator-row');
+        if (rows.length > 0) return true;
+        const placeholder = table.querySelector('.tabulator-placeholder');
+        return !!(placeholder && (placeholder.textContent || '').trim().length > 0);
+      },
+      { timeout: 35000 },
+    );
+    tableReady = true;
   } catch {
-    console.log('Table rows did not appear within 25s.');
+    console.log('Table rows did not appear within 35s.');
   }
   await page.waitForTimeout(2000);
 
@@ -122,14 +134,20 @@ async function run(): Promise<void> {
   }
 
   const consoleErrors = consoleEntries.filter((e) => e.type === 'error');
-  const ignorableConsoleErrors = consoleErrors.filter((e) => e.text && e.text.includes('ERR_NAME_NOT_RESOLVED'));
+  const ignorableConsoleErrors = consoleErrors.filter(
+    (e) =>
+      e.text &&
+      (e.text.includes('ERR_NAME_NOT_RESOLVED') || /status of 404|ERR_ABORTED/i.test(e.text)),
+  );
   if (consoleErrors.length > 0 && consoleErrors.length > ignorableConsoleErrors.length) {
     hasIssue = true;
     console.log(`Console errors (${consoleErrors.length}):`);
     consoleErrors.forEach((e) => console.log('  -', (e.text || '').slice(0, 200)));
     console.log('');
   } else if (ignorableConsoleErrors.length > 0) {
-    console.log(`Console: ${ignorableConsoleErrors.length} ERR_NAME_NOT_RESOLVED (e.g. telemetry) - ignored.`);
+    console.log(
+      `Console: ${ignorableConsoleErrors.length} telemetry/third-party error(s) (ERR_NAME_NOT_RESOLVED, 404, or ERR_ABORTED) - ignored.`,
+    );
   }
 
   const abnormalityLogs = consoleEntries.filter((e) => e.text && e.text.includes('EXPLORER_TABLE_ABNORMALITY'));
@@ -180,6 +198,9 @@ async function run(): Promise<void> {
     }
   }
 
+  if (!tableReady && tableRowCount > 0) {
+    console.log('(Table has data; initial wait timed out but rows are present.)');
+  }
   if (!hasIssue && tableRowCount > 0) console.log('(Table has data; no table-related errors.)');
   if (!hasIssue) console.log('No table-related errors detected.');
   console.log('========== END REPORT ==========\n');

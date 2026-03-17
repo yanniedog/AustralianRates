@@ -296,6 +296,8 @@
             });
         })().catch(function (error) {
             chartState.fallbackReason = '';
+            var chartOutputStillPresent = typeof document !== 'undefined' && document.getElementById('chart-output');
+            if (!chartOutputStillPresent) return;
             // #region agent log
             var isTimeout = (network && typeof network.isTimeoutError === 'function' && network.isTimeoutError(error)) || (error && error.code === 'timeout');
             var logPayload = { sessionId: 'd301fc', location: 'ar-charts.js:drawChart', message: 'Chart load failed', data: { code: error && error.code, timeoutMs: error && error.timeoutMs, timedOut: !!isTimeout, userMessage: describeError(error, chartErrorMessage()) }, timestamp: Date.now(), hypothesisId: 'H1' };
