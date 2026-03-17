@@ -82,9 +82,14 @@ adminLogRoutes.get('/logs/system', async (c) => {
 
 /** POST /admin/logs/system/wipe - delete all rows from global_log */
 adminLogRoutes.post('/logs/system/wipe', async (c) => {
-  const r = await c.env.DB.prepare('DELETE FROM global_log').run()
-  const deleted = r.meta.changes ?? 0
-  return c.json({ ok: true, deleted })
+  try {
+    const r = await c.env.DB.prepare('DELETE FROM global_log').run()
+    const deleted = r.meta.changes ?? 0
+    return c.json({ ok: true, deleted })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return jsonError(c, 500, 'WIPE_FAILED', 'Failed to wipe system log.', { message })
+  }
 })
 
 /** GET /admin/logs/system/stats - system log row count and latest ts (for UI) */

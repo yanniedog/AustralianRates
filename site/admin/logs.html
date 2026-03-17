@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -98,15 +98,29 @@
 
             function wipeSystemLog() {
                 if (!confirm('Delete all entries from the system log (global_log)? This cannot be undone.')) return;
-                portal.fetchAdmin('/logs/system/wipe', { method: 'POST' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) {
-                        if (d.ok) {
-                            showMsg('System log wiped. ' + (d.deleted || 0) + ' entries deleted.', false);
+                portal.fetchAdmin('/logs/system/wipe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                })
+                    .then(function (r) {
+                        return r.text().then(function (text) {
+                            var d = null;
+                            try { d = text ? JSON.parse(text) : null; } catch (e) { /* ignore */ }
+                            return { ok: r.ok, status: r.status, statusText: r.statusText, data: d, raw: text };
+                        });
+                    })
+                    .then(function (out) {
+                        if (out.ok && out.data && out.data.ok) {
+                            showMsg('System log wiped. ' + (out.data.deleted || 0) + ' entries deleted.', false);
                             loadSystemStats();
                             if (typeof window.refreshSystemLogCount === 'function') window.refreshSystemLogCount();
+                        } else if (out.data && out.data.error && out.data.error.message) {
+                            showMsg(out.data.error.message, true);
+                        } else if (out.status) {
+                            showMsg('Wipe failed: HTTP ' + out.status + (out.statusText ? ' ' + out.statusText : ''), true);
                         } else {
-                            showMsg(d.error && d.error.message ? d.error.message : 'Wipe failed', true);
+                            showMsg('Wipe failed', true);
                         }
                     })
                     .catch(function (e) {
