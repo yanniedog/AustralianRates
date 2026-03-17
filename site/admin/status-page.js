@@ -81,6 +81,37 @@
         return 'green';
     }
 
+    function severityFromLenderUniverse(report) {
+        if (!report) return 'green';
+        if (report.error) return 'red';
+        var missing = Number(report.totals && report.totals.missing_from_register) || 0;
+        var drift = Number(report.totals && report.totals.endpoint_drift) || 0;
+        var total = missing + drift;
+        if (total >= 3) return 'red';
+        if (total >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromReplayQueue(rows) {
+        var n = Array.isArray(rows) ? rows.length : 0;
+        if (n === 0) return 'green';
+        if (n >= 10) return 'red';
+        if (n >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromProbePayloads(events) {
+        if (!Array.isArray(events) || events.length === 0) return 'green';
+        var failed = 0;
+        for (var i = 0; i < events.length; i++) {
+            var s = events[i].httpStatus;
+            if (s == null || s < 200 || s >= 300) failed++;
+        }
+        if (failed >= 5) return 'red';
+        if (failed >= 1) return 'yellow';
+        return 'green';
+    }
+
     function applyCardSeverity(cardEl, severity) {
         if (!cardEl || !cardEl.classList) return;
         cardEl.classList.remove('severity-green', 'severity-yellow', 'severity-red');
@@ -262,12 +293,15 @@
     }
 
     function renderProbePayloads(events) {
-        if (!Array.isArray(events) || events.length === 0) {
+        var list = Array.isArray(events) ? events : [];
+        var card = probePayloadsEl && probePayloadsEl.closest ? probePayloadsEl.closest('.card') : null;
+        applyCardSeverity(card, severityFromProbePayloads(list));
+        if (!list.length) {
             probePayloadsEl.innerHTML = '<div>No recent probe payloads captured.</div>';
             return;
         }
         probePayloadsEl.innerHTML = '<table><thead><tr><th>Fetched</th><th>Source</th><th>Dataset</th><th>Status</th><th>Payload</th></tr></thead><tbody>'
-            + events.map(function (event) {
+            + list.map(function (event) {
                 return '<tr>'
                     + '<td class="mono">' + esc(event.fetchedAt || '') + '</td>'
                     + '<td><span class="mono">' + esc(event.sourceType || '') + '</span><br>' + esc(event.sourceUrl || '') + '</td>'
@@ -407,12 +441,14 @@
         : null;
 
     function renderLenderUniverse(report) {
+        var card = lenderUniverseOverviewEl && lenderUniverseOverviewEl.closest ? lenderUniverseOverviewEl.closest('.card') : null;
         if (!report) {
             lenderUniverseOverviewEl.innerHTML = '';
             lenderUniverseWrapEl.innerHTML = '<div>No lender-universe audit report available.</div>';
+            applyCardSeverity(card, 'green');
             return;
         }
-
+        applyCardSeverity(card, severityFromLenderUniverse(report));
         lenderUniverseOverviewEl.innerHTML = '<div class="grid">'
             + cardCell('Register source', '<span class="mono">' + esc(report.register_source_url || 'n/a') + '</span>')
             + cardCell('Configured lenders', esc(String(report.totals && report.totals.configured_lenders || 0)))
@@ -440,6 +476,8 @@
 
     function renderReplayQueue(data) {
         var rows = data && Array.isArray(data.rows) ? data.rows : [];
+        var card = replayQueueWrapEl && replayQueueWrapEl.closest ? replayQueueWrapEl.closest('.card') : null;
+        applyCardSeverity(card, severityFromReplayQueue(rows));
         if (!rows.length) {
             replayQueueWrapEl.innerHTML = '<div>No replay queue rows currently exist.</div>';
             return;
@@ -543,6 +581,8 @@
             renderProbePayloads(data.events || []);
         } catch (err) {
             probePayloadsEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+            var probeCard = probePayloadsEl && probePayloadsEl.closest ? probePayloadsEl.closest('.card') : null;
+            applyCardSeverity(probeCard, 'red');
         }
     }
 
@@ -572,12 +612,14 @@
             } else {
                 renderCoverageGapAudit(report);
             }
+            var gaps = report && report.totals ? (report.totals.gaps || 0) : 0;
+            var errors = report && report.totals ? (report.totals.errors || 0) : 0;
+            var gapSev = severityFromGapCount(gaps, errors);
             if (coverageGapRemediationStatusEl) {
-                var gaps = report && report.totals ? (report.totals.gaps || 0) : 0;
-                var errors = report && report.totals ? (report.totals.errors || 0) : 0;
-                var gapSev = severityFromGapCount(gaps, errors);
                 coverageGapRemediationStatusEl.className = 'admin-status-line severity-' + gapSev;
             }
+            var coverageGapCard = coverageGapOverviewEl && coverageGapOverviewEl.closest ? coverageGapOverviewEl.closest('.card') : null;
+            applyCardSeverity(coverageGapCard, gapSev);
         } catch (err) {
             latestCoverageGapRemediation = null;
             coverageGapOverviewEl.innerHTML = '';
@@ -586,6 +628,8 @@
                 coverageGapRemediationStatusEl.textContent = 'Failed to load automatic coverage-gap remediation status.';
                 coverageGapRemediationStatusEl.className = 'admin-status-line severity-red';
             }
+            var coverageGapCard = coverageGapOverviewEl && coverageGapOverviewEl.closest ? coverageGapOverviewEl.closest('.card') : null;
+            applyCardSeverity(coverageGapCard, 'red');
         }
     }
 
@@ -598,6 +642,8 @@
         } catch (err) {
             lenderUniverseOverviewEl.innerHTML = '';
             lenderUniverseWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+            var lenderCard = lenderUniverseOverviewEl && lenderUniverseOverviewEl.closest ? lenderUniverseOverviewEl.closest('.card') : null;
+            applyCardSeverity(lenderCard, 'red');
         }
     }
 
@@ -609,6 +655,8 @@
             renderReplayQueue(data);
         } catch (err) {
             replayQueueWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+            var replayCard = replayQueueWrapEl && replayQueueWrapEl.closest ? replayQueueWrapEl.closest('.card') : null;
+            applyCardSeverity(replayCard, 'red');
         }
     }
 
