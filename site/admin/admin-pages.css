@@ -71,6 +71,13 @@
     overflow: auto;
 }
 
+.admin-status .integrity-empty {
+    color: var(--ar-text-muted);
+}
+.admin-status .integrity-empty a {
+    color: var(--ar-accent);
+}
+
 .admin-status table,
 .admin-runs table,
 .admin-config table,
@@ -354,6 +361,7 @@
 }
 
 .admin-exports .export-actions input[type="number"],
+.admin-exports .export-actions input[type="date"],
 .admin-exports .export-actions select {
     width: min(100%, 220px);
 }

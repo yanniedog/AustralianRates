@@ -238,14 +238,14 @@ body.ar-legal .legal-hero h1 {
 @media (max-width: 760px) {
     body.ar-public .site-header,
     body.ar-legal .site-header {
-        width: calc(100vw - 18px);
+        width: calc(100vw - 24px);
     }
 
     body.ar-public .site-header-inner,
     body.ar-legal .site-header-inner {
         grid-template-columns: 1fr;
-        gap: 10px;
-        padding: 12px;
+        gap: 12px;
+        padding: 14px 18px;
     }
 
     body.ar-public .site-header-context,
@@ -257,11 +257,12 @@ body.ar-legal .legal-hero h1 {
     body.ar-legal .site-header-actions {
         flex-wrap: nowrap;
         overflow-x: auto;
+        gap: 8px;
     }
 
     body.ar-public .shell-public,
     body.ar-legal .shell {
-        width: calc(100vw - 18px);
-        padding-top: 22px;
+        width: calc(100vw - 24px);
+        padding-top: 24px;
     }
 }

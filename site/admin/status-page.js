@@ -251,7 +251,10 @@
         var integrity = latest && latest.integrity ? latest.integrity : null;
         var checks = integrity && Array.isArray(integrity.checks) ? integrity.checks : [];
         if (!checks.length) {
-            integrityEl.innerHTML = '<div>No integrity checks available.</div>';
+            integrityEl.innerHTML = '<div class="integrity-empty">'
+                + '<p>No integrity checks from the latest health run.</p>'
+                + '<p>Use <strong>Run check now</strong> above to run a health check (includes integrity), or open <a href="integrity.html">Data integrity</a> for the full audit and history.</p>'
+                + '</div>';
             return;
         }
         integrityEl.innerHTML = '<table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>'

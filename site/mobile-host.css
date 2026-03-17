@@ -1,10 +1,39 @@
+/* Mobile host (m.*): header padding */
 html[data-ar-host-variant="mobile"] .site-header-inner {
-    padding-inline: 12px;
+    padding-inline: 14px;
 }
 
+/* Narrow viewport: unified gutter (12px each side), safe areas, spacing */
+@media (max-width: 760px) {
+    .site-header {
+        padding-left: env(safe-area-inset-left, 0);
+        padding-right: env(safe-area-inset-right, 0);
+    }
+
+    .site-header-inner {
+        padding-inline: 14px;
+    }
+
+    .shell,
+    .shell-public,
+    .site-footer {
+        width: calc(100vw - 24px - env(safe-area-inset-left, 0) - env(safe-area-inset-right, 0));
+        padding-left: env(safe-area-inset-left, 0);
+        padding-right: env(safe-area-inset-right, 0);
+    }
+
+    html[data-ar-host-variant="mobile"] .terminal-column-left {
+        top: calc(var(--ar-header-height) + 10px);
+        left: 12px;
+        right: 12px;
+        width: auto;
+    }
+}
+
+/* Mobile host: same width so shell/footer align when on m.* */
 html[data-ar-host-variant="mobile"] .shell,
 html[data-ar-host-variant="mobile"] .site-footer {
-    width: calc(100vw - 16px);
+    width: calc(100vw - 24px);
 }
 
 .site-host-switch,
@@ -12,13 +41,4 @@ html[data-ar-host-variant="mobile"] .site-footer {
     color: var(--ar-text-soft);
     font-size: 0.72rem;
     font-weight: 600;
-}
-
-@media (max-width: 760px) {
-    html[data-ar-host-variant="mobile"] .terminal-column-left {
-        top: calc(var(--ar-header-height) + 6px);
-        left: 8px;
-        right: 8px;
-        width: auto;
-    }
 }

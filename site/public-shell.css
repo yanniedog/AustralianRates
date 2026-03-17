@@ -673,7 +673,8 @@ body.ar-not-found .market-intro-actions {
 @media (max-width: 760px) {
     .site-header-inner {
         grid-template-columns: 1fr;
-        gap: 10px;
+        gap: 12px;
+        padding: 14px 18px;
     }
 
     .site-header-inner > * {
@@ -684,33 +685,43 @@ body.ar-not-found .market-intro-actions {
         display: none;
     }
 
+    .site-header-segment-link {
+        min-height: 44px;
+        padding: 0 14px;
+    }
+
     .site-header-actions {
         justify-self: start;
         width: 100%;
         min-width: 0;
         max-width: 100%;
         flex-wrap: nowrap;
-        padding: 4px;
+        gap: 8px;
+        padding: 6px;
         border: 1px solid var(--ar-line);
         border-radius: 16px;
         background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
         overflow-x: auto;
         overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
     }
 
     .site-action-btn,
     .site-action-btn.icon-link,
     .site-action-btn.icon-btn {
         width: auto;
-        min-width: 0;
+        min-width: 44px;
+        min-height: 44px;
         padding-inline: 12px;
         border-radius: 12px;
+        flex-shrink: 0;
     }
 
     .site-action-help,
     .site-action-menu {
-        width: 36px;
-        min-width: 36px;
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
         padding-inline: 0;
     }
 
@@ -721,7 +732,7 @@ body.ar-not-found .market-intro-actions {
     .shell,
     .shell-public,
     .site-footer {
-        width: calc(100vw - 20px);
+        width: calc(100vw - 24px);
     }
 
     .market-terminal {
@@ -730,11 +741,11 @@ body.ar-not-found .market-intro-actions {
 
     .terminal-column-left {
         position: fixed;
-        top: calc(var(--ar-header-height) + 8px);
-        left: 10px;
-        bottom: 10px;
+        top: calc(var(--ar-header-height) + 10px);
+        left: 12px;
+        bottom: 12px;
         z-index: 100;
-        width: min(320px, calc(100vw - 20px));
+        width: min(320px, calc(100vw - 24px));
         max-height: none;
         padding-right: 0;
         transform: translateX(calc(-100% - 18px));
@@ -751,9 +762,13 @@ body.ar-not-found .market-intro-actions {
         align-items: flex-start;
     }
 
+    .shell-public {
+        padding-top: 24px;
+    }
+
     .site-help-panel,
     .site-menu-panel {
-        inset: auto 10px 10px 10px;
+        inset: auto 12px 12px 12px;
         width: auto;
     }
 

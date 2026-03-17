@@ -5,6 +5,7 @@ import type { E2EResult } from '../pipeline/e2e-alignment'
 import { runSiteHealthChecks } from '../pipeline/site-health'
 import type { AppContext } from '../types'
 import { withNoStore } from '../utils/http'
+import { log } from '../utils/logger'
 
 export const adminHealthRoutes = new Hono<AppContext>()
 
@@ -85,6 +86,10 @@ adminHealthRoutes.get('/health', async (c) => {
 adminHealthRoutes.post('/health/run', async (c) => {
   withNoStore(c)
   const origin = `${new URL(c.req.url).origin}`
+  log.info('admin', 'health_run_started', {
+    code: 'admin_health_run',
+    context: { trigger: 'manual', origin },
+  })
   const result = await runSiteHealthChecks(c.env, {
     triggerSource: 'manual',
     origin,
@@ -106,6 +111,15 @@ adminHealthRoutes.post('/health/run', async (c) => {
     failuresJson: JSON.stringify(result.failures),
   })
 
+  log.info('admin', 'health_run_completed', {
+    code: 'admin_health_run',
+    context: {
+      run_id: result.runId,
+      overall_ok: result.overallOk,
+      duration_ms: result.durationMs,
+      failures: result.failures?.length ?? 0,
+    },
+  })
   return c.json({
     ok: true,
     run: {

@@ -218,6 +218,10 @@ adminRoutes.post('/integrity-audit/run', async (c) => {
     })
   }
 
+  log.info('admin', 'integrity_audit_run_completed', {
+    code: 'admin_integrity_audit_run',
+    context: { run_id: runId, status: result.status, stored, duration_ms: result.duration_ms },
+  })
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,

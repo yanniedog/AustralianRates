@@ -546,7 +546,21 @@
                     });
             });
 
+            function updateForceFinalizeButtonState() {
+                if (!forceFinalizeBtn) return;
+                var runId = String(forceFinalizeRunId && forceFinalizeRunId.value || '').trim();
+                var lenderCode = String(forceFinalizeLenderCode && forceFinalizeLenderCode.value || '').trim().toLowerCase();
+                var dataset = (forceFinalizeDataset && forceFinalizeDataset.value || '').trim();
+                var valid = runId.length > 0 && lenderCode.length > 0 && (dataset === 'home_loans' || dataset === 'savings' || dataset === 'term_deposits');
+                forceFinalizeBtn.disabled = !valid;
+            }
             if (forceFinalizeBtn && forceFinalizeStatus) {
+                updateForceFinalizeButtonState();
+                if (forceFinalizeRunId) forceFinalizeRunId.addEventListener('input', updateForceFinalizeButtonState);
+                if (forceFinalizeRunId) forceFinalizeRunId.addEventListener('change', updateForceFinalizeButtonState);
+                if (forceFinalizeLenderCode) forceFinalizeLenderCode.addEventListener('input', updateForceFinalizeButtonState);
+                if (forceFinalizeLenderCode) forceFinalizeLenderCode.addEventListener('change', updateForceFinalizeButtonState);
+                if (forceFinalizeDataset) forceFinalizeDataset.addEventListener('change', updateForceFinalizeButtonState);
                 forceFinalizeBtn.addEventListener('click', function () {
                     var runId = String(forceFinalizeRunId && forceFinalizeRunId.value || '').trim();
                     var lenderCode = String(forceFinalizeLenderCode && forceFinalizeLenderCode.value || '').trim().toLowerCase();
@@ -579,7 +593,7 @@
                             forceFinalizeStatus.textContent = e && e.message ? e.message : 'Request failed';
                         })
                         .finally(function () {
-                            forceFinalizeBtn.disabled = false;
+                            updateForceFinalizeButtonState();
                         });
                 });
             }

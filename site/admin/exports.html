@@ -25,7 +25,7 @@
         <div class="admin-page-head">
             <p class="eyebrow">Export center</p>
             <h1>Full database dump</h1>
-            <p class="admin-subtitle">Create one single-file SQL dump of the entire D1 database for restore or replacement. A monthly backup (data for that month only) is generated automatically at 23:59 UTC on the last day of each month and appears in the job list below.</p>
+            <p class="admin-subtitle">Create one single-file SQL dump of the entire D1 database for restore or replacement. A monthly backup (data for that month only) is generated automatically at 23:59 UTC on the last day of each month and appears in the job list below. Daily backups (one day of data each) are generated at 09:00 UTC for the previous Melbourne day and appear in the Daily backups section.</p>
         </div>
         <div class="admin-message" id="exports-msg" role="status" aria-live="polite">
             <span class="admin-message-copy" id="exports-msg-copy"></span>
@@ -55,6 +55,18 @@
                     </div>
                 </div>
                 <div class="export-job-list" id="database-dump-jobs"></div>
+            </section>
+            <section class="admin-card">
+                <h2>Daily backups</h2>
+                <p class="hint">One file per day (that day's data only). Generated automatically at 09:00 UTC for the previous Melbourne day. Download and apply in date order to reconstruct a range.</p>
+                <div class="export-actions">
+                    <label for="daily-backup-date">Date (YYYY-MM-DD):</label>
+                    <input type="date" id="daily-backup-date" data-input="daily-backup-date" />
+                    <button type="button" class="secondary" id="daily-backups-create" data-action="create-daily-backup">Create backup for date</button>
+                    <button type="button" class="secondary" id="daily-backups-refresh" data-action="refresh-daily-backups">Refresh list</button>
+                </div>
+                <div class="export-summary" id="daily-backups-summary"></div>
+                <div class="export-job-list" id="daily-backups-list"></div>
             </section>
         </div>
     </main>

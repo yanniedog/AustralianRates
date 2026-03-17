@@ -291,25 +291,26 @@ body.ar-public .market-intro-step:nth-child(3) {
 
     body.ar-public .site-header,
     body.ar-legal .site-header {
-        width: calc(100vw - 18px);
+        width: calc(100vw - 24px);
     }
 
     body.ar-public .site-header-inner,
     body.ar-legal .site-header-inner {
         grid-template-columns: 1fr;
         gap: 12px;
-        padding: 14px;
+        padding: 14px 18px;
     }
 
     body.ar-public .site-header-actions,
     body.ar-legal .site-header-actions {
         justify-self: stretch;
         overflow-x: auto;
+        gap: 8px;
     }
 
     body.ar-public .shell-public,
     body.ar-legal .shell {
-        width: calc(100vw - 18px);
+        width: calc(100vw - 24px);
         padding-top: 24px;
     }
 
@@ -320,7 +321,7 @@ body.ar-public .market-intro-step:nth-child(3) {
     body.ar-public .terminal-panel,
     body.ar-public .terminal-subpanel,
     body.ar-public .terminal-notes {
-        padding: 14px;
+        padding: 16px;
         border-radius: 20px;
     }
 
@@ -338,6 +339,8 @@ body.ar-public .market-intro-step:nth-child(3) {
     body.ar-public .chart-preset {
         flex: 0 0 auto;
         scroll-snap-align: start;
+        min-height: 44px;
+        padding-inline: 14px;
     }
 
     body.ar-public #tab-history {
@@ -358,7 +361,7 @@ body.ar-public .market-intro-step:nth-child(3) {
 
     body.ar-public .terminal-mobile-fold,
     body.ar-public .terminal-context-panel {
-        padding: 14px;
+        padding: 16px;
         border: 1px solid var(--ar-line);
         border-radius: 20px;
         background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
@@ -426,6 +429,6 @@ body.ar-public .market-intro-step:nth-child(3) {
 
     body.ar-public .site-footer,
     body.ar-legal .site-footer {
-        width: calc(100vw - 16px);
+        width: calc(100vw - 24px);
     }
 }

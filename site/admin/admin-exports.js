@@ -244,11 +244,91 @@
         await loadSection();
     }
 
+    var dailyBackupsSection = {
+        dates: [],
+        loaded: false,
+        loading: false,
+        summaryEl: document.getElementById('daily-backups-summary'),
+        listEl: document.getElementById('daily-backups-list'),
+        refreshBtn: document.getElementById('daily-backups-refresh')
+    };
+
+    async function loadDailyBackups() {
+        if (!dailyBackupsSection.listEl) return;
+        dailyBackupsSection.loading = true;
+        if (dailyBackupsSection.summaryEl) dailyBackupsSection.summaryEl.textContent = 'Loading...';
+        try {
+            var payload = await requestJson('/backups/daily?limit=62');
+            dailyBackupsSection.dates = Array.isArray(payload.dates) ? payload.dates : [];
+            dailyBackupsSection.loaded = true;
+            renderDailyBackups();
+        } catch (error) {
+            if (dailyBackupsSection.summaryEl) dailyBackupsSection.summaryEl.textContent = '';
+            dailyBackupsSection.listEl.innerHTML = '<div class="export-empty">Failed to load: ' + (error && error.message ? error.message : 'unknown') + '</div>';
+        } finally {
+            dailyBackupsSection.loading = false;
+        }
+    }
+
+    function renderDailyBackups() {
+        var dates = dailyBackupsSection.dates;
+        var listEl = dailyBackupsSection.listEl;
+        var summaryEl = dailyBackupsSection.summaryEl;
+        if (!listEl) return;
+        if (summaryEl) summaryEl.textContent = dates.length + ' day(s) available.';
+        if (!dates.length) {
+            listEl.innerHTML = '<div class="export-empty">No daily backups yet. They are created automatically at 09:00 UTC for the previous Melbourne day.</div>';
+            return;
+        }
+        var html = '<ul class="export-job-list-inner">';
+        dates.forEach(function (date) {
+            var fileName = 'australianrates-daily-' + date + '.sql.gz';
+            var downloadPath = '/admin/backups/daily/' + encodeURIComponent(date) + '/download';
+            html += '<li class="export-job-item">'
+                + '<span class="export-job-date">' + date + '</span>'
+                + '<button type="button" class="secondary" data-action="download-daily-backup" data-path="' + downloadPath.replace(/"/g, '&quot;') + '" data-file-name="' + fileName.replace(/"/g, '&quot;') + '">Download</button>'
+                + '</li>';
+        });
+        html += '</ul>';
+        listEl.innerHTML = html;
+    }
+
     function handleClick(event) {
         var action;
         var target = event.target;
         if (!target || !target.getAttribute) return;
 
+        if (target.getAttribute('data-action') === 'refresh-daily-backups') {
+            loadDailyBackups().catch(function (error) { showMsg(error && error.message ? error.message : 'Failed to load daily backups.', true); });
+            return;
+        }
+        if (target.getAttribute('data-action') === 'create-daily-backup') {
+            var dateInput = document.getElementById('daily-backup-date');
+            var date = dateInput ? String(dateInput.value || '').trim() : '';
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                showMsg('Pick a date (YYYY-MM-DD) first.', true);
+                return;
+            }
+            requestJson('/backups/daily', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: date })
+            }).then(function (payload) {
+                showMsg('Daily backup created for ' + date + '. ' + (payload.backup && payload.backup.byte_size ? 'Size: ' + Math.round(payload.backup.byte_size / 1024) + ' KB' : ''), false);
+                return loadDailyBackups();
+            }).catch(function (error) {
+                showMsg(error && error.message ? error.message : 'Failed to create daily backup.', true);
+            });
+            return;
+        }
+        if (target.getAttribute('data-action') === 'download-daily-backup') {
+            runtime.downloadFile(target.getAttribute('data-path') || '', target.getAttribute('data-file-name') || '').then(function () {
+                showMsg('Daily backup download started.', false);
+            }).catch(function (error) {
+                showMsg(error && error.message ? error.message : 'Failed to download.', true);
+            });
+            return;
+        }
         if (target.getAttribute('data-create-job') === 'database-dump') {
             createDumpJob().catch(function (error) { showMsg(error && error.message ? error.message : 'Failed to create dump job.', true); });
             return;
@@ -295,5 +375,8 @@
 
     loadSection().catch(function (error) {
         showMsg(error && error.message ? error.message : 'Failed to load dump jobs.', true);
+    });
+    loadDailyBackups().catch(function (error) {
+        showMsg(error && error.message ? error.message : 'Failed to load daily backups.', true);
     });
 })();
