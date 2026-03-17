@@ -556,7 +556,7 @@
                                 '<div id="chart-summary" class="chart-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
                             '</div>',
                         '</div>',
-                        '<details class="terminal-mobile-fold terminal-chart-fold"' + (compactViewport ? '' : ' open') + '>',
+                        '<details class="terminal-mobile-fold terminal-chart-fold">',
                             '<summary class="terminal-more-summary" data-help="Open or close the chart controls for the current slice." data-help-label="Chart controls">' +
                                 panelIcon('chart', 'Chart controls') +
                                 panelHeadingMarkup('h3', 'Chart controls') +
@@ -599,7 +599,13 @@
                         '<p id="chart-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
                         '<p id="chart-status" class="hint">Idle</p>',
                     '</section>',
-                    '<section class="panel terminal-panel terminal-bottom-panel" id="table">',
+                    '<details class="terminal-mobile-fold terminal-table-fold" id="table-details">',
+                        '<summary class="terminal-more-summary" data-help="Expand to see the data table, pivot grid, history, and rate changes." data-help-label="Data table">' +
+                            panelIcon('table', 'Table') +
+                            panelHeadingMarkup('h3', 'Table, pivot, history, changes') +
+                            '<span class="pill">Expand for data</span>' +
+                        '</summary>',
+                        '<section class="panel terminal-panel terminal-bottom-panel" id="table">',
                         '<nav class="terminal-bottom-tabs" role="tablist" aria-label="Data panes">',
                             tabButtonMarkup(WORKSPACE_TABS[0], true),
                             tabButtonMarkup(WORKSPACE_TABS[1], false),
@@ -658,6 +664,7 @@
                             '</div>',
                         '</section>',
                     '</section>',
+                    '</details>',
                 '</section>',
                 '<div id="right-rail-resizer" class="terminal-resizer terminal-resizer-right" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize shortlist panel"></div>',
                 '<aside id="ladder" class="terminal-column terminal-column-right">',

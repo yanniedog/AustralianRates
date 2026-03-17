@@ -277,6 +277,11 @@
             executiveSummary.loadExecutiveSummary();
         }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
+        if (document.body && document.body.classList.contains('ar-public') && charts && typeof charts.drawChart === 'function') {
+            window.setTimeout(function () {
+                charts.drawChart();
+            }, 150);
+        }
         var sourceText = String(source || '');
         if (sourceText.indexOf('pending') >= 0) showStartupRetryPending();
         else if (sourceText.indexOf('failed') >= 0) setFilterLiveStatus('Retry startup', 'is-error');

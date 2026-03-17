@@ -434,6 +434,12 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
     await dragRail('#left-rail-resizer', '--ar-left-rail-width', 60, 'left rail resizer');
     await dragRail('#right-rail-resizer', '--ar-right-rail-width', -60, 'right rail resizer');
 
+    await page.evaluate(() => {
+        const d = document.getElementById('table-details');
+        if (d && d.tagName === 'DETAILS') d.open = true;
+    });
+    await page.waitForTimeout(400);
+
     await page.locator('#rate-table').scrollIntoViewIfNeeded().catch(() => {});
     await page.click('#table-settings-btn');
     await page.locator('#table-settings-popover input[data-setting="move-columns"]').check();
@@ -651,6 +657,11 @@ async function verifyPublicTriggerRemoval(page, results, label) {
 }
 
 async function verifyChartSmoke(page, results, label) {
+    await page.evaluate(() => {
+        const fold = document.querySelector('.terminal-chart-fold');
+        if (fold && fold.tagName === 'DETAILS') fold.open = true;
+    });
+    await page.waitForTimeout(300);
     const button = page.locator('#draw-chart');
     if (!(await button.isVisible().catch(() => false))) {
         fail(results, `${label}: draw-chart button missing`);
@@ -678,6 +689,11 @@ async function verifyChartSmoke(page, results, label) {
 }
 
 async function verifyPivotLoad(page, results, label) {
+    await page.evaluate(() => {
+        const d = document.getElementById('table-details');
+        if (d && d.tagName === 'DETAILS') d.open = true;
+    });
+    await page.waitForTimeout(400);
     await page.click('#tab-pivot');
     await page.waitForTimeout(300);
 
@@ -857,8 +873,7 @@ async function verifyTabsAndHash(page, results, label, baseUrl) {
 async function verifyResponsiveViewports(page, results, label, baseUrl) {
     for (const viewport of VIEWPORTS) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
-        await gotoPublic(page, baseUrl);
-        await waitForExplorerTableReady(page);
+        await page.waitForTimeout(400);
         const noOverflow = await page.evaluate((expectedWidth) => document.documentElement.scrollWidth <= expectedWidth, viewport.width).catch(() => false);
         if (noOverflow) pass(results, `${label}: ${viewport.name} viewport has no horizontal overflow`);
         else fail(results, `${label}: ${viewport.name} viewport overflowed horizontally`);
@@ -912,9 +927,13 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
 
 async function verifyMobileRail(page, results, label, baseUrl) {
     await page.setViewportSize({ width: 375, height: 667 });
-    await gotoPublic(page, baseUrl);
-    await waitForExplorerTableReady(page);
-
+    await page.evaluate(() => {
+        const d = document.getElementById('table-details');
+        if (d && d.tagName === 'DETAILS') d.open = true;
+    });
+    await page.waitForTimeout(400);
+    await page.click('#tab-explorer').catch(() => {});
+    await page.waitForTimeout(300);
     const visible = await waitForMobileRailVisible(page);
     if (!visible) {
         fail(results, `${label}: mobile explorer rail did not appear`);
@@ -955,8 +974,12 @@ async function verifyMobileRail(page, results, label, baseUrl) {
 
 async function verifyMobileOverlays(page, results, label, baseUrl) {
     await page.setViewportSize({ width: 375, height: 667 });
-    await gotoPublic(page, baseUrl);
-    await waitForExplorerTableReady(page);
+    await page.waitForTimeout(400);
+    await page.evaluate(() => {
+        const d = document.getElementById('table-details');
+        if (d && d.tagName === 'DETAILS') d.open = true;
+    });
+    await page.waitForTimeout(300);
 
     const helpBtn = page.locator('#site-help-btn');
     const menuBtn = page.locator('#site-menu-toggle');

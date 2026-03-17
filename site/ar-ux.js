@@ -158,7 +158,14 @@
         if (!hash) return;
         var el = document.getElementById(hash);
         if (!el) return;
-        if (el.tagName === 'DETAILS') el.open = true;
+        if (el.tagName === 'DETAILS') {
+            el.open = true;
+            return;
+        }
+        var tableDetails = document.getElementById('table-details');
+        if (hash === 'table' && tableDetails && tableDetails.tagName === 'DETAILS') {
+            tableDetails.open = true;
+        }
     }
 
     function bindActions() {
