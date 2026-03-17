@@ -114,6 +114,51 @@
     color: var(--ar-warning);
 }
 
+/* Status severity highlighting: green = ok, yellow = moderate, red = critical */
+.admin-status .severity-green {
+    border-left: 4px solid var(--ar-positive);
+    background: color-mix(in srgb, var(--ar-positive) 8%, var(--ar-surface-soft));
+}
+.admin-status .severity-yellow {
+    border-left: 4px solid var(--ar-warning);
+    background: color-mix(in srgb, var(--ar-warning) 10%, var(--ar-surface-soft));
+}
+.admin-status .severity-red {
+    border-left: 4px solid var(--ar-danger);
+    background: color-mix(in srgb, var(--ar-danger) 8%, var(--ar-surface-soft));
+}
+.admin-status .status-line.severity-green { color: var(--ar-positive); }
+.admin-status .status-line.severity-yellow { color: var(--ar-warning); }
+.admin-status .status-line.severity-red { color: var(--ar-danger); }
+.admin-status .severity-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+.admin-status .severity-dot.severity-green { background: var(--ar-positive); }
+.admin-status .severity-dot.severity-yellow { background: var(--ar-warning); }
+.admin-status .severity-dot.severity-red { background: var(--ar-danger); }
+.admin-status .pill.ok { border-color: rgba(31, 185, 120, 0.35); color: var(--ar-positive); }
+.admin-status .pill.bad { border-color: rgba(239, 68, 68, 0.35); color: var(--ar-danger); }
+.admin-status .pill.warn { border-color: rgba(245, 158, 11, 0.35); color: var(--ar-warning); }
+.admin-status table tr.severity-green td:first-child { border-left: 3px solid var(--ar-positive); }
+.admin-status table tr.severity-yellow td:first-child { border-left: 3px solid var(--ar-warning); }
+.admin-status table tr.severity-red td:first-child { border-left: 3px solid var(--ar-danger); }
+.admin-status #issues-wrap table tr.severity-yellow { background: color-mix(in srgb, var(--ar-warning) 6%, var(--ar-surface-soft)); }
+.admin-status #issues-wrap table tr.severity-red { background: color-mix(in srgb, var(--ar-danger) 6%, var(--ar-surface-soft)); }
+.admin-status #cdr-audit-status.severity-green { color: var(--ar-positive); font-weight: 600; }
+.admin-status #cdr-audit-status.severity-yellow { color: var(--ar-warning); font-weight: 600; }
+.admin-status #cdr-audit-status.severity-red { color: var(--ar-danger); font-weight: 600; }
+.admin-status #coverage-gap-remediation-status.severity-green { color: var(--ar-positive); }
+.admin-status #coverage-gap-remediation-status.severity-yellow { color: var(--ar-warning); }
+.admin-status #coverage-gap-remediation-status.severity-red { color: var(--ar-danger); }
+.admin-status .card.severity-green { border-color: color-mix(in srgb, var(--ar-positive) 40%, var(--ar-line)); }
+.admin-status .card.severity-yellow { border-color: color-mix(in srgb, var(--ar-warning) 40%, var(--ar-line)); }
+.admin-status .card.severity-red { border-color: color-mix(in srgb, var(--ar-danger) 40%, var(--ar-line)); }
+
 .admin-db #db-grid {
     min-height: 320px;
     border: 1px solid var(--ar-line);

@@ -130,10 +130,21 @@ export async function runLenderUniverseAudit(
       }
     })
 
+    const hasEndpointDrift = rows.some((row) => row.status === 'endpoint_drift')
+    const missingWithConfiguredEndpoint = rows.filter(
+      (row) => row.status === 'missing_from_register' && row.configured_endpoint != null,
+    )
+    const ok =
+      !hasEndpointDrift &&
+      rows.every(
+        (row) =>
+          row.status === 'ok' ||
+          (row.status === 'missing_from_register' && row.configured_endpoint != null),
+      )
     const report: LenderUniverseAuditReport = {
       run_id: `lender-universe-audit:${generatedAt}:${crypto.randomUUID()}`,
       generated_at: generatedAt,
-      ok: rows.every((row) => row.status === 'ok'),
+      ok,
       register_source_url: fetched.sourceUrl,
       register_brand_count: fetched.brands.length,
       totals: {
@@ -152,7 +163,10 @@ export async function runLenderUniverseAudit(
 
     if (report.ok) {
       log.info('scheduler', 'lender_universe_audit_ok', {
-        context: `register_source=${fetched.sourceUrl} configured=${TARGET_LENDERS.length}`,
+        context: `register_source=${fetched.sourceUrl} configured=${TARGET_LENDERS.length}` +
+          (missingWithConfiguredEndpoint.length > 0
+            ? ` missing_but_configured=${missingWithConfiguredEndpoint.length}`
+            : ''),
       })
     } else {
       log.error('scheduler', 'lender_universe_audit_detected_drift', {

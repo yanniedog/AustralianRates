@@ -42,4 +42,35 @@ describe('lender dataset invariants', () => {
     expect(assessment.reasons).toContain('zero_written_rows_for_nonzero_expected_details')
     expect(assessment.reasons).toContain('dataset_not_finalized')
   })
+
+  it('allows finalization when majority of detail fetches completed (partial success)', () => {
+    const snapshot = {
+      expected_detail_count: 13,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 20,
+      written_row_count: 20,
+      detail_fetch_event_count: 17,
+      lineage_error_count: 0,
+      completed_detail_count: 12,
+      failed_detail_count: 5,
+    }
+    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({ ready: true, reason: null })
+  })
+
+  it('blocks finalization when completed share is below threshold despite some success', () => {
+    const snapshot = {
+      expected_detail_count: 10,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 5,
+      written_row_count: 5,
+      detail_fetch_event_count: 10,
+      lineage_error_count: 0,
+      completed_detail_count: 5,
+      failed_detail_count: 5,
+    }
+    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({
+      ready: false,
+      reason: 'failed_detail_fetches_present',
+    })
+  })
 })

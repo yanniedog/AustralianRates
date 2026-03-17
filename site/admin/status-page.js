@@ -36,6 +36,72 @@
         return '<span class="pill ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'OK' : 'Attention') + '</span>';
     }
 
+    function severityFromOverall(latest) {
+        if (!latest) return 'green';
+        if (!latest.overall_ok) return 'red';
+        var failures = (latest.failures || []).length;
+        if (failures >= 3) return 'red';
+        if (failures >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromE2E(latest) {
+        var e2e = latest && latest.e2e ? latest.e2e : null;
+        if (!e2e) return 'green';
+        if (!e2e.aligned) return 'red';
+        var datasets = Array.isArray(e2e.datasets) ? e2e.datasets : [];
+        var failed = datasets.filter(function (row) { return !row.ok; }).length;
+        if (failed >= 2) return 'red';
+        if (failed >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromIssueCount(count) {
+        var n = Number(count) || 0;
+        if (n >= 5) return 'red';
+        if (n >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromCdrReport(report) {
+        if (!report) return 'green';
+        if (!report.ok) return 'red';
+        var failed = report.totals && (report.totals.failed || 0) || 0;
+        var warns = report.totals && (report.totals.warns || 0) || 0;
+        if (failed > 0) return 'red';
+        if (warns > 0) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromGapCount(gaps, errors) {
+        var g = Number(gaps) || 0;
+        var e = Number(errors) || 0;
+        if (e > 0 || g >= 10) return 'red';
+        if (g >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function applyCardSeverity(cardEl, severity) {
+        if (!cardEl || !cardEl.classList) return;
+        cardEl.classList.remove('severity-green', 'severity-yellow', 'severity-red');
+        if (severity) cardEl.classList.add('severity-' + severity);
+    }
+
+    function setStatusLineSeverity(statusLineEl, line, severity) {
+        if (!statusLineEl) return;
+        statusLineEl.className = 'admin-status-line severity-' + (severity || 'green');
+        var dot = statusLineEl.querySelector('.severity-dot');
+        if (!dot) {
+            dot = document.createElement('span');
+            dot.setAttribute('aria-hidden', 'true');
+            statusLineEl.insertBefore(dot, statusLineEl.firstChild);
+        }
+        dot.className = 'severity-dot severity-' + (severity || 'green');
+        var textNode = Array.prototype.find.call(statusLineEl.childNodes, function (n) { return n.nodeType === 3; });
+        if (textNode) textNode.textContent = line;
+        else statusLineEl.appendChild(document.createTextNode(line));
+    }
+
     function cardCell(label, value) {
         return '<div><div class="status-line">' + esc(label) + '</div><div>' + value + '</div></div>';
     }
@@ -71,8 +137,10 @@
     }
 
     function renderOverall(latest) {
+        var card = overallEl && overallEl.parentElement;
         if (!latest) {
             overallEl.innerHTML = '<div>No health runs recorded yet.</div>';
+            applyCardSeverity(card, 'green');
             return;
         }
         overallEl.innerHTML = [
@@ -83,13 +151,16 @@
             cardCell('Duration', esc(String(latest.duration_ms || 0)) + ' ms'),
             cardCell('Failures', esc(String((latest.failures || []).length || 0)))
         ].join('');
+        applyCardSeverity(card, severityFromOverall(latest));
     }
 
     function renderE2E(latest) {
+        var card = e2eEl && e2eEl.parentElement;
         var e2e = latest && latest.e2e ? latest.e2e : null;
         if (!e2e) {
             e2eEl.innerHTML = '<div>No E2E result available.</div>';
             e2eDatasetsEl.innerHTML = '<div>No per-dataset E2E result available.</div>';
+            applyCardSeverity(card, 'green');
             return;
         }
         var criteria = e2e.criteria || {};
@@ -107,6 +178,7 @@
             cardCell('Detail', esc(e2e.reasonDetail || 'None'))
         ].join('');
 
+        applyCardSeverity(card, severityFromE2E(latest));
         if (!datasets.length) {
             e2eDatasetsEl.innerHTML = '<div>No dataset probes recorded.</div>';
             return;
@@ -170,7 +242,8 @@
         }
         issuesEl.innerHTML = '<table><thead><tr><th>Code</th><th>Title</th><th>Count</th><th>Action</th><th>Latest</th></tr></thead><tbody>'
             + issues.map(function (i) {
-                return '<tr>'
+                var sev = severityFromIssueCount(i.count);
+                return '<tr class="severity-' + sev + '">'
                     + '<td class="mono">' + esc(i.code) + '</td>'
                     + '<td>' + esc(i.title) + '</td>'
                     + '<td>' + esc(i.count) + '</td>'
@@ -222,11 +295,13 @@
     function renderCdrAudit(report) {
         if (!report) {
             cdrAuditStatusEl.textContent = 'No audit report available.';
+            cdrAuditStatusEl.className = 'admin-status-line severity-green';
             cdrAuditOverviewEl.innerHTML = '';
             cdrAuditWrapEl.innerHTML = '<div>Run the CDR audit to inspect pipeline gaps.</div>';
             return;
         }
-
+        var sev = severityFromCdrReport(report);
+        cdrAuditStatusEl.className = 'admin-status-line severity-' + sev;
         cdrAuditStatusEl.textContent = report.ok
             ? 'CDR audit status: OK'
             : ('CDR audit detected ' + String(report.totals && report.totals.failed || 0) + ' issue(s).');
@@ -424,9 +499,15 @@
                 ? ('Last checked: ' + (data.latest.checked_at || 'n/a'))
                 : 'No health check runs yet.';
             if (data.nextCronExpression) line += ' | Next: ' + data.nextCronExpression;
-            statusEl.textContent = line;
+            var overallSev = severityFromOverall(data.latest);
+            var e2eSev = severityFromE2E(data.latest);
+            var issueCount = (data.latest && Array.isArray(data.latest.actionable) ? data.latest.actionable : []).length;
+            var issuesSev = issueCount >= 5 ? 'red' : issueCount >= 1 ? 'yellow' : 'green';
+            var worst = (overallSev === 'red' || e2eSev === 'red' || issuesSev === 'red') ? 'red'
+                : (overallSev === 'yellow' || e2eSev === 'yellow' || issuesSev === 'yellow') ? 'yellow' : 'green';
+            setStatusLineSeverity(statusEl, line, worst);
         } catch (err) {
-            statusEl.textContent = 'Failed to load status.';
+            setStatusLineSeverity(statusEl, 'Failed to load status.', 'red');
             overallEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
         }
     }
@@ -479,13 +560,25 @@
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
             latestCoverageGapRemediation = data.last_remediation || null;
-            renderCoverageGapAudit(data.report || null);
+            var report = data.report || null;
+            if (coverageGapManager) {
+                coverageGapManager.render(report, latestCoverageGapRemediation);
+            } else {
+                renderCoverageGapAudit(report);
+            }
+            if (coverageGapRemediationStatusEl) {
+                var gaps = report && report.totals ? (report.totals.gaps || 0) : 0;
+                var errors = report && report.totals ? (report.totals.errors || 0) : 0;
+                var gapSev = severityFromGapCount(gaps, errors);
+                coverageGapRemediationStatusEl.className = 'admin-status-line severity-' + gapSev;
+            }
         } catch (err) {
             latestCoverageGapRemediation = null;
             coverageGapOverviewEl.innerHTML = '';
             coverageGapWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
             if (coverageGapRemediationStatusEl) {
                 coverageGapRemediationStatusEl.textContent = 'Failed to load automatic coverage-gap remediation status.';
+                coverageGapRemediationStatusEl.className = 'admin-status-line severity-red';
             }
         }
     }

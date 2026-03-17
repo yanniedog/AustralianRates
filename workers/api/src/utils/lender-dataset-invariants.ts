@@ -103,6 +103,9 @@ export function assessLenderDatasetCoverage(
   }
 }
 
+/** Minimum share of expected detail fetches that must complete to allow finalization when some failed (e.g. bank returns 400 for a few product IDs). */
+const MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION = 0.75
+
 export function isLenderDatasetReadyForFinalization(
   snapshot: Pick<
     LenderDatasetInvariantSnapshot,
@@ -122,10 +125,11 @@ export function isLenderDatasetReadyForFinalization(
   if (asCount(snapshot.lineage_error_count) > 0) {
     return { ready: false, reason: 'lineage_errors_present' }
   }
-  if (asCount(snapshot.failed_detail_count) > 0) {
-    return { ready: false, reason: 'failed_detail_fetches_present' }
-  }
   const expectedDetails = asCount(snapshot.expected_detail_count)
+  const completedDetails = asCount(snapshot.completed_detail_count)
+  const failedDetails = asCount(snapshot.failed_detail_count)
+  const processedDetails = completedDetails + failedDetails
+
   if (expectedDetails <= 0) {
     return { ready: true, reason: null }
   }
@@ -138,8 +142,14 @@ export function isLenderDatasetReadyForFinalization(
   if (asCount(snapshot.detail_fetch_event_count) <= 0) {
     return { ready: false, reason: 'detail_fetch_events_missing' }
   }
-  if (asCount(snapshot.completed_detail_count) < expectedDetails) {
+  if (processedDetails < expectedDetails) {
     return { ready: false, reason: 'detail_processing_incomplete' }
+  }
+  if (failedDetails > 0) {
+    const minCompleted = Math.ceil(expectedDetails * MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION)
+    if (completedDetails < minCompleted) {
+      return { ready: false, reason: 'failed_detail_fetches_present' }
+    }
   }
   return { ready: true, reason: null }
 }
