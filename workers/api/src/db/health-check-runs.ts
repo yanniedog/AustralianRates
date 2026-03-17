@@ -1,3 +1,5 @@
+import { runRetentionPrunes } from './retention-prune'
+
 export type HealthCheckRunRow = {
   run_id: string
   checked_at: string
@@ -116,6 +118,7 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
         .run()
     }
     await pruneHealthCheckRuns(db)
+    await runRetentionPrunes(db)
   } catch {
     // Table may not exist if migration 0019_health_checks_and_log_codes.sql not yet applied.
     // Health checks still run; persistence is best-effort.

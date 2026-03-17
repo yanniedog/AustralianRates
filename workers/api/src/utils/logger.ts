@@ -20,7 +20,7 @@ let _db: D1Database | null = null
 const _buffer: PersistedLogEntry[] = []
 const _pendingWrites = new Set<Promise<void>>()
 const MAX_BUFFER = 200
-const MAX_CONTEXT_CHARS = 32000
+const MAX_CONTEXT_CHARS = 8000
 
 export function initLogger(db: D1Database): void {
   _db = db
