@@ -9,6 +9,7 @@ import { insertIntegrityAuditRun } from '../db/integrity-audit-runs'
 import { insertHealthCheckRun } from '../db/health-check-runs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
+import { refreshChartPivotCache } from './chart-cache-refresh'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
 import { dispatchReplayQueue } from './replay-queue'
@@ -142,13 +143,14 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
   }
 
   if (tasks.includes('site_health')) {
-    log.info('scheduler', `Dispatching coverage + site health cron (${cron})`, {
+    log.info('scheduler', `Dispatching coverage + site health + chart cache cron (${cron})`, {
       context: `scheduled_time=${scheduledIso}`,
     })
 
-    const [coverageResult, siteHealthResult] = await Promise.allSettled([
+    const [coverageResult, siteHealthResult, chartCacheResult] = await Promise.allSettled([
       handleScheduledHourlyWayback(event, env),
       runSiteHealthCron(env),
+      refreshChartPivotCache(env),
     ])
 
     if (coverageResult.status === 'rejected' || siteHealthResult.status === 'rejected') {
@@ -175,6 +177,12 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       })
       throw new Error(`scheduled_dispatch_failed:${failureContext}`)
     }
+    if (chartCacheResult.status === 'rejected') {
+      log.warn('scheduler', 'Chart cache refresh failed (non-fatal)', {
+        code: 'chart_cache_refresh_rejected',
+        context: (chartCacheResult.reason as Error)?.message ?? String(chartCacheResult.reason),
+      })
+    }
 
     return {
       ok: true,
@@ -183,6 +191,7 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       replay_dispatch: replayDispatch,
       hourly_wayback: coverageResult.value,
       site_health: siteHealthResult.value,
+      chart_cache: chartCacheResult.status === 'fulfilled' ? chartCacheResult.value : undefined,
     }
   }
 

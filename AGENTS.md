@@ -68,6 +68,13 @@ These rules are mandatory and override any conflicting preference.
 
 - **product_key** is the canonical identity for linking rates over time for the same product. It is defined as `bank_name|product_id|security_purpose|repayment_type|lvr_tier|rate_structure`. Any chart or export that shows rate over time must group or filter by `product_key` so each series is one specific product tracked longitudinally.
 
+## Chart and pivot cache (fast loads)
+
+- **Goal:** Charts and pivot tables load almost instantly by serving from a slim precomputed layer instead of scanning the full raw DB on every request.
+- **D1 table:** `chart_pivot_cache` (migration 0030) holds one row per (section, representation) with JSON payload for the default slice (last 365 days, no filters). Refreshed every 15 min by the same cron as site health (`*/15 * * * *`).
+- **API behaviour:** `GET /analytics/series` and `POST /analytics/pivot` try (1) optional KV cache by request key, (2) D1 cache when the request matches default filters, (3) live collect from analytics/canonical DB. All responses set `Cache-Control: public, s-maxage=300, stale-while-revalidate=600`.
+- **Non-stale:** Cron keeps the D1 cache updated; optional `CHART_CACHE_KV` (see types) can cache any response for 5 min. Apply migration 0030 before or after deploy so the table exists.
+
 ## Project Philosophy: Real Data Only
 
 Tests and tooling must not use mock or simulated data. This is project philosophy and a hard rule.

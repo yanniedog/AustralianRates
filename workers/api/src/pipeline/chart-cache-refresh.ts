@@ -14,7 +14,13 @@ const REPRESENTATIONS = ['day', 'change'] as const
 /** Build default filters for precomputed cache (last 365 days, no selective filters). */
 function defaultFilters() {
   const { startDate, endDate } = getDefaultDateRange()
-  return { startDate, endDate, mode: 'all' as const, includeRemoved: false }
+  return {
+    startDate,
+    endDate,
+    mode: 'all' as const,
+    includeRemoved: false,
+    sourceMode: 'all' as const,
+  }
 }
 
 /** Refresh chart_pivot_cache for all sections and representations. Called by cron every 15 min. */

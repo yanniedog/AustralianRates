@@ -35,7 +35,7 @@ function toParams(merged: Record<string, string | undefined>): Record<string, st
 
 export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void {
   publicRoutes.get('/analytics/series', async (c) => {
-    const merged = Object.fromEntries(c.req.query().entries()) as Record<string, string | undefined>
+    const merged = { ...c.req.query() } as Record<string, string | undefined>
     const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
     const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
     const result = await getCachedOrCompute(
@@ -64,7 +64,7 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
 
   publicRoutes.post('/analytics/pivot', async (c) => {
     const body = (await c.req.json<Record<string, string | undefined>>().catch(() => ({}))) as Record<string, string | undefined>
-    const merged = { ...Object.fromEntries(c.req.query().entries()), ...body } as Record<string, string | undefined>
+    const merged = { ...c.req.query(), ...body } as Record<string, string | undefined>
     const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
     const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
     const result = await getCachedOrCompute(
