@@ -463,6 +463,15 @@ button.bank-option-card.is-selected .bank-badge-sub {
     hyphens: none;
 }
 
+.terminal-stat-small {
+    padding: 8px 10px;
+}
+
+.terminal-stat-small .metric-code,
+.terminal-stat-small strong {
+    font-size: 0.875rem;
+}
+
 .terminal-ladder-search {
     margin-bottom: 2px;
 }

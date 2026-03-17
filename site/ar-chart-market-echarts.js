@@ -15,6 +15,17 @@
             softText: '#c5ced8',
             axisLine: 'rgba(237, 243, 249, 0.2)',
             shadowAccent: 'rgba(79, 141, 253, 0.24)',
+            crosshairLine: 'rgba(79, 141, 253, 0.5)',
+            crosshairLabelBg: 'rgba(17, 22, 29, 0.94)',
+        };
+    };
+    var axisPointerConfig = helpers.axisPointerConfig || function (theme) {
+        theme = theme || chartTheme();
+        return {
+            type: 'cross',
+            lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5, type: 'dashed' },
+            crossStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1 },
+            label: { backgroundColor: theme.crosshairLabelBg, color: theme.emphasisText, fontSize: 11 },
         };
     };
     var trimAxisLabel = helpers.trimAxisLabel || function (value) { return String(value || ''); };
@@ -95,8 +106,9 @@
             series.push({
                 name: 'Market median',
                 type: 'line',
+                smooth: 0.2,
                 showSymbol: true,
-                symbolSize: 7,
+                symbolSize: 6,
                 lineStyle: { width: 3, color: theme.softText, type: 'dashed' },
                 itemStyle: { color: theme.softText },
                 data: market.categories.map(function (category) {
@@ -109,12 +121,13 @@
             series.push({
                 name: curve.bankName,
                 type: 'line',
+                smooth: 0.2,
                 connectNulls: false,
                 showSymbol: true,
-                symbolSize: 7,
+                symbolSize: 6,
                 lineStyle: { width: 2.8, color: paletteColor(index) },
                 itemStyle: { color: paletteColor(index) },
-                emphasis: { focus: 'series' },
+                emphasis: { focus: 'series', lineStyle: { width: 3.2 }, symbolSize: 9 },
                 data: curve.points.map(function (point) {
                     if (!point) return null;
                     return { value: [point.bucketKey, point.value], bucketKey: point.bucketKey, row: point.row };
@@ -129,6 +142,7 @@
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
             title: curveTitle ? {
                 text: curveTitle,
                 left: 0,
@@ -145,7 +159,7 @@
             },
             tooltip: {
                 trigger: 'axis',
-                axisPointer: { type: 'line', lineStyle: { color: theme.shadowAccent } },
+                axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -187,6 +201,7 @@
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
             title: curveTitle ? {
                 text: curveTitle,
                 left: 0,
@@ -195,7 +210,7 @@
             } : undefined,
             tooltip: {
                 trigger: 'axis',
-                axisPointer: { type: 'line', lineStyle: { color: theme.shadowAccent } },
+                axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -298,6 +313,7 @@
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
             title: curveTitle ? {
                 text: curveTitle,
                 left: 0,
@@ -465,6 +481,12 @@
                         itemStyle: { color: paletteColor(index), borderRadius: [999, 999, 999, 999] },
                     };
                 }),
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 14,
+                        shadowColor: theme.shadowAccent,
+                    },
+                },
                 label: {
                     show: true,
                     position: 'right',

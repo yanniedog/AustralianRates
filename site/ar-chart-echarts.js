@@ -427,6 +427,13 @@
                         borderColor: paletteColor(0),
                         borderWidth: 2,
                     },
+                    emphasis: {
+                        itemStyle: {
+                            borderWidth: 2.5,
+                            shadowBlur: 12,
+                            shadowColor: theme.shadowAccent,
+                        },
+                    },
                     data: model.distribution.boxes,
                 },
                 {
@@ -434,6 +441,7 @@
                     type: 'scatter',
                     symbolSize: 10,
                     itemStyle: { color: paletteColor(1) },
+                    emphasis: { scale: 1.4 },
                     data: model.distribution.means.map(function (value, index) {
                         return [model.distribution.categories[index], value];
                     }),

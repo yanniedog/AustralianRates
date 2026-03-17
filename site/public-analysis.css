@@ -59,7 +59,7 @@
 .terminal-chart-surface {
     min-height: 420px;
     border: 1px solid var(--ar-line);
-    border-radius: 14px;
+    border-radius: 16px;
     background: var(--ar-surface-2);
     overflow: hidden;
 }
@@ -68,6 +68,8 @@
 #chart-output,
 #chart-detail-output {
     min-height: 360px;
+    width: 100%;
+    touch-action: manipulation;
 }
 
 .chart-output-empty,
@@ -393,6 +395,15 @@
 
 #chart-output[data-chart-rendered="true"] {
     opacity: 1;
+}
+
+#chart-output:focus-within,
+#chart-detail-output:focus-within {
+    outline: none;
+}
+
+.terminal-chart-surface:focus-within {
+    border-color: color-mix(in srgb, var(--ar-accent, #2563eb) 38%, var(--ar-line));
 }
 
 .chart-output-empty,

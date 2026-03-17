@@ -170,7 +170,8 @@
         var url = apiBase + '/overview';
         requestJson
             ? requestJson(url, { requestLabel: 'Landing overview', timeoutMs: requestTimeoutMs, retryCount: 0 })
-                .then(function (data) {
+                .then(function (res) {
+                    var data = res && res.data;
                     if (data && data.ok) {
                         landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
                         applyLandingOverview();
