@@ -278,6 +278,9 @@
     }
 
     async function drawChart() {
+        // #region agent log
+        fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-charts.js:drawChart',message:'drawChart invoked',data:{hasOutput:!!els.chartOutput},hypothesisId:'H2',timestamp:Date.now()})}).catch(function(){});
+        // #endregion
         if (!els.chartOutput) return;
         if (chartLoadPromise) return chartLoadPromise;
         disposeCharts();
@@ -351,6 +354,9 @@
             return;
         }
         if (!chartState.rows.length) {
+            // #region agent log
+            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-charts.js:refreshFromCache',message:'no rows, calling setIdleState',data:{reason:reason},hypothesisId:'H3',timestamp:Date.now()})}).catch(function(){});
+            // #endregion
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             if (chartUi.setIdleState) chartUi.setIdleState();
             return;
@@ -392,7 +398,11 @@
             onViewChange: function () { refreshFromCache('view'); },
         });
     }
-    if (chartUi.setIdleState) chartUi.setIdleState();
+    // #region agent log
+    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-charts.js:init',message:'init: set pending instead of idle',data:{},hypothesisId:'H1',timestamp:Date.now()})}).catch(function(){});
+    // #endregion
+    if (chartUi.setPendingState) chartUi.setPendingState('Loading');
+    else if (chartUi.setIdleState) chartUi.setIdleState();
 
     [document.getElementById('notes'), document.getElementById('filter-bar')].forEach(function (details) {
         if (details && details.tagName === 'DETAILS') details.addEventListener('toggle', scheduleResponsiveSync);

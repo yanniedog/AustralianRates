@@ -86,6 +86,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Check queue binding health and replay queue diagnostics, then retry replay dispatch.',
     links: ['/admin/runs.html', '/admin/logs.html'],
   },
+  detail_fetch_failed: {
+    code: 'detail_fetch_failed',
+    title: 'CDR product detail fetch failed',
+    action:
+      'Check upstream CDR 4xx/5xx (400/406/500). Verify lender endpoint and x-v; for 400/406 confirm product ID is valid and still offered. Use admin logs and coverage-gap report.',
+    links: ['/admin/logs.html', '/admin/status.html', '/admin/runs.html'],
+  },
   run_lifecycle_reconciliation_stalled: {
     code: 'run_lifecycle_reconciliation_stalled',
     title: 'Run lifecycle reconciliation stalled',
@@ -110,6 +117,7 @@ function inferCodeFromMessage(message: string): string {
   const normalized = String(message || '').toLowerCase()
   if (normalized.includes('queue_message_exhausted')) return 'queue_message_exhausted'
   if (normalized.includes('queue_message_failed')) return 'queue_message_failed'
+  if (normalized.includes('detail_fetch_failed')) return 'detail_fetch_failed'
   if (normalized.includes('upsert_failed')) return 'upsert_failed'
   if (normalized.includes('daily run') && normalized.includes('failed')) return 'daily_run_failed'
   if (normalized.includes('backfill run') && normalized.includes('failed')) return 'backfill_run_failed'

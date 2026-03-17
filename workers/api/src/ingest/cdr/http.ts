@@ -174,6 +174,14 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
       for (const x of advertised) {
         if (!tried.has(x)) queue.push(x)
       }
+      if (advertised.length === 0) {
+        const snippet = (res.text || '').slice(0, 300).replace(/\s+/g, ' ').trim()
+        log.warn('ingest', 'cdr_406_no_versions_advertised', {
+          runId: context?.runId,
+          lenderCode: context?.lenderCode,
+          context: `url=${url} x_v_tried=${version} body_snippet=${snippet || 'empty'}`,
+        })
+      }
     }
   }
 

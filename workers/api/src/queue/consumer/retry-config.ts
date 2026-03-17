@@ -24,6 +24,12 @@ export async function persistProductDetailPayload(
 }
 
 export function isNonRetryableErrorMessage(message: string): boolean {
+  if (
+    message.startsWith('detail_fetch_failed:') &&
+    (message.includes('status=400') || message.includes('status=406'))
+  ) {
+    return true
+  }
   return (
     message === 'invalid_queue_message_shape' ||
     message.startsWith('unknown_lender_code:') ||

@@ -53,6 +53,10 @@
 - **Cash rate**: Ingest `workers/api/src/ingest/rba.ts`; DB `workers/api/src/db/rba-cash-rate.ts`; table `rba_cash_rates`. Collected in same daily run as banks via `bootstrap-jobs.ts`. Backfill: `backfillRbaCashRatesForDateRange`; admin POST `/admin/rba/backfill`.
 - **Headline inflation + one other key inflation metric**: Must be obtained at the same frequency as bank collection and stored reliably. If not yet implemented, add tables and ingest (e.g. from RBA statistics or ABS CPI) and schedule with the daily run. See [all-banks-and-rba.md](all-banks-and-rba.md).
 
+## Lender-specific notes
+
+- **Bendigo & Adelaide**: Product detail has been observed returning 400, 406, and 500 for some products. 400/406 are treated as non-retryable. For 406, if the response body does not include "Versions available:", the pipeline logs `cdr_406_no_versions_advertised` with a body snippet. Check admin actionable logs (`detail_fetch_failed`) and coverage-gap report; verify product IDs are still offered by the bank.
+
 ## Key files (ingest and pipeline)
 
 - **Index/detail fetch**: `workers/api/src/ingest/cdr/http.ts` (`fetchCdrJson`), `mortgage-fetch.ts`, `cdr-savings.ts` (product list + detail).
