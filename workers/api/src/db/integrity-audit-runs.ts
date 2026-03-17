@@ -37,28 +37,24 @@ export async function insertIntegrityAuditRun(
   db: D1Database,
   input: InsertIntegrityAuditRunInput,
 ): Promise<void> {
-  try {
-    await db
-      .prepare(
-        `INSERT INTO integrity_audit_runs (
-           run_id, checked_at, trigger_source, overall_ok, duration_ms, status, summary_json, findings_json
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-      )
-      .bind(
-        input.runId,
-        input.checkedAt,
-        input.triggerSource,
-        input.overallOk ? 1 : 0,
-        input.durationMs,
-        input.status,
-        input.summaryJson,
-        input.findingsJson,
-      )
-      .run()
-    await pruneIntegrityAuditRuns(db)
-  } catch {
-    // Table may not exist if migration 0029 not applied.
-  }
+  await db
+    .prepare(
+      `INSERT INTO integrity_audit_runs (
+         run_id, checked_at, trigger_source, overall_ok, duration_ms, status, summary_json, findings_json
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+    )
+    .bind(
+      input.runId,
+      input.checkedAt,
+      input.triggerSource,
+      input.overallOk ? 1 : 0,
+      input.durationMs,
+      input.status,
+      input.summaryJson,
+      input.findingsJson,
+    )
+    .run()
+  await pruneIntegrityAuditRuns(db)
 }
 
 export async function getLatestIntegrityAuditRun(

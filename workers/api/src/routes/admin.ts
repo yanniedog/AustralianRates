@@ -145,10 +145,21 @@ adminRoutes.get('/integrity-audit', async (c) => {
 })
 
 adminRoutes.post('/integrity-audit/run', async (c) => {
+  let result: Awaited<ReturnType<typeof runDataIntegrityAudit>>
   try {
     const timezone = c.env.MELBOURNE_TIMEZONE || 'Australia/Melbourne'
-    const result = await runDataIntegrityAudit(c.env.DB, timezone)
-    const runId = `integrity:manual:${result.checked_at}:${crypto.randomUUID()}`
+    result = await runDataIntegrityAudit(c.env.DB, timezone)
+  } catch (error) {
+    log.error('admin', 'integrity_audit_run_failed', {
+      error,
+      context: JSON.stringify({ route: '/admin/integrity-audit/run' }),
+    })
+    return jsonError(c, 500, 'INTEGRITY_AUDIT_FAILED', 'Data integrity audit failed to execute.')
+  }
+
+  const runId = `integrity:manual:${result.checked_at}:${crypto.randomUUID()}`
+  let stored = false
+  try {
     await insertIntegrityAuditRun(c.env.DB, {
       runId,
       checkedAt: result.checked_at,
@@ -159,23 +170,29 @@ adminRoutes.post('/integrity-audit/run', async (c) => {
       summaryJson: JSON.stringify(result.summary),
       findingsJson: JSON.stringify(result.findings),
     })
-    return c.json({
-      ok: true,
-      auth_mode: c.get('adminAuthState')?.mode || null,
-      run_id: runId,
-      status: result.status,
-      checked_at: result.checked_at,
-      duration_ms: result.duration_ms,
-      summary: result.summary,
-      findings: result.findings,
-    })
+    stored = true
   } catch (error) {
-    log.error('admin', 'integrity_audit_run_failed', {
+    log.error('admin', 'integrity_audit_insert_failed', {
       error,
-      context: JSON.stringify({ route: '/admin/integrity-audit/run' }),
+      context: JSON.stringify({
+        route: '/admin/integrity-audit/run',
+        run_id: runId,
+        hint: 'Ensure migration 0029_integrity_audit_runs.sql is applied to D1.',
+      }),
     })
-    return jsonError(c, 500, 'INTEGRITY_AUDIT_FAILED', 'Data integrity audit failed to execute.')
   }
+
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    stored,
+    run_id: runId,
+    status: result.status,
+    checked_at: result.checked_at,
+    duration_ms: result.duration_ms,
+    summary: result.summary,
+    findings: result.findings,
+  })
 })
 
 adminRoutes.get('/runs', async (c) => {

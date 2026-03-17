@@ -2,8 +2,8 @@ import type { AdminDownloadArtifactRow, AdminDownloadJobRow } from '../db/admin-
 
 const INTERNAL_TABLE_PREFIXES = ['sqlite_', '_cf_']
 
-export const DATABASE_DUMP_ROW_BATCH_SIZE = 1_000
-export const DATABASE_DUMP_PARTS_PER_PASS = 3
+export const DATABASE_DUMP_ROW_BATCH_SIZE = 2_500
+export const DATABASE_DUMP_PARTS_PER_PASS = 8
 export const ADMIN_DOWNLOAD_STALE_MS = 90_000
 
 type DatabaseDumpPartKind = 'header' | 'schema' | 'data' | 'indexes' | 'triggers' | 'views' | 'footer'

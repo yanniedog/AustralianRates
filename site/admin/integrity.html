@@ -29,6 +29,8 @@
         .integrity-findings .fail { color: #ef4444; }
         .integrity-history { margin-top: 1.5rem; }
         .integrity-history li { padding: 0.35rem 0; border-bottom: 1px solid var(--ar-border, #334155); }
+        .integrity-stored-warning { margin: 0.75rem 0; padding: 0.75rem; border-radius: 6px; background: var(--ar-bg-secondary, #1e293b); color: var(--ar-muted, #94a3b8); display: none; }
+        .integrity-stored-warning.show { display: block; color: #eab308; }
     </style>
 </head>
 <body class="ar-admin">
@@ -50,6 +52,7 @@
             <button type="button" class="secondary" id="refresh-btn">Refresh</button>
             <span id="status-line" class="admin-status-line">Loading...</span>
         </div>
+        <div id="integrity-stored-warning" class="integrity-stored-warning" role="alert" aria-live="polite"></div>
         <section class="card admin-card">
             <h2>Status</h2>
             <div id="traffic-wrap" class="integrity-traffic">

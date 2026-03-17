@@ -102,12 +102,26 @@
 
     function render(data) {
         var latest = data && data.latest;
+        var stored = data && data.stored;
         renderTraffic(latest);
         if (latest && latest.summary) renderSummary(latest.summary);
         else renderSummary(null);
         if (latest && latest.findings) renderFindings(latest.findings);
         else renderFindings([]);
         renderHistory(data && data.history ? data.history : []);
+        renderStoredWarning(stored);
+    }
+
+    function renderStoredWarning(stored) {
+        var el = document.getElementById('integrity-stored-warning');
+        if (!el) return;
+        if (stored === false) {
+            el.textContent = 'Result was not saved. Ensure migration 0029 (integrity_audit_runs) is applied to the D1 database.';
+            el.className = 'integrity-stored-warning show';
+        } else {
+            el.textContent = '';
+            el.className = 'integrity-stored-warning';
+        }
     }
 
     function load() {
@@ -131,6 +145,19 @@
             });
     }
 
+    function latestFromRunResponse(body) {
+        if (!body || !body.ok) return null;
+        return {
+            run_id: body.run_id,
+            checked_at: body.checked_at,
+            trigger_source: 'manual',
+            status: body.status,
+            duration_ms: body.duration_ms,
+            summary: body.summary || {},
+            findings: body.findings || []
+        };
+    }
+
     function runAudit() {
         setStatus('Running audit...');
         runAuditBtn.disabled = true;
@@ -139,7 +166,9 @@
             .then(function (res) { return res.json(); })
             .then(function (body) {
                 if (body && body.ok) {
-                    setStatus('Audit complete. Refreshing...');
+                    setStatus(body.stored === false ? 'Audit complete but result not saved (see hint below).' : 'Audit complete. Refreshing...');
+                    var latestFromRun = latestFromRunResponse(body);
+                    if (latestFromRun) render({ latest: latestFromRun, history: [], stored: body.stored });
                     load();
                 } else {
                     setStatus('Audit failed: ' + (body && body.message ? body.message : 'unknown'));
