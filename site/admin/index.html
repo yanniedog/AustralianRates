@@ -37,11 +37,6 @@
     <script src="../frame.js?v=7ecd7b4"></script>
     <script>
         (function () {
-            // #region agent log
-            try {
-                fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'aafb66' }, body: JSON.stringify({ sessionId: 'aafb66', location: 'index.html:ready', message: 'login page ready', data: { pathname: window.location.pathname, hasAR: !!(window.AR), hasAdminPortal: !!(window.AR && window.AR.AdminPortal), origin: window.location.origin }, hypothesisId: 'H3', timestamp: Date.now() }) }).catch(function () {});
-            } catch (e) {}
-            // #endregion
             var form = document.getElementById('login-form');
             var btn = document.getElementById('login-btn');
             var errEl = document.getElementById('login-error');
@@ -63,13 +58,6 @@
                     errEl.classList.add('visible');
                     return;
                 }
-                // #region agent log
-                var authCheckUrl = apiBase + '/admin/auth-check';
-                var t0 = Date.now();
-                try {
-                    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'aafb66' }, body: JSON.stringify({ sessionId: 'aafb66', location: 'index.html:submit', message: 'login form submit', data: { apiBase: apiBase, authCheckUrl: authCheckUrl, tokenLength: token.length }, hypothesisId: 'H3', timestamp: Date.now() }) }).catch(function () {});
-                } catch (err) {}
-                // #endregion
                 errEl.classList.remove('visible');
                 errEl.textContent = '';
                 btn.disabled = true;
@@ -84,12 +72,6 @@
                     signal: ac.signal
                 })
                     .then(function (r) {
-                        // #region agent log
-                        var elapsed = Date.now() - t0;
-                        try {
-                            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'aafb66' }, body: JSON.stringify({ sessionId: 'aafb66', location: 'index.html:fetchDone', message: 'login fetch response', data: { ok: r.ok, status: r.status, elapsedMs: elapsed }, hypothesisId: 'H5', timestamp: Date.now() }) }).catch(function () {});
-                        } catch (err) {}
-                        // #endregion
                         if (r.ok) {
                             window.AR.AdminPortal.setToken(token);
                             window.location.href = 'dashboard.html';
@@ -106,12 +88,6 @@
                         });
                     })
                     .catch(function (err) {
-                        // #region agent log
-                        var elapsed = Date.now() - t0;
-                        try {
-                            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'aafb66' }, body: JSON.stringify({ sessionId: 'aafb66', location: 'index.html:fetchCatch', message: 'login fetch failed', data: { name: err && err.name, elapsedMs: elapsed, isAbort: err && err.name === 'AbortError' }, hypothesisId: err && err.name === 'AbortError' ? 'H2' : 'H4', timestamp: Date.now() }) }).catch(function () {});
-                        } catch (e) {}
-                        // #endregion
                         if (err && err.name === 'AbortError') {
                             errEl.textContent = 'Request timed out (30s). The server may be slow or unreachable. Check your network, try again, or use a different connection.';
                         } else {

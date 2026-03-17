@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DAILY_BACKUP_CRON_EXPRESSION,
   DAILY_SCHEDULE_CRON_EXPRESSION,
   INTEGRITY_AUDIT_CRON_EXPRESSION,
   SITE_HEALTH_CRON_EXPRESSION,
@@ -18,6 +19,10 @@ describe('scheduledTasksForCron', () => {
 
   it('routes the daily 04:00 UTC cron to integrity audit', () => {
     expect(scheduledTasksForCron(INTEGRITY_AUDIT_CRON_EXPRESSION)).toEqual(['integrity_audit'])
+  })
+
+  it('routes the daily 09:00 UTC cron to daily backup', () => {
+    expect(scheduledTasksForCron(DAILY_BACKUP_CRON_EXPRESSION)).toEqual(['daily_backup'])
   })
 
   it('ignores unknown cron expressions', () => {
