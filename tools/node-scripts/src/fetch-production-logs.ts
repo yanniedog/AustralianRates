@@ -12,6 +12,8 @@ const BASE = `${ORIGIN}/api/home-loan-rates/admin/logs/system`;
 const token = (
   process.env.ADMIN_API_TOKEN ||
   process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() ||
+  process.env.ADMIN_TEST_TOKEN ||
+  process.env.LOCAL_ADMIN_API_TOKEN ||
   ''
 ).trim();
 
@@ -58,10 +60,10 @@ async function main(): Promise<void> {
     10000,
     Math.max(1, parseInt(args.find((a) => a.startsWith('--limit='))?.split('=')[1] || '1000', 10))
   );
-  const doErrors = args.includes('--errors') || (!args.includes('--warn') && !args.includes('--actionable') && !args.includes('--stats'));
+  const doErrors = args.includes('--errors') || args.length === 0;
   const doWarn = args.includes('--warn');
-  const doActionable = args.includes('--actionable');
-  const doStats = args.includes('--stats');
+  const doActionable = args.includes('--actionable') || args.length === 0;
+  const doStats = args.includes('--stats') || args.length === 0;
 
   try {
     if (doStats) {
