@@ -217,6 +217,116 @@
         return 'line';
     }
 
+    function buildTimeRibbonModel(rows, fields, selectionState) {
+        var section = window.AR.section || 'home-loans';
+        if (section !== 'term-deposits') return null;
+        var allRows = rows || [];
+        if (!allRows.length) return null;
+        var direction = marketDirection(fields.yField);
+        var termFilter = (selectionState && selectionState.termMonthsFilter) ? String(selectionState.termMonthsFilter).trim() : '';
+        var byDateTerm = {};
+        allRows.forEach(function (row) {
+            var date = String(row && row.collection_date || '');
+            var term = row && row.term_months != null ? String(row.term_months) : '';
+            var value = numericValue(row, fields.yField);
+            if (!date || !Number.isFinite(value)) return;
+            var key = date + '|' + term;
+            if (!byDateTerm[key]) byDateTerm[key] = { date: date, term: term, bankMap: {}, rows: [] };
+            var cat = byDateTerm[key];
+            cat.rows.push({ row: row, value: value });
+            var bankName = String(row.bank_name || 'Unknown bank');
+            var existing = cat.bankMap[bankName];
+            if (!existing || betterValue(direction, existing.value, value) === value) {
+                cat.bankMap[bankName] = { bankName: bankName, value: value, row: row };
+            }
+        });
+        var termsWithData = {};
+        Object.keys(byDateTerm).forEach(function (key) {
+            var t = byDateTerm[key].term;
+            if (t) termsWithData[t] = (termsWithData[t] || 0) + 1;
+        });
+        var chosenTerm = termFilter && termsWithData[termFilter]
+            ? termFilter
+            : Object.keys(termsWithData).sort(function (a, b) { return termsWithData[b] - termsWithData[a] || Number(a) - Number(b); })[0] || '';
+        var dateKeys = Object.keys(byDateTerm)
+            .filter(function (key) { return byDateTerm[key].term === chosenTerm; })
+            .map(function (key) { return byDateTerm[key].date; })
+            .sort(compareDates);
+        if (!dateKeys.length) return null;
+        var categories = dateKeys.map(function (date) {
+            var key = date + '|' + chosenTerm;
+            var cat = byDateTerm[key];
+            var bankEntries = Object.keys(cat.bankMap).map(function (bankName) { return cat.bankMap[bankName]; }).sort(function (a, b) {
+                var metricSort = compareBucketValues(direction, a.value, b.value);
+                if (metricSort !== 0) return metricSort;
+                return String(a.bankName).localeCompare(String(b.bankName));
+            });
+            var values = cat.rows.map(function (e) { return e.value; }).sort(function (a, b) { return a - b; });
+            var total = values.reduce(function (sum, v) { return sum + v; }, 0);
+            return {
+                key: date,
+                date: date,
+                label: humanField('collection_date', date, null),
+                shortLabel: date,
+                secondaryLabel: chosenTerm ? chosenTerm + 'm' : '',
+                bankCount: bankEntries.length,
+                min: values[0],
+                q1: quantile(values, 0.25),
+                median: quantile(values, 0.5),
+                q3: quantile(values, 0.75),
+                max: values[values.length - 1],
+                mean: values.length ? total / values.length : null,
+                bestValue: bankEntries.length ? bankEntries[0].value : null,
+                bestRow: bankEntries.length ? bankEntries[0].row : null,
+                bankEntries: bankEntries,
+            };
+        });
+        var bankNames = [];
+        categories.forEach(function (cat) {
+            cat.bankEntries.forEach(function (entry) {
+                if (bankNames.indexOf(entry.bankName) < 0) bankNames.push(entry.bankName);
+            });
+        });
+        var bankCurves = bankNames.slice(0, 8).map(function (bankName) {
+            return {
+                bankName: bankName,
+                points: categories.map(function (cat) {
+                    var entry = cat.bankEntries.find(function (e) { return e.bankName === bankName; });
+                    return entry ? { date: cat.date, value: entry.value, row: entry.row } : null;
+                }),
+            };
+        });
+        return {
+            type: 'timeRibbon',
+            termMonths: chosenTerm,
+            termLabel: chosenTerm ? chosenTerm + 'm' : 'All terms',
+            snapshotDateDisplay: categories.length ? humanField('collection_date', categories[categories.length - 1].date, null) : '',
+            categories: categories,
+            bankCurves: bankCurves,
+            dimensionLabel: 'Date',
+        };
+    }
+
+    function buildTdTermTimeModel(rows, fields) {
+        var section = window.AR.section || 'home-loans';
+        if (section !== 'term-deposits') return null;
+        var tr = buildTimeRibbonModel(rows, fields, {});
+        if (!tr || !tr.categories) return null;
+        var termsWithData = {};
+        (rows || []).forEach(function (row) {
+            var t = row && row.term_months != null ? String(row.term_months) : '';
+            if (t) termsWithData[t] = true;
+        });
+        var termKeys = Object.keys(termsWithData).sort(function (a, b) { return Number(a) - Number(b); }).slice(0, 6);
+        var terms = termKeys.map(function (term) {
+            var sel = { termMonthsFilter: term };
+            var ribbon = buildTimeRibbonModel(rows, fields, sel);
+            return { termKey: term, termLabel: term + 'm', timeRibbon: ribbon };
+        }).filter(function (t) { return t.timeRibbon && t.timeRibbon.categories && t.timeRibbon.categories.length; });
+        if (!terms.length) return null;
+        return { type: 'tdTermTime', terms: terms, dimensionLabel: 'Term vs time' };
+    }
+
     function buildMarketModel(rows, fields, selectionState) {
         var snapshot = snapshotRows(rows || []);
         var latestRows = snapshot.rows || [];
@@ -328,4 +438,6 @@
 
     window.AR.chartMarket = window.AR.chartMarket || {};
     window.AR.chartMarket.buildModel = buildMarketModel;
+    window.AR.chartMarket.buildTimeRibbonModel = buildTimeRibbonModel;
+    window.AR.chartMarket.buildTdTermTimeModel = buildTdTermTimeModel;
 })();

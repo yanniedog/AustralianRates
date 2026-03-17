@@ -86,6 +86,15 @@
             parts.push(model.market.snapshotDateDisplay || '');
             return parts.filter(Boolean).join(' | ');
         }
+        if (currentFields.view === 'timeRibbon' && model.timeRibbon) {
+            parts.push(model.timeRibbon.categories.length + ' dates');
+            parts.push(model.timeRibbon.termLabel || '');
+            return parts.filter(Boolean).join(' | ');
+        }
+        if (currentFields.view === 'tdTermTime' && model.tdTermTime) {
+            parts.push(model.tdTermTime.terms.length + ' terms');
+            return parts.filter(Boolean).join(' | ');
+        }
         if (currentFields.view === 'lenders') {
             parts.push(model.meta.visibleLenders.toLocaleString() + '/' + model.meta.totalLenders.toLocaleString() + ' lenders');
         } else {
@@ -176,13 +185,26 @@
             if (chartUi.setStatus) chartUi.setStatus('No curve data');
             return;
         }
+        if (currentFields.view === 'timeRibbon' && (!model.timeRibbon || !model.timeRibbon.categories || !model.timeRibbon.categories.length)) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
+            clearOutput('No time ribbon data');
+            if (chartUi.setStatus) chartUi.setStatus('No time ribbon data');
+            return;
+        }
+        if (currentFields.view === 'tdTermTime' && (!model.tdTermTime || !model.tdTermTime.terms || !model.tdTermTime.terms.length)) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
+            clearOutput('No term vs time data');
+            if (chartUi.setStatus) chartUi.setStatus('No term vs time data');
+            return;
+        }
         if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No lender match');
             if (chartUi.setStatus) chartUi.setStatus('No lender match');
             return;
         }
-        if (currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
+        var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
+        if (!timeViews && currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No numeric values');
             if (chartUi.setStatus) chartUi.setStatus('No numeric values');
@@ -250,7 +272,8 @@
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
-        params.representation = currentFields.view === 'market' ? 'day' : (currentFields.representation || 'change');
+        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
+        params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         return params;
     }
 
@@ -323,7 +346,7 @@
             drawChart();
             return;
         }
-        if (fields().view === 'market' && chartState.loadedRepresentation !== 'day') {
+        if ((fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime') && chartState.loadedRepresentation !== 'day') {
             drawChart();
             return;
         }
@@ -342,8 +365,8 @@
 
     function toggleSeries(seriesKey) {
         if (!seriesKey) return;
-        if (fields().view === 'market') {
-            chartState.marketFocusKey = seriesKey;
+        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime') {
+            if (fields().view === 'market') chartState.marketFocusKey = seriesKey;
             if (!chartState.stale) renderFromCache();
             return;
         }

@@ -116,13 +116,20 @@
         { value: '90', label: '90D' }
     ];
 
-    var CHART_VIEWS = [
+    var BASE_CHART_VIEWS = [
         { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best rate now per lender.' },
         { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: true },
         { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate over time (heatmap).' },
         { value: 'compare', label: 'Compare', icon: 'compare', help: 'Selected products over time.' },
         { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Spread by group.' }
     ];
+    var TD_EXTRA_VIEWS = [
+        { value: 'timeRibbon', label: 'Ribbon (time)', icon: 'history', help: 'Rate range and mean over time, all banks.' },
+        { value: 'tdTermTime', label: 'Term vs time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.' }
+    ];
+    var CHART_VIEWS = section === 'term-deposits'
+        ? BASE_CHART_VIEWS.concat(TD_EXTRA_VIEWS)
+        : BASE_CHART_VIEWS;
 
     var WORKSPACE_TABS = [
         { id: 'explorer', label: 'Table', icon: 'table', help: 'Live rates table.' },

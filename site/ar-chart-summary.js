@@ -186,6 +186,23 @@
             renderMarketTable(model, fields);
             return;
         }
+        if (fields && fields.view === 'timeRibbon' && model.timeRibbon && model.timeRibbon.bankCurves && model.timeRibbon.bankCurves.length) {
+            var tr = model.timeRibbon;
+            var trRows = tr.bankCurves.map(function (curve) {
+                var last = curve.points && curve.points.length ? curve.points[curve.points.length - 1] : null;
+                return [bankCell(curve.bankName), esc(formatMetric(fields.yField, last && last.value)), esc(tr.termLabel || '')];
+            });
+            tableMarkup('Ribbon (time)', 'Rate over time: mean and range with bank lines. ' + (tr.termLabel ? tr.termLabel + ' term.' : ''), ['Bank', 'Latest rate', 'Term'], trRows);
+            return;
+        }
+        if (fields && fields.view === 'tdTermTime' && model.tdTermTime && model.tdTermTime.terms && model.tdTermTime.terms.length) {
+            var ttRows = model.tdTermTime.terms.map(function (t) {
+                var n = t.timeRibbon && t.timeRibbon.categories ? t.timeRibbon.categories.length : 0;
+                return [esc(t.termLabel), esc(n + ' dates'), 'Ribbon over time'];
+            });
+            tableMarkup('Term vs time', 'Yield by term over time: one ribbon per term.', ['Term', 'Dates', 'View'], ttRows);
+            return;
+        }
         if (fields && fields.view === 'lenders') {
             renderLenderTable(model, fields);
             return;

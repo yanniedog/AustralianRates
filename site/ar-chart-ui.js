@@ -126,6 +126,8 @@
         if (fields.view === 'surface') tags.push('Movement');
         if (fields.view === 'lenders') tags.push('Leaders');
         if (fields.view === 'market') tags.push('Curve');
+        if (fields.view === 'timeRibbon') tags.push('Ribbon (time)');
+        if (fields.view === 'tdTermTime') tags.push('Term vs time');
         if (fields.view === 'compare') tags.push('Compare');
         if (fields.view === 'distribution') tags.push('Distribution');
         if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('Limited');
@@ -161,6 +163,11 @@
         if (fields.view === 'market' && model.market) {
             pills.push('<span class="chart-summary-pill">' + esc(model.market.categories.length + ' ' + marketDimensionLabel(model.market).toLowerCase() + ' points') + '</span>');
             pills.push('<span class="chart-summary-pill">' + esc('Snapshot ' + model.market.snapshotDateDisplay) + '</span>');
+        } else if (fields.view === 'timeRibbon' && model.timeRibbon) {
+            pills.push('<span class="chart-summary-pill">' + esc(model.timeRibbon.termLabel + ' term') + '</span>');
+            pills.push('<span class="chart-summary-pill">' + esc(model.timeRibbon.categories.length + ' dates') + '</span>');
+        } else if (fields.view === 'tdTermTime' && model.tdTermTime) {
+            pills.push('<span class="chart-summary-pill">' + esc(model.tdTermTime.terms.length + ' terms') + '</span>');
         } else {
             pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
         }
@@ -188,6 +195,8 @@
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
         if (fields.view === 'market' && model.market) return marketDimensionLabel(model.market) + ' curve';
+        if (fields.view === 'timeRibbon' && model.timeRibbon) return 'Rate over time · ' + (model.timeRibbon.termLabel || '');
+        if (fields.view === 'tdTermTime' && model.tdTermTime) return 'Term vs time';
         if (fields.view === 'compare') return 'Selected shortlist';
         if (fields.view === 'distribution') return 'Distribution view';
         return 'Product series';
@@ -215,7 +224,11 @@
     function renderSeriesRail(model, selectionState) {
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
         var fields = getChartFields();
-        if (!model || (fields.view === 'market' ? !(model.market && model.market.categories && model.market.categories.length) : !model.visibleSeries.length)) {
+        var marketOk = model && model.market && model.market.categories && model.market.categories.length;
+        var timeRibbonOk = model && model.timeRibbon && model.timeRibbon.categories && model.timeRibbon.categories.length;
+        var tdTermTimeOk = model && model.tdTermTime && model.tdTermTime.terms && model.tdTermTime.terms.length;
+        var visibleOk = model && model.visibleSeries && model.visibleSeries.length;
+        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || ((fields.view !== 'market' && fields.view !== 'timeRibbon' && fields.view !== 'tdTermTime') && !visibleOk)) {
             els.chartSeriesNote.textContent = 'Loading';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
@@ -226,6 +239,40 @@
             : [];
 
         els.chartSeriesNote.textContent = railNote(fields, model);
+        if (fields.view === 'timeRibbon' && model.timeRibbon && model.timeRibbon.bankCurves && model.timeRibbon.bankCurves.length) {
+            els.chartSeriesList.innerHTML = model.timeRibbon.bankCurves.map(function (curve, index) {
+                var lastPoint = curve.points && curve.points.length ? curve.points[curve.points.length - 1] : null;
+                var valueText = lastPoint && Number.isFinite(lastPoint.value) ? chartConfig.formatMetricValue(fields.yField, lastPoint.value) : '-';
+                return seriesCardMarkup({
+                    key: curve.bankName,
+                    title: curve.bankName,
+                    valueText: valueText,
+                    caption: model.timeRibbon.termLabel + ' term',
+                    metaLeft: (curve.points && curve.points.length) + ' dates',
+                    metaRight: '',
+                    isSelected: false,
+                    isSpotlight: false,
+                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                });
+            }).join('');
+            return;
+        }
+        if (fields.view === 'tdTermTime' && model.tdTermTime) {
+            els.chartSeriesList.innerHTML = model.tdTermTime.terms.map(function (t, index) {
+                return seriesCardMarkup({
+                    key: t.termKey,
+                    title: t.termLabel,
+                    valueText: (t.timeRibbon && t.timeRibbon.categories && t.timeRibbon.categories.length) ? (t.timeRibbon.categories.length + ' dates') : '-',
+                    caption: 'Ribbon over time',
+                    metaLeft: '',
+                    metaRight: '',
+                    isSelected: false,
+                    isSpotlight: false,
+                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                });
+            }).join('');
+            return;
+        }
         if (fields.view === 'market' && model.market) {
             els.chartSeriesList.innerHTML = model.market.categories.map(function (category, index) {
                 var isSpotlight = selectionState && selectionState.marketFocusKey === category.key;

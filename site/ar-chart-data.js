@@ -43,26 +43,28 @@
     function subtitleParts(row) {
         if (!row) return [];
         return [
+            displayValue('term_months', row),
             displayValue('rate_structure', row),
+            displayValue('deposit_tier', row),
             displayValue('security_purpose', row),
             displayValue('repayment_type', row),
-            displayValue('lvr_tier', row),
-            displayValue('feature_set', row),
             displayValue('account_type', row),
             displayValue('rate_type', row),
-            displayValue('deposit_tier', row),
-            displayValue('term_months', row),
             displayValue('interest_payment', row),
+            displayValue('lvr_tier', row),
+            displayValue('feature_set', row),
         ].filter(function (value) {
             return value && value !== '-';
-        }).slice(0, 3);
+        }).slice(0, 4);
     }
 
     function seriesName(row) {
-        return [
-            row && row.bank_name ? String(row.bank_name) : '',
-            row && row.product_name ? String(row.product_name) : 'Unknown product',
-        ].filter(Boolean).join(' | ');
+        if (!row) return 'Unknown';
+        var parts = [row.bank_name ? String(row.bank_name) : ''];
+        if (row.product_name) parts.push(String(row.product_name));
+        else if (row.term_months != null) parts.push(row.term_months + 'm');
+        else parts.push('Unknown product');
+        return parts.filter(Boolean).join(' | ');
     }
 
     function shortText(value, maxLength) {
@@ -405,6 +407,14 @@
         var market = typeof marketModule.buildModel === 'function'
             ? marketModule.buildModel(rows, fields, selectionState)
             : null;
+        var timeRibbon = null;
+        var tdTermTime = null;
+        if (fields.view === 'timeRibbon' && marketModule.buildTimeRibbonModel) {
+            timeRibbon = marketModule.buildTimeRibbonModel(rows, fields, selectionState);
+        }
+        if (fields.view === 'tdTermTime' && marketModule.buildTdTermTimeModel) {
+            tdTermTime = marketModule.buildTdTermTimeModel(rows, fields);
+        }
         lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
             return spotlight && spotlight.series && entry.seriesKey === spotlight.series.key;
         }) || lenderRanking.entries[0] || null;
@@ -429,6 +439,8 @@
                 return selectedKeys.indexOf(series.key) >= 0;
             }),
             market: market,
+            timeRibbon: timeRibbon,
+            tdTermTime: tdTermTime,
             spotlight: spotlight,
         };
     }

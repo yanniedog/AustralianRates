@@ -529,6 +529,12 @@
         if (view === 'market' && typeof marketModule.buildMainOption === 'function') {
             return marketModule.buildMainOption(model, fields, size);
         }
+        if (view === 'timeRibbon' && model.timeRibbon && typeof marketModule.buildTimeRibbonOption === 'function') {
+            return marketModule.buildTimeRibbonOption(model.timeRibbon, fields, size);
+        }
+        if (view === 'tdTermTime' && model.tdTermTime && typeof marketModule.buildTdTermTimeOption === 'function') {
+            return marketModule.buildTdTermTimeOption(model.tdTermTime, fields, size);
+        }
         if (view === 'lenders') return buildLenderOption(model, fields, size);
         if (view === 'compare') return buildCompareOption(model, fields, size);
         if (view === 'distribution') return buildDistributionOption(model, fields, size);
