@@ -1,6 +1,6 @@
 # Data integrity audit report
 
-Generated: 2026-03-17T11:40:14.823Z
+Generated: 2026-03-17T15:11:27.911Z
 Target DB: australianrates_api
 
 ## Summary

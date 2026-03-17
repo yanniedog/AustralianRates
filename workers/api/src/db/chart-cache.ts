@@ -74,18 +74,29 @@ export type ChartCacheRow = {
   built_at: string
 }
 
-/** Read precomputed payload from D1. Returns null if missing or stale. */
+function isNoSuchTableError(e: unknown, table: string): boolean {
+  const msg = e instanceof Error ? e.message : String(e)
+  return /no such table/i.test(msg) && msg.includes(table)
+}
+
+/** Read precomputed payload from D1. Returns null if missing, stale, or table does not exist (migration 0030 not applied). */
 export async function readD1ChartCache(
   db: D1Database,
   section: ChartCacheSection,
   representation: 'day' | 'change',
 ): Promise<{ rows: Array<Record<string, unknown>>; representation: 'day' | 'change'; fallbackReason: string | null; builtAt: string } | null> {
-  const row = await db
-    .prepare(
-      `SELECT payload_json, row_count, built_at FROM ${CACHE_TABLE} WHERE section = ? AND representation = ?`,
-    )
-    .bind(section, representation)
-    .first<ChartCacheRow>()
+  let row: ChartCacheRow | null
+  try {
+    row = await db
+      .prepare(
+        `SELECT payload_json, row_count, built_at FROM ${CACHE_TABLE} WHERE section = ? AND representation = ?`,
+      )
+      .bind(section, representation)
+      .first<ChartCacheRow>()
+  } catch (e) {
+    if (isNoSuchTableError(e, CACHE_TABLE)) return null
+    throw e
+  }
   if (!row?.payload_json) return null
   const builtAt = row.built_at
   const cutoff = new Date()
@@ -105,7 +116,7 @@ export async function readD1ChartCache(
   }
 }
 
-/** Write precomputed result to D1 (upsert). */
+/** Write precomputed result to D1 (upsert). No-op if table does not exist (migration 0030 not applied). */
 export async function writeD1ChartCache(
   db: D1Database,
   section: ChartCacheSection,
@@ -114,17 +125,22 @@ export async function writeD1ChartCache(
 ): Promise<void> {
   const payloadJson = JSON.stringify(result.rows)
   const builtAt = new Date().toISOString()
-  await db
-    .prepare(
-      `INSERT INTO ${CACHE_TABLE} (section, representation, payload_json, row_count, built_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (section, representation) DO UPDATE SET
-         payload_json = excluded.payload_json,
-         row_count = excluded.row_count,
-         built_at = excluded.built_at`,
-    )
-    .bind(section, representation, payloadJson, result.rows.length, builtAt)
-    .run()
+  try {
+    await db
+      .prepare(
+        `INSERT INTO ${CACHE_TABLE} (section, representation, payload_json, row_count, built_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (section, representation) DO UPDATE SET
+           payload_json = excluded.payload_json,
+           row_count = excluded.row_count,
+           built_at = excluded.built_at`,
+      )
+      .bind(section, representation, payloadJson, result.rows.length, builtAt)
+      .run()
+  } catch (e) {
+    if (isNoSuchTableError(e, CACHE_TABLE)) return
+    throw e
+  }
 }
 
 /** Stable cache key for KV from section, representation, and sorted params. */

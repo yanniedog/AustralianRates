@@ -33,28 +33,39 @@ export async function pruneIntegrityAuditRuns(db: D1Database): Promise<void> {
   }
 }
 
+function isNoSuchTableIntegrityRuns(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e)
+  return /no such table/i.test(msg) && msg.includes('integrity_audit_runs')
+}
+
+/** Insert an integrity audit run. No-op if table does not exist (migration 0029 not applied). */
 export async function insertIntegrityAuditRun(
   db: D1Database,
   input: InsertIntegrityAuditRunInput,
 ): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO integrity_audit_runs (
-         run_id, checked_at, trigger_source, overall_ok, duration_ms, status, summary_json, findings_json
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-    )
-    .bind(
-      input.runId,
-      input.checkedAt,
-      input.triggerSource,
-      input.overallOk ? 1 : 0,
-      input.durationMs,
-      input.status,
-      input.summaryJson,
-      input.findingsJson,
-    )
-    .run()
-  await pruneIntegrityAuditRuns(db)
+  try {
+    await db
+      .prepare(
+        `INSERT INTO integrity_audit_runs (
+           run_id, checked_at, trigger_source, overall_ok, duration_ms, status, summary_json, findings_json
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      )
+      .bind(
+        input.runId,
+        input.checkedAt,
+        input.triggerSource,
+        input.overallOk ? 1 : 0,
+        input.durationMs,
+        input.status,
+        input.summaryJson,
+        input.findingsJson,
+      )
+      .run()
+    await pruneIntegrityAuditRuns(db)
+  } catch (e) {
+    if (isNoSuchTableIntegrityRuns(e)) return
+    throw e
+  }
 }
 
 export async function getLatestIntegrityAuditRun(
