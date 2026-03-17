@@ -55,15 +55,15 @@ node fetch-production-logs.js --errors --warn --actionable --stats --limit=2000
 
 ## 3. Schema and migration status
 
-### 3.1 Missing objects (production D1)
+### 3.1 Migration status (production D1)
 
-| Migration | Adds | Impact if not applied |
-|-----------|------|------------------------|
-| **0028** `admin_download_monthly.sql` | Columns `export_kind`, `month_iso` on `admin_download_jobs` | List admin download jobs can 500 unless code uses legacy SELECT (fallback exists in repo). |
-| **0029** `integrity_audit_runs.sql` | Table `integrity_audit_runs` | Manual integrity run completes but insert fails; no history in admin UI. |
-| **0030** `chart_pivot_cache.sql` | Table `chart_pivot_cache` | Analytics/series and chart cache cron fail with "no such table"; charts fall back to live compute once code handles missing table. |
+| Migration | Status | Applied |
+|-----------|--------|---------|
+| **0028** `admin_download_monthly.sql` | Applied | 18 Mar 2026 |
+| **0029** `integrity_audit_runs.sql` | Applied | 18 Mar 2026 |
+| **0030** `chart_pivot_cache.sql` | Applied | 18 Mar 2026 |
 
-### 3.2 How to apply migrations
+### 3.2 How to apply future migrations
 
 From repo root:
 
@@ -71,12 +71,6 @@ From repo root:
 cd workers/api
 npx wrangler d1 migrations apply australianrates_api --remote
 ```
-
-Apply in order (wrangler applies pending migrations in sequence). Verify after deploy:
-
-- `GET /api/home-loan-rates/analytics/series` (home_loans) returns 200.
-- `GET /api/home-loan-rates/admin/downloads` returns 200.
-- Trigger integrity audit from admin; no `integrity_audit_insert_failed` in logs.
 
 ---
 
@@ -105,9 +99,8 @@ Apply in order (wrangler applies pending migrations in sequence). Verify after d
 ### 4.3 Remediation
 
 1. **Orphan latest_savings_series (2 rows)**  
-   - Query:  
-     `SELECT series_key FROM latest_savings_series l LEFT JOIN (SELECT DISTINCT series_key FROM historical_savings_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`  
-   - Either delete those two rows from `latest_savings_series`, or restore/backfill the corresponding rows in `historical_savings_rates` if the products are still active.
+   - **Done (18 Mar 2026):** Deleted the 2 orphan rows via  
+     `DELETE FROM latest_savings_series WHERE series_key IN (SELECT l.series_key FROM latest_savings_series l LEFT JOIN (SELECT DISTINCT series_key FROM historical_savings_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL)` on production D1. Re-run audit confirms 0 orphan latest_savings_series.
 
 2. **Legacy raw_payloads (3,714)**  
    - Treat as known backlog; no change to audit pass/fail. Prune or archive per `docs/database-live-audit.md` (e.g. retention by `fetched_at` or delete orphans after backup).
