@@ -68,6 +68,25 @@ body.ar-public .market-intro-console-log-prompt { color: var(--ar-accent); }
 :root[data-theme="light"] body.ar-public .market-intro-prompt,
 :root[data-theme="light"] body.ar-public .market-intro-command-prompt,
 :root[data-theme="light"] body.ar-public .market-intro-console-log-prompt { color: #0b5a47; }
+
+:root[data-theme="light"] body.ar-public .market-intro {
+    background: radial-gradient(circle at top right, color-mix(in srgb, var(--ar-showcase-glow) 48%, transparent), transparent 34%), linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-soft) 96%, var(--ar-bg)), color-mix(in srgb, var(--ar-surface) 98%, var(--ar-bg-elevated)));
+}
+:root[data-theme="light"] body.ar-public .market-intro-command-block {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 98%, white), color-mix(in srgb, var(--ar-surface-3) 96%, white));
+}
+:root[data-theme="light"] body.ar-public .market-intro-console {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, white), color-mix(in srgb, var(--ar-surface-3) 98%, white));
+}
+:root[data-theme="light"] body.ar-public .market-intro-live-card,
+:root[data-theme="light"] body.ar-public .market-intro-console-log-shell,
+:root[data-theme="light"] body.ar-public .market-intro-step {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 92%, var(--ar-bg-elevated)), color-mix(in srgb, var(--ar-surface) 96%, var(--ar-bg-elevated)));
+}
+:root[data-theme="light"] body.ar-public .market-intro-bank-chip {
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-bg-elevated));
+}
+
 body.ar-public .market-intro-caret {
     width: 10px;
     height: 1.05em;

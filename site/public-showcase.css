@@ -109,6 +109,14 @@ body.ar-legal .bg-layer {
         linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 78%, #060a10) 0%, #050b11 54%, #02050a 100%);
 }
 
+:root[data-theme="light"] body.ar-public .bg-layer,
+:root[data-theme="light"] body.ar-legal .bg-layer {
+    background:
+        radial-gradient(circle at 18% 0, color-mix(in srgb, var(--ar-accent) 8%, transparent), transparent 24%),
+        radial-gradient(circle at 82% 10%, var(--ar-showcase-glow), transparent 24%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-bg) 98%, var(--ar-surface-soft)) 0%, var(--ar-bg-elevated) 54%, var(--ar-bg) 100%);
+}
+
 body.ar-public .site-header,
 body.ar-legal .site-header {
     top: 12px;
