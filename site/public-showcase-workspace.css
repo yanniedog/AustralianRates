@@ -68,6 +68,8 @@ body.ar-public .terminal-more-summary {
 
 body.ar-public .terminal-chart-surface {
     border-radius: 20px;
+    border-width: 1px;
+    border-style: solid;
     background:
         linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent)),
         repeating-linear-gradient(
@@ -77,6 +79,18 @@ body.ar-public .terminal-chart-surface {
             color-mix(in srgb, var(--ar-line) 72%, transparent) 58px,
             color-mix(in srgb, var(--ar-line) 72%, transparent) 59px
         );
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+@supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
+    body.ar-public .terminal-chart-surface {
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+    }
+}
+
+body.ar-public .terminal-chart-surface:has(#chart-output[data-chart-rendered="true"]) {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 18%, transparent);
 }
 
 body.ar-public .terminal-stat,
@@ -86,6 +100,17 @@ body.ar-public .chart-series-card,
 body.ar-public .chart-spotlight-card {
     border-radius: 20px;
     background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+}
+
+body.ar-public .chart-series-card:hover,
+body.ar-public .chart-spotlight-card:hover {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+
+body.ar-public .chart-preset.is-active {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 36%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-showcase-spark) 14%, var(--ar-accent-soft));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 28%, transparent);
 }
 
 body.ar-public .terminal-stat strong {

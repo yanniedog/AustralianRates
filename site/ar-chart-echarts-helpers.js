@@ -44,8 +44,8 @@
         var theme = chartTheme();
         return {
             textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
-            animationDuration: 420,
-            animationDurationUpdate: 300,
+            animationDuration: 320,
+            animationDurationUpdate: 240,
             animationEasing: 'cubicOut',
         };
     }
@@ -65,7 +65,7 @@
             backgroundColor: theme.tooltipBackground,
             borderColor: theme.tooltipBorder,
             textStyle: { color: theme.tooltipText },
-            extraCssText: theme.tooltipShadow,
+            extraCssText: theme.tooltipShadow + '; transition: opacity 0.18s ease-out, transform 0.18s ease-out;',
         };
     }
 

@@ -192,18 +192,12 @@ UNION ALL SELECT 'term_deposits', SUM(CASE WHEN series_key IS NULL OR TRIM(serie
       label: 'runs_with_no_outputs_count',
       expectedAlias: 'runs_with_no_outputs',
       sql: `WITH run_outputs AS (
-  SELECT rr.run_id, rr.status,
-    (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
+  SELECT rr.run_id, (SELECT COUNT(*) FROM historical_loan_rates hl WHERE hl.run_id = rr.run_id) AS home_rows,
     (SELECT COUNT(*) FROM historical_savings_rates hs WHERE hs.run_id = rr.run_id) AS savings_rows,
     (SELECT COUNT(*) FROM historical_term_deposit_rates ht WHERE ht.run_id = rr.run_id) AS td_rows
   FROM run_reports rr
-),
-run_violations AS (
-  SELECT run_id, SUM(CASE WHEN COALESCE(lineage_error_count, 0) > 0 OR (COALESCE(written_row_count, 0) = 0 AND NOT (COALESCE(index_fetch_succeeded, 0) = 1 AND COALESCE(expected_detail_count, 0) = 0 AND COALESCE(lineage_error_count, 0) = 0)) THEN 1 ELSE 0 END) AS problematic_dataset_rows
-  FROM lender_dataset_runs GROUP BY run_id
 )
-SELECT COUNT(*) AS runs_with_no_outputs FROM run_outputs LEFT JOIN run_violations rv ON rv.run_id = run_outputs.run_id
-WHERE status = 'ok' AND (home_rows + savings_rows + td_rows) = 0 AND COALESCE(rv.problematic_dataset_rows, 0) > 0`,
+SELECT COUNT(*) AS runs_with_no_outputs FROM run_outputs WHERE (home_rows + savings_rows + td_rows) = 0`,
     },
     {
       label: 'exact_duplicate_home',
@@ -339,201 +333,240 @@ export function runDataIntegrityAudit(
   const executedCommands: Array<{ label: string; command: string; exit_code: number }> = []
   const retries: unknown[] = []
 
-  const run = (spec: QuerySpec) => {
+  const run = (spec: QuerySpec): Array<Record<string, unknown>> => {
     const result = runQuery(config.db, spec, spawnRunner)
     executedCommands.push({ label: spec.label, command: result.command, exit_code: result.exitCode })
     if (result.retry) retries.push(result.retry)
     return result.rows
   }
 
-  const datasetStats = run(queries[0])
-  const productKeyConsistency = run(queries[1])
-  const missingTotal = (productKeyConsistency as Array<Record<string, unknown>>).reduce(
-    (sum, r) => sum + num(r.missing_series_key),
-    0,
-  )
-  const mismatchedTotal = (productKeyConsistency as Array<Record<string, unknown>>).reduce(
-    (sum, r) => sum + num(r.mismatched_series_key),
-    0,
-  )
-  findings.push({
-    category: 'invalid',
-    check: 'product_key_consistency',
-    passed: missingTotal === 0 && mismatchedTotal === 0,
-    count: missingTotal + mismatchedTotal,
-    detail: {
-      missing_series_key_total: missingTotal,
-      mismatched_series_key_total: mismatchedTotal,
-      by_dataset: productKeyConsistency,
-    },
+  const runSafe = (
+    spec: QuerySpec,
+    interpret: (rows: Array<Record<string, unknown>>) => void,
+  ): void => {
+    try {
+      const rows = run(spec)
+      interpret(rows)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      executedCommands.push({ label: spec.label, command: '(throw)', exit_code: 1 })
+      findings.push({
+        category: 'erroneous',
+        check: spec.label,
+        passed: false,
+        detail: { error: message },
+      })
+    }
+  }
+
+  let productKeyConsistency: Array<Record<string, unknown>> = []
+  runSafe(queries[0], () => {})
+  runSafe(queries[1], (rows) => {
+    productKeyConsistency = rows
+  })
+  if (productKeyConsistency.length > 0) {
+    const missingTotal = productKeyConsistency.reduce((sum, r) => sum + num(r.missing_series_key), 0)
+    const mismatchedTotal = productKeyConsistency.reduce((sum, r) => sum + num(r.mismatched_series_key), 0)
+    findings.push({
+      category: 'invalid',
+      check: 'product_key_consistency',
+      passed: missingTotal === 0 && mismatchedTotal === 0,
+      count: missingTotal + mismatchedTotal,
+      detail: {
+        missing_series_key_total: missingTotal,
+        mismatched_series_key_total: mismatchedTotal,
+        by_dataset: productKeyConsistency,
+      },
+    })
+  }
+
+  runSafe(queries[2], (rows) => {
+    const presenceCount = num(rows[0]?.orphan_count)
+    let sample: Array<Record<string, unknown>> = []
+    try {
+      sample = run(queries[3])
+    } catch {
+      // optional sample
+    }
+    findings.push({
+      category: 'dead',
+      check: 'orphan_product_presence_status',
+      passed: presenceCount === 0,
+      count: presenceCount,
+      detail: { orphan_count: presenceCount },
+      sample: sample.length ? sample : undefined,
+    })
   })
 
-  const orphanPresenceCount = run(queries[2]) as Array<Record<string, unknown>>
-  const orphanPresenceSample = run(queries[3]) as Array<Record<string, unknown>>
-  const presenceCount = num(orphanPresenceCount[0]?.orphan_count)
-  findings.push({
-    category: 'dead',
-    check: 'orphan_product_presence_status',
-    passed: presenceCount === 0,
-    count: presenceCount,
-    detail: { orphan_count: presenceCount },
-    sample: orphanPresenceSample,
+  runSafe(queries[4], (rows) => {
+    const feCount = num(rows[0]?.orphan_count)
+    let sample: Array<Record<string, unknown>> = []
+    try {
+      sample = run(queries[5])
+    } catch {
+      // optional sample
+    }
+    findings.push({
+      category: 'dead',
+      check: 'fetch_event_raw_object_linkage',
+      passed: feCount === 0,
+      count: feCount,
+      detail: { orphan_count: feCount },
+      sample: sample.length ? sample : undefined,
+    })
   })
 
-  const fetchOrphanCount = run(queries[4]) as Array<Record<string, unknown>>
-  const fetchOrphanSample = run(queries[5]) as Array<Record<string, unknown>>
-  const feCount = num(fetchOrphanCount[0]?.orphan_count)
-  findings.push({
-    category: 'dead',
-    check: 'fetch_event_raw_object_linkage',
-    passed: feCount === 0,
-    count: feCount,
-    detail: { orphan_count: feCount },
-    sample: fetchOrphanSample,
+  runSafe(queries[6], (rows) => {
+    const rpCount = num(rows[0]?.orphan_count)
+    findings.push({
+      category: 'dead',
+      check: 'legacy_raw_payload_backlog',
+      passed: true,
+      count: rpCount,
+      detail: { orphan_count: rpCount },
+    })
   })
 
-  const rawPayloadCount = run(queries[6]) as Array<Record<string, unknown>>
-  const rpCount = num(rawPayloadCount[0]?.orphan_count)
-  findings.push({
-    category: 'dead',
-    check: 'legacy_raw_payload_backlog',
-    passed: true,
-    count: rpCount,
-    detail: { orphan_count: rpCount },
+  runSafe(queries[7], (rows) => {
+    const runsNoOut = num(rows[0]?.runs_with_no_outputs)
+    findings.push({
+      category: 'erroneous',
+      check: 'runs_with_no_outputs',
+      passed: runsNoOut === 0,
+      count: runsNoOut,
+      detail: { runs_with_no_outputs: runsNoOut },
+    })
   })
 
-  const runsNoOutputs = run(queries[7]) as Array<Record<string, unknown>>
-  const runsNoOut = num(runsNoOutputs[0]?.runs_with_no_outputs)
-  findings.push({
-    category: 'erroneous',
-    check: 'runs_with_no_outputs',
-    passed: runsNoOut === 0,
-    count: runsNoOut,
-    detail: { runs_with_no_outputs: runsNoOut },
+  runSafe(queries[8], (rows) => {
+    findings.push({
+      category: 'duplicate',
+      check: 'exact_duplicate_rows_home_loans',
+      passed: num(rows[0]?.duplicate_groups) === 0,
+      count: num(rows[0]?.duplicate_rows),
+      detail: { duplicate_groups: num(rows[0]?.duplicate_groups), duplicate_rows: num(rows[0]?.duplicate_rows) },
+    })
+  })
+  runSafe(queries[9], (rows) => {
+    findings.push({
+      category: 'duplicate',
+      check: 'exact_duplicate_rows_savings',
+      passed: num(rows[0]?.duplicate_groups) === 0,
+      count: num(rows[0]?.duplicate_rows),
+      detail: { duplicate_groups: num(rows[0]?.duplicate_groups), duplicate_rows: num(rows[0]?.duplicate_rows) },
+    })
+  })
+  runSafe(queries[10], (rows) => {
+    findings.push({
+      category: 'duplicate',
+      check: 'exact_duplicate_rows_term_deposits',
+      passed: num(rows[0]?.duplicate_groups) === 0,
+      count: num(rows[0]?.duplicate_rows),
+      detail: { duplicate_groups: num(rows[0]?.duplicate_groups), duplicate_rows: num(rows[0]?.duplicate_rows) },
+    })
   })
 
-  const dupHome = run(queries[8]) as Array<Record<string, unknown>>
-  const dupSavings = run(queries[9]) as Array<Record<string, unknown>>
-  const dupTd = run(queries[10]) as Array<Record<string, unknown>>
-  const dupHomeGroups = num(dupHome[0]?.duplicate_groups)
-  const dupHomeRows = num(dupHome[0]?.duplicate_rows)
-  const dupSavingsGroups = num(dupSavings[0]?.duplicate_groups)
-  const dupSavingsRows = num(dupSavings[0]?.duplicate_rows)
-  const dupTdGroups = num(dupTd[0]?.duplicate_groups)
-  const dupTdRows = num(dupTd[0]?.duplicate_rows)
-  findings.push({
-    category: 'duplicate',
-    check: 'exact_duplicate_rows_home_loans',
-    passed: dupHomeGroups === 0,
-    count: dupHomeRows,
-    detail: { duplicate_groups: dupHomeGroups, duplicate_rows: dupHomeRows },
+  runSafe(queries[11], (rows) => {
+    const c = num(rows[0]?.out_of_range_count)
+    findings.push({
+      category: 'invalid',
+      check: 'out_of_range_rates_home_loans',
+      passed: c === 0,
+      count: c,
+      detail: { bounds: '0.5-25', out_of_range_count: c },
+    })
   })
-  findings.push({
-    category: 'duplicate',
-    check: 'exact_duplicate_rows_savings',
-    passed: dupSavingsGroups === 0,
-    count: dupSavingsRows,
-    detail: { duplicate_groups: dupSavingsGroups, duplicate_rows: dupSavingsRows },
+  runSafe(queries[12], (rows) => {
+    const c = num(rows[0]?.out_of_range_count)
+    findings.push({
+      category: 'invalid',
+      check: 'out_of_range_rates_savings',
+      passed: c === 0,
+      count: c,
+      detail: { bounds: '0-15', out_of_range_count: c },
+    })
   })
-  findings.push({
-    category: 'duplicate',
-    check: 'exact_duplicate_rows_term_deposits',
-    passed: dupTdGroups === 0,
-    count: dupTdRows,
-    detail: { duplicate_groups: dupTdGroups, duplicate_rows: dupTdRows },
-  })
-
-  const oorHome = run(queries[11]) as Array<Record<string, unknown>>
-  const oorSavings = run(queries[12]) as Array<Record<string, unknown>>
-  const oorTd = run(queries[13]) as Array<Record<string, unknown>>
-  const oorHomeCount = num(oorHome[0]?.out_of_range_count)
-  const oorSavingsCount = num(oorSavings[0]?.out_of_range_count)
-  const oorTdCount = num(oorTd[0]?.out_of_range_count)
-  findings.push({
-    category: 'invalid',
-    check: 'out_of_range_rates_home_loans',
-    passed: oorHomeCount === 0,
-    count: oorHomeCount,
-    detail: { bounds: '0.5-25', out_of_range_count: oorHomeCount },
-  })
-  findings.push({
-    category: 'invalid',
-    check: 'out_of_range_rates_savings',
-    passed: oorSavingsCount === 0,
-    count: oorSavingsCount,
-    detail: { bounds: '0-15', out_of_range_count: oorSavingsCount },
-  })
-  findings.push({
-    category: 'invalid',
-    check: 'out_of_range_rates_term_deposits',
-    passed: oorTdCount === 0,
-    count: oorTdCount,
-    detail: { bounds: '0-15', out_of_range_count: oorTdCount },
+  runSafe(queries[13], (rows) => {
+    const c = num(rows[0]?.out_of_range_count)
+    findings.push({
+      category: 'invalid',
+      check: 'out_of_range_rates_term_deposits',
+      passed: c === 0,
+      count: c,
+      detail: { bounds: '0-15', out_of_range_count: c },
+    })
   })
 
-  const nullHome = run(queries[14]) as Array<Record<string, unknown>>
-  const nullSavings = run(queries[15]) as Array<Record<string, unknown>>
-  const nullTd = run(queries[16]) as Array<Record<string, unknown>>
-  const nullHomeCount = num(nullHome[0]?.null_count)
-  const nullSavingsCount = num(nullSavings[0]?.null_count)
-  const nullTdCount = num(nullTd[0]?.null_count)
-  findings.push({
-    category: 'invalid',
-    check: 'null_required_fields_home_loans',
-    passed: nullHomeCount === 0,
-    count: nullHomeCount,
-    detail: { null_count: nullHomeCount },
+  runSafe(queries[14], (rows) => {
+    const c = num(rows[0]?.null_count)
+    findings.push({
+      category: 'invalid',
+      check: 'null_required_fields_home_loans',
+      passed: c === 0,
+      count: c,
+      detail: { null_count: c },
+    })
   })
-  findings.push({
-    category: 'invalid',
-    check: 'null_required_fields_savings',
-    passed: nullSavingsCount === 0,
-    count: nullSavingsCount,
-    detail: { null_count: nullSavingsCount },
+  runSafe(queries[15], (rows) => {
+    const c = num(rows[0]?.null_count)
+    findings.push({
+      category: 'invalid',
+      check: 'null_required_fields_savings',
+      passed: c === 0,
+      count: c,
+      detail: { null_count: c },
+    })
   })
-  findings.push({
-    category: 'invalid',
-    check: 'null_required_fields_term_deposits',
-    passed: nullTdCount === 0,
-    count: nullTdCount,
-    detail: { null_count: nullTdCount },
-  })
-
-  const orphanLatestHome = run(queries[17]) as Array<Record<string, unknown>>
-  const orphanLatestSavings = run(queries[18]) as Array<Record<string, unknown>>
-  const orphanLatestTd = run(queries[19]) as Array<Record<string, unknown>>
-  const olHome = num(orphanLatestHome[0]?.orphan_count)
-  const olSavings = num(orphanLatestSavings[0]?.orphan_count)
-  const olTd = num(orphanLatestTd[0]?.orphan_count)
-  findings.push({
-    category: 'dead',
-    check: 'orphan_latest_home_loan_series',
-    passed: olHome === 0,
-    count: olHome,
-    detail: { orphan_count: olHome },
-  })
-  findings.push({
-    category: 'dead',
-    check: 'orphan_latest_savings_series',
-    passed: olSavings === 0,
-    count: olSavings,
-    detail: { orphan_count: olSavings },
-  })
-  findings.push({
-    category: 'dead',
-    check: 'orphan_latest_td_series',
-    passed: olTd === 0,
-    count: olTd,
-    detail: { orphan_count: olTd },
+  runSafe(queries[16], (rows) => {
+    const c = num(rows[0]?.null_count)
+    findings.push({
+      category: 'invalid',
+      check: 'null_required_fields_term_deposits',
+      passed: c === 0,
+      count: c,
+      detail: { null_count: c },
+    })
   })
 
-  const freshnessRows = run(queries[20]) as Array<Record<string, unknown>>
-  const mismatchCount = (freshnessRows || []).filter((r) => num(r.latest_global_mismatch) === 1).length
-  findings.push({
-    category: 'indicator',
-    check: 'latest_vs_global_freshness',
-    passed: true,
-    detail: { mismatch_dataset_count: mismatchCount, datasets: freshnessRows },
+  runSafe(queries[17], (rows) => {
+    const c = num(rows[0]?.orphan_count)
+    findings.push({
+      category: 'dead',
+      check: 'orphan_latest_home_loan_series',
+      passed: c === 0,
+      count: c,
+      detail: { orphan_count: c },
+    })
+  })
+  runSafe(queries[18], (rows) => {
+    const c = num(rows[0]?.orphan_count)
+    findings.push({
+      category: 'dead',
+      check: 'orphan_latest_savings_series',
+      passed: c === 0,
+      count: c,
+      detail: { orphan_count: c },
+    })
+  })
+  runSafe(queries[19], (rows) => {
+    const c = num(rows[0]?.orphan_count)
+    findings.push({
+      category: 'dead',
+      check: 'orphan_latest_td_series',
+      passed: c === 0,
+      count: c,
+      detail: { orphan_count: c },
+    })
+  })
+
+  runSafe(queries[20], (rows) => {
+    const mismatchCount = (rows || []).filter((r) => num(r.latest_global_mismatch) === 1).length
+    findings.push({
+      category: 'indicator',
+      check: 'latest_vs_global_freshness',
+      passed: true,
+      detail: { mismatch_dataset_count: mismatchCount, datasets: rows },
+    })
   })
 
   const failed = findings.filter((f) => !f.passed)

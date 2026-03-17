@@ -370,6 +370,150 @@
     color: var(--ar-text-muted);
 }
 
+/* --- Ultra-modern chart interface: responsive, slick, interactive --- */
+
+.terminal-chart-surface {
+    transition:
+        border-color var(--ar-motion-base, 240ms) var(--ar-ease, cubic-bezier(0.22, 1, 0.36, 1)),
+        box-shadow var(--ar-motion-base, 240ms) var(--ar-ease),
+        background var(--ar-motion-base, 240ms) var(--ar-ease);
+    contain: layout style;
+}
+
+.terminal-chart-surface:has(#chart-output[data-chart-rendered="true"]) {
+    border-color: color-mix(in srgb, var(--ar-accent, #2563eb) 28%, var(--ar-line));
+}
+
+.terminal-chart-output,
+#chart-output,
+#chart-detail-output {
+    transition: opacity var(--ar-motion-base, 240ms) var(--ar-ease);
+    contain: layout style paint;
+}
+
+#chart-output[data-chart-rendered="true"] {
+    opacity: 1;
+}
+
+.chart-output-empty,
+.chart-detail-empty {
+    animation: chart-fade-in 0.4s var(--ar-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+#chart-output:not([data-chart-rendered="true"]) .chart-output-empty,
+#chart-detail-output:not([data-chart-rendered="true"]) .chart-detail-empty {
+    animation: chart-fade-in 0.4s var(--ar-ease) both, chart-loading-pulse 1.6s ease-in-out infinite 0.5s;
+}
+
+@keyframes chart-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes chart-loading-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.72; }
+}
+
+.chart-question-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.chart-preset {
+    transition:
+        border-color var(--ar-motion-fast, 180ms) var(--ar-ease),
+        background-color var(--ar-motion-fast, 180ms) var(--ar-ease),
+        color var(--ar-motion-fast, 180ms) var(--ar-ease),
+        box-shadow var(--ar-motion-fast, 180ms) var(--ar-ease),
+        transform var(--ar-motion-fast, 180ms) var(--ar-ease);
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.chart-preset:hover {
+    border-color: color-mix(in srgb, var(--ar-accent) 36%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-accent-soft) 60%, var(--ar-surface-2));
+}
+
+.chart-preset:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 2px;
+}
+
+.chart-preset.is-active {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-accent) 40%, transparent);
+}
+
+.chart-series-card,
+.chart-spotlight-card {
+    transition:
+        transform var(--ar-motion-fast, 180ms) var(--ar-ease),
+        box-shadow var(--ar-motion-fast, 180ms) var(--ar-ease),
+        border-color var(--ar-motion-fast, 180ms) var(--ar-ease),
+        background-color var(--ar-motion-fast, 180ms) var(--ar-ease);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.chart-series-card:hover,
+.chart-spotlight-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.chart-series-card:focus-visible,
+.chart-spotlight-card:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 2px;
+}
+
+.chart-series-card.is-active,
+.chart-series-card.is-selected {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--series-accent, var(--ar-accent)) 50%, transparent);
+}
+
+.chart-summary-pill {
+    transition:
+        transform var(--ar-motion-fast, 180ms) var(--ar-ease),
+        opacity var(--ar-motion-fast, 180ms) var(--ar-ease);
+}
+
+.chart-summary-pill:hover {
+    opacity: 1;
+}
+
+.chart-point-link {
+    transition: color var(--ar-motion-fast, 180ms) var(--ar-ease);
+}
+
+.terminal-chart-controls select,
+.terminal-chart-controls .terminal-field input {
+    transition: border-color var(--ar-motion-fast, 180ms) var(--ar-ease), background-color var(--ar-motion-fast, 180ms) var(--ar-ease);
+}
+
+#draw-chart {
+    transition:
+        border-color var(--ar-motion-fast, 180ms) var(--ar-ease),
+        background-color var(--ar-motion-fast, 180ms) var(--ar-ease),
+        transform var(--ar-motion-fast, 180ms) var(--ar-ease);
+    -webkit-tap-highlight-color: transparent;
+}
+
+#draw-chart:hover {
+    transform: translateY(-1px);
+}
+
+#draw-chart:active {
+    transform: translateY(0);
+}
+
+#draw-chart:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 2px;
+}
+
 @media (max-width: 760px) {
     .terminal-bottom-tabs {
         flex-direction: column;
@@ -385,5 +529,25 @@
     #chart-output,
     #chart-detail-output {
         min-height: 280px;
+    }
+
+    .chart-question-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .chart-preset {
+        flex: 0 0 auto;
+        scroll-snap-align: start;
+        min-height: 44px;
+    }
+
+    .chart-series-card,
+    .chart-spotlight-card {
+        min-height: 44px;
+        padding: 14px;
     }
 }
