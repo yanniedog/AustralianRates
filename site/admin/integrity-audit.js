@@ -166,9 +166,18 @@
             .then(function (res) { return res.json(); })
             .then(function (body) {
                 if (body && body.ok) {
-                    setStatus(body.stored === false ? 'Audit complete but result not saved (see hint below).' : 'Audit complete. Refreshing...');
+                    setStatus(body.stored === false ? 'Audit complete but result not saved (see hint below).' : 'Audit complete.');
                     var latestFromRun = latestFromRunResponse(body);
-                    if (latestFromRun) render({ latest: latestFromRun, history: [], stored: body.stored });
+                    if (latestFromRun) {
+                        render({ latest: latestFromRun, history: [], stored: body.stored });
+                        // Refresh after a short delay so D1 read-after-write sees the new run.
+                        // Immediate load() can return stale "latest" and make the report disappear.
+                        setTimeout(function () {
+                            load();
+                            setStatus('');
+                        }, 2000);
+                        return;
+                    }
                     load();
                 } else {
                     var errMsg = (body && body.error && body.error.message) ? body.error.message : (body && body.message) ? body.message : 'unknown';

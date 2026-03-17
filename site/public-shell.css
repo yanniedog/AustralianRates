@@ -685,14 +685,11 @@ body.ar-not-found .market-intro-actions {
         gap: 8px 12px;
         padding: 10px 14px;
         min-height: 0;
+        overflow: hidden;
     }
 
     .site-header-inner > * {
         min-width: 0;
-    }
-
-    .site-header-inner {
-        overflow: hidden;
     }
 
     .site-brand-lockup {
