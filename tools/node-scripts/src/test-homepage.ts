@@ -658,6 +658,7 @@ async function verifyPublicTriggerRemoval(page, results, label) {
 
 async function verifyChartSmoke(page, results, label) {
     const button = page.locator('#draw-chart');
+    await button.scrollIntoViewIfNeeded().catch(() => {});
     if (!(await button.isVisible().catch(() => false))) {
         fail(results, `${label}: draw-chart button missing`);
         return;
