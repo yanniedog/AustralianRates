@@ -144,16 +144,93 @@ adminRoutes.get('/integrity-audit', async (c) => {
   })
 })
 
+function serializeError(e: unknown): { message: string; name: string; stack: string | null } {
+  if (e instanceof Error) {
+    return { message: e.message, name: e.name, stack: e.stack ?? null }
+  }
+  return {
+    message: String(e),
+    name: 'NonError',
+    stack: null,
+  }
+}
+
 adminRoutes.post('/integrity-audit/run', async (c) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
+    body: JSON.stringify({
+      sessionId: '6fa854',
+      location: 'admin.ts:integrity-audit/run:entry',
+      message: 'POST /integrity-audit/run handler entered',
+      data: { route: '/admin/integrity-audit/run' },
+      timestamp: Date.now(),
+      hypothesisId: 'H5',
+    }),
+  }).catch(() => {})
+  // #endregion
   let result: Awaited<ReturnType<typeof runDataIntegrityAudit>>
   try {
     const timezone = c.env.MELBOURNE_TIMEZONE || 'Australia/Melbourne'
+    // #region agent log
+    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
+      body: JSON.stringify({
+        sessionId: '6fa854',
+        location: 'admin.ts:before-runDataIntegrityAudit',
+        message: 'About to call runDataIntegrityAudit',
+        data: { timezone },
+        timestamp: Date.now(),
+        hypothesisId: 'H2',
+      }),
+    }).catch(() => {})
+    // #endregion
     result = await runDataIntegrityAudit(c.env.DB, timezone)
+    // #region agent log
+    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
+      body: JSON.stringify({
+        sessionId: '6fa854',
+        location: 'admin.ts:after-runDataIntegrityAudit',
+        message: 'runDataIntegrityAudit completed',
+        data: { status: result.status, duration_ms: result.duration_ms },
+        timestamp: Date.now(),
+        hypothesisId: 'H2',
+      }),
+    }).catch(() => {})
+    // #endregion
   } catch (error) {
+    const errSer = serializeError(error)
     log.error('admin', 'integrity_audit_run_failed', {
       error,
-      context: JSON.stringify({ route: '/admin/integrity-audit/run' }),
+      context: JSON.stringify({
+        route: '/admin/integrity-audit/run',
+        errorMessage: errSer.message,
+        errorName: errSer.name,
+        errorStack: errSer.stack,
+      }),
     })
+    // #region agent log
+    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
+      body: JSON.stringify({
+        sessionId: '6fa854',
+        location: 'admin.ts:integrity-audit/run:catch',
+        message: 'runDataIntegrityAudit threw',
+        data: {
+          errorMessage: errSer.message,
+          errorName: errSer.name,
+          errorStack: errSer.stack,
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'H2',
+      }),
+    }).catch(() => {})
+    // #endregion
     return jsonError(c, 500, 'INTEGRITY_AUDIT_FAILED', 'Data integrity audit failed to execute.')
   }
 
@@ -172,12 +249,15 @@ adminRoutes.post('/integrity-audit/run', async (c) => {
     })
     stored = true
   } catch (error) {
+    const errSer = serializeError(error)
     log.error('admin', 'integrity_audit_insert_failed', {
       error,
       context: JSON.stringify({
         route: '/admin/integrity-audit/run',
         run_id: runId,
         hint: 'Ensure migration 0029_integrity_audit_runs.sql is applied to D1.',
+        errorMessage: errSer.message,
+        errorName: errSer.name,
       }),
     })
   }

@@ -171,7 +171,8 @@
                     if (latestFromRun) render({ latest: latestFromRun, history: [], stored: body.stored });
                     load();
                 } else {
-                    setStatus('Audit failed: ' + (body && body.message ? body.message : 'unknown'));
+                    var errMsg = (body && body.error && body.error.message) ? body.error.message : (body && body.message) ? body.message : 'unknown';
+                    setStatus('Audit failed: ' + errMsg);
                     runAuditBtn.disabled = false;
                     refreshBtn.disabled = false;
                 }
