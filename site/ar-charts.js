@@ -296,6 +296,13 @@
             });
         })().catch(function (error) {
             chartState.fallbackReason = '';
+            // #region agent log
+            var isTimeout = (network && typeof network.isTimeoutError === 'function' && network.isTimeoutError(error)) || (error && error.code === 'timeout');
+            var logPayload = { sessionId: 'd301fc', location: 'ar-charts.js:drawChart', message: 'Chart load failed', data: { code: error && error.code, timeoutMs: error && error.timeoutMs, timedOut: !!isTimeout, userMessage: describeError(error, chartErrorMessage()) }, timestamp: Date.now(), hypothesisId: 'H1' };
+            if (config && config.apiBase) {
+                fetch(config.apiBase + '/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd301fc' }, body: JSON.stringify(logPayload) }).catch(function () {});
+            }
+            // #endregion
             clearOutput('Error loading chart');
             if (chartUi.setErrorState) chartUi.setErrorState(describeError(error, chartErrorMessage()));
             if (chartUi.setStatus) chartUi.setStatus('Error loading chart');

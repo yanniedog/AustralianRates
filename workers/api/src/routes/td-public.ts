@@ -24,6 +24,7 @@ import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { queryTdRateChangeIntegrity, queryTdRateChanges } from '../db/rate-change-log'
+import { registerDebugLogRoutes } from './debug-log'
 import { registerTdAnalyticsRoutes } from './td-analytics'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { queryTdRepresentationTimeseriesResolved } from './analytics-data'
@@ -53,6 +54,7 @@ tdPublicRoutes.use('*', async (c, next) => {
 })
 
 registerTdExportRoutes(tdPublicRoutes)
+registerDebugLogRoutes(tdPublicRoutes)
 registerTdAnalyticsRoutes(tdPublicRoutes)
 
 tdPublicRoutes.get('/health', (c) => {

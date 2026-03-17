@@ -8,6 +8,12 @@
     var apiBase = config.apiBase || '';
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
 
+    function sendDebugLog(payload) {
+        if (!apiBase) return;
+        var body = JSON.stringify(payload);
+        fetch(apiBase + '/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd301fc' }, body: body }).catch(function () {});
+    }
+
     function numericValue(row, field) {
         var num = Number(row && row[field]);
         return Number.isFinite(num) ? num : null;
@@ -429,14 +435,31 @@
 
     function fetchAnalyticsRows(params) {
         var query = new URLSearchParams(params || {});
+        var url = apiBase + '/analytics/series?' + query.toString();
+        // #region agent log
+        var t0 = typeof Date.now === 'function' ? Date.now() : 0;
+        sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request start', data: { representation: params && params.representation, hasStartDate: !!(params && params.start_date), hasEndDate: !!(params && params.end_date), paramKeys: params ? Object.keys(params) : [] }, timestamp: t0, hypothesisId: 'H1' });
+        // #endregion
         if (requestJson) {
-            return requestJson(apiBase + '/analytics/series?' + query.toString(), {
+            return requestJson(url, {
                 requestLabel: 'Chart history',
-                timeoutMs: 20000,
+                timeoutMs: 40000,
                 retryCount: 0,
-            }).then(function (result) { return result.data; });
+            }).then(function (result) {
+                // #region agent log
+                var t1 = typeof Date.now === 'function' ? Date.now() : 0;
+                sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request success', data: { durationMs: t1 - t0, rowCount: result && result.rows ? result.rows.length : 0 }, timestamp: t1, hypothesisId: 'H1' });
+                // #endregion
+                return result.data;
+            }).catch(function (err) {
+                // #region agent log
+                var t1 = typeof Date.now === 'function' ? Date.now() : 0;
+                sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request failed', data: { durationMs: t1 - t0, code: err && err.code, timeoutMs: err && err.timeoutMs, timedOut: !!(err && err.code === 'timeout'), userMessage: err && err.userMessage }, timestamp: t1, hypothesisId: 'H1' });
+                // #endregion
+                throw err;
+            });
         }
-        return fetch(apiBase + '/analytics/series?' + query.toString(), { cache: 'no-store' }).then(function (response) {
+        return fetch(url, { cache: 'no-store' }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/series');
             return response.json();
         });
