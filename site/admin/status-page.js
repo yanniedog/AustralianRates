@@ -236,10 +236,17 @@
 
     function renderIssues(latest) {
         var issues = latest && Array.isArray(latest.actionable) ? latest.actionable : [];
+        var card = issuesEl && issuesEl.closest ? issuesEl.closest('.card') : null;
         if (!issues.length) {
             issuesEl.innerHTML = '<div>No actionable issues detected from recent warn/error logs.</div>';
+            applyCardSeverity(card, 'green');
             return;
         }
+        var worstIssueSev = issues.reduce(function (acc, i) {
+            var s = severityFromIssueCount(i.count);
+            return (s === 'red' || (s === 'yellow' && acc !== 'red')) ? s : acc;
+        }, 'green');
+        applyCardSeverity(card, worstIssueSev);
         issuesEl.innerHTML = '<table><thead><tr><th>Code</th><th>Title</th><th>Count</th><th>Action</th><th>Latest</th></tr></thead><tbody>'
             + issues.map(function (i) {
                 var sev = severityFromIssueCount(i.count);
@@ -484,7 +491,7 @@
     }
 
     async function loadStatus() {
-        statusEl.textContent = 'Loading status...';
+        setStatusLineSeverity(statusEl, 'Loading status...', 'yellow');
         try {
             var res = await portal.fetchAdmin('/health?limit=48');
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -513,16 +520,15 @@
     }
 
     async function runNow() {
-        statusEl.textContent = 'Running manual health check...';
+        setStatusLineSeverity(statusEl, 'Running manual health check...', 'yellow');
         var btn = document.getElementById('run-check-btn');
         btn.disabled = true;
         try {
             var res = await portal.fetchAdmin('/health/run', { method: 'POST' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             await refreshAll();
-            statusEl.textContent = 'Manual health check completed.';
         } catch (_err) {
-            statusEl.textContent = 'Manual health check failed.';
+            setStatusLineSeverity(statusEl, 'Manual health check failed.', 'red');
         } finally {
             btn.disabled = false;
         }
