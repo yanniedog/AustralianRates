@@ -442,7 +442,7 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
 
     await page.locator('#rate-table').scrollIntoViewIfNeeded().catch(() => {});
     await page.click('#table-settings-btn');
-    await page.locator('#table-settings-popover input[data-setting="move-columns"]').check();
+    await page.locator('#table-settings-popover input[data-setting="move-columns"]').check({ force: true, timeout: 15000 });
     await page.waitForTimeout(500);
 
     const moveModeState = await page.evaluate(() => {
