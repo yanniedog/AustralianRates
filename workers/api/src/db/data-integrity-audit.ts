@@ -43,6 +43,10 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 export async function runDataIntegrityAudit(
   db: D1Database,
   timezone = 'Australia/Melbourne',
@@ -65,21 +69,32 @@ export async function runDataIntegrityAudit(
   const checkedAt = new Date().toISOString()
   const findings: IntegrityFinding[] = []
 
-  const integrity = await runIntegrityChecks(db, timezone, { includeAnomalyProbes: true })
-  // #region agent log
-  fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
-    body: JSON.stringify({
-      sessionId: '6fa854',
-      location: 'data-integrity-audit.ts:after-runIntegrityChecks',
-      message: 'runIntegrityChecks completed',
-      data: { checksCount: integrity.checks?.length ?? 0 },
-      timestamp: Date.now(),
-      hypothesisId: 'H4',
-    }),
-  }).catch(() => {})
-  // #endregion
+  let integrity: Awaited<ReturnType<typeof runIntegrityChecks>>
+  try {
+    integrity = await runIntegrityChecks(db, timezone, { includeAnomalyProbes: true })
+    // #region agent log
+    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6fa854' },
+      body: JSON.stringify({
+        sessionId: '6fa854',
+        location: 'data-integrity-audit.ts:after-runIntegrityChecks',
+        message: 'runIntegrityChecks completed',
+        data: { checksCount: integrity.checks?.length ?? 0 },
+        timestamp: Date.now(),
+        hypothesisId: 'H4',
+      }),
+    }).catch(() => {})
+    // #endregion
+  } catch (e) {
+    findings.push({
+      category: 'erroneous',
+      check: 'integrity_checks_run',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'runIntegrityChecks failed; check D1 tables and schema.' },
+    })
+    integrity = { ok: false, checked_at: checkedAt, checks: [] }
+  }
 
   for (const c of integrity.checks) {
     const category =
@@ -110,130 +125,162 @@ export async function runDataIntegrityAudit(
     })
   }
 
-  const [orphanLatestHome, orphanLatestSavings, orphanLatestTd] = await Promise.all([
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM latest_home_loan_series l
-         LEFT JOIN (SELECT DISTINCT series_key FROM historical_loan_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
-      )
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM latest_savings_series l
-         LEFT JOIN (SELECT DISTINCT series_key FROM historical_savings_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
-      )
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM latest_td_series l
-         LEFT JOIN (SELECT DISTINCT series_key FROM historical_term_deposit_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
-      )
-      .first<{ n: number }>(),
-  ])
-
-  for (const [name, row] of [
-    ['orphan_latest_home_loan_series', orphanLatestHome],
-    ['orphan_latest_savings_series', orphanLatestSavings],
-    ['orphan_latest_td_series', orphanLatestTd],
-  ] as const) {
-    const n = num(row?.n)
+  try {
+    const [orphanLatestHome, orphanLatestSavings, orphanLatestTd] = await Promise.all([
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM latest_home_loan_series l
+           LEFT JOIN (SELECT DISTINCT series_key FROM historical_loan_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
+        )
+        .first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM latest_savings_series l
+           LEFT JOIN (SELECT DISTINCT series_key FROM historical_savings_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
+        )
+        .first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM latest_td_series l
+           LEFT JOIN (SELECT DISTINCT series_key FROM historical_term_deposit_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
+        )
+        .first<{ n: number }>(),
+    ])
+    for (const [name, row] of [
+      ['orphan_latest_home_loan_series', orphanLatestHome],
+      ['orphan_latest_savings_series', orphanLatestSavings],
+      ['orphan_latest_td_series', orphanLatestTd],
+    ] as const) {
+      const n = num(row?.n)
+      findings.push({
+        category: 'dead',
+        check: name,
+        passed: n === 0,
+        count: n,
+        detail: { orphan_count: n },
+      })
+    }
+  } catch (e) {
     findings.push({
       category: 'dead',
-      check: name,
-      passed: n === 0,
-      count: n,
-      detail: { orphan_count: n },
+      check: 'orphan_latest_series_checks',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'Tables latest_*_series or historical_*_rates may be missing.' },
     })
   }
 
-  const [dupHome, dupSavings, dupTd] = await Promise.all([
-    db
-      .prepare(
-        `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_loan_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
-         SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
-      )
-      .first<{ duplicate_groups: number; duplicate_rows: number }>(),
-    db
-      .prepare(
-        `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_savings_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
-         SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
-      )
-      .first<{ duplicate_groups: number; duplicate_rows: number }>(),
-    db
-      .prepare(
-        `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_term_deposit_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
-         SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
-      )
-      .first<{ duplicate_groups: number; duplicate_rows: number }>(),
-  ])
-
-  for (const [name, row] of [
-    ['exact_duplicate_rows_home_loans', dupHome],
-    ['exact_duplicate_rows_savings', dupSavings],
-    ['exact_duplicate_rows_term_deposits', dupTd],
-  ] as const) {
-    const groups = num(row?.duplicate_groups)
-    const rows = num(row?.duplicate_rows)
+  try {
+    const [dupHome, dupSavings, dupTd] = await Promise.all([
+      db
+        .prepare(
+          `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_loan_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
+           SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
+        )
+        .first<{ duplicate_groups: number; duplicate_rows: number }>(),
+      db
+        .prepare(
+          `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_savings_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
+           SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
+        )
+        .first<{ duplicate_groups: number; duplicate_rows: number }>(),
+      db
+        .prepare(
+          `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_term_deposit_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
+           SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
+        )
+        .first<{ duplicate_groups: number; duplicate_rows: number }>(),
+    ])
+    for (const [name, row] of [
+      ['exact_duplicate_rows_home_loans', dupHome],
+      ['exact_duplicate_rows_savings', dupSavings],
+      ['exact_duplicate_rows_term_deposits', dupTd],
+    ] as const) {
+      const groups = num(row?.duplicate_groups)
+      const rows = num(row?.duplicate_rows)
+      findings.push({
+        category: 'duplicate',
+        check: name,
+        passed: groups === 0,
+        count: rows,
+        detail: { duplicate_groups: groups, duplicate_rows: rows },
+      })
+    }
+  } catch (e) {
     findings.push({
       category: 'duplicate',
-      check: name,
-      passed: groups === 0,
-      count: rows,
-      detail: { duplicate_groups: groups, duplicate_rows: rows },
+      check: 'exact_duplicate_rows_checks',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'historical_*_rates tables may be missing.' },
     })
   }
 
-  const [oorHome, oorSavings, oorTd] = await Promise.all([
-    db.prepare(`SELECT COUNT(*) AS n FROM historical_loan_rates WHERE interest_rate < 0.5 OR interest_rate > 25`).first<{ n: number }>(),
-    db.prepare(`SELECT COUNT(*) AS n FROM historical_savings_rates WHERE interest_rate < 0 OR interest_rate > 15`).first<{ n: number }>(),
-    db.prepare(`SELECT COUNT(*) AS n FROM historical_term_deposit_rates WHERE interest_rate < 0 OR interest_rate > 15`).first<{ n: number }>(),
-  ])
-
-  for (const [name, row, bounds] of [
-    ['out_of_range_rates_home_loans', oorHome, '0.5-25'],
-    ['out_of_range_rates_savings', oorSavings, '0-15'],
-    ['out_of_range_rates_term_deposits', oorTd, '0-15'],
-  ] as const) {
-    const n = num(row?.n)
+  try {
+    const [oorHome, oorSavings, oorTd] = await Promise.all([
+      db.prepare(`SELECT COUNT(*) AS n FROM historical_loan_rates WHERE interest_rate < 0.5 OR interest_rate > 25`).first<{ n: number }>(),
+      db.prepare(`SELECT COUNT(*) AS n FROM historical_savings_rates WHERE interest_rate < 0 OR interest_rate > 15`).first<{ n: number }>(),
+      db.prepare(`SELECT COUNT(*) AS n FROM historical_term_deposit_rates WHERE interest_rate < 0 OR interest_rate > 15`).first<{ n: number }>(),
+    ])
+    for (const [name, row, bounds] of [
+      ['out_of_range_rates_home_loans', oorHome, '0.5-25'],
+      ['out_of_range_rates_savings', oorSavings, '0-15'],
+      ['out_of_range_rates_term_deposits', oorTd, '0-15'],
+    ] as const) {
+      const n = num(row?.n)
+      findings.push({
+        category: 'invalid',
+        check: name,
+        passed: n === 0,
+        count: n,
+        detail: { bounds, out_of_range_count: n },
+      })
+    }
+  } catch (e) {
     findings.push({
       category: 'invalid',
-      check: name,
-      passed: n === 0,
-      count: n,
-      detail: { bounds, out_of_range_count: n },
+      check: 'out_of_range_rates_checks',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'historical_*_rates tables may be missing.' },
     })
   }
 
-  const [nullHome, nullSavings, nullTd] = await Promise.all([
-    db
-      .prepare(
-        `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_loan_rates`,
-      )
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_savings_rates`,
-      )
-      .first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_term_deposit_rates`,
-      )
-      .first<{ n: number }>(),
-  ])
-
-  for (const [name, row] of [
-    ['null_required_fields_home_loans', nullHome],
-    ['null_required_fields_savings', nullSavings],
-    ['null_required_fields_term_deposits', nullTd],
-  ] as const) {
-    const n = num(row?.n)
+  try {
+    const [nullHome, nullSavings, nullTd] = await Promise.all([
+      db
+        .prepare(
+          `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_loan_rates`,
+        )
+        .first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_savings_rates`,
+        )
+        .first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_term_deposit_rates`,
+        )
+        .first<{ n: number }>(),
+    ])
+    for (const [name, row] of [
+      ['null_required_fields_home_loans', nullHome],
+      ['null_required_fields_savings', nullSavings],
+      ['null_required_fields_term_deposits', nullTd],
+    ] as const) {
+      const n = num(row?.n)
+      findings.push({
+        category: 'invalid',
+        check: name,
+        passed: n === 0,
+        count: n,
+        detail: { null_count: n },
+      })
+    }
+  } catch (e) {
     findings.push({
       category: 'invalid',
-      check: name,
-      passed: n === 0,
-      count: n,
-      detail: { null_count: n },
+      check: 'null_required_fields_checks',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'historical_*_rates tables may be missing.' },
     })
   }
 
