@@ -370,6 +370,10 @@ body.is-resizing-panels * {
     letter-spacing: -0.02em;
 }
 
+.terminal-panel-close-mobile {
+    display: none;
+}
+
 .market-nav-tree,
 .site-tree,
 .site-tree-group,
@@ -784,13 +788,15 @@ body.ar-not-found .market-intro-actions {
         transform: translateX(0);
     }
 
+    .terminal-panel-close-mobile {
+        display: inline-flex;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
     .site-footer-inner {
         flex-direction: column;
         align-items: flex-start;
-    }
-
-    .shell-public {
-        padding-top: 24px;
     }
 
     .site-help-panel,

@@ -275,9 +275,9 @@
         var listEl = dailyBackupsSection.listEl;
         var summaryEl = dailyBackupsSection.summaryEl;
         if (!listEl) return;
-        if (summaryEl) summaryEl.textContent = dates.length + ' day(s) available.';
+        if (summaryEl) summaryEl.textContent = dates.length + ' day(s) available for immediate download.';
         if (!dates.length) {
-            listEl.innerHTML = '<div class="export-empty">No daily backups yet. They are created automatically at 09:00 UTC for the previous Melbourne day.</div>';
+            listEl.innerHTML = '<div class="export-empty">No daily backups in the list yet. Backups are created automatically every day at 09:00 UTC (previous day\'s data). Use "Create backup for date" to generate one for a specific date, then Refresh list.</div>';
             return;
         }
         var html = '<ul class="export-job-list-inner">';
