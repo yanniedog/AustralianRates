@@ -546,6 +546,44 @@
                     });
             });
 
+            if (forceFinalizeBtn && forceFinalizeStatus) {
+                forceFinalizeBtn.addEventListener('click', function () {
+                    var runId = String(forceFinalizeRunId && forceFinalizeRunId.value || '').trim();
+                    var lenderCode = String(forceFinalizeLenderCode && forceFinalizeLenderCode.value || '').trim().toLowerCase();
+                    var dataset = (forceFinalizeDataset && forceFinalizeDataset.value || '').trim();
+                    if (!runId || !lenderCode || !dataset) {
+                        forceFinalizeStatus.textContent = 'Enter run_id, lender code, and select dataset.';
+                        return;
+                    }
+                    if (dataset !== 'home_loans' && dataset !== 'savings' && dataset !== 'term_deposits') {
+                        forceFinalizeStatus.textContent = 'Select a valid dataset (home_loans, savings, or term_deposits).';
+                        return;
+                    }
+                    forceFinalizeBtn.disabled = true;
+                    forceFinalizeStatus.textContent = 'Force finalizing...';
+                    portal.fetchAdmin('/runs/lender-dataset/force-finalize', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ run_id: runId, lender_code: lenderCode, dataset: dataset })
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                            if (d && d.ok) {
+                                forceFinalizeStatus.textContent = d.already_finalized ? 'Run was already finalized.' : 'Run finalized.';
+                                return Promise.all([loadRealtime(), loadBacklog()]);
+                            }
+                            var msg = (d && d.error && d.error.message) ? d.error.message : 'Force finalize failed';
+                            forceFinalizeStatus.textContent = msg;
+                        })
+                        .catch(function (e) {
+                            forceFinalizeStatus.textContent = e && e.message ? e.message : 'Request failed';
+                        })
+                        .finally(function () {
+                            forceFinalizeBtn.disabled = false;
+                        });
+                });
+            }
+
             Promise.all([loadRealtime(), loadBacklog()]);
             var backlogIntervalId = setInterval(loadBacklog, 60000);
             document.body.addEventListener('ar:admin-page-unload', function () {
