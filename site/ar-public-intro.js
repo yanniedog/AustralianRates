@@ -158,7 +158,7 @@
         + '      <p class="eyebrow">' + esc(copy.eyebrow) + '</p><h1 class="market-intro-title">' + esc(copy.title) + '</h1><p class="market-intro-summary">' + esc(copy.summary) + '</p>'
         + '    </div>'
         + '    <ol class="market-intro-command-list">' + copy.commands.map(commandLine).join('') + '</ol>'
-        + '    <div class="market-intro-actions">' + buttonLink(compactViewport ? '#chart' : '#scenario', compactViewport ? 'See chart' : 'Open filters', 'primary') + '<div class="market-intro-secondary-actions">' + buttonLink(compactViewport ? '#scenario' : '#ladder', compactViewport ? 'Open filters' : 'See leaders', 'ghost') + buttonLink('/about/', 'Methodology', 'ghost') + '</div></div>'
+        + '    <div class="market-intro-actions">' + buttonLink(compactViewport ? '#chart' : '#scenario', compactViewport ? 'See chart' : 'Open filters', 'primary') + '<div class="market-intro-secondary-actions">' + buttonLink(compactViewport ? '#scenario' : '#chart', compactViewport ? 'Open filters' : 'See chart', 'ghost') + buttonLink('/about/', 'Methodology', 'ghost') + '</div></div>'
         + '  </div>'
         + '  <aside class="market-intro-console" aria-label="Live session console">'
         + '    <div class="market-intro-console-head"><div><p class="market-intro-console-kicker">' + esc(copy.consoleKicker) + '</p><h2 class="market-intro-console-title">' + esc(copy.consoleTitle) + '</h2></div><span class="market-intro-console-status">' + esc(copy.consoleStatus) + '</span></div>'

@@ -85,6 +85,7 @@ When changing retention or adding a second log stream, update migrations and ret
 
 Cursor and Codex agents **should try to access the production logfiles** whenever they are debugging code anywhere on the site (front end, API, archive worker, pipelines, or Cloudflare). Logs often contain the exact error, traceback, and context that explain a failure.
 
+- **Do not use stale logs.** Local log files (e.g. `errors.jsonl`, `warn.jsonl`, `actionable.json` in the repo) are stale. Always fetch current logs from the production API (`node fetch-production-logs.js` from repo root, or the logs API directly) before diagnosing or fixing issues.
 - **Credentials:** Use the repo root `.env` file. It must contain `ADMIN_API_TOKEN` (or a token listed in `ADMIN_API_TOKENS`) with the same value as the production API worker secret. See `.env.example` for the required variable names and comments.
 - **URL (production):** `GET https://www.australianrates.com/api/home-loan-rates/admin/logs/system` with header `Authorization: Bearer <ADMIN_API_TOKEN>`.
 - **Useful params:** `format=jsonl`, `limit=1000`, `level=error` or `level=warn`, `source=...`, `code=...`. For stats: `.../admin/logs/system/stats`; for actionable issues: `.../admin/logs/system/actionable`.

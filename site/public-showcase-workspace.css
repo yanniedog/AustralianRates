@@ -1,11 +1,10 @@
+/* Two-column layout: left rail + chart (no right leaders column). Chart gets full width. */
 body.ar-public .market-terminal {
     gap: 18px;
     grid-template-columns:
         minmax(270px, 292px)
         var(--ar-splitter-track)
-        minmax(0, 1fr)
-        var(--ar-splitter-track)
-        minmax(292px, 332px);
+        minmax(0, 1fr);
 }
 
 body.ar-public .terminal-panel,
@@ -72,6 +71,7 @@ body.ar-public .chart-figure {
 }
 
 body.ar-public .chart-figure .terminal-chart-surface {
+    min-height: 480px;
     background:
         linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent)),
         repeating-linear-gradient(
@@ -146,6 +146,26 @@ body.ar-public .site-footer-inner,
 body.ar-legal .site-footer-inner {
     padding-top: 18px;
     border-top-color: color-mix(in srgb, var(--ar-line-strong) 84%, transparent);
+}
+
+body.ar-public .chart-overview-in-footer {
+    margin-bottom: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--ar-line);
+}
+
+body.ar-public .chart-overview-in-footer .chart-footer-guidance {
+    display: block;
+    margin-bottom: 8px;
+}
+
+body.ar-public .chart-overview-in-footer .chart-footer-stats {
+    margin-bottom: 10px;
+}
+
+body.ar-public .chart-overview-in-footer .chart-summary {
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 body.ar-public .footer-technical-summary,
@@ -293,12 +313,6 @@ body.ar-public .market-intro-step:nth-child(3) {
         padding-top: 24px;
     }
 
-    body.ar-public .terminal-column-right {
-        order: 2;
-        grid-column: auto;
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     body.ar-public .terminal-column-center {
         order: 1;
     }
@@ -370,12 +384,12 @@ body.ar-public .market-intro-step:nth-child(3) {
     }
 
     body.ar-public .chart-figure .terminal-chart-surface {
-        min-height: 340px;
+        min-height: 380px;
     }
 
     body.ar-public .terminal-chart-output,
     body.ar-public #chart-output {
-        min-height: 300px;
+        min-height: 320px;
     }
 
     body.ar-public #chart-detail-output {

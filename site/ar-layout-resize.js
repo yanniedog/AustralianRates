@@ -14,7 +14,7 @@
 
     var leftHandle = document.getElementById('left-rail-resizer');
     var rightHandle = document.getElementById('right-rail-resizer');
-    if (!leftHandle || !rightHandle) return;
+    if (!leftHandle) return;
 
     var desktopQuery = window.matchMedia(DESKTOP_QUERY);
     var section = String(body.getAttribute('data-ar-section') || 'home-loans');
@@ -23,7 +23,7 @@
 
     applyWidths();
     bindHandle(leftHandle, WIDTHS.left, 1);
-    bindHandle(rightHandle, WIDTHS.right, -1);
+    if (rightHandle) bindHandle(rightHandle, WIDTHS.right, -1);
     bindMediaQuery(desktopQuery, syncDesktopState);
     syncDesktopState();
 
@@ -69,7 +69,7 @@
         terminal.style.setProperty('--ar-left-rail-width', widths.left + 'px');
         terminal.style.setProperty('--ar-right-rail-width', widths.right + 'px');
         syncAria(leftHandle, widths.left, WIDTHS.left);
-        syncAria(rightHandle, widths.right, WIDTHS.right);
+        if (rightHandle) syncAria(rightHandle, widths.right, WIDTHS.right);
     }
 
     function syncAria(handle, value, config) {
@@ -85,7 +85,7 @@
         }
         body.classList.remove('is-resizing-panels');
         leftHandle.classList.remove('is-active');
-        rightHandle.classList.remove('is-active');
+        if (rightHandle) rightHandle.classList.remove('is-active');
     }
 
     function bindHandle(handle, config, direction) {

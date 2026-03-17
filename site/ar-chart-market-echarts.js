@@ -508,100 +508,111 @@
         return { min: Math.max(0, lo - pad), max: hi + pad };
     }
 
+    /* Unified single-frame chart: one line per term (median yield over time). Full width, one story. */
     function buildTdTermTimeOption(tt, fields, size) {
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
-        var termCount = tt.terms.length;
-        var rowCount = Math.min(termCount, 4);
-        var colCount = termCount <= 2 ? termCount : 2;
-        var topStart = 28;
-        var h = (100 - topStart) / rowCount;
-        var w = 100 / colCount;
         var sharedRange = tdTermTimeGlobalRange(tt);
-        var grids = [];
-        var xAxes = [];
-        var yAxes = [];
-        for (var i = 0; i < termCount; i++) {
-            var row = Math.floor(i / colCount);
-            var col = i % colCount;
-            grids.push({
-                left: (col * w) + '%',
-                top: (topStart + row * h) + '%',
-                width: (w - 0.5) + '%',
-                height: (h - 2) + '%',
-                containLabel: true,
-            });
-            xAxes.push({
-                type: 'category',
-                gridIndex: i,
-                data: tt.terms[i].timeRibbon.categories.map(function (c) { return c.key; }),
-                boundaryGap: false,
-                axisLine: gridStyles().axisLine,
-                axisTick: { show: false },
-                axisLabel: {
-                    color: theme.mutedText,
-                    fontSize: narrow ? 8 : 10,
-                    interval: categoryInterval(tt.terms[i].timeRibbon.categories.length, 6),
-                    formatter: function (value) { return formatDateAxisLabel(value, true); },
-                },
-            });
-            yAxes.push({
-                type: 'value',
-                gridIndex: i,
-                name: '',
-                min: sharedRange.min,
-                max: sharedRange.max,
-                axisLine: gridStyles().axisLine,
-                splitLine: { show: false },
-                axisLabel: { color: theme.softText, fontSize: narrow ? 8 : 10, fontFamily: theme.dataFont || undefined, formatter: function (v) { return metricAxisLabel(fields.yField, v, true); } },
-            });
-        }
-        var series = [];
-        tt.terms.forEach(function (term, gridIdx) {
+        var allDates = [];
+        var dateSet = {};
+        tt.terms.forEach(function (term) {
             var tr = term.timeRibbon;
-            if (!tr || !tr.categories.length) return;
-            tr.bucketByKey = {};
-            tr.categories.forEach(function (c) { tr.bucketByKey[c.key] = c; });
-            series.push({ name: 'Floor', type: 'line', stack: 'g' + gridIdx, silent: true, lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 }, symbol: 'none', xAxisIndex: gridIdx, yAxisIndex: gridIdx, data: tr.categories.map(function (c) { return c.min; }) });
-            series.push({ name: 'Full range', type: 'line', stack: 'g' + gridIdx, lineStyle: { opacity: 0 }, symbol: 'none', areaStyle: { color: 'rgba(79, 141, 253, 0.12)' }, xAxisIndex: gridIdx, yAxisIndex: gridIdx, data: tr.categories.map(function (c) { return c.max - c.min; }) });
-            series.push({ name: 'Median', type: 'line', smooth: 0.2, showSymbol: false, symbolSize: 4, lineStyle: { width: 2, color: paletteColor(0) }, itemStyle: { color: paletteColor(0) }, xAxisIndex: gridIdx, yAxisIndex: gridIdx, data: tr.categories.map(function (c) { return [c.key, c.median]; }) });
-            var bankCurves = (tr.bankCurves || []).slice(0, 4);
-            bankCurves.forEach(function (curve, bi) {
-                series.push({
-                    name: curve.bankName,
-                    type: 'line',
-                    smooth: 0.2,
-                    connectNulls: true,
-                    showSymbol: false,
-                    symbolSize: 3,
-                    lineStyle: { width: 1.5, color: paletteColor((bi + 1) % 6) },
-                    itemStyle: { color: paletteColor((bi + 1) % 6) },
-                    xAxisIndex: gridIdx,
-                    yAxisIndex: gridIdx,
-                    data: curve.points.map(function (p) { return p ? [p.date, p.value] : null; }),
-                });
+            if (!tr || !tr.categories) return;
+            tr.categories.forEach(function (c) {
+                if (c.key && !dateSet[c.key]) {
+                    dateSet[c.key] = true;
+                    allDates.push(c.key);
+                }
             });
         });
+        allDates.sort();
+        var categoryByTerm = {};
+        tt.terms.forEach(function (term) {
+            var tr = term.timeRibbon;
+            if (!tr || !tr.categories) return;
+            categoryByTerm[term.termKey] = {};
+            tr.categories.forEach(function (c) { categoryByTerm[term.termKey][c.key] = c; });
+        });
+        var series = tt.terms.map(function (term, index) {
+            var byDate = categoryByTerm[term.termKey] || {};
+            var data = allDates.map(function (d) {
+                var c = byDate[d];
+                return c && Number.isFinite(c.median) ? [d, c.median] : null;
+            });
+            return {
+                name: term.termLabel || term.termKey,
+                type: 'line',
+                smooth: 0.2,
+                connectNulls: true,
+                showSymbol: !compact,
+                symbolSize: narrow ? 4 : 6,
+                lineStyle: { width: narrow ? 2 : 2.5, color: paletteColor(index) },
+                itemStyle: { color: paletteColor(index) },
+                emphasis: { focus: 'series', lineStyle: { width: 3 } },
+                data: data,
+            };
+        });
+        var xInterval = categoryInterval(allDates.length, narrow ? 8 : 12);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
             animationDurationUpdate: base.animationDurationUpdate,
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
-            legend: { show: false },
+            legend: {
+                show: true,
+                type: 'scroll',
+                bottom: 8,
+                left: 0,
+                right: 0,
+                textStyle: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
+                pageButtonItemGap: 8,
+                pageIconInactiveColor: theme.softText,
+                pageTextStyle: { color: theme.mutedText },
+            },
             axisPointer: axisPointerConfig(theme),
             title: {
-                text: 'Yield by term over time — same scale for direct comparison',
+                text: 'Yield by term over time',
+                subtext: 'Median rate across banks at each term. One line per term.',
                 left: 0,
                 top: 2,
-                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+                textStyle: { color: theme.emphasisText, fontSize: narrow ? 13 : 14, fontWeight: 700 },
+                subtextStyle: { color: theme.mutedText, fontSize: 11 },
             },
-            tooltip: { trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } }, backgroundColor: tooltipStyles().backgroundColor, borderColor: tooltipStyles().borderColor, textStyle: tooltipStyles().textStyle, extraCssText: tooltipStyles().extraCssText },
-            grid: grids,
-            xAxis: xAxes,
-            yAxis: yAxes,
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
+            },
+            grid: { left: compact ? 48 : 56, right: compact ? 16 : 24, top: 52, bottom: narrow ? 76 : 88, containLabel: true },
+            xAxis: {
+                type: 'category',
+                data: allDates,
+                boundaryGap: false,
+                axisLine: gridStyles().axisLine,
+                axisTick: { show: false },
+                axisLabel: {
+                    color: theme.mutedText,
+                    interval: xInterval,
+                    formatter: function (value) { return formatDateAxisLabel(value, narrow); },
+                },
+            },
+            yAxis: {
+                type: 'value',
+                name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : 'Rate (%)'),
+                min: sharedRange.min,
+                max: sharedRange.max,
+                nameGap: narrow ? 20 : 28,
+                nameTextStyle: { color: theme.mutedText },
+                axisLine: gridStyles().axisLine,
+                splitLine: gridStyles().splitLine,
+                axisLabel: { color: theme.softText, fontFamily: theme.dataFont || undefined, formatter: function (v) { return metricAxisLabel(fields.yField, v, narrow); } },
+            },
             series: series,
         };
     }

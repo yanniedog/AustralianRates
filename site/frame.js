@@ -203,7 +203,6 @@
     function buildMarketLinks(baseHref) {
         return [
             { href: baseHref + '#chart', label: 'Charts', icon: 'chart' },
-            { href: baseHref + '#ladder', label: 'Leaders', icon: 'ladder' },
             { href: baseHref + '#table', label: 'Table', icon: 'table' },
             { href: baseHref + '#pivot', label: 'Pivot', icon: 'pivot' },
             { href: baseHref + '#history', label: 'History', icon: 'history' },
@@ -457,6 +456,17 @@
             var wrap = document.getElementById('footer-log-info');
             if (wrap && !wrap.contains(event.target)) popup.hidden = true;
         });
+
+        /* Move chart overview (guidance, stats, summary) into site footer for public market pages. */
+        if (!context.admin && !context.legal && context.section) {
+            var chartFooter = document.querySelector('.chart-footer');
+            var footerInner = footer.querySelector('.site-footer-inner');
+            if (chartFooter && chartFooter.parentNode && footerInner) {
+                chartFooter.parentNode.removeChild(chartFooter);
+                chartFooter.classList.add('chart-overview-in-footer');
+                footerInner.insertBefore(chartFooter, footerInner.firstChild);
+            }
+        }
 
         updateLogLinkText();
     }
