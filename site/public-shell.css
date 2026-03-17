@@ -134,7 +134,7 @@ body.ar-admin {
 body.ar-public .site-header-inner,
 body.ar-legal .site-header-inner,
 body.ar-not-found .site-header-inner {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 body.ar-public .site-header-context,

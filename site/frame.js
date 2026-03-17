@@ -295,6 +295,20 @@
         return iconOnly(icon, label, 'site-action-icon') + actionTextMarkup(label);
     }
 
+    function headerSegmentMarkup(context) {
+        if (context.admin || context.legal || context.notFound) return '';
+        var sections = publicSections();
+        var currentPath = window.location.pathname;
+        return '' +
+            '<nav class="site-header-segment" aria-label="Rate products">' +
+                sections.map(function (item) {
+                    var active = isSectionActive(currentPath, item);
+                    var label = item.label === 'Home Loans' ? 'Mortgage' : item.label;
+                    return '<a href="' + esc(item.path) + '" class="site-header-segment-link' + (active ? ' is-active' : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + esc(label) + '</a>';
+                }).join('') +
+            '</nav>';
+    }
+
     function headerActionsMarkup(context) {
         var menuLabel = context.legal || context.notFound ? 'Sections' : 'Menu';
         var actions = [
@@ -323,6 +337,7 @@
                     '<span class="site-brand-tagline">' + esc(currentPageLabel(context)) + '</span>' +
                 '</div>' +
             '</div>' +
+            headerSegmentMarkup(context) +
             '<div class="site-header-context">' +
                 '<span class="eyebrow">' + esc(context.admin ? 'Admin' : (context.legal ? 'Reference' : (context.notFound ? 'Not found' : 'Markets'))) + '</span>' +
                 '<strong class="site-header-title">' + esc(currentPageLabel(context)) + '</strong>' +
