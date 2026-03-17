@@ -19,19 +19,23 @@ export type ResolvedAnalyticsRows = {
   rows: Array<Record<string, unknown>>
 }
 
+/** Max rows returned by /analytics/series to keep response time and size bounded for charts. */
+const CHART_SERIES_MAX_ROWS = 20_000
+
 async function collectByOffset<T>(
   fetchChunk: (limit: number, offset: number) => Promise<T[]>,
   pageSize = 5000,
+  maxRows: number = CHART_SERIES_MAX_ROWS,
 ): Promise<T[]> {
   const rows: T[] = []
   let offset = 0
   while (true) {
     const chunk = await fetchChunk(pageSize, offset)
     rows.push(...chunk)
-    if (chunk.length < pageSize) break
+    if (chunk.length < pageSize || rows.length >= maxRows) break
     offset += chunk.length
   }
-  return rows
+  return rows.slice(0, maxRows)
 }
 
 function normalizeSignatureValue(value: unknown): string {
@@ -55,6 +59,10 @@ function dedupeAnalyticsRows(
   return deduped
 }
 
+function capRows(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return rows.length <= CHART_SERIES_MAX_ROWS ? rows : rows.slice(0, CHART_SERIES_MAX_ROWS)
+}
+
 async function resolveRepresentationRows(
   dataset: DatasetKind,
   dbs: DbPair,
@@ -63,37 +71,41 @@ async function resolveRepresentationRows(
   fetchDayRows: () => Promise<Array<Record<string, unknown>>>,
 ): Promise<ResolvedAnalyticsRows> {
   if (representation !== 'change') {
+    const rows = await fetchDayRows()
     return {
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: null,
-      rows: await fetchDayRows(),
+      rows: capRows(rows),
     }
   }
 
   const ready = await analyticsProjectionReady(dbs.analyticsDb, dataset)
   if (!ready) {
+    const rows = await fetchDayRows()
     return {
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_unavailable',
-      rows: await fetchDayRows(),
+      rows: capRows(rows),
     }
   }
 
   try {
+    const rows = await fetchChangeRows()
     return {
       requestedRepresentation: representation,
       representation: 'change',
       fallbackReason: null,
-      rows: await fetchChangeRows(),
+      rows: capRows(rows),
     }
   } catch {
+    const rows = await fetchDayRows()
     return {
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_query_failed',
-      rows: await fetchDayRows(),
+      rows: capRows(rows),
     }
   }
 }

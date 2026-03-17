@@ -448,7 +448,7 @@
             }).then(function (result) {
                 // #region agent log
                 var t1 = typeof Date.now === 'function' ? Date.now() : 0;
-                sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request success', data: { durationMs: t1 - t0, rowCount: result && result.rows ? result.rows.length : 0 }, timestamp: t1, hypothesisId: 'H1' });
+                sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request success', data: { durationMs: t1 - t0, rowCount: result && result.data && result.data.rows ? result.data.rows.length : 0 }, timestamp: t1, hypothesisId: 'H1' });
                 // #endregion
                 return result.data;
             }).catch(function (err) {

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -37,6 +37,11 @@
     <script src="../frame.js?v=7ecd7b4"></script>
     <script>
         (function () {
+            // #region agent log
+            try {
+                fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'index.html:ready', message: 'login page ready', data: { pathname: window.location.pathname, hasAR: !!(window.AR), hasAdminPortal: !!(window.AR && window.AR.AdminPortal) }, hypothesisId: 'A_H2', timestamp: Date.now() }) }).catch(function () {});
+            } catch (e) {}
+            // #endregion
             var form = document.getElementById('login-form');
             var btn = document.getElementById('login-btn');
             var errEl = document.getElementById('login-error');
@@ -57,6 +62,11 @@
                     errEl.classList.add('visible');
                     return;
                 }
+                // #region agent log
+                try {
+                    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'index.html:submit', message: 'login form submit', data: { apiBase: apiBase, tokenLength: token.length, hasAdminPortal: !!(window.AR && window.AR.AdminPortal) }, hypothesisId: 'H4', timestamp: Date.now() }) }).catch(function () {});
+                } catch (err) {}
+                // #endregion
                 errEl.classList.remove('visible');
                 errEl.textContent = '';
                 btn.disabled = true;
@@ -64,6 +74,11 @@
 
                 fetch(apiBase + '/admin/runs?limit=1', { headers: { Authorization: 'Bearer ' + token } })
                     .then(function (r) {
+                        // #region agent log
+                        try {
+                            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'index.html:fetchDone', message: 'login fetch response', data: { ok: r.ok, status: r.status, hasAdminPortal: !!(window.AR && window.AR.AdminPortal) }, hypothesisId: 'H4_H5', timestamp: Date.now() }) }).catch(function () {});
+                        } catch (err) {}
+                        // #endregion
                         if (r.ok) {
                             window.AR.AdminPortal.setToken(token);
                             window.location.href = 'dashboard.html';
@@ -79,6 +94,11 @@
                         });
                     })
                     .catch(function () {
+                        // #region agent log
+                        try {
+                            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'index.html:fetchCatch', message: 'login fetch failed', data: {}, hypothesisId: 'H4', timestamp: Date.now() }) }).catch(function () {});
+                        } catch (err) {}
+                        // #endregion
                         errEl.textContent = 'Network error. Check your connection and try again.';
                         errEl.classList.add('visible');
                     })

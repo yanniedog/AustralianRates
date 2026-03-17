@@ -1,0 +1,2 @@
+# Redirect /admin (no trailing slash) to /admin/ so directory index is served
+/admin /admin/ 301

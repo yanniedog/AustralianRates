@@ -3,6 +3,11 @@
  * All admin pages (except login) must call AR.AdminPortal.guard() first.
  */
 (function () {
+    // #region agent log
+    try {
+        fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'admin-portal.js:load', message: 'admin-portal.js loaded', data: { hasWindow: typeof window !== 'undefined' }, hypothesisId: 'H2', timestamp: Date.now() }) }).catch(function () {});
+    } catch (err) {}
+    // #endregion
     'use strict';
     var STORAGE_KEY = 'ar_admin_token';
     var API_BASE = (typeof window !== 'undefined' && window.location && window.location.origin)
@@ -37,8 +42,16 @@
 
     /** Redirect to login if no token. Call on dashboard, database, config, runs pages. */
     function guard() {
-        if (!getToken()) {
-            var path = (typeof window !== 'undefined' && window.location) ? window.location.pathname : '';
+        var token = getToken();
+        var path = (typeof window !== 'undefined' && window.location) ? window.location.pathname : '';
+        var hasToken = !!(token && token.length);
+        var willRedirect = !hasToken;
+        // #region agent log
+        try {
+            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'admin-portal.js:guard', message: 'guard() called', data: { path: path, tokenLength: token ? token.length : 0, hasToken: hasToken, willRedirect: willRedirect }, hypothesisId: 'H3', timestamp: Date.now() }) }).catch(function () {});
+        } catch (err) {}
+        // #endregion
+        if (!hasToken) {
             var idx = path.indexOf('/admin');
             var adminBase = idx >= 0 ? path.substring(0, idx) + '/admin/' : '/admin/';
             window.location.href = adminBase;
