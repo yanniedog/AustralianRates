@@ -1,14 +1,14 @@
 # Data integrity audit report
 
-Generated: 2026-03-17T15:11:27.911Z
+Generated: 2026-03-17T15:18:43.733Z
 Target DB: australianrates_api
 
 ## Summary
 
 - Total checks: 18
-- Passed: 16
-- Failed: 2
-- Dead data issues: 1
+- Passed: 17
+- Failed: 1
+- Dead data issues: 0
 - Invalid data issues: 0
 - Duplicate data issues: 0
 - Other issues: 1
@@ -90,10 +90,10 @@ Target DB: australianrates_api
 - Count: 0
 - Detail: {"orphan_count":0}
 
-### orphan_latest_savings_series [dead] FAIL
+### orphan_latest_savings_series [dead] PASS
 
-- Count: 2
-- Detail: {"orphan_count":2}
+- Count: 0
+- Detail: {"orphan_count":0}
 
 ### orphan_latest_td_series [dead] PASS
 

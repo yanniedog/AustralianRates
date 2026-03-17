@@ -2,7 +2,8 @@
 
 **Generated:** 18 March 2026  
 **Scope:** Production API D1 database (`australianrates_api`), logs, and status  
-**Sources:** Fresh production logs (fetch 18 Mar 2026), existing integrity audit (17 Mar 2026), codebase review
+**Sources:** Fresh production logs (fetch 18 Mar 2026), integrity audits (17–18 Mar 2026), codebase review  
+**Updates (18 Mar):** Migrations 0028, 0029, 0030 applied; API deployed; 2 orphan `latest_savings_series` rows removed; re-run audit: 17/18 checks pass.
 
 ---
 
@@ -10,16 +11,17 @@
 
 | Area | Status | Action |
 |------|--------|--------|
-| **Schema / migrations** | **Red** | Production D1 is missing tables/columns from migrations 0028, 0029, 0030. Apply migrations. |
-| **Chart / analytics** | **Amber** | `chart_pivot_cache` missing; API falls back to live compute after code fix. Apply migration 0030 for fast loads. |
-| **Integrity audit UI** | **Amber** | `integrity_audit_runs` missing; run completes but is not stored. Apply migration 0029. |
-| **Admin downloads** | **Amber** | `export_kind`/`month_iso` missing; list already has legacy fallback. Apply migration 0028. |
-| **Product drift / orphans** | **Amber** | 2 orphan rows in `latest_savings_series`; 3,714 legacy `raw_payloads` without `raw_objects`. Remediate orphans; treat raw_payloads as known backlog. |
+| **Schema / migrations** | **Green** | Migrations 0028, 0029, 0030 applied to production (18 Mar 2026). |
+| **Chart / analytics** | **Green** | `chart_pivot_cache` table exists; cache refresh and analytics/series use it. |
+| **Integrity audit UI** | **Green** | `integrity_audit_runs` table exists; manual runs are stored. |
+| **Admin downloads** | **Green** | `export_kind`/`month_iso` columns present. |
+| **Product drift / orphans** | **Green** | Orphan `latest_savings_series` rows remediated (2 deleted). 3,714 legacy `raw_payloads` without `raw_objects` remain as known backlog. |
 | **Coverage gaps** | **Amber** | 23 coverage gaps (CBA term_deposits, UBank index failures, Bendigo detail failures). Operational; see CDR/playbook fixes. |
 | **CDR pipeline audit** | **Amber** | 3 failed checks (2 errors, 1 warn). Review CDR audit output in admin. |
-| **Core rate data** | **Green** | No invalid keys, no out-of-range rates, no duplicate historical rows (per 17 Mar audit). |
+| **Core rate data** | **Green** | No invalid keys, no out-of-range rates, no duplicate historical rows. |
+| **Runs with no outputs** | **Amber** | 291 runs with status=ok but zero rows written (audit finding). Operational/legacy; no data fix required. |
 
-**Critical fix:** Apply pending D1 migrations on production so schema matches code. Then re-run integrity audit and confirm chart cache and admin features.
+**Done:** Migrations applied, API deployed, orphan latest_savings_series remediated, integrity re-audit run (17 passed, 1 failed: runs_with_no_outputs). Log retention already 14d warn/error, 48h info/debug in `retention-prune.ts`.
 
 ---
 

@@ -143,14 +143,14 @@ async function runRetrievedActivityCheck(env: EnvBindings): Promise<AuditCheckRe
       title: 'Fetch event retrieval activity (24h)',
       metricSql: `SELECT
     COUNT(*) AS total_events,
-    SUM(CASE WHEN fetched_at >= datetime('now', '-1 day') THEN 1 ELSE 0 END) AS events_24h,
-    SUM(CASE WHEN fetched_at >= datetime('now', '-1 day') AND COALESCE(http_status, 0) >= 400 THEN 1 ELSE 0 END) AS http_errors_24h,
-    COUNT(DISTINCT CASE WHEN fetched_at >= datetime('now', '-1 day') THEN lender_code END) AS lenders_24h
+    SUM(CASE WHEN fetched_at >= datetime('now', '-1 day') AND lender_code IS NOT NULL AND lender_code != '' THEN 1 ELSE 0 END) AS events_24h,
+    SUM(CASE WHEN fetched_at >= datetime('now', '-1 day') AND lender_code IS NOT NULL AND lender_code != '' AND COALESCE(http_status, 0) >= 400 THEN 1 ELSE 0 END) AS http_errors_24h,
+    COUNT(DISTINCT CASE WHEN fetched_at >= datetime('now', '-1 day') AND lender_code IS NOT NULL AND lender_code != '' THEN lender_code END) AS lenders_24h
     FROM fetch_events`,
       sampleSql: `SELECT
     id, fetched_at, run_id, lender_code, dataset_kind, source_type, http_status, source_url
     FROM fetch_events
-    WHERE fetched_at >= datetime('now', '-1 day') AND COALESCE(http_status, 0) >= 400
+    WHERE fetched_at >= datetime('now', '-1 day') AND lender_code IS NOT NULL AND lender_code != '' AND COALESCE(http_status, 0) >= 400
     ORDER BY fetched_at DESC
     LIMIT 12`,
       failureMessage: 'Failed to query retrieval activity diagnostics.',

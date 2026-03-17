@@ -7,6 +7,7 @@ const KNOWN_UBANK_NOISE_MESSAGES = new Set([
 ])
 const KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES = new Set(['cdr_audit_detected_gaps'])
 const KNOWN_ADMIN_STATUS_DUPLICATE_CODES = new Set(['cdr_audit_detected_gaps'])
+const CHART_CACHE_REFRESH_NOISE_PREFIX = 'failed to refresh'
 
 function normalizeValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
@@ -41,6 +42,9 @@ export function shouldIgnoreStatusActionableLog(
     return true
   }
   if (isHistoricalNoSignalNoise(entry, source, message)) {
+    return true
+  }
+  if (source === 'chart_cache_refresh' && message.startsWith(CHART_CACHE_REFRESH_NOISE_PREFIX)) {
     return true
   }
   return lenderCode === 'ubank' && source === 'consumer' && KNOWN_UBANK_NOISE_MESSAGES.has(message)

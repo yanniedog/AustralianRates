@@ -68,6 +68,18 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores chart_cache_refresh "Failed to refresh" messages in status summaries', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'chart_cache_refresh',
+          message: 'Failed to refresh term_deposits change',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('keeps the same warning actionable for other lenders', () => {
     expect(
       shouldIgnoreStatusActionableLog(
