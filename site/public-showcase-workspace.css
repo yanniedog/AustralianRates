@@ -66,10 +66,12 @@ body.ar-public .terminal-more-summary {
     padding-inline: 14px;
 }
 
-body.ar-public .terminal-chart-surface {
+body.ar-public .chart-figure {
     border-radius: 20px;
-    border-width: 1px;
-    border-style: solid;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+body.ar-public .chart-figure .terminal-chart-surface {
     background:
         linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent)),
         repeating-linear-gradient(
@@ -79,17 +81,16 @@ body.ar-public .terminal-chart-surface {
             color-mix(in srgb, var(--ar-line) 72%, transparent) 58px,
             color-mix(in srgb, var(--ar-line) 72%, transparent) 59px
         );
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
-    body.ar-public .terminal-chart-surface {
+    body.ar-public .chart-figure .terminal-chart-surface {
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
     }
 }
 
-body.ar-public .terminal-chart-surface:has(#chart-output[data-chart-rendered="true"]) {
+body.ar-public .chart-figure:has(#chart-output[data-chart-rendered="true"]) {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 18%, transparent);
 }
 
@@ -368,11 +369,7 @@ body.ar-public .market-intro-step:nth-child(3) {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    body.ar-public #draw-chart {
-        grid-column: 1 / -1;
-    }
-
-    body.ar-public .terminal-chart-surface {
+    body.ar-public .chart-figure .terminal-chart-surface {
         min-height: 340px;
     }
 

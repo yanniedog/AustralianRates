@@ -657,11 +657,6 @@ async function verifyPublicTriggerRemoval(page, results, label) {
 }
 
 async function verifyChartSmoke(page, results, label) {
-    await page.evaluate(() => {
-        const fold = document.querySelector('.terminal-chart-fold');
-        if (fold && fold.tagName === 'DETAILS') fold.open = true;
-    });
-    await page.waitForTimeout(300);
     const button = page.locator('#draw-chart');
     if (!(await button.isVisible().catch(() => false))) {
         fail(results, `${label}: draw-chart button missing`);

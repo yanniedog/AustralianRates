@@ -412,7 +412,7 @@
     if (chartUi.setPendingState) chartUi.setPendingState('Loading');
     else if (chartUi.setIdleState) chartUi.setIdleState();
 
-    [document.getElementById('notes'), document.getElementById('filter-bar')].forEach(function (details) {
+    [document.getElementById('notes'), document.getElementById('filter-bar'), document.getElementById('chart-options-details')].forEach(function (details) {
         if (details && details.tagName === 'DETAILS') details.addEventListener('toggle', scheduleResponsiveSync);
     });
 

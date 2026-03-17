@@ -5,6 +5,85 @@
     gap: 14px;
 }
 
+.chart-block {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
+.chart-block-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.chart-block-head .terminal-panel-head {
+    margin: 0;
+}
+
+.chart-figure {
+    border: 1px solid var(--ar-line);
+    border-radius: 16px;
+    background: var(--ar-surface-2);
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-height: 0;
+}
+
+.chart-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ar-line);
+    background: color-mix(in srgb, var(--ar-surface-2) 60%, var(--ar-surface));
+}
+
+.chart-toolbar .chart-question-row {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.chart-toolbar-btn {
+    flex-shrink: 0;
+}
+
+.chart-options-details {
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: var(--ar-surface-2);
+    overflow: hidden;
+}
+
+.chart-options-summary {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ar-text-soft);
+    cursor: pointer;
+    list-style: none;
+}
+
+.chart-options-summary::-webkit-details-marker {
+    display: none;
+}
+
+.chart-options-summary:hover {
+    color: var(--ar-text);
+}
+
+.chart-options-details[open] .chart-options-summary {
+    border-bottom: 1px solid var(--ar-line);
+}
+
+.chart-options-details .terminal-chart-controls {
+    padding: 12px;
+}
+
 .chart-guidance-wrap,
 .chart-summary,
 .terminal-bottom-tabs {
@@ -58,10 +137,13 @@
 
 .terminal-chart-surface {
     min-height: 420px;
-    border: 1px solid var(--ar-line);
-    border-radius: 16px;
-    background: var(--ar-surface-2);
     overflow: hidden;
+}
+
+.chart-figure .terminal-chart-surface {
+    border: none;
+    border-radius: 0;
+    background: transparent;
 }
 
 .terminal-chart-output,
@@ -374,16 +456,19 @@
 
 /* --- Ultra-modern chart interface: responsive, slick, interactive --- */
 
-.terminal-chart-surface {
+.chart-figure {
     transition:
         border-color var(--ar-motion-base, 240ms) var(--ar-ease, cubic-bezier(0.22, 1, 0.36, 1)),
-        box-shadow var(--ar-motion-base, 240ms) var(--ar-ease),
-        background var(--ar-motion-base, 240ms) var(--ar-ease);
-    contain: layout style;
+        box-shadow var(--ar-motion-base, 240ms) var(--ar-ease);
 }
 
-.terminal-chart-surface:has(#chart-output[data-chart-rendered="true"]) {
+.chart-figure:has(#chart-output[data-chart-rendered="true"]) {
     border-color: color-mix(in srgb, var(--ar-accent, #2563eb) 28%, var(--ar-line));
+}
+
+.terminal-chart-surface {
+    transition: opacity var(--ar-motion-base, 240ms) var(--ar-ease);
+    contain: layout style;
 }
 
 .terminal-chart-output,
@@ -402,7 +487,7 @@
     outline: none;
 }
 
-.terminal-chart-surface:focus-within {
+.chart-figure:focus-within {
     border-color: color-mix(in srgb, var(--ar-accent, #2563eb) 38%, var(--ar-line));
 }
 
@@ -533,6 +618,15 @@
 
     .terminal-chart-controls {
         grid-template-columns: 1fr;
+    }
+
+    .chart-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .chart-toolbar .chart-toolbar-btn {
+        width: 100%;
     }
 
     .terminal-chart-surface,
