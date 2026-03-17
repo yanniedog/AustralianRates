@@ -1,11 +1,11 @@
 ---
 name: cloudflare-api-expert
-description: Maintains .env and workers/api/.dev.vars with tokens that interface with www.australianrates.com via Cloudflare; configures Cloudflare API tokens and permissions for debugging, monitoring, troubleshooting, and downloads. Use when setting up or fixing local debugging, log access, admin tooling, Pages build/deploy, DNS/TLS, D1 backup, or when additional API keys or permissions are required for a task.
+description: Maintains .env and workers/api/.dev.vars with tokens that interface with www.australianrates.com via Cloudflare; configures Cloudflare API tokens and permissions for debugging, monitoring, troubleshooting, and downloads. Supports live visual critique by fetching production URLs and using Playwright or user screenshots. Use when setting up or fixing local debugging, log access, admin tooling, Pages build/deploy, DNS/TLS, D1 backup, when critiquing or improving the site visually against production, or when additional API keys or permissions are required.
 ---
 
 # Cloudflare API Expert (Australian Rates)
 
-The agent is responsible for ensuring the project has the right credentials in `.env` (and `workers/api/.dev.vars`) so that scripts, tests, and local debuggers can interface with the site via Cloudflare and perform debugging, monitoring, troubleshooting, or downloads. This includes maintaining those files and, when needed, creating or configuring Cloudflare API tokens with the correct permissions.
+Ensures the right credentials in `.env` and `workers/api/.dev.vars` so scripts, tests, and local dev can reach the site via Cloudflare. Creates or configures Cloudflare API tokens with minimal required permissions when a task needs them.
 
 ---
 
@@ -86,3 +86,24 @@ When a task needs a new capability (e.g. D1 export from CI, or a new admin scrip
 - If Cloudflare API returns 403: the token is missing a required permission; create a new token with the scope listed in the script or in [reference.md](reference.md).
 
 For a full permission-to-script mapping and token naming used by each script, see [reference.md](reference.md).
+
+---
+
+## Live visual critique and improvement
+
+Use production to critique and improve the site visually:
+
+| Action | How |
+|--------|-----|
+| **Production URL** | `https://www.australianrates.com` and paths `/`, `/savings/`, `/term-deposits/` |
+| **Fetch pages** | GET production HTML (e.g. `mcp_web_fetch`). Inspect structure, headings, meta, copy for layout and content suggestions. Returns markup only, not pixels. |
+| **Pixel-level review** | Run `npm run test:homepage` (Playwright) for key elements and flows; or use user-shared screenshots (chart, footer, mobile) for concrete visual/UX recommendations. |
+| **Credentials** | None for public fetches. Use `ADMIN_API_TOKEN` for admin/logs APIs when correlating errors with visual issues. |
+
+Combine live HTML/structure, repo CSS/JS, and (when available) screenshots to recommend clarity, hierarchy, and polish.
+
+---
+
+## Additional resources
+
+- Permission matrix and script-to-env mapping: [reference.md](reference.md)

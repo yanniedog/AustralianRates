@@ -1,10 +1,14 @@
 import type { Hono } from 'hono'
+import { getCachedOrCompute } from '../db/chart-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
+import { withPublicCache } from '../utils/http'
 import { parseSourceMode } from '../utils/source-mode'
 import { collectSavingsAnalyticsRowsResolved } from './analytics-data'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+
+const CHART_CACHE_MAX_AGE = 300
 
 function buildFilters(query: Record<string, string | undefined>) {
   return {
@@ -23,18 +27,34 @@ function buildFilters(query: Record<string, string | undefined>) {
   } as const
 }
 
+function toParams(merged: Record<string, string | undefined>): Record<string, string | undefined> {
+  const params: Record<string, string | undefined> = {}
+  for (const [k, v] of Object.entries(merged)) params[k] = v == null ? undefined : String(v)
+  return params
+}
+
 export function registerSavingsAnalyticsRoutes(publicRoutes: Hono<AppContext>): void {
   publicRoutes.get('/analytics/series', async (c) => {
-    const requestedRepresentation = parseAnalyticsRepresentation(c.req.query('representation'))
-    const result = await collectSavingsAnalyticsRowsResolved(
-      { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    const merged = Object.fromEntries(c.req.query().entries()) as Record<string, string | undefined>
+    const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
+    const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
+    const result = await getCachedOrCompute(
+      c.env,
+      'savings',
       requestedRepresentation,
-      buildFilters(c.req.query()),
+      toParams(merged),
+      () =>
+        collectSavingsAnalyticsRowsResolved(dbs, requestedRepresentation, buildFilters(merged)).then((r) => ({
+          rows: r.rows,
+          representation: r.representation,
+          fallbackReason: r.fallbackReason,
+        })),
     )
+    withPublicCache(c, CHART_CACHE_MAX_AGE)
     return c.json({
       ok: true,
       representation: result.representation,
-      requested_representation: result.requestedRepresentation,
+      requested_representation: requestedRepresentation,
       fallback_reason: result.fallbackReason,
       count: result.rows.length,
       total: result.rows.length,
@@ -44,17 +64,26 @@ export function registerSavingsAnalyticsRoutes(publicRoutes: Hono<AppContext>): 
 
   publicRoutes.post('/analytics/pivot', async (c) => {
     const body = (await c.req.json<Record<string, string | undefined>>().catch(() => ({}))) as Record<string, string | undefined>
-    const merged = { ...c.req.query(), ...body }
+    const merged = { ...Object.fromEntries(c.req.query().entries()), ...body } as Record<string, string | undefined>
     const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
-    const result = await collectSavingsAnalyticsRowsResolved(
-      { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
+    const result = await getCachedOrCompute(
+      c.env,
+      'savings',
       requestedRepresentation,
-      buildFilters(merged),
+      toParams(merged),
+      () =>
+        collectSavingsAnalyticsRowsResolved(dbs, requestedRepresentation, buildFilters(merged)).then((r) => ({
+          rows: r.rows,
+          representation: r.representation,
+          fallbackReason: r.fallbackReason,
+        })),
     )
+    withPublicCache(c, CHART_CACHE_MAX_AGE)
     return c.json({
       ok: true,
       representation: result.representation,
-      requested_representation: result.requestedRepresentation,
+      requested_representation: requestedRepresentation,
       fallback_reason: result.fallbackReason,
       count: result.rows.length,
       total: result.rows.length,

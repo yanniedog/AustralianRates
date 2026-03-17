@@ -25,12 +25,20 @@
 
 .chart-figure {
     border: 1px solid var(--ar-line);
-    border-radius: 12px;
+    border-radius: 12px 12px 0 0;
     background: var(--ar-surface-2);
     overflow: hidden;
     display: grid;
     grid-template-rows: auto 1fr;
     min-height: 0;
+}
+
+.chart-figure:last-child {
+    border-radius: 12px;
+}
+
+.chart-footer {
+    border-radius: 0 0 12px 12px;
 }
 
 .chart-toolbar {
@@ -136,7 +144,7 @@
 }
 
 .terminal-chart-surface {
-    min-height: 420px;
+    min-height: 560px;
     overflow: hidden;
 }
 
@@ -149,9 +157,48 @@
 .terminal-chart-output,
 #chart-output,
 #chart-detail-output {
-    min-height: 380px;
+    min-height: 520px;
     width: 100%;
     touch-action: manipulation;
+}
+
+.chart-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--ar-line);
+    border-top: none;
+    background: color-mix(in srgb, var(--ar-surface-2) 85%, var(--ar-surface));
+    border-radius: 0 0 12px 12px;
+}
+
+.chart-footer-guidance {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+}
+
+.chart-footer-stats {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin: 0;
+}
+
+.chart-footer-stats .terminal-stat {
+    min-width: 0;
+}
+
+.chart-footer-summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+}
+
+.chart-figure + .chart-footer {
+    border-radius: 0;
 }
 
 .chart-output-empty,

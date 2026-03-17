@@ -483,6 +483,31 @@
         };
     }
 
+    function tdTermTimeGlobalRange(tt) {
+        var lo = Infinity;
+        var hi = -Infinity;
+        tt.terms.forEach(function (term) {
+            var tr = term.timeRibbon;
+            if (!tr || !tr.categories) return;
+            tr.categories.forEach(function (c) {
+                if (Number.isFinite(c.min) && c.min < lo) lo = c.min;
+                if (Number.isFinite(c.max) && c.max > hi) hi = c.max;
+            });
+            (tr.bankCurves || []).forEach(function (curve) {
+                (curve.points || []).forEach(function (p) {
+                    if (p && Number.isFinite(p.value)) {
+                        if (p.value < lo) lo = p.value;
+                        if (p.value > hi) hi = p.value;
+                    }
+                });
+            });
+        });
+        if (!Number.isFinite(lo)) lo = 0;
+        if (!Number.isFinite(hi)) hi = 5;
+        var pad = (hi - lo) * 0.06 || 0.5;
+        return { min: Math.max(0, lo - pad), max: hi + pad };
+    }
+
     function buildTdTermTimeOption(tt, fields, size) {
         var base = baseTextStyles();
         var theme = chartTheme();
@@ -491,11 +516,10 @@
         var termCount = tt.terms.length;
         var rowCount = Math.min(termCount, 4);
         var colCount = termCount <= 2 ? termCount : 2;
-        var gap = 12;
-        var topStart = 36;
-        var titleHeight = 28;
+        var topStart = 28;
         var h = (100 - topStart) / rowCount;
         var w = 100 / colCount;
+        var sharedRange = tdTermTimeGlobalRange(tt);
         var grids = [];
         var xAxes = [];
         var yAxes = [];
@@ -518,7 +542,7 @@
                 axisTick: { show: false },
                 axisLabel: {
                     color: theme.mutedText,
-                    fontSize: 9,
+                    fontSize: narrow ? 8 : 10,
                     interval: categoryInterval(tt.terms[i].timeRibbon.categories.length, 6),
                     formatter: function (value) { return formatDateAxisLabel(value, true); },
                 },
@@ -527,9 +551,11 @@
                 type: 'value',
                 gridIndex: i,
                 name: '',
+                min: sharedRange.min,
+                max: sharedRange.max,
                 axisLine: gridStyles().axisLine,
                 splitLine: { show: false },
-                axisLabel: { color: theme.softText, fontSize: 9, fontFamily: theme.dataFont || undefined, formatter: function (v) { return metricAxisLabel(fields.yField, v, true); } },
+                axisLabel: { color: theme.softText, fontSize: narrow ? 8 : 10, fontFamily: theme.dataFont || undefined, formatter: function (v) { return metricAxisLabel(fields.yField, v, true); } },
             });
         }
         var series = [];
@@ -565,13 +591,14 @@
             animationEasing: base.animationEasing,
             backgroundColor: 'transparent',
             legend: { show: false },
+            axisPointer: axisPointerConfig(theme),
             title: {
-                text: 'Yield by term over time · how banks price across terms',
+                text: 'Yield by term over time — same scale for direct comparison',
                 left: 0,
-                top: 4,
-                textStyle: { color: theme.mutedText, fontSize: 13, fontWeight: 600 },
+                top: 2,
+                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
             },
-            tooltip: { trigger: 'axis', backgroundColor: tooltipStyles().backgroundColor, borderColor: tooltipStyles().borderColor, textStyle: tooltipStyles().textStyle, extraCssText: tooltipStyles().extraCssText },
+            tooltip: { trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } }, backgroundColor: tooltipStyles().backgroundColor, borderColor: tooltipStyles().borderColor, textStyle: tooltipStyles().textStyle, extraCssText: tooltipStyles().extraCssText },
             grid: grids,
             xAxis: xAxes,
             yAxis: yAxes,
