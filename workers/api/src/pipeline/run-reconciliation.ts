@@ -418,6 +418,91 @@ export async function closeStaleRunningRuns(
   }
 }
 
+export type CancelAllRunningRunsResult = {
+  cancelled: number
+  run_ids: string[]
+  errors: string[]
+  dry_run: boolean
+}
+
+/**
+ * Cancel all run_reports that are still status = 'running'. Force-finalizes their unfinalized
+ * lender_dataset_runs first to retain as much info as possible, then marks each run terminal.
+ */
+export async function cancelAllRunningRuns(
+  db: D1Database,
+  options?: { dryRun?: boolean },
+): Promise<CancelAllRunningRunsResult> {
+  const dryRun = Boolean(options?.dryRun)
+  const errors: string[] = []
+  const runIds: string[] = []
+  let cancelled = 0
+
+  const rows = await db
+    .prepare(
+      `SELECT run_id, started_at, finished_at, per_lender_json, errors_json
+       FROM run_reports
+       WHERE status = 'running'
+       ORDER BY started_at ASC`,
+    )
+    .all<StaleRunningRun>()
+
+  for (const row of rows.results ?? []) {
+    runIds.push(row.run_id)
+    const totals = asSummaryTotals(row.per_lender_json)
+    const invariantSummary = await loadRunInvariantSummary(db, row.run_id)
+    const nextStatus = deriveTerminalRunStatus(totals, invariantSummary)
+    const reconciliationTime = nowIso()
+    const note =
+      `[${reconciliationTime}] cancelled: admin_cancel_all_running` +
+      ` enqueued=${totals.enqueuedTotal} processed=${totals.processedTotal} failed=${totals.failedTotal}` +
+      ` invariant_problem_rows=${invariantSummary.problematic_rows} started_at=${row.started_at}`
+
+    if (dryRun) {
+      cancelled += 1
+      continue
+    }
+
+    const { errors: eodErrors } = await forceFinalizeAllUnfinalizedForRun(db, row.run_id)
+    if (eodErrors.length > 0) {
+      eodErrors.forEach((e) => pushError(errors, `${row.run_id}:${e}`))
+    }
+    log.info('run_reconciliation', 'Run cancelled (cancel-all-running); force-finalized lender_dataset_runs', {
+      runId: row.run_id,
+      context: { started_at: row.started_at },
+    })
+
+    try {
+      const errorsJson = parseJson<string[]>(row.errors_json, [])
+      errorsJson.push(note)
+      const update = await db
+        .prepare(
+          `UPDATE run_reports
+           SET status = ?1,
+               finished_at = ?2,
+               errors_json = ?3
+           WHERE run_id = ?4
+             AND status = 'running'`,
+        )
+        .bind(nextStatus, row.finished_at || reconciliationTime, JSON.stringify(errorsJson.slice(-400)), row.run_id)
+        .run()
+
+      if (Number(update.meta?.changes ?? 0) > 0) {
+        cancelled += 1
+      }
+    } catch (error) {
+      pushError(errors, `${row.run_id}:${(error as Error)?.message || String(error)}`)
+    }
+  }
+
+  return {
+    cancelled,
+    run_ids: runIds,
+    errors,
+    dry_run: dryRun,
+  }
+}
+
 type StaleUnfinalizedRow = {
   run_id: string
   lender_code: string

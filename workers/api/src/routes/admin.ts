@@ -17,7 +17,7 @@ import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-au
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
-import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
+import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
 import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { adminClearRoutes } from './admin-clear'
@@ -694,6 +694,21 @@ adminRoutes.post('/runs/reconcile', async (c) => {
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
     result,
+  })
+})
+
+/** Cancel all runs that are still pending or in progress (status = 'running'). Force-finalizes their lender_dataset_runs first to retain info. Body: { dry_run?: boolean }. */
+adminRoutes.post('/runs/cancel-all-running', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const dryRun = Boolean(body.dry_run ?? body.dryRun)
+  const result = await cancelAllRunningRuns(c.env.DB, { dryRun })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    cancelled: result.cancelled,
+    run_ids: result.run_ids,
+    errors: result.errors,
+    dry_run: result.dry_run,
   })
 })
 
