@@ -148,13 +148,11 @@ These changes allow the API to run without 500s when migrations 0029 and 0030 ar
 4. ~~**Re-run data integrity audit**~~ **Done.** Audit run: 17 passed, 1 failed (runs_with_no_outputs: 291). orphan_latest_savings_series now PASS.
 
 5. **Address coverage gaps and CDR audit**  
-   Use admin coverage-gap and CDR audit UIs; fix UBank index, Bendigo detail failures, and CBA term_deposit finalization per playbooks and CDR expert guidance.
+   See `docs/coverage-gaps-and-cdr-audit.md`. Use admin coverage-gap and CDR audit UIs; run remediation for UBank/Bendigo; CBA term_deposits "one short" is now treated as acceptable. CDR audit failures: fix in order discovery → detail fetch → parse → write → lineage.
 
-6. **Optional: raw_payloads backlog**  
-   Plan retention or orphan cleanup for `raw_payloads` per `docs/database-live-audit.md`.
+6. ~~**Optional: raw_payloads backlog**~~ **Done.** Orphan `raw_payloads` (no matching `raw_objects`) are pruned on each retention run (`pruneRawPayloadsOrphans` in `retention-prune.ts`).
 
-7. **Optional: runs_with_no_outputs (291)**  
-   Audit flags 291 runs with status=ok but zero rows written. Treat as operational/legacy; no data fix required unless you want to mark or prune old runs.
+7. ~~**Optional: runs_with_no_outputs (291)**~~ **Done.** `run_reports` (and run_seen_*, lender_dataset_runs) older than 180 days are pruned on each retention run. Over time the 291 count will drop.
 
 ---
 
@@ -165,4 +163,5 @@ These changes allow the API to run without 500s when migrations 0029 and 0030 ar
 - **How to run audit:** `docs/data-integrity-audit.md`
 - **Previous audit report:** `docs/data-integrity-audit-report-2026-03-17.md`
 - **Retention and optimisation:** `docs/database-optimization.md`
+- **Coverage gaps and CDR audit (UBank, Bendigo, CBA, remediation):** `docs/coverage-gaps-and-cdr-audit.md`
 - **In-worker integrity checks:** `workers/api/src/db/integrity-checks.ts`, `workers/api/src/db/data-integrity-audit.ts`

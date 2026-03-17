@@ -47,10 +47,11 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
       idleMinutes: 5,
-      staleRunMinutes: 120,
+      staleRunMinutes: 90,
     })
     const ready = reconciliation.ready_finalizations
     const stale = reconciliation.stale_runs
+    const staleUnfinalized = reconciliation.stale_unfinalized
     const context = JSON.stringify({
       scanned_rows: ready.scanned_rows,
       finalized_rows: ready.finalized_rows,
@@ -59,7 +60,13 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       ready_stop: ready.stopped_reason ?? null,
       closed_runs: stale.closed_runs,
       stale_scanned_runs: stale.scanned_runs,
-      error_sample: compactErrorSample([...ready.errors, ...stale.errors]),
+      force_closed_unfinalized: staleUnfinalized.force_closed_rows,
+      stale_unfinalized_scanned: staleUnfinalized.scanned_rows,
+      error_sample: compactErrorSample([
+        ...ready.errors,
+        ...stale.errors,
+        ...staleUnfinalized.errors,
+      ]),
       duration_ms: reconciliation.duration_ms,
     })
     log.info('scheduler', 'Run lifecycle reconciliation completed', {

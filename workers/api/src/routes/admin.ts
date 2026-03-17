@@ -688,7 +688,7 @@ adminRoutes.post('/runs/reconcile', async (c) => {
   const result = await runLifecycleReconciliation(c.env.DB, {
     dryRun,
     idleMinutes: 5,
-    staleRunMinutes: 120,
+    staleRunMinutes: 90,
   })
   return c.json({
     ok: true,

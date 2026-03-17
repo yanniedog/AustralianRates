@@ -3,13 +3,18 @@ import { finalizePresenceForRun } from '../db/presence-finalize'
 import { tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { isLenderDatasetReadyForFinalization } from '../utils/lender-dataset-invariants'
 import { nowIso } from '../utils/time'
+import { log } from '../utils/logger'
 
 export { deriveTerminalRunStatus } from '../db/run-terminal-state'
+
+/** After this many minutes unfinalized, lender_dataset_runs are force-closed so they stop causing reconciliation stall. */
+const STALE_UNFINALIZED_MINUTES = 6 * 60
 
 type ReconciliationOptions = {
   dryRun?: boolean
   idleMinutes?: number
   staleRunMinutes?: number
+  staleUnfinalizedMinutes?: number
   maxRows?: number
 }
 
@@ -66,10 +71,20 @@ export type StaleRunClosureReconciliation = {
   dry_run: boolean
 }
 
+export type StaleUnfinalizedClosureReconciliation = {
+  cutoff_iso: string
+  stale_minutes: number
+  scanned_rows: number
+  force_closed_rows: number
+  errors: string[]
+  dry_run: boolean
+}
+
 export type RunLifecycleReconciliationResult = {
   checked_at: string
   duration_ms: number
   dry_run: boolean
+  stale_unfinalized: StaleUnfinalizedClosureReconciliation
   ready_finalizations: ReadyFinalizationReconciliation
   stale_runs: StaleRunClosureReconciliation
 }
@@ -178,6 +193,12 @@ export async function reconcileReadyFinalizations(
     const readiness = isLenderDatasetReadyForFinalization(row)
     if (!readiness.ready) {
       skippedRows += 1
+      log.debug('run_reconciliation', 'Skipped unfinalized row (not ready)', {
+        run_id: row.run_id,
+        lender_code: row.lender_code,
+        dataset: row.dataset_kind,
+        reason: readiness.reason ?? 'unknown',
+      })
       continue
     }
 
@@ -311,6 +332,96 @@ export async function closeStaleRunningRuns(
   }
 }
 
+type StaleUnfinalizedRow = {
+  run_id: string
+  lender_code: string
+  dataset_kind: 'home_loans' | 'savings' | 'term_deposits'
+  bank_name: string
+  collection_date: string
+}
+
+/**
+ * Force-close lender_dataset_runs that have been unfinalized longer than staleUnfinalizedMinutes.
+ * Prevents reconciliation stall when rows never become "ready" (e.g. index_fetch_not_succeeded, failed_detail_fetches).
+ */
+export async function forceCloseStaleUnfinalizedLenderDatasets(
+  db: D1Database,
+  options?: { dryRun?: boolean; staleUnfinalizedMinutes?: number; maxRows?: number },
+): Promise<StaleUnfinalizedClosureReconciliation> {
+  const dryRun = Boolean(options?.dryRun)
+  const staleMinutes = Math.max(
+    60,
+    Math.floor(Number(options?.staleUnfinalizedMinutes) || STALE_UNFINALIZED_MINUTES),
+  )
+  const maxRows = Math.max(1, Math.min(5000, Math.floor(Number(options?.maxRows) || 500)))
+  const cutoff = cutoffIso(staleMinutes)
+  const errors: string[] = []
+  let forceClosedRows = 0
+
+  const rows = await db
+    .prepare(
+      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date
+       FROM lender_dataset_runs
+       WHERE finalized_at IS NULL
+         AND updated_at < ?1
+       ORDER BY updated_at ASC
+       LIMIT ?2`,
+    )
+    .bind(cutoff, maxRows)
+    .all<StaleUnfinalizedRow>()
+
+  for (const row of rows.results ?? []) {
+    if (dryRun) {
+      forceClosedRows += 1
+      continue
+    }
+    try {
+      await finalizePresenceForRun(db, {
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        dataset: row.dataset_kind,
+        bankName: row.bank_name,
+        collectionDate: row.collection_date,
+      })
+    } catch (presenceError) {
+      pushError(
+        errors,
+        `${row.run_id}:${row.lender_code}:${row.dataset_kind}:presence:${(presenceError as Error)?.message || String(presenceError)}`,
+      )
+    }
+    try {
+      const updated = await tryMarkLenderDatasetFinalized(db, {
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        dataset: row.dataset_kind,
+      })
+      if (updated) {
+        forceClosedRows += 1
+        log.info('run_reconciliation', 'Stale unfinalized lender_dataset force-closed', {
+          run_id: row.run_id,
+          lender_code: row.lender_code,
+          dataset: row.dataset_kind,
+          updated_at_cutoff: cutoff,
+        })
+      }
+    } catch (markError) {
+      pushError(
+        errors,
+        `${row.run_id}:${row.lender_code}:${row.dataset_kind}:mark:${(markError as Error)?.message || String(markError)}`,
+      )
+    }
+  }
+
+  return {
+    cutoff_iso: cutoff,
+    stale_minutes: staleMinutes,
+    scanned_rows: (rows.results ?? []).length,
+    force_closed_rows: forceClosedRows,
+    errors,
+    dry_run: dryRun,
+  }
+}
+
 export async function runLifecycleReconciliation(
   db: D1Database,
   options?: ReconciliationOptions,
@@ -318,6 +429,22 @@ export async function runLifecycleReconciliation(
   const startedAt = Date.now()
   const dryRun = Boolean(options?.dryRun)
   const checkedAt = nowIso()
+
+  // 1. Close run_reports stuck in 'running' so they do not linger indefinitely.
+  const staleRuns = await closeStaleRunningRuns(db, {
+    dryRun,
+    staleRunMinutes: options?.staleRunMinutes,
+    maxRows: options?.maxRows,
+  })
+
+  // 2. Force-close lender_dataset_runs that have been unfinalized too long (prevents reconciliation stall).
+  const staleUnfinalized = await forceCloseStaleUnfinalizedLenderDatasets(db, {
+    dryRun,
+    staleUnfinalizedMinutes: options?.staleUnfinalizedMinutes,
+    maxRows: options?.maxRows,
+  })
+
+  // 3. Normal finalization for rows that are ready (idle past cutoff).
   const maxPasses = dryRun ? 1 : 10
   const readyPasses: Array<ReadyFinalizationReconciliation & { pass: number }> = []
   for (let pass = 1; pass <= maxPasses; pass += 1) {
@@ -355,16 +482,12 @@ export async function runLifecycleReconciliation(
       readyPasses.reduce((sum, pass) => sum + pass.scanned_rows, 0) > 0 &&
       readyPasses.reduce((sum, pass) => sum + pass.finalized_rows, 0) === 0,
   }
-  const staleRuns = await closeStaleRunningRuns(db, {
-    dryRun,
-    staleRunMinutes: options?.staleRunMinutes,
-    maxRows: options?.maxRows,
-  })
 
   return {
     checked_at: checkedAt,
     duration_ms: Date.now() - startedAt,
     dry_run: dryRun,
+    stale_unfinalized: staleUnfinalized,
     ready_finalizations: readyFinalizations,
     stale_runs: staleRuns,
   }
