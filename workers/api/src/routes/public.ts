@@ -33,6 +33,7 @@ import { queryHomeLoanRepresentationTimeseriesResolved } from './analytics-data'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
+import { registerRbaRoutes } from './rba-routes'
 
 export const publicRoutes = new Hono<AppContext>()
 
@@ -46,6 +47,7 @@ publicRoutes.use('*', async (c, next) => {
 registerHomeLoanExportRoutes(publicRoutes)
 registerHomeLoanAnalyticsRoutes(publicRoutes)
 registerPublicCoreRoutes(publicRoutes)
+registerRbaRoutes(publicRoutes)
 
 publicRoutes.post('/trigger-run', async (c) => {
   const guard = guardPublicTriggerRun(c)

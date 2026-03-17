@@ -30,6 +30,7 @@ import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { queryTdRepresentationTimeseriesResolved } from './analytics-data'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
 import { getLandingOverview } from '../db/landing-overview'
+import { registerRbaRoutes } from './rba-routes'
 import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { registerTdExportRoutes } from './td-exports'
 import {
@@ -57,6 +58,7 @@ tdPublicRoutes.use('*', async (c, next) => {
 registerTdExportRoutes(tdPublicRoutes)
 registerDebugLogRoutes(tdPublicRoutes)
 registerTdAnalyticsRoutes(tdPublicRoutes)
+registerRbaRoutes(tdPublicRoutes)
 
 tdPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

@@ -337,7 +337,10 @@
             return String(left.bankName).localeCompare(String(right.bankName));
         });
 
-        var visibleEntries = entries.slice(0, density.rowLimit);
+        var visibleEntries = entries.slice(0, density.rowLimit).map(function (entry, index) {
+            entry.rank = index + 1;
+            return entry;
+        });
         var min = null;
         var max = null;
         visibleEntries.forEach(function (entry) {
@@ -353,6 +356,63 @@
             entries: visibleEntries,
             min: min,
             max: max,
+        };
+    }
+
+    /** Slope graph: two dates (then / now), one line per product showing rate change. Award-winning "who moved" view. */
+    function buildSlopeModel(rows, fields, density) {
+        var allSeries = buildSeriesCollection(rows, fields.yField);
+        var direction = metricDirection(fields.yField);
+        var dates = uniqueDates(allSeries);
+        if (dates.length < 2) return null;
+        var dateNow = dates[dates.length - 1];
+        var idxThen = Math.max(0, Math.floor(dates.length * 0.4));
+        var dateThen = dates[idxThen];
+        if (dateThen === dateNow) return null;
+
+        var byKey = {};
+        allSeries.forEach(function (series) {
+            var ptThen = series.points.find(function (p) { return p.date === dateThen; });
+            var ptNow = series.points.find(function (p) { return p.date === dateNow; });
+            if (!ptThen || !ptNow || !Number.isFinite(ptThen.value) || !Number.isFinite(ptNow.value)) return;
+            byKey[series.key] = {
+                key: series.key,
+                name: series.name,
+                valueLeft: ptThen.value,
+                valueRight: ptNow.value,
+                delta: ptNow.value - ptThen.value,
+                rowLeft: ptThen.row,
+                rowRight: ptNow.row,
+            };
+        });
+        var lines = Object.keys(byKey).map(function (k) { return byKey[k]; }).sort(function (a, b) {
+            var d = (b.delta || 0) - (a.delta || 0);
+            if (d !== 0) return d;
+            return String(a.name).localeCompare(String(b.name));
+        }).slice(0, density.rowLimit);
+
+        if (!lines.length) return null;
+        var minY = null;
+        var maxY = null;
+        lines.forEach(function (line) {
+            [line.valueLeft, line.valueRight].forEach(function (v) {
+                if (!Number.isFinite(v)) return;
+                if (minY == null || v < minY) minY = v;
+                if (maxY == null || v > maxY) maxY = v;
+            });
+        });
+        if (minY != null && maxY != null && minY === maxY) maxY = minY + 1;
+
+        return {
+            type: 'slope',
+            dateLeft: dateThen,
+            dateRight: dateNow,
+            dateLeftLabel: chartConfig.formatFieldValue ? chartConfig.formatFieldValue('collection_date', dateThen, null) : dateThen,
+            dateRightLabel: chartConfig.formatFieldValue ? chartConfig.formatFieldValue('collection_date', dateNow, null) : dateNow,
+            lines: lines,
+            min: minY,
+            max: maxY,
+            metricLabel: chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : fields.yField,
         };
     }
 
@@ -407,6 +467,15 @@
         var market = typeof marketModule.buildModel === 'function'
             ? marketModule.buildModel(rows, fields, selectionState)
             : null;
+        var tdCurveFrames = null;
+        var tdCurveDates = null;
+        if (market && typeof marketModule.buildTdCurveFrames === 'function') {
+            var tdFrames = marketModule.buildTdCurveFrames(rows, fields);
+            if (tdFrames && tdFrames.frames && tdFrames.frames.length) {
+                tdCurveFrames = tdFrames.frames;
+                tdCurveDates = tdFrames.dates || [];
+            }
+        }
         var timeRibbon = null;
         var tdTermTime = null;
         if (fields.view === 'timeRibbon' && marketModule.buildTimeRibbonModel) {
@@ -415,6 +484,7 @@
         if (fields.view === 'tdTermTime' && marketModule.buildTdTermTimeModel) {
             tdTermTime = marketModule.buildTdTermTimeModel(rows, fields);
         }
+        var slope = (fields.view === 'slope') ? buildSlopeModel(rows, fields, density) : null;
         lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
             return spotlight && spotlight.series && entry.seriesKey === spotlight.series.key;
         }) || lenderRanking.entries[0] || null;
@@ -439,8 +509,11 @@
                 return selectedKeys.indexOf(series.key) >= 0;
             }),
             market: market,
+            tdCurveFrames: tdCurveFrames,
+            tdCurveDates: tdCurveDates,
             timeRibbon: timeRibbon,
             tdTermTime: tdTermTime,
+            slope: slope,
             spotlight: spotlight,
         };
     }
@@ -503,8 +576,40 @@
         };
     }
 
+    function getApiBase() {
+        return (typeof config !== 'undefined' && config.apiBase) ? String(config.apiBase) : '';
+    }
+
+    var rbaHistoryCache = null;
+
+    function fetchRbaHistory() {
+        if (rbaHistoryCache && Array.isArray(rbaHistoryCache)) return Promise.resolve(rbaHistoryCache);
+        var base = getApiBase();
+        if (!base) return Promise.resolve([]);
+        var url = base + '/rba/history';
+        if (requestJson) {
+            return requestJson(url, { requestLabel: 'RBA history', timeoutMs: 10000, retryCount: 0 })
+                .then(function (res) {
+                    var rows = (res && res.rows) ? res.rows : [];
+                    rbaHistoryCache = Array.isArray(rows) ? rows : [];
+                    return rbaHistoryCache;
+                })
+                .catch(function () { return []; });
+        }
+        return fetch(url, { cache: 'default' })
+            .then(function (r) { return r.ok ? r.json() : { rows: [] }; })
+            .then(function (res) {
+                var rows = (res && res.rows) ? res.rows : [];
+                rbaHistoryCache = Array.isArray(rows) ? rows : [];
+                return rbaHistoryCache;
+            })
+            .catch(function () { return []; });
+    }
+
     window.AR.chartData = {
         buildChartModel: buildChartModel,
+        buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
+        fetchRbaHistory: fetchRbaHistory,
     };
 })();

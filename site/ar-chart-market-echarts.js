@@ -48,7 +48,8 @@
             axisLabel: {
                 color: theme.mutedText,
                 interval: categoryInterval(market.categories.length, narrow ? 5 : 8),
-                hideOverlap: false,
+                hideOverlap: true,
+                overflow: 'truncate',
                 formatter: function (value) {
                     var category = market.bucketByKey[value];
                     return category ? axisLabel(category.shortLabel, category.secondaryLabel, narrow) : value;
@@ -132,6 +133,8 @@
         }
 
         market.bankCurves.forEach(function (curve, index) {
+            var lineStyle = { width: 2.8, color: paletteColor(index) };
+            if (curve.lineDashed) lineStyle.type = 'dashed';
             series.push({
                 name: curve.bankName,
                 type: 'line',
@@ -139,7 +142,7 @@
                 connectNulls: false,
                 showSymbol: true,
                 symbolSize: 6,
-                lineStyle: { width: 2.8, color: paletteColor(index) },
+                lineStyle: lineStyle,
                 itemStyle: { color: paletteColor(index) },
                 emphasis: { focus: 'series', lineStyle: { width: 3.2 }, symbolSize: 9 },
                 data: curve.points.map(function (point) {
@@ -475,6 +478,8 @@
                 axisLabel: {
                     color: theme.mutedText,
                     interval: xInterval,
+                    hideOverlap: true,
+                    overflow: 'truncate',
                     formatter: function (value) { return formatDateAxisLabel(value, narrow); },
                 },
             },
@@ -607,6 +612,8 @@
                 axisLabel: {
                     color: theme.mutedText,
                     interval: xInterval,
+                    hideOverlap: true,
+                    overflow: 'truncate',
                     formatter: function (value) { return formatDateAxisLabel(value, narrow); },
                 },
             },

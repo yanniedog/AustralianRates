@@ -162,6 +162,43 @@
     touch-action: manipulation;
 }
 
+.chart-time-slider-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    padding: 10px 0 4px;
+    margin-top: 4px;
+    border-top: 1px solid var(--ar-line);
+}
+
+.chart-time-slider-wrap[hidden] {
+    display: none;
+}
+
+.chart-time-slider-label {
+    font-size: 0.78rem;
+    color: var(--ar-text-soft);
+}
+
+.chart-time-slider {
+    flex: 1 1 200px;
+    min-width: 120px;
+    max-width: 360px;
+    height: 8px;
+    accent-color: var(--ar-accent);
+}
+
+.chart-time-slider-date {
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ar-text);
+}
+
+.chart-time-play {
+    flex: 0 0 auto;
+}
+
 .chart-footer {
     display: flex;
     flex-wrap: wrap;

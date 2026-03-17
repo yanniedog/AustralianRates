@@ -180,7 +180,54 @@
         return trimAxisLabel(bank, isDense ? 14 : 18) + ' | ' + trimAxisLabel(product, isDense ? 18 : 22);
     }
 
+    /** Add RBA cash rate change vertical lines to an ECharts option that has a category xAxis of dates. */
+    function addRbaMarkLine(option, rbaRows) {
+        if (!option || !Array.isArray(rbaRows) || !rbaRows.length) return;
+        var xAxis = option.xAxis;
+        var data = (xAxis && Array.isArray(xAxis) ? xAxis[0] : xAxis) && (xAxis && Array.isArray(xAxis) ? xAxis[0].data : xAxis.data);
+        if (!Array.isArray(data) || !data.length) return;
+        var dateSet = {};
+        data.forEach(function (d) { dateSet[String(d)] = true; });
+        var inRange = rbaRows.filter(function (r) {
+            var d = r && r.effective_date != null ? String(r.effective_date) : '';
+            return d && dateSet[d];
+        });
+        if (!inRange.length) return;
+        var theme = chartTheme();
+        var lineColor = theme.axisLine || 'rgba(148, 163, 184, 0.5)';
+        var labelColor = theme.mutedText || '#94a3b8';
+        var markLineData = inRange.map(function (r) {
+            var rate = Number(r.cash_rate);
+            var name = (r.effective_date || '') + '  RBA ' + (Number.isFinite(rate) ? rate.toFixed(2) : '') + '%';
+            return { name: name, xAxis: String(r.effective_date) };
+        });
+        var rbaSeries = {
+            name: 'RBA changes',
+            type: 'line',
+            data: [],
+            silent: true,
+            symbol: 'none',
+            markLine: {
+                symbol: 'none',
+                lineStyle: { color: lineColor, width: 1.5, type: 'dashed' },
+                label: {
+                    show: true,
+                    position: 'insideEndTop',
+                    color: labelColor,
+                    fontSize: 10,
+                    formatter: function (params) {
+                        return params && params.name ? String(params.name) : '';
+                    },
+                },
+                data: markLineData,
+            },
+        };
+        if (!option.series) option.series = [];
+        option.series.push(rbaSeries);
+    }
+
     window.AR.chartEchartsHelpers = {
+        addRbaMarkLine: addRbaMarkLine,
         axisPointerConfig: axisPointerConfig,
         baseTextStyles: baseTextStyles,
         categoryInterval: categoryInterval,

@@ -56,6 +56,32 @@
         };
     }
 
+    function snapshotRowsForDate(rows, date) {
+        var d = String(date || '');
+        return rows.filter(function (row) { return String(row && row.collection_date || '') === d; });
+    }
+
+    function buildTdCurveFrames(rows, fields) {
+        if (section !== 'term-deposits') return null;
+        var allRows = rows || [];
+        if (!allRows.length) return null;
+        var byDate = {};
+        allRows.forEach(function (row) {
+            var date = String(row && row.collection_date || '');
+            if (date) byDate[date] = true;
+        });
+        var dates = Object.keys(byDate).sort(compareDates);
+        if (!dates.length) return null;
+        var frames = [];
+        for (var i = 0; i < dates.length; i++) {
+            var snapshotRows = snapshotRowsForDate(allRows, dates[i]);
+            var market = buildMarketModel(snapshotRows, fields, {});
+            if (market && market.categories && market.categories.length) frames.push(market);
+        }
+        if (!frames.length) return null;
+        return { dates: dates, frames: frames };
+    }
+
     function quantile(sorted, q) {
         if (!sorted.length) return null;
         if (sorted.length === 1) return sorted[0];
@@ -425,14 +451,20 @@
         categories.forEach(function (category) { byKey[category.key] = category; });
 
         var bankCurves = visibleBanks.map(function (bankName, index) {
+            var points = categories.map(function (category) {
+                var bankEntry = category.bankEntries.find(function (entry) { return entry.bankName === bankName; });
+                if (!bankEntry) return null;
+                return { bucketKey: category.key, value: bankEntry.value, row: bankEntry.row };
+            });
+            var firstRow = points.filter(Boolean)[0] && points.filter(Boolean)[0].row;
+            var rateType = (section === 'savings' && firstRow && firstRow.rate_type) ? String(firstRow.rate_type).toLowerCase() : '';
+            var isConditional = rateType === 'bonus' || rateType === 'introductory' || rateType === 'intro' || rateType === 'bundle';
             return {
                 bankName: bankName,
                 colorIndex: index,
-                points: categories.map(function (category) {
-                    var bankEntry = category.bankEntries.find(function (entry) { return entry.bankName === bankName; });
-                    if (!bankEntry) return null;
-                    return { bucketKey: category.key, value: bankEntry.value, row: bankEntry.row };
-                }),
+                points: points,
+                rateType: rateType,
+                lineDashed: isConditional,
             };
         });
 
@@ -457,4 +489,5 @@
     window.AR.chartMarket.buildModel = buildMarketModel;
     window.AR.chartMarket.buildTimeRibbonModel = buildTimeRibbonModel;
     window.AR.chartMarket.buildTdTermTimeModel = buildTdTermTimeModel;
+    window.AR.chartMarket.buildTdCurveFrames = buildTdCurveFrames;
 })();

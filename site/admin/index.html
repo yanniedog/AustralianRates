@@ -72,7 +72,14 @@
                 btn.disabled = true;
                 btn.textContent = 'Checking...';
 
-                fetch(apiBase + '/admin/runs?limit=1', { headers: { Authorization: 'Bearer ' + token } })
+                var timeoutMs = 15000;
+                var ac = new AbortController();
+                var timeoutId = setTimeout(function () { ac.abort(); }, timeoutMs);
+
+                fetch(apiBase + '/admin/auth-check', {
+                    headers: { Authorization: 'Bearer ' + token },
+                    signal: ac.signal
+                })
                     .then(function (r) {
                         // #region agent log
                         try {
@@ -93,16 +100,21 @@
                             errEl.classList.add('visible');
                         });
                     })
-                    .catch(function () {
+                    .catch(function (err) {
                         // #region agent log
                         try {
-                            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'index.html:fetchCatch', message: 'login fetch failed', data: {}, hypothesisId: 'H4', timestamp: Date.now() }) }).catch(function () {});
-                        } catch (err) {}
+                            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e952bc' }, body: JSON.stringify({ sessionId: 'e952bc', location: 'index.html:fetchCatch', message: 'login fetch failed', data: { name: err && err.name }, hypothesisId: 'H4', timestamp: Date.now() }) }).catch(function () {});
+                        } catch (e) {}
                         // #endregion
-                        errEl.textContent = 'Network error. Check your connection and try again.';
+                        if (err && err.name === 'AbortError') {
+                            errEl.textContent = 'Request timed out. Check your connection and try again.';
+                        } else {
+                            errEl.textContent = 'Network error. Check your connection and try again.';
+                        }
                         errEl.classList.add('visible');
                     })
                     .finally(function () {
+                        clearTimeout(timeoutId);
                         btn.disabled = false;
                         btn.textContent = 'Log in';
                     });

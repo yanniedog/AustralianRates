@@ -126,6 +126,8 @@
         if (fields.view === 'surface') tags.push('Movement');
         if (fields.view === 'lenders') tags.push('Leaders');
         if (fields.view === 'market') tags.push('Curve');
+        if (fields.view === 'slope') tags.push('Slope');
+        if (fields.view === 'ladder') tags.push('Ladder');
         if (fields.view === 'timeRibbon') tags.push('Ribbon (time)');
         if (fields.view === 'tdTermTime') tags.push('Term vs time');
         if (fields.view === 'compare') tags.push('Compare');
@@ -168,8 +170,13 @@
             pills.push('<span class="chart-summary-pill">' + esc(model.timeRibbon.categories.length + ' dates') + '</span>');
         } else if (fields.view === 'tdTermTime' && model.tdTermTime) {
             pills.push('<span class="chart-summary-pill">' + esc(model.tdTermTime.terms.length + ' terms') + '</span>');
+        } else if (fields.view === 'slope' && model.slope && model.slope.lines) {
+            pills.push('<span class="chart-summary-pill">' + esc(model.slope.lines.length + ' slopes') + '</span>');
+            pills.push('<span class="chart-summary-pill">' + esc(model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel) + '</span>');
+        } else if (fields.view === 'ladder' || fields.view === 'lenders') {
+            pills.push('<span class="chart-summary-pill">' + esc(model.meta.visibleLenders + ' lenders') + '</span>');
         } else {
-            pills.push('<span class="chart-summary-pill">' + esc(fields.view === 'lenders' ? model.meta.visibleLenders + ' lenders' : model.meta.visibleSeries + ' visible series') + '</span>');
+            pills.push('<span class="chart-summary-pill">' + esc(model.meta.visibleSeries + ' visible series') + '</span>');
         }
         pills.push('<span class="chart-summary-pill">' + esc(model.meta.densityLabel) + ' density</span>');
         pills = pills.concat(currentSlicePills(fields));
@@ -195,6 +202,8 @@
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
         if (fields.view === 'market' && model.market) return marketDimensionLabel(model.market) + ' curve';
+        if (fields.view === 'slope' && model.slope) return 'Who moved';
+        if (fields.view === 'ladder') return 'Rate ladder';
         if (fields.view === 'timeRibbon' && model.timeRibbon) return 'Rate over time · ' + (model.timeRibbon.termLabel || '');
         if (fields.view === 'tdTermTime' && model.tdTermTime) return 'Term vs time';
         if (fields.view === 'compare') return 'Selected shortlist';
@@ -227,8 +236,10 @@
         var marketOk = model && model.market && model.market.categories && model.market.categories.length;
         var timeRibbonOk = model && model.timeRibbon && model.timeRibbon.categories && model.timeRibbon.categories.length;
         var tdTermTimeOk = model && model.tdTermTime && model.tdTermTime.terms && model.tdTermTime.terms.length;
+        var slopeOk = model && model.slope && model.slope.lines && model.slope.lines.length;
+        var ladderOk = model && model.lenderRanking && model.lenderRanking.entries && model.lenderRanking.entries.length;
         var visibleOk = model && model.visibleSeries && model.visibleSeries.length;
-        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || ((fields.view !== 'market' && fields.view !== 'timeRibbon' && fields.view !== 'tdTermTime') && !visibleOk)) {
+        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || (fields.view === 'slope' && !slopeOk) || (fields.view === 'ladder' && !ladderOk) || ((fields.view !== 'market' && fields.view !== 'timeRibbon' && fields.view !== 'tdTermTime' && fields.view !== 'slope' && fields.view !== 'ladder') && !visibleOk)) {
             els.chartSeriesNote.textContent = 'Loading';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
@@ -268,6 +279,41 @@
                     metaRight: '',
                     isSelected: false,
                     isSpotlight: false,
+                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                });
+            }).join('');
+            return;
+        }
+        if (fields.view === 'slope' && model.slope && model.slope.lines.length) {
+            els.chartSeriesList.innerHTML = model.slope.lines.map(function (line, index) {
+                var deltaStr = Number.isFinite(line.delta) ? (line.delta >= 0 ? '+' : '') + chartConfig.formatMetricValue(fields.yField, line.delta) : '';
+                return seriesCardMarkup({
+                    key: line.key,
+                    title: line.name,
+                    valueText: chartConfig.formatMetricValue(fields.yField, line.valueRight),
+                    caption: model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel,
+                    metaLeft: deltaStr,
+                    metaRight: '',
+                    isSelected: false,
+                    isSpotlight: false,
+                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                });
+            }).join('');
+            return;
+        }
+        if (fields.view === 'ladder' && model.lenderRanking && model.lenderRanking.entries.length) {
+            els.chartSeriesList.innerHTML = model.lenderRanking.entries.map(function (entry, index) {
+                var isSelected = selected.indexOf(entry.seriesKey) >= 0;
+                var isSpotlight = selectionState && selectionState.spotlightSeriesKey === entry.seriesKey;
+                return seriesCardMarkup({
+                    key: entry.seriesKey,
+                    title: (entry.rank != null ? entry.rank + '. ' : '') + chartConfig.formatFieldValue('bank_name', entry.bankName, entry.row || null),
+                    valueText: chartConfig.formatMetricValue(fields.yField, entry.value),
+                    caption: entry.productName || 'Best matching product',
+                    metaLeft: entry.latestDate ? chartConfig.formatFieldValue('collection_date', entry.latestDate, entry.row || null) : 'Latest',
+                    metaRight: entry.pointCount.toLocaleString() + ' pts',
+                    isSelected: isSelected,
+                    isSpotlight: isSpotlight,
                     color: chartConfig.palette()[index % chartConfig.palette().length],
                 });
             }).join('');

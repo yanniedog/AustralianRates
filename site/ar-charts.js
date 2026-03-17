@@ -31,12 +31,15 @@
         spotlightSeriesKey: '',
         spotlightDate: '',
         marketFocusKey: '',
+        tdCurveFrameIndex: null,
+        tdPlayInterval: null,
         mainChart: null,
         detailChart: null,
     };
     var responsiveSyncTimer = 0;
     var resizeObserver = null;
     var chartLoadPromise = null;
+    var chartTimeSliderBound = false;
 
     function fields() {
         var defaultView = (window.AR.chartConfig && window.AR.chartConfig.defaultView) ? window.AR.chartConfig.defaultView() : 'lenders';
@@ -95,11 +98,16 @@
             parts.push(model.tdTermTime.terms.length + ' terms');
             return parts.filter(Boolean).join(' | ');
         }
-        if (currentFields.view === 'lenders') {
+        if (currentFields.view === 'lenders' || currentFields.view === 'ladder') {
             parts.push(model.meta.visibleLenders.toLocaleString() + '/' + model.meta.totalLenders.toLocaleString() + ' lenders');
-        } else {
-            parts.push(model.meta.visibleSeries.toLocaleString() + '/' + model.meta.totalSeries.toLocaleString() + ' series');
+            return parts.join(' | ');
         }
+        if (currentFields.view === 'slope' && model.slope && model.slope.lines) {
+            parts.push(model.slope.lines.length + ' slopes');
+            parts.push(model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel);
+            return parts.join(' | ');
+        }
+        parts.push(model.meta.visibleSeries.toLocaleString() + '/' + model.meta.totalSeries.toLocaleString() + ' series');
         return parts.join(' | ');
     }
 
@@ -203,8 +211,21 @@
             if (chartUi.setStatus) chartUi.setStatus('No lender match');
             return;
         }
+        if (currentFields.view === 'slope' && (!model.slope || !model.slope.lines || !model.slope.lines.length)) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
+            clearOutput('No slope data');
+            if (chartUi.setStatus) chartUi.setStatus('No slope data');
+            return;
+        }
+        if (currentFields.view === 'ladder' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
+            clearOutput('No ladder data');
+            if (chartUi.setStatus) chartUi.setStatus('No ladder data');
+            return;
+        }
         var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
-        if (!timeViews && currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
+        var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
+        if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No numeric values');
             if (chartUi.setStatus) chartUi.setStatus('No numeric values');
@@ -221,10 +242,77 @@
             chartState.marketFocusKey = model.market.focusBucket.key;
         }
 
+        var section = window.AR.section || '';
+        var showTdTimeSlider = section === 'term-deposits' && currentFields.view === 'market' && model.tdCurveFrames && model.tdCurveFrames.length && model.tdCurveDates && model.tdCurveDates.length;
+        if (showTdTimeSlider) {
+            var numFrames = model.tdCurveFrames.length;
+            var lastIdx = numFrames - 1;
+            if (chartState.tdCurveFrameIndex == null || chartState.tdCurveFrameIndex < 0 || chartState.tdCurveFrameIndex > lastIdx) {
+                chartState.tdCurveFrameIndex = lastIdx;
+            }
+            if (els.chartTimeSliderWrap) {
+                els.chartTimeSliderWrap.hidden = false;
+                if (els.chartTimeSlider) {
+                    els.chartTimeSlider.min = 0;
+                    els.chartTimeSlider.max = Math.max(0, lastIdx);
+                    els.chartTimeSlider.value = chartState.tdCurveFrameIndex;
+                    els.chartTimeSlider.setAttribute('aria-valuetext', model.tdCurveDates[chartState.tdCurveFrameIndex] || '');
+                }
+                if (els.chartTimeSliderDate) {
+                    els.chartTimeSliderDate.textContent = model.tdCurveDates[chartState.tdCurveFrameIndex] || '';
+                }
+                if (!chartTimeSliderBound && els.chartTimeSlider) {
+                    chartTimeSliderBound = true;
+                    els.chartTimeSlider.addEventListener('input', function () {
+                        var val = parseInt(els.chartTimeSlider.value, 10);
+                        if (Number.isFinite(val)) chartState.tdCurveFrameIndex = val;
+                        if (els.chartTimeSliderDate && chartState.rows.length) {
+                            var m = chartData.buildChartModel(chartState.rows, fields(), chartState);
+                            if (m.tdCurveDates) els.chartTimeSliderDate.textContent = m.tdCurveDates[chartState.tdCurveFrameIndex] || '';
+                        }
+                        renderFromCache();
+                    });
+                    if (els.chartTimePlay) {
+                        els.chartTimePlay.addEventListener('click', function () {
+                            if (chartState.tdPlayInterval) {
+                                clearInterval(chartState.tdPlayInterval);
+                                chartState.tdPlayInterval = null;
+                                els.chartTimePlay.textContent = 'Play';
+                                return;
+                            }
+                            var m = chartData.buildChartModel(chartState.rows, fields(), chartState);
+                            var maxIdx = (m.tdCurveFrames && m.tdCurveFrames.length) ? m.tdCurveFrames.length - 1 : 0;
+                            if (chartState.tdCurveFrameIndex >= maxIdx) chartState.tdCurveFrameIndex = 0;
+                            els.chartTimePlay.textContent = 'Pause';
+                            chartState.tdPlayInterval = setInterval(function () {
+                                var cur = chartData.buildChartModel(chartState.rows, fields(), chartState);
+                                var n = (cur.tdCurveFrames && cur.tdCurveFrames.length) ? cur.tdCurveFrames.length - 1 : 0;
+                                chartState.tdCurveFrameIndex = (chartState.tdCurveFrameIndex + 1) <= n ? chartState.tdCurveFrameIndex + 1 : 0;
+                                if (els.chartTimeSlider) { els.chartTimeSlider.max = n; els.chartTimeSlider.value = chartState.tdCurveFrameIndex; }
+                                if (els.chartTimeSliderDate && cur.tdCurveDates) els.chartTimeSliderDate.textContent = cur.tdCurveDates[chartState.tdCurveFrameIndex] || '';
+                                renderFromCache();
+                                if (chartState.tdCurveFrameIndex >= n) {
+                                    clearInterval(chartState.tdPlayInterval);
+                                    chartState.tdPlayInterval = null;
+                                    els.chartTimePlay.textContent = 'Play';
+                                }
+                            }, 400);
+                        });
+                    }
+                }
+            }
+        } else {
+            if (chartState.tdPlayInterval) {
+                clearInterval(chartState.tdPlayInterval);
+                chartState.tdPlayInterval = null;
+            }
+            if (els.chartTimeSliderWrap) els.chartTimeSliderWrap.hidden = true;
+        }
+
         ensureCharts();
         chartEcharts.renderMainChart(chartState.mainChart, els.chartOutput, currentFields.view, model, currentFields, {
             onMainClick: handleMainChartClick,
-        });
+        }, chartState.rbaHistory, chartState);
         chartEcharts.renderDetailChart(chartState.detailChart, els.chartDetailOutput, model, currentFields);
 
         if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
@@ -272,7 +360,7 @@
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
-        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
+        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         return params;
     }
@@ -303,6 +391,11 @@
                 els.chartRepresentation.value = payload.representation;
             }
             resetSelection();
+            try {
+                chartState.rbaHistory = chartData.fetchRbaHistory ? await chartData.fetchRbaHistory() : [];
+            } catch (e) {
+                chartState.rbaHistory = [];
+            }
 
             if (!chartState.rows.length) {
                 clientLog('info', 'Chart load returned no rows', { section: (window.AR && window.AR.section) || 'unknown' });
@@ -363,7 +456,7 @@
             drawChart();
             return;
         }
-        if ((fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime') && chartState.loadedRepresentation !== 'day') {
+        if ((fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'slope') && chartState.loadedRepresentation !== 'day') {
             drawChart();
             return;
         }
@@ -382,7 +475,7 @@
 
     function toggleSeries(seriesKey) {
         if (!seriesKey) return;
-        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime') {
+        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'slope' || fields().view === 'ladder') {
             if (fields().view === 'market') chartState.marketFocusKey = seriesKey;
             if (!chartState.stale) renderFromCache();
             return;

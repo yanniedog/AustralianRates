@@ -41,3 +41,21 @@ export async function getNearestRbaCashRate(db: D1Database, collectionDate: stri
   if (!row) return null
   return Number.isFinite(Number(row.cash_rate)) ? Number(row.cash_rate) : null
 }
+
+/** Distinct RBA cash rate changes by effective_date for chart annotations (date and rate labels). */
+export type RbaHistoryEntry = { effective_date: string; cash_rate: number }
+
+export async function getRbaHistory(db: D1Database): Promise<RbaHistoryEntry[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT effective_date, cash_rate
+       FROM rba_cash_rates
+       GROUP BY effective_date
+       ORDER BY effective_date ASC`,
+    )
+    .all<{ effective_date: string; cash_rate: number }>()
+  if (!results || !Array.isArray(results)) return []
+  return results
+    .filter((r) => r && r.effective_date != null && Number.isFinite(Number(r.cash_rate)))
+    .map((r) => ({ effective_date: String(r.effective_date), cash_rate: Number(r.cash_rate) }))
+}

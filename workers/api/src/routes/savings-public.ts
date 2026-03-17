@@ -43,6 +43,7 @@ import {
 } from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import { registerRbaRoutes } from './rba-routes'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -55,6 +56,7 @@ savingsPublicRoutes.use('*', async (c, next) => {
 
 registerSavingsExportRoutes(savingsPublicRoutes)
 registerSavingsAnalyticsRoutes(savingsPublicRoutes)
+registerRbaRoutes(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

@@ -118,7 +118,9 @@
 
     var BASE_CHART_VIEWS = [
         { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best rate now per lender.' },
+        { value: 'ladder', label: 'Ladder', icon: 'chart', help: 'Rank and value: who is first and by how much.' },
         { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: true },
+        { value: 'slope', label: 'Slope', icon: 'compare', help: 'Who moved? Rate change between two dates.' },
         { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate over time (heatmap).' },
         { value: 'compare', label: 'Compare', icon: 'compare', help: 'Selected products over time.' },
         { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Spread by group.' }
@@ -567,6 +569,12 @@
                                 '</div>',
                                 '<div class="terminal-chart-surface">',
                                     '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
+                                    '<div id="chart-time-slider-wrap" class="chart-time-slider-wrap" hidden aria-label="Chart time scrubber">',
+                                        '<label class="chart-time-slider-label" for="chart-time-slider">Sampling date</label>',
+                                        '<input type="range" id="chart-time-slider" class="chart-time-slider" min="0" max="0" value="0" step="1" aria-valuetext="">',
+                                        '<span id="chart-time-slider-date" class="chart-time-slider-date"></span>',
+                                        '<button type="button" id="chart-time-play" class="buttonish secondary chart-time-play" aria-label="Play animation">Play</button>',
+                                    '</div>',
                                 '</div>',
                             '</div>',
                             '<footer class="chart-footer" aria-label="Chart overview">',
