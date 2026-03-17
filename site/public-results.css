@@ -769,11 +769,13 @@ button.bank-option-card.is-selected .bank-badge-sub {
     .terminal-panel-head-control,
     .terminal-filter-group-head {
         align-items: flex-start;
+        gap: 12px;
     }
 
     .terminal-action-row,
     .terminal-filter-panel .terminal-action-row,
     .bank-picker-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
 }

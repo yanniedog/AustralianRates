@@ -50,6 +50,24 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
+/** True if the error indicates export_kind/month_iso columns are missing (migration 0028 not applied). */
+function isMissingExportKindColumn(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e)
+  return /no such column: export_kind/i.test(msg) || /no such column: month_iso/i.test(msg)
+}
+
+const SELECT_JOBS_COLUMNS_LEGACY = `job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
+  status, requested_at, started_at, completed_at, error_message`
+const SELECT_JOBS_COLUMNS = `${SELECT_JOBS_COLUMNS_LEGACY}, export_kind, month_iso`
+
+function mapJobRow(row: Record<string, unknown>): AdminDownloadJobRow {
+  return {
+    ...row,
+    export_kind: ((row.export_kind as AdminDownloadExportKind) ?? 'full') as AdminDownloadExportKind,
+    month_iso: (row.month_iso as string | null) ?? null,
+  } as AdminDownloadJobRow
+}
+
 export async function createAdminDownloadJob(
   db: D1Database,
   input: {
@@ -66,25 +84,51 @@ export async function createAdminDownloadJob(
 ): Promise<void> {
   const exportKind = input.exportKind ?? 'full'
   const monthIso = input.monthIso ?? null
-  await db
-    .prepare(
-      `INSERT INTO admin_download_jobs (
-         job_id, stream, scope, mode, format, since_cursor, include_payload_bodies, status, requested_at, export_kind, month_iso
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'queued', ?8, ?9, ?10)`,
-    )
-    .bind(
-      input.jobId,
-      input.stream,
-      input.scope,
-      input.mode,
-      input.format,
-      input.sinceCursor ?? null,
-      input.includePayloadBodies ? 1 : 0,
-      nowIso(),
-      exportKind,
-      monthIso,
-    )
-    .run()
+  try {
+    await db
+      .prepare(
+        `INSERT INTO admin_download_jobs (
+           job_id, stream, scope, mode, format, since_cursor, include_payload_bodies, status, requested_at, export_kind, month_iso
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'queued', ?8, ?9, ?10)`,
+      )
+      .bind(
+        input.jobId,
+        input.stream,
+        input.scope,
+        input.mode,
+        input.format,
+        input.sinceCursor ?? null,
+        input.includePayloadBodies ? 1 : 0,
+        nowIso(),
+        exportKind,
+        monthIso,
+      )
+      .run()
+  } catch (e) {
+    if (!isMissingExportKindColumn(e)) throw e
+    if (exportKind !== 'full' || monthIso != null) {
+      throw new Error(
+        'Monthly exports require migration 0028_admin_download_monthly.sql. Apply it with: wrangler d1 migrations apply australianrates_api --remote',
+      )
+    }
+    await db
+      .prepare(
+        `INSERT INTO admin_download_jobs (
+           job_id, stream, scope, mode, format, since_cursor, include_payload_bodies, status, requested_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'queued', ?8)`,
+      )
+      .bind(
+        input.jobId,
+        input.stream,
+        input.scope,
+        input.mode,
+        input.format,
+        input.sinceCursor ?? null,
+        input.includePayloadBodies ? 1 : 0,
+        nowIso(),
+      )
+      .run()
+  }
 }
 
 export async function markAdminDownloadJobProcessing(db: D1Database, jobId: string): Promise<void> {
@@ -232,21 +276,25 @@ export async function addAdminDownloadArtifact(
 }
 
 export async function getAdminDownloadJob(db: D1Database, jobId: string): Promise<AdminDownloadJobRow | null> {
-  const row = await db
-    .prepare(
-      `SELECT
-         job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
-         status, requested_at, started_at, completed_at, error_message, export_kind, month_iso
-       FROM admin_download_jobs
-       WHERE job_id = ?1`,
-    )
-    .bind(jobId)
-    .first<AdminDownloadJobRow>()
-  if (!row) return null
-  return {
-    ...row,
-    export_kind: (row as AdminDownloadJobRow & { export_kind?: string }).export_kind ?? 'full',
-    month_iso: (row as AdminDownloadJobRow & { month_iso?: string | null }).month_iso ?? null,
+  try {
+    const row = await db
+      .prepare(
+        `SELECT ${SELECT_JOBS_COLUMNS} FROM admin_download_jobs WHERE job_id = ?1`,
+      )
+      .bind(jobId)
+      .first<Record<string, unknown>>()
+    if (!row) return null
+    return mapJobRow(row)
+  } catch (e) {
+    if (!isMissingExportKindColumn(e)) throw e
+    const row = await db
+      .prepare(
+        `SELECT ${SELECT_JOBS_COLUMNS_LEGACY} FROM admin_download_jobs WHERE job_id = ?1`,
+      )
+      .bind(jobId)
+      .first<Record<string, unknown>>()
+    if (!row) return null
+    return mapJobRow(row)
   }
 }
 
@@ -275,46 +323,41 @@ export async function listAdminDownloadJobs(
   }
   const limit = Math.max(1, Math.min(250, Math.floor(Number(input?.limit ?? 20))))
   binds.push(limit)
-  const result = await db
-    .prepare(
-      `SELECT
-         job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
-         status, requested_at, started_at, completed_at, error_message, export_kind, month_iso
-       FROM admin_download_jobs
-       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY requested_at DESC
-       LIMIT ?${binds.length}`,
-    )
-    .bind(...binds)
-    .all<AdminDownloadJobRow & { export_kind?: string; month_iso?: string | null }>()
-  const rows = result.results ?? []
-  return rows.map((row) => ({
-    ...row,
-    export_kind: (row.export_kind ?? 'full') as AdminDownloadExportKind,
-    month_iso: row.month_iso ?? null,
-  }))
+  const sql = `SELECT ${SELECT_JOBS_COLUMNS} FROM admin_download_jobs
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY requested_at DESC
+    LIMIT ?${binds.length}`
+  try {
+    const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
+    return (result.results ?? []).map(mapJobRow)
+  } catch (e) {
+    if (!isMissingExportKindColumn(e)) throw e
+    const sqlLegacy = `SELECT ${SELECT_JOBS_COLUMNS_LEGACY} FROM admin_download_jobs
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY requested_at DESC
+      LIMIT ?${binds.length}`
+    const result = await db.prepare(sqlLegacy).bind(...binds).all<Record<string, unknown>>()
+    return (result.results ?? []).map(mapJobRow)
+  }
 }
 
 export async function listAdminDownloadJobsByIds(db: D1Database, jobIds: string[]): Promise<AdminDownloadJobRow[]> {
   const ids = normalizeJobIds(jobIds)
   if (!ids.length) return []
-  const result = await db
-    .prepare(
-      `SELECT
-         job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
-         status, requested_at, started_at, completed_at, error_message, export_kind, month_iso
-       FROM admin_download_jobs
-       WHERE job_id IN (${inClausePlaceholders(ids.length)})
-       ORDER BY requested_at DESC`,
-    )
-    .bind(...ids)
-    .all<AdminDownloadJobRow & { export_kind?: string; month_iso?: string | null }>()
-  const rows = result.results ?? []
-  return rows.map((row) => ({
-    ...row,
-    export_kind: (row.export_kind ?? 'full') as AdminDownloadExportKind,
-    month_iso: row.month_iso ?? null,
-  }))
+  const sql = `SELECT ${SELECT_JOBS_COLUMNS} FROM admin_download_jobs
+    WHERE job_id IN (${inClausePlaceholders(ids.length)})
+    ORDER BY requested_at DESC`
+  try {
+    const result = await db.prepare(sql).bind(...ids).all<Record<string, unknown>>()
+    return (result.results ?? []).map(mapJobRow)
+  } catch (e) {
+    if (!isMissingExportKindColumn(e)) throw e
+    const sqlLegacy = `SELECT ${SELECT_JOBS_COLUMNS_LEGACY} FROM admin_download_jobs
+      WHERE job_id IN (${inClausePlaceholders(ids.length)})
+      ORDER BY requested_at DESC`
+    const result = await db.prepare(sqlLegacy).bind(...ids).all<Record<string, unknown>>()
+    return (result.results ?? []).map(mapJobRow)
+  }
 }
 
 export async function listAdminDownloadArtifacts(db: D1Database, jobId: string): Promise<AdminDownloadArtifactRow[]> {

@@ -5,7 +5,7 @@ html[data-ar-host-variant="mobile"] .site-header-inner {
 
 /* Narrow viewport: unified gutter (12px each side), safe areas, spacing */
 @media (max-width: 760px) {
-    .site-header {
+    body {
         padding-left: env(safe-area-inset-left, 0);
         padding-right: env(safe-area-inset-right, 0);
     }
@@ -17,9 +17,7 @@ html[data-ar-host-variant="mobile"] .site-header-inner {
     .shell,
     .shell-public,
     .site-footer {
-        width: calc(100vw - 24px - env(safe-area-inset-left, 0) - env(safe-area-inset-right, 0));
-        padding-left: env(safe-area-inset-left, 0);
-        padding-right: env(safe-area-inset-right, 0);
+        width: calc(100% - 24px);
     }
 
     html[data-ar-host-variant="mobile"] .terminal-column-left {
