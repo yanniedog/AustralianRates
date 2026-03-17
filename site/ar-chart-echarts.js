@@ -193,11 +193,12 @@
                 splitNumber: narrow ? 4 : 6,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameGap: compact ? 10 : (narrow ? 18 : 26),
-                nameTextStyle: { color: theme.mutedText },
+                nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: theme.softText,
                     hideOverlap: true,
+                    fontFamily: theme.dataFont || undefined,
                     formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
                 },
                 splitLine: styles.splitLine,
@@ -243,6 +244,7 @@
                     distance: compact ? 6 : (narrow ? 8 : 10),
                     color: theme.emphasisText,
                     fontSize: compact ? 11 : 12,
+                    fontFamily: theme.dataFont || undefined,
                     formatter: function (params) {
                         var main = metricAxisLabel(fields.yField, params.value, narrow);
                         var d = params.data && params.data.delta;
@@ -322,11 +324,12 @@
             yAxis: {
                 type: 'value',
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
-                nameTextStyle: { color: theme.mutedText },
+                nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
                 axisLine: styles.axisLine,
                 splitNumber: narrow ? 4 : 6,
                 axisLabel: {
                     color: theme.softText,
+                    fontFamily: theme.dataFont || undefined,
                     formatter: function (value) {
                         return metricAxisLabel(fields.yField, value, narrow);
                     },
@@ -407,11 +410,12 @@
             yAxis: {
                 type: 'value',
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
-                nameTextStyle: { color: theme.mutedText },
+                nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
                 axisLine: styles.axisLine,
                 splitNumber: narrow ? 4 : 6,
                 axisLabel: {
                     color: theme.softText,
+                    fontFamily: theme.dataFont || undefined,
                     formatter: function (value) {
                         return metricAxisLabel(fields.yField, value, narrow);
                     },
@@ -505,6 +509,7 @@
                 splitNumber: narrow ? 3 : (compact ? 4 : 6),
                 axisLabel: {
                     color: theme.softText,
+                    fontFamily: theme.dataFont || undefined,
                     formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
                 },
                 splitLine: { lineStyle: { color: theme.splitLine } },

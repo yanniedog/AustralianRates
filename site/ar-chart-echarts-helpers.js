@@ -18,37 +18,40 @@
         return document.documentElement.getAttribute('data-theme') === 'light';
     }
 
+    var DATA_FONT = '"JetBrains Mono", "SF Mono", "Consolas", "Monaco", "ui-monospace", monospace';
+
     function chartTheme() {
         var light = isLightTheme();
         return {
-            emphasisText: light ? '#102033' : '#f8fbff',
-            mutedText: light ? '#5b6d81' : '#9aa9b9',
-            shadowAccent: light ? 'rgba(37, 99, 235, 0.18)' : 'rgba(79, 141, 253, 0.24)',
-            softText: light ? '#31465c' : '#c5ced8',
-            splitLine: light ? 'rgba(79, 98, 118, 0.12)' : 'rgba(237, 243, 249, 0.08)',
+            emphasisText: light ? '#0c1220' : '#f0f6ff',
+            mutedText: light ? '#4a5c72' : '#94a3b8',
+            shadowAccent: light ? 'rgba(37, 99, 235, 0.2)' : 'rgba(79, 141, 253, 0.28)',
+            softText: light ? '#1e3a52' : '#b8c5d6',
+            splitLine: light ? 'rgba(59, 78, 104, 0.08)' : 'rgba(226, 232, 240, 0.06)',
             surfaceScale: light
-                ? ['#eef6ff', '#bfdbfe']
-                : ['#173256', '#315f9a'],
-            text: light ? '#15273c' : '#edf3f9',
-            tooltipBackground: light ? '#ffffff' : '#11161d',
-            tooltipBorder: light ? 'rgba(37, 99, 235, 0.28)' : 'rgba(79, 141, 253, 0.28)',
+                ? ['#eef6ff', '#93c5fd']
+                : ['#1e3a5f', '#2563eb'],
+            text: light ? '#0f172a' : '#e2e8f0',
+            tooltipBackground: light ? '#ffffff' : '#0f1419',
+            tooltipBorder: light ? 'rgba(37, 99, 235, 0.35)' : 'rgba(79, 141, 253, 0.35)',
             tooltipShadow: light
-                ? 'box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.04); border-radius: 14px;'
-                : 'box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255,255,255,0.06); border-radius: 14px;',
-            tooltipText: light ? '#0f172a' : '#edf3f9',
-            axisLine: light ? 'rgba(79, 98, 118, 0.42)' : 'rgba(237, 243, 249, 0.2)',
-            crosshairLine: light ? 'rgba(37, 99, 235, 0.45)' : 'rgba(79, 141, 253, 0.5)',
-            crosshairLabelBg: light ? 'rgba(255,255,255,0.96)' : 'rgba(17, 22, 29, 0.94)',
-            focusBlurOpacity: 0.22,
+                ? 'box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06); border-radius: 10px;'
+                : 'box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.08); border-radius: 10px;',
+            tooltipText: light ? '#0f172a' : '#e2e8f0',
+            axisLine: light ? 'rgba(59, 78, 104, 0.35)' : 'rgba(226, 232, 240, 0.18)',
+            crosshairLine: light ? 'rgba(37, 99, 235, 0.55)' : 'rgba(99, 179, 237, 0.6)',
+            crosshairLabelBg: light ? 'rgba(255,255,255,0.98)' : 'rgba(15, 20, 25, 0.96)',
+            focusBlurOpacity: 0.2,
+            dataFont: DATA_FONT,
         };
     }
 
     function baseTextStyles() {
         var theme = chartTheme();
         return {
-            textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", sans-serif' },
-            animationDuration: 380,
-            animationDurationUpdate: 320,
+            textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", system-ui, sans-serif' },
+            animationDuration: 320,
+            animationDurationUpdate: 280,
             animationEasing: 'cubicOut',
         };
     }
@@ -56,9 +59,9 @@
     function gridStyles() {
         var theme = chartTheme();
         return {
-            axisLine: { lineStyle: { color: theme.axisLine } },
+            axisLine: { lineStyle: { color: theme.axisLine, width: 1 } },
             axisLabel: { color: theme.softText },
-            splitLine: { lineStyle: { color: theme.splitLine } },
+            splitLine: { lineStyle: { color: theme.splitLine, width: 1, type: 'solid' } },
         };
     }
 
@@ -67,9 +70,15 @@
         return {
             backgroundColor: theme.tooltipBackground,
             borderColor: theme.tooltipBorder,
-            textStyle: { color: theme.tooltipText, fontSize: 13, lineHeight: 1.5 },
-            padding: [12, 16],
-            extraCssText: theme.tooltipShadow + '; transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);',
+            borderWidth: 1,
+            textStyle: {
+                color: theme.tooltipText,
+                fontSize: 13,
+                lineHeight: 1.55,
+                fontFamily: theme.dataFont ? theme.dataFont : undefined,
+            },
+            padding: [14, 18],
+            extraCssText: theme.tooltipShadow + '; transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1); font-variant-numeric: tabular-nums;',
         };
     }
 
@@ -147,8 +156,11 @@
             label: {
                 backgroundColor: theme.crosshairLabelBg != null ? theme.crosshairLabelBg : theme.tooltipBackground,
                 borderColor: theme.tooltipBorder,
+                borderWidth: 1,
                 color: theme.tooltipText,
                 fontSize: 11,
+                fontFamily: theme.dataFont || undefined,
+                padding: [4, 8],
             },
         };
     }
