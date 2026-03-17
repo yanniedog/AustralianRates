@@ -131,9 +131,8 @@ body.ar-admin {
     justify-self: end;
 }
 
-body.ar-public .site-header-inner,
-body.ar-legal .site-header-inner,
-body.ar-not-found .site-header-inner {
+/* Apply 3-column grid only to public market pages that render the navigation segment */
+body.ar-public[data-ar-section] .site-header-inner {
     grid-template-columns: minmax(0, 1fr) auto auto;
 }
 

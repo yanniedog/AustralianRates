@@ -297,6 +297,9 @@
 
     function headerSegmentMarkup(context) {
         if (context.admin || context.legal || context.notFound) return '';
+        // All data sources are trusted: publicSections() returns hardcoded metadata,
+        // window.location.pathname is the current page path (not user input),
+        // and all values are escaped via esc() before insertion into innerHTML.
         var sections = publicSections();
         var currentPath = window.location.pathname;
         return '' +
