@@ -671,57 +671,84 @@ body.ar-not-found .market-intro-actions {
 }
 
 @media (max-width: 760px) {
+    .site-header {
+        min-height: 0;
+    }
+
     .site-header-inner {
-        grid-template-columns: 1fr;
-        gap: 12px;
-        padding: 14px 18px;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto auto;
+        gap: 8px 12px;
+        padding: 10px 14px;
+        min-height: 0;
     }
 
     .site-header-inner > * {
         min-width: 0;
     }
 
+    .site-brand-lockup {
+        grid-column: 1;
+        grid-row: 1;
+        align-items: center;
+    }
+
+    .site-brand-tagline {
+        display: none;
+    }
+
+    .site-header-segment {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        gap: 6px;
+        padding-bottom: 2px;
+    }
+
+    .site-header-segment-link {
+        min-height: 40px;
+        padding: 0 12px;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+    }
+
     .site-header-context {
         display: none;
     }
 
-    .site-header-segment-link {
-        min-height: 44px;
-        padding: 0 14px;
-    }
-
     .site-header-actions {
-        justify-self: start;
-        width: 100%;
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+        width: auto;
         min-width: 0;
-        max-width: 100%;
         flex-wrap: nowrap;
-        gap: 8px;
-        padding: 6px;
+        gap: 6px;
+        padding: 4px;
         border: 1px solid var(--ar-line);
-        border-radius: 16px;
+        border-radius: 12px;
         background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
     }
 
     .site-action-btn,
     .site-action-btn.icon-link,
     .site-action-btn.icon-btn {
         width: auto;
-        min-width: 44px;
-        min-height: 44px;
-        padding-inline: 12px;
-        border-radius: 12px;
+        min-width: 40px;
+        min-height: 40px;
+        padding-inline: 10px;
+        border-radius: 10px;
         flex-shrink: 0;
     }
 
     .site-action-help,
     .site-action-menu {
-        width: 44px;
-        min-width: 44px;
-        min-height: 44px;
+        width: 40px;
+        min-width: 40px;
+        min-height: 40px;
         padding-inline: 0;
     }
 

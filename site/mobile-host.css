@@ -3,8 +3,12 @@ html[data-ar-host-variant="mobile"] .site-header-inner {
     padding-inline: 14px;
 }
 
-/* Narrow viewport: unified gutter (12px each side), safe areas, spacing */
+/* Narrow viewport: unified gutter, safe areas, shorter header, readable text */
 @media (max-width: 760px) {
+    :root {
+        --ar-header-height: 52px;
+    }
+
     body {
         padding-left: env(safe-area-inset-left, 0);
         padding-right: env(safe-area-inset-right, 0);
@@ -20,11 +24,23 @@ html[data-ar-host-variant="mobile"] .site-header-inner {
         width: calc(100% - 24px);
     }
 
+    .shell-public {
+        padding-top: 16px;
+        padding-bottom: 20px;
+    }
+
     html[data-ar-host-variant="mobile"] .terminal-column-left {
         top: calc(var(--ar-header-height) + 10px);
         left: 12px;
         right: 12px;
         width: auto;
+    }
+
+    .hint,
+    .field-help,
+    .terminal-control-copy,
+    .chart-footer-guidance {
+        font-size: max(0.8125rem, 13px);
     }
 }
 

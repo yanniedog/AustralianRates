@@ -266,19 +266,32 @@ body.ar-public .market-intro-step:hover {
     body.ar-public .market-intro-proof-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
-    body.ar-public .market-intro,
+    body.ar-public .market-intro {
+        padding: 14px;
+        margin-bottom: 14px;
+        gap: 12px;
+    }
     body.ar-public .market-intro-command-block,
-    body.ar-public .market-intro-console { padding: 16px; }
-    body.ar-public .market-intro-title { font-size: clamp(2.35rem, 12vw, 3.7rem); }
+    body.ar-public .market-intro-console { padding: 12px; }
+    body.ar-public .market-intro-title { font-size: clamp(1.75rem, 10vw, 2.75rem); }
+    body.ar-public .market-intro-summary {
+        font-size: max(0.875rem, 14px);
+        line-height: 1.5;
+    }
+    body.ar-public .market-intro-steps {
+        display: none;
+    }
     body.ar-public .market-intro-status-row {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         align-items: stretch;
+        gap: 8px;
     }
     body.ar-public .market-intro-nav {
         flex-wrap: nowrap;
         overflow-x: auto;
         padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
     }
     body.ar-public .market-intro-bank-strip {
         align-items: flex-start;
@@ -290,7 +303,7 @@ body.ar-public .market-intro-step:hover {
     }
     body.ar-public .market-intro-status-pill,
     body.ar-public .market-intro-bank-chip { min-width: 0; }
-    body.ar-public .market-intro-nav-link { flex: 0 0 auto; }
+    body.ar-public .market-intro-nav-link { flex: 0 0 auto; min-height: 40px; padding: 0 12px; }
 }
 @media (max-width: 560px) {
     body.ar-public .market-intro-topline {
