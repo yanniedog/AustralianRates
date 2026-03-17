@@ -502,6 +502,21 @@
         gap: 14px;
     }
 
+    .admin-status .card {
+        padding: 16px;
+    }
+
+    .admin-status th,
+    .admin-status td {
+        padding: 12px 10px;
+        font-size: 0.84rem;
+    }
+
+    .admin-status .admin-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     .admin-exports .export-actions,
     .admin-exports .export-cursor-input,
     .admin-exports .export-history-bar,

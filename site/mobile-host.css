@@ -42,6 +42,25 @@ html[data-ar-host-variant="mobile"] .site-header-inner {
     .chart-footer-guidance {
         font-size: max(0.8125rem, 13px);
     }
+
+    .site-footer-meta {
+        gap: 12px 18px;
+    }
+
+    .site-footer-meta a {
+        min-height: 44px;
+        padding: 8px 4px;
+        margin: -8px -4px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .footer-note {
+        font-size: max(0.8125rem, 13px);
+        line-height: 1.5;
+        color: var(--ar-text-soft);
+        margin-top: 12px;
+    }
 }
 
 /* Mobile host: same width so shell/footer align when on m.* */

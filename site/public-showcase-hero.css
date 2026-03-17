@@ -304,6 +304,15 @@ body.ar-public .market-intro-step:hover {
     body.ar-public .market-intro-status-pill,
     body.ar-public .market-intro-bank-chip { min-width: 0; }
     body.ar-public .market-intro-nav-link { flex: 0 0 auto; min-height: 40px; padding: 0 12px; }
+    body.ar-public .market-intro-actions {
+        gap: 14px;
+    }
+    body.ar-public .market-intro-secondary-actions {
+        gap: 12px;
+    }
+    body.ar-public .market-intro-actions .buttonish {
+        min-height: 44px;
+    }
 }
 @media (max-width: 560px) {
     body.ar-public .market-intro-topline {

@@ -691,10 +691,27 @@ body.ar-not-found .market-intro-actions {
         min-width: 0;
     }
 
+    .site-header-inner {
+        overflow: hidden;
+    }
+
     .site-brand-lockup {
         grid-column: 1;
         grid-row: 1;
         align-items: center;
+        min-width: 0;
+    }
+
+    .site-brand-copy {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .site-brand {
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .site-brand-tagline {
@@ -729,6 +746,7 @@ body.ar-not-found .market-intro-actions {
         justify-self: end;
         width: auto;
         min-width: 0;
+        flex-shrink: 0;
         flex-wrap: nowrap;
         gap: 6px;
         padding: 4px;
