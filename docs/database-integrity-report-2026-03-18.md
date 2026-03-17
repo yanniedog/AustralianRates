@@ -139,23 +139,22 @@ These changes allow the API to run without 500s when migrations 0029 and 0030 ar
 
 ## 7. Recommendations (priority order)
 
-1. **Apply D1 migrations (production)**  
-   Run `npx wrangler d1 migrations apply australianrates_api --remote` from `workers/api`. Confirm 0028, 0029, 0030 are applied.
+1. ~~**Apply D1 migrations (production)**~~ **Done.** Applied 0028, 0029, 0030 on 18 Mar 2026.
 
-2. **Deploy API worker**  
-   Deploy so the new graceful handling (chart cache, integrity insert) is live. Then confirm analytics/series and integrity run without errors in logs.
+2. ~~**Deploy API worker**~~ **Done.** API deployed 18 Mar 2026.
 
-3. **Remediate 2 orphan latest_savings_series rows**  
-   Run the diagnostic query (section 4.3); delete or backfill as appropriate.
+3. ~~**Remediate 2 orphan latest_savings_series rows**~~ **Done.** Deleted 2 orphan rows on production D1.
 
-4. **Re-run data integrity audit**  
-   After migrations: `node scripts/data-integrity-audit-prod.js --remote --db australianrates_api`. Optionally trigger from admin and confirm result is stored.
+4. ~~**Re-run data integrity audit**~~ **Done.** Audit run: 17 passed, 1 failed (runs_with_no_outputs: 291). orphan_latest_savings_series now PASS.
 
 5. **Address coverage gaps and CDR audit**  
    Use admin coverage-gap and CDR audit UIs; fix UBank index, Bendigo detail failures, and CBA term_deposit finalization per playbooks and CDR expert guidance.
 
 6. **Optional: raw_payloads backlog**  
    Plan retention or orphan cleanup for `raw_payloads` per `docs/database-live-audit.md`.
+
+7. **Optional: runs_with_no_outputs (291)**  
+   Audit flags 291 runs with status=ok but zero rows written. Treat as operational/legacy; no data fix required unless you want to mark or prune old runs.
 
 ---
 

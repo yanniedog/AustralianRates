@@ -8,10 +8,12 @@ High-churn tables are pruned so they stay bounded. Pruning runs after every heal
 
 | Table | Retention | Implemented in |
 |-------|-----------|----------------|
-| `global_log` | 30 days | `workers/api/src/db/retention-prune.ts` |
+| `global_log` | 14 days (warn/error), 48 hours (info/debug) | `workers/api/src/db/retention-prune.ts` |
 | `ingest_anomalies` | 90 days | `workers/api/src/db/retention-prune.ts` |
 | `health_check_runs` | 7 days | `workers/api/src/db/health-check-runs.ts` |
 | `integrity_audit_runs` | 30 days | `workers/api/src/db/integrity-audit-runs.ts` |
+| `run_reports` (+ run_seen_*, lender_dataset_runs) | 180 days | `workers/api/src/db/retention-prune.ts` |
+| `raw_payloads` | Orphan cleanup (no matching raw_objects) | `workers/api/src/db/retention-prune.ts` |
 
 Effects: less D1 storage, faster `COUNT(*)` and `ORDER BY ts DESC` on log/anomaly tables, less data transferred on admin log queries and dumps.
 

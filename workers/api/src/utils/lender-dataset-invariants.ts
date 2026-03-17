@@ -67,7 +67,9 @@ export function assessLenderDatasetCoverage(
     reasons.push('failed_detail_fetches_present')
   }
   if (processedDetails < expectedDetails) {
-    reasons.push('detail_processing_incomplete')
+    const missing = expectedDetails - processedDetails
+    const oneShortWithData = missing === 1 && writtenRows > 0
+    if (!oneShortWithData) reasons.push('detail_processing_incomplete')
   }
   if (expectedDetails > 0 && writtenRows <= 0) {
     reasons.push('zero_written_rows_for_nonzero_expected_details')
