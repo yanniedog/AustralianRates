@@ -40,6 +40,8 @@ describe('admin download operational helpers', () => {
         started_at: '2026-03-13T00:00:01.000Z',
         completed_at: '2026-03-13T00:00:02.000Z',
         error_message: null,
+        export_kind: 'full',
+        month_iso: null,
       }),
     ).toBe('operational-all-snapshot.jsonl.gz')
 

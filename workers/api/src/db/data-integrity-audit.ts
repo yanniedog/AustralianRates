@@ -1,0 +1,245 @@
+/**
+ * In-Worker data integrity audit. Runs the same checks as the CLI audit script
+ * using D1 directly; used for admin UI and daily cron.
+ */
+
+import { runIntegrityChecks } from './integrity-checks'
+
+export type IntegrityFinding = {
+  category: 'dead' | 'invalid' | 'duplicate' | 'erroneous' | 'indicator'
+  check: string
+  passed: boolean
+  count?: number
+  detail?: Record<string, unknown>
+}
+
+export type IntegrityAuditSummary = {
+  total_checks: number
+  passed: number
+  failed: number
+  dead_data_issues: number
+  invalid_data_issues: number
+  duplicate_data_issues: number
+  other_issues: number
+}
+
+export type IntegrityAuditResult = {
+  ok: boolean
+  status: 'green' | 'amber' | 'red'
+  checked_at: string
+  duration_ms: number
+  findings: IntegrityFinding[]
+  summary: IntegrityAuditSummary
+}
+
+const INFORMATIONAL_CHECKS = new Set([
+  'legacy_raw_payload_backlog',
+  'latest_vs_global_freshness_indicator',
+  'latest_vs_global_freshness',
+])
+
+function num(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+export async function runDataIntegrityAudit(
+  db: D1Database,
+  timezone = 'Australia/Melbourne',
+): Promise<IntegrityAuditResult> {
+  const startedAt = Date.now()
+  const checkedAt = new Date().toISOString()
+  const findings: IntegrityFinding[] = []
+
+  const integrity = await runIntegrityChecks(db, timezone, { includeAnomalyProbes: true })
+
+  for (const c of integrity.checks) {
+    const category =
+      c.name === 'product_key_consistency'
+        ? 'invalid'
+        : c.name.startsWith('orphan_') || c.name.includes('linkage') || c.name === 'legacy_raw_payload_backlog'
+          ? 'dead'
+          : c.name === 'runs_with_no_outputs'
+            ? 'erroneous'
+            : c.name.includes('freshness') || c.name === 'recent_anomaly_volume' || c.name === 'run_report_status_distribution' || c.name === 'dataset_staleness'
+              ? 'indicator'
+              : 'erroneous'
+    const detail = (c.detail || {}) as Record<string, unknown>
+    const count =
+      typeof detail.orphan_count === 'number'
+        ? detail.orphan_count
+        : typeof detail.runs_with_no_outputs === 'number'
+          ? detail.runs_with_no_outputs
+          : detail.missing_series_key_total != null || detail.mismatched_series_key_total != null
+            ? num(detail.missing_series_key_total) + num(detail.mismatched_series_key_total)
+            : undefined
+    findings.push({
+      category,
+      check: c.name,
+      passed: c.passed,
+      count,
+      detail: c.detail as Record<string, unknown>,
+    })
+  }
+
+  const [orphanLatestHome, orphanLatestSavings, orphanLatestTd] = await Promise.all([
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM latest_home_loan_series l
+         LEFT JOIN (SELECT DISTINCT series_key FROM historical_loan_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
+      )
+      .first<{ n: number }>(),
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM latest_savings_series l
+         LEFT JOIN (SELECT DISTINCT series_key FROM historical_savings_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
+      )
+      .first<{ n: number }>(),
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM latest_td_series l
+         LEFT JOIN (SELECT DISTINCT series_key FROM historical_term_deposit_rates) h ON h.series_key = l.series_key WHERE h.series_key IS NULL`,
+      )
+      .first<{ n: number }>(),
+  ])
+
+  for (const [name, row] of [
+    ['orphan_latest_home_loan_series', orphanLatestHome],
+    ['orphan_latest_savings_series', orphanLatestSavings],
+    ['orphan_latest_td_series', orphanLatestTd],
+  ] as const) {
+    const n = num(row?.n)
+    findings.push({
+      category: 'dead',
+      check: name,
+      passed: n === 0,
+      count: n,
+      detail: { orphan_count: n },
+    })
+  }
+
+  const [dupHome, dupSavings, dupTd] = await Promise.all([
+    db
+      .prepare(
+        `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_loan_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
+         SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
+      )
+      .first<{ duplicate_groups: number; duplicate_rows: number }>(),
+    db
+      .prepare(
+        `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_savings_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
+         SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
+      )
+      .first<{ duplicate_groups: number; duplicate_rows: number }>(),
+    db
+      .prepare(
+        `WITH g AS (SELECT series_key, collection_date, run_id, interest_rate, COUNT(*) AS n FROM historical_term_deposit_rates GROUP BY series_key, collection_date, run_id, interest_rate HAVING COUNT(*) > 1)
+         SELECT COUNT(*) AS duplicate_groups, COALESCE(SUM(n), 0) AS duplicate_rows FROM g`,
+      )
+      .first<{ duplicate_groups: number; duplicate_rows: number }>(),
+  ])
+
+  for (const [name, row] of [
+    ['exact_duplicate_rows_home_loans', dupHome],
+    ['exact_duplicate_rows_savings', dupSavings],
+    ['exact_duplicate_rows_term_deposits', dupTd],
+  ] as const) {
+    const groups = num(row?.duplicate_groups)
+    const rows = num(row?.duplicate_rows)
+    findings.push({
+      category: 'duplicate',
+      check: name,
+      passed: groups === 0,
+      count: rows,
+      detail: { duplicate_groups: groups, duplicate_rows: rows },
+    })
+  }
+
+  const [oorHome, oorSavings, oorTd] = await Promise.all([
+    db.prepare(`SELECT COUNT(*) AS n FROM historical_loan_rates WHERE interest_rate < 0.5 OR interest_rate > 25`).first<{ n: number }>(),
+    db.prepare(`SELECT COUNT(*) AS n FROM historical_savings_rates WHERE interest_rate < 0 OR interest_rate > 15`).first<{ n: number }>(),
+    db.prepare(`SELECT COUNT(*) AS n FROM historical_term_deposit_rates WHERE interest_rate < 0 OR interest_rate > 15`).first<{ n: number }>(),
+  ])
+
+  for (const [name, row, bounds] of [
+    ['out_of_range_rates_home_loans', oorHome, '0.5-25'],
+    ['out_of_range_rates_savings', oorSavings, '0-15'],
+    ['out_of_range_rates_term_deposits', oorTd, '0-15'],
+  ] as const) {
+    const n = num(row?.n)
+    findings.push({
+      category: 'invalid',
+      check: name,
+      passed: n === 0,
+      count: n,
+      detail: { bounds, out_of_range_count: n },
+    })
+  }
+
+  const [nullHome, nullSavings, nullTd] = await Promise.all([
+    db
+      .prepare(
+        `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_loan_rates`,
+      )
+      .first<{ n: number }>(),
+    db
+      .prepare(
+        `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_savings_rates`,
+      )
+      .first<{ n: number }>(),
+    db
+      .prepare(
+        `SELECT SUM(CASE WHEN bank_name IS NULL OR TRIM(COALESCE(bank_name,'')) = '' OR product_id IS NULL OR TRIM(COALESCE(product_id,'')) = '' OR collection_date IS NULL OR TRIM(COALESCE(collection_date,'')) = '' OR interest_rate IS NULL THEN 1 ELSE 0 END) AS n FROM historical_term_deposit_rates`,
+      )
+      .first<{ n: number }>(),
+  ])
+
+  for (const [name, row] of [
+    ['null_required_fields_home_loans', nullHome],
+    ['null_required_fields_savings', nullSavings],
+    ['null_required_fields_term_deposits', nullTd],
+  ] as const) {
+    const n = num(row?.n)
+    findings.push({
+      category: 'invalid',
+      check: name,
+      passed: n === 0,
+      count: n,
+      detail: { null_count: n },
+    })
+  }
+
+  const failed = findings.filter((f) => !f.passed)
+  const failedNonInformational = failed.filter((f) => !INFORMATIONAL_CHECKS.has(f.check))
+  const deadIssues = failed.filter((f) => f.category === 'dead' && !INFORMATIONAL_CHECKS.has(f.check)).length
+  const invalidIssues = failed.filter((f) => f.category === 'invalid').length
+  const duplicateIssues = failed.filter((f) => f.category === 'duplicate').length
+  const otherIssues = failed.filter(
+    (f) => !['dead', 'invalid', 'duplicate'].includes(f.category) && !INFORMATIONAL_CHECKS.has(f.check),
+  ).length
+
+  const summary: IntegrityAuditSummary = {
+    total_checks: findings.length,
+    passed: findings.filter((f) => f.passed).length,
+    failed: failed.length,
+    dead_data_issues: deadIssues,
+    invalid_data_issues: invalidIssues,
+    duplicate_data_issues: duplicateIssues,
+    other_issues: otherIssues,
+  }
+
+  let status: 'green' | 'amber' | 'red' = 'green'
+  if (failedNonInformational.length > 0) status = 'red'
+  else if (failed.length > 0) status = 'amber'
+
+  const durationMs = Date.now() - startedAt
+
+  return {
+    ok: failedNonInformational.length === 0,
+    status,
+    checked_at: checkedAt,
+    duration_ms: durationMs,
+    findings,
+    summary,
+  }
+}

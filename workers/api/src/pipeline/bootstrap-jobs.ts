@@ -191,6 +191,7 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       : []
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
+      await collectRbaCashRateForDate(env.DB, collectionDate, env)
       return {
         ok: true,
         skipped: true,

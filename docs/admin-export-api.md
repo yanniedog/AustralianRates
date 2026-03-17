@@ -2,12 +2,10 @@
 
 The admin export center uses the authenticated admin API under `/api/home-loan-rates/admin/downloads`.
 
-New job creation now supports one export type only:
+Export types:
 
-- A full-database dump of the D1 database
-- Downloaded as one `.sql.gz` file
-- Restorable in-place through the admin UI/API
-- Importable into a blank or replacement D1 database with `node scripts/import-d1-backup.js`
+- **Full database dump** – Created manually via the admin UI or `POST /admin/downloads`. Downloaded as one `.sql.gz` file. Restorable in-place through the admin UI/API or importable into a blank/replacement D1 with `node scripts/import-d1-backup.js`.
+- **Monthly database dump** – Generated automatically at 23:59 UTC on the last day of each month. Same single `.sql.gz` format; contains schema and only data for that month (time-series tables filtered by date; other tables full). Uses `INSERT OR REPLACE` so that importing a batch of monthly backups in chronological order reconstructs the database. Filename: `australianrates-database-monthly-YYYY-MM.sql.gz`.
 
 ## Endpoints
 
@@ -104,8 +102,9 @@ Streams one concatenated gzip file for completed operational dump jobs.
 
 For new jobs, this is the public single-file SQL dump:
 
-- Filename: `australianrates-database-full-<timestamp>.sql.gz`
-- Contents: SQL DDL + SQL inserts for the D1 database
+- Full dump filename: `australianrates-database-full-<timestamp>.sql.gz`
+- Monthly dump filename: `australianrates-database-monthly-YYYY-MM.sql.gz`
+- Contents: SQL DDL + SQL inserts (or INSERT OR REPLACE for monthly) for the D1 database
 
 Legacy operational JSONL bundle jobs can still use the same route until they are deleted.
 

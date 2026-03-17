@@ -1,14 +1,22 @@
-import { DAILY_SCHEDULE_CRON_EXPRESSION, SITE_HEALTH_CRON_EXPRESSION } from '../constants'
+import {
+  DAILY_SCHEDULE_CRON_EXPRESSION,
+  INTEGRITY_AUDIT_CRON_EXPRESSION,
+  MONTHLY_EXPORT_CRON_EXPRESSION,
+  SITE_HEALTH_CRON_EXPRESSION,
+} from '../constants'
+import { runDataIntegrityAudit } from '../db/data-integrity-audit'
+import { insertIntegrityAuditRun } from '../db/integrity-audit-runs'
 import { insertHealthCheckRun } from '../db/health-check-runs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
+import { triggerMonthlyExport } from './monthly-export'
 import { dispatchReplayQueue } from './replay-queue'
 import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
 
 type CronEvent = ScheduledController & { cron?: string }
-export type ScheduledTask = 'daily' | 'hourly_wayback' | 'site_health'
+export type ScheduledTask = 'daily' | 'hourly_wayback' | 'site_health' | 'monthly_export' | 'integrity_audit'
 
 export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   const normalizedCron = String(cron || '').trim()
@@ -17,6 +25,12 @@ export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   }
   if (normalizedCron === SITE_HEALTH_CRON_EXPRESSION) {
     return ['hourly_wayback', 'site_health']
+  }
+  if (normalizedCron === MONTHLY_EXPORT_CRON_EXPRESSION) {
+    return ['monthly_export']
+  }
+  if (normalizedCron === INTEGRITY_AUDIT_CRON_EXPRESSION) {
+    return ['integrity_audit']
   }
   return []
 }
@@ -80,6 +94,50 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     return {
       replay_dispatch: replayDispatch,
       ...result,
+    }
+  }
+
+  if (tasks.length === 1 && tasks[0] === 'monthly_export') {
+    log.info('scheduler', `Dispatching monthly export cron (${cron})`, {
+      context: `scheduled_time=${scheduledIso}`,
+    })
+    const monthlyResult = await triggerMonthlyExport(env, event.scheduledTime)
+    return {
+      replay_dispatch: replayDispatch,
+      ok: monthlyResult.ok,
+      skipped: monthlyResult.skipped,
+      kind: 'monthly_export',
+      reason: monthlyResult.reason,
+      job_id: monthlyResult.job_id,
+      month_iso: monthlyResult.month_iso,
+    }
+  }
+
+  if (tasks.length === 1 && tasks[0] === 'integrity_audit') {
+    log.info('scheduler', `Dispatching data integrity audit cron (${cron})`, {
+      context: `scheduled_time=${scheduledIso}`,
+    })
+    const timezone = env.MELBOURNE_TIMEZONE || 'Australia/Melbourne'
+    const result = await runDataIntegrityAudit(env.DB, timezone)
+    const runId = `integrity:${result.status}:${result.checked_at}:${crypto.randomUUID()}`
+    await insertIntegrityAuditRun(env.DB, {
+      runId,
+      checkedAt: result.checked_at,
+      triggerSource: 'scheduled',
+      overallOk: result.ok,
+      durationMs: result.duration_ms,
+      status: result.status,
+      summaryJson: JSON.stringify(result.summary),
+      findingsJson: JSON.stringify(result.findings),
+    })
+    return {
+      replay_dispatch: replayDispatch,
+      ok: true,
+      skipped: false,
+      kind: 'integrity_audit',
+      run_id: runId,
+      status: result.status,
+      failed_count: result.summary.failed,
     }
   }
 

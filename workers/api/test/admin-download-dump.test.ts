@@ -24,8 +24,17 @@ describe('admin download dump helpers', () => {
     expect(
       fullDatabaseDumpFileName({
         requested_at: '2026-03-13T00:00:00.000Z',
+        export_kind: 'full',
+        month_iso: null,
       }),
     ).toBe('australianrates-database-full-20260313T000000Z.sql.gz')
+    expect(
+      fullDatabaseDumpFileName({
+        requested_at: '2026-03-13T00:00:00.000Z',
+        export_kind: 'monthly',
+        month_iso: '2026-02',
+      }),
+    ).toBe('australianrates-database-monthly-2026-02.sql.gz')
 
     expect(
       hasSqlDumpArtifacts([

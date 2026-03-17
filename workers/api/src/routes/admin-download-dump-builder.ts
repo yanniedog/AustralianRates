@@ -16,9 +16,57 @@ import {
   isProtectedDatabaseDumpTableError,
   listDatabaseDumpTables,
 } from './admin-download-dump'
-import { countTableRows, quoteSqlIdentifier, readDatabaseSchema, readTableColumns, type DatabaseSchema, type SchemaObject } from './admin-download-schema'
+import { quoteSqlIdentifier, readDatabaseSchema, readTableColumns, type DatabaseSchema, type SchemaObject } from './admin-download-schema'
 
 const INSERT_ROWS_PER_STATEMENT = 50
+
+/** Tables that are filtered by a date column for monthly dumps; others are dumped in full for that month. */
+const MONTHLY_TABLE_DATE_COLUMNS: Record<string, string> = {
+  historical_loan_rates: 'collection_date',
+  historical_savings_rates: 'collection_date',
+  historical_term_deposit_rates: 'collection_date',
+  home_loan_rate_events: 'collection_date',
+  savings_rate_events: 'collection_date',
+  td_rate_events: 'collection_date',
+  home_loan_rate_intervals: 'effective_from_collection_date',
+  savings_rate_intervals: 'effective_from_collection_date',
+  td_rate_intervals: 'effective_from_collection_date',
+  raw_payloads: 'fetched_at',
+  run_reports: 'started_at',
+  lender_endpoint_cache: 'fetched_at',
+  product_catalog: 'last_seen_collection_date',
+  series_catalog: 'last_seen_collection_date',
+  series_presence_status: 'last_seen_collection_date',
+  run_seen_products: 'collection_date',
+  run_seen_series: 'collection_date',
+  fetch_events: 'fetched_at',
+  lender_dataset_runs: 'collection_date',
+  rba_cash_rates: 'collection_date',
+  backfill_cursors: 'updated_at',
+  brand_normalization_map: 'updated_at',
+  client_historical_runs: 'started_at',
+  client_historical_tasks: 'collection_date',
+  client_historical_batches: 'collection_date',
+  admin_download_jobs: 'requested_at',
+  admin_download_artifacts: 'created_at',
+  download_change_feed: 'emitted_at',
+  export_jobs: 'started_at',
+  product_presence_status: 'last_seen_collection_date',
+  analytics_projection_state: 'last_collection_date',
+  ingest_replay_queue: 'collection_date',
+  ingest_anomalies: 'collection_date',
+}
+
+function monthBounds(monthIso: string): { start: string; end: string } {
+  if (!/^\d{4}-\d{2}$/.test(monthIso)) {
+    return { start: '0000-01-01', end: '9999-12-32' }
+  }
+  const [y, m] = monthIso.split('-').map(Number)
+  const start = `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-01`
+  const nextMonth = m === 12 ? [y + 1, 1] : [y, m + 1]
+  const end = `${String(nextMonth[0]).padStart(4, '0')}-${String(nextMonth[1]).padStart(2, '0')}-01`
+  return { start, end }
+}
 
 function sqlComment(value: string): string {
   return `-- ${String(value || '').trim()}`
@@ -50,11 +98,13 @@ function buildInsertStatements(
   tableName: string,
   columnNames: string[],
   rows: Array<Record<string, unknown>>,
+  useReplace = false,
 ): string[] {
   if (!rows.length || !columnNames.length) return []
 
   const tableSql = quoteSqlIdentifier(tableName)
   const columnsSql = columnNames.map((columnName) => quoteSqlIdentifier(columnName)).join(', ')
+  const insertKw = useReplace ? 'INSERT OR REPLACE INTO' : 'INSERT INTO'
   const statements: string[] = []
 
   for (let index = 0; index < rows.length; index += INSERT_ROWS_PER_STATEMENT) {
@@ -62,7 +112,7 @@ function buildInsertStatements(
     const valuesSql = batch
       .map((row) => `(${columnNames.map((columnName) => serializeSqlValue(row[columnName])).join(', ')})`)
       .join(',\n')
-    statements.push(`INSERT INTO ${tableSql} (${columnsSql}) VALUES\n${valuesSql};`)
+    statements.push(`${insertKw} ${tableSql} (${columnsSql}) VALUES\n${valuesSql};`)
   }
 
   return statements
@@ -83,15 +133,22 @@ function dropStatements(schema: DatabaseSchema): string[] {
 }
 
 function headerLines(schema: DatabaseSchema, job: AdminDownloadJobRow): string[] {
-  return [
-    sqlComment('AustralianRates full database dump'),
+  const isMonthly = job.export_kind === 'monthly' && job.month_iso
+  const lines = [
+    sqlComment(isMonthly ? 'AustralianRates monthly database dump' : 'AustralianRates full database dump'),
     sqlComment(`Generated at ${new Date().toISOString()}`),
     sqlComment(`Job id ${job.job_id}`),
+  ]
+  if (isMonthly) {
+    lines.push(sqlComment(`Month ${job.month_iso}; data filtered by month for time-series tables; use INSERT OR REPLACE so batch import reconstructs DB.`))
+  }
+  lines.push(
     sqlComment('Restore by decompressing this file to .sql and running wrangler d1 execute --file against the target database.'),
     sqlComment('If you need an exact point-in-time clone, create the dump during a quiet period with writes paused.'),
     'PRAGMA foreign_keys = OFF;',
     ...dropStatements(schema),
-  ]
+  )
+  return lines
 }
 
 function secondarySchemaLines(label: string, objects: SchemaObject[]): string[] {
@@ -101,14 +158,35 @@ function secondarySchemaLines(label: string, objects: SchemaObject[]): string[] 
   return objects.map((object) => withTrailingSemicolon(object.sql)).filter(Boolean)
 }
 
-function jobScopedWhereClause(tableName: string, jobId: string): { sql: string; bind: string[] } {
+function jobScopedWhereClause(
+  tableName: string,
+  jobId: string,
+  monthIso?: string | null,
+): { sql: string; bind: string[] } {
+  const parts: string[] = []
+  const bind: string[] = []
+  let paramIndex = 1
+
   if (tableName === 'admin_download_jobs' || tableName === 'admin_download_artifacts') {
-    return {
-      sql: 'WHERE job_id <> ?1',
-      bind: [jobId],
+    parts.push(`job_id <> ?${paramIndex}`)
+    bind.push(jobId)
+    paramIndex += 1
+  }
+
+  if (monthIso && /^\d{4}-\d{2}$/.test(monthIso)) {
+    const dateCol = MONTHLY_TABLE_DATE_COLUMNS[tableName]
+    if (dateCol) {
+      const { start, end } = monthBounds(monthIso)
+      parts.push(`${quoteSqlIdentifier(dateCol)} >= ?${paramIndex}`)
+      bind.push(start)
+      paramIndex += 1
+      parts.push(`${quoteSqlIdentifier(dateCol)} < ?${paramIndex}`)
+      bind.push(end)
     }
   }
-  return { sql: '', bind: [] }
+
+  const sql = parts.length ? `WHERE ${parts.join(' AND ')}` : ''
+  return { sql, bind }
 }
 
 async function readTableRowsChunk(
@@ -119,7 +197,7 @@ async function readTableRowsChunk(
   offset: number,
 ): Promise<Array<Record<string, unknown>>> {
   try {
-    const scope = jobScopedWhereClause(tableName, job.job_id)
+    const scope = jobScopedWhereClause(tableName, job.job_id, job.month_iso ?? undefined)
     const result = await db
       .prepare(`SELECT * FROM ${quoteSqlIdentifier(tableName)} ${scope.sql} LIMIT ?${scope.bind.length + 1} OFFSET ?${scope.bind.length + 2}`)
       .bind(...scope.bind, limit, offset)
@@ -133,7 +211,7 @@ async function readTableRowsChunk(
 
 async function countDumpTableRows(db: D1Database, job: AdminDownloadJobRow, tableName: string): Promise<number> {
   try {
-    const scope = jobScopedWhereClause(tableName, job.job_id)
+    const scope = jobScopedWhereClause(tableName, job.job_id, job.month_iso ?? undefined)
     const result = await db
       .prepare(`SELECT COUNT(*) AS n FROM ${quoteSqlIdentifier(tableName)} ${scope.sql}`)
       .bind(...scope.bind)
@@ -238,11 +316,12 @@ export async function runDatabaseDumpPass(env: AdminDownloadEnv, job: AdminDownl
       const nextOffset = offset + rows.length
       const fileName = databaseDumpDataFileName(tableName, offset)
       if (!existingFiles.has(fileName)) {
+        const useReplace = job.export_kind === 'monthly'
         const shouldPause = await writePart(
           fileName,
           [
             sqlComment(`Data for table ${tableName} rows ${offset} to ${nextOffset}`),
-            ...buildInsertStatements(tableName, columnNames, rows),
+            ...buildInsertStatements(tableName, columnNames, rows, useReplace),
           ],
           rows.length,
           offset,
@@ -279,11 +358,12 @@ export async function runDatabaseDumpPass(env: AdminDownloadEnv, job: AdminDownl
 
   const footerFile = databaseDumpFooterFileName()
   if (!existingFiles.has(footerFile)) {
+    const endComment = job.export_kind === 'monthly' ? 'End of AustralianRates monthly database dump' : 'End of AustralianRates full database dump'
     await writePart(
       footerFile,
       [
         'PRAGMA foreign_keys = ON;',
-        sqlComment('End of AustralianRates full database dump'),
+        sqlComment(endComment),
       ],
       0,
       null,

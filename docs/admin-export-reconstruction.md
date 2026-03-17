@@ -1,8 +1,9 @@
 # Admin Export Reconstruction
 
-The admin export center now creates one export type only: a full-database D1 dump delivered as a single `.sql.gz` file.
+The admin export center creates two export types:
 
-That file is intended to restore or replace the database from scratch.
+1. **Full database dump** – Entire D1 database as a single `.sql.gz` file. Restore or replace the database from scratch.
+2. **Monthly database dump** – Generated automatically at 23:59 UTC on the last day of each month. Same format; contains schema and data for that month only (time-series tables filtered by date; dimension tables full). Uses `INSERT OR REPLACE` so that importing multiple monthly files in chronological order reconstructs the current database.
 
 ## What the dump contains
 

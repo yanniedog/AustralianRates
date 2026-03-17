@@ -4,9 +4,17 @@ import { getAnalyticsProjectionDiagnostics, rebuildAnalyticsProjections } from '
 import { getAdminRealtimeSnapshot } from '../db/admin-realtime'
 import { getFetchEventById, getRecentFetchEvents } from '../db/fetch-events'
 import { getRunReport, listRunReports } from '../db/run-reports'
+import { MELBOURNE_TIMEZONE } from '../constants'
 import { adminRemediationRoutes } from './admin-remediation'
 import { getHistoricalPullDetail, startHistoricalPullRun } from '../pipeline/client-historical'
+import { runDataIntegrityAudit } from '../db/data-integrity-audit'
+import {
+  getLatestIntegrityAuditRun,
+  insertIntegrityAuditRun,
+  listIntegrityAuditRuns,
+} from '../db/integrity-audit-runs'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
+import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { runLifecycleReconciliation } from '../pipeline/run-reconciliation'
@@ -18,6 +26,7 @@ import { adminHardeningRoutes } from './admin-hardening'
 import { adminHealthRoutes } from './admin-health'
 import { adminLiveCdrRepairRoutes } from './admin-live-cdr-repair'
 import { adminLogRoutes } from './admin-logs'
+import { getMelbourneNowParts } from '../utils/time'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import { log } from '../utils/logger'
@@ -106,6 +115,66 @@ adminRoutes.post('/cdr-audit/run', async (c) => {
       }),
     })
     return jsonError(c, 500, 'CDR_AUDIT_FAILED', 'CDR pipeline audit failed to execute.')
+  }
+})
+
+adminRoutes.get('/integrity-audit', async (c) => {
+  const limit = Math.max(1, Math.min(100, Number(c.req.query('limit') || 20)))
+  const [latest, history] = await Promise.all([
+    getLatestIntegrityAuditRun(c.env.DB),
+    listIntegrityAuditRuns(c.env.DB, limit),
+  ])
+  const parse = (row: { summary_json: string; findings_json: string } | null) => {
+    if (!row) return null
+    try {
+      return {
+        ...row,
+        summary: JSON.parse(row.summary_json || '{}'),
+        findings: JSON.parse(row.findings_json || '[]'),
+      }
+    } catch {
+      return { ...row, summary: {}, findings: [] }
+    }
+  }
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    latest: latest ? parse(latest) : null,
+    history: history.map((row) => parse(row)).filter(Boolean),
+  })
+})
+
+adminRoutes.post('/integrity-audit/run', async (c) => {
+  try {
+    const timezone = c.env.MELBOURNE_TIMEZONE || 'Australia/Melbourne'
+    const result = await runDataIntegrityAudit(c.env.DB, timezone)
+    const runId = `integrity:manual:${result.checked_at}:${crypto.randomUUID()}`
+    await insertIntegrityAuditRun(c.env.DB, {
+      runId,
+      checkedAt: result.checked_at,
+      triggerSource: 'manual',
+      overallOk: result.ok,
+      durationMs: result.duration_ms,
+      status: result.status,
+      summaryJson: JSON.stringify(result.summary),
+      findingsJson: JSON.stringify(result.findings),
+    })
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      run_id: runId,
+      status: result.status,
+      checked_at: result.checked_at,
+      duration_ms: result.duration_ms,
+      summary: result.summary,
+      findings: result.findings,
+    })
+  } catch (error) {
+    log.error('admin', 'integrity_audit_run_failed', {
+      error,
+      context: JSON.stringify({ route: '/admin/integrity-audit/run' }),
+    })
+    return jsonError(c, 500, 'INTEGRITY_AUDIT_FAILED', 'Data integrity audit failed to execute.')
   }
 })
 
@@ -532,6 +601,25 @@ adminRoutes.post('/runs/backfill', async (c) => {
 
   return c.json({
     ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    result,
+  })
+})
+
+adminRoutes.post('/rba/backfill', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const melbourneDate = getMelbourneNowParts(new Date(), c.env.MELBOURNE_TIMEZONE || MELBOURNE_TIMEZONE).date
+  const startDate = String(body.start_date ?? body.startDate ?? '2026-02-15').trim() || '2026-02-15'
+  const endDate = String(body.end_date ?? body.endDate ?? melbourneDate).trim() || melbourneDate
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return c.json({ ok: false, error: 'start_date and end_date must be YYYY-MM-DD' }, 400)
+  }
+  if (startDate > endDate) {
+    return c.json({ ok: false, error: 'start_date must be <= end_date' }, 400)
+  }
+  const result = await backfillRbaCashRatesForDateRange(c.env.DB, startDate, endDate, c.env)
+  return c.json({
+    ok: result.ok,
     auth_mode: c.get('adminAuthState')?.mode || null,
     result,
   })

@@ -4,6 +4,7 @@ export type AdminDownloadMode = 'snapshot' | 'delta'
 export type AdminDownloadFormat = 'jsonl_gzip'
 export type AdminDownloadStatus = 'queued' | 'processing' | 'completed' | 'failed'
 export type AdminDownloadArtifactKind = 'main' | 'payload_bodies' | 'manifest'
+export type AdminDownloadExportKind = 'full' | 'monthly'
 
 export type AdminDownloadJobRow = {
   job_id: string
@@ -19,6 +20,8 @@ export type AdminDownloadJobRow = {
   started_at: string | null
   completed_at: string | null
   error_message: string | null
+  export_kind: AdminDownloadExportKind
+  month_iso: string | null
 }
 
 export type AdminDownloadArtifactRow = {
@@ -57,13 +60,17 @@ export async function createAdminDownloadJob(
     format: AdminDownloadFormat
     sinceCursor?: number | null
     includePayloadBodies?: boolean
+    exportKind?: AdminDownloadExportKind
+    monthIso?: string | null
   },
 ): Promise<void> {
+  const exportKind = input.exportKind ?? 'full'
+  const monthIso = input.monthIso ?? null
   await db
     .prepare(
       `INSERT INTO admin_download_jobs (
-         job_id, stream, scope, mode, format, since_cursor, include_payload_bodies, status, requested_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'queued', ?8)`,
+         job_id, stream, scope, mode, format, since_cursor, include_payload_bodies, status, requested_at, export_kind, month_iso
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'queued', ?8, ?9, ?10)`,
     )
     .bind(
       input.jobId,
@@ -74,6 +81,8 @@ export async function createAdminDownloadJob(
       input.sinceCursor ?? null,
       input.includePayloadBodies ? 1 : 0,
       nowIso(),
+      exportKind,
+      monthIso,
     )
     .run()
 }
@@ -227,13 +236,18 @@ export async function getAdminDownloadJob(db: D1Database, jobId: string): Promis
     .prepare(
       `SELECT
          job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
-         status, requested_at, started_at, completed_at, error_message
+         status, requested_at, started_at, completed_at, error_message, export_kind, month_iso
        FROM admin_download_jobs
        WHERE job_id = ?1`,
     )
     .bind(jobId)
     .first<AdminDownloadJobRow>()
-  return row ?? null
+  if (!row) return null
+  return {
+    ...row,
+    export_kind: (row as AdminDownloadJobRow & { export_kind?: string }).export_kind ?? 'full',
+    month_iso: (row as AdminDownloadJobRow & { month_iso?: string | null }).month_iso ?? null,
+  }
 }
 
 export async function listAdminDownloadJobs(
@@ -265,15 +279,20 @@ export async function listAdminDownloadJobs(
     .prepare(
       `SELECT
          job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
-         status, requested_at, started_at, completed_at, error_message
+         status, requested_at, started_at, completed_at, error_message, export_kind, month_iso
        FROM admin_download_jobs
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
        ORDER BY requested_at DESC
        LIMIT ?${binds.length}`,
     )
     .bind(...binds)
-    .all<AdminDownloadJobRow>()
-  return result.results ?? []
+    .all<AdminDownloadJobRow & { export_kind?: string; month_iso?: string | null }>()
+  const rows = result.results ?? []
+  return rows.map((row) => ({
+    ...row,
+    export_kind: (row.export_kind ?? 'full') as AdminDownloadExportKind,
+    month_iso: row.month_iso ?? null,
+  }))
 }
 
 export async function listAdminDownloadJobsByIds(db: D1Database, jobIds: string[]): Promise<AdminDownloadJobRow[]> {
@@ -283,14 +302,19 @@ export async function listAdminDownloadJobsByIds(db: D1Database, jobIds: string[
     .prepare(
       `SELECT
          job_id, stream, scope, mode, format, since_cursor, end_cursor, include_payload_bodies,
-         status, requested_at, started_at, completed_at, error_message
+         status, requested_at, started_at, completed_at, error_message, export_kind, month_iso
        FROM admin_download_jobs
        WHERE job_id IN (${inClausePlaceholders(ids.length)})
        ORDER BY requested_at DESC`,
     )
     .bind(...ids)
-    .all<AdminDownloadJobRow>()
-  return result.results ?? []
+    .all<AdminDownloadJobRow & { export_kind?: string; month_iso?: string | null }>()
+  const rows = result.results ?? []
+  return rows.map((row) => ({
+    ...row,
+    export_kind: (row.export_kind ?? 'full') as AdminDownloadExportKind,
+    month_iso: row.month_iso ?? null,
+  }))
 }
 
 export async function listAdminDownloadArtifacts(db: D1Database, jobId: string): Promise<AdminDownloadArtifactRow[]> {

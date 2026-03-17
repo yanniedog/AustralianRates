@@ -40,7 +40,12 @@ export function adminDownloadStaleBeforeIso(now = Date.now()): string {
   return new Date(now - ADMIN_DOWNLOAD_STALE_MS).toISOString()
 }
 
-export function fullDatabaseDumpFileName(job: Pick<AdminDownloadJobRow, 'requested_at'>): string {
+export function fullDatabaseDumpFileName(job: Pick<AdminDownloadJobRow, 'requested_at' | 'export_kind' | 'month_iso'>): string {
+  const kind = (job as { export_kind?: string; month_iso?: string | null }).export_kind
+  const monthIso = (job as { export_kind?: string; month_iso?: string | null }).month_iso
+  if (kind === 'monthly' && monthIso && /^\d{4}-\d{2}$/.test(monthIso)) {
+    return `australianrates-database-monthly-${monthIso}.sql.gz`
+  }
   return `australianrates-database-full-${compactTimestampToken(job.requested_at)}.sql.gz`
 }
 

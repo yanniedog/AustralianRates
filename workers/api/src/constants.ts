@@ -18,6 +18,10 @@ export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
 export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 */6 * * *'
 export const SITE_HEALTH_CRON_EXPRESSION = '*/15 * * * *'
+/** 23:59 daily; handler runs monthly export only on the last day of each month. */
+export const MONTHLY_EXPORT_CRON_EXPRESSION = '59 23 * * *'
+/** 04:00 UTC daily; data integrity audit for admin UI. */
+export const INTEGRITY_AUDIT_CRON_EXPRESSION = '0 4 * * *'
 export const SCHEDULE_CRON_EXPRESSION = DAILY_SCHEDULE_CRON_EXPRESSION
 // Hourly cron should keep attempting the active Melbourne collection date until coverage is complete.
 export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 0
