@@ -116,6 +116,10 @@ body.ar-admin.has-admin-sidebar .admin-shell {
     font-weight: 700;
 }
 
+.admin-nav-card-copy {
+    line-height: 1.5;
+}
+
 .admin-nav-card-copy,
 .admin-subtitle,
 .admin-status-line,
@@ -281,7 +285,7 @@ body.ar-admin .site-header-inner {
 body.ar-admin .site-header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
@@ -322,6 +326,24 @@ body.ar-admin .site-header-actions .site-action-btn:hover {
         align-items: center;
         padding-inline: 14px;
         min-height: var(--ar-header-height);
+    }
+
+    body.ar-admin .site-header-actions {
+        gap: 12px;
+    }
+
+    .admin-dashboard-grid {
+        gap: 14px;
+    }
+
+    .admin-nav-card {
+        padding: 16px;
+        align-items: flex-start;
+    }
+
+    .admin-nav-card-copy {
+        line-height: 1.55;
+        min-height: 0;
     }
 
     .admin-shell,

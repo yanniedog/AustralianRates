@@ -68,9 +68,11 @@ async function main(): Promise<void> {
     await page.screenshot({ path: dashboardPath, fullPage: true })
     console.log('Saved:', dashboardPath)
 
-    // 3. Status page (has sidebar + content)
+    // 3. Status page (has sidebar + content; wait for async content to render)
     await page.goto(`${ADMIN_BASE}/status.html`, { waitUntil: 'domcontentloaded', timeout: 20_000 })
     await page.waitForSelector('#main-content', { timeout: 10_000 }).catch(() => null)
+    await page.waitForSelector('#overall-grid, .admin-status .card, #run-check-btn', { timeout: 15_000 }).catch(() => null)
+    await new Promise((r) => setTimeout(r, 800))
     await page.evaluate(() => window.scrollTo(0, 0))
     const statusPath = path.join(CAPTURE_DIR, '03-status.png')
     await page.screenshot({ path: statusPath, fullPage: true })

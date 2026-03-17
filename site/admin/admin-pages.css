@@ -498,6 +498,10 @@
         grid-template-columns: 1fr;
     }
 
+    .admin-db .admin-toolbar {
+        gap: 14px;
+    }
+
     .admin-exports .export-actions,
     .admin-exports .export-cursor-input,
     .admin-exports .export-history-bar,
