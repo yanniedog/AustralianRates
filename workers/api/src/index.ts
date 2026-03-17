@@ -52,8 +52,8 @@ app.use(
   }),
 )
 
-app.route(API_BASE_PATH, publicRoutes)
 app.route(`${API_BASE_PATH}/admin`, adminRoutes)
+app.route(API_BASE_PATH, publicRoutes)
 app.route(SAVINGS_API_BASE_PATH, savingsPublicRoutes)
 app.route(TD_API_BASE_PATH, tdPublicRoutes)
 
