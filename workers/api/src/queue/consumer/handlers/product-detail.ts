@@ -1,6 +1,6 @@
 import { TARGET_LENDERS } from '../../../constants'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
-import { ensureLenderDatasetRun, recordLenderDatasetWriteStats } from '../../../db/lender-dataset-runs'
+import { ensureLenderDatasetRun, markLenderDatasetDetailProcessed, recordLenderDatasetWriteStats } from '../../../db/lender-dataset-runs'
 import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { upsertSavingsRateRows } from '../../../db/savings-rates'
 import { upsertTdRateRows } from '../../../db/td-rates'
@@ -144,6 +144,13 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           detailFetchEventCount: fetchEventId != null ? 1 : 0,
           errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
         })
+        await markLenderDatasetDetailProcessed(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'home_loans',
+          failed: true,
+          errorMessage: `detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}`,
+        })
         throw new Error(`detail_fetch_failed:home_loans:${job.productId}:status=${fetchStatus}`)
       }
       for (const row of details.rows) {
@@ -261,6 +268,13 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           detailFetchEventCount: fetchEventId != null ? 1 : 0,
           errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
         })
+        await markLenderDatasetDetailProcessed(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'savings',
+          failed: true,
+          errorMessage: `detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}`,
+        })
         throw new Error(`detail_fetch_failed:savings:${job.productId}:status=${fetchStatus}`)
       }
       for (const row of details.savingsRows) {
@@ -377,6 +391,13 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           dataset: 'term_deposits',
           detailFetchEventCount: fetchEventId != null ? 1 : 0,
           errorMessage: `detail_fetch_failed:${job.productId}:status=${fetchStatus}`,
+        })
+        await markLenderDatasetDetailProcessed(env.DB, {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'term_deposits',
+          failed: true,
+          errorMessage: `detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}`,
         })
         throw new Error(`detail_fetch_failed:term_deposits:${job.productId}:status=${fetchStatus}`)
       }

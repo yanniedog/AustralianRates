@@ -17,13 +17,19 @@ const token = (
   ''
 ).trim();
 
+const FETCH_TIMEOUT_MS = 60_000;
+
 async function fetchJson<T>(url: string): Promise<T> {
+  const controller = new AbortController();
+  const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   const res = await fetch(url, {
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json, application/x-ndjson',
     },
   });
+  clearTimeout(to);
   if (res.status === 401) {
     throw new Error('401 Unauthorized: ADMIN_API_TOKEN invalid or missing');
   }
@@ -34,12 +40,16 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 async function fetchText(url: string): Promise<string> {
+  const controller = new AbortController();
+  const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   const res = await fetch(url, {
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/x-ndjson, text/plain',
     },
   });
+  clearTimeout(to);
   if (res.status === 401) {
     throw new Error('401 Unauthorized: ADMIN_API_TOKEN invalid or missing');
   }
