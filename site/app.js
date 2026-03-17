@@ -278,9 +278,6 @@
         }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
         if (document.body && document.body.classList.contains('ar-public') && charts && typeof charts.drawChart === 'function') {
-            // #region agent log
-            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'app.js:finishAppInit',message:'scheduling drawChart in 150ms',data:{},hypothesisId:'H2',timestamp:Date.now()})}).catch(function(){});
-            // #endregion
             window.setTimeout(function () {
                 charts.drawChart();
             }, 150);

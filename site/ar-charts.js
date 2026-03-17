@@ -278,9 +278,6 @@
     }
 
     async function drawChart() {
-        // #region agent log
-        fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-charts.js:drawChart',message:'drawChart invoked',data:{hasOutput:!!els.chartOutput},hypothesisId:'H2',timestamp:Date.now()})}).catch(function(){});
-        // #endregion
         if (!els.chartOutput) return;
         if (chartLoadPromise) return chartLoadPromise;
         disposeCharts();
@@ -308,6 +305,7 @@
             resetSelection();
 
             if (!chartState.rows.length) {
+                clientLog('info', 'Chart load returned no rows', { section: (window.AR && window.AR.section) || 'unknown' });
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
                 clearOutput('No data');
                 if (chartUi.setStatus) chartUi.setStatus('No data');
@@ -324,19 +322,35 @@
             chartState.fallbackReason = '';
             var chartOutputStillPresent = typeof document !== 'undefined' && document.getElementById('chart-output');
             if (!chartOutputStillPresent) return;
-            // #region agent log
+            var userMessage = describeError(error, chartErrorMessage());
             var isTimeout = (network && typeof network.isTimeoutError === 'function' && network.isTimeoutError(error)) || (error && error.code === 'timeout');
-            var logPayload = { sessionId: 'd301fc', location: 'ar-charts.js:drawChart', message: 'Chart load failed', data: { code: error && error.code, timeoutMs: error && error.timeoutMs, timedOut: !!isTimeout, userMessage: describeError(error, chartErrorMessage()) }, timestamp: Date.now(), hypothesisId: 'H1' };
-            if (config && config.apiBase) {
-                fetch(config.apiBase + '/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd301fc' }, body: JSON.stringify(logPayload) }).catch(function () {});
+            var logData = {
+                section: (window.AR && window.AR.section) || 'unknown',
+                userMessage: userMessage,
+                code: error && error.code,
+                timedOut: !!isTimeout,
+            };
+            if (error && (error.status != null || error.url)) {
+                logData.status = error.status;
+                logData.url = error.url ? String(error.url).slice(0, 500) : undefined;
             }
-            // #endregion
+            if (error && error.bodySnippet) logData.bodySnippet = String(error.bodySnippet).slice(0, 200);
+            clientLog('error', 'Chart load failed', logData);
+            if (config && config.apiBase) {
+                fetch(config.apiBase + '/debug-log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        location: 'ar-charts.js:drawChart',
+                        message: 'Chart load failed',
+                        data: logData,
+                        timestamp: Date.now(),
+                    }),
+                }).catch(function () {});
+            }
             clearOutput('Error loading chart');
-            if (chartUi.setErrorState) chartUi.setErrorState(describeError(error, chartErrorMessage()));
+            if (chartUi.setErrorState) chartUi.setErrorState(userMessage);
             if (chartUi.setStatus) chartUi.setStatus('Error loading chart');
-            clientLog('error', 'Chart load failed', {
-                message: describeError(error, chartErrorMessage()),
-            });
         }).finally(function () {
             chartLoadPromise = null;
         });
@@ -354,9 +368,6 @@
             return;
         }
         if (!chartState.rows.length) {
-            // #region agent log
-            fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-charts.js:refreshFromCache',message:'no rows, calling setIdleState',data:{reason:reason},hypothesisId:'H3',timestamp:Date.now()})}).catch(function(){});
-            // #endregion
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             if (chartUi.setIdleState) chartUi.setIdleState();
             return;
@@ -398,9 +409,6 @@
             onViewChange: function () { refreshFromCache('view'); },
         });
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-charts.js:init',message:'init: set pending instead of idle',data:{},hypothesisId:'H1',timestamp:Date.now()})}).catch(function(){});
-    // #endregion
     if (chartUi.setPendingState) chartUi.setPendingState('Loading');
     else if (chartUi.setIdleState) chartUi.setIdleState();
 

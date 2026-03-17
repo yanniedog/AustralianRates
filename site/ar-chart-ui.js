@@ -450,9 +450,6 @@
     }
 
     function setIdleState() {
-        // #region agent log
-        fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a33b3'},body:JSON.stringify({sessionId:'7a33b3',location:'ar-chart-ui.js:setIdleState',message:'setIdleState called',data:{stack:new Error().stack?String(new Error().stack).slice(0,200):''},hypothesisId:'H1',timestamp:Date.now()})}).catch(function(){});
-        // #endregion
         setActiveView(defaultViewFallback());
         clearErrorState();
         if (els.chartGuidance) els.chartGuidance.textContent = 'On demand';
