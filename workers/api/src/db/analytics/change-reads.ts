@@ -168,7 +168,7 @@ export async function queryAnalyticsRateChanges(
   input: { limit?: number; offset?: number },
 ): Promise<{ total: number; rows: Array<Record<string, unknown>> }> {
   const config = getAnalyticsDatasetConfig(dataset)
-  const detailSelect = config.changeDetailColumns.map((column) => `e.${column}`).join(', ')
+  const detailSelect = config.changeDetailColumns.map((column) => `ordered.${column}`).join(', ')
   const countResult = await db
     .prepare(`SELECT COUNT(*) AS total FROM ${config.eventsTable} WHERE event_type = 'rate_change'`)
     .first<{ total: number }>()

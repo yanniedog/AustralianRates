@@ -27,7 +27,10 @@ export async function queryChangesWithFallback(
       }
     } catch (error) {
       const message = (error as Error)?.message || String(error)
-      const isSchemaMismatch = /no such column:.*\.(security_purpose|repayment_type|rate_structure|lvr_tier|feature_set)/i.test(message)
+      const knownDetailColumns = ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set']
+      const isSchemaMismatch =
+        /no such column:.*\.(security_purpose|repayment_type|rate_structure|lvr_tier|feature_set)/i.test(message) ||
+        (message.includes('no such column') && knownDetailColumns.some((col) => message.includes(col)))
       if (isSchemaMismatch) {
         log.warn('public', 'analytics_change_query_schema_mismatch', {
           code: 'analytics_change_query_schema_mismatch',
