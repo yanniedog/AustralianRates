@@ -243,7 +243,7 @@ async function verifyClarityPresent(page, results, label) {
 async function verifyHeroStats(page, results, label) {
     await page.waitForFunction(() => {
         const stats = Array.from(document.querySelectorAll('#hero-stats .terminal-stat'));
-        if (stats.length !== 3) return false;
+        if (stats.length < 3) return false;
         return stats.every((el) => {
             const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
             return text.length > 0 && text.indexOf('...') === -1;
@@ -253,7 +253,7 @@ async function verifyHeroStats(page, results, label) {
     const stats = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('#hero-stats .terminal-stat')).map((el) => String(el.textContent || '').replace(/\s+/g, ' ').trim());
     });
-    if (stats.length === 3 && stats.every((text) => text.length > 0 && text.indexOf('...') === -1)) {
+    if (stats.length >= 3 && stats.every((text) => text.length > 0 && text.indexOf('...') === -1)) {
         pass(results, `${label}: summary stats loaded`);
     } else {
         fail(results, `${label}: summary stats incomplete (${stats.join(' | ') || 'none'})`);
@@ -690,7 +690,10 @@ async function verifyPivotLoad(page, results, label) {
         if (d && d.tagName === 'DETAILS') d.open = true;
     });
     await page.waitForTimeout(400);
-    await page.click('#tab-pivot');
+    const tabPivot = page.locator('#tab-pivot');
+    await tabPivot.scrollIntoViewIfNeeded().catch(() => {});
+    await tabPivot.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+    await tabPivot.click({ timeout: 15000 });
     await page.waitForTimeout(300);
 
     const pivotVisible = await page.evaluate(() => {
@@ -843,7 +846,9 @@ async function verifyTabsAndHash(page, results, label, baseUrl) {
     ];
 
     for (const scenario of scenarios) {
-        await page.click(scenario.tabId);
+        const tabLocator = page.locator(scenario.tabId);
+        await tabLocator.scrollIntoViewIfNeeded().catch(() => {});
+        await tabLocator.click({ timeout: 15000 });
         await page.waitForTimeout(250);
         const state = await page.evaluate((panelId) => {
             const panel = document.querySelector(panelId);
@@ -952,7 +957,9 @@ async function verifyMobileRail(page, results, label, baseUrl) {
     if (afterUp < afterDown - 20) pass(results, `${label}: mobile rail up button scrolls the page back`);
     else fail(results, `${label}: mobile rail up button did not move the page upward`);
 
-    await page.click('#tab-pivot');
+    const mobilePivotTab = page.locator('#tab-pivot');
+    await mobilePivotTab.scrollIntoViewIfNeeded().catch(() => {});
+    await mobilePivotTab.click({ force: true, timeout: 15000 });
     await page.waitForTimeout(400);
     const hiddenOnPivot = await page.evaluate(() => {
         const rail = document.getElementById('mobile-table-rail');

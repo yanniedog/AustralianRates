@@ -39,13 +39,14 @@
     }
 
     function categoryAxis(market, narrow) {
-        return {
+        var theme = chartTheme();
+        var axis = {
             type: 'category',
             data: market.categories.map(function (category) { return category.key; }),
             axisLine: gridStyles().axisLine,
             axisTick: { show: false },
             axisLabel: {
-                color: chartTheme().mutedText,
+                color: theme.mutedText,
                 interval: categoryInterval(market.categories.length, narrow ? 5 : 8),
                 hideOverlap: false,
                 formatter: function (value) {
@@ -54,6 +55,13 @@
                 },
             },
         };
+        if (market.dimensionLabel) {
+            axis.name = market.dimensionLabel;
+            axis.nameLocation = 'middle';
+            axis.nameGap = narrow ? 32 : 42;
+            axis.nameTextStyle = { color: theme.mutedText, fontFamily: theme.dataFont || undefined };
+        }
+        return axis;
     }
 
     function axisTooltip(params, market, fields) {
@@ -112,10 +120,10 @@
             series.push({
                 name: 'Market median',
                 type: 'line',
-                smooth: 0.2,
+                smooth: 0.28,
                 showSymbol: true,
                 symbolSize: 6,
-                lineStyle: { width: 3, color: theme.softText, type: 'dashed' },
+                lineStyle: { width: 3.2, color: theme.softText, type: 'dashed' },
                 itemStyle: { color: theme.softText },
                 data: market.categories.map(function (category) {
                     return { value: [category.key, category.median], bucketKey: category.key };
@@ -127,7 +135,7 @@
             series.push({
                 name: curve.bankName,
                 type: 'line',
-                smooth: 0.2,
+                smooth: 0.26,
                 connectNulls: false,
                 showSymbol: true,
                 symbolSize: 6,

@@ -70,7 +70,7 @@
         if (className) classes.push(className);
         return '' +
             '<span class="' + classes.join(' ') + '">' +
-                icon(name, label) +
+                icon(name, null) +
                 '<span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span>' +
             '</span>';
     }

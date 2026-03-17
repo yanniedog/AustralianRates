@@ -96,6 +96,24 @@
         return Number.isFinite(amount) ? amount * scale : Number.POSITIVE_INFINITY;
     }
 
+    /** For Savings deposit_tier: sort by upper bound of range so axis reads low balance to high balance. */
+    function depositTierSortValue(value, row) {
+        var maxB = row && row.max_balance != null ? Number(row.max_balance) : NaN;
+        var minB = row && row.min_balance != null ? Number(row.min_balance) : NaN;
+        if (Number.isFinite(maxB)) return maxB;
+        if (Number.isFinite(minB)) return minB;
+        var raw = String(value || '').replace(/\s+/g, ' ');
+        var re = /\$?(\d+(?:\.\d+)?)\s*([km])?/gi;
+        var max = 0;
+        var match;
+        while ((match = re.exec(raw)) !== null) {
+            var amount = Number(match[1]);
+            var scale = (match[2] || '').toLowerCase() === 'm' ? 1000000 : ((match[2] || '').toLowerCase() === 'k' ? 1000 : 1);
+            if (Number.isFinite(amount)) max = Math.max(max, amount * scale);
+        }
+        return max || Number.POSITIVE_INFINITY;
+    }
+
     function marketDirection(field) {
         return chartConfig.rankDirection ? chartConfig.rankDirection(field) : 'desc';
     }
@@ -159,8 +177,7 @@
         var value = row ? row[field] : '';
         if (value == null || value === '') return null;
         if (field === 'deposit_tier') {
-            var minBalance = Number(row && row.min_balance);
-            return { key: String(value), label: humanField('deposit_tier', value, row), shortLabel: trimAxisLabel(humanField('deposit_tier', value, row), 14), secondaryLabel: '', sortValue: Number.isFinite(minBalance) ? minBalance : parseAmountToken(value), dimensionLabel: 'Deposit tier' };
+            return { key: String(value), label: humanField('deposit_tier', value, row), shortLabel: trimAxisLabel(humanField('deposit_tier', value, row), 14), secondaryLabel: '', sortValue: depositTierSortValue(value, row), dimensionLabel: 'Balance tier' };
         }
         if (field === 'rate_type') {
             return { key: String(value), label: humanField('rate_type', value, row), shortLabel: humanField('rate_type', value, row), secondaryLabel: '', sortValue: Object.prototype.hasOwnProperty.call(SAVINGS_RATE_TYPE_ORDER, String(value)) ? SAVINGS_RATE_TYPE_ORDER[String(value)] : 99, dimensionLabel: 'Rate type' };
