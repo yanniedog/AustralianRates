@@ -559,12 +559,21 @@
             var consistentTiers = computeConsistentLvrTiersPerBank(allRows);
             var bankLvrCurves = [];
             visibleBanks.forEach(function (bankName, bankIndex) {
-                var tiers = (consistentTiers[bankName] && consistentTiers[bankName].length) ? consistentTiers[bankName] : LVR_TIER_ORDER.slice();
+                var tiers = (consistentTiers[bankName] && consistentTiers[bankName].length) ? consistentTiers[bankName] : null;
+                if (!tiers || !tiers.length) {
+                    var tierSet = Object.create(null);
+                    variableRows.forEach(function (row) {
+                        if (String(row && row.bank_name || '') !== bankName) return;
+                        var t = String(row && row.lvr_tier || '').trim();
+                        if (t) tierSet[t] = true;
+                    });
+                    tiers = Object.keys(tierSet).sort(function (a, b) { return lvrTierSortKey(a) - lvrTierSortKey(b); });
+                }
                 tiers.forEach(function (tier) {
                     var points = categories.map(function (category) {
                         var bankRows = category.rows.filter(function (entry) {
                             return String(entry.row && entry.row.bank_name || '') === bankName
-                                && String(entry.row && entry.row.lvr_tier || '') === tier;
+                                && String(entry.row && entry.row.lvr_tier || '').trim() === String(tier || '').trim();
                         });
                         if (!bankRows.length) return null;
                         var best = bankRows[0];
