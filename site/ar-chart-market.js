@@ -433,6 +433,7 @@
                 secondaryLabel: category.secondaryLabel,
                 dimensionLabel: category.dimensionLabel,
                 sortValue: category.sortValue,
+                rows: category.rows,
                 rowCount: category.rows.length,
                 bankCount: bankEntries.length,
                 min: values[0],
