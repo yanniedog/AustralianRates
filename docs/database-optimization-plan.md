@@ -8,7 +8,7 @@ This document defines how to keep the D1 database smaller and optimised while (a
 
 - **Do not drop or over-prune** any table or column that feeds the public site or API.
 - **User-facing data** lives in:
-  - `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates` (one row per (product_key, collection_date); migration 0032)
+  - `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates` (one row per (product_key, collection_date); migration 0032). Within each day the **single row per product** is chosen by: prefer `run_source = 'scheduled'`, then latest `parsed_at` (deduplication in 0032); new writes use ON CONFLICT so the last write for that day wins.
   - `latest_home_loan_series`, `latest_savings_series`, `latest_td_series`
   - `home_loan_rate_events`, `savings_rate_events`, `term_deposit_rate_events` (if used by charts/exports)
   - `chart_pivot_cache`, `rba_cash_rates`

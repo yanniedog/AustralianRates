@@ -56,6 +56,31 @@ Use sparingly; retention pruning alone keeps growth in check.
   ```
   This calls `GET /api/home-loan-rates/admin/db/stats` and prints total size and per-table row counts (largest first). Alternatively use `GET /api/home-loan-rates/admin/db/audit` for table row counts only.
 
+## Plan status (one row per day, no intra-day duplicates)
+
+The optimization plan in `docs/database-optimization-plan.md` is **fully implemented**:
+
+- **Front-end historical tables:** One row per (product_key, collection_date). Migration 0032 deduplicated existing data (preferring `run_source = 'scheduled'`, then latest `parsed_at`). The write path uses `ON CONFLICT` on the natural key so new inserts never create a second row for the same product and day.
+- **Backend retention:** fetch_events, run_reports (+ run_seen_*, lender_dataset_runs), ingest_anomalies, health_check_runs, integrity_audit_runs use 3-day retention. raw_objects and raw_payloads are pruned to the retained window. Retention runs after every health check (e.g. every 15 minutes via cron).
+
+**Why total row count is still high:** Most rows are in **backend/operational** tables, not in the historical rate tables:
+
+| Source | Typical share | Notes |
+|--------|----------------|-------|
+| fetch_events | Largest (~180k+ in 3-day window) | One row per HTTP fetch; many lenders × products per run |
+| run_seen_series, run_seen_products | ~68k, ~16k | 3-day retention; one per (run, series/product) |
+| download_change_feed, client_historical_tasks | ~62k, ~56k | Operational; no retention in plan (optional later) |
+| raw_objects | ~60k | 3-day window after fetch_events prune |
+| historical_loan_rates, historical_savings_rates, historical_term_deposit_rates | ~13k, ~7k, ~21k | **One row per product per day**; no intra-day duplicates |
+
+To confirm there are no intra-day duplicates in historical tables, run (with `ADMIN_API_TOKEN` in `.env`):
+
+```bash
+node fetch-duplicate-check.js
+```
+
+Expect `duplicate_rows=0` for each table and `one_row_per_day: yes`. The API also exposes `GET /api/home-loan-rates/admin/db/duplicate-check` (admin auth required).
+
 ## Front-end data shape
 
 - **One row per (product_key, collection_date):** Migration 0032 enforces at most one row per product per day in historical_* tables. Charts and APIs naturally get one point per day. Write path uses ON CONFLICT on the natural key (no run_source) so the last write for that day wins.

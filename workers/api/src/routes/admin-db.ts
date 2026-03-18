@@ -199,6 +199,84 @@ adminDbRoutes.get('/db/audit', async (c) => {
   })
 })
 
+/** GET /admin/db/duplicate-check - verify one row per (product_key, collection_date) in historical rate tables. Read-only. */
+adminDbRoutes.get('/db/duplicate-check', async (c) => {
+  const db = c.env.DB
+  const results: { table: string; total_rows: number; distinct_keys: number; duplicate_rows: number }[] = []
+  try {
+    const loan = await db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM historical_loan_rates) AS total,
+           (SELECT COUNT(*) FROM (
+             SELECT 1 FROM historical_loan_rates
+             GROUP BY bank_name, collection_date, product_id, security_purpose, repayment_type, lvr_tier, rate_structure
+           )) AS distinct_keys`,
+      )
+      .first<{ total: number; distinct_keys: number }>()
+    if (loan) {
+      results.push({
+        table: 'historical_loan_rates',
+        total_rows: loan.total ?? 0,
+        distinct_keys: loan.distinct_keys ?? 0,
+        duplicate_rows: Math.max(0, (loan.total ?? 0) - (loan.distinct_keys ?? 0)),
+      })
+    }
+    const savings = await db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM historical_savings_rates) AS total,
+           (SELECT COUNT(*) FROM (
+             SELECT 1 FROM historical_savings_rates
+             GROUP BY bank_name, collection_date, product_id, account_type, rate_type, deposit_tier
+           )) AS distinct_keys`,
+      )
+      .first<{ total: number; distinct_keys: number }>()
+    if (savings) {
+      results.push({
+        table: 'historical_savings_rates',
+        total_rows: savings.total ?? 0,
+        distinct_keys: savings.distinct_keys ?? 0,
+        duplicate_rows: Math.max(0, (savings.total ?? 0) - (savings.distinct_keys ?? 0)),
+      })
+    }
+    const td = await db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM historical_term_deposit_rates) AS total,
+           (SELECT COUNT(*) FROM (
+             SELECT 1 FROM historical_term_deposit_rates
+             GROUP BY bank_name, collection_date, product_id, term_months, deposit_tier, interest_payment
+           )) AS distinct_keys`,
+      )
+      .first<{ total: number; distinct_keys: number }>()
+    if (td) {
+      results.push({
+        table: 'historical_term_deposit_rates',
+        total_rows: td.total ?? 0,
+        distinct_keys: td.distinct_keys ?? 0,
+        duplicate_rows: Math.max(0, (td.total ?? 0) - (td.distinct_keys ?? 0)),
+      })
+    }
+  } catch (e) {
+    return c.json(
+      {
+        ok: false,
+        error: String((e as Error)?.message ?? e),
+        results: results.length ? results : null,
+      },
+      500,
+    )
+  }
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode ?? null,
+    generated_at: new Date().toISOString(),
+    results,
+    one_row_per_day: results.every((r) => r.duplicate_rows === 0),
+  })
+})
+
 /** GET /admin/db/tables - list allowlisted tables with optional row counts */
 adminDbRoutes.get('/db/tables', async (c) => {
   const db = c.env.DB
