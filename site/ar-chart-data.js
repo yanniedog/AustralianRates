@@ -564,26 +564,14 @@
     function fetchAnalyticsRows(params) {
         var query = new URLSearchParams(params || {});
         var url = apiBase + '/analytics/series?' + query.toString();
-        // #region agent log
-        var t0 = typeof Date.now === 'function' ? Date.now() : 0;
-        sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request start', data: { representation: params && params.representation, hasStartDate: !!(params && params.start_date), hasEndDate: !!(params && params.end_date), paramKeys: params ? Object.keys(params) : [] }, timestamp: t0, hypothesisId: 'H1' });
-        // #endregion
         if (requestJson) {
             return requestJson(url, {
                 requestLabel: 'Chart history',
                 timeoutMs: 40000,
                 retryCount: 0,
             }).then(function (result) {
-                // #region agent log
-                var t1 = typeof Date.now === 'function' ? Date.now() : 0;
-                sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request success', data: { durationMs: t1 - t0, rowCount: result && result.data && result.data.rows ? result.data.rows.length : 0 }, timestamp: t1, hypothesisId: 'H1' });
-                // #endregion
                 return result.data;
             }).catch(function (err) {
-                // #region agent log
-                var t1 = typeof Date.now === 'function' ? Date.now() : 0;
-                sendDebugLog({ sessionId: 'd301fc', location: 'ar-chart-data.js:fetchAnalyticsRows', message: 'Chart history request failed', data: { durationMs: t1 - t0, code: err && err.code, timeoutMs: err && err.timeoutMs, timedOut: !!(err && err.code === 'timeout'), userMessage: err && err.userMessage }, timestamp: t1, hypothesisId: 'H1' });
-                // #endregion
                 throw err;
             });
         }
