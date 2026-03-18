@@ -61,7 +61,7 @@
         if (getActiveTab() !== 'explorer') return false;
         if (!isExplorerVisible()) return false;
         if (!range) return false;
-        return range.height > window.innerHeight * MIN_SECTION_MULTIPLIER && range.end > range.start;
+        return (range.end - range.start) > 50;
     }
 
     function setRailVisible(visible) {
