@@ -371,38 +371,28 @@ async function ensureSyntheticListFetchEvent(
          run_id,
          lender_code,
          dataset_kind,
-         job_kind,
          source_type,
          source_url,
          collection_date,
          fetched_at,
          http_status,
          content_hash,
-         body_bytes,
-         response_headers_json,
-         duration_ms,
          product_id,
-         raw_object_created,
-         notes
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`,
+         raw_object_created
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
     )
     .bind(
       candidate.runId,
       lenderCode,
       target.dataset,
-      'lineage_repair_legacy_raw_payload',
       'cdr_products',
       candidate.baseUrl,
       candidate.collectionDate,
       rawPayload.fetched_at,
       rawPayload.http_status == null ? null : Number(rawPayload.http_status),
       rawPayload.content_hash,
-      rawObjectMeta.bodyBytes,
-      null,
-      null,
       null,
       0,
-      `lineage_repair legacy_raw_payload_list raw_payload_id=${rawPayload.id}`,
     )
     .run()
 

@@ -13,9 +13,10 @@ High-churn tables are pruned so they stay bounded. Pruning runs after every heal
 | `health_check_runs` | 7 days | `workers/api/src/db/health-check-runs.ts` |
 | `integrity_audit_runs` | 30 days | `workers/api/src/db/integrity-audit-runs.ts` |
 | `run_reports` (+ run_seen_*, lender_dataset_runs) | 180 days | `workers/api/src/db/retention-prune.ts` |
+| `fetch_events` | 90 days | `workers/api/src/db/retention-prune.ts` |
 | `raw_payloads` | Orphan cleanup (no matching raw_objects) | `workers/api/src/db/retention-prune.ts` |
 
-Effects: less D1 storage, faster `COUNT(*)` and `ORDER BY ts DESC` on log/anomaly tables, less data transferred on admin log queries and dumps.
+Effects: less D1 storage, faster `COUNT(*)` and `ORDER BY ts DESC` on log/anomaly tables, less data transferred on admin log queries and dumps. For the full optimization plan (invariants: front-end data never lost, admin status/integrity pragmatic), see `docs/database-optimization-plan.md`.
 
 ## Log context size
 

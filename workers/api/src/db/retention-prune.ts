@@ -9,6 +9,8 @@ const GLOBAL_LOG_INFO_DEBUG_RETENTION_HOURS = 48
 const INGEST_ANOMALIES_RETENTION_DAYS = 90
 /** Run reports and related run-scoped rows older than this are pruned (reduces runs_with_no_outputs and table growth). */
 const RUN_REPORTS_RETENTION_DAYS = 180
+/** Fetch events older than this are pruned; admin remediation and CDR audit keep this much lineage. */
+const FETCH_EVENTS_RETENTION_DAYS = 90
 
 /**
  * Delete global_log rows by level: debug/info older than 48h; warn/error older than 14d.
@@ -116,6 +118,24 @@ export async function pruneRawPayloadsOrphans(db: D1Database): Promise<void> {
 }
 
 /**
+ * Delete fetch_events rows older than FETCH_EVENTS_RETENTION_DAYS.
+ * No-op on error. Keeps table bounded; admin remediation and CDR audit use recent lineage.
+ * Historical rate rows may keep fetch_event_id pointing to pruned rows (lookup returns null).
+ */
+export async function pruneFetchEvents(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `DELETE FROM fetch_events WHERE fetched_at < datetime('now', ?1)`,
+      )
+      .bind(`-${FETCH_EVENTS_RETENTION_DAYS} days`)
+      .run()
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Run all retention prunes. Safe to call from any context; failures are swallowed.
  */
 export async function runRetentionPrunes(db: D1Database): Promise<void> {
@@ -123,4 +143,5 @@ export async function runRetentionPrunes(db: D1Database): Promise<void> {
   await pruneIngestAnomalies(db)
   await pruneRunReports(db)
   await pruneRawPayloadsOrphans(db)
+  await pruneFetchEvents(db)
 }

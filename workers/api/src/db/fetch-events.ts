@@ -133,27 +133,22 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
   const inserted = await env.DB
     .prepare(
       `INSERT INTO fetch_events (
-         run_id, lender_code, dataset_kind, job_kind, source_type, source_url, collection_date, fetched_at, http_status,
-         content_hash, body_bytes, response_headers_json, duration_ms, product_id, raw_object_created, notes
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`,
+         run_id, lender_code, dataset_kind, source_type, source_url, collection_date, fetched_at, http_status,
+         content_hash, product_id, raw_object_created
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
     )
     .bind(
       input.runId ?? null,
       input.lenderCode ?? null,
       input.dataset ?? null,
-      input.jobKind ?? null,
       input.sourceType,
       input.sourceUrl,
       input.collectionDate ?? null,
       fetchedAtIso,
       input.httpStatus == null ? null : Math.floor(input.httpStatus),
       contentHash,
-      bodyBytes,
-      headersJson(input.responseHeaders),
-      input.durationMs == null ? null : Math.max(0, Math.floor(input.durationMs)),
       input.productId ?? null,
       rawObjectCreated ? 1 : 0,
-      input.notes ?? null,
     )
     .run()
 
@@ -214,36 +209,32 @@ export async function getRecentFetchEvents(
   binds.push(limit)
 
   const sql = `SELECT
-      id, run_id, lender_code, dataset_kind, job_kind, source_type, source_url, collection_date, fetched_at,
-      http_status, content_hash, body_bytes, response_headers_json, duration_ms, product_id, raw_object_created, notes
+      id, run_id, lender_code, dataset_kind, source_type, source_url, collection_date, fetched_at,
+      http_status, content_hash, product_id, raw_object_created
     FROM fetch_events
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY fetched_at DESC
     LIMIT ?`
 
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()
-  return (result.results ?? []).map(mapFetchEventRow)
+  return (result.results ?? []).map((r) => mapFetchEventRow(r))
 }
 
-function mapFetchEventRow(row: Record<string, unknown>): FetchEventRecord {
+function mapFetchEventRow(row: Record<string, unknown>, bodyBytesFromJoin?: number): FetchEventRecord {
   return {
     id: Number(row.id ?? 0),
     runId: row.run_id == null ? null : String(row.run_id),
     lenderCode: row.lender_code == null ? null : String(row.lender_code),
     dataset: row.dataset_kind == null ? null : (String(row.dataset_kind) as DatasetKind),
-    jobKind: row.job_kind == null ? null : (String(row.job_kind) as IngestTaskKind),
     sourceType: String(row.source_type ?? ''),
     sourceUrl: String(row.source_url ?? ''),
     collectionDate: row.collection_date == null ? null : String(row.collection_date),
     fetchedAt: String(row.fetched_at ?? ''),
     httpStatus: row.http_status == null ? null : Number(row.http_status),
     contentHash: String(row.content_hash ?? ''),
-    bodyBytes: Number(row.body_bytes ?? 0),
-    responseHeadersJson: row.response_headers_json == null ? null : String(row.response_headers_json),
-    durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
-    productId: row.product_id == null ? null : String(row.product_id),
+    bodyBytes: bodyBytesFromJoin ?? Number(row.body_bytes ?? 0),
     rawObjectCreated: String(row.raw_object_created ?? '0') === '1' || row.raw_object_created === 1,
-    notes: row.notes == null ? null : String(row.notes),
+    productId: row.product_id == null ? null : String(row.product_id),
     r2Key: row.r2_key == null ? null : String(row.r2_key),
     contentType: row.content_type == null ? null : String(row.content_type),
   }
@@ -260,21 +251,17 @@ export async function getFetchEventById(
          fe.run_id,
          fe.lender_code,
          fe.dataset_kind,
-         fe.job_kind,
          fe.source_type,
          fe.source_url,
          fe.collection_date,
          fe.fetched_at,
          fe.http_status,
          fe.content_hash,
-         fe.body_bytes,
-         fe.response_headers_json,
-         fe.duration_ms,
          fe.product_id,
          fe.raw_object_created,
-         fe.notes,
          ro.r2_key,
-         ro.content_type
+         ro.content_type,
+         ro.body_bytes AS body_bytes
        FROM fetch_events fe
        LEFT JOIN raw_objects ro
          ON ro.content_hash = fe.content_hash
@@ -284,7 +271,8 @@ export async function getFetchEventById(
     .bind(Math.max(1, Math.floor(fetchEventId)))
     .first<Record<string, unknown>>()
   if (!row) return null
-  return mapFetchEventRow(row)
+  const bodyBytes = row.body_bytes != null ? Number(row.body_bytes) : 0
+  return mapFetchEventRow(row, bodyBytes)
 }
 
 export async function resolveFetchEventIdByPayloadIdentity(
