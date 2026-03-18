@@ -836,6 +836,12 @@
             var toggle = function (event) {
                 if (event && typeof event.preventDefault === 'function') event.preventDefault();
                 if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+                var prior = null;
+                try { prior = input.__arPointerDownChecked; } catch (_) { prior = null; }
+                if (prior != null && !!input.checked !== !!prior) {
+                    // The browser already toggled the checkbox; avoid double-toggling.
+                    return;
+                }
                 input.checked = !input.checked;
                 try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
             };
