@@ -206,9 +206,9 @@
                 textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
             } : undefined,
             legend: {
-                top: curveTitle ? 20 : 0,
-                left: gridLeft,
-                right: 18,
+                bottom: 8,
+                left: 0,
+                right: 0,
                 type: 'scroll',
                 textStyle: { color: theme.softText },
                 formatter: function (name) { return trimAxisLabel(name, compact ? 14 : 22); },
@@ -225,8 +225,8 @@
             grid: {
                 left: gridLeft,
                 right: 18,
-                top: curveTitle ? 72 : 54,
-                bottom: narrow ? 78 : 64,
+                top: curveTitle ? 36 : 24,
+                bottom: narrow ? 88 : 76,
                 containLabel: true,
             },
             xAxis: categoryAxis(market, compact),
@@ -261,11 +261,10 @@
         var narrow = size && size.width < 760;
         var gridLeft = narrow ? 46 : 58;
         var curveTitle = market.curveTitle || 'Borrowing cost by structure (LVR band)';
-        var bankAccentColor = chartConfig.bankAccentColor || paletteColor;
         var showLvrLabels = market.categories.length > 1;
         var series = [];
         (market.bankRibbons || []).forEach(function (ribbon, idx) {
-            var color = typeof bankAccentColor === 'function' ? bankAccentColor(ribbon.bankName, ribbon.colorIndex) : paletteColor(ribbon.colorIndex);
+            var color = paletteColor(ribbon.colorIndex);
             var fillColor = hexToRgba(color, 0.5);
             var categoryKeys = market.categories.map(function (c) { return c.key; });
             var lowData = ribbon.points.map(function (p, i) {
@@ -336,8 +335,8 @@
             } : undefined,
             legend: {
                 data: (market.bankRibbons || []).map(function (r) { return r.bankName; }),
-                top: curveTitle ? 20 : 0,
-                left: gridLeft,
+                bottom: 8,
+                left: 0,
                 right: 20,
                 type: 'scroll',
                 textStyle: { color: theme.softText },
@@ -354,8 +353,8 @@
             grid: {
                 left: gridLeft,
                 right: 20,
-                top: curveTitle ? 72 : 54,
-                bottom: narrow ? 78 : 64,
+                top: curveTitle ? 36 : 24,
+                bottom: narrow ? 88 : 76,
                 containLabel: true,
             },
             xAxis: categoryAxis(market, narrow),
