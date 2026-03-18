@@ -8,7 +8,7 @@ This document defines how to keep the D1 database smaller and optimised while (a
 
 - **Do not drop or over-prune** any table or column that feeds the public site or API.
 - **User-facing data** lives in:
-  - `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates`
+  - `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates` (one row per (product_key, collection_date); migration 0032)
   - `latest_home_loan_series`, `latest_savings_series`, `latest_td_series`
   - `home_loan_rate_events`, `savings_rate_events`, `term_deposit_rate_events` (if used by charts/exports)
   - `chart_pivot_cache`, `rba_cash_rates`
@@ -18,7 +18,7 @@ This document defines how to keep the D1 database smaller and optimised while (a
 
 ### (b) Admin status and integrity remain pragmatic and useful
 
-- **Run history**: `run_reports` (and run_seen_*, lender_dataset_runs) drive run list, coverage gaps, and “runs with no outputs”. Keep **at least 90 days** (current 180 days is fine).
+- **Run history**: `run_reports` (and run_seen_*, lender_dataset_runs) drive run list, coverage gaps, and “runs with no outputs”. Keep **3 days** for backend integrity and validation (lineage repair, CDR audit, coverage-gap).
 - **Logs**: `global_log` 14d (warn/error) and 48h (info/debug) so actionable issues and recent context remain.
 - Older historical rate rows may have `fetch_event_id` pointing to pruned fetch_events (lookup returns null); that is acceptable.
 
@@ -50,3 +50,4 @@ This document defines how to keep the D1 database smaller and optimised while (a
 
 - After any retention or schema change: run `npm run test:api` and `npm run typecheck:api`; run `npm run test:homepage` if deploy affects production.
 - Admin: confirm status page, coverage-gap report, CDR audit, and remediation (e.g. “show fetch events”) still work within the retained windows.
+- After applying migration 0032: optionally run projection rebuild for all datasets so rate_events and rate_intervals reflect deduplicated historical data; chart_pivot_cache refreshes on next cron.
