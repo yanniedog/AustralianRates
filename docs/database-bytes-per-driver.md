@@ -2,6 +2,13 @@
 
 The full table has columns: **Table | Bytes | Rows | % of bytes**, sorted by bytes descending. Data is **real only**: from the production API or from a saved response you captured from the API.
 
+**Total rows and total size (entire DB):**  
+From repo root with `ADMIN_API_TOKEN` in `.env` run:
+```bash
+node fetch-db-stats.js --summary
+```
+This prints `Total rows: <n>` and `Total size: <MB> (bytes)`. If the API returns no size, use the Cloudflare D1 dashboard for storage size.
+
 **How to get the full table:**
 
 1. Deploy the API so `GET /api/home-loan-rates/admin/db/stats` is live.

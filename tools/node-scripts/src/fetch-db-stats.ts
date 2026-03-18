@@ -3,6 +3,7 @@
  * Requires ADMIN_API_TOKEN in repo root .env (loaded by runner) when fetching from API.
  * Usage:
  *   node fetch-db-stats.js                    # fetch from API (needs token)
+ *   node fetch-db-stats.js --summary          # print only total rows and total size
  *   node fetch-db-stats.js <path-to.json>     # print full table from saved API response
  */
 
@@ -42,10 +43,24 @@ function formatBytes(n: number): string {
   return `${n} B`;
 }
 
-function printTable(data: StatsResponse): void {
-
+function getTotals(data: StatsResponse): { totalRows: number; totalBytes: number } {
   const totalBytes = data.total_bytes_approx ?? 0;
   const totalRows = data.tables.reduce((sum, t) => sum + (t.row_count > 0 ? t.row_count : 0), 0);
+  return { totalRows, totalBytes };
+}
+
+function printSummary(data: StatsResponse): void {
+  const { totalRows, totalBytes } = getTotals(data);
+  console.log('Total rows:', totalRows.toLocaleString());
+  if (totalBytes > 0) {
+    console.log('Total size:', `${(totalBytes / 1e6).toFixed(2)} MB`, `(${totalBytes.toLocaleString()} bytes)`);
+  } else {
+    console.log('Total size: (not available from API; check Cloudflare D1 dashboard)');
+  }
+}
+
+function printTable(data: StatsResponse): void {
+  const { totalRows, totalBytes } = getTotals(data);
   const totalEstimated = data.tables.reduce(
     (sum, t) => sum + (t.estimated_bytes != null && t.estimated_bytes > 0 ? t.estimated_bytes : 0),
     0,
@@ -93,7 +108,9 @@ function printTable(data: StatsResponse): void {
 
 async function main(): Promise<void> {
   let data: StatsResponse;
-  const fileArg = process.argv[2];
+  const args = process.argv.slice(2);
+  const summaryOnly = args.includes('--summary');
+  const fileArg = args.find((a) => a !== '--summary' && !a.startsWith('-'));
   if (fileArg && fs.existsSync(path.resolve(process.cwd(), fileArg))) {
     const raw = fs.readFileSync(path.resolve(process.cwd(), fileArg), 'utf8');
     data = JSON.parse(raw) as StatsResponse;
@@ -124,7 +141,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   }
-  printTable(data);
+  if (summaryOnly) printSummary(data);
+  else printTable(data);
 }
 
 main().catch((e) => {
