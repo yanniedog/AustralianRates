@@ -20,6 +20,12 @@ const token = (
 
 const FETCH_TIMEOUT_MS = 120_000
 
+type HealthRunResponse = {
+  run?: {
+    duration_ms?: number
+  }
+}
+
 async function fetchAdmin(
   path: string,
   options: { method?: string; body?: string } = {}
@@ -80,7 +86,9 @@ async function main(): Promise<void> {
 
     if (!noRun && !cdrOnly) {
       const runRes = await fetchAdmin('/health/run', { method: 'POST' })
-      const runJson = runRes.ok ? await runRes.json().catch(() => ({})) : null
+      const runJson = runRes.ok
+        ? ((await runRes.json().catch(() => ({}))) as HealthRunResponse)
+        : null
       out.healthRun = {
         status: runRes.status,
         ok: runRes.ok,
