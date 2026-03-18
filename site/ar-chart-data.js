@@ -457,6 +457,12 @@
     }
 
     function buildChartModel(rows, fields, selectionState) {
+        var included = selectionState && selectionState.includedRateStructures;
+        if (included && Array.isArray(included) && included.length) {
+            rows = rows.filter(function (r) {
+                return included.indexOf(String(r.rate_structure || '')) >= 0;
+            });
+        }
         var density = chartConfig.parseDensity(fields.density);
         var allSeries = buildSeriesCollection(rows, fields.yField);
         var visibleSeries = buildVisibleSeries(allSeries, density, selectionState);

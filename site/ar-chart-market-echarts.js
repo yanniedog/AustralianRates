@@ -208,7 +208,134 @@
         };
     }
 
+    function hexToRgba(hex, alpha) {
+        var m = String(hex).match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+        if (!m) return 'rgba(79, 141, 253, ' + (alpha != null ? alpha : 0.5) + ')';
+        return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + (alpha != null ? alpha : 0.5) + ')';
+    }
+
+    function buildHlLvrRibbonOption(market, fields, size) {
+        var base = baseTextStyles();
+        var theme = chartTheme();
+        var narrow = size && size.width < 760;
+        var curveTitle = market.curveTitle || 'Borrowing cost by structure (LVR band)';
+        var bankAccentColor = chartConfig.bankAccentColor || paletteColor;
+        var series = [];
+        (market.bankRibbons || []).forEach(function (ribbon, idx) {
+            var color = typeof bankAccentColor === 'function' ? bankAccentColor(ribbon.bankName, ribbon.colorIndex) : paletteColor(ribbon.colorIndex);
+            var fillColor = hexToRgba(color, 0.5);
+            var categoryKeys = market.categories.map(function (c) { return c.key; });
+            var lowData = ribbon.points.map(function (p, i) {
+                if (!p || p.lowRate == null) return null;
+                return { value: [categoryKeys[i], p.lowRate], bucketKey: p.bucketKey, lowLvrLabel: p.lowLvrLabel, highLvrLabel: p.highLvrLabel };
+            });
+            var highData = ribbon.points.map(function (p, i) {
+                if (!p || p.highRate == null) return null;
+                return { value: [categoryKeys[i], p.highRate], bucketKey: p.bucketKey, lowLvrLabel: p.lowLvrLabel, highLvrLabel: p.highLvrLabel };
+            });
+            var stackId = 'hlribbon_' + idx;
+            series.push({
+                name: ribbon.bankName + ' (base)',
+                type: 'line',
+                stack: stackId,
+                silent: true,
+                lineStyle: { opacity: 0 },
+                areaStyle: { opacity: 0 },
+                symbol: 'none',
+                data: ribbon.points.map(function (p, i) { return p && p.lowRate != null ? { value: [categoryKeys[i], p.lowRate], bucketKey: p.bucketKey } : null; }),
+            });
+            series.push({
+                name: ribbon.bankName + ' (band)',
+                type: 'line',
+                stack: stackId,
+                lineStyle: { opacity: 0 },
+                symbol: 'none',
+                areaStyle: { color: fillColor },
+                data: ribbon.points.map(function (p, i) {
+                    if (!p || p.lowRate == null || p.highRate == null) return null;
+                    return { value: [categoryKeys[i], (p.highRate - p.lowRate)], bucketKey: p.bucketKey };
+                }),
+            });
+            series.push({
+                name: ribbon.bankName,
+                type: 'line',
+                showSymbol: true,
+                symbolSize: 4,
+                lineStyle: { width: 1.5, color: color },
+                itemStyle: { color: color },
+                data: lowData,
+                label: { show: true, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.lowLvrLabel) || ''; } },
+            });
+            series.push({
+                name: ribbon.bankName,
+                type: 'line',
+                showSymbol: true,
+                symbolSize: 4,
+                lineStyle: { width: 1.5, color: color },
+                itemStyle: { color: color },
+                data: highData,
+                label: { show: true, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.highLvrLabel) || ''; } },
+            });
+        });
+        return {
+            textStyle: base.textStyle,
+            animationDuration: base.animationDuration,
+            animationDurationUpdate: base.animationDurationUpdate,
+            animationEasing: base.animationEasing,
+            backgroundColor: 'transparent',
+            axisPointer: axisPointerConfig(theme),
+            title: curveTitle ? {
+                text: curveTitle,
+                left: 0,
+                top: 2,
+                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+            } : undefined,
+            legend: {
+                data: (market.bankRibbons || []).map(function (r) { return r.bankName; }),
+                top: curveTitle ? 20 : 0,
+                left: 0,
+                right: 0,
+                type: 'scroll',
+                textStyle: { color: theme.softText },
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
+                backgroundColor: tooltipStyles().backgroundColor,
+                borderColor: tooltipStyles().borderColor,
+                textStyle: tooltipStyles().textStyle,
+                extraCssText: tooltipStyles().extraCssText,
+                formatter: function (params) { return axisTooltip(params, market, fields); },
+            },
+            grid: {
+                left: narrow ? 46 : 58,
+                right: 20,
+                top: curveTitle ? 72 : 54,
+                bottom: narrow ? 78 : 64,
+                containLabel: true,
+            },
+            xAxis: categoryAxis(market, narrow),
+            yAxis: {
+                type: 'value',
+                name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                nameGap: narrow ? 18 : 26,
+                nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
+                axisLine: gridStyles().axisLine,
+                splitLine: gridStyles().splitLine,
+                axisLabel: {
+                    color: theme.softText,
+                    fontFamily: theme.dataFont || undefined,
+                    formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
+                },
+            },
+            series: series,
+        };
+    }
+
     function buildRibbonOption(market, fields, size) {
+        if (market.bankRibbons && market.bankRibbons.length) {
+            return buildHlLvrRibbonOption(market, fields, size);
+        }
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;

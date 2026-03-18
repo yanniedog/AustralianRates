@@ -112,6 +112,26 @@
     min-width: 0;
 }
 
+.chart-structure-filters-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chart-structure-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+}
+
+.chart-structure-filters .chart-structure-checkbox {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
 .chart-preset,
 .tab-btn {
     border-radius: 999px;

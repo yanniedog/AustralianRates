@@ -20,6 +20,7 @@
         ? network.describeError
         : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
 
+    var section = (window.AR && window.AR.section) || document.body.getAttribute('data-ar-section') || 'home-loans';
     var chartState = {
         rows: [],
         totalRows: 0,
@@ -35,7 +36,17 @@
         tdPlayInterval: null,
         mainChart: null,
         detailChart: null,
+        includedRateStructures: section === 'home-loans' ? ['variable'] : null,
     };
+    var HL_RATE_STRUCTURES = [
+        { value: 'variable', label: 'Variable' },
+        { value: 'fixed_1yr', label: '1y fixed' },
+        { value: 'fixed_2yr', label: '2y fixed' },
+        { value: 'fixed_3yr', label: '3y fixed' },
+        { value: 'fixed_4yr', label: '4y fixed' },
+        { value: 'fixed_5yr', label: '5y fixed' },
+    ];
+    var structureFiltersBound = false;
     var responsiveSyncTimer = 0;
     var resizeObserver = null;
     var chartLoadPromise = null;
@@ -165,6 +176,37 @@
         return !!(els.chartOutput && window.getComputedStyle(els.chartOutput).display !== 'none');
     }
 
+    function ensureStructureFiltersUi() {
+        if (section !== 'home-loans' || !els.chartStructureFilters || !els.chartStructureFiltersWrap) {
+            if (els.chartStructureFiltersWrap) els.chartStructureFiltersWrap.style.display = section === 'home-loans' ? '' : 'none';
+            return;
+        }
+        els.chartStructureFiltersWrap.style.display = '';
+        if (structureFiltersBound) return;
+        structureFiltersBound = true;
+        var container = els.chartStructureFilters;
+        HL_RATE_STRUCTURES.forEach(function (item) {
+            var label = document.createElement('label');
+            label.className = 'chart-structure-checkbox';
+            var input = document.createElement('input');
+            input.type = 'checkbox';
+            input.setAttribute('data-rate-structure', item.value);
+            input.checked = chartState.includedRateStructures && chartState.includedRateStructures.indexOf(item.value) >= 0;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(' ' + item.label));
+            container.appendChild(label);
+        });
+        container.addEventListener('change', function () {
+            var checked = [];
+            container.querySelectorAll('input[type="checkbox"]:checked').forEach(function (input) {
+                var v = input.getAttribute('data-rate-structure');
+                if (v) checked.push(v);
+            });
+            chartState.includedRateStructures = checked.length ? checked : null;
+            refreshFromCache('structure-filter');
+        });
+    }
+
     function scheduleResponsiveSync() {
         scheduleResizeCharts();
         if (responsiveSyncTimer) window.clearTimeout(responsiveSyncTimer);
@@ -179,6 +221,7 @@
     }
 
     function renderFromCache() {
+        ensureStructureFiltersUi();
         if (!chartState.rows.length) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('WAIT');

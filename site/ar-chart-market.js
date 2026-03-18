@@ -28,6 +28,13 @@
     var MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     var SAVINGS_RATE_TYPE_ORDER = { base: 0, bonus: 1, introductory: 2, intro: 2, bundle: 3 };
     var SAVINGS_ACCOUNT_ORDER = { transaction: 0, at_call: 1, savings: 2 };
+    /** LVR tier order: lowest to highest (for ribbon low/high edge). */
+    var LVR_TIER_ORDER = ['lvr_=60%', 'lvr_60-70%', 'lvr_70-80%', 'lvr_80-85%', 'lvr_85-90%', 'lvr_90-95%'];
+
+    function lvrTierSortIndex(lvrTier) {
+        var idx = LVR_TIER_ORDER.indexOf(String(lvrTier || ''));
+        return idx >= 0 ? idx : 999;
+    }
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -469,18 +476,44 @@
         });
 
         var curveTitle = section === 'home-loans' ? 'Borrowing cost by structure' : section === 'term-deposits' ? 'Yield by term' : (chosenSavingsField === 'deposit_tier' ? 'Rate by balance tier' : 'Rate by tier or type');
+        var style = curveStyle(fields.chartType);
+        var bankRibbons = null;
+        if (section === 'home-loans' && style === 'ribbon') {
+            bankRibbons = visibleBanks.map(function (bankName, index) {
+                var points = categories.map(function (category) {
+                    var bankRows = category.rows.filter(function (entry) { return String(entry.row && entry.row.bank_name || '') === bankName; });
+                    if (!bankRows.length) return null;
+                    bankRows.sort(function (a, b) {
+                        return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier);
+                    });
+                    var low = bankRows[0];
+                    var high = bankRows[bankRows.length - 1];
+                    var lowLvr = low && low.row ? String(low.row.lvr_tier || '') : '';
+                    var highLvr = high && high.row ? String(high.row.lvr_tier || '') : '';
+                    return {
+                        bucketKey: category.key,
+                        lowRate: low && Number.isFinite(low.value) ? low.value : null,
+                        highRate: high && Number.isFinite(high.value) ? high.value : null,
+                        lowLvrLabel: humanField('lvr_tier', lowLvr, low && low.row),
+                        highLvrLabel: humanField('lvr_tier', highLvr, high && high.row),
+                    };
+                });
+                return { bankName: bankName, colorIndex: index, points: points };
+            });
+        }
         return {
             snapshotDate: snapshot.snapshotDate,
             snapshotDateDisplay: humanField('collection_date', snapshot.snapshotDate, null),
             dimensionLabel: categories[0].dimensionLabel,
             dimensionField: section === 'savings' ? chosenSavingsField : (section === 'term-deposits' ? 'term_months' : 'rate_structure'),
             curveTitle: curveTitle,
-            style: curveStyle(fields.chartType),
+            style: style,
             direction: direction,
             bestLabel: direction === 'asc' ? 'Lowest' : 'Highest',
             categories: categories,
             bucketByKey: byKey,
             bankCurves: bankCurves,
+            bankRibbons: bankRibbons,
             focusBucket: focusBucket(categories, selectionState),
         };
     }

@@ -43,6 +43,32 @@
             'term-deposits': ['#d89f00', '#2563eb', '#0f8a5f', '#ea580c', '#7c3aed', '#dc2626'],
         }
     };
+    /** Bank name (normalized lower) -> hex colour for ribbon/labels. Fallback to section palette by index. */
+    var BANK_ACCENT_COLORS = {
+        'commonwealth bank of australia': '#f01428',
+        'westpac banking corporation': '#d4002a',
+        'anz': '#0057b7',
+        'national australia bank': '#e4002b',
+        'macquarie bank': '#c4122e',
+        'ing': '#ff6200',
+        'ubank': '#7d3e84',
+        'bankwest': '#e31837',
+        'bendigo and adelaide bank': '#e31837',
+        'bank of melbourne': '#e4002b',
+        'st. george bank': '#e4002b',
+        'bank of queensland': '#e4002b',
+        'suncorp bank': '#e31837',
+        'great southern bank': '#00a651',
+        'hsbc australia': '#db0011',
+        'amp bank': '#00a651',
+    };
+
+    function bankAccentColor(bankName, index) {
+        var key = bankName ? String(bankName).trim().toLowerCase().replace(/\s+/g, ' ') : '';
+        if (key && BANK_ACCENT_COLORS[key]) return BANK_ACCENT_COLORS[key];
+        var pal = palette();
+        return pal && pal[index % pal.length] ? pal[index % pal.length] : '#4f8dfd';
+    }
 
     var DENSITIES = {
         compact: { key: 'compact', label: 'Compact', rowLimit: 12, compareLimit: 4 },
@@ -129,11 +155,15 @@
     }
 
     function defaultView() {
-        return 'market';
+        return section === 'home-loans' ? 'slope' : 'market';
     }
 
     function defaultMetric() {
         return 'interest_rate';
+    }
+
+    function defaultChartType() {
+        return section === 'home-loans' ? 'bar' : 'scatter';
     }
 
     function defaultFields() {
@@ -141,13 +171,14 @@
             xField: 'collection_date',
             yField: defaultMetric(),
             groupField: 'product_key',
-            chartType: 'scatter',
+            chartType: defaultChartType(),
             density: 'standard',
             view: defaultView(),
         };
     }
 
     window.AR.chartConfig = {
+        bankAccentColor: bankAccentColor,
         defaultFields: defaultFields,
         defaultView: defaultView,
         defaultMetric: defaultMetric,

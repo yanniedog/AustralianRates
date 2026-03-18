@@ -119,8 +119,8 @@
     var BASE_CHART_VIEWS = [
         { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best rate now per lender.' },
         { value: 'ladder', label: 'Ladder', icon: 'chart', help: 'Rank and value: who is first and by how much.' },
-        { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: true },
-        { value: 'slope', label: 'Slope', icon: 'compare', help: 'Who moved? Rate change between two dates.' },
+        { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: section !== 'home-loans' },
+        { value: 'slope', label: 'Slope', icon: 'compare', help: 'Who moved? Rate change between two dates.', selected: section === 'home-loans' },
         { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate over time (heatmap).' },
         { value: 'compare', label: 'Compare', icon: 'compare', help: 'Selected products over time.' },
         { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Spread by group.' }
@@ -224,8 +224,8 @@
                 { value: 'repayment_type', label: 'Repayment' }
             ],
             chartTypes: [
-                { value: 'scatter', label: 'Line', selected: true },
-                { value: 'bar', label: 'Ribbon' },
+                { value: 'scatter', label: 'Line', selected: false },
+                { value: 'bar', label: 'Ribbon', selected: true },
                 { value: 'box', label: 'Box-whisker' }
             ]
         },
@@ -609,12 +609,22 @@
                                     '</label>',
                                     '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="History basis">',
                                         iconText('history', 'History basis', 'field-code'),
-                                        '<select id="chart-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
+                                        '<select id="chart-representation">' +
+                                        (section === 'home-loans'
+                                            ? '<option value="change">Change basis</option><option value="day" selected>Daily basis</option>'
+                                            : '<option value="change" selected>Change basis</option><option value="day">Daily basis</option>') +
+                                        '</select>',
                                     '</label>',
                                     '<label class="terminal-field" data-help="Line, ribbon, or box-whisker. Applies to Curve view only." data-help-label="Curve style">',
                                         iconText('chart', 'Curve style (Curve only)', 'field-code'),
                                         '<select id="chart-type">' + optionsMarkup(ui.chartTypes || BASE_CHART_TYPES) + '</select>',
-                                    '</label>',
+                                    '</label>' +
+                                    (section === 'home-loans'
+                                        ? '<div class="terminal-field chart-structure-filters-wrap" id="chart-structure-filters-wrap" data-help="Include or exclude rate structures in slope and curve charts. Variable only by default." data-help-label="Show structures">' +
+                                            '<span class="field-code">' + (typeof iconText === 'function' ? iconText('compare', 'Show structures', 'field-code') : 'Show structures') + '</span>' +
+                                            '<div id="chart-structure-filters" class="chart-structure-filters" role="group" aria-label="Rate structures to show"></div>' +
+                                            '</div>'
+                                        : ''),
                                 '</div>',
                             '</details>',
                             '<p id="chart-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',

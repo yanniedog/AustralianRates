@@ -64,6 +64,8 @@
         chartType: document.getElementById('chart-type'),
         chartSeriesLimit: document.getElementById('chart-series-limit'),
         chartRepresentation: document.getElementById('chart-representation'),
+        chartStructureFilters: document.getElementById('chart-structure-filters'),
+        chartStructureFiltersWrap: document.getElementById('chart-structure-filters-wrap'),
         drawChart: document.getElementById('draw-chart'),
         chartOutput: document.getElementById('chart-output'),
         chartStatus: document.getElementById('chart-status'),
