@@ -940,6 +940,8 @@
             };
         }
         if (market.style === 'box') return buildBoxOption(market, fields, size);
+        if (market.style === 'ribbon' && market.bankRibbons && market.bankRibbons.length) return buildRibbonOption(market, fields, size);
+        if (market.bankLvrCurves && market.bankLvrCurves.length) return buildLineOption(market, fields, size);
         if (market.style === 'ribbon') return buildRibbonOption(market, fields, size);
         return buildLineOption(market, fields, size);
     }
