@@ -274,7 +274,8 @@
         return homeLoanBucket(row, snapshotDate);
     }
 
-    function chooseVisibleBanks(categories, direction) {
+    function chooseVisibleBanks(categories, direction, maxBanks) {
+        var limit = maxBanks != null && maxBanks > 0 ? maxBanks : 4;
         var bankStats = {};
         categories.forEach(function (category) {
             category.bankEntries.forEach(function (entry) {
@@ -295,7 +296,7 @@
             var metricSort = compareBucketValues(direction, left.average, right.average);
             if (metricSort !== 0) return metricSort;
             return String(left.bankName).localeCompare(String(right.bankName));
-        }).slice(0, 4).map(function (entry) { return entry.bankName; });
+        }).slice(0, limit).map(function (entry) { return entry.bankName; });
     }
 
     function focusBucket(categories, selectionState) {
@@ -504,7 +505,7 @@
                 };
             });
             if (!categories.length) return null;
-            var visibleBanks = chooseVisibleBanks(categories, direction);
+            var visibleBanks = chooseVisibleBanks(categories, direction, 8);
             var byKey = {};
             categories.forEach(function (c) { byKey[c.key] = c; });
             var consistentLvr = computeConsistentLvrPerBank(allRows);
