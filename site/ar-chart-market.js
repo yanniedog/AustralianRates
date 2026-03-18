@@ -587,9 +587,6 @@
                 });
             });
 
-            // #region agent log
-            try { fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'16a5eb'},body:JSON.stringify({sessionId:'16a5eb',runId:'pre-fix',hypothesisId:'H1',location:'ar-chart-market.js:buildMarketModel',message:'HL market ribbon branch produces LVR lines',data:{dateCount:categories.length,visibleBanks:visibleBanks.length,curves:bankLvrCurves.length,firstDate:categories[0]&&categories[0].key,lastDate:categories[categories.length-1]&&categories[categories.length-1].key},timestamp:Date.now()})}).catch(function(){});} catch(e) {}
-            // #endregion
             var lastCategory = categories[categories.length - 1];
             return {
                 snapshotDate: lastCategory ? lastCategory.key : '',

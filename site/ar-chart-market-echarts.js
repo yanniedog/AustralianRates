@@ -180,10 +180,6 @@
                 });
             });
 
-            // #region agent log
-            try { fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'16a5eb'},body:JSON.stringify({sessionId:'16a5eb',runId:'pre-fix',hypothesisId:'H2',location:'ar-chart-market-echarts.js:buildLineOption',message:'Rendering HL per-LVR lines',data:{seriesCount:series.length,legendCount:series.length,xCount:market.categories&&market.categories.length,sample:series.slice(0,6).map(function(s){return {name:s.name,color:s.lineStyle&&s.lineStyle.color};})},timestamp:Date.now()})}).catch(function(){});} catch(e) {}
-            // #endregion
-
             return {
                 textStyle: base.textStyle,
                 animationDuration: base.animationDuration,
