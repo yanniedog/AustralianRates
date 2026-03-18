@@ -828,6 +828,18 @@
                 '<p class=\"table-settings-title\">Visible columns</p>' +
                 (items.length ? items.join('') : '<p class=\"table-settings-empty\">No configurable columns.</p>') +
             '</div>';
+
+        // Ensure checkboxes toggle deterministically (Playwright + some overlay edge cases).
+        Array.prototype.slice.call(els.tableSettingsPopover.querySelectorAll('input[type=\"checkbox\"]')).forEach(function (input) {
+            if (!input || input.__arClickBound) return;
+            input.__arClickBound = true;
+            input.addEventListener('click', function (event) {
+                if (event && typeof event.preventDefault === 'function') event.preventDefault();
+                if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+                input.checked = !input.checked;
+                try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+            }, true);
+        });
     }
 
     function setSettingsOpen(open) {
