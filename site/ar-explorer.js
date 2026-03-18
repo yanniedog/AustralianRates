@@ -867,13 +867,13 @@
         els.tableSettingsPopover.addEventListener('click', function (event) {
             var target = event && event.target;
             if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return;
-            var prior = null;
-            try { prior = target.__arPointerDownChecked; } catch (_) { prior = null; }
-            if (prior == null) return;
-            if (!!target.checked === !!prior) {
-                target.checked = !target.checked;
+            var before = !!target.checked;
+            setTimeout(function () {
+                if (!target) return;
+                if (!!target.checked !== before) return;
+                target.checked = !before;
                 try { target.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
-            }
+            }, 0);
         }, true);
 
         els.tableSettingsBtn.addEventListener('click', function (event) {
