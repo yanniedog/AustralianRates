@@ -428,7 +428,137 @@
     }
 
     function buildMarketModel(rows, fields, selectionState) {
-        var snapshot = snapshotRows(rows || []);
+        var allRows = rows || [];
+        var style = curveStyle(fields.chartType);
+
+        if (section === 'home-loans' && style === 'ribbon') {
+            var variableRows = allRows.filter(function (row) { return String(row && row.rate_structure || '') === 'variable'; });
+            if (!variableRows.length) return null;
+            var dateKeys = [];
+            var dateSet = {};
+            variableRows.forEach(function (row) {
+                var d = String(row && row.collection_date || '');
+                if (d && !dateSet[d]) { dateSet[d] = true; dateKeys.push(d); }
+            });
+            dateKeys.sort(compareDates);
+            if (!dateKeys.length) return null;
+            var direction = marketDirection(fields.yField);
+            var categoriesByKey = {};
+            dateKeys.forEach(function (date) {
+                categoriesByKey[date] = {
+                    key: date,
+                    label: humanField('collection_date', date, null),
+                    shortLabel: date,
+                    secondaryLabel: '',
+                    sortValue: date,
+                    dimensionLabel: 'Date',
+                    rows: [],
+                    bankMap: {},
+                };
+            });
+            variableRows.forEach(function (row) {
+                var date = String(row && row.collection_date || '');
+                var category = categoriesByKey[date];
+                if (!category) return;
+                var value = numericValue(row, fields.yField);
+                if (!Number.isFinite(value)) return;
+                category.rows.push({ row: row, value: value });
+                var bankName = String(row.bank_name || 'Unknown bank');
+                var existingBank = category.bankMap[bankName];
+                if (!existingBank) {
+                    category.bankMap[bankName] = { bankName: bankName, value: value, row: row };
+                } else {
+                    var better = betterValue(direction, existingBank.value, value);
+                    if (better === value) category.bankMap[bankName] = { bankName: bankName, value: value, row: row };
+                }
+            });
+            var categories = dateKeys.map(function (key) {
+                var category = categoriesByKey[key];
+                var values = category.rows.map(function (entry) { return entry.value; }).sort(function (a, b) { return a - b; });
+                var bankEntries = Object.keys(category.bankMap).map(function (bankName) { return category.bankMap[bankName]; }).sort(function (left, right) {
+                    var metricSort = compareBucketValues(direction, left.value, right.value);
+                    if (metricSort !== 0) return metricSort;
+                    return String(left.bankName).localeCompare(String(right.bankName));
+                });
+                var total = values.reduce(function (sum, v) { return sum + v; }, 0);
+                return {
+                    key: category.key,
+                    label: category.label,
+                    shortLabel: category.shortLabel,
+                    secondaryLabel: category.secondaryLabel,
+                    dimensionLabel: category.dimensionLabel,
+                    sortValue: category.sortValue,
+                    rows: category.rows,
+                    rowCount: category.rows.length,
+                    bankCount: bankEntries.length,
+                    min: values[0],
+                    q1: quantile(values, 0.25),
+                    median: quantile(values, 0.5),
+                    q3: quantile(values, 0.75),
+                    max: values[values.length - 1],
+                    mean: values.length ? total / values.length : null,
+                    bestValue: bankEntries.length ? bankEntries[0].value : null,
+                    bestRow: bankEntries.length ? bankEntries[0].row : null,
+                    bankEntries: bankEntries,
+                    box: values.length ? [values[0], quantile(values, 0.25), quantile(values, 0.5), quantile(values, 0.75), values[values.length - 1]] : [],
+                };
+            });
+            if (!categories.length) return null;
+            var visibleBanks = chooseVisibleBanks(categories, direction);
+            var byKey = {};
+            categories.forEach(function (c) { byKey[c.key] = c; });
+            var consistentLvr = computeConsistentLvrPerBank(allRows);
+            var bankRibbons = visibleBanks.map(function (bankName, index) {
+                var bankRange = consistentLvr[bankName] || { lowLvr: '', highLvr: '' };
+                var lowLvrTier = bankRange.lowLvr;
+                var highLvrTier = bankRange.highLvr;
+                var points = categories.map(function (category) {
+                    var bankRows = category.rows.filter(function (entry) { return String(entry.row && entry.row.bank_name || '') === bankName; });
+                    if (!bankRows.length) return null;
+                    var lowEntry = lowLvrTier ? bankRows.find(function (e) { return String(e.row && e.row.lvr_tier || '') === lowLvrTier; }) : null;
+                    var highEntry = highLvrTier ? bankRows.find(function (e) { return String(e.row && e.row.lvr_tier || '') === highLvrTier; }) : null;
+                    if (!lowEntry && bankRows.length) {
+                        bankRows = bankRows.slice().sort(function (a, b) { return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier); });
+                        lowEntry = bankRows[0];
+                    }
+                    if (!highEntry && bankRows.length) {
+                        var sortedByLvr = bankRows.slice().sort(function (a, b) { return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier); });
+                        highEntry = sortedByLvr[sortedByLvr.length - 1];
+                    }
+                    var lowRate = lowEntry && Number.isFinite(lowEntry.value) ? lowEntry.value : null;
+                    var highRate = highEntry && Number.isFinite(highEntry.value) ? highEntry.value : null;
+                    var lowLvrLabel = humanField('lvr_tier', lowLvrTier || (lowEntry && lowEntry.row ? String(lowEntry.row.lvr_tier || '') : ''), lowEntry && lowEntry.row);
+                    var highLvrLabel = humanField('lvr_tier', highLvrTier || (highEntry && highEntry.row ? String(highEntry.row.lvr_tier || '') : ''), highEntry && highEntry.row);
+                    return { bucketKey: category.key, lowRate: lowRate, highRate: highRate, lowLvrLabel: lowLvrLabel, highLvrLabel: highLvrLabel };
+                });
+                return { bankName: bankName, colorIndex: index, points: points };
+            });
+            var lastCategory = categories[categories.length - 1];
+            return {
+                snapshotDate: lastCategory ? lastCategory.key : '',
+                snapshotDateDisplay: lastCategory ? humanField('collection_date', lastCategory.key, null) : '',
+                dimensionLabel: 'Date',
+                dimensionField: 'collection_date',
+                curveTitle: 'Variable rate by date (LVR band)',
+                style: 'ribbon',
+                direction: direction,
+                bestLabel: direction === 'asc' ? 'Lowest' : 'Highest',
+                categories: categories,
+                bucketByKey: byKey,
+                bankCurves: visibleBanks.map(function (bankName, index) {
+                    var points = categories.map(function (category) {
+                        var bankEntry = category.bankEntries.find(function (e) { return e.bankName === bankName; });
+                        if (!bankEntry) return null;
+                        return { bucketKey: category.key, value: bankEntry.value, row: bankEntry.row };
+                    });
+                    return { bankName: bankName, colorIndex: index, points: points, rateType: '', lineDashed: false };
+                }),
+                bankRibbons: bankRibbons,
+                focusBucket: focusBucket(categories, selectionState),
+            };
+        }
+
+        var snapshot = snapshotRows(allRows);
         var latestRows = snapshot.rows || [];
         if (!latestRows.length) return null;
 
