@@ -215,7 +215,7 @@
         return out;
     }
 
-    /** Min and max date from all series points; max is at least today so axis extends to current day. */
+    /** Min and max date from all series points (no extension to today; axis span = first to last snapshot). */
     function dateRangeFromSeries(seriesList) {
         var minDate = null;
         var maxDate = null;
@@ -229,13 +229,13 @@
             });
         });
         if (!minDate || !maxDate) return { minDate: today, maxDate: today };
-        if (maxDate < today) maxDate = today;
         return { minDate: minDate, maxDate: maxDate };
     }
 
+    /** X-axis labels = sorted unique snapshot dates so first tick = first snapshot and all snapshots spread over full span. */
     function buildSurfaceModel(seriesList) {
-        var range = dateRangeFromSeries(seriesList);
-        var xLabels = allDaysInRange(range.minDate, range.maxDate);
+        var xLabels = uniqueDates(seriesList);
+        if (!xLabels.length) xLabels = [todayYmd()];
         var indexByDate = {};
         var min = null;
         var max = null;

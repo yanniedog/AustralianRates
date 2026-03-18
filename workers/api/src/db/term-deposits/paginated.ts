@@ -81,6 +81,30 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
   }
 }
 
+const TD_JOIN = `
+    FROM historical_term_deposit_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'term_deposits'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id`
+
+/** Min and max collection_date for the given filters (date filters omitted). */
+export async function queryTdCollectionDateRange(
+  db: D1Database,
+  filters: Omit<TdPaginatedFilters, 'startDate' | 'endDate'> & { startDate?: string; endDate?: string },
+): Promise<{ startDate: string; endDate: string } | null> {
+  const rangeFilters = { ...filters, startDate: undefined, endDate: undefined }
+  const { clause: whereClause, binds } = buildWhere(rangeFilters)
+  const row = await db
+    .prepare(
+      `SELECT MIN(h.collection_date) AS min_date, MAX(h.collection_date) AS max_date ${TD_JOIN} ${whereClause}`,
+    )
+    .bind(...binds)
+    .first<{ min_date: string | null; max_date: string | null }>()
+  if (!row?.min_date || !row?.max_date) return null
+  return { startDate: row.min_date, endDate: row.max_date }
+}
+
 export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilters, maxRows = 10000) {
   const { clause: whereClause, binds } = buildWhere(filters)
   const sortCol = SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'

@@ -526,3 +526,73 @@ export async function queryRatesForExport(
     source_mix: { scheduled, manual },
   }
 }
+
+const HL_JOIN = `
+    FROM historical_loan_rates h
+    LEFT JOIN product_presence_status pps
+      ON pps.section = 'home_loans'
+      AND pps.bank_name = h.bank_name
+      AND pps.product_id = h.product_id`
+
+function buildHomeLoanWhereNoDates(filters: RatesPaginatedFilters): { whereClause: string; binds: Array<string | number> } {
+  const where: string[] = []
+  const binds: Array<string | number> = []
+  where.push('h.interest_rate BETWEEN ? AND ?')
+  binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
+  addRateBoundsWhere(where, binds, 'h.interest_rate', 'h.comparison_rate', filters)
+  where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
+  if (filters.mode === 'daily') {
+    where.push("h.data_quality_flag NOT LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_DAILY)
+  } else if (filters.mode === 'historical') {
+    where.push("h.data_quality_flag LIKE 'parsed_from_wayback%'")
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_HISTORICAL)
+  } else {
+    where.push('h.confidence_score >= ?')
+    binds.push(MIN_CONFIDENCE_ALL)
+  }
+  addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
+  if (filters.securityPurpose) {
+    where.push('h.security_purpose = ?')
+    binds.push(filters.securityPurpose)
+  }
+  if (filters.repaymentType) {
+    where.push('h.repayment_type = ?')
+    binds.push(filters.repaymentType)
+  }
+  if (filters.rateStructure) {
+    where.push('h.rate_structure = ?')
+    binds.push(filters.rateStructure)
+  }
+  if (filters.lvrTier) {
+    where.push('h.lvr_tier = ?')
+    binds.push(filters.lvrTier)
+  }
+  if (filters.featureSet) {
+    where.push('h.feature_set = ?')
+    binds.push(filters.featureSet)
+  }
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+  }
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  return { whereClause, binds }
+}
+
+/** Min and max collection_date in historical_loan_rates for the given filters (date filters omitted). */
+export async function queryHomeLoanCollectionDateRange(
+  db: D1Database,
+  filters: Omit<RatesPaginatedFilters, 'startDate' | 'endDate'> & { startDate?: string; endDate?: string },
+): Promise<{ startDate: string; endDate: string } | null> {
+  const { whereClause, binds } = buildHomeLoanWhereNoDates(filters as RatesPaginatedFilters)
+  const row = await db
+    .prepare(
+      `SELECT MIN(h.collection_date) AS min_date, MAX(h.collection_date) AS max_date ${HL_JOIN} ${whereClause}`,
+    )
+    .bind(...binds)
+    .first<{ min_date: string | null; max_date: string | null }>()
+  if (!row?.min_date || !row?.max_date) return null
+  return { startDate: row.min_date, endDate: row.max_date }
+}

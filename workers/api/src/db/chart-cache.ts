@@ -4,6 +4,9 @@
  */
 
 import type { EnvBindings } from '../types'
+import { queryHomeLoanCollectionDateRange } from './home-loans/paginated'
+import { querySavingsCollectionDateRange } from './savings/paginated'
+import { queryTdCollectionDateRange } from './term-deposits/paginated'
 
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
 
@@ -78,26 +81,33 @@ async function gunzipFromBase64(b64: string): Promise<string> {
   }
   const ds = new DecompressionStream('gzip')
   const gzBytes = base64ToBytes(b64)
-  const stream = new Blob([gzBytes]).stream().pipeThrough(ds) as ReadableStream<Uint8Array>
+  const ab = gzBytes.buffer.slice(gzBytes.byteOffset, gzBytes.byteOffset + gzBytes.byteLength) as ArrayBuffer
+  const stream = new Blob([ab]).stream().pipeThrough(ds) as ReadableStream<Uint8Array>
   const bytes = await streamToUint8Array(stream)
   return new TextDecoder().decode(bytes)
 }
 
-/** Default date range for precomputed cache: last 365 days inclusive (at least 20 consecutive daily snapshots for charts). */
-export function getDefaultDateRange(): { startDate: string; endDate: string } {
-  const end = new Date()
-  const start = new Date(end)
-  start.setDate(start.getDate() - 365)
-  return { startDate: toYmd(start), endDate: toYmd(end) }
-}
-
-/** When start or end is missing, applies default range so chart requests always have at least 20 consecutive daily snapshots. */
-export function applyDefaultChartDateRange<T extends { startDate?: string; endDate?: string }>(filters: T): T {
+/** When start or end is missing, resolves range from DB (first to last snapshot for the section/filters). Returns filters with dates set. */
+export async function resolveChartDateRangeFromDb(
+  db: D1Database,
+  section: ChartCacheSection,
+  filters: Record<string, unknown> & { startDate?: string; endDate?: string },
+): Promise<Record<string, unknown> & { startDate: string; endDate: string }> {
   const start = filters.startDate?.trim()
   const end = filters.endDate?.trim()
-  if (start && end) return filters
-  const def = getDefaultDateRange()
-  return { ...filters, startDate: start || def.startDate, endDate: end || def.endDate }
+  if (start && end) return { ...filters, startDate: start, endDate: end }
+  let range: { startDate: string; endDate: string } | null = null
+  if (section === 'home_loans') {
+    range = await queryHomeLoanCollectionDateRange(db, filters as Parameters<typeof queryHomeLoanCollectionDateRange>[1])
+  } else if (section === 'savings') {
+    range = await querySavingsCollectionDateRange(db, filters as Parameters<typeof querySavingsCollectionDateRange>[1])
+  } else if (section === 'term_deposits') {
+    range = await queryTdCollectionDateRange(db, filters as Parameters<typeof queryTdCollectionDateRange>[1])
+  }
+  const fallback = toYmd(new Date())
+  const startDate = start || range?.startDate || fallback
+  const endDate = end || range?.endDate || fallback
+  return { ...filters, startDate, endDate }
 }
 
 type DefaultCheckInput = {
@@ -118,13 +128,7 @@ export function isDefaultChartRequest(
   if (params.bank || (params.banks && params.banks.length > 0)) return false
   if (params.includeRemoved) return false
   if (params.mode && params.mode !== 'all') return false
-  const { startDate: defaultStart, endDate: defaultEnd } = getDefaultDateRange()
-  const start = params.startDate?.trim()
-  const end = params.endDate?.trim()
-  if (start || end) {
-    if (!start || !end) return false
-    if (start !== defaultStart || end !== defaultEnd) return false
-  }
+  if (params.startDate?.trim() || params.endDate?.trim()) return false
   if (section === 'home_loans') {
     const h = params as DefaultCheckInput & { securityPurpose?: string; repaymentType?: string; rateStructure?: string; lvrTier?: string; featureSet?: string; minRate?: number; maxRate?: number; minComparisonRate?: number; maxComparisonRate?: number }
     if (h.securityPurpose || h.repaymentType || h.rateStructure || h.lvrTier || h.featureSet) return false

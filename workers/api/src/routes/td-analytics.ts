@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { applyDefaultChartDateRange, getCachedOrCompute } from '../db/chart-cache'
+import { getCachedOrCompute, resolveChartDateRangeFromDb } from '../db/chart-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
@@ -38,13 +38,18 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
     const merged = { ...c.req.query() } as Record<string, string | undefined>
     const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
     const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
+    const baseFilters = buildFilters(merged)
+    const resolvedFilters =
+      baseFilters.startDate && baseFilters.endDate
+        ? baseFilters
+        : await resolveChartDateRangeFromDb(dbs.canonicalDb, 'term_deposits', baseFilters)
     const result = await getCachedOrCompute(
       c.env,
       'term_deposits',
       requestedRepresentation,
       toParams(merged),
       () =>
-        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, applyDefaultChartDateRange(buildFilters(merged))).then((r) => ({
+        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, resolvedFilters).then((r) => ({
           rows: r.rows,
           representation: r.representation,
           fallbackReason: r.fallbackReason,
@@ -67,13 +72,18 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
     const merged = { ...c.req.query(), ...body } as Record<string, string | undefined>
     const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
     const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
+    const baseFilters = buildFilters(merged)
+    const resolvedFilters =
+      baseFilters.startDate && baseFilters.endDate
+        ? baseFilters
+        : await resolveChartDateRangeFromDb(dbs.canonicalDb, 'term_deposits', baseFilters)
     const result = await getCachedOrCompute(
       c.env,
       'term_deposits',
       requestedRepresentation,
       toParams(merged),
       () =>
-        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, applyDefaultChartDateRange(buildFilters(merged))).then((r) => ({
+        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, resolvedFilters).then((r) => ({
           rows: r.rows,
           representation: r.representation,
           fallbackReason: r.fallbackReason,
