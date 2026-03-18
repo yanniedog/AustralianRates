@@ -10,9 +10,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const ORIGIN: string = process.env.API_BASE
-  ? new URL(process.env.API_BASE).origin
-  : 'https://www.australianrates.com';
+/** Use production by default so DB stats always reflect live D1. Override with ADMIN_DB_STATS_ORIGIN if needed. */
+const ORIGIN: string =
+  process.env.ADMIN_DB_STATS_ORIGIN && process.env.ADMIN_DB_STATS_ORIGIN.trim()
+    ? new URL(process.env.ADMIN_DB_STATS_ORIGIN.trim()).origin
+    : 'https://www.australianrates.com';
 const STATS_URL = `${ORIGIN}/api/home-loan-rates/admin/db/stats`;
 
 const token = (
@@ -124,15 +126,28 @@ async function main(): Promise<void> {
       console.error('Missing ADMIN_API_TOKEN (or ADMIN_API_TOKENS) in environment. Set it in repo root .env.');
       process.exit(1);
     }
-    const res = await fetch(STATS_URL, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' as const };
+    let res = await fetch(STATS_URL, { headers });
     if (res.status === 401) {
       console.error('401 Unauthorized: token invalid or missing.');
       process.exit(1);
     }
+    if (res.status === 404) {
+      const auditUrl = `${ORIGIN}/api/home-loan-rates/admin/db/audit`;
+      const auditRes = await fetch(auditUrl, { headers });
+      if (auditRes.ok) {
+        const audit = (await auditRes.json()) as { tables?: { name: string; row_count: number }[] };
+        const tables = audit.tables ?? [];
+        const totalRows = tables.reduce((s, t) => s + (t.row_count > 0 ? t.row_count : 0), 0);
+        console.log('Total rows:', totalRows.toLocaleString());
+        console.log('Total size: (GET /admin/db/stats returned 404; check Cloudflare D1 dashboard for storage size.)');
+        process.exit(0);
+      }
+      console.error(`HTTP 404 at ${STATS_URL}; audit fallback also failed. Ensure the API worker is deployed with admin DB routes.`);
+      process.exit(1);
+    }
     if (!res.ok) {
-      console.error(`HTTP ${res.status} ${res.statusText}`);
+      console.error(`HTTP ${res.status} ${res.statusText} at ${STATS_URL}`);
       process.exit(1);
     }
     data = (await res.json()) as StatsResponse;
