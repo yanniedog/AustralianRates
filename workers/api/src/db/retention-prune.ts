@@ -6,13 +6,14 @@
 
 const GLOBAL_LOG_ERROR_WARN_RETENTION_DAYS = 14
 const GLOBAL_LOG_INFO_DEBUG_RETENTION_HOURS = 48
-/** Backend lineage/run data retained for integrity and validation only. */
-const BACKEND_RETENTION_DAYS = 3
+/** Backend lineage/run data: keep only 1 day for compact DB; admin diagnostics see last 24h. */
+const BACKEND_RETENTION_DAYS = 1
 const INGEST_ANOMALIES_RETENTION_DAYS = BACKEND_RETENTION_DAYS
-/** Run reports and related run-scoped rows older than this are pruned. */
 const RUN_REPORTS_RETENTION_DAYS = BACKEND_RETENTION_DAYS
-/** Fetch events older than this are pruned; admin remediation and CDR audit use recent lineage. */
 const FETCH_EVENTS_RETENTION_DAYS = BACKEND_RETENTION_DAYS
+/** Operational tables with no retention previously; keep 1 day for compact DB. */
+const DOWNLOAD_CHANGE_FEED_RETENTION_DAYS = BACKEND_RETENTION_DAYS
+const CLIENT_HISTORICAL_RETENTION_DAYS = BACKEND_RETENTION_DAYS
 
 /**
  * Delete global_log rows by level: debug/info older than 48h; warn/error older than 14d.
@@ -155,6 +156,40 @@ export async function pruneRawObjectsOrphans(db: D1Database): Promise<void> {
 }
 
 /**
+ * Delete download_change_feed rows older than DOWNLOAD_CHANGE_FEED_RETENTION_DAYS.
+ * Keeps admin download/change feed bounded; compact DB.
+ */
+export async function pruneDownloadChangeFeed(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `DELETE FROM download_change_feed WHERE emitted_at < datetime('now', ?1)`,
+      )
+      .bind(`-${DOWNLOAD_CHANGE_FEED_RETENTION_DAYS} days`)
+      .run()
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Delete client_historical_runs (and CASCADE tasks/batches) older than CLIENT_HISTORICAL_RETENTION_DAYS.
+ * Keeps historical pull orchestration data bounded; compact DB.
+ */
+export async function pruneClientHistoricalRuns(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `DELETE FROM client_historical_runs WHERE created_at < datetime('now', ?1)`,
+      )
+      .bind(`-${CLIENT_HISTORICAL_RETENTION_DAYS} days`)
+      .run()
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Run all retention prunes. Safe to call from any context; failures are swallowed.
  */
 export async function runRetentionPrunes(db: D1Database): Promise<void> {
@@ -164,4 +199,6 @@ export async function runRetentionPrunes(db: D1Database): Promise<void> {
   await pruneRawPayloadsOrphans(db)
   await pruneFetchEvents(db)
   await pruneRawObjectsOrphans(db)
+  await pruneDownloadChangeFeed(db)
+  await pruneClientHistoricalRuns(db)
 }

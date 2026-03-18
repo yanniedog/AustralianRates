@@ -9,15 +9,17 @@ High-churn tables are pruned so they stay bounded. Pruning runs after every heal
 | Table | Retention | Implemented in |
 |-------|-----------|----------------|
 | `global_log` | 14 days (warn/error), 48 hours (info/debug) | `workers/api/src/db/retention-prune.ts` |
-| `ingest_anomalies` | 3 days | `workers/api/src/db/retention-prune.ts` |
-| `health_check_runs` | 3 days | `workers/api/src/db/health-check-runs.ts` |
-| `integrity_audit_runs` | 3 days | `workers/api/src/db/integrity-audit-runs.ts` |
-| `run_reports` (+ run_seen_*, lender_dataset_runs) | 3 days | `workers/api/src/db/retention-prune.ts` |
-| `fetch_events` | 3 days | `workers/api/src/db/retention-prune.ts` |
+| `ingest_anomalies` | 1 day | `workers/api/src/db/retention-prune.ts` |
+| `health_check_runs` | 1 day | `workers/api/src/db/health-check-runs.ts` |
+| `integrity_audit_runs` | 1 day | `workers/api/src/db/integrity-audit-runs.ts` |
+| `run_reports` (+ run_seen_*, lender_dataset_runs) | 1 day | `workers/api/src/db/retention-prune.ts` |
+| `fetch_events` | 1 day | `workers/api/src/db/retention-prune.ts` |
 | `raw_objects` | Orphan cleanup (content_hash not in fetch_events) | `workers/api/src/db/retention-prune.ts` |
 | `raw_payloads` | Orphan cleanup (no matching raw_objects) | `workers/api/src/db/retention-prune.ts` |
+| `download_change_feed` | 1 day | `workers/api/src/db/retention-prune.ts` |
+| `client_historical_runs` (+ tasks, batches CASCADE) | 1 day | `workers/api/src/db/retention-prune.ts` |
 
-Effects: less D1 storage, faster `COUNT(*)` and `ORDER BY ts DESC` on log/anomaly tables, less data transferred on admin log queries and dumps. For the full optimization plan (invariants: front-end data never lost, admin status/integrity pragmatic), see `docs/database-optimization-plan.md`.
+Effects: compact D1 (1-day backend), faster queries, less storage. Retention runs after every health check (~every 15 min). To compact immediately after deploy (without waiting for the next health check), run from repo root with `ADMIN_API_TOKEN` in `.env`: `node trigger-retention.js`. For the full plan, see `docs/database-optimization-plan.md`.
 
 ## Log context size
 
@@ -61,17 +63,16 @@ Use sparingly; retention pruning alone keeps growth in check.
 The optimization plan in `docs/database-optimization-plan.md` is **fully implemented**:
 
 - **Front-end historical tables:** One row per (product_key, collection_date). Migration 0032 deduplicated existing data (preferring `run_source = 'scheduled'`, then latest `parsed_at`). The write path uses `ON CONFLICT` on the natural key so new inserts never create a second row for the same product and day.
-- **Backend retention:** fetch_events, run_reports (+ run_seen_*, lender_dataset_runs), ingest_anomalies, health_check_runs, integrity_audit_runs use 3-day retention. raw_objects and raw_payloads are pruned to the retained window. Retention runs after every health check (e.g. every 15 minutes via cron).
+- **Backend retention:** All backend/operational tables use **1-day** retention for a compact DB: fetch_events, run_reports (+ run_seen_*, lender_dataset_runs), ingest_anomalies, health_check_runs, integrity_audit_runs, download_change_feed, client_historical_runs (+ tasks/batches). raw_objects and raw_payloads are pruned to the retained fetch_events window. Retention runs after every health check (e.g. every 15 minutes via cron). Admin diagnostics (lineage, CDR audit) see the last 24 hours only.
 
-**Why total row count is still high:** Most rows are in **backend/operational** tables, not in the historical rate tables:
+**Row count after compaction:** Backend tables are pruned to 1 day, so total rows and size drop sharply. Largest remaining contributors:
 
-| Source | Typical share | Notes |
-|--------|----------------|-------|
-| fetch_events | Largest (~180k+ in 3-day window) | One row per HTTP fetch; many lenders × products per run |
-| run_seen_series, run_seen_products | ~68k, ~16k | 3-day retention; one per (run, series/product) |
-| download_change_feed, client_historical_tasks | ~62k, ~56k | Operational; no retention in plan (optional later) |
-| raw_objects | ~60k | 3-day window after fetch_events prune |
-| historical_loan_rates, historical_savings_rates, historical_term_deposit_rates | ~13k, ~7k, ~21k | **One row per product per day**; no intra-day duplicates |
+| Source | After 1-day retention | Notes |
+|--------|------------------------|-------|
+| fetch_events, raw_objects | ~60k combined (1-day window) | One row per HTTP fetch |
+| run_seen_*, lender_dataset_runs | Bounded by 1-day runs | One per (run, series/product) |
+| download_change_feed, client_historical_* | Bounded to 1 day | Pruned by retention |
+| historical_* (3 tables) | ~41k | One row per product per day; never pruned by retention |
 
 To confirm there are no intra-day duplicates in historical tables, run (with `ADMIN_API_TOKEN` in `.env`):
 

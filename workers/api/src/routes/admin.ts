@@ -17,6 +17,7 @@ import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-au
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
+import { runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
 import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../db/presence-finalize'
@@ -102,6 +103,21 @@ adminRoutes.route('/', adminHealthRoutes)
 adminRoutes.route('/', adminHardeningRoutes)
 adminRoutes.route('/', adminLiveCdrRepairRoutes)
 adminRoutes.route('/', adminRemediationRoutes)
+
+/** Run retention prunes now (1-day backend, log turnover). Use after deploy to compact DB without waiting for next health check. */
+adminRoutes.post('/retention/run', async (c) => {
+  try {
+    await runRetentionPrunes(c.env.DB)
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode ?? null,
+      message: 'Retention prunes completed. Backend tables trimmed to 1 day.',
+    })
+  } catch (error) {
+    log.error('admin', 'retention_run_failed', { error, context: '/admin/retention/run' })
+    return jsonError(c, 500, 'RETENTION_FAILED', 'Retention run failed.')
+  }
+})
 
 adminRoutes.get('/cdr-audit', async (c) => {
   let report = getCachedCdrAuditReport()
