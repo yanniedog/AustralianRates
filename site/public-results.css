@@ -151,6 +151,11 @@
     gap: 10px;
 }
 
+.terminal-data-actions {
+    position: relative;
+    z-index: 1;
+}
+
 .terminal-filter-grid-primary {
     grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
 }
@@ -530,7 +535,7 @@ button.bank-option-card.is-selected .bank-badge-sub {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    z-index: 30;
+    z-index: 9999;
     min-width: 240px;
     max-width: min(340px, calc(100vw - 40px));
     padding: 12px;
