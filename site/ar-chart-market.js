@@ -539,7 +539,7 @@
                 snapshotDateDisplay: lastCategory ? humanField('collection_date', lastCategory.key, null) : '',
                 dimensionLabel: 'Date',
                 dimensionField: 'collection_date',
-                curveTitle: 'Variable rate by date (LVR band)',
+                curveTitle: 'Variable rate over time (LVR band: lower = lowest LVR, upper = highest LVR)',
                 style: 'ribbon',
                 direction: direction,
                 bestLabel: direction === 'asc' ? 'Lowest' : 'Highest',

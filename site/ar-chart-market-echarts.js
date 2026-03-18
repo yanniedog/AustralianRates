@@ -260,7 +260,7 @@
         var theme = chartTheme();
         var narrow = size && size.width < 760;
         var gridLeft = narrow ? 46 : 58;
-        var curveTitle = market.curveTitle || 'Borrowing cost by structure (LVR band)';
+        var curveTitle = market.curveTitle || 'Variable rate over time (LVR band: lower = lowest LVR, upper = highest LVR)';
         var series = [];
         (market.bankRibbons || []).forEach(function (ribbon, idx) {
             var color = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
