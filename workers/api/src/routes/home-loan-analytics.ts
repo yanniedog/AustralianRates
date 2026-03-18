@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { getCachedOrCompute } from '../db/chart-cache'
+import { applyDefaultChartDateRange, getCachedOrCompute } from '../db/chart-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
@@ -48,7 +48,7 @@ export function registerHomeLoanAnalyticsRoutes(publicRoutes: Hono<AppContext>):
       requestedRepresentation,
       toParams(merged),
       () =>
-        collectHomeLoanAnalyticsRowsResolved(dbs, requestedRepresentation, buildFilters(merged)).then((r) => ({
+        collectHomeLoanAnalyticsRowsResolved(dbs, requestedRepresentation, applyDefaultChartDateRange(buildFilters(merged))).then((r) => ({
           rows: r.rows,
           representation: r.representation,
           fallbackReason: r.fallbackReason,
@@ -77,7 +77,7 @@ export function registerHomeLoanAnalyticsRoutes(publicRoutes: Hono<AppContext>):
       requestedRepresentation,
       toParams(merged),
       () =>
-        collectHomeLoanAnalyticsRowsResolved(dbs, requestedRepresentation, buildFilters(merged)).then((r) => ({
+        collectHomeLoanAnalyticsRowsResolved(dbs, requestedRepresentation, applyDefaultChartDateRange(buildFilters(merged))).then((r) => ({
           rows: r.rows,
           representation: r.representation,
           fallbackReason: r.fallbackReason,

@@ -83,12 +83,21 @@ async function gunzipFromBase64(b64: string): Promise<string> {
   return new TextDecoder().decode(bytes)
 }
 
-/** Default date range for precomputed cache: last 365 days inclusive. */
+/** Default date range for precomputed cache: last 365 days inclusive (at least 20 consecutive daily snapshots for charts). */
 export function getDefaultDateRange(): { startDate: string; endDate: string } {
   const end = new Date()
   const start = new Date(end)
   start.setDate(start.getDate() - 365)
   return { startDate: toYmd(start), endDate: toYmd(end) }
+}
+
+/** When start or end is missing, applies default range so chart requests always have at least 20 consecutive daily snapshots. */
+export function applyDefaultChartDateRange<T extends { startDate?: string; endDate?: string }>(filters: T): T {
+  const start = filters.startDate?.trim()
+  const end = filters.endDate?.trim()
+  if (start && end) return filters
+  const def = getDefaultDateRange()
+  return { ...filters, startDate: start || def.startDate, endDate: end || def.endDate }
 }
 
 type DefaultCheckInput = {

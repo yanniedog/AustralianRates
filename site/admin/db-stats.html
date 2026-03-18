@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Database size | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=ed14155">
+    <link rel="stylesheet" href="../public-shell.css?v=ed14155">
+    <link rel="stylesheet" href="admin-layout.css?v=ed14155">
+    <link rel="stylesheet" href="admin-pages.css?v=ed14155">
+    <script src="../theme.js?v=ed14155"></script>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide admin-db-stats" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Database</p>
+            <h1>Database size</h1>
+            <p class="admin-subtitle">Total rows and storage breakdown by table.</p>
+        </div>
+        <div class="admin-message" id="msg" role="alert"></div>
+        <div class="admin-toolbar">
+            <button type="button" class="primary" id="refresh-btn">Refresh</button>
+        </div>
+        <section class="db-stats-summary" aria-labelledby="summary-heading">
+            <h2 id="summary-heading">Summary</h2>
+            <div class="db-stats-summary-grid" id="summary-grid">
+                <p class="db-stats-loading" id="summary-loading">Loading…</p>
+            </div>
+        </section>
+        <section class="db-stats-breakdown" aria-labelledby="breakdown-heading">
+            <h2 id="breakdown-heading">Breakdown by table</h2>
+            <div class="db-stats-table-wrap" id="breakdown-wrap">
+                <p class="db-stats-loading" id="breakdown-loading">Loading…</p>
+            </div>
+        </section>
+    </main>
+    <script src="admin-portal.js?v=ed14155"></script>
+    <script src="admin-sidebar.js?v=ed14155"></script>
+    <script src="../ui-icons.js?v=ed14155"></script>
+    <script src="../frame.js?v=ed14155"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var refreshBtn = document.getElementById('refresh-btn');
+            var msgEl = document.getElementById('msg');
+            var summaryGrid = document.getElementById('summary-grid');
+            var breakdownWrap = document.getElementById('breakdown-wrap');
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
+            }
+
+            function formatBytes(n) {
+                if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB';
+                if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB';
+                if (n >= 1e3) return (n / 1e3).toFixed(2) + ' KB';
+                return n + ' B';
+            }
+
+            function escapeHtml(value) {
+                var div = document.createElement('div');
+                div.textContent = value == null ? '' : String(value);
+                return div.innerHTML;
+            }
+
+            function renderSummary(data) {
+                var totalRows = 0;
+                var totalBytes = data.total_bytes_approx || 0;
+                if (data.tables && data.tables.length) {
+                    totalRows = data.tables.reduce(function (s, t) {
+                        return s + (t.row_count > 0 ? t.row_count : 0);
+                    }, 0);
+                }
+                summaryGrid.innerHTML = ''
+                    + '<div class="summary-cell"><strong>Total rows</strong><span class="db-stats-value">' + totalRows.toLocaleString() + '</span></div>'
+                    + '<div class="summary-cell"><strong>Total size</strong><span class="db-stats-value">' + (totalBytes > 0 ? formatBytes(totalBytes) + ' (' + totalBytes.toLocaleString() + ' bytes)' : '—') + '</span></div>'
+                    + (data.generated_at ? '<div class="summary-cell"><strong>Generated</strong><span class="db-stats-value">' + escapeHtml(data.generated_at) + '</span></div>' : '');
+            }
+
+            function renderBreakdown(data) {
+                if (!data.tables || data.tables.length === 0) {
+                    breakdownWrap.innerHTML = '<p class="admin-muted">No table data.</p>';
+                    return;
+                }
+                var totalEst = data.tables.reduce(function (s, t) {
+                    return s + (t.estimated_bytes != null && t.estimated_bytes > 0 ? t.estimated_bytes : 0);
+                }, 0);
+                var table = document.createElement('table');
+                table.className = 'db-stats-table';
+                table.setAttribute('role', 'grid');
+                table.innerHTML = '<thead><tr><th scope="col">Table</th><th scope="col">Rows</th><th scope="col">Bytes</th><th scope="col">% of bytes</th></tr></thead><tbody></tbody>';
+                var tbody = table.querySelector('tbody');
+                data.tables.forEach(function (t) {
+                    var bytes = t.estimated_bytes != null ? t.estimated_bytes : 0;
+                    var rows = t.row_count >= 0 ? t.row_count : 0;
+                    var pct = totalEst > 0 && bytes > 0 ? ((bytes / totalEst) * 100).toFixed(1) : '—';
+                    var bytesStr = bytes > 0 ? formatBytes(bytes) : '—';
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + escapeHtml(t.name) + '</td><td>' + rows.toLocaleString() + '</td><td>' + bytesStr + '</td><td>' + pct + (pct !== '—' ? '%' : '') + '</td>';
+                    tbody.appendChild(tr);
+                });
+                breakdownWrap.innerHTML = '';
+                breakdownWrap.appendChild(table);
+            }
+
+            function load() {
+                summaryGrid.innerHTML = '<p class="db-stats-loading">Loading…</p>';
+                breakdownWrap.innerHTML = '<p class="db-stats-loading">Loading…</p>';
+
+                portal.fetchAdmin('/db/stats')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Stats failed');
+                        renderSummary(d);
+                        renderBreakdown(d);
+                    })
+                    .catch(function (e) {
+                        summaryGrid.innerHTML = '<p class="admin-muted">Failed to load.</p>';
+                        breakdownWrap.innerHTML = '<p class="admin-muted">Failed to load.</p>';
+                        showMsg(e && e.message ? e.message : 'Failed to load database stats', true);
+                    });
+            }
+
+            refreshBtn.addEventListener('click', load);
+            load();
+        })();
+    </script>
+</body>
+</html>

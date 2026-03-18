@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { getCachedOrCompute } from '../db/chart-cache'
+import { applyDefaultChartDateRange, getCachedOrCompute } from '../db/chart-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
@@ -44,7 +44,7 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
       requestedRepresentation,
       toParams(merged),
       () =>
-        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, buildFilters(merged)).then((r) => ({
+        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, applyDefaultChartDateRange(buildFilters(merged))).then((r) => ({
           rows: r.rows,
           representation: r.representation,
           fallbackReason: r.fallbackReason,
@@ -73,7 +73,7 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
       requestedRepresentation,
       toParams(merged),
       () =>
-        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, buildFilters(merged)).then((r) => ({
+        collectTdAnalyticsRowsResolved(dbs, requestedRepresentation, applyDefaultChartDateRange(buildFilters(merged))).then((r) => ({
           rows: r.rows,
           representation: r.representation,
           fallbackReason: r.fallbackReason,

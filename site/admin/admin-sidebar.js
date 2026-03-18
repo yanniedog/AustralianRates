@@ -18,6 +18,7 @@
         { href: 'status.html', label: 'Status' },
         { href: 'integrity.html', label: 'Data integrity' },
         { href: 'database.html', label: 'Database' },
+        { href: 'db-stats.html', label: 'Database size' },
         { href: 'exports.html', label: 'Exports' },
         { href: 'clear.html', label: 'Clear data' },
         { href: 'config.html', label: 'Configuration' },

@@ -2,12 +2,19 @@
 
 The full table has columns: **Table | Bytes | Rows | % of bytes**, sorted by bytes descending. Data is **real only**: from the production API or from a saved response you captured from the API.
 
-**Total rows and total size (entire DB):**  
-From repo root with `ADMIN_API_TOKEN` in `.env` run:
+**Total rows and total size (entire DB):**
 ```bash
-node fetch-db-stats.js --summary
+npm run db:summary
 ```
-This prints `Total rows: <n>` and `Total size: <MB> (bytes)`. If the API returns no size, use the Cloudflare D1 dashboard for storage size.
+or `node fetch-db-stats.js --summary`. Requires `ADMIN_API_TOKEN` in `.env`. If the API returns no size, use the Cloudflare D1 dashboard for storage size.
+
+**Detailed breakdown (rows and bytes per table):**
+```bash
+npm run db:breakdown
+```
+or `node fetch-db-stats.js` (no flags). Prints every table with row count, estimated bytes, and % of total, sorted by bytes descending. Same `.env` requirement.
+
+**Admin portal:** The admin portal has a **Database size** section (`/admin/db-stats.html`) that shows the same summary (total rows, total size) and a table breakdown. Open the admin dashboard, then **Database size**. Uses the same `GET /admin/db/stats` endpoint with your logged-in token.
 
 **How to get the full table:**
 
