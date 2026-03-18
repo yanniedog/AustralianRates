@@ -3,7 +3,9 @@
     window.AR = window.AR || {};
     var chartConfig = window.AR.chartConfig || {}, helpers = window.AR.chartEchartsHelpers || {};
     var paletteColor = helpers.paletteColor, tooltipMetric = helpers.tooltipMetric, baseTextStyles = helpers.baseTextStyles, gridStyles = helpers.gridStyles;
-    var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize, chartSizeWithFallback = helpers.chartSizeWithFallback, trimAxisLabel = helpers.trimAxisLabel;
+    var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize;
+    var chartSizeWithFallback = (helpers.chartSizeWithFallback && typeof helpers.chartSizeWithFallback === 'function')
+        ? helpers.chartSizeWithFallback : chartSize;
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
     var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, categoryInterval = helpers.categoryInterval;
     var axisPointerConfig = helpers.axisPointerConfig, axisLabelFontSize = helpers.axisLabelFontSize, chartTheme = helpers.chartTheme;
@@ -830,18 +832,30 @@
         return buildSurfaceOption(model, fields, size);
     }
 
-    function statusLineTextFromOption(option, dataIndex, yValue, fields) {
+    function statusLineTextFromOption(option, dataIndex, otherValue, fields, categoryAxis) {
         if (!option || dataIndex == null) return '';
-        var xAxis = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
-        var categories = xAxis && xAxis.data;
-        var dateStr = Array.isArray(categories) && categories[dataIndex] != null
-            ? formatDateAxisLabel(categories[dataIndex], false)
-            : '';
+        var labelStr = '';
         var valueStr = '';
-        if (yValue != null && Number.isFinite(yValue) && fields && chartConfig.fieldLabel) {
-            valueStr = chartConfig.fieldLabel(fields.yField) + ': ' + metricAxisLabel(fields.yField, yValue, false);
+        if (categoryAxis === 'x') {
+            var xAxis = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+            var xCategories = xAxis && xAxis.data;
+            if (Array.isArray(xCategories) && xCategories[dataIndex] != null) {
+                labelStr = formatDateAxisLabel(xCategories[dataIndex], false);
+            }
+            if (otherValue != null && Number.isFinite(otherValue) && fields && chartConfig.fieldLabel) {
+                valueStr = chartConfig.fieldLabel(fields.yField) + ': ' + metricAxisLabel(fields.yField, otherValue, false);
+            }
+        } else {
+            var yAxis = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
+            var yCategories = yAxis && yAxis.data;
+            if (Array.isArray(yCategories) && yCategories[dataIndex] != null) {
+                labelStr = String(yCategories[dataIndex]);
+            }
+            if (otherValue != null && Number.isFinite(otherValue) && fields && chartConfig.fieldLabel) {
+                valueStr = chartConfig.fieldLabel(fields.yField) + ': ' + metricAxisLabel(fields.yField, otherValue, false);
+            }
         }
-        return (dateStr && valueStr ? dateStr + '   ' + valueStr : dateStr || valueStr || '').trim();
+        return (labelStr && valueStr ? labelStr + '   ' + valueStr : labelStr || valueStr || '').trim();
     }
 
     function ensureChartStatusLine(element) {
@@ -859,23 +873,56 @@
         if (!instance || !element || !option) return;
         var statusEl = ensureChartStatusLine(element);
         if (!statusEl) return;
+        statusEl.textContent = '\u2014';
+        statusEl.classList.add('visible');
         var zr = instance.getZr && instance.getZr();
         if (!zr) return;
         function onMouseMove(event) {
-            var point = event && event.offsetX != null ? [event.offsetX, event.offsetY] : null;
-            if (!point || !instance.containPixel || !instance.containPixel('grid', point)) {
+            if (!event) { statusEl.classList.remove('visible'); return; }
+            var point = null;
+            if (event.point && Array.isArray(event.point) && event.point.length >= 2) {
+                point = [event.point[0], event.point[1]];
+            } else if (event.offsetX != null && event.offsetY != null) {
+                point = [event.offsetX, event.offsetY];
+            } else if (event.event && event.event.offsetX != null && event.event.offsetY != null) {
+                point = [event.event.offsetX, event.event.offsetY];
+            }
+            if (!point) {
                 statusEl.classList.remove('visible');
                 return;
             }
-            var dataCoord = instance.convertFromPixel && instance.convertFromPixel({ seriesIndex: 0 }, point);
+            statusEl.classList.add('visible');
+            if (!statusEl.textContent) statusEl.textContent = '\u2014';
+            if (!instance.convertFromPixel) return;
+            var inGrid = false;
+            if (instance.containPixel && typeof instance.containPixel === 'function') {
+                try { inGrid = instance.containPixel('grid', point); } catch (e) { inGrid = true; }
+            } else {
+                inGrid = true;
+            }
+            var dataCoord = null;
+            try {
+                dataCoord = instance.convertFromPixel({ seriesIndex: 0 }, point);
+            } catch (e) {}
+            if ((!dataCoord || !Array.isArray(dataCoord)) && instance.convertFromPixel) {
+                try {
+                    dataCoord = instance.convertFromPixel({ gridIndex: 0 }, point);
+                } catch (e2) {}
+            }
             if (!dataCoord || !Array.isArray(dataCoord)) {
                 statusEl.classList.remove('visible');
                 return;
             }
-            var dataIndex = Math.round(dataCoord[0]);
-            var yVal = dataCoord[1];
-            var xAxis = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
-            var categories = xAxis && xAxis.data;
+            var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+            var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
+            var categoryAxis = (xAxisOpt && xAxisOpt.type === 'category') ? 'x' : ((yAxisOpt && yAxisOpt.type === 'category') ? 'y' : null);
+            if (!categoryAxis) {
+                statusEl.classList.remove('visible');
+                return;
+            }
+            var dataIndex = categoryAxis === 'x' ? Math.round(dataCoord[0]) : Math.round(dataCoord[1]);
+            var otherVal = categoryAxis === 'x' ? dataCoord[1] : dataCoord[0];
+            var categories = categoryAxis === 'x' ? (xAxisOpt && xAxisOpt.data) : (yAxisOpt && yAxisOpt.data);
             if (!Array.isArray(categories) || dataIndex < 0 || dataIndex >= categories.length) {
                 statusEl.classList.remove('visible');
                 return;
@@ -883,9 +930,9 @@
             var series = option.series;
             if (Array.isArray(series) && series.length && series[0].data && series[0].data[dataIndex] != null) {
                 var d = series[0].data[dataIndex];
-                if (d && typeof d === 'object' && d.value != null) yVal = Array.isArray(d.value) ? d.value[1] : d.value;
+                if (d && typeof d === 'object' && d.value != null) otherVal = typeof d.value === 'number' ? d.value : (Array.isArray(d.value) ? d.value[0] : d.value);
             }
-            var text = statusLineTextFromOption(option, dataIndex, yVal, fields);
+            var text = statusLineTextFromOption(option, dataIndex, otherVal, fields, categoryAxis);
             statusEl.textContent = text;
             statusEl.classList.toggle('visible', !!text);
         }
@@ -916,8 +963,9 @@
         element.setAttribute('data-chart-rendered', 'true');
 
         var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
-        var hasCategoryX = xAxisOpt && xAxisOpt.type === 'category';
-        if (hasCategoryX && option.grid != null) bindChartStatusLine(instance, element, option, fields);
+        var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
+        var hasCategoryAxis = (xAxisOpt && xAxisOpt.type === 'category') || (yAxisOpt && yAxisOpt.type === 'category');
+        if (hasCategoryAxis && option.grid != null) bindChartStatusLine(instance, element, option, fields);
 
         instance.off('click');
         if (!handlers || typeof handlers.onMainClick !== 'function') return;
