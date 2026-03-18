@@ -833,12 +833,16 @@
         Array.prototype.slice.call(els.tableSettingsPopover.querySelectorAll('input[type=\"checkbox\"]')).forEach(function (input) {
             if (!input || input.__arClickBound) return;
             input.__arClickBound = true;
-            input.addEventListener('click', function (event) {
+            var toggle = function (event) {
                 if (event && typeof event.preventDefault === 'function') event.preventDefault();
                 if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
                 input.checked = !input.checked;
                 try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
-            }, true);
+            };
+            // Some automation paths fail to emit 'click' for these inputs, but mouseup/pointerup still fires.
+            input.addEventListener('mouseup', toggle, true);
+            input.addEventListener('pointerup', toggle, true);
+            input.addEventListener('touchend', toggle, true);
         });
     }
 
