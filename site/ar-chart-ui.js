@@ -34,6 +34,59 @@
             buttons[i].classList.toggle('is-active', isActive);
             buttons[i].setAttribute('aria-pressed', String(isActive));
         }
+        syncControlAvailability(fallback);
+    }
+
+    function viewCapabilities(view) {
+        var key = String(view || defaultViewFallback());
+        var caps = {
+            xField: false,
+            groupField: false,
+            chartType: false,
+            representation: true,
+        };
+        if (key === 'market') {
+            caps.chartType = true;
+            caps.representation = false;
+            return caps;
+        }
+        if (key === 'distribution') {
+            caps.groupField = true;
+            return caps;
+        }
+        if (key === 'slope' || key === 'timeRibbon' || key === 'tdTermTime') {
+            caps.representation = false;
+            return caps;
+        }
+        return caps;
+    }
+
+    function controlField(control) {
+        return control && control.closest ? control.closest('.terminal-field') : null;
+    }
+
+    function setControlVisibility(control, enabled, disabledTitle) {
+        var field = controlField(control);
+        if (!field || !control) return;
+        field.hidden = !enabled;
+        control.disabled = !enabled;
+        if (enabled) {
+            field.removeAttribute('title');
+            field.removeAttribute('aria-hidden');
+            control.removeAttribute('aria-disabled');
+            return;
+        }
+        field.setAttribute('title', disabledTitle || 'Not available for this chart view');
+        field.setAttribute('aria-hidden', 'true');
+        control.setAttribute('aria-disabled', 'true');
+    }
+
+    function syncControlAvailability(view) {
+        var caps = viewCapabilities(view);
+        setControlVisibility(els.chartX, !!caps.xField, 'X-axis choices are not yet available for this view.');
+        setControlVisibility(els.chartGroup, !!caps.groupField, 'Grouping is only available where implemented for this view.');
+        setControlVisibility(els.chartType, !!caps.chartType, 'Curve style only applies to the Curve view.');
+        setControlVisibility(els.chartRepresentation, !!caps.representation, 'This view always uses daily snapshots.');
     }
 
     function getChartFields() {
@@ -540,6 +593,7 @@
                 if (handlers && typeof handlers.onViewChange === 'function') handlers.onViewChange(view);
             });
         }
+        syncControlAvailability(activeView());
 
         [els.chartX, els.chartY, els.chartGroup, els.chartType, els.chartSeriesLimit, els.chartRepresentation].forEach(function (control) {
             if (!control) return;

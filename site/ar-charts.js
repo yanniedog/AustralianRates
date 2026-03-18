@@ -33,6 +33,8 @@
         spotlightDate: '',
         marketFocusKey: '',
         tdCurveFrameIndex: null,
+        tdCurveDates: [],
+        tdCurveFrames: [],
         tdPlayInterval: null,
         mainChart: null,
         detailChart: null,
@@ -84,11 +86,68 @@
 
     function clearOutput(message) {
         disposeCharts();
+        chartState.tdCurveDates = [];
+        chartState.tdCurveFrames = [];
         if (chartUi.setCanvasPlaceholder) chartUi.setCanvasPlaceholder(message);
         if (chartUi.renderSummary) chartUi.renderSummary(null, fields(), payloadMeta(), chartState.stale);
         if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, chartState);
         if (chartUi.renderSpotlight) chartUi.renderSpotlight(null, fields());
         if (chartSummary && chartSummary.clear) chartSummary.clear(message);
+    }
+
+    function stopTdPlayback() {
+        if (!chartState.tdPlayInterval) return;
+        clearInterval(chartState.tdPlayInterval);
+        chartState.tdPlayInterval = null;
+    }
+
+    function tdFrameCount() {
+        return Array.isArray(chartState.tdCurveFrames) ? chartState.tdCurveFrames.length : 0;
+    }
+
+    function tdCurrentDateLabel() {
+        if (!Array.isArray(chartState.tdCurveDates) || !chartState.tdCurveDates.length) return '';
+        var idx = Number(chartState.tdCurveFrameIndex);
+        if (!Number.isFinite(idx) || idx < 0 || idx >= chartState.tdCurveDates.length) return '';
+        return chartState.tdCurveDates[idx] || '';
+    }
+
+    function syncTdTimeControls() {
+        var active = tdFrameCount() > 0;
+        if (els.chartTimeSliderWrap) els.chartTimeSliderWrap.hidden = !active;
+        if (!active) {
+            if (els.chartTimeSlider) {
+                els.chartTimeSlider.value = '0';
+                els.chartTimeSlider.max = '0';
+                els.chartTimeSlider.setAttribute('aria-valuetext', '');
+            }
+            if (els.chartTimeSliderDate) els.chartTimeSliderDate.textContent = '';
+            if (els.chartTimePlay) {
+                els.chartTimePlay.textContent = 'Play';
+                els.chartTimePlay.setAttribute('aria-label', 'Play animation');
+                els.chartTimePlay.setAttribute('aria-pressed', 'false');
+            }
+            return;
+        }
+
+        var maxIdx = Math.max(0, tdFrameCount() - 1);
+        if (chartState.tdCurveFrameIndex == null || chartState.tdCurveFrameIndex < 0 || chartState.tdCurveFrameIndex > maxIdx) {
+            chartState.tdCurveFrameIndex = maxIdx;
+        }
+        var dateLabel = tdCurrentDateLabel();
+        if (els.chartTimeSlider) {
+            els.chartTimeSlider.min = 0;
+            els.chartTimeSlider.max = String(maxIdx);
+            els.chartTimeSlider.value = String(chartState.tdCurveFrameIndex);
+            els.chartTimeSlider.setAttribute('aria-valuetext', dateLabel);
+        }
+        if (els.chartTimeSliderDate) els.chartTimeSliderDate.textContent = dateLabel;
+        if (els.chartTimePlay) {
+            var playing = !!chartState.tdPlayInterval;
+            els.chartTimePlay.textContent = playing ? 'Pause' : 'Play';
+            els.chartTimePlay.setAttribute('aria-label', playing ? 'Pause animation' : 'Play animation');
+            els.chartTimePlay.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        }
     }
 
     function statusText(model, currentFields) {
@@ -252,142 +311,117 @@
 
             currentFields = fields();
             var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
-        if (currentFields.view === 'market' && (!model.market || !model.market.categories || !model.market.categories.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No curve data');
-            if (chartUi.setStatus) chartUi.setStatus('No curve data');
-            return;
-        }
-        if (currentFields.view === 'timeRibbon' && (!model.timeRibbon || !model.timeRibbon.categories || !model.timeRibbon.categories.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No time ribbon data');
-            if (chartUi.setStatus) chartUi.setStatus('No time ribbon data');
-            return;
-        }
-        if (currentFields.view === 'tdTermTime' && (!model.tdTermTime || !model.tdTermTime.terms || !model.tdTermTime.terms.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No term vs time data');
-            if (chartUi.setStatus) chartUi.setStatus('No term vs time data');
-            return;
-        }
-        if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No lender match');
-            if (chartUi.setStatus) chartUi.setStatus('No lender match');
-            return;
-        }
-        if (currentFields.view === 'slope' && (!model.slope || !model.slope.lines || !model.slope.lines.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No slope data');
-            if (chartUi.setStatus) chartUi.setStatus('No slope data');
-            return;
-        }
-        if (currentFields.view === 'ladder' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No ladder data');
-            if (chartUi.setStatus) chartUi.setStatus('No ladder data');
-            return;
-        }
-        var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
-        var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
-        if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('No numeric values');
-            if (chartUi.setStatus) chartUi.setStatus('No numeric values');
-            return;
-        }
-
-        if (chartUi.clearErrorState) chartUi.clearErrorState();
-        chartState.selectedSeriesKeys = model.selectedKeys.slice();
-        if (model.spotlight && model.spotlight.series) {
-            chartState.spotlightSeriesKey = model.spotlight.series.key;
-            chartState.spotlightDate = model.spotlight.date || '';
-        }
-        if (model.market && model.market.focusBucket) {
-            chartState.marketFocusKey = model.market.focusBucket.key;
-        }
-
-        var section = window.AR.section || '';
-        var showTdTimeSlider = section === 'term-deposits' && currentFields.view === 'market' && model.tdCurveFrames && model.tdCurveFrames.length && model.tdCurveDates && model.tdCurveDates.length;
-        if (showTdTimeSlider) {
-            var numFrames = model.tdCurveFrames.length;
-            var lastIdx = numFrames - 1;
-            if (chartState.tdCurveFrameIndex == null || chartState.tdCurveFrameIndex < 0 || chartState.tdCurveFrameIndex > lastIdx) {
-                chartState.tdCurveFrameIndex = lastIdx;
+            chartState.tdCurveFrames = Array.isArray(model.tdCurveFrames) ? model.tdCurveFrames : [];
+            chartState.tdCurveDates = Array.isArray(model.tdCurveDates) ? model.tdCurveDates : [];
+            if (currentFields.view === 'market' && (!model.market || !model.market.categories || !model.market.categories.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No curve data');
+                if (chartUi.setStatus) chartUi.setStatus('No curve data');
+                return;
             }
-            if (els.chartTimeSliderWrap) {
-                els.chartTimeSliderWrap.hidden = false;
-                if (els.chartTimeSlider) {
-                    els.chartTimeSlider.min = 0;
-                    els.chartTimeSlider.max = Math.max(0, lastIdx);
-                    els.chartTimeSlider.value = chartState.tdCurveFrameIndex;
-                    els.chartTimeSlider.setAttribute('aria-valuetext', model.tdCurveDates[chartState.tdCurveFrameIndex] || '');
-                }
-                if (els.chartTimeSliderDate) {
-                    els.chartTimeSliderDate.textContent = model.tdCurveDates[chartState.tdCurveFrameIndex] || '';
-                }
+            if (currentFields.view === 'timeRibbon' && (!model.timeRibbon || !model.timeRibbon.categories || !model.timeRibbon.categories.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No time ribbon data');
+                if (chartUi.setStatus) chartUi.setStatus('No time ribbon data');
+                return;
+            }
+            if (currentFields.view === 'tdTermTime' && (!model.tdTermTime || !model.tdTermTime.terms || !model.tdTermTime.terms.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No term vs time data');
+                if (chartUi.setStatus) chartUi.setStatus('No term vs time data');
+                return;
+            }
+            if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No lender match');
+                if (chartUi.setStatus) chartUi.setStatus('No lender match');
+                return;
+            }
+            if (currentFields.view === 'slope' && (!model.slope || !model.slope.lines || !model.slope.lines.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No slope data');
+                if (chartUi.setStatus) chartUi.setStatus('No slope data');
+                return;
+            }
+            if (currentFields.view === 'ladder' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No ladder data');
+                if (chartUi.setStatus) chartUi.setStatus('No ladder data');
+                return;
+            }
+            var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
+            var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
+            if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No numeric values');
+                if (chartUi.setStatus) chartUi.setStatus('No numeric values');
+                return;
+            }
+
+            if (chartUi.clearErrorState) chartUi.clearErrorState();
+            chartState.selectedSeriesKeys = model.selectedKeys.slice();
+            if (model.spotlight && model.spotlight.series) {
+                chartState.spotlightSeriesKey = model.spotlight.series.key;
+                chartState.spotlightDate = model.spotlight.date || '';
+            }
+            if (model.market && model.market.focusBucket) {
+                chartState.marketFocusKey = model.market.focusBucket.key;
+            }
+
+            var section = window.AR.section || '';
+            var showTdTimeSlider = section === 'term-deposits' && currentFields.view === 'market' && chartState.tdCurveFrames.length && chartState.tdCurveDates.length;
+            if (showTdTimeSlider) {
+                syncTdTimeControls();
                 if (!chartTimeSliderBound && els.chartTimeSlider) {
                     chartTimeSliderBound = true;
                     els.chartTimeSlider.addEventListener('input', function () {
                         var val = parseInt(els.chartTimeSlider.value, 10);
                         if (Number.isFinite(val)) chartState.tdCurveFrameIndex = val;
-                        if (els.chartTimeSliderDate && chartState.rows.length) {
-                            var m = chartData.buildChartModel(chartState.rows, fields(), chartState);
-                            if (m.tdCurveDates) els.chartTimeSliderDate.textContent = m.tdCurveDates[chartState.tdCurveFrameIndex] || '';
-                        }
+                        syncTdTimeControls();
                         renderFromCache();
                     });
                     if (els.chartTimePlay) {
                         els.chartTimePlay.addEventListener('click', function () {
+                            var maxIdx = Math.max(0, tdFrameCount() - 1);
                             if (chartState.tdPlayInterval) {
-                                clearInterval(chartState.tdPlayInterval);
-                                chartState.tdPlayInterval = null;
-                                els.chartTimePlay.textContent = 'Play';
+                                stopTdPlayback();
+                                syncTdTimeControls();
                                 return;
                             }
-                            var m = chartData.buildChartModel(chartState.rows, fields(), chartState);
-                            var maxIdx = (m.tdCurveFrames && m.tdCurveFrames.length) ? m.tdCurveFrames.length - 1 : 0;
                             if (chartState.tdCurveFrameIndex >= maxIdx) chartState.tdCurveFrameIndex = 0;
-                            els.chartTimePlay.textContent = 'Pause';
                             chartState.tdPlayInterval = setInterval(function () {
-                                var cur = chartData.buildChartModel(chartState.rows, fields(), chartState);
-                                var n = (cur.tdCurveFrames && cur.tdCurveFrames.length) ? cur.tdCurveFrames.length - 1 : 0;
-                                chartState.tdCurveFrameIndex = (chartState.tdCurveFrameIndex + 1) <= n ? chartState.tdCurveFrameIndex + 1 : 0;
-                                if (els.chartTimeSlider) { els.chartTimeSlider.max = n; els.chartTimeSlider.value = chartState.tdCurveFrameIndex; }
-                                if (els.chartTimeSliderDate && cur.tdCurveDates) els.chartTimeSliderDate.textContent = cur.tdCurveDates[chartState.tdCurveFrameIndex] || '';
+                                var lastIdx = Math.max(0, tdFrameCount() - 1);
+                                chartState.tdCurveFrameIndex = (chartState.tdCurveFrameIndex + 1) <= lastIdx ? chartState.tdCurveFrameIndex + 1 : 0;
+                                syncTdTimeControls();
                                 renderFromCache();
-                                if (chartState.tdCurveFrameIndex >= n) {
-                                    clearInterval(chartState.tdPlayInterval);
-                                    chartState.tdPlayInterval = null;
-                                    els.chartTimePlay.textContent = 'Play';
+                                if (chartState.tdCurveFrameIndex >= lastIdx) {
+                                    stopTdPlayback();
+                                    syncTdTimeControls();
                                 }
                             }, 400);
+                            syncTdTimeControls();
                         });
                     }
                 }
+            } else {
+                stopTdPlayback();
+                syncTdTimeControls();
             }
-        } else {
-            if (chartState.tdPlayInterval) {
-                clearInterval(chartState.tdPlayInterval);
-                chartState.tdPlayInterval = null;
-            }
-            if (els.chartTimeSliderWrap) els.chartTimeSliderWrap.hidden = true;
-        }
 
-        ensureCharts();
-        chartEcharts.renderMainChart(chartState.mainChart, els.chartOutput, currentFields.view, model, currentFields, {
-            onMainClick: handleMainChartClick,
-        }, chartState.rbaHistory, chartState);
-        chartEcharts.renderDetailChart(chartState.detailChart, els.chartDetailOutput, model, currentFields);
+            ensureCharts();
+            chartEcharts.renderMainChart(chartState.mainChart, els.chartOutput, currentFields.view, model, currentFields, {
+                onMainClick: handleMainChartClick,
+            }, chartState.rbaHistory, chartState);
+            chartEcharts.renderDetailChart(chartState.detailChart, els.chartDetailOutput, model, currentFields, chartState);
 
-        if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
-        if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
-        if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
-        if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
-        if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'STALE' : statusText(model, currentFields));
+            if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
+            if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
+            if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
+            if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
+            if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'STALE' : statusText(model, currentFields));
 
-        tabState.chartDrawn = true;
-        scheduleResizeCharts();
+            tabState.chartDrawn = true;
+            scheduleResizeCharts();
         } catch (err) {
             var view = (currentFields && currentFields.view) || '';
             sendChartErrorToLog(err, { view: view, section: section });
@@ -459,6 +493,8 @@
             chartState.loadedRepresentation = payload.representation || buildBaseParams().representation || 'change';
             chartState.stale = false;
             chartState.fallbackReason = payload.fallbackReason || '';
+            chartState.tdCurveDates = [];
+            chartState.tdCurveFrames = [];
             if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
                 els.chartRepresentation.value = payload.representation;
             }
