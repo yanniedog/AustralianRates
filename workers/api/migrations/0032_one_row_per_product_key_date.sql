@@ -1,8 +1,3 @@
--- One row per (product_key, collection_date) for front-end data.
--- Drops run_source from UNIQUE so at most one row per product per day.
--- Dedupe: prefer run_source='scheduled', then latest parsed_at.
--- Repopulate latest_* from deduplicated historical.
-
 PRAGMA foreign_keys = OFF;
 
 DROP VIEW IF EXISTS vw_latest_rates;
@@ -19,7 +14,6 @@ DROP TRIGGER IF EXISTS check_savings_rates_update;
 DROP TRIGGER IF EXISTS check_td_rates_insert;
 DROP TRIGGER IF EXISTS check_td_rates_update;
 
--- ========== historical_loan_rates: new UNIQUE without run_source ==========
 CREATE TABLE historical_loan_rates_new (
   bank_name TEXT NOT NULL,
   collection_date TEXT NOT NULL,
@@ -86,7 +80,6 @@ CREATE INDEX IF NOT EXISTS idx_historical_loan_rates_search ON historical_loan_r
 CREATE INDEX IF NOT EXISTS idx_historical_loan_rates_latest_key ON historical_loan_rates(bank_name, product_id, security_purpose, repayment_type, lvr_tier, rate_structure, collection_date DESC, parsed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_historical_loan_rates_cdr_detail_hash ON historical_loan_rates(cdr_product_detail_hash);
 
--- ========== historical_savings_rates: new UNIQUE without run_source ==========
 CREATE TABLE historical_savings_rates_new (
   bank_name TEXT NOT NULL,
   collection_date TEXT NOT NULL,
@@ -150,7 +143,6 @@ CREATE INDEX IF NOT EXISTS idx_historical_savings_rates_series_key ON historical
 CREATE INDEX IF NOT EXISTS idx_historical_savings_rates_retrieval_date ON historical_savings_rates(retrieval_type, collection_date DESC);
 CREATE INDEX IF NOT EXISTS idx_historical_savings_rates_cdr_detail_hash ON historical_savings_rates(cdr_product_detail_hash);
 
--- ========== historical_term_deposit_rates: new UNIQUE without run_source ==========
 CREATE TABLE historical_term_deposit_rates_new (
   bank_name TEXT NOT NULL,
   collection_date TEXT NOT NULL,
@@ -212,55 +204,6 @@ CREATE INDEX IF NOT EXISTS idx_historical_td_rates_series_key ON historical_term
 CREATE INDEX IF NOT EXISTS idx_historical_td_rates_retrieval_date ON historical_term_deposit_rates(retrieval_type, collection_date DESC);
 CREATE INDEX IF NOT EXISTS idx_historical_td_rates_cdr_detail_hash ON historical_term_deposit_rates(cdr_product_detail_hash);
 
--- ========== Recreate triggers ==========
-CREATE TRIGGER IF NOT EXISTS check_loan_rates_insert BEFORE INSERT ON historical_loan_rates
-BEGIN
-  SELECT RAISE(ABORT, 'interest_rate out of bounds') WHERE NEW.interest_rate < 0.5 OR NEW.interest_rate > 25;
-  SELECT RAISE(ABORT, 'comparison_rate out of bounds') WHERE NEW.comparison_rate IS NOT NULL AND (NEW.comparison_rate < 0.5 OR NEW.comparison_rate > 30);
-  SELECT RAISE(ABORT, 'annual_fee out of bounds') WHERE NEW.annual_fee IS NOT NULL AND (NEW.annual_fee < 0 OR NEW.annual_fee > 10000);
-  SELECT RAISE(ABORT, 'collection_date invalid') WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
-END;
-CREATE TRIGGER IF NOT EXISTS check_loan_rates_update BEFORE UPDATE ON historical_loan_rates
-BEGIN
-  SELECT RAISE(ABORT, 'interest_rate out of bounds') WHERE NEW.interest_rate < 0.5 OR NEW.interest_rate > 25;
-  SELECT RAISE(ABORT, 'comparison_rate out of bounds') WHERE NEW.comparison_rate IS NOT NULL AND (NEW.comparison_rate < 0.5 OR NEW.comparison_rate > 30);
-  SELECT RAISE(ABORT, 'annual_fee out of bounds') WHERE NEW.annual_fee IS NOT NULL AND (NEW.annual_fee < 0 OR NEW.annual_fee > 10000);
-  SELECT RAISE(ABORT, 'collection_date invalid') WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
-END;
-CREATE TRIGGER IF NOT EXISTS check_savings_rates_insert BEFORE INSERT ON historical_savings_rates
-BEGIN
-  SELECT RAISE(ABORT, 'interest_rate out of bounds') WHERE NEW.interest_rate < 0 OR NEW.interest_rate > 15;
-  SELECT RAISE(ABORT, 'monthly_fee out of bounds') WHERE NEW.monthly_fee IS NOT NULL AND (NEW.monthly_fee < 0 OR NEW.monthly_fee > 50);
-  SELECT RAISE(ABORT, 'min_balance out of bounds') WHERE NEW.min_balance IS NOT NULL AND (NEW.min_balance < 0 OR NEW.min_balance > 100000000);
-  SELECT RAISE(ABORT, 'max_balance out of bounds') WHERE NEW.max_balance IS NOT NULL AND (NEW.max_balance < 0 OR NEW.max_balance > 100000000);
-  SELECT RAISE(ABORT, 'collection_date invalid') WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
-END;
-CREATE TRIGGER IF NOT EXISTS check_savings_rates_update BEFORE UPDATE ON historical_savings_rates
-BEGIN
-  SELECT RAISE(ABORT, 'interest_rate out of bounds') WHERE NEW.interest_rate < 0 OR NEW.interest_rate > 15;
-  SELECT RAISE(ABORT, 'monthly_fee out of bounds') WHERE NEW.monthly_fee IS NOT NULL AND (NEW.monthly_fee < 0 OR NEW.monthly_fee > 50);
-  SELECT RAISE(ABORT, 'min_balance out of bounds') WHERE NEW.min_balance IS NOT NULL AND (NEW.min_balance < 0 OR NEW.min_balance > 100000000);
-  SELECT RAISE(ABORT, 'max_balance out of bounds') WHERE NEW.max_balance IS NOT NULL AND (NEW.max_balance < 0 OR NEW.max_balance > 100000000);
-  SELECT RAISE(ABORT, 'collection_date invalid') WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
-END;
-CREATE TRIGGER IF NOT EXISTS check_td_rates_insert BEFORE INSERT ON historical_term_deposit_rates
-BEGIN
-  SELECT RAISE(ABORT, 'interest_rate out of bounds') WHERE NEW.interest_rate < 0 OR NEW.interest_rate > 15;
-  SELECT RAISE(ABORT, 'term_months out of bounds') WHERE NEW.term_months < 1 OR NEW.term_months > 120;
-  SELECT RAISE(ABORT, 'min_deposit out of bounds') WHERE NEW.min_deposit IS NOT NULL AND (NEW.min_deposit < 0 OR NEW.min_deposit > 100000000);
-  SELECT RAISE(ABORT, 'max_deposit out of bounds') WHERE NEW.max_deposit IS NOT NULL AND (NEW.max_deposit < 0 OR NEW.max_deposit > 100000000);
-  SELECT RAISE(ABORT, 'collection_date invalid') WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
-END;
-CREATE TRIGGER IF NOT EXISTS check_td_rates_update BEFORE UPDATE ON historical_term_deposit_rates
-BEGIN
-  SELECT RAISE(ABORT, 'interest_rate out of bounds') WHERE NEW.interest_rate < 0 OR NEW.interest_rate > 15;
-  SELECT RAISE(ABORT, 'term_months out of bounds') WHERE NEW.term_months < 1 OR NEW.term_months > 120;
-  SELECT RAISE(ABORT, 'min_deposit out of bounds') WHERE NEW.min_deposit IS NOT NULL AND (NEW.min_deposit < 0 OR NEW.min_deposit > 100000000);
-  SELECT RAISE(ABORT, 'max_deposit out of bounds') WHERE NEW.max_deposit IS NOT NULL AND (NEW.max_deposit < 0 OR NEW.max_deposit > 100000000);
-  SELECT RAISE(ABORT, 'collection_date invalid') WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
-END;
-
--- ========== Recreate views ==========
 CREATE VIEW vw_latest_rates AS
 WITH ranked AS (
   SELECT *, bank_name || '|' || product_id || '|' || security_purpose || '|' || repayment_type || '|' || lvr_tier || '|' || rate_structure AS product_key,
@@ -315,7 +258,6 @@ SELECT collection_date, bank_name, product_id, product_name, term_months, intere
   bank_name || '|' || product_id || '|' || term_months || '|' || deposit_tier AS product_key
 FROM historical_term_deposit_rates;
 
--- ========== Repopulate latest_* from deduplicated historical ==========
 DELETE FROM latest_home_loan_series;
 INSERT INTO latest_home_loan_series (
   series_key, product_key, bank_name, collection_date, product_id, product_code, product_name,

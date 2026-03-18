@@ -27,13 +27,16 @@ Logger limits persisted `context` to 8,000 characters per row (`workers/api/src/
 
 Admin full-dump job uses larger batches and more parts per pass to reduce queue invocations and finish faster: `DATABASE_DUMP_ROW_BATCH_SIZE` and `DATABASE_DUMP_PARTS_PER_PASS` in `workers/api/src/routes/admin-download-dump.ts`.
 
+## Rate bounds triggers after migration 0032
+
+Migration 0032 drops and does not recreate the rate bounds triggers (from 0012) because D1/wrangler splits migration SQL on semicolons, which breaks `CREATE TRIGGER` bodies on remote. Application validation remains the primary enforcement. To re-create the triggers, run the DDL from `workers/api/migrations/0012_rate_bounds_triggers.sql` manually (e.g. one trigger per file with `wrangler d1 execute australianrates_api --remote --file=...` from `workers/api`).
+
 ## VACUUM (reclaim space after deletes)
 
-After large deletes (e.g. retention prunes or one-off cleanups), SQLite does not automatically reclaim disk space until `VACUUM` is run. In Cloudflare D1, run VACUUM only during a maintenance window; it can be slow and may affect availability. From repo root (with wrangler and DB name):
+After large deletes (e.g. retention prunes or one-off cleanups), SQLite does not automatically reclaim disk space until `VACUUM` is run. In Cloudflare D1, run VACUUM only during a maintenance window; it can be slow and may affect availability. From `workers/api`:
 
 ```bash
-# Example: run VACUUM via wrangler (check current wrangler d1 execute docs)
-# npx wrangler d1 execute australianrates_api --remote --command "VACUUM;"
+npx wrangler d1 execute australianrates_api --remote --command "VACUUM;"
 ```
 
 Use sparingly; retention pruning alone keeps growth in check.
