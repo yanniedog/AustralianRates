@@ -10,11 +10,77 @@ export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
 const CACHE_TABLE = 'chart_pivot_cache'
 /** D1 cache row considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 20
+/**
+ * D1 has practical limits on row/value sizes; large JSON payloads can fail with SQLITE_TOOBIG.
+ * We store JSON directly when small, otherwise store gzip(base64(JSON)) with a prefix.
+ */
+const GZIP_PREFIX = 'gz:'
+const MAX_UNCOMPRESSED_CHARS = 500_000
 /** KV TTL for computed responses (seconds). */
 export const CHART_CACHE_KV_TTL = 300
 
 function toYmd(d: Date): string {
   return d.toISOString().slice(0, 10)
+}
+
+async function streamToUint8Array(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    if (value) {
+      chunks.push(value)
+      total += value.byteLength
+    }
+  }
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const c of chunks) {
+    out.set(c, offset)
+    offset += c.byteLength
+  }
+  return out
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let s = ''
+  // Chunk to avoid call stack / argument limits.
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    s += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(s)
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
+async function gzipToBase64(input: string): Promise<string> {
+  if (typeof CompressionStream === 'undefined') {
+    throw new Error('CompressionStream not available in this runtime')
+  }
+  const cs = new CompressionStream('gzip')
+  const bytes = new TextEncoder().encode(input)
+  const stream = new Blob([bytes]).stream().pipeThrough(cs) as ReadableStream<Uint8Array>
+  const gzBytes = await streamToUint8Array(stream)
+  return bytesToBase64(gzBytes)
+}
+
+async function gunzipFromBase64(b64: string): Promise<string> {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('DecompressionStream not available in this runtime')
+  }
+  const ds = new DecompressionStream('gzip')
+  const gzBytes = base64ToBytes(b64)
+  const stream = new Blob([gzBytes]).stream().pipeThrough(ds) as ReadableStream<Uint8Array>
+  const bytes = await streamToUint8Array(stream)
+  return new TextDecoder().decode(bytes)
 }
 
 /** Default date range for precomputed cache: last 365 days inclusive. */
@@ -104,7 +170,10 @@ export async function readD1ChartCache(
   if (new Date(builtAt) < cutoff) return null
   let rows: Array<Record<string, unknown>>
   try {
-    rows = JSON.parse(row.payload_json) as Array<Record<string, unknown>>
+    const payload = row.payload_json.startsWith(GZIP_PREFIX)
+      ? await gunzipFromBase64(row.payload_json.slice(GZIP_PREFIX.length))
+      : row.payload_json
+    rows = JSON.parse(payload) as Array<Record<string, unknown>>
   } catch {
     return null
   }
@@ -123,7 +192,9 @@ export async function writeD1ChartCache(
   representation: 'day' | 'change',
   result: { rows: Array<Record<string, unknown>> },
 ): Promise<void> {
-  const payloadJson = JSON.stringify(result.rows)
+  const rawJson = JSON.stringify(result.rows)
+  const payloadJson =
+    rawJson.length <= MAX_UNCOMPRESSED_CHARS ? rawJson : `${GZIP_PREFIX}${await gzipToBase64(rawJson)}`
   const builtAt = new Date().toISOString()
   try {
     await db

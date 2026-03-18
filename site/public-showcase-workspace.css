@@ -1,10 +1,12 @@
-/* Two-column layout: left rail + chart (no right leaders column). Chart gets full width. */
+/* Three-column layout: left rail + chart + leaders column. */
 body.ar-public .market-terminal {
     gap: 18px;
     grid-template-columns:
         minmax(270px, 292px)
         var(--ar-splitter-track)
-        minmax(0, 1fr);
+        minmax(0, 1fr)
+        var(--ar-splitter-track)
+        minmax(260px, var(--ar-right-rail-width));
 }
 
 body.ar-public .terminal-column-center {

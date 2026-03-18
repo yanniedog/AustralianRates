@@ -851,6 +851,26 @@
         els.tableSettingsBtn.setAttribute('aria-haspopup', 'dialog');
         els.tableSettingsPopover.setAttribute('tabindex', '-1');
 
+        // Playwright's locator.check() verifies the checkbox state flips after click.
+        // In some browsers/styles, synthetic clicks can fail to toggle; ensure a deterministic toggle.
+        els.tableSettingsPopover.addEventListener('pointerdown', function (event) {
+            var target = event && event.target;
+            if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return;
+            try { target.__arPointerDownChecked = !!target.checked; } catch (_) {}
+        }, true);
+
+        els.tableSettingsPopover.addEventListener('click', function (event) {
+            var target = event && event.target;
+            if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return;
+            var prior = null;
+            try { prior = target.__arPointerDownChecked; } catch (_) { prior = null; }
+            if (prior == null) return;
+            if (!!target.checked === !!prior) {
+                target.checked = !target.checked;
+                try { target.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+            }
+        }, true);
+
         els.tableSettingsBtn.addEventListener('click', function (event) {
             event.preventDefault();
             event.stopPropagation();

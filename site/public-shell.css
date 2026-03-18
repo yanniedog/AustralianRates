@@ -193,12 +193,15 @@ body.ar-public .disclaimer {
 
 .market-terminal {
     --ar-left-rail-width: 280px;
+    --ar-right-rail-width: 330px;
     --ar-splitter-track: 18px;
     display: grid;
     grid-template-columns:
         minmax(260px, var(--ar-left-rail-width))
         var(--ar-splitter-track)
-        minmax(0, 1fr);
+        minmax(0, 1fr)
+        var(--ar-splitter-track)
+        minmax(260px, var(--ar-right-rail-width));
     gap: 0;
     align-items: start;
 }

@@ -422,6 +422,9 @@
                             iconText(view.icon, view.label, 'control-chip-label') +
                         '</button>';
                 }).join('') +
+                '<button id="draw-chart" type="button" class="small" data-help="Render the chart using the selected view and filters." data-help-label="Draw chart">' +
+                    iconText('chart', 'Draw Chart', 'control-chip-label') +
+                '</button>' +
             '</div>';
     }
 
@@ -698,6 +701,21 @@
                     '</section>',
                     '</details>',
                 '</section>',
+                '<div id="right-rail-resizer" class="terminal-resizer terminal-resizer-right" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize leaders panel"></div>',
+                '<aside class="terminal-column terminal-column-right" aria-label="Leaders">',
+                    '<section class="panel terminal-panel terminal-context-panel">',
+                        '<div class="terminal-panel-head">',
+                            panelIcon('ladder', 'Leaders'),
+                            panelHeadingMarkup('h2', 'Leaders'),
+                        '</div>',
+                        '<p class="hint">Fast view of the best rates in the current slice.</p>',
+                        '<label class="terminal-field">',
+                            iconText('search', 'Search', 'field-code'),
+                            '<input id="ladder-search" class="small" type="search" placeholder="Search banks or products" autocomplete="off" spellcheck="false">',
+                        '</label>',
+                        '<div id="quick-compare-cards" class="quick-compare-cards" aria-live="polite"></div>',
+                    '</section>',
+                '</aside>',
             '</section>'
         ].join('');
     }
