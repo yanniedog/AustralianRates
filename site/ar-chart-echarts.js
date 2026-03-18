@@ -46,6 +46,8 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'item',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -159,6 +161,8 @@
             axisPointer: axisPointerConfig(theme),
             tooltip: {
                 trigger: 'item',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -319,6 +323,8 @@
             },
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -410,6 +416,8 @@
             },
             tooltip: {
                 trigger: 'item',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -523,6 +531,8 @@
             axisPointer: axisPointerConfig(theme),
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -627,6 +637,8 @@
             axisPointer: axisPointerConfig(theme),
             tooltip: {
                 trigger: 'item',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -723,6 +735,8 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,

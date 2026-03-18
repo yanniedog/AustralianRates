@@ -78,7 +78,7 @@
                 fontFamily: theme.dataFont ? theme.dataFont : undefined,
             },
             padding: [14, 18],
-            extraCssText: theme.tooltipShadow + '; transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1); font-variant-numeric: tabular-nums;',
+            extraCssText: theme.tooltipShadow + '; font-variant-numeric: tabular-nums;',
         };
     }
 

@@ -323,6 +323,8 @@
             },
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -454,6 +456,8 @@
             },
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -511,6 +515,8 @@
             } : undefined,
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -629,6 +635,8 @@
             } : undefined,
             tooltip: {
                 trigger: 'item',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -755,6 +763,8 @@
             },
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -889,6 +899,8 @@
             },
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -973,6 +985,8 @@
             backgroundColor: 'transparent',
             tooltip: {
                 trigger: 'item',
+                transitionDuration: 0,
+                confine: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
