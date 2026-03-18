@@ -10,11 +10,11 @@
     var themeApi = window.ARTheme || {};
     var uiIcons = (window.AR && window.AR.uiIcons) ? window.AR.uiIcons : {};
     var SESSION_LOG_MAX = 500;
-    var TOOLTIP_DELAY_MS = 450;
     var LONG_PRESS_MS = 500;
     var _sessionLog = [];
     var tooltipEl = null;
     var tooltipTimer = 0;
+    var currentTooltipTarget = null;
     var longPressTimer = 0;
     var helpSheet = null;
     var navScrim = null;
@@ -721,12 +721,18 @@
         tooltipEl.id = 'site-tooltip';
         tooltipEl.className = 'site-tooltip';
         tooltipEl.hidden = true;
+        tooltipEl.addEventListener('mouseout', function (event) {
+            var related = event.relatedTarget;
+            if (related && currentTooltipTarget && currentTooltipTarget.contains(related)) return;
+            hideTooltip();
+        });
         document.body.appendChild(tooltipEl);
         return tooltipEl;
     }
 
     function hideTooltip() {
         window.clearTimeout(tooltipTimer);
+        currentTooltipTarget = null;
         if (!tooltipEl) return;
         tooltipEl.hidden = true;
         tooltipEl.textContent = '';
@@ -736,6 +742,7 @@
         if (!target) return;
         var text = String(target.getAttribute('data-help') || '').trim();
         if (!text) return;
+        currentTooltipTarget = target;
         var tooltip = ensureTooltip();
         var label = String(target.getAttribute('data-help-label') || '').trim();
         tooltip.innerHTML = label ? ('<strong>' + esc(label) + '</strong><span>' + esc(text) + '</span>') : ('<span>' + esc(text) + '</span>');
@@ -750,9 +757,7 @@
 
     function scheduleTooltip(target) {
         hideTooltip();
-        tooltipTimer = window.setTimeout(function () {
-            showTooltipFor(target);
-        }, TOOLTIP_DELAY_MS);
+        showTooltipFor(target);
     }
 
     function closestHelpTarget(node) {
@@ -771,7 +776,9 @@
         document.addEventListener('mouseout', function (event) {
             var target = closestHelpTarget(event.target);
             if (!target) return;
-            if (!event.relatedTarget || !target.contains(event.relatedTarget)) hideTooltip();
+            var related = event.relatedTarget;
+            if (related && tooltipEl && tooltipEl.contains(related)) return;
+            if (!related || !target.contains(related)) hideTooltip();
         });
         document.addEventListener('focusin', function (event) {
             var target = closestHelpTarget(event.target);
