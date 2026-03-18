@@ -180,6 +180,29 @@
     min-height: 520px;
     width: 100%;
     touch-action: manipulation;
+    position: relative;
+}
+
+.chart-status-line {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    z-index: 2;
+    pointer-events: none;
+    font-family: var(--ar-font-mono, "JetBrains Mono", "SF Mono", "Consolas", monospace);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ar-text-soft, #64748b);
+    background: color-mix(in srgb, var(--ar-bg, #0f1419) 92%, transparent);
+    border: 1px solid var(--ar-line, rgba(148, 163, 184, 0.2));
+    border-radius: 4px;
+    padding: 6px 10px;
+    white-space: pre;
+    visibility: hidden;
+}
+
+.chart-status-line.visible {
+    visibility: visible;
 }
 
 .chart-time-slider-wrap {

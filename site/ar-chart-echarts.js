@@ -3,10 +3,10 @@
     window.AR = window.AR || {};
     var chartConfig = window.AR.chartConfig || {}, helpers = window.AR.chartEchartsHelpers || {};
     var paletteColor = helpers.paletteColor, tooltipMetric = helpers.tooltipMetric, baseTextStyles = helpers.baseTextStyles, gridStyles = helpers.gridStyles;
-    var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize, trimAxisLabel = helpers.trimAxisLabel;
+    var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize, chartSizeWithFallback = helpers.chartSizeWithFallback, trimAxisLabel = helpers.trimAxisLabel;
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
     var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, categoryInterval = helpers.categoryInterval;
-    var axisPointerConfig = helpers.axisPointerConfig, chartTheme = helpers.chartTheme;
+    var axisPointerConfig = helpers.axisPointerConfig, axisLabelFontSize = helpers.axisLabelFontSize, chartTheme = helpers.chartTheme;
     var themeFallback = function () {
         return (helpers.chartTheme && helpers.chartTheme()) || {
             emphasisText: '#0f172a',
@@ -79,6 +79,7 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: theme.mutedText,
+                    fontSize: typeof axisLabelFontSize === 'function' ? axisLabelFontSize(narrow, veryNarrow) : 12,
                     hideOverlap: true,
                     margin: 12,
                     interval: xLabelInterval,
@@ -94,6 +95,7 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: theme.emphasisText,
+                    fontSize: typeof axisLabelFontSize === 'function' ? axisLabelFontSize(narrow, veryNarrow) : 12,
                     width: veryNarrow ? 64 : (narrow ? 104 : (denseSurface ? 220 : 250)),
                     overflow: 'truncate',
                     interval: yLabelInterval,
@@ -203,6 +205,7 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: theme.softText,
+                    fontSize: typeof axisLabelFontSize === 'function' ? axisLabelFontSize(narrow, compact) : 12,
                     hideOverlap: true,
                     fontFamily: theme.dataFont || undefined,
                     formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
@@ -216,6 +219,7 @@
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: theme.emphasisText,
+                    fontSize: typeof axisLabelFontSize === 'function' ? axisLabelFontSize(narrow, compact) : 12,
                     width: compact ? 104 : (narrow ? 128 : 180),
                     overflow: 'truncate',
                 },
@@ -328,6 +332,7 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
+                alwaysShowContent: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -538,6 +543,7 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
+                alwaysShowContent: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
@@ -744,6 +750,7 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
+                alwaysShowContent: true,
                 backgroundColor: tooltipStyles().backgroundColor,
                 borderColor: tooltipStyles().borderColor,
                 textStyle: tooltipStyles().textStyle,
@@ -823,18 +830,94 @@
         return buildSurfaceOption(model, fields, size);
     }
 
+    function statusLineTextFromOption(option, dataIndex, yValue, fields) {
+        if (!option || dataIndex == null) return '';
+        var xAxis = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+        var categories = xAxis && xAxis.data;
+        var dateStr = Array.isArray(categories) && categories[dataIndex] != null
+            ? formatDateAxisLabel(categories[dataIndex], false)
+            : '';
+        var valueStr = '';
+        if (yValue != null && Number.isFinite(yValue) && fields && chartConfig.fieldLabel) {
+            valueStr = chartConfig.fieldLabel(fields.yField) + ': ' + metricAxisLabel(fields.yField, yValue, false);
+        }
+        return (dateStr && valueStr ? dateStr + '   ' + valueStr : dateStr || valueStr || '').trim();
+    }
+
+    function ensureChartStatusLine(element) {
+        if (!element) return null;
+        var el = element.querySelector('.chart-status-line');
+        if (el) return el;
+        el = document.createElement('div');
+        el.className = 'chart-status-line';
+        el.setAttribute('aria-hidden', 'true');
+        element.appendChild(el);
+        return el;
+    }
+
+    function bindChartStatusLine(instance, element, option, fields) {
+        if (!instance || !element || !option) return;
+        var statusEl = ensureChartStatusLine(element);
+        if (!statusEl) return;
+        var zr = instance.getZr && instance.getZr();
+        if (!zr) return;
+        function onMouseMove(event) {
+            var point = event && event.offsetX != null ? [event.offsetX, event.offsetY] : null;
+            if (!point || !instance.containPixel || !instance.containPixel('grid', point)) {
+                statusEl.classList.remove('visible');
+                return;
+            }
+            var dataCoord = instance.convertFromPixel && instance.convertFromPixel({ seriesIndex: 0 }, point);
+            if (!dataCoord || !Array.isArray(dataCoord)) {
+                statusEl.classList.remove('visible');
+                return;
+            }
+            var dataIndex = Math.round(dataCoord[0]);
+            var yVal = dataCoord[1];
+            var xAxis = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+            var categories = xAxis && xAxis.data;
+            if (!Array.isArray(categories) || dataIndex < 0 || dataIndex >= categories.length) {
+                statusEl.classList.remove('visible');
+                return;
+            }
+            var series = option.series;
+            if (Array.isArray(series) && series.length && series[0].data && series[0].data[dataIndex] != null) {
+                var d = series[0].data[dataIndex];
+                if (d && typeof d === 'object' && d.value != null) yVal = Array.isArray(d.value) ? d.value[1] : d.value;
+            }
+            var text = statusLineTextFromOption(option, dataIndex, yVal, fields);
+            statusEl.textContent = text;
+            statusEl.classList.toggle('visible', !!text);
+        }
+        function onGlobalOut() {
+            statusEl.classList.remove('visible');
+        }
+        zr.off('mousemove', instance._statusLineMove);
+        zr.off('globalout', instance._statusLineOut);
+        instance._statusLineMove = onMouseMove;
+        instance._statusLineOut = onGlobalOut;
+        zr.on('mousemove', onMouseMove);
+        zr.on('globalout', onGlobalOut);
+    }
+
     function renderMainChart(instance, element, view, model, fields, handlers, rbaHistory) {
         if (!instance || !element) return;
-        var size = chartSize(element);
+        instance.resize();
+        var size = chartSizeWithFallback(element);
         var option = optionForView(view, model, fields, size);
         var timeAxisViews = view === 'timeRibbon' || view === 'tdTermTime' || view === 'compare' || view === 'surface';
         if (timeAxisViews && option && Array.isArray(rbaHistory) && rbaHistory.length && helpers.addRbaMarkLine) {
             helpers.addRbaMarkLine(option, rbaHistory);
         }
         instance.setOption(option, true);
+        instance.resize();
         element.setAttribute('data-chart-engine', 'echarts');
         element.setAttribute('data-chart-render-view', view);
         element.setAttribute('data-chart-rendered', 'true');
+
+        var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+        var hasCategoryX = xAxisOpt && xAxisOpt.type === 'category';
+        if (hasCategoryX && option.grid != null) bindChartStatusLine(instance, element, option, fields);
 
         instance.off('click');
         if (!handlers || typeof handlers.onMainClick !== 'function') return;
@@ -845,6 +928,8 @@
 
     function renderDetailChart(instance, element, model, fields, chartState) {
         if (!instance) return;
+        if (element) instance.resize();
+        var size = element ? chartSizeWithFallback(element) : { width: 320, height: 180 };
         var marketModule = window.AR.chartMarket || {};
         if (fields && fields.view === 'market' && typeof marketModule.buildDetailOption === 'function') {
             var detailModel = model;
@@ -854,10 +939,12 @@
                 for (var k in model) { if (Object.prototype.hasOwnProperty.call(model, k)) detailModel[k] = model[k]; }
                 detailModel.market = model.tdCurveFrames[idx];
             }
-            instance.setOption(marketModule.buildDetailOption(detailModel, fields, chartSize(element)), true);
+            instance.setOption(marketModule.buildDetailOption(detailModel, fields, size), true);
+            if (element) instance.resize();
             return;
         }
-        instance.setOption(buildDetailOption(model, fields, chartSize(element)), true);
+        instance.setOption(buildDetailOption(model, fields, size), true);
+        if (element) instance.resize();
     }
 
     window.AR.chartEcharts = {
