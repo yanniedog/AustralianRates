@@ -37,6 +37,21 @@ After large deletes (e.g. retention prunes or one-off cleanups), SQLite does not
 
 Use sparingly; retention pruning alone keeps growth in check.
 
+## Database size and breakdown
+
+- **Total size:** Reported by the D1 API as `meta.size_after` (bytes) on query results. In the Cloudflare dashboard: D1 > your database > Metrics. Typical production size is in the hundreds of MB; limits are 500 MB (Free) / 10 GB (Paid).
+- **What drives size:** Row count and average row size per table. The largest contributors are usually:
+  - **fetch_events** – one row per HTTP fetch; 90-day retention keeps it bounded.
+  - **historical_loan_rates**, **historical_savings_rates**, **historical_term_deposit_rates** – bulk of user-facing data; do not prune without product agreement.
+  - **raw_objects** – one row per content hash (R2 pointer); grows with unique payloads.
+  - **run_reports**, **run_seen_***, **lender_dataset_runs** – 180-day retention.
+  - **global_log**, **ingest_anomalies** – 14d/48h and 90-day retention.
+- **Live breakdown:** After deploying the API, run from repo root (with `ADMIN_API_TOKEN` in `.env`):
+  ```bash
+  node fetch-db-stats.js
+  ```
+  This calls `GET /api/home-loan-rates/admin/db/stats` and prints total size and per-table row counts (largest first). Alternatively use `GET /api/home-loan-rates/admin/db/audit` for table row counts only.
+
 ## Schema and indexes
 
 - Canonical keys (`product_key`, `series_key`) are used for longitudinal correctness; see AGENTS.md and `docs/MISSION_AND_TECHNICAL_SPEC.md`.
