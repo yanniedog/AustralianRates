@@ -9,11 +9,12 @@ High-churn tables are pruned so they stay bounded. Pruning runs after every heal
 | Table | Retention | Implemented in |
 |-------|-----------|----------------|
 | `global_log` | 14 days (warn/error), 48 hours (info/debug) | `workers/api/src/db/retention-prune.ts` |
-| `ingest_anomalies` | 90 days | `workers/api/src/db/retention-prune.ts` |
-| `health_check_runs` | 7 days | `workers/api/src/db/health-check-runs.ts` |
-| `integrity_audit_runs` | 30 days | `workers/api/src/db/integrity-audit-runs.ts` |
-| `run_reports` (+ run_seen_*, lender_dataset_runs) | 180 days | `workers/api/src/db/retention-prune.ts` |
-| `fetch_events` | 90 days | `workers/api/src/db/retention-prune.ts` |
+| `ingest_anomalies` | 3 days | `workers/api/src/db/retention-prune.ts` |
+| `health_check_runs` | 3 days | `workers/api/src/db/health-check-runs.ts` |
+| `integrity_audit_runs` | 3 days | `workers/api/src/db/integrity-audit-runs.ts` |
+| `run_reports` (+ run_seen_*, lender_dataset_runs) | 3 days | `workers/api/src/db/retention-prune.ts` |
+| `fetch_events` | 3 days | `workers/api/src/db/retention-prune.ts` |
+| `raw_objects` | Orphan cleanup (content_hash not in fetch_events) | `workers/api/src/db/retention-prune.ts` |
 | `raw_payloads` | Orphan cleanup (no matching raw_objects) | `workers/api/src/db/retention-prune.ts` |
 
 Effects: less D1 storage, faster `COUNT(*)` and `ORDER BY ts DESC` on log/anomaly tables, less data transferred on admin log queries and dumps. For the full optimization plan (invariants: front-end data never lost, admin status/integrity pragmatic), see `docs/database-optimization-plan.md`.
@@ -41,16 +42,20 @@ Use sparingly; retention pruning alone keeps growth in check.
 
 - **Total size:** Reported by the D1 API as `meta.size_after` (bytes) on query results. In the Cloudflare dashboard: D1 > your database > Metrics. Typical production size is in the hundreds of MB; limits are 500 MB (Free) / 10 GB (Paid).
 - **What drives size:** Row count and average row size per table. The largest contributors are usually:
-  - **fetch_events** – one row per HTTP fetch; 90-day retention keeps it bounded.
-  - **historical_loan_rates**, **historical_savings_rates**, **historical_term_deposit_rates** – bulk of user-facing data; do not prune without product agreement.
-  - **raw_objects** – one row per content hash (R2 pointer); grows with unique payloads.
-  - **run_reports**, **run_seen_***, **lender_dataset_runs** – 180-day retention.
-  - **global_log**, **ingest_anomalies** – 14d/48h and 90-day retention.
+  - **historical_loan_rates**, **historical_savings_rates**, **historical_term_deposit_rates** – one row per (product_key, collection_date); bulk of user-facing data (migration 0032). Do not prune without product agreement.
+  - **fetch_events** – one row per HTTP fetch; 3-day retention keeps it bounded.
+  - **raw_objects** – pruned to content_hashes still in fetch_events (3-day window).
+  - **run_reports**, **run_seen_***, **lender_dataset_runs** – 3-day retention.
+  - **global_log**, **ingest_anomalies** – 14d/48h and 3-day retention.
 - **Live breakdown:** After deploying the API, run from repo root (with `ADMIN_API_TOKEN` in `.env`):
   ```bash
   node fetch-db-stats.js
   ```
   This calls `GET /api/home-loan-rates/admin/db/stats` and prints total size and per-table row counts (largest first). Alternatively use `GET /api/home-loan-rates/admin/db/audit` for table row counts only.
+
+## Front-end data shape
+
+- **One row per (product_key, collection_date):** Migration 0032 enforces at most one row per product per day in historical_* tables. Charts and APIs naturally get one point per day. Write path uses ON CONFLICT on the natural key (no run_source) so the last write for that day wins.
 
 ## Schema and indexes
 

@@ -19,19 +19,17 @@ This document defines how to keep the D1 database smaller and optimised while (a
 ### (b) Admin status and integrity remain pragmatic and useful
 
 - **Run history**: `run_reports` (and run_seen_*, lender_dataset_runs) drive run list, coverage gaps, and “runs with no outputs”. Keep **at least 90 days** (current 180 days is fine).
-- **Health**: `health_check_runs` (e.g. 7 days) so status page shows recent health.
-- **Integrity**: `integrity_audit_runs` (e.g. 30 days) so admin can re-run and compare.
-- **Fetch lineage**: `fetch_events` is used by admin remediation (show fetch events), admin download (operational stream), and CDR audit (validate fetch_events vs raw_objects). Keep **at least 90 days** of fetch_events so remediation and CDR audit have recent lineage. Older historical rows may have `fetch_event_id` pointing to pruned rows (getFetchEventById returns null); that is acceptable.
 - **Logs**: `global_log` 14d (warn/error) and 48h (info/debug) so actionable issues and recent context remain.
-- **Anomalies**: `ingest_anomalies` (e.g. 90 days) for diagnostics.
+- Older historical rate rows may have `fetch_event_id` pointing to pruned fetch_events (lookup returns null); that is acceptable.
 
 ## Concrete actions
 
-### 1. Fetch_events retention (implemented)
+### 1. Backend retention and raw_objects (implemented)
 
-- **Add** retention pruning for `fetch_events`: delete rows where `fetched_at < now - 90 days`.
-- **Run** after other retention prunes (e.g. in `runRetentionPrunes`).
-- **Effect**: Largest table by row count shrinks; admin keeps 90 days of lineage for remediation and CDR audit.
+- **fetch_events**: Prune rows where `fetched_at < now - 3 days` (in `runRetentionPrunes`).
+- **raw_objects**: After pruning fetch_events, delete rows where `content_hash NOT IN (SELECT content_hash FROM fetch_events)` so storage matches the 3-day lineage window.
+- **run_reports**, **ingest_anomalies**: 3 days. **health_check_runs**, **integrity_audit_runs**: 3 days.
+- **Effect**: Backend tables stay small; admin remediation and CDR audit use recent lineage only.
 
 ### 2. Fetch_events column slim (implemented)
 
@@ -44,9 +42,9 @@ This document defines how to keep the D1 database smaller and optimised while (a
 - **Already in place**: `global_log`, `ingest_anomalies`, `run_reports` (+ run_seen_*, lender_dataset_runs), `raw_payloads` orphans, `health_check_runs`, `integrity_audit_runs` (see `database-optimization.md`).
 - **Optional later**: If needed for size, add retention for `download_change_feed`, `client_historical_runs` (+ tasks/batches), `admin_download_jobs` (+ artifacts), and/or `historical_*` (e.g. 730 days) with aligned pruning of `*_rate_events` and `*_rate_intervals`. Do not add these without explicit product/ops agreement and without ensuring (a) and (b) above.
 
-### 4. Raw_objects
+### 4. Raw_objects (implemented)
 
-- **Do not** prune `raw_objects` by age alone; they are referenced by `fetch_events` and by R2 keys. If desired, only prune hashes that are no longer referenced by any retained `fetch_event` (after fetch_events retention has run).
+- Prune `raw_objects` after `fetch_events` retention: delete where `content_hash NOT IN (SELECT content_hash FROM fetch_events)`. Keeps only objects referenced by the retained 3-day fetch_events window.
 
 ## Verification
 

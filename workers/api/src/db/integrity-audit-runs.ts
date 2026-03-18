@@ -20,7 +20,7 @@ export type InsertIntegrityAuditRunInput = {
   findingsJson: string
 }
 
-const RETENTION_DAYS = 30
+const RETENTION_DAYS = 3
 
 export async function pruneIntegrityAuditRuns(db: D1Database): Promise<void> {
   try {

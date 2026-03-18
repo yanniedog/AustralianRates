@@ -35,7 +35,7 @@
         var narrow = size && size.width < 760;
         var veryNarrow = size && size.width < 420;
         var denseSurface = model.surface.yLabels.length > (narrow ? 12 : 16);
-        var xLabelInterval = categoryInterval(model.surface.xLabels.length, veryNarrow ? 5 : (narrow ? 7 : 10));
+        var xLabelInterval = categoryInterval(model.surface.xLabels.length, veryNarrow ? 6 : (narrow ? 10 : 14));
         var yLabelInterval = categoryInterval(model.surface.yLabels.length, veryNarrow ? 8 : (narrow ? 10 : 12));
         var showVisualMap = !narrow && !denseSurface;
         return {
@@ -556,7 +556,7 @@
                     color: theme.mutedText,
                     hideOverlap: true,
                     margin: 12,
-                    interval: narrow && model.surface.xLabels.length > 5 ? 1 : 0,
+                    interval: categoryInterval(model.surface.xLabels.length, narrow ? 8 : 12),
                     formatter: function (value) { return formatDateAxisLabel(value, narrow); },
                 },
                 splitLine: { show: false },
@@ -577,6 +577,10 @@
                 splitLine: styles.splitLine,
             },
             series: model.compareSeries.map(function (series, index) {
+                var byDate = {};
+                series.points.forEach(function (point) {
+                    byDate[point.date] = point;
+                });
                 return {
                     id: series.key,
                     name: series.name,
@@ -584,6 +588,7 @@
                     smooth: false,
                     showSymbol: false,
                     symbolSize: 6,
+                    connectNulls: false,
                     endLabel: {
                         show: showEndLabels,
                         color: theme.emphasisText,
@@ -597,12 +602,11 @@
                     animationDurationUpdate: 320,
                     lineStyle: { width: narrow ? 2.5 : 3, color: paletteColor(index) },
                     itemStyle: { color: paletteColor(index) },
-                    data: series.points.map(function (point) {
-                        return {
-                            value: [point.date, point.value],
-                            row: point.row,
-                            seriesKey: series.key,
-                        };
+                    data: model.surface.xLabels.map(function (date) {
+                        var point = byDate[date];
+                        return point
+                            ? { value: [date, point.value], row: point.row, seriesKey: series.key }
+                            : [date, null];
                     }),
                 };
             }),

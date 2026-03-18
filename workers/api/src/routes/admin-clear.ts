@@ -15,24 +15,24 @@ const PRODUCT_TABLES: Record<string, string[]> = {
   all: ['historical_loan_rates', 'historical_savings_rates', 'historical_term_deposit_rates'],
 } as const
 
+/** One row per (product_key, collection_date); run_source is not part of the unique key. */
 const TABLE_KEY_COLUMNS: Record<string, string[]> = {
   historical_loan_rates: [
     'bank_name',
     'collection_date',
     'product_id',
-    'lvr_tier',
-    'rate_structure',
     'security_purpose',
     'repayment_type',
-    'run_source',
+    'lvr_tier',
+    'rate_structure',
   ],
   historical_savings_rates: [
     'bank_name',
     'collection_date',
     'product_id',
+    'account_type',
     'rate_type',
     'deposit_tier',
-    'run_source',
   ],
   historical_term_deposit_rates: [
     'bank_name',
@@ -40,7 +40,7 @@ const TABLE_KEY_COLUMNS: Record<string, string[]> = {
     'product_id',
     'term_months',
     'deposit_tier',
-    'run_source',
+    'interest_payment',
   ],
 }
 

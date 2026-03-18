@@ -1,12 +1,11 @@
-import type { D1Database } from '@cloudflare/workers-types'
 import { getReadDb } from '../db/read-db'
 import { writeD1ChartCache, type ChartCacheSection } from '../db/chart-cache'
+import type { EnvBindings } from '../types'
 import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
   collectTdAnalyticsRowsResolved,
 } from '../routes/analytics-data'
-import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 
 const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
@@ -47,7 +46,7 @@ async function getDefaultDateRangeForSection(
 
 /** Build default filters for precomputed cache: data start to today, no selective filters. */
 async function defaultFilters(
-  db: D1Database,
+  db: EnvBindings['DB'],
   section: ChartCacheSection,
 ): Promise<{ startDate: string; endDate: string; mode: 'all'; includeRemoved: false; sourceMode: 'all' }> {
   const { startDate, endDate } = await getDefaultDateRangeForSection(db, section)

@@ -198,8 +198,44 @@
         return Object.keys(seen).sort(compareDates);
     }
 
+    /** Return today as YYYY-MM-DD. */
+    function todayYmd() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    /** List every day from start (inclusive) to end (inclusive). Dates are YYYY-MM-DD. */
+    function allDaysInRange(startDate, endDate) {
+        var out = [];
+        var d = new Date(startDate + 'T12:00:00Z');
+        var end = new Date(endDate + 'T12:00:00Z');
+        while (d <= end) {
+            out.push(d.toISOString().slice(0, 10));
+            d.setUTCDate(d.getUTCDate() + 1);
+        }
+        return out;
+    }
+
+    /** Min and max date from all series points; max is at least today so axis extends to current day. */
+    function dateRangeFromSeries(seriesList) {
+        var minDate = null;
+        var maxDate = null;
+        var today = todayYmd();
+        seriesList.forEach(function (series) {
+            series.points.forEach(function (point) {
+                var d = String(point.date || '');
+                if (!d) return;
+                if (!minDate || d < minDate) minDate = d;
+                if (!maxDate || d > maxDate) maxDate = d;
+            });
+        });
+        if (!minDate || !maxDate) return { minDate: today, maxDate: today };
+        if (maxDate < today) maxDate = today;
+        return { minDate: minDate, maxDate: maxDate };
+    }
+
     function buildSurfaceModel(seriesList) {
-        var xLabels = uniqueDates(seriesList);
+        var range = dateRangeFromSeries(seriesList);
+        var xLabels = allDaysInRange(range.minDate, range.maxDate);
         var indexByDate = {};
         var min = null;
         var max = null;

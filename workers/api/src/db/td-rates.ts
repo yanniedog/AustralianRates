@@ -42,7 +42,7 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         retrieval_type,
         parsed_at, fetch_event_id, run_id, run_source
       ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)
-      ON CONFLICT(bank_name, collection_date, product_id, term_months, deposit_tier, interest_payment, run_source) DO UPDATE SET
+      ON CONFLICT(bank_name, collection_date, product_id, term_months, deposit_tier, interest_payment) DO UPDATE SET
         product_code = excluded.product_code,
         product_name = excluded.product_name,
         series_key = excluded.series_key,
@@ -59,7 +59,8 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         retrieval_type = excluded.retrieval_type,
         parsed_at = excluded.parsed_at,
         fetch_event_id = COALESCE(excluded.fetch_event_id, historical_term_deposit_rates.fetch_event_id),
-        run_id = excluded.run_id`,
+        run_id = excluded.run_id,
+        run_source = excluded.run_source`,
     )
     .bind(
       row.bankName,

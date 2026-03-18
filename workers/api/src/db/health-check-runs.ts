@@ -32,7 +32,7 @@ export type InsertHealthCheckRunInput = {
   failuresJson: string
 }
 
-const HEALTH_RUN_RETENTION_DAYS = 7
+const HEALTH_RUN_RETENTION_DAYS = 3
 
 function legacyE2EDetailPayload(input: InsertHealthCheckRunInput): string | null {
   try {
