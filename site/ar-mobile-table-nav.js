@@ -46,7 +46,9 @@
         if (!section) return null;
         var rect = section.getBoundingClientRect();
         var top = window.scrollY + rect.top;
-        var height = rect.height;
+        var scrollHeight = 0;
+        try { scrollHeight = Number(section.scrollHeight || 0); } catch (_) { scrollHeight = 0; }
+        var height = Math.max(rect.height, scrollHeight);
         var start = Math.max(0, top);
         var end = Math.max(start, top + height - window.innerHeight);
         return {
