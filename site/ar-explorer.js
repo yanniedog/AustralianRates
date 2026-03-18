@@ -853,11 +853,16 @@
 
         // Playwright's locator.check() verifies the checkbox state flips after click.
         // In some browsers/styles, synthetic clicks can fail to toggle; ensure a deterministic toggle.
-        els.tableSettingsPopover.addEventListener('pointerdown', function (event) {
+        function recordSettingsCheckboxState(event) {
             var target = event && event.target;
             if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return;
             try { target.__arPointerDownChecked = !!target.checked; } catch (_) {}
-        }, true);
+        }
+
+        // Some Playwright click paths use mousedown/mouseup without pointer events.
+        els.tableSettingsPopover.addEventListener('mousedown', recordSettingsCheckboxState, true);
+        els.tableSettingsPopover.addEventListener('pointerdown', recordSettingsCheckboxState, true);
+        els.tableSettingsPopover.addEventListener('touchstart', recordSettingsCheckboxState, true);
 
         els.tableSettingsPopover.addEventListener('click', function (event) {
             var target = event && event.target;
