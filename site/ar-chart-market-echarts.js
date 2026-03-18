@@ -73,11 +73,14 @@
         var rawValue = Array.isArray(params.value) ? params.value[1] : (params.value != null ? params.value : (params.data && params.data.value));
         var rateStr = chartConfig.formatMetricValue && rawValue != null ? chartConfig.formatMetricValue(fields.yField, rawValue) : (rawValue != null ? String(rawValue) : '');
         var yLabel = (chartConfig.fieldLabel && chartConfig.fieldLabel(fields.yField)) || 'Rate';
-        return [
+        var lvrLabel = (params.data && params.data.lvrLabel) ? String(params.data.lvrLabel) : '';
+        var lines = [
             '<strong>' + (params.seriesName || '') + '</strong>',
+            lvrLabel ? 'LVR: ' + lvrLabel : '',
             dateLabel ? 'Date: ' + dateLabel : '',
             rateStr !== '' ? yLabel + ': ' + rateStr : '',
-        ].filter(Boolean).join('<br>');
+        ];
+        return lines.filter(Boolean).join('<br>');
     }
 
     function axisTooltip(params, market, fields) {
@@ -173,13 +176,14 @@
         if (market.bankLvrCurves && market.bankLvrCurves.length) {
             var curveTitle = market.curveTitle || 'Variable rate over time by LVR tier';
             var yRange = marketCurveYRange(market, fields.yField);
+            var legendBankNames = [];
             market.bankLvrCurves.forEach(function (curve, index) {
                 var bankColor = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
                     ? chartConfig.bankAccentColor(curve.bankName, curve.colorIndex || 0)
                     : paletteColor(curve.colorIndex || 0);
-                var name = curve.bankName + ' · ' + (curve.lvrLabel || curve.lvrTier || '');
+                if (legendBankNames.indexOf(curve.bankName) < 0) legendBankNames.push(curve.bankName);
                 series.push({
-                    name: name,
+                    name: curve.bankName,
                     type: 'line',
                     smooth: 0.22,
                     connectNulls: false,
@@ -190,7 +194,12 @@
                     emphasis: { focus: 'series', lineStyle: { width: 2.2 }, symbolSize: 7 },
                     data: (curve.points || []).map(function (point) {
                         if (!point) return null;
-                        return { value: [point.bucketKey, point.value], bucketKey: point.bucketKey, row: point.row };
+                        return {
+                            value: [point.bucketKey, point.value],
+                            bucketKey: point.bucketKey,
+                            row: point.row,
+                            lvrLabel: curve.lvrLabel || curve.lvrTier || '',
+                        };
                     }),
                 });
             });
@@ -209,6 +218,7 @@
                     textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
                 } : undefined,
                 legend: {
+                    data: legendBankNames,
                     bottom: 8,
                     left: 0,
                     right: 0,
