@@ -156,7 +156,7 @@
     }
 
     function defaultView() {
-        return section === 'home-loans' ? 'slope' : 'market';
+        return 'market';
     }
 
     function defaultMetric() {

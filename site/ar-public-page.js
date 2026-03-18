@@ -129,9 +129,16 @@
         { value: 'timeRibbon', label: 'Ribbon (time)', icon: 'history', help: 'Rate range and mean over time, all banks.' },
         { value: 'tdTermTime', label: 'Term vs time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.' }
     ];
-    var CHART_VIEWS = section === 'term-deposits'
-        ? BASE_CHART_VIEWS.concat(TD_EXTRA_VIEWS)
-        : BASE_CHART_VIEWS;
+    var CHART_VIEWS;
+    if (section === 'home-loans') {
+        var curveFirst = { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: true };
+        var restViews = BASE_CHART_VIEWS.filter(function (v) { return v.value !== 'market'; }).map(function (v) { return Object.assign({}, v, { selected: false }); });
+        CHART_VIEWS = [curveFirst].concat(restViews);
+    } else {
+        CHART_VIEWS = section === 'term-deposits'
+            ? BASE_CHART_VIEWS.concat(TD_EXTRA_VIEWS)
+            : BASE_CHART_VIEWS;
+    }
 
     var WORKSPACE_TABS = [
         { id: 'explorer', label: 'Table', icon: 'table', help: 'Live rates table.' },

@@ -65,6 +65,21 @@
         return axis;
     }
 
+    function itemTooltipHlLvr(params, market, fields) {
+        if (!params || !market || !market.bucketByKey) return '';
+        var bucketKey = params.name || (params.data && params.data.bucketKey);
+        var category = bucketKey ? market.bucketByKey[bucketKey] : null;
+        var dateLabel = category ? (category.shortLabel || category.label || bucketKey) : (bucketKey || '');
+        var rawValue = Array.isArray(params.value) ? params.value[1] : (params.value != null ? params.value : (params.data && params.data.value));
+        var rateStr = chartConfig.formatMetricValue && rawValue != null ? chartConfig.formatMetricValue(fields.yField, rawValue) : (rawValue != null ? String(rawValue) : '');
+        var yLabel = (chartConfig.fieldLabel && chartConfig.fieldLabel(fields.yField)) || 'Rate';
+        return [
+            '<strong>' + (params.seriesName || '') + '</strong>',
+            dateLabel ? 'Date: ' + dateLabel : '',
+            rateStr !== '' ? yLabel + ': ' + rateStr : '',
+        ].filter(Boolean).join('<br>');
+    }
+
     function axisTooltip(params, market, fields) {
         var list = Array.isArray(params) ? params.filter(Boolean) : [];
         if (!list.length) return '';
@@ -186,7 +201,7 @@
                 animationDurationUpdate: base.animationDurationUpdate,
                 animationEasing: base.animationEasing,
                 backgroundColor: 'transparent',
-                axisPointer: axisPointerConfig(theme),
+                axisPointer: { show: false },
                 title: curveTitle ? {
                     text: curveTitle,
                     left: 0,
@@ -202,13 +217,14 @@
                     formatter: function (name) { return trimAxisLabel(name, compact ? 16 : 26); },
                 },
                 tooltip: {
-                    trigger: 'axis',
-                    axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
+                    trigger: 'item',
+                    transitionDuration: 0,
+                    confine: true,
                     backgroundColor: tooltipStyles().backgroundColor,
                     borderColor: tooltipStyles().borderColor,
                     textStyle: tooltipStyles().textStyle,
                     extraCssText: tooltipStyles().extraCssText,
-                    formatter: function (params) { return axisTooltip(params, market, fields); },
+                    formatter: function (params) { return itemTooltipHlLvr(params, market, fields); },
                 },
                 grid: {
                     left: gridLeft,
