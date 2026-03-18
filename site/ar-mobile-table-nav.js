@@ -34,7 +34,9 @@
     function isExplorerVisible() {
         var panel = document.getElementById('panel-explorer');
         if (!panel || panel.hidden || !panel.classList.contains('active')) return false;
-        return getComputedStyle(panel).display !== 'none';
+        // Some mobile overlay states temporarily hide panels via CSS while the
+        // explorer remains the active tab; we still want the rail to appear.
+        return true;
     }
 
     function clamp(value, min, max) {
