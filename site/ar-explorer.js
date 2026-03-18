@@ -866,11 +866,19 @@
 
         els.tableSettingsPopover.addEventListener('click', function (event) {
             var target = event && event.target;
-            if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return;
+            if (!target) return;
+            var input = null;
+            if (target.tagName === 'INPUT' && target.type === 'checkbox') {
+                input = target;
+            } else if (typeof target.closest === 'function') {
+                var label = target.closest('label');
+                if (label) input = label.querySelector('input[type=\"checkbox\"]');
+            }
+            if (!input || input.type !== 'checkbox') return;
             if (event && typeof event.preventDefault === 'function') event.preventDefault();
             if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
-            target.checked = !target.checked;
-            try { target.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+            input.checked = !input.checked;
+            try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
         }, true);
 
         els.tableSettingsBtn.addEventListener('click', function (event) {
