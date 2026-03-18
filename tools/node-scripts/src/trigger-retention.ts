@@ -20,7 +20,7 @@ async function main(): Promise<void> {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   })
-  const data = await res.json().catch(() => ({}))
+  const data = (await res.json().catch(() => ({}))) as { message?: string }
   if (!res.ok) {
     console.error('HTTP', res.status, data)
     process.exit(1)
