@@ -130,6 +130,7 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
 
   const r2Key = rawObject.r2_key
 
+  // Schema after migration 0031: no job_kind, body_bytes, response_headers_json, duration_ms, notes.
   const inserted = await env.DB
     .prepare(
       `INSERT INTO fetch_events (

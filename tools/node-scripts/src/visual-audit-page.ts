@@ -133,14 +133,55 @@ async function evaluateTableState(page: Page, checks: CaptureCheck[], issues: Ca
   if (table.badCells.length > 0) pushIssue(issues, 'TABLE_ABNORMAL_TEXT', 'Rate table contains abnormal error-like text.')
 }
 
-async function evaluateChartState(page: Page, expectedView: string, checks: CaptureCheck[], issues: CaptureIssue[]): Promise<void> {
+async function evaluateChartState(
+  page: Page,
+  expectedView: string,
+  viewportKey: ViewportKey,
+  checks: CaptureCheck[],
+  issues: CaptureIssue[],
+): Promise<void> {
   const chart = await page.evaluate(() => {
     const output = document.getElementById('chart-output')
-    const view = output?.getAttribute('data-chart-view') || ''
-    const rendered = !!output && (output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg'))
+    const view = output?.getAttribute('data-chart-view') || output?.getAttribute('data-chart-render-view') || ''
+    const canvas = output?.querySelector('canvas')
+    const svg = output?.querySelector('svg')
+    const rendered = !!output && (output.getAttribute('data-chart-engine') === 'echarts' || !!canvas || !!svg)
     const summaryRows = document.querySelectorAll('#chart-data-summary tbody tr').length
     const spotlightText = String(document.getElementById('chart-point-details')?.textContent || '').trim()
-    return { rendered, spotlightText, summaryRows, view }
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    let canvasWidth = 0
+    let canvasHeight = 0
+    let containerWidth = 0
+    let containerHeight = 0
+    let containerClipped = false
+    if (output) {
+      const rect = output.getBoundingClientRect()
+      containerWidth = rect.width
+      containerHeight = rect.height
+      containerClipped = rect.left < -1 || rect.right > viewportWidth + 1
+    }
+    if (canvas) {
+      canvasWidth = canvas.width
+      canvasHeight = canvas.height
+    } else if (svg) {
+      const r = svg.getBoundingClientRect()
+      canvasWidth = r.width
+      canvasHeight = r.height
+    }
+    return {
+      canvasHeight,
+      canvasWidth,
+      containerClipped,
+      containerHeight,
+      containerWidth,
+      rendered,
+      spotlightText,
+      summaryRows,
+      view,
+      viewportHeight,
+      viewportWidth,
+    }
   })
   pushCheck(checks, 'chart rendered', chart.rendered, chart.view)
   if (!chart.rendered) pushIssue(issues, 'CHART_NOT_RENDERED', 'Chart surface did not render.')
@@ -150,6 +191,15 @@ async function evaluateChartState(page: Page, expectedView: string, checks: Capt
   if (chart.summaryRows === 0) pushIssue(issues, 'CHART_SUMMARY_EMPTY', 'Chart summary table did not populate.')
   pushCheck(checks, 'chart spotlight populated', chart.spotlightText.length > 0)
   if (chart.spotlightText.length === 0) pushIssue(issues, 'CHART_SPOTLIGHT_EMPTY', 'Chart spotlight panel is empty.')
+  const isMobileOrTablet = viewportKey === 'mobile' || viewportKey === 'tablet'
+  if (isMobileOrTablet && chart.rendered) {
+    const minChartSize = 100
+    const canvasPlots = chart.canvasWidth >= minChartSize && chart.canvasHeight >= minChartSize
+    pushCheck(checks, 'chart canvas has valid size on mobile/tablet', canvasPlots, `canvas=${chart.canvasWidth}x${chart.canvasHeight}`)
+    if (!canvasPlots) pushIssue(issues, 'CHART_CANVAS_TOO_SMALL', 'Chart canvas has zero or very small dimensions on mobile/tablet; chart may not plot correctly.')
+    pushCheck(checks, 'chart container not clipped on mobile/tablet', !chart.containerClipped)
+    if (chart.containerClipped) pushIssue(issues, 'CHART_CONTAINER_CLIPPED', 'Chart container is clipped horizontally on mobile/tablet.')
+  }
 }
 
 export async function prepareState(page: Page, route: AuditRoute, state: AuditState, checks: CaptureCheck[], issues: CaptureIssue[]): Promise<string[]> {
@@ -182,7 +232,7 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
     await switchAnalyst(page)
     const view = state.key.replace('chart-', '')
     await waitForChartView(page, view)
-    await evaluateChartState(page, view, checks, issues)
+    await evaluateChartState(page, view, state.viewportKey, checks, issues)
     return [...interactiveSelectors, ...ANALYST_CLICK_TARGETS, ...CHART_CLICK_TARGETS]
   }
   if (state.key === 'market-notes-open') {

@@ -328,6 +328,7 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
       lastError: message.slice(0, 1800),
     })
     log.error('consumer', 'historical_task_execute failed', {
+      code: 'historical_task_execute_failed',
       runId: job.runId,
       lenderCode: task.lender_code,
       context: `task_id=${task.task_id} date=${task.collection_date} error=${message} total_ms=${elapsedMs(startedAt)}`,

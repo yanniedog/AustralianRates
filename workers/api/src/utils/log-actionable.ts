@@ -50,6 +50,12 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Inspect historical task failures and re-trigger backfill with narrowed scope to isolate bad sources.',
     links: ['/admin/runs.html', '/admin/logs.html'],
   },
+  historical_task_execute_failed: {
+    code: 'historical_task_execute_failed',
+    title: 'Historical task execute failed',
+    action: 'Check error context (e.g. D1 schema: ensure migration 0031 applied; fetch_events must not reference dropped columns). Retry historical run or fix schema then re-run.',
+    links: ['/admin/logs.html', '/admin/runs.html', '/admin/database.html'],
+  },
   unknown_cron_expression: {
     code: 'unknown_cron_expression',
     title: 'Unexpected cron expression',
@@ -135,6 +141,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('upsert_failed')) return 'upsert_failed'
   if (normalized.includes('daily run') && normalized.includes('failed')) return 'daily_run_failed'
   if (normalized.includes('backfill run') && normalized.includes('failed')) return 'backfill_run_failed'
+  if (normalized.includes('historical_task_execute failed')) return 'historical_task_execute_failed'
   if (normalized.includes('unknown cron expression')) return 'unknown_cron_expression'
   if (normalized.includes('app_config') && normalized.includes('unavailable')) return 'app_config_unavailable'
   if (normalized.includes('coverage_gap_audit_detected_gaps') || normalized.includes('coverage_slo_breach')) return 'coverage_slo_breach'

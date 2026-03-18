@@ -83,9 +83,20 @@
     }
 
     function chartSize(element) {
+        var w = Math.max(0, Number(element && element.clientWidth) || 0);
+        var h = Math.max(0, Number(element && element.clientHeight) || 0);
+        return { width: w, height: h };
+    }
+
+    /** Minimum size when container has not yet been laid out (e.g. mobile flex). */
+    function chartSizeWithFallback(element) {
+        var size = chartSize(element);
+        if (size.width > 0 && size.height > 0) return size;
+        var viewportWidth = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 400;
+        var viewportHeight = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 300;
         return {
-            width: Math.max(0, Number(element && element.clientWidth) || 0),
-            height: Math.max(0, Number(element && element.clientHeight) || 0),
+            width: size.width > 0 ? size.width : Math.min(viewportWidth, 400),
+            height: size.height > 0 ? size.height : Math.min(viewportHeight, 280),
         };
     }
 
@@ -145,6 +156,11 @@
         if (!Number.isFinite(total) || !Number.isFinite(maxVisible) || maxVisible <= 0) return 0;
         if (total <= maxVisible) return 0;
         return Math.max(0, Math.ceil(total / maxVisible) - 1);
+    }
+
+    /** Axis label font size for mobile/narrow so labels stay readable on small chart areas. */
+    function axisLabelFontSize(narrow, compactOrVeryNarrow) {
+        return compactOrVeryNarrow ? 9 : (narrow ? 10 : 12);
     }
 
     function axisPointerConfig(theme) {
@@ -228,10 +244,12 @@
 
     window.AR.chartEchartsHelpers = {
         addRbaMarkLine: addRbaMarkLine,
+        axisLabelFontSize: axisLabelFontSize,
         axisPointerConfig: axisPointerConfig,
         baseTextStyles: baseTextStyles,
         categoryInterval: categoryInterval,
         chartSize: chartSize,
+        chartSizeWithFallback: chartSizeWithFallback,
         formatDateAxisLabel: formatDateAxisLabel,
         formatSurfaceAxisLabel: formatSurfaceAxisLabel,
         gridStyles: gridStyles,
