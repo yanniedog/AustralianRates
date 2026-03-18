@@ -457,6 +457,7 @@
     }
 
     function buildChartModel(rows, fields, selectionState) {
+        rows = Array.isArray(rows) ? rows : [];
         var included = selectionState && selectionState.includedRateStructures;
         if (included && Array.isArray(included) && included.length) {
             rows = rows.filter(function (r) {

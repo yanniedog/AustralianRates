@@ -54,6 +54,7 @@ export function registerDebugLogRoutes(app: Hono<AppContext>): void {
         if (typeof o.url === 'string') ctx.url = o.url.slice(0, 500)
         if (typeof o.status === 'number') ctx.status = o.status
         if (typeof o.code === 'string') ctx.code = o.code.slice(0, 100)
+        if (o.data != null && typeof o.data === 'object') ctx.data = o.data
       }
       const contextStr = JSON.stringify(ctx).slice(0, MAX_CLIENT_CONTEXT)
       if ((body as { level: string }).level === 'error') {

@@ -247,7 +247,18 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
       })
       return
     }
-    throw new Error(`ubank_home_fallback_no_valid_rows:${job.lenderCode}`)
+    log.warn('consumer', 'ubank_home_fallback_all_dropped', {
+      code: 'ubank_home_fallback_no_valid_rows',
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context: `collected=${collectedRows.length} accepted=0 dropped=${dropped.length} dropped_reasons=${Object.keys(droppedReasons).join(',')} inspected=${inspectedHtml} dropped_by_parser=${droppedByParser}`,
+    })
+    await finalizeLenderDatasetIfReady(env, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+    return
   }
 
   const written = await upsertHistoricalRateRows(env.DB, accepted)

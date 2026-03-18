@@ -220,16 +220,38 @@
         }, 150);
     }
 
-    function renderFromCache() {
-        ensureStructureFiltersUi();
-        if (!chartState.rows.length) {
-            if (chartUi.clearErrorState) chartUi.clearErrorState();
-            clearOutput('WAIT');
-            return;
-        }
+    function sendChartErrorToLog(err, context) {
+        var apiBase = config && config.apiBase;
+        if (!apiBase) return;
+        var payload = {
+            level: 'error',
+            message: (err && err.message) ? String(err.message) : 'Chart render error',
+            code: 'chart_render_error',
+            location: 'ar-charts.js:renderFromCache',
+            timestamp: Date.now(),
+            data: context || {},
+        };
+        if (err && err.stack) payload.data.stack = String(err.stack).slice(0, 2000);
+        fetch(apiBase + '/debug-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).catch(function () {});
+    }
 
-        var currentFields = fields();
-        var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
+    function renderFromCache() {
+        var currentFields;
+        var section = (window.AR && window.AR.section) || '';
+        try {
+            ensureStructureFiltersUi();
+            if (!chartState.rows.length) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('WAIT');
+                return;
+            }
+
+            currentFields = fields();
+            var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
         if (currentFields.view === 'market' && (!model.market || !model.market.categories || !model.market.categories.length)) {
             if (chartUi.clearErrorState) chartUi.clearErrorState();
             clearOutput('No curve data');
@@ -366,6 +388,13 @@
 
         tabState.chartDrawn = true;
         scheduleResizeCharts();
+        } catch (err) {
+            var view = (currentFields && currentFields.view) || '';
+            sendChartErrorToLog(err, { view: view, section: section });
+            clearOutput('Error loading chart');
+            if (chartUi.setErrorState) chartUi.setErrorState(err && err.message ? String(err.message) : 'Error loading chart');
+            if (chartUi.setStatus) chartUi.setStatus('Error loading chart');
+        }
     }
 
     function handleMainChartClick(params) {
