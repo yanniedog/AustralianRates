@@ -68,6 +68,56 @@
         return rows.filter(function (row) { return String(row && row.collection_date || '') === d; });
     }
 
+    /**
+     * For HL ribbon: LVR tiers that each bank offers in every snapshot (variable rows only).
+     * Returns { bankName: { lowLvr, highLvr } } using LVR_TIER_ORDER. Fallback: one snapshot -> use that snapshot's set.
+     */
+    function computeConsistentLvrPerBank(rows) {
+        var allRows = rows || [];
+        if (!allRows.length) return {};
+        var variableOnly = section === 'home-loans';
+        var byDateBank = {};
+        allRows.forEach(function (row) {
+            if (variableOnly && String(row && row.rate_structure || '') !== 'variable') return;
+            var date = String(row && row.collection_date || '');
+            var bankName = String(row && row.bank_name || 'Unknown bank');
+            var lvr = String(row && row.lvr_tier || '').trim();
+            if (!date || !lvr) return;
+            var key = date + '\t' + bankName;
+            if (!byDateBank[key]) byDateBank[key] = Object.create(null);
+            byDateBank[key][lvr] = true;
+        });
+        var banksByDate = {};
+        Object.keys(byDateBank).forEach(function (key) {
+            var parts = key.split('\t');
+            var date = parts[0];
+            var bankName = parts[1];
+            if (!banksByDate[bankName]) banksByDate[bankName] = [];
+            if (banksByDate[bankName].indexOf(date) < 0) banksByDate[bankName].push(date);
+        });
+        var latestDate = latestSnapshotDate(allRows);
+        var result = {};
+        Object.keys(banksByDate).forEach(function (bankName) {
+            var dates = banksByDate[bankName].sort(compareDates);
+            var intersection = null;
+            dates.forEach(function (date) {
+                var set = byDateBank[date + '\t' + bankName];
+                var tiers = Object.keys(set).filter(Boolean);
+                if (intersection === null) intersection = tiers.slice();
+                else intersection = intersection.filter(function (t) { return set[t]; });
+            });
+            if (!intersection || !intersection.length) {
+                var fallbackDate = dates.length ? dates[dates.length - 1] : latestDate;
+                var latestSet = byDateBank[fallbackDate + '\t' + bankName];
+                intersection = latestSet ? Object.keys(latestSet).filter(Boolean) : [];
+            }
+            if (!intersection.length) { result[bankName] = { lowLvr: '', highLvr: '' }; return; }
+            var sorted = intersection.slice().sort(function (a, b) { return lvrTierSortIndex(a) - lvrTierSortIndex(b); });
+            result[bankName] = { lowLvr: sorted[0], highLvr: sorted[sorted.length - 1] };
+        });
+        return result;
+    }
+
     function buildTdCurveFrames(rows, fields) {
         if (section !== 'term-deposits') return null;
         var allRows = rows || [];
@@ -480,23 +530,38 @@
         var style = curveStyle(fields.chartType);
         var bankRibbons = null;
         if (section === 'home-loans' && style === 'ribbon') {
+            var consistentLvr = computeConsistentLvrPerBank(rows || []);
             bankRibbons = visibleBanks.map(function (bankName, index) {
+                var bankRange = consistentLvr[bankName] || { lowLvr: '', highLvr: '' };
+                var lowLvrTier = bankRange.lowLvr;
+                var highLvrTier = bankRange.highLvr;
                 var points = categories.map(function (category) {
-                    var bankRows = category.rows.filter(function (entry) { return String(entry.row && entry.row.bank_name || '') === bankName; });
-                    if (!bankRows.length) return null;
-                    bankRows.sort(function (a, b) {
-                        return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier);
+                    var bankRows = category.rows.filter(function (entry) {
+                        if (String(entry.row && entry.row.bank_name || '') !== bankName) return false;
+                        if (section === 'home-loans' && String(entry.row && entry.row.rate_structure || '') !== 'variable') return false;
+                        return true;
                     });
-                    var low = bankRows[0];
-                    var high = bankRows[bankRows.length - 1];
-                    var lowLvr = low && low.row ? String(low.row.lvr_tier || '') : '';
-                    var highLvr = high && high.row ? String(high.row.lvr_tier || '') : '';
+                    if (!bankRows.length) return null;
+                    var lowEntry = lowLvrTier ? bankRows.find(function (e) { return String(e.row && e.row.lvr_tier || '') === lowLvrTier; }) : null;
+                    var highEntry = highLvrTier ? bankRows.find(function (e) { return String(e.row && e.row.lvr_tier || '') === highLvrTier; }) : null;
+                    if (!lowEntry && bankRows.length) {
+                        bankRows.sort(function (a, b) { return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier); });
+                        lowEntry = bankRows[0];
+                    }
+                    if (!highEntry && bankRows.length) {
+                        if (!lowEntry) bankRows.sort(function (a, b) { return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier); });
+                        highEntry = bankRows[bankRows.length - 1];
+                    }
+                    var lowRate = lowEntry && Number.isFinite(lowEntry.value) ? lowEntry.value : null;
+                    var highRate = highEntry && Number.isFinite(highEntry.value) ? highEntry.value : null;
+                    var lowLvrLabel = humanField('lvr_tier', lowLvrTier || (lowEntry && lowEntry.row ? String(lowEntry.row.lvr_tier || '') : ''), lowEntry && lowEntry.row);
+                    var highLvrLabel = humanField('lvr_tier', highLvrTier || (highEntry && highEntry.row ? String(highEntry.row.lvr_tier || '') : ''), highEntry && highEntry.row);
                     return {
                         bucketKey: category.key,
-                        lowRate: low && Number.isFinite(low.value) ? low.value : null,
-                        highRate: high && Number.isFinite(high.value) ? high.value : null,
-                        lowLvrLabel: humanField('lvr_tier', lowLvr, low && low.row),
-                        highLvrLabel: humanField('lvr_tier', highLvr, high && high.row),
+                        lowRate: lowRate,
+                        highRate: highRate,
+                        lowLvrLabel: lowLvrLabel,
+                        highLvrLabel: highLvrLabel,
                     };
                 });
                 return { bankName: bankName, colorIndex: index, points: points };

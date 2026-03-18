@@ -261,10 +261,11 @@
         var narrow = size && size.width < 760;
         var gridLeft = narrow ? 46 : 58;
         var curveTitle = market.curveTitle || 'Borrowing cost by structure (LVR band)';
-        var showLvrLabels = market.categories.length > 1;
         var series = [];
         (market.bankRibbons || []).forEach(function (ribbon, idx) {
-            var color = paletteColor(ribbon.colorIndex);
+            var color = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
+                ? chartConfig.bankAccentColor(ribbon.bankName, ribbon.colorIndex)
+                : paletteColor(ribbon.colorIndex);
             var fillColor = hexToRgba(color, 0.5);
             var categoryKeys = market.categories.map(function (c) { return c.key; });
             var lowData = ribbon.points.map(function (p, i) {
@@ -306,7 +307,7 @@
                 lineStyle: { width: 1.5, color: color },
                 itemStyle: { color: color },
                 data: lowData,
-                label: { show: showLvrLabels, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.lowLvrLabel) || ''; } },
+                label: { show: true, fontSize: 6, distance: 0, color: color, formatter: function (params) { return (params.data && params.data.lowLvrLabel) || ''; } },
             });
             series.push({
                 name: ribbon.bankName,
@@ -316,7 +317,7 @@
                 lineStyle: { width: 1.5, color: color },
                 itemStyle: { color: color },
                 data: highData,
-                label: { show: showLvrLabels, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.highLvrLabel) || ''; } },
+                label: { show: true, fontSize: 6, distance: 0, color: color, formatter: function (params) { return (params.data && params.data.highLvrLabel) || ''; } },
             });
         });
         var yRange = marketCurveYRange(market, fields.yField);
