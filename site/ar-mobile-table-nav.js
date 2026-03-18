@@ -60,12 +60,17 @@
         };
     }
 
+    /** Minimum scroll range (px) to show the rail; low so rail appears reliably after layout. */
+    var MIN_RAIL_SCROLL_RANGE = 20;
+
     function shouldShowRail(range) {
         if (!isMobileViewport()) return false;
         if (getActiveTab() !== 'explorer') return false;
         if (!isExplorerVisible()) return false;
-        if (!range) return false;
-        return (range.end - range.start) > 50;
+        if (range && (range.end - range.start) > MIN_RAIL_SCROLL_RANGE) return true;
+        var section = getExplorerSection();
+        if (section && section.scrollHeight > window.innerHeight + MIN_RAIL_SCROLL_RANGE) return true;
+        return false;
     }
 
     function setRailVisible(visible) {

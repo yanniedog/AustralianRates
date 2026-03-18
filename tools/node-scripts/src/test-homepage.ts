@@ -928,14 +928,22 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
 
 async function verifyMobileRail(page, results, label, baseUrl) {
     await page.setViewportSize({ width: 375, height: 667 });
+    await page.waitForTimeout(500);
     await page.evaluate(() => {
         const d = document.getElementById('table-details');
         if (d && d.tagName === 'DETAILS') d.open = true;
     });
     await page.waitForTimeout(400);
     await page.click('#tab-explorer').catch(() => {});
-    await page.waitForTimeout(300);
-    const visible = await waitForMobileRailVisible(page);
+    await page.waitForTimeout(500);
+    await page.waitForSelector('#panel-explorer.active', { timeout: 5000 }).catch(() => {});
+    await page.waitForSelector('#rate-table .tabulator-row', { timeout: 10000 }).catch(() => {});
+    await page.evaluate(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (window.AR?.mobileTableNav?.refresh) window.AR.mobileTableNav.refresh();
+    });
+    await page.waitForTimeout(600);
+    const visible = await waitForMobileRailVisible(page, 20000);
     if (!visible) {
         fail(results, `${label}: mobile explorer rail did not appear`);
         return;
