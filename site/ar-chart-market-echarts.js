@@ -110,11 +110,49 @@
         return lines.filter(Boolean).join('<br>');
     }
 
+    function marketCurveYRange(market, yField) {
+        var lo = Infinity;
+        var hi = -Infinity;
+        (market.categories || []).forEach(function (category) {
+            if (Number.isFinite(category.min)) lo = Math.min(lo, category.min);
+            if (Number.isFinite(category.max)) hi = Math.max(hi, category.max);
+            if (Number.isFinite(category.median)) {
+                lo = Math.min(lo, category.median);
+                hi = Math.max(hi, category.median);
+            }
+            if (Number.isFinite(category.bestValue)) {
+                lo = Math.min(lo, category.bestValue);
+                hi = Math.max(hi, category.bestValue);
+            }
+        });
+        (market.bankCurves || []).forEach(function (curve) {
+            (curve.points || []).forEach(function (point) {
+                if (point && Number.isFinite(point.value)) {
+                    lo = Math.min(lo, point.value);
+                    hi = Math.max(hi, point.value);
+                }
+            });
+        });
+        (market.bankRibbons || []).forEach(function (ribbon) {
+            (ribbon.points || []).forEach(function (p) {
+                if (p && Number.isFinite(p.lowRate)) lo = Math.min(lo, p.lowRate);
+                if (p && Number.isFinite(p.highRate)) hi = Math.max(hi, p.highRate);
+            });
+        });
+        if (!Number.isFinite(lo)) lo = 0;
+        if (!Number.isFinite(hi)) hi = 8;
+        var pad = (hi - lo) * 0.06 || 0.25;
+        var minVal = lo - pad;
+        if (typeof chartConfig.isPercentField === 'function' && chartConfig.isPercentField(yField)) minVal = Math.max(0, minVal);
+        return { min: minVal, max: hi + pad };
+    }
+
     function buildLineOption(market, fields, size) {
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
+        var gridLeft = compact ? 46 : 58;
         var series = [];
 
         if (market.categories.length > 1) {
@@ -153,6 +191,7 @@
         });
 
         var curveTitle = market.curveTitle || '';
+        var yRange = marketCurveYRange(market, fields.yField);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -168,8 +207,8 @@
             } : undefined,
             legend: {
                 top: curveTitle ? 20 : 0,
-                left: 0,
-                right: 0,
+                left: gridLeft,
+                right: 18,
                 type: 'scroll',
                 textStyle: { color: theme.softText },
                 formatter: function (name) { return trimAxisLabel(name, compact ? 14 : 22); },
@@ -184,7 +223,7 @@
                 formatter: function (params) { return axisTooltip(params, market, fields); },
             },
             grid: {
-                left: compact ? 46 : 58,
+                left: gridLeft,
                 right: 18,
                 top: curveTitle ? 72 : 54,
                 bottom: narrow ? 78 : 64,
@@ -193,6 +232,8 @@
             xAxis: categoryAxis(market, compact),
             yAxis: {
                 type: 'value',
+                min: yRange.min,
+                max: yRange.max,
                 name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
                 nameGap: compact ? 10 : (narrow ? 18 : 26),
                 nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
@@ -218,8 +259,10 @@
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
+        var gridLeft = narrow ? 46 : 58;
         var curveTitle = market.curveTitle || 'Borrowing cost by structure (LVR band)';
         var bankAccentColor = chartConfig.bankAccentColor || paletteColor;
+        var showLvrLabels = market.categories.length > 1;
         var series = [];
         (market.bankRibbons || []).forEach(function (ribbon, idx) {
             var color = typeof bankAccentColor === 'function' ? bankAccentColor(ribbon.bankName, ribbon.colorIndex) : paletteColor(ribbon.colorIndex);
@@ -264,7 +307,7 @@
                 lineStyle: { width: 1.5, color: color },
                 itemStyle: { color: color },
                 data: lowData,
-                label: { show: true, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.lowLvrLabel) || ''; } },
+                label: { show: showLvrLabels, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.lowLvrLabel) || ''; } },
             });
             series.push({
                 name: ribbon.bankName,
@@ -274,9 +317,10 @@
                 lineStyle: { width: 1.5, color: color },
                 itemStyle: { color: color },
                 data: highData,
-                label: { show: true, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.highLvrLabel) || ''; } },
+                label: { show: showLvrLabels, fontSize: 8, color: color, formatter: function (params) { return (params.data && params.data.highLvrLabel) || ''; } },
             });
         });
+        var yRange = marketCurveYRange(market, fields.yField);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -293,8 +337,8 @@
             legend: {
                 data: (market.bankRibbons || []).map(function (r) { return r.bankName; }),
                 top: curveTitle ? 20 : 0,
-                left: 0,
-                right: 0,
+                left: gridLeft,
+                right: 20,
                 type: 'scroll',
                 textStyle: { color: theme.softText },
             },
@@ -308,7 +352,7 @@
                 formatter: function (params) { return axisTooltip(params, market, fields); },
             },
             grid: {
-                left: narrow ? 46 : 58,
+                left: gridLeft,
                 right: 20,
                 top: curveTitle ? 72 : 54,
                 bottom: narrow ? 78 : 64,
@@ -317,6 +361,8 @@
             xAxis: categoryAxis(market, narrow),
             yAxis: {
                 type: 'value',
+                min: yRange.min,
+                max: yRange.max,
                 name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
                 nameGap: narrow ? 18 : 26,
                 nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
@@ -370,19 +416,24 @@
                 containLabel: true,
             },
             xAxis: categoryAxis(market, narrow),
-            yAxis: {
-                type: 'value',
-                name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
-                nameGap: narrow ? 18 : 26,
-                nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
-                axisLine: gridStyles().axisLine,
-                splitLine: gridStyles().splitLine,
-                axisLabel: {
-                    color: theme.softText,
-                    fontFamily: theme.dataFont || undefined,
-                    formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
-                },
-            },
+            yAxis: (function () {
+                var yRange = marketCurveYRange(market, fields.yField);
+                return {
+                    type: 'value',
+                    min: yRange.min,
+                    max: yRange.max,
+                    name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                    nameGap: narrow ? 18 : 26,
+                    nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
+                    axisLine: gridStyles().axisLine,
+                    splitLine: gridStyles().splitLine,
+                    axisLabel: {
+                        color: theme.softText,
+                        fontFamily: theme.dataFont || undefined,
+                        formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
+                    },
+                };
+            })(),
             series: [
                 {
                     name: 'Floor',
@@ -482,19 +533,24 @@
                 containLabel: true,
             },
             xAxis: categoryAxis(market, narrow),
-            yAxis: {
-                type: 'value',
-                name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
-                nameGap: narrow ? 18 : 26,
-                nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
-                axisLine: gridStyles().axisLine,
-                splitLine: gridStyles().splitLine,
-                axisLabel: {
-                    color: theme.softText,
-                    fontFamily: theme.dataFont || undefined,
-                    formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
-                },
-            },
+            yAxis: (function () {
+                var yRange = marketCurveYRange(market, fields.yField);
+                return {
+                    type: 'value',
+                    min: yRange.min,
+                    max: yRange.max,
+                    name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                    nameGap: narrow ? 18 : 26,
+                    nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
+                    axisLine: gridStyles().axisLine,
+                    splitLine: gridStyles().splitLine,
+                    axisLabel: {
+                        color: theme.softText,
+                        fontFamily: theme.dataFont || undefined,
+                        formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
+                    },
+                };
+            })(),
             series: [
                 {
                     name: 'Distribution',
