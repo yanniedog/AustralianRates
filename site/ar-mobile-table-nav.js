@@ -26,6 +26,8 @@
     }
 
     function getExplorerSection() {
+        var fold = document.getElementById('table-details');
+        if (fold && fold.tagName === 'DETAILS' && fold.open) return fold;
         return document.querySelector('#panel-explorer .panel-wide') || document.getElementById('panel-explorer');
     }
 
