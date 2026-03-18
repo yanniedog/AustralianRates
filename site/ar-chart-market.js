@@ -36,6 +36,10 @@
         return idx >= 0 ? idx : 999;
     }
 
+    function lvrTierSortKey(lvrTier) {
+        return lvrTierSortIndex(lvrTier);
+    }
+
     function numericValue(row, field) {
         var num = Number(row && row[field]);
         return Number.isFinite(num) ? num : null;
@@ -114,6 +118,50 @@
             if (!intersection.length) { result[bankName] = { lowLvr: '', highLvr: '' }; return; }
             var sorted = intersection.slice().sort(function (a, b) { return lvrTierSortIndex(a) - lvrTierSortIndex(b); });
             result[bankName] = { lowLvr: sorted[0], highLvr: sorted[sorted.length - 1] };
+        });
+        return result;
+    }
+
+    function computeConsistentLvrTiersPerBank(rows) {
+        var allRows = rows || [];
+        if (!allRows.length) return {};
+        var variableOnly = section === 'home-loans';
+        var byDateBank = {};
+        allRows.forEach(function (row) {
+            if (variableOnly && String(row && row.rate_structure || '') !== 'variable') return;
+            var date = String(row && row.collection_date || '');
+            var bankName = String(row && row.bank_name || 'Unknown bank');
+            var lvr = String(row && row.lvr_tier || '').trim();
+            if (!date || !lvr) return;
+            var key = date + '\t' + bankName;
+            if (!byDateBank[key]) byDateBank[key] = Object.create(null);
+            byDateBank[key][lvr] = true;
+        });
+        var banksByDate = {};
+        Object.keys(byDateBank).forEach(function (key) {
+            var parts = key.split('\t');
+            var date = parts[0];
+            var bankName = parts[1];
+            if (!banksByDate[bankName]) banksByDate[bankName] = [];
+            if (banksByDate[bankName].indexOf(date) < 0) banksByDate[bankName].push(date);
+        });
+        var latestDate = latestSnapshotDate(allRows);
+        var result = {};
+        Object.keys(banksByDate).forEach(function (bankName) {
+            var dates = banksByDate[bankName].sort(compareDates);
+            var intersection = null;
+            dates.forEach(function (date) {
+                var set = byDateBank[date + '\t' + bankName];
+                var tiers = Object.keys(set).filter(Boolean);
+                if (intersection === null) intersection = tiers.slice();
+                else intersection = intersection.filter(function (t) { return set[t]; });
+            });
+            if (!intersection || !intersection.length) {
+                var fallbackDate = dates.length ? dates[dates.length - 1] : latestDate;
+                var latestSet = byDateBank[fallbackDate + '\t' + bankName];
+                intersection = latestSet ? Object.keys(latestSet).filter(Boolean) : [];
+            }
+            result[bankName] = intersection.slice().sort(function (a, b) { return lvrTierSortKey(a) - lvrTierSortKey(b); });
         });
         return result;
     }
@@ -508,39 +556,47 @@
             var visibleBanks = chooseVisibleBanks(categories, direction, 8);
             var byKey = {};
             categories.forEach(function (c) { byKey[c.key] = c; });
-            var consistentLvr = computeConsistentLvrPerBank(allRows);
-            var bankRibbons = visibleBanks.map(function (bankName, index) {
-                var bankRange = consistentLvr[bankName] || { lowLvr: '', highLvr: '' };
-                var lowLvrTier = bankRange.lowLvr;
-                var highLvrTier = bankRange.highLvr;
-                var points = categories.map(function (category) {
-                    var bankRows = category.rows.filter(function (entry) { return String(entry.row && entry.row.bank_name || '') === bankName; });
-                    if (!bankRows.length) return null;
-                    var lowEntry = lowLvrTier ? bankRows.find(function (e) { return String(e.row && e.row.lvr_tier || '') === lowLvrTier; }) : null;
-                    var highEntry = highLvrTier ? bankRows.find(function (e) { return String(e.row && e.row.lvr_tier || '') === highLvrTier; }) : null;
-                    if (!lowEntry && bankRows.length) {
-                        bankRows = bankRows.slice().sort(function (a, b) { return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier); });
-                        lowEntry = bankRows[0];
-                    }
-                    if (!highEntry && bankRows.length) {
-                        var sortedByLvr = bankRows.slice().sort(function (a, b) { return lvrTierSortIndex(a.row && a.row.lvr_tier) - lvrTierSortIndex(b.row && b.row.lvr_tier); });
-                        highEntry = sortedByLvr[sortedByLvr.length - 1];
-                    }
-                    var lowRate = lowEntry && Number.isFinite(lowEntry.value) ? lowEntry.value : null;
-                    var highRate = highEntry && Number.isFinite(highEntry.value) ? highEntry.value : null;
-                    var lowLvrLabel = humanField('lvr_tier', lowLvrTier || (lowEntry && lowEntry.row ? String(lowEntry.row.lvr_tier || '') : ''), lowEntry && lowEntry.row);
-                    var highLvrLabel = humanField('lvr_tier', highLvrTier || (highEntry && highEntry.row ? String(highEntry.row.lvr_tier || '') : ''), highEntry && highEntry.row);
-                    return { bucketKey: category.key, lowRate: lowRate, highRate: highRate, lowLvrLabel: lowLvrLabel, highLvrLabel: highLvrLabel };
+            var consistentTiers = computeConsistentLvrTiersPerBank(allRows);
+            var bankLvrCurves = [];
+            visibleBanks.forEach(function (bankName, bankIndex) {
+                var tiers = (consistentTiers[bankName] && consistentTiers[bankName].length) ? consistentTiers[bankName] : LVR_TIER_ORDER.slice();
+                tiers.forEach(function (tier) {
+                    var points = categories.map(function (category) {
+                        var bankRows = category.rows.filter(function (entry) {
+                            return String(entry.row && entry.row.bank_name || '') === bankName
+                                && String(entry.row && entry.row.lvr_tier || '') === tier;
+                        });
+                        if (!bankRows.length) return null;
+                        var best = bankRows[0];
+                        for (var i = 1; i < bankRows.length; i++) {
+                            var candidate = bankRows[i];
+                            var better = betterValue(direction, best.value, candidate.value);
+                            if (better === candidate.value) best = candidate;
+                        }
+                        return best && Number.isFinite(best.value)
+                            ? { bucketKey: category.key, value: best.value, row: best.row, lvrTier: tier }
+                            : null;
+                    });
+                    bankLvrCurves.push({
+                        bankName: bankName,
+                        lvrTier: tier,
+                        lvrLabel: humanField('lvr_tier', tier, null),
+                        colorIndex: bankIndex,
+                        points: points,
+                    });
                 });
-                return { bankName: bankName, colorIndex: index, points: points };
             });
+
+            // #region agent log
+            try { fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'16a5eb'},body:JSON.stringify({sessionId:'16a5eb',runId:'pre-fix',hypothesisId:'H1',location:'ar-chart-market.js:buildMarketModel',message:'HL market ribbon branch produces LVR lines',data:{dateCount:categories.length,visibleBanks:visibleBanks.length,curves:bankLvrCurves.length,firstDate:categories[0]&&categories[0].key,lastDate:categories[categories.length-1]&&categories[categories.length-1].key},timestamp:Date.now()})}).catch(function(){});} catch(e) {}
+            // #endregion
             var lastCategory = categories[categories.length - 1];
             return {
                 snapshotDate: lastCategory ? lastCategory.key : '',
                 snapshotDateDisplay: lastCategory ? humanField('collection_date', lastCategory.key, null) : '',
                 dimensionLabel: 'Date',
                 dimensionField: 'collection_date',
-                curveTitle: 'Variable rate over time (LVR band: lower = lowest LVR, upper = highest LVR)',
+                curveTitle: 'Variable rate over time by LVR tier (one colour per bank)',
                 style: 'ribbon',
                 direction: direction,
                 bestLabel: direction === 'asc' ? 'Lowest' : 'Highest',
@@ -554,7 +610,8 @@
                     });
                     return { bankName: bankName, colorIndex: index, points: points, rateType: '', lineDashed: false };
                 }),
-                bankRibbons: bankRibbons,
+                bankRibbons: null,
+                bankLvrCurves: bankLvrCurves,
                 focusBucket: focusBucket(categories, selectionState),
             };
         }

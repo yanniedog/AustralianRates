@@ -45,22 +45,23 @@
     };
     /** Bank name (normalized lower) -> hex colour for ribbon/labels. Fallback to section palette by index. */
     var BANK_ACCENT_COLORS = {
-        'commonwealth bank of australia': '#f01428',
-        'westpac banking corporation': '#d4002a',
-        'anz': '#0057b7',
-        'national australia bank': '#e4002b',
-        'macquarie bank': '#c4122e',
-        'ing': '#ff6200',
-        'ubank': '#7d3e84',
-        'bankwest': '#e31837',
-        'bendigo and adelaide bank': '#e31837',
-        'bank of melbourne': '#e4002b',
-        'st. george bank': '#e4002b',
-        'bank of queensland': '#e4002b',
-        'suncorp bank': '#e31837',
-        'great southern bank': '#00a651',
-        'hsbc australia': '#db0011',
-        'amp bank': '#00a651',
+        // Prefer distinct, brand-aligned colours so each bank is visually unique.
+        'commonwealth bank of australia': '#ffcc00', // CBA gold
+        'westpac banking corporation': '#d50032', // Westpac red
+        'anz': '#0033a0', // ANZ blue
+        'national australia bank': '#8a1538', // NAB burgundy
+        'macquarie bank': '#006d5b', // Macquarie green
+        'ing': '#ff6200', // ING orange
+        'ubank': '#7d3e84', // ubank purple
+        'bankwest': '#7ac142', // Bankwest lime
+        'bendigo and adelaide bank': '#a6192e', // Bendigo deep red
+        'bank of melbourne': '#4b0f1f', // Bank of Melbourne dark maroon
+        'st. george bank': '#e60012', // St.George red
+        'bank of queensland': '#00a3e0', // BOQ cyan/blue
+        'suncorp bank': '#1b365d', // Suncorp navy
+        'great southern bank': '#00a651', // Great Southern green
+        'hsbc australia': '#db0011', // HSBC red
+        'amp bank': '#ff6f00', // AMP orange accent (distinct)
     };
 
     function bankAccentColor(bankName, index) {

@@ -155,6 +155,92 @@
         var gridLeft = compact ? 46 : 58;
         var series = [];
 
+        if (market.bankLvrCurves && market.bankLvrCurves.length) {
+            var curveTitle = market.curveTitle || 'Variable rate over time by LVR tier';
+            var yRange = marketCurveYRange(market, fields.yField);
+            market.bankLvrCurves.forEach(function (curve, index) {
+                var bankColor = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
+                    ? chartConfig.bankAccentColor(curve.bankName, curve.colorIndex || 0)
+                    : paletteColor(curve.colorIndex || 0);
+                var name = curve.bankName + ' · ' + (curve.lvrLabel || curve.lvrTier || '');
+                series.push({
+                    name: name,
+                    type: 'line',
+                    smooth: 0.22,
+                    connectNulls: false,
+                    showSymbol: true,
+                    symbolSize: 4,
+                    lineStyle: { width: 1.6, color: bankColor, opacity: 0.9 },
+                    itemStyle: { color: bankColor, opacity: 0.9 },
+                    emphasis: { focus: 'series', lineStyle: { width: 2.2 }, symbolSize: 7 },
+                    data: (curve.points || []).map(function (point) {
+                        if (!point) return null;
+                        return { value: [point.bucketKey, point.value], bucketKey: point.bucketKey, row: point.row };
+                    }),
+                });
+            });
+
+            // #region agent log
+            try { fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'16a5eb'},body:JSON.stringify({sessionId:'16a5eb',runId:'pre-fix',hypothesisId:'H2',location:'ar-chart-market-echarts.js:buildLineOption',message:'Rendering HL per-LVR lines',data:{seriesCount:series.length,legendCount:series.length,xCount:market.categories&&market.categories.length,sample:series.slice(0,6).map(function(s){return {name:s.name,color:s.lineStyle&&s.lineStyle.color};})},timestamp:Date.now()})}).catch(function(){});} catch(e) {}
+            // #endregion
+
+            return {
+                textStyle: base.textStyle,
+                animationDuration: base.animationDuration,
+                animationDurationUpdate: base.animationDurationUpdate,
+                animationEasing: base.animationEasing,
+                backgroundColor: 'transparent',
+                axisPointer: axisPointerConfig(theme),
+                title: curveTitle ? {
+                    text: curveTitle,
+                    left: 0,
+                    top: 2,
+                    textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+                } : undefined,
+                legend: {
+                    bottom: 8,
+                    left: 0,
+                    right: 0,
+                    type: 'scroll',
+                    textStyle: { color: theme.softText },
+                    formatter: function (name) { return trimAxisLabel(name, compact ? 16 : 26); },
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
+                    backgroundColor: tooltipStyles().backgroundColor,
+                    borderColor: tooltipStyles().borderColor,
+                    textStyle: tooltipStyles().textStyle,
+                    extraCssText: tooltipStyles().extraCssText,
+                    formatter: function (params) { return axisTooltip(params, market, fields); },
+                },
+                grid: {
+                    left: gridLeft,
+                    right: 18,
+                    top: curveTitle ? 36 : 24,
+                    bottom: narrow ? 88 : 76,
+                    containLabel: true,
+                },
+                xAxis: categoryAxis(market, compact),
+                yAxis: {
+                    type: 'value',
+                    min: yRange.min,
+                    max: yRange.max,
+                    name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                    nameGap: compact ? 10 : (narrow ? 18 : 26),
+                    nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
+                    axisLine: gridStyles().axisLine,
+                    splitLine: gridStyles().splitLine,
+                    axisLabel: {
+                        color: theme.softText,
+                        fontFamily: theme.dataFont || undefined,
+                        formatter: function (value) { return metricAxisLabel(fields.yField, value, narrow); },
+                    },
+                },
+                series: series,
+            };
+        }
+
         if (market.categories.length > 1) {
             series.push({
                 name: 'Market median',
