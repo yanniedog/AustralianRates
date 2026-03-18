@@ -867,13 +867,10 @@
         els.tableSettingsPopover.addEventListener('click', function (event) {
             var target = event && event.target;
             if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return;
-            var before = !!target.checked;
-            setTimeout(function () {
-                if (!target) return;
-                if (!!target.checked !== before) return;
-                target.checked = !before;
-                try { target.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
-            }, 0);
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            target.checked = !target.checked;
+            try { target.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
         }, true);
 
         els.tableSettingsBtn.addEventListener('click', function (event) {
