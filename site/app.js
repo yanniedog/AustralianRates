@@ -261,6 +261,11 @@
         if (els.filterBar && els.filterBar.tagName === 'DETAILS') els.filterBar.open = false;
         var notes = document.getElementById('notes');
         if (notes && notes.tagName === 'DETAILS') notes.open = false;
+        var tableDetails = document.getElementById('table-details');
+        if (tableDetails && tableDetails.tagName === 'DETAILS') {
+            var desktop = window.matchMedia ? window.matchMedia('(min-width: 761px)') : null;
+            if (!desktop || desktop.matches) tableDetails.open = true;
+        }
     }
 
     function finishAppInit(source) {
