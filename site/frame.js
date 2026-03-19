@@ -19,6 +19,19 @@
     var helpSheet = null;
     var navScrim = null;
 
+    (function stripNocacheFromUrl() {
+        try {
+            var search = typeof location !== 'undefined' && location.search;
+            if (!search || search.indexOf('_nocache=') === -1) return;
+            var p = new URLSearchParams(search);
+            if (!p.has('_nocache')) return;
+            p.delete('_nocache');
+            var newSearch = p.toString();
+            var newUrl = location.pathname + (newSearch ? '?' + newSearch : '') + (location.hash || '');
+            if (typeof history !== 'undefined' && history.replaceState) history.replaceState(null, '', newUrl);
+        } catch (_) {}
+    })();
+
     function addSessionLog(level, message, detail) {
         _sessionLog.push({
             ts: new Date().toISOString(),
@@ -450,6 +463,13 @@
             downloadClient.addEventListener('click', function () {
                 downloadClientLog();
                 if (popup) popup.hidden = true;
+            });
+        }
+        var coldRefreshBtn = document.getElementById('footer-cold-refresh');
+        if (coldRefreshBtn) {
+            coldRefreshBtn.addEventListener('click', function () {
+                if (popup) popup.hidden = true;
+                clearSiteDataAndReload();
             });
         }
         document.addEventListener('click', function (event) {
