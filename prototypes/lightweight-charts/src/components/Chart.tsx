@@ -242,7 +242,7 @@ export default function Chart(props: ChartProps) {
             data-type={event.type}
             key={`${event.type}:${event.date}:${index}`}
             style={{ left: event.left }}
-            title={`${formatDate(event.date)} · ${event.label}`}
+            title={`${formatDate(event.date)} - ${event.label}`}
           >
             <span className="prototype-event-label">{event.label}</span>
           </div>

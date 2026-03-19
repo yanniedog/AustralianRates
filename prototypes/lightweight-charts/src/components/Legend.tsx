@@ -35,7 +35,7 @@ export default function Legend(props: LegendProps) {
                 {series.lender}
               </span>
               <strong>{series.productName}</strong>
-              <span className="prototype-meta">{series.meta.map((item) => `${item.label}: ${item.value}`).join(' · ')}</span>
+              <span className="prototype-meta">{series.meta.map((item) => `${item.label}: ${item.value}`).join(' | ')}</span>
             </button>
           )
         })}

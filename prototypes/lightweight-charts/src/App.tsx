@@ -456,7 +456,7 @@ export default function App() {
             <p className="prototype-kicker">{datasetLabel(activeDataset)}</p>
             <h2>Rate history</h2>
             <p className="prototype-meta">
-              {currentState.loadingFilters ? 'Loading real filter options…' : currentState.loadingChart ? 'Loading real chart data…' : 'Crosshair and tap surface only real recorded values.'}
+              {currentState.loadingFilters ? 'Loading real filter options...' : currentState.loadingChart ? 'Loading real chart data...' : 'Crosshair and tap surface only real recorded values.'}
             </p>
           </div>
           <button className="prototype-logout" type="button" onClick={() => window.AR?.AdminPortal?.logout()}>
