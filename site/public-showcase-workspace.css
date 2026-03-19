@@ -21,6 +21,10 @@ body.ar-public .chart-block {
 
 /* Tablet / narrow desktop: keep three-column grid within ~768–900px viewports (homepage overflow QA). */
 @media (max-width: 900px) and (min-width: 761px) {
+    body.ar-public {
+        overflow-x: hidden;
+    }
+
     body.ar-public .market-terminal {
         grid-template-columns:
             minmax(180px, 1fr)
