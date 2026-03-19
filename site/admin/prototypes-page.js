@@ -16,12 +16,6 @@
         });
     }
 
-    function escapeHtml(value) {
-        var div = document.createElement('div');
-        div.textContent = value == null ? '' : String(value);
-        return div.innerHTML;
-    }
-
     function formatCommitDate(value) {
         if (!value) return '';
         var date = new Date(value);
@@ -47,27 +41,49 @@
         return response.json();
     }
 
-    function renderCard(entry, version) {
+    function appendCopy(parent, text) {
+        var p = document.createElement('p');
+        p.className = 'admin-nav-card-copy';
+        p.textContent = text == null ? '' : String(text);
+        parent.appendChild(p);
+    }
+
+    function buildCardElement(entry, version) {
+        var article = document.createElement('article');
+        article.className = 'admin-nav-card';
+
+        var title = document.createElement('span');
+        title.className = 'admin-nav-card-title';
+        title.textContent = entry.title == null ? '' : String(entry.title);
+        article.appendChild(title);
+
+        appendCopy(article, entry.description);
+
         var datasets = Array.isArray(entry.datasets) ? entry.datasets.join(', ') : '';
-        var versionMeta = version && version.branch && version.shortCommit && version.commitDate
-            ? ('<p class="admin-nav-card-copy"><strong>Latest:</strong> ' + escapeHtml(version.branch) + ' @ ' + escapeHtml(version.shortCommit) + ' · ' + escapeHtml(formatCommitDate(version.commitDate)) + '</p>')
-            : '<p class="admin-nav-card-copy">Commit metadata unavailable.</p>';
-        return ''
-            + '<article class="admin-nav-card">'
-            + '  <span class="admin-nav-card-title">' + escapeHtml(entry.title) + '</span>'
-            + '  <p class="admin-nav-card-copy">' + escapeHtml(entry.description) + '</p>'
-            + '  <p class="admin-nav-card-copy"><strong>Datasets:</strong> ' + escapeHtml(datasets) + '</p>'
-            + '  <p class="admin-nav-card-copy"><strong>Status:</strong> ' + escapeHtml(entry.active ? 'Active' : 'Inactive') + '</p>'
-            + versionMeta
-            + '  <a class="secondary" href="' + escapeHtml(entry.previewUrl) + '">Open preview</a>'
-            + '</article>';
+        appendCopy(article, 'Datasets: ' + datasets);
+
+        appendCopy(article, 'Status: ' + (entry.active ? 'Active' : 'Inactive'));
+
+        if (version && version.branch && version.shortCommit && version.commitDate) {
+            appendCopy(article, 'Latest: ' + version.branch + ' @ ' + version.shortCommit + ' · ' + formatCommitDate(version.commitDate));
+        } else {
+            appendCopy(article, 'Commit metadata unavailable.');
+        }
+
+        var link = document.createElement('a');
+        link.className = 'secondary';
+        link.href = entry.previewUrl == null ? '#' : String(entry.previewUrl);
+        link.textContent = 'Open preview';
+        article.appendChild(link);
+
+        return article;
     }
 
     async function render() {
         if (!grid || !status) return;
         if (!registry.length) {
             status.textContent = 'No prototype entries are registered.';
-            grid.innerHTML = '';
+            grid.replaceChildren();
             return;
         }
 
@@ -76,14 +92,15 @@
             return loadVersion(entry.previewUrl).catch(function () { return null; });
         }));
 
-        grid.innerHTML = registry.map(function (entry, index) {
-            return renderCard(entry, versions[index]);
-        }).join('');
+        grid.replaceChildren();
+        for (var i = 0; i < registry.length; i++) {
+            grid.appendChild(buildCardElement(registry[i], versions[i]));
+        }
         status.textContent = 'Prototype catalogue loaded.';
     }
 
     render().catch(function () {
         if (status) status.textContent = 'Failed to load prototype catalogue.';
-        if (grid) grid.innerHTML = '';
+        if (grid) grid.replaceChildren();
     });
 })();

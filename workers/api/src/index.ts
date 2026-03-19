@@ -56,6 +56,7 @@ app.use(
     const configuredOrigins = parseConfiguredOrigins(c.env.PUBLIC_ALLOWED_ORIGINS)
     const corsMiddleware = cors({
       origin: (origin) => {
+        if (!origin) return 'https://www.australianrates.com'
         if (configuredOrigins.includes(origin)) return origin
         if (origin.endsWith('.pages.dev')) return origin
         if (origin.endsWith('.australianrates.com') || origin === 'https://australianrates.com') return origin
