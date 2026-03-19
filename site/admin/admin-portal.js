@@ -10,23 +10,44 @@
         return String(value || '').replace(/\/+$/, '');
     }
 
+    function resolveQueryParam(name) {
+        try {
+            var search = (typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : '';
+            var params = new URLSearchParams(search);
+            var value = params.get(name);
+            return value ? String(value) : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
     function resolveApiBase() {
         var globalOverride = (typeof window !== 'undefined' && window.AR_ADMIN_API_BASE)
             ? String(window.AR_ADMIN_API_BASE)
             : '';
         if (globalOverride) return trimTrailingSlash(globalOverride);
-        try {
-            var search = (typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : '';
-            var params = new URLSearchParams(search);
-            var queryOverride = params.get('adminApiBase');
-            if (queryOverride) return trimTrailingSlash(queryOverride);
-        } catch (e) {}
+        var queryOverride = resolveQueryParam('adminApiBase');
+        if (queryOverride) return trimTrailingSlash(queryOverride);
         return (typeof window !== 'undefined' && window.location && window.location.origin)
             ? trimTrailingSlash(window.location.origin + '/api/home-loan-rates')
             : '';
     }
 
+    function resolveAdminBase() {
+        var globalOverride = (typeof window !== 'undefined' && window.AR_ADMIN_BASE)
+            ? String(window.AR_ADMIN_BASE)
+            : '';
+        if (globalOverride) return trimTrailingSlash(globalOverride) + '/';
+        var queryOverride = resolveQueryParam('adminBase');
+        if (queryOverride) return trimTrailingSlash(queryOverride) + '/';
+        var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+        var idx = path.indexOf('/admin');
+        var fallback = idx >= 0 ? path.substring(0, idx) + '/admin/' : '/admin/';
+        return fallback;
+    }
+
     var API_BASE = resolveApiBase();
+    var ADMIN_BASE = resolveAdminBase();
 
     function getToken() {
         try {
@@ -57,13 +78,9 @@
     /** Redirect to login if no token. Call on dashboard, database, config, runs pages. */
     function guard() {
         var token = getToken();
-        var path = (typeof window !== 'undefined' && window.location) ? window.location.pathname : '';
         var hasToken = !!(token && token.length);
-        var willRedirect = !hasToken;
         if (!hasToken) {
-            var idx = path.indexOf('/admin');
-            var adminBase = idx >= 0 ? path.substring(0, idx) + '/admin/' : '/admin/';
-            window.location.href = adminBase;
+            window.location.href = ADMIN_BASE;
             return false;
         }
         return true;
@@ -71,9 +88,7 @@
 
     function logout() {
         clearToken();
-        var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
-        var adminBase = path.substring(0, path.lastIndexOf('/') + 1) || '/admin/';
-        window.location.href = adminBase + (adminBase.endsWith('admin/') ? '' : 'admin/');
+        window.location.href = ADMIN_BASE;
     }
 
     /**
@@ -86,10 +101,7 @@
         var res = await fetch(url, Object.assign({}, opts, { headers: headers }));
         if (res.status === 401) {
             clearToken();
-            var path = window.location.pathname || '';
-            var idx = path.indexOf('/admin');
-            var adminBase = idx >= 0 ? path.substring(0, idx) + '/admin/' : '/admin/';
-            window.location.href = adminBase;
+            window.location.href = ADMIN_BASE;
             throw new Error('Unauthorized');
         }
         return res;
