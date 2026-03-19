@@ -331,10 +331,8 @@
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
+            '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Cold refresh" title="Clear site cache, storage and cookies, then reload to load the latest version from the server">' + actionIconMarkup('refresh', 'Cold refresh') + '</button>',
         ];
-        if (context.admin) {
-            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Cold refresh" title="Clear site cache, storage and cookies, then reload to load the latest version from the server">' + actionIconMarkup('refresh', 'Cold refresh') + '</button>');
-        }
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
