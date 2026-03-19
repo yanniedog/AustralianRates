@@ -77,6 +77,7 @@ export async function queryTimeseries(db: D1Database, input: TimeseriesFilters) 
       t.lvr_tier,
       t.rate_structure,
       t.feature_set,
+      t.has_offset_account,
       t.interest_rate,
       t.comparison_rate,
       t.annual_fee,

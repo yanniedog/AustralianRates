@@ -67,7 +67,7 @@ const HOME_LOAN_CONFIG: ProjectionConfig = {
   datasetKind: 'home_loans',
   eventsTable: 'home_loan_rate_events',
   intervalsTable: 'home_loan_rate_intervals',
-  dimensionColumns: ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set'],
+  dimensionColumns: ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set', 'has_offset_account'],
   metricColumns: ['interest_rate', 'comparison_rate', 'annual_fee'],
   rateColumns: ['interest_rate', 'comparison_rate', 'annual_fee'],
 }
@@ -399,6 +399,7 @@ export async function writeHomeLoanProjection(
     rateStructure: string
     lvrTier: string
     featureSet: string
+    hasOffsetAccount?: boolean | null
     interestRate: number
     comparisonRate?: number | null
     annualFee?: number | null
@@ -430,6 +431,7 @@ export async function writeHomeLoanProjection(
     rate_structure: input.rateStructure,
     lvr_tier: input.lvrTier,
     feature_set: input.featureSet,
+    has_offset_account: input.hasOffsetAccount == null ? null : (input.hasOffsetAccount ? 1 : 0),
     interest_rate: input.interestRate,
     comparison_rate: input.comparisonRate ?? null,
     annual_fee: input.annualFee ?? null,

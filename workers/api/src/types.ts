@@ -229,6 +229,7 @@ export type EnvBindings = {
   ADMIN_API_TOKENS?: string
   CF_ACCESS_TEAM_DOMAIN?: string
   CF_ACCESS_AUD?: string
+  PUBLIC_ALLOWED_ORIGINS?: string
   WORKER_VERSION?: string
   PUBLIC_API_BASE_PATH?: string
   MELBOURNE_TIMEZONE?: string

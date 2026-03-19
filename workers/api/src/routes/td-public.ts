@@ -45,6 +45,7 @@ import {
 } from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import { registerTdChartDataRoute } from './chart-data/term-deposits'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -59,6 +60,7 @@ registerTdExportRoutes(tdPublicRoutes)
 registerDebugLogRoutes(tdPublicRoutes)
 registerTdAnalyticsRoutes(tdPublicRoutes)
 registerRbaRoutes(tdPublicRoutes)
+registerTdChartDataRoute(tdPublicRoutes)
 
 tdPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

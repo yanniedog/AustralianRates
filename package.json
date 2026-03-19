@@ -4,12 +4,14 @@
   "private": true,
   "workspaces": [
     "packages/shared",
+    "prototypes/lightweight-charts",
     "workers/api",
     "workers/archive"
   ],
   "scripts": {
     "install:all": "npm install --workspaces",
-    "build": "npm run check:public-assets && npm run check:clarity && npm run build:site-version",
+    "build": "npm run check:public-assets && npm run check:clarity && npm run build:prototype:lightweight-charts && npm run build:site-version",
+    "build:prototype:lightweight-charts": "npm run build -w prototypes/lightweight-charts",
     "build:site-version": "node write-deploy-version.js",
     "dev:api": "npm run dev -w workers/api",
     "dev:archive": "npm run dev -w workers/archive",

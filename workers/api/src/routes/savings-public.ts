@@ -44,6 +44,7 @@ import {
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerRbaRoutes } from './rba-routes'
+import { registerSavingsChartDataRoute } from './chart-data/savings'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -57,6 +58,7 @@ savingsPublicRoutes.use('*', async (c, next) => {
 registerSavingsExportRoutes(savingsPublicRoutes)
 registerSavingsAnalyticsRoutes(savingsPublicRoutes)
 registerRbaRoutes(savingsPublicRoutes)
+registerSavingsChartDataRoute(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

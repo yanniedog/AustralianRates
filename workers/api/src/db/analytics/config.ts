@@ -31,7 +31,7 @@ const DATASET_CONFIGS: Record<DatasetKind, AnalyticsDatasetConfig> = {
       'repayment_type',
       'run_source',
     ],
-    changeDetailColumns: ['security_purpose', 'repayment_type', 'lvr_tier', 'rate_structure', 'feature_set'],
+    changeDetailColumns: ['security_purpose', 'repayment_type', 'lvr_tier', 'rate_structure', 'feature_set', 'has_offset_account'],
     pivotValueColumns: ['interest_rate', 'comparison_rate', 'annual_fee'],
     pivotLabelColumns: [
       'collection_date',
@@ -44,6 +44,7 @@ const DATASET_CONFIGS: Record<DatasetKind, AnalyticsDatasetConfig> = {
       'lvr_tier',
       'rate_structure',
       'feature_set',
+      'has_offset_account',
       'run_source',
       'retrieval_type',
       'data_quality_flag',

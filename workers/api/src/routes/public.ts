@@ -34,6 +34,7 @@ import { parseAnalyticsRepresentation } from './analytics-route-utils'
 import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
 import { registerRbaRoutes } from './rba-routes'
+import { registerHomeLoanChartDataRoute } from './chart-data/home-loans'
 
 export const publicRoutes = new Hono<AppContext>()
 
@@ -48,6 +49,7 @@ registerHomeLoanExportRoutes(publicRoutes)
 registerHomeLoanAnalyticsRoutes(publicRoutes)
 registerPublicCoreRoutes(publicRoutes)
 registerRbaRoutes(publicRoutes)
+registerHomeLoanChartDataRoute(publicRoutes)
 
 publicRoutes.post('/trigger-run', async (c) => {
   const guard = guardPublicTriggerRun(c)

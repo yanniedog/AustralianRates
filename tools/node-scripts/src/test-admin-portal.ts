@@ -16,7 +16,7 @@ const ADMIN_BASE = `${ORIGIN}/admin`;
 const ADMIN_API_BASE = `${ORIGIN}/api/home-loan-rates/admin`;
 const CLOUDFLARE_INSIGHTS_BEACON = 'https://static.cloudflareinsights.com/beacon.min.js';
 
-const PAGE_PATHS = ['dashboard', 'status', 'integrity', 'database', 'exports', 'clear', 'config', 'runs', 'logs'];
+const PAGE_PATHS = ['dashboard', 'prototypes', 'status', 'integrity', 'database', 'exports', 'clear', 'config', 'runs', 'logs'];
 
 function asPathname(value: string): string {
   return new URL(value).pathname;
@@ -192,9 +192,26 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
       const navTexts = await page.$$eval('main.admin-dash .admin-nav-card-title', (nodes: HTMLElement[]) =>
         nodes.map((n) => (n.textContent || '').trim()),
       );
-      const required = ['Status', 'Data integrity', 'Database', 'Clear data', 'Configuration', 'Runs', 'Logs'];
+      const required = ['Prototype', 'Status', 'Data integrity', 'Database', 'Clear data', 'Configuration', 'Runs', 'Logs'];
       const missing = required.filter((v) => !navTexts.includes(v));
       if (missing.length) throw new Error(`missing cards: ${missing.join(', ')}`);
+    });
+
+    await runStep('prototype catalogue renders registry entry and preview link', async () => {
+      await page.goto(`${ADMIN_BASE}/prototypes`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('#prototype-grid .admin-nav-card').length > 0;
+      }, null, { timeout: 25000 });
+      const cardTitles = await page.$$eval('#prototype-grid .admin-nav-card-title', (nodes: HTMLElement[]) =>
+        nodes.map((node) => (node.textContent || '').trim()),
+      );
+      if (!cardTitles.includes('Real-Data Lightweight Charts')) {
+        throw new Error(`unexpected prototype cards: ${cardTitles.join(', ')}`);
+      }
+      const previewHref = await page.$eval('#prototype-grid .admin-nav-card a', (node: HTMLAnchorElement) => node.href);
+      if (!previewHref || !/admin\/prototypes\/lightweight-charts\/?$/i.test(previewHref)) {
+        throw new Error(`unexpected preview href: ${previewHref}`);
+      }
     });
 
     await runStep('status page refresh loads summary', async () => {

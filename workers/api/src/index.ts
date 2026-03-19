@@ -15,6 +15,18 @@ import { flushBufferedLogs, initLogger, log } from './utils/logger'
 
 const app = new Hono<AppContext>()
 
+function parseConfiguredOrigins(raw: string | undefined): string[] {
+  if (!raw) return []
+  return Array.from(
+    new Set(
+      String(raw)
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
 app.use('*', async (c, next) => {
   initLogger(c.env.DB)
   const path = new URL(c.req.url).pathname
@@ -40,16 +52,22 @@ app.use(
 )
 app.use(
   '*',
-  cors({
-    origin: (origin) => {
-      if (!origin) return '*'
-      if (origin.endsWith('.australianrates.com') || origin === 'https://australianrates.com') return origin
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) return origin
-      return 'https://www.australianrates.com'
-    },
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'Cf-Access-Jwt-Assertion'],
-  }),
+  async (c, next) => {
+    const configuredOrigins = parseConfiguredOrigins(c.env.PUBLIC_ALLOWED_ORIGINS)
+    const corsMiddleware = cors({
+      origin: (origin) => {
+        if (!origin) return 'https://www.australianrates.com'
+        if (configuredOrigins.includes(origin)) return origin
+        if (origin.endsWith('.pages.dev')) return origin
+        if (origin.endsWith('.australianrates.com') || origin === 'https://australianrates.com') return origin
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) return origin
+        return 'https://www.australianrates.com'
+      },
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Cf-Access-Jwt-Assertion'],
+    })
+    await corsMiddleware(c, next)
+  },
 )
 
 app.route(`${API_BASE_PATH}/admin`, adminRoutes)

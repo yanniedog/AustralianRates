@@ -9,6 +9,7 @@ type HomeRow = {
   rateStructure: string
   lvrTier: string
   featureSet: string
+  hasOffsetAccount?: boolean | null
   interestRate: number
   comparisonRate: number | null
   annualFee: number | null
@@ -91,14 +92,14 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
     .prepare(
       `INSERT INTO latest_home_loan_series (
          series_key, product_key, bank_name, collection_date, product_id, product_code, product_name,
-         security_purpose, repayment_type, rate_structure, lvr_tier, feature_set, interest_rate, comparison_rate, annual_fee,
+         security_purpose, repayment_type, rate_structure, lvr_tier, feature_set, has_offset_account, interest_rate, comparison_rate, annual_fee,
          source_url, product_url, published_at, cdr_product_detail_hash, data_quality_flag, confidence_score, retrieval_type,
          parsed_at, run_id, run_source, is_removed, removed_at
        ) VALUES (
          ?1, ?2, ?3, ?4, ?5, ?6, ?7,
-         ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-         ?16, ?17, ?18, ?19, ?20, ?21, ?22,
-         ?23, ?24, ?25, ?26, ?27
+         ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+         ?17, ?18, ?19, ?20, ?21, ?22, ?23,
+         ?24, ?25, ?26, ?27, ?28
        )
        ON CONFLICT(series_key) DO UPDATE SET
          product_key = excluded.product_key,
@@ -112,6 +113,7 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
          rate_structure = excluded.rate_structure,
          lvr_tier = excluded.lvr_tier,
          feature_set = excluded.feature_set,
+         has_offset_account = excluded.has_offset_account,
          interest_rate = excluded.interest_rate,
          comparison_rate = excluded.comparison_rate,
          annual_fee = excluded.annual_fee,
@@ -141,6 +143,7 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
       row.rateStructure,
       row.lvrTier,
       row.featureSet,
+      row.hasOffsetAccount == null ? null : (row.hasOffsetAccount ? 1 : 0),
       row.interestRate,
       row.comparisonRate,
       row.annualFee,

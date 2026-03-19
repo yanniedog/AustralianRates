@@ -27,6 +27,7 @@ export type NormalizedRateRow = {
   rateStructure: RateStructure
   lvrTier: LvrTier
   featureSet: FeatureSet
+  hasOffsetAccount?: boolean | null
   interestRate: number
   comparisonRate: number | null
   annualFee: number | null
@@ -319,6 +320,9 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   }
   if (!FEATURE_SETS.includes(row.featureSet)) {
     return { ok: false, reason: 'invalid_feature_set' }
+  }
+  if (row.hasOffsetAccount != null && typeof row.hasOffsetAccount !== 'boolean') {
+    return { ok: false, reason: 'invalid_has_offset_account' }
   }
   if (!isFiniteNumber(row.interestRate) || row.interestRate < MIN_RATE_PERCENT || row.interestRate > MAX_RATE_PERCENT) {
     return { ok: false, reason: 'interest_rate_out_of_bounds' }

@@ -164,7 +164,8 @@
     }
 
     function defaultChartType() {
-        return section === 'home-loans' ? 'bar' : 'scatter';
+        if (section === 'home-loans' || section === 'savings') return 'bar';
+        return 'scatter';
     }
 
     function defaultFields() {

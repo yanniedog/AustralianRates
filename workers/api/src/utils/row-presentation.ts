@@ -16,6 +16,17 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function asBooleanOrNull(value: unknown): boolean | null {
+  if (value == null || value === '') return null
+  if (value === true || value === false) return value
+  if (value === 1 || value === '1') return true
+  if (value === 0 || value === '0') return false
+  const text = String(value).trim().toLowerCase()
+  if (text === 'true' || text === 'yes') return true
+  if (text === 'false' || text === 'no') return false
+  return null
+}
+
 function toTitleWords(value: string): string {
   return value
     .split(' ')
@@ -277,6 +288,13 @@ function featureSetDisplay(value: unknown): string {
   return humanizeCode(v)
 }
 
+function offsetAccountDisplay(value: unknown): string {
+  const normalized = asBooleanOrNull(value)
+  if (normalized === true) return 'Offset'
+  if (normalized === false) return 'No offset'
+  return 'Unknown'
+}
+
 function accountTypeDisplay(value: unknown): string {
   const v = asText(value).toLowerCase()
   if (v === 'at_call') return 'At call'
@@ -315,11 +333,13 @@ export function presentHomeLoanRow<T extends RowRecord>(row: T): T & Record<stri
   const base = withBaseDisplayFields(row)
   return {
     ...base,
+    has_offset_account: asBooleanOrNull(base.has_offset_account),
     security_purpose_display: securityPurposeDisplay(base.security_purpose),
     repayment_type_display: repaymentTypeDisplay(base.repayment_type),
     rate_structure_display: rateStructureDisplay(base.rate_structure),
     lvr_tier_display: lvrTierDisplay(base.lvr_tier),
     feature_set_display: featureSetDisplay(base.feature_set),
+    has_offset_account_display: offsetAccountDisplay(base.has_offset_account),
   }
 }
 

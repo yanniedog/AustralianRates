@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Prototype Catalogue | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=d4ad818">
+    <link rel="stylesheet" href="../public-shell.css?v=d4ad818">
+    <link rel="stylesheet" href="admin-layout.css?v=d4ad818">
+    <link rel="stylesheet" href="admin-pages.css?v=d4ad818">
+    <script src="../theme.js?v=d4ad818"></script>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide" id="main-content" tabindex="-1">
+        <div class="admin-page-head">
+            <p class="eyebrow">Prototype</p>
+            <h1>Prototype catalogue</h1>
+            <p class="sub">Admin-only previews for isolated charting prototypes that stay off the public stack until approved.</p>
+        </div>
+        <section aria-live="polite">
+            <div id="prototype-status" class="admin-status-line">Loading prototype registry…</div>
+            <div id="prototype-grid" class="admin-dashboard-grid"></div>
+        </section>
+        <div class="admin-actions">
+            <button type="button" id="logout-btn" class="secondary">Log out</button>
+        </div>
+    </main>
+    <script src="admin-portal.js?v=d4ad818"></script>
+    <script src="prototype-registry.js?v=d4ad818"></script>
+    <script src="prototypes-page.js?v=d4ad818"></script>
+    <script src="admin-sidebar.js?v=d4ad818"></script>
+    <script src="../ui-icons.js?v=d4ad818"></script>
+    <script src="../frame.js?v=d4ad818"></script>
+</body>
+</html>

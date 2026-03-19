@@ -5,9 +5,28 @@
 (function () {
     'use strict';
     var STORAGE_KEY = 'ar_admin_token';
-    var API_BASE = (typeof window !== 'undefined' && window.location && window.location.origin)
-        ? (window.location.origin + '/api/home-loan-rates')
-        : '';
+
+    function trimTrailingSlash(value) {
+        return String(value || '').replace(/\/+$/, '');
+    }
+
+    function resolveApiBase() {
+        var globalOverride = (typeof window !== 'undefined' && window.AR_ADMIN_API_BASE)
+            ? String(window.AR_ADMIN_API_BASE)
+            : '';
+        if (globalOverride) return trimTrailingSlash(globalOverride);
+        try {
+            var search = (typeof window !== 'undefined' && window.location && window.location.search) ? window.location.search : '';
+            var params = new URLSearchParams(search);
+            var queryOverride = params.get('adminApiBase');
+            if (queryOverride) return trimTrailingSlash(queryOverride);
+        } catch (e) {}
+        return (typeof window !== 'undefined' && window.location && window.location.origin)
+            ? trimTrailingSlash(window.location.origin + '/api/home-loan-rates')
+            : '';
+    }
+
+    var API_BASE = resolveApiBase();
 
     function getToken() {
         try {
