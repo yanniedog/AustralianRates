@@ -1047,8 +1047,9 @@
                 if (d && typeof d === 'object' && d.value != null) otherVal = typeof d.value === 'number' ? d.value : (Array.isArray(d.value) ? d.value[0] : d.value);
             }
             var text = statusLineTextFromOption(option, dataIndex, otherVal, fields, categoryAxis);
-            statusEl.textContent = text;
-            statusEl.classList.toggle('visible', !!text);
+            statusEl.textContent = text || statusEl.textContent || '\u2014';
+            if (text) statusEl.classList.add('visible');
+            /* Do not remove visible when text is empty; keep bar showing last content. */
         }
 
         function onGlobalOut() {
