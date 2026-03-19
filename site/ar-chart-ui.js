@@ -89,6 +89,39 @@
         setControlVisibility(els.chartRepresentation, !!caps.representation, 'This view always uses daily snapshots.');
     }
 
+    function chartEngineStorageKey() {
+        return (window.AR.chartLightweight && window.AR.chartLightweight.CHART_ENGINE_STORAGE) || 'ar.chartEngine';
+    }
+
+    function activeChartEngine() {
+        var btn = document.querySelector('[data-chart-engine].is-active');
+        if (btn) return String(btn.getAttribute('data-chart-engine') || 'echarts');
+        return 'echarts';
+    }
+
+    function setActiveChartEngine(engine) {
+        var v = String(engine || 'echarts') === 'lightweight' ? 'lightweight' : 'echarts';
+        var buttons = document.querySelectorAll('[data-chart-engine]');
+        for (var i = 0; i < buttons.length; i++) {
+            var b = buttons[i];
+            var isActive = String(b.getAttribute('data-chart-engine') || '') === v;
+            b.classList.toggle('is-active', isActive);
+            b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+        try {
+            localStorage.setItem(chartEngineStorageKey(), v);
+        } catch (_e) { /* ignore */ }
+    }
+
+    function initChartEngineFromStorage() {
+        var saved = 'echarts';
+        try {
+            saved = localStorage.getItem(chartEngineStorageKey()) || 'echarts';
+        } catch (_e) { /* ignore */ }
+        if (saved !== 'lightweight') saved = 'echarts';
+        setActiveChartEngine(saved);
+    }
+
     function getChartFields() {
         var defaults = chartConfig.defaultFields ? chartConfig.defaultFields() : {};
         return {
@@ -99,6 +132,7 @@
             chartType: els.chartType ? els.chartType.value : defaults.chartType || 'scatter',
             density: els.chartSeriesLimit ? els.chartSeriesLimit.value : defaults.density || 'standard',
             representation: els.chartRepresentation ? els.chartRepresentation.value : 'change',
+            chartEngine: activeChartEngine(),
         };
     }
 
@@ -579,6 +613,8 @@
         if (uiBound) return;
         uiBound = true;
 
+        initChartEngineFromStorage();
+
         var controlHandler = function (reason) {
             if (!handlers || typeof handlers.onControlChange !== 'function') return;
             handlers.onControlChange(reason || 'controls');
@@ -594,6 +630,15 @@
             });
         }
         syncControlAvailability(activeView());
+
+        document.querySelectorAll('[data-chart-engine]').forEach(function (btn) {
+            btn.addEventListener('click', function (event) {
+                var b = event.currentTarget;
+                var next = b ? String(b.getAttribute('data-chart-engine') || 'echarts') : 'echarts';
+                setActiveChartEngine(next);
+                controlHandler('chart-engine');
+            });
+        });
 
         [els.chartX, els.chartY, els.chartGroup, els.chartType, els.chartSeriesLimit, els.chartRepresentation].forEach(function (control) {
             if (!control) return;
@@ -616,6 +661,8 @@
     window.AR.chartUi = {
         bindUi: bindUi,
         getChartFields: getChartFields,
+        initChartEngineFromStorage: initChartEngineFromStorage,
+        setActiveChartEngine: setActiveChartEngine,
         markStale: markStale,
         renderSeriesRail: renderSeriesRail,
         renderSpotlight: renderSpotlight,

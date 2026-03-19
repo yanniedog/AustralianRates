@@ -8,6 +8,7 @@
     var state = window.AR.state;
     var chartData = window.AR.chartData || {};
     var chartEcharts = window.AR.chartEcharts || {};
+    var chartLightweight = window.AR.chartLightweight || {};
     var chartSummary = window.AR.chartSummary || {};
     var chartUi = window.AR.chartUi || {};
     var utils = window.AR.utils || {};
@@ -47,6 +48,9 @@
         tdPlayInterval: null,
         mainChart: null,
         detailChart: null,
+        lwcMain: null,
+        lwcDetail: null,
+        renderGen: 0,
         statusLine: freshStatusLineState(),
         includedRateStructures: section === 'home-loans' ? ['variable'] : null,
     };
@@ -96,6 +100,13 @@
     function disposeCharts() {
         chartState.mainChart = disposeChart(chartState.mainChart);
         chartState.detailChart = disposeChart(chartState.detailChart);
+        if (chartLightweight && typeof chartLightweight.dispose === 'function') {
+            chartState.lwcMain = chartLightweight.dispose(chartState.lwcMain);
+            chartState.lwcDetail = chartLightweight.dispose(chartState.lwcDetail);
+        } else {
+            chartState.lwcMain = null;
+            chartState.lwcDetail = null;
+        }
     }
 
     function clearOutput(message) {
@@ -199,7 +210,7 @@
         return 'Chart unavailable right now. It will retry when you change filters or options.';
     }
 
-    function ensureCharts() {
+    function ensureEchartsCharts() {
         if (!els.chartOutput || !els.chartDetailOutput) return;
         if (!chartState.mainChart) {
             els.chartOutput.innerHTML = '';
@@ -215,6 +226,10 @@
     function resizeCharts() {
         if (chartState.mainChart && !chartState.mainChart.isDisposed()) chartState.mainChart.resize();
         if (chartState.detailChart && !chartState.detailChart.isDisposed()) chartState.detailChart.resize();
+        if (chartLightweight && typeof chartLightweight.resizeState === 'function') {
+            chartLightweight.resizeState(chartState.lwcMain);
+            chartLightweight.resizeState(chartState.lwcDetail);
+        }
     }
 
     function scheduleResizeCharts() {
@@ -422,20 +437,86 @@
                 syncTdTimeControls();
             }
 
-            ensureCharts();
-            chartEcharts.renderMainChart(chartState.mainChart, els.chartOutput, currentFields.view, model, currentFields, {
-                onMainClick: handleMainChartClick,
-            }, chartState.rbaHistory, chartState);
-            chartEcharts.renderDetailChart(chartState.detailChart, els.chartDetailOutput, model, currentFields, chartState);
+            var pref = currentFields.chartEngine || 'echarts';
+            var eff = typeof chartLightweight.effectiveEngine === 'function'
+                ? chartLightweight.effectiveEngine(pref, currentFields.view)
+                : 'echarts';
+            var useLwc = eff === 'lightweight'
+                && chartLightweight.isViewSupported
+                && chartLightweight.isViewSupported(currentFields.view)
+                && typeof chartLightweight.ensureLoaded === 'function'
+                && typeof chartLightweight.renderMainCompare === 'function';
 
-            if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
-            if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
-            if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
-            if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
-            if (chartUi.setStatus) chartUi.setStatus(chartState.stale ? 'STALE' : statusText(model, currentFields));
+            var gen = ++chartState.renderGen;
 
-            tabState.chartDrawn = true;
-            scheduleResizeCharts();
+            function appendEngineHint(base) {
+                var hint = typeof chartLightweight.engineStatusHint === 'function'
+                    ? chartLightweight.engineStatusHint(pref, eff, currentFields.view)
+                    : '';
+                if (!hint) return base;
+                return base ? (base + ' · ' + hint) : hint;
+            }
+
+            function finishChartPaint(extraSuffix) {
+                if (gen !== chartState.renderGen) return;
+                if (chartUi.renderSummary) chartUi.renderSummary(model, currentFields, payloadMeta(), chartState.stale);
+                if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(model, chartState);
+                if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
+                if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
+                var statusLine = chartState.stale ? 'STALE' : statusText(model, currentFields);
+                statusLine = appendEngineHint(statusLine);
+                if (extraSuffix) statusLine = statusLine + ' · ' + extraSuffix;
+                if (chartUi.setStatus) chartUi.setStatus(statusLine);
+                tabState.chartDrawn = true;
+                scheduleResizeCharts();
+            }
+
+            function runEchartsRender(extraSuffix) {
+                if (gen !== chartState.renderGen) return;
+                if (chartLightweight.dispose) {
+                    chartState.lwcMain = chartLightweight.dispose(chartState.lwcMain);
+                    chartState.lwcDetail = chartLightweight.dispose(chartState.lwcDetail);
+                }
+                ensureEchartsCharts();
+                chartEcharts.renderMainChart(chartState.mainChart, els.chartOutput, currentFields.view, model, currentFields, {
+                    onMainClick: handleMainChartClick,
+                }, chartState.rbaHistory, chartState);
+                chartEcharts.renderDetailChart(chartState.detailChart, els.chartDetailOutput, model, currentFields, chartState);
+                finishChartPaint(extraSuffix);
+            }
+
+            if (useLwc) {
+                chartLightweight.ensureLoaded().then(function () {
+                    if (gen !== chartState.renderGen) return;
+                    try {
+                        chartState.mainChart = disposeChart(chartState.mainChart);
+                        chartState.detailChart = disposeChart(chartState.detailChart);
+                        chartState.lwcMain = chartLightweight.dispose(chartState.lwcMain);
+                        chartState.lwcDetail = chartLightweight.dispose(chartState.lwcDetail);
+                        chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields);
+                        if (els.chartOutput) {
+                            els.chartOutput.setAttribute('data-chart-engine', 'lightweight');
+                            els.chartOutput.setAttribute('data-chart-render-view', currentFields.view);
+                            els.chartOutput.setAttribute('data-chart-rendered', 'true');
+                        }
+                        chartState.lwcDetail = chartLightweight.renderDetail(els.chartDetailOutput, model, currentFields);
+                        if (els.chartDetailOutput) {
+                            els.chartDetailOutput.setAttribute('data-chart-engine', 'lightweight');
+                        }
+                        observeChartContainers();
+                        finishChartPaint();
+                    } catch (lwErr) {
+                        clientLog('error', 'Lightweight render failed', { message: String(lwErr && lwErr.message) });
+                        runEchartsRender('Lightweight render failed — Classic charts');
+                    }
+                }).catch(function (loadErr) {
+                    clientLog('error', 'Lightweight bundle load failed', { message: String(loadErr && loadErr.message) });
+                    runEchartsRender('Lightweight library failed to load — Classic charts');
+                });
+                return;
+            }
+
+            runEchartsRender();
         } catch (err) {
             var view = (currentFields && currentFields.view) || '';
             sendChartErrorToLog(err, { view: view, section: section });

@@ -435,6 +435,19 @@
             '</div>';
     }
 
+    function chartEngineMarkup() {
+        return '' +
+            '<div class="chart-engine-row" role="group" aria-label="Chart rendering engine">' +
+                '<span class="chart-engine-label hint">Engine</span>' +
+                '<button type="button" class="chart-engine-btn chip-btn secondary is-active" data-chart-engine="echarts"' +
+                    ' aria-pressed="true" title="Apache ECharts"' +
+                    ' aria-label="Classic charts using Apache ECharts">Classic</button>' +
+                '<button type="button" class="chart-engine-btn chip-btn secondary" data-chart-engine="lightweight"' +
+                    ' aria-pressed="false" title="TradingView Lightweight Charts"' +
+                    ' aria-label="TradingView Lightweight Charts">Lightweight</button>' +
+            '</div>';
+    }
+
     function notesMarkup(ui) {
         return '' +
             '<details class="panel terminal-notes" id="market-notes">' +
@@ -576,7 +589,10 @@
                             '</div>',
                             '<div class="chart-figure">',
                                 '<div class="chart-toolbar">',
-                                    chartQuestionMarkup(),
+                                    '<div class="chart-toolbar-stack">',
+                                        chartQuestionMarkup(),
+                                        chartEngineMarkup(),
+                                    '</div>',
                                 '</div>',
                                 '<div class="terminal-chart-surface">',
                                     '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
