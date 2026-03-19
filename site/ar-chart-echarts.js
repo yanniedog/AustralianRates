@@ -4,8 +4,14 @@
     var chartConfig = window.AR.chartConfig || {}, helpers = window.AR.chartEchartsHelpers || {};
     var paletteColor = helpers.paletteColor, tooltipMetric = helpers.tooltipMetric, baseTextStyles = helpers.baseTextStyles, gridStyles = helpers.gridStyles;
     var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize;
+    function defaultChartSize(el) {
+        var w = (el && el.clientWidth) || 320;
+        var h = (el && el.clientHeight) || 180;
+        return { width: Math.max(0, w), height: Math.max(0, h) };
+    }
     var chartSizeWithFallback = (helpers.chartSizeWithFallback && typeof helpers.chartSizeWithFallback === 'function')
-        ? helpers.chartSizeWithFallback : chartSize;
+        ? helpers.chartSizeWithFallback
+        : (typeof chartSize === 'function' ? chartSize : defaultChartSize);
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
     var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, minMetric = helpers.minMetric, categoryInterval = helpers.categoryInterval;
     var axisPointerConfig = helpers.axisPointerConfig, axisLabelFontSize = helpers.axisLabelFontSize, chartTheme = helpers.chartTheme;
