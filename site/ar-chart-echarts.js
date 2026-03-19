@@ -1040,7 +1040,6 @@
         var useMarketStatus = isMarket && hasMarketRows;
 
         statusEl.textContent = statusState.pinnedText || statusState.text || '\u2014';
-        statusEl.classList.add('visible');
         if (!statusState.text) statusState.text = statusEl.textContent;
         var zr = instance.getZr && instance.getZr();
         if (!zr) return;
@@ -1048,12 +1047,16 @@
         var pinned = null;
         var hovered = null;
 
+        function setStatusVisible(show) {
+            if (show) statusEl.classList.add('visible');
+            else statusEl.classList.remove('visible');
+        }
+
         function setStatusText(text) {
             var nextText = text ? String(text) : '';
             if (!nextText) nextText = statusState.pinnedText || statusState.text || '\u2014';
             statusState.text = nextText;
             statusEl.textContent = nextText;
-            statusEl.classList.add('visible');
             return nextText;
         }
 
@@ -1081,6 +1084,7 @@
         function onMouseMove(event) {
             if (!event) {
                 hovered = null;
+                setStatusVisible(false);
                 refreshStatus();
                 return;
             }
@@ -1094,6 +1098,7 @@
             }
             if (!point) {
                 hovered = null;
+                setStatusVisible(false);
                 refreshStatus();
                 return;
             }
@@ -1103,14 +1108,19 @@
                 hovered = hit;
                 if (hit) {
                     setStatusFromPoint(hit);
+                    setStatusVisible(true);
                 } else {
                     refreshStatus();
+                    setStatusVisible(false);
                 }
                 return;
             }
 
             setStatusText(statusEl.textContent || '\u2014');
-            if (!instance.convertFromPixel) return;
+            if (!instance.convertFromPixel) {
+                setStatusVisible(false);
+                return;
+            }
             var inGrid = true;
             if (instance.containPixel && typeof instance.containPixel === 'function') {
                 try { inGrid = instance.containPixel('grid', point); } catch (e) { inGrid = true; }
@@ -1125,6 +1135,7 @@
                 } catch (e2) {}
             }
             if (!dataCoord || !Array.isArray(dataCoord)) {
+                setStatusVisible(false);
                 refreshStatus();
                 return;
             }
@@ -1132,6 +1143,7 @@
             var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
             var categoryAxis = (xAxisOpt && xAxisOpt.type === 'category') ? 'x' : ((yAxisOpt && yAxisOpt.type === 'category') ? 'y' : null);
             if (!categoryAxis) {
+                setStatusVisible(false);
                 refreshStatus();
                 return;
             }
@@ -1139,6 +1151,7 @@
             var otherVal = categoryAxis === 'x' ? dataCoord[1] : dataCoord[0];
             var categories = categoryAxis === 'x' ? (xAxisOpt && xAxisOpt.data) : (yAxisOpt && yAxisOpt.data);
             if (!Array.isArray(categories) || dataIndex < 0 || dataIndex >= categories.length) {
+                setStatusVisible(false);
                 refreshStatus();
                 return;
             }
@@ -1148,12 +1161,18 @@
                 if (d && typeof d === 'object' && d.value != null) otherVal = typeof d.value === 'number' ? d.value : (Array.isArray(d.value) ? d.value[0] : d.value);
             }
             var text = statusLineTextFromOption(option, dataIndex, otherVal, fields, categoryAxis);
-            if (text) setStatusText(text);
-            else refreshStatus();
+            if (text) {
+                setStatusText(text);
+                setStatusVisible(true);
+            } else {
+                setStatusVisible(false);
+                refreshStatus();
+            }
         }
 
         function onGlobalOut() {
             hovered = null;
+            setStatusVisible(false);
             if (statusState.hoveringBar) return;
             refreshStatus();
         }
