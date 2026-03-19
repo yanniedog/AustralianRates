@@ -92,6 +92,7 @@ export async function queryLatestRates(db: D1Database, filters: LatestFilters, t
       l.rate_structure,
       l.lvr_tier,
       l.feature_set,
+      l.has_offset_account,
       l.interest_rate,
       l.comparison_rate,
       l.annual_fee,

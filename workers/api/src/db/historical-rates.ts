@@ -47,6 +47,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         rate_structure,
         lvr_tier,
         feature_set,
+        has_offset_account,
         interest_rate,
         comparison_rate,
         annual_fee,
@@ -61,12 +62,13 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
         fetch_event_id,
         run_id,
         run_source
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)
       ON CONFLICT(bank_name, collection_date, product_id, security_purpose, repayment_type, lvr_tier, rate_structure) DO UPDATE SET
         product_code = excluded.product_code,
         product_name = excluded.product_name,
         series_key = excluded.series_key,
         feature_set = excluded.feature_set,
+        has_offset_account = excluded.has_offset_account,
         interest_rate = excluded.interest_rate,
         comparison_rate = excluded.comparison_rate,
         annual_fee = excluded.annual_fee,
@@ -94,6 +96,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
       row.rateStructure,
       row.lvrTier,
       row.featureSet,
+      row.hasOffsetAccount == null ? null : (row.hasOffsetAccount ? 1 : 0),
       row.interestRate,
       row.comparisonRate,
       row.annualFee,
@@ -181,6 +184,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
     rateStructure: row.rateStructure,
     lvrTier: row.lvrTier,
     featureSet: row.featureSet,
+    hasOffsetAccount: row.hasOffsetAccount ?? null,
     interestRate: row.interestRate,
     comparisonRate: row.comparisonRate,
     annualFee: row.annualFee,
@@ -211,6 +215,7 @@ export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRat
     rateStructure: row.rateStructure,
     lvrTier: row.lvrTier,
     featureSet: row.featureSet,
+    hasOffsetAccount: row.hasOffsetAccount ?? null,
     interestRate: row.interestRate,
     comparisonRate: row.comparisonRate,
     annualFee: row.annualFee,

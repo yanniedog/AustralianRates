@@ -147,6 +147,11 @@ body.ar-public .filter-bank-count {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    body.ar-public .bank-picker-grid {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
     body.ar-public .filter-pad-btn,
     body.ar-public button.bank-option-card {
         aspect-ratio: auto;

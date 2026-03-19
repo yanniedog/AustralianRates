@@ -14,6 +14,7 @@ import {
 } from '../normalize.js'
 import { getLenderPlaybook } from '../lender-playbooks.js'
 import type { LenderConfig } from '../../types.js'
+import { detectExplicitOffsetAccountValue } from './mortgage-offset.js'
 import { productUrlFromDetail, publishedAtFromDetail } from './detail-metadata.js'
 import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives.js'
 
@@ -190,6 +191,7 @@ export function parseRatesFromDetail(input: {
         rateStructure: normalizeRateStructure(rateStructureText),
         lvrTier: lvrResult.tier,
         featureSet: normalizeFeatureSet(`${productName} ${contextText}`, annualFee),
+        hasOffsetAccount: detectExplicitOffsetAccountValue(detail, rate),
         interestRate,
         comparisonRate,
         annualFee,

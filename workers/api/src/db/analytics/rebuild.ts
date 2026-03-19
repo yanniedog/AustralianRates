@@ -201,6 +201,7 @@ async function replayRow(db: D1Database, dataset: DatasetKind, row: Record<strin
         rateStructure: String(row.rate_structure || ''),
         lvrTier: String(row.lvr_tier || ''),
         featureSet: String(row.feature_set || ''),
+        hasOffsetAccount: row.has_offset_account == null ? null : Number(row.has_offset_account) === 1,
         interestRate: Number(row.interest_rate ?? 0),
         comparisonRate: row.comparison_rate == null ? null : Number(row.comparison_rate),
         annualFee: row.annual_fee == null ? null : Number(row.annual_fee),

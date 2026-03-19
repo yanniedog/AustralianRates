@@ -18,6 +18,7 @@ type HomeLoanState = BaseState & {
   rateStructure: string
   lvrTier: string
   featureSet: string
+  hasOffsetAccount?: boolean | null
   interestRate: number
   comparisonRate?: number | null
   annualFee?: number | null
@@ -65,6 +66,7 @@ export async function hashHomeLoanState(input: HomeLoanState): Promise<string> {
     rate_structure: String(input.rateStructure || '').trim(),
     lvr_tier: String(input.lvrTier || '').trim(),
     feature_set: String(input.featureSet || '').trim(),
+    has_offset_account: input.hasOffsetAccount == null ? null : (input.hasOffsetAccount ? 1 : 0),
     interest_rate: Number(input.interestRate),
     comparison_rate: input.comparisonRate ?? null,
     annual_fee: input.annualFee ?? null,
