@@ -39,6 +39,7 @@ export default function Chart(props: ChartProps) {
   const chartRef = useRef<any>(null)
   const seriesRefs = useRef(new Map<string, { api: any; source: RenderableSeries }>())
   const stickyTouchRef = useRef(false)
+  const lastSeriesKeyRef = useRef<string>('')
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     left: 0,
@@ -177,8 +178,8 @@ export default function Chart(props: ChartProps) {
   useEffect(() => {
     const chart = chartRef.current
     if (!chart) return
-
     const incomingIds = new Set(props.series.map((series) => series.id))
+    const nextSeriesKey = props.series.map((series) => series.id).join('|')
     Array.from(seriesRefs.current.keys()).forEach((seriesId) => {
       if (!incomingIds.has(seriesId)) {
         const handle = seriesRefs.current.get(seriesId)
@@ -205,16 +206,27 @@ export default function Chart(props: ChartProps) {
       }
       handle.source = series
       handle.api.setData(insertWhitespaceGaps(series.data))
+      handle.api.applyOptions({ color: series.color })
+    })
+
+    if (lastSeriesKeyRef.current !== nextSeriesKey) {
+      chart.timeScale().fitContent()
+      lastSeriesKeyRef.current = nextSeriesKey
+    }
+    updateEventOverlay()
+  }, [props.series, updateEventOverlay])
+
+  useEffect(() => {
+    props.series.forEach((series) => {
+      const handle = seriesRefs.current.get(series.id)
+      if (!handle) return
       handle.api.applyOptions({
         visible: !hiddenSeries.has(series.id),
         color: series.color,
         lineWidth: props.highlightedSeriesId && props.highlightedSeriesId === series.id ? 3 : 2,
       })
     })
-
-    chart.timeScale().fitContent()
-    updateEventOverlay()
-  }, [hiddenSeries, props.highlightedSeriesId, props.series, updateEventOverlay])
+  }, [hiddenSeries, props.highlightedSeriesId, props.series])
 
   useEffect(() => {
     updateEventOverlay()

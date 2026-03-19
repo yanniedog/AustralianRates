@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useRef, useState } from 'react'
 import Chart from './components/Chart'
 import Legend from './components/Legend'
 import { fetchChartData, fetchFilters } from './lib/api'
@@ -54,7 +54,8 @@ function cloneFilters<T extends AnyFilters>(filters: T): T {
 }
 
 export default function App() {
-  const config = useMemo(() => readPrototypeConfig(), [])
+  const configRef = useRef(readPrototypeConfig())
+  const config = configRef.current
   const initialParamsRef = useRef(new URLSearchParams(window.location.search))
   const [activeDataset, setActiveDataset] = useState<DatasetKey>(parseInitialDataset)
   const [states, setStates] = useState<Record<DatasetKey, DatasetRuntimeState>>({
@@ -64,10 +65,7 @@ export default function App() {
   })
 
   const currentState = states[activeDataset]
-  const currentSeries = useMemo(
-    () => (currentState.response ? toRenderableSeries(activeDataset, currentState.response as AnyChartResponse) : []),
-    [activeDataset, currentState.response],
-  )
+  const currentSeries = currentState.response ? toRenderableSeries(activeDataset, currentState.response as AnyChartResponse) : []
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
