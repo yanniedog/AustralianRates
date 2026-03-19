@@ -984,7 +984,6 @@
         function onMouseMove(event) {
             if (!event) {
                 hovered = null;
-                refreshStatus();
                 return;
             }
             var point = null;
@@ -997,7 +996,6 @@
             }
             if (!point) {
                 hovered = null;
-                refreshStatus();
                 return;
             }
 
@@ -1024,21 +1022,18 @@
                 } catch (e2) {}
             }
             if (!dataCoord || !Array.isArray(dataCoord)) {
-                statusEl.classList.remove('visible');
                 return;
             }
             var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
             var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
             var categoryAxis = (xAxisOpt && xAxisOpt.type === 'category') ? 'x' : ((yAxisOpt && yAxisOpt.type === 'category') ? 'y' : null);
             if (!categoryAxis) {
-                statusEl.classList.remove('visible');
                 return;
             }
             var dataIndex = categoryAxis === 'x' ? Math.round(dataCoord[0]) : Math.round(dataCoord[1]);
             var otherVal = categoryAxis === 'x' ? dataCoord[1] : dataCoord[0];
             var categories = categoryAxis === 'x' ? (xAxisOpt && xAxisOpt.data) : (yAxisOpt && yAxisOpt.data);
             if (!Array.isArray(categories) || dataIndex < 0 || dataIndex >= categories.length) {
-                statusEl.classList.remove('visible');
                 return;
             }
             var s0 = option.series;
