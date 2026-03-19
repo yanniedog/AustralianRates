@@ -129,6 +129,28 @@
         var timeZone = asText(tz) || getUserTimeZone();
         var parsed = parseServerTimestamp(parsedAt);
         if (!parsed.ok) {
+            var fromSource = parseServerTimestamp(canonical);
+            if (fromSource.ok) {
+                var timeUtc = padTwo(fromSource.date.getUTCHours()) + ':' + padTwo(fromSource.date.getUTCMinutes());
+                var dateTimeCanonical = canonical + ' ' + timeUtc;
+                var localDateTime = formatLocalDateTime(fromSource.date, timeZone);
+                return {
+                    ok: true,
+                    text: dateTimeCanonical + ' (local: ' + localDateTime + ')',
+                    title: 'Source date: ' + canonical + ' | Local date/time in ' + timeZone + ': ' + localDateTime + ' (parsed_at unavailable)'
+                };
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(canonical)) {
+                var midnight = parseServerTimestamp(canonical);
+                if (midnight.ok) {
+                    var localDateTimeFallback = formatLocalDateTime(midnight.date, timeZone);
+                    return {
+                        ok: true,
+                        text: canonical + ' 00:00 (local: ' + localDateTimeFallback + ')',
+                        title: 'Source date: ' + canonical + ' | Local date/time in ' + timeZone + ': ' + localDateTimeFallback + ' (time assumed midnight; parsed_at unavailable)'
+                    };
+                }
+            }
             var fallbackTitle = 'Source date: ' + canonical;
             if (asText(parsedAt)) {
                 fallbackTitle += ' | Local date/time unavailable (invalid parsed_at: ' + asText(parsedAt) + ')';
