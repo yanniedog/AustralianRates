@@ -897,6 +897,32 @@
         return el;
     }
 
+    function resolveStatusLineState(instance, opts) {
+        var chartState = opts && opts.chartState && typeof opts.chartState === 'object' ? opts.chartState : null;
+        var state = chartState ? chartState.statusLine : instance._statusLineState;
+        if (!state || typeof state !== 'object') {
+            state = {
+                view: '',
+                text: '',
+                pinnedText: '',
+                hoveringBar: false,
+            };
+            if (chartState) chartState.statusLine = state;
+            else instance._statusLineState = state;
+        }
+        var nextView = String((opts && opts.view) || '');
+        if (state.view !== nextView) {
+            state.view = nextView;
+            state.text = '';
+            state.pinnedText = '';
+            state.hoveringBar = false;
+        }
+        if (state.text == null) state.text = '';
+        if (state.pinnedText == null) state.pinnedText = '';
+        state.hoveringBar = !!state.hoveringBar;
+        return state;
+    }
+
     var HIT_RADIUS = 28;
 
     function findMarketPointUnderPixel(instance, option, pixel) {
@@ -946,6 +972,7 @@
         var statusEl = ensureChartStatusLine(element);
         if (!statusEl) return;
         opts = opts || {};
+        var statusState = resolveStatusLineState(instance, opts);
         var isMarket = opts.view === 'market' && opts.model && opts.model.market;
         var series = option.series;
         var hasMarketRows = isMarket && Array.isArray(series) && series.some(function (s) {
@@ -954,19 +981,27 @@
         });
         var useMarketStatus = isMarket && hasMarketRows;
 
-        statusEl.textContent = '\u2014';
+        statusEl.textContent = statusState.pinnedText || statusState.text || '\u2014';
         statusEl.classList.add('visible');
-        /* Visible by default and not hidden on globalout/spurious mousemove so the bar stays visible when using Sync now (refresh). */
+        if (!statusState.text) statusState.text = statusEl.textContent;
         var zr = instance.getZr && instance.getZr();
         if (!zr) return;
 
         var pinned = null;
         var hovered = null;
 
+        function setStatusText(text) {
+            var nextText = text ? String(text) : '';
+            if (!nextText) nextText = statusState.pinnedText || statusState.text || '\u2014';
+            statusState.text = nextText;
+            statusEl.textContent = nextText;
+            statusEl.classList.add('visible');
+            return nextText;
+        }
+
         function setStatusFromPoint(pt) {
             if (!pt || !pt.row) return;
-            statusEl.textContent = statusLineTextFromMarketPoint(pt.row, pt.bucketKey, pt.value, fields);
-            statusEl.classList.add('visible');
+            setStatusText(statusLineTextFromMarketPoint(pt.row, pt.bucketKey, pt.value, fields));
         }
 
         function refreshStatus() {
@@ -976,15 +1011,19 @@
             }
             if (pinned) {
                 setStatusFromPoint(pinned);
-                statusEl.classList.add('visible');
                 return;
             }
-            /* Do not hide: keep last content visible so the bar never disappears after ~400ms or on no-hit mousemove. */
+            if (statusState.pinnedText) {
+                setStatusText(statusState.pinnedText);
+                return;
+            }
+            setStatusText(statusState.text || '\u2014');
         }
 
         function onMouseMove(event) {
             if (!event) {
                 hovered = null;
+                refreshStatus();
                 return;
             }
             var point = null;
@@ -997,6 +1036,7 @@
             }
             if (!point) {
                 hovered = null;
+                refreshStatus();
                 return;
             }
 
@@ -1005,13 +1045,13 @@
                 hovered = hit;
                 if (hit) {
                     setStatusFromPoint(hit);
-                    statusEl.classList.add('visible');
+                } else {
+                    refreshStatus();
                 }
                 return;
             }
 
-            statusEl.classList.add('visible');
-            if (!statusEl.textContent) statusEl.textContent = '\u2014';
+            setStatusText(statusEl.textContent || '\u2014');
             if (!instance.convertFromPixel) return;
             var inGrid = true;
             if (instance.containPixel && typeof instance.containPixel === 'function') {
@@ -1027,18 +1067,21 @@
                 } catch (e2) {}
             }
             if (!dataCoord || !Array.isArray(dataCoord)) {
+                refreshStatus();
                 return;
             }
             var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
             var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
             var categoryAxis = (xAxisOpt && xAxisOpt.type === 'category') ? 'x' : ((yAxisOpt && yAxisOpt.type === 'category') ? 'y' : null);
             if (!categoryAxis) {
+                refreshStatus();
                 return;
             }
             var dataIndex = categoryAxis === 'x' ? Math.round(dataCoord[0]) : Math.round(dataCoord[1]);
             var otherVal = categoryAxis === 'x' ? dataCoord[1] : dataCoord[0];
             var categories = categoryAxis === 'x' ? (xAxisOpt && xAxisOpt.data) : (yAxisOpt && yAxisOpt.data);
             if (!Array.isArray(categories) || dataIndex < 0 || dataIndex >= categories.length) {
+                refreshStatus();
                 return;
             }
             var s0 = option.series;
@@ -1047,21 +1090,23 @@
                 if (d && typeof d === 'object' && d.value != null) otherVal = typeof d.value === 'number' ? d.value : (Array.isArray(d.value) ? d.value[0] : d.value);
             }
             var text = statusLineTextFromOption(option, dataIndex, otherVal, fields, categoryAxis);
-            statusEl.textContent = text || statusEl.textContent || '\u2014';
-            if (text) statusEl.classList.add('visible');
-            /* Do not remove visible when text is empty; keep bar showing last content. */
+            if (text) setStatusText(text);
+            else refreshStatus();
         }
 
         function onGlobalOut() {
             hovered = null;
-            if (pinned && useMarketStatus) {
-                setStatusFromPoint(pinned);
-            }
-            /* Keep status bar visible with last content; do not hide on globalout so it stays visible. */
+            if (statusState.hoveringBar) return;
+            refreshStatus();
         }
 
         function onClick(event) {
-            if (!useMarketStatus) return;
+            if (!useMarketStatus) {
+                if (!event || !event.target || !statusState.text || statusState.text === '\u2014') return;
+                statusState.pinnedText = statusState.text;
+                refreshStatus();
+                return;
+            }
             var point = null;
             if (event && event.point && Array.isArray(event.point) && event.point.length >= 2) {
                 point = [event.point[0], event.point[1]];
@@ -1073,24 +1118,47 @@
             if (point) {
                 var hit = findMarketPointUnderPixel(instance, option, point);
                 pinned = hit;
+                statusState.pinnedText = hit ? statusLineTextFromMarketPoint(hit.row, hit.bucketKey, hit.value, fields) : '';
             } else {
                 pinned = null;
+                statusState.pinnedText = '';
             }
+            refreshStatus();
+        }
+
+        function onStatusMouseEnter() {
+            statusState.hoveringBar = true;
+            setStatusText(statusState.pinnedText || statusState.text || '\u2014');
+        }
+
+        function onStatusMouseLeave() {
+            statusState.hoveringBar = false;
             refreshStatus();
         }
 
         zr.off('mousemove', instance._statusLineMove);
         zr.off('globalout', instance._statusLineOut);
         zr.off('click', instance._statusLineClick);
+        if (instance._statusLineEl && instance._statusLineMouseEnter) {
+            instance._statusLineEl.removeEventListener('mouseenter', instance._statusLineMouseEnter);
+        }
+        if (instance._statusLineEl && instance._statusLineMouseLeave) {
+            instance._statusLineEl.removeEventListener('mouseleave', instance._statusLineMouseLeave);
+        }
         instance._statusLineMove = onMouseMove;
         instance._statusLineOut = onGlobalOut;
         instance._statusLineClick = onClick;
+        instance._statusLineEl = statusEl;
+        instance._statusLineMouseEnter = onStatusMouseEnter;
+        instance._statusLineMouseLeave = onStatusMouseLeave;
         zr.on('mousemove', onMouseMove);
         zr.on('globalout', onGlobalOut);
-        if (useMarketStatus) zr.on('click', onClick);
+        zr.on('click', onClick);
+        statusEl.addEventListener('mouseenter', onStatusMouseEnter);
+        statusEl.addEventListener('mouseleave', onStatusMouseLeave);
     }
 
-    function renderMainChart(instance, element, view, model, fields, handlers, rbaHistory) {
+    function renderMainChart(instance, element, view, model, fields, handlers, rbaHistory, chartState) {
         if (!instance || !element) return;
         instance.resize();
         var size = chartSizeWithFallback(element);
@@ -1108,7 +1176,7 @@
         var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
         var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
         var hasCategoryAxis = (xAxisOpt && xAxisOpt.type === 'category') || (yAxisOpt && yAxisOpt.type === 'category');
-        if (hasCategoryAxis && option.grid != null) bindChartStatusLine(instance, element, option, fields, { view: view, model: model });
+        if (hasCategoryAxis && option.grid != null) bindChartStatusLine(instance, element, option, fields, { view: view, model: model, chartState: chartState });
 
         instance.off('click');
         if (!handlers || typeof handlers.onMainClick !== 'function') return;

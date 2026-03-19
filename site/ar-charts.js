@@ -20,6 +20,15 @@
         ? network.describeError
         : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
 
+    function freshStatusLineState() {
+        return {
+            view: '',
+            text: '',
+            pinnedText: '',
+            hoveringBar: false,
+        };
+    }
+
     var section = (window.AR && window.AR.section) || document.body.getAttribute('data-ar-section') || 'home-loans';
     var chartState = {
         rows: [],
@@ -38,6 +47,7 @@
         tdPlayInterval: null,
         mainChart: null,
         detailChart: null,
+        statusLine: freshStatusLineState(),
         includedRateStructures: section === 'home-loans' ? ['variable'] : null,
     };
     var HL_RATE_STRUCTURES = [
@@ -72,6 +82,10 @@
         chartState.spotlightSeriesKey = '';
         chartState.spotlightDate = '';
         chartState.marketFocusKey = '';
+    }
+
+    function resetStatusLine() {
+        chartState.statusLine = freshStatusLineState();
     }
 
     function disposeChart(instance) {
@@ -475,6 +489,7 @@
         if (!els.chartOutput) return;
         if (chartLoadPromise) return chartLoadPromise;
         disposeCharts();
+        resetStatusLine();
         chartState.fallbackReason = '';
         if (chartUi.clearErrorState) chartUi.clearErrorState();
         if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
@@ -605,9 +620,15 @@
 
     if (chartUi.bindUi) {
         chartUi.bindUi({
-            onControlChange: function () { refreshFromCache('control'); },
+            onControlChange: function () {
+                resetStatusLine();
+                refreshFromCache('control');
+            },
             onSeriesToggle: toggleSeries,
-            onViewChange: function () { refreshFromCache('view'); },
+            onViewChange: function () {
+                resetStatusLine();
+                refreshFromCache('view');
+            },
         });
     }
     if (chartUi.setPendingState) chartUi.setPendingState('Loading');
