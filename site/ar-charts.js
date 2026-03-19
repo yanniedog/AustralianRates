@@ -378,9 +378,18 @@
                 if (chartUi.setStatus) chartUi.setStatus('No ladder data');
                 return;
             }
+            if (currentFields.view === 'distribution') {
+                var distModel = model.distribution;
+                if (!distModel || !distModel.categories || !distModel.categories.length) {
+                    if (chartUi.clearErrorState) chartUi.clearErrorState();
+                    clearOutput('No distribution data');
+                    if (chartUi.setStatus) chartUi.setStatus('No distribution data');
+                    return;
+                }
+            }
             var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
             var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
-            if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && (!model.visibleSeries.length || !model.surface.cells.length)) {
+            if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && currentFields.view !== 'distribution' && (!model.visibleSeries.length || !model.surface.cells.length)) {
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
                 clearOutput('No numeric values');
                 if (chartUi.setStatus) chartUi.setStatus('No numeric values');

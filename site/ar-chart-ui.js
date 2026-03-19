@@ -325,8 +325,10 @@
         var tdTermTimeOk = model && model.tdTermTime && model.tdTermTime.terms && model.tdTermTime.terms.length;
         var slopeOk = model && model.slope && model.slope.lines && model.slope.lines.length;
         var ladderOk = model && model.lenderRanking && model.lenderRanking.entries && model.lenderRanking.entries.length;
+        var distOk = model && model.distribution && model.distribution.categories && model.distribution.categories.length;
         var visibleOk = model && model.visibleSeries && model.visibleSeries.length;
-        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || (fields.view === 'slope' && !slopeOk) || (fields.view === 'ladder' && !ladderOk) || ((fields.view !== 'market' && fields.view !== 'timeRibbon' && fields.view !== 'tdTermTime' && fields.view !== 'slope' && fields.view !== 'ladder') && !visibleOk)) {
+        var excludedFromVisibleGate = fields.view === 'market' || fields.view === 'timeRibbon' || fields.view === 'tdTermTime' || fields.view === 'slope' || fields.view === 'ladder' || fields.view === 'distribution';
+        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || (fields.view === 'slope' && !slopeOk) || (fields.view === 'ladder' && !ladderOk) || (fields.view === 'distribution' && !distOk) || (!excludedFromVisibleGate && !visibleOk)) {
             els.chartSeriesNote.textContent = 'Loading';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
@@ -438,6 +440,31 @@
                     isSpotlight: isSpotlight,
                     color: chartConfig.palette()[index % chartConfig.palette().length],
                 });
+            }).join('');
+            return;
+        }
+        if (fields.view === 'distribution' && model.distribution && model.distribution.categories && model.distribution.categories.length) {
+            var pal = chartConfig.palette();
+            els.chartSeriesList.innerHTML = model.distribution.categories.map(function (cat, index) {
+                var meanV = model.distribution.means && model.distribution.means[index];
+                var cnt = model.distribution.counts && model.distribution.counts[index];
+                var valueText = Number.isFinite(meanV) ? chartConfig.formatMetricValue(fields.yField, meanV) : '-';
+                var metaLeft = cnt != null ? Number(cnt).toLocaleString() + ' observations' : '';
+                return '' +
+                    '<div class="chart-series-card secondary" style="--series-accent:' + esc(pal[index % pal.length]) + ';" role="listitem">' +
+                        '<span class="chart-series-topline">' +
+                            '<span class="chart-series-name-wrap">' +
+                                '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                                '<span class="chart-series-name">' + esc(cat || '-') + '</span>' +
+                            '</span>' +
+                            '<span class="chart-series-value">' + esc(valueText) + '</span>' +
+                        '</span>' +
+                        '<span class="chart-series-caption">' + esc(chartConfig.fieldLabel(fields.groupField || 'bank_name')) + ' group</span>' +
+                        '<span class="chart-series-meta">' +
+                            '<span class="chart-series-delta"></span>' +
+                            '<span class="chart-series-points">' + esc(metaLeft) + '</span>' +
+                        '</span>' +
+                    '</div>';
             }).join('');
             return;
         }

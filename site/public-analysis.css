@@ -193,12 +193,27 @@
 .terminal-chart-surface {
     min-height: 560px;
     overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-content: start;
 }
 
 .chart-figure .terminal-chart-surface {
     border: none;
     border-radius: 0;
     background: transparent;
+}
+
+.chart-selection-rail {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    max-height: min(320px, 42vh);
+    overflow: auto;
+    padding: 12px 14px 16px;
+    border-top: 1px solid var(--ar-line);
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
 }
 
 .terminal-chart-output,

@@ -580,6 +580,38 @@
         return valueRangeWithPadding(lo === Infinity ? null : lo, hi === -Infinity ? null : hi, yField);
     }
 
+    /** Keep boxplot + scatter aligned; drop rows with non-finite box stats (avoids ECharts setOption errors). */
+    function sanitizeDistributionForChart(dist) {
+        if (!dist || !Array.isArray(dist.categories)) {
+            return { categories: [], boxes: [], means: [], counts: [] };
+        }
+        var categories = [];
+        var boxes = [];
+        var means = [];
+        var counts = [];
+        for (var i = 0; i < dist.categories.length; i++) {
+            var box = dist.boxes && dist.boxes[i];
+            if (!Array.isArray(box) || box.length < 5) continue;
+            var j;
+            var ok = true;
+            for (j = 0; j < 5; j++) {
+                if (!Number.isFinite(box[j])) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
+            var meanVal = dist.means && dist.means[i];
+            if (!Number.isFinite(meanVal)) meanVal = box[2];
+            if (!Number.isFinite(meanVal)) continue;
+            categories.push(dist.categories[i]);
+            boxes.push([box[0], box[1], box[2], box[3], box[4]]);
+            means.push(meanVal);
+            counts.push(dist.counts && dist.counts[i] != null ? dist.counts[i] : 0);
+        }
+        return { categories: categories, boxes: boxes, means: means, counts: counts };
+    }
+
     function buildCompareOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
@@ -701,7 +733,23 @@
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
-        var yRange = distributionYRange(model.distribution, fields.yField);
+        var dist = sanitizeDistributionForChart(model && model.distribution ? model.distribution : null);
+        if (!dist.categories.length) {
+            return {
+                textStyle: base.textStyle,
+                backgroundColor: 'transparent',
+                title: {
+                    text: 'Not enough valid values for distribution',
+                    left: 'center',
+                    top: 'middle',
+                    textStyle: { color: theme.mutedText, fontSize: 14, fontWeight: 500 },
+                },
+            };
+        }
+        var yRange = distributionYRange(dist, fields.yField);
+        var meanScatter = dist.means.map(function (value, index) {
+            return [dist.categories[index], value];
+        });
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -728,13 +776,13 @@
             },
             xAxis: {
                 type: 'category',
-                data: model.distribution.categories,
+                data: dist.categories,
                 axisLine: styles.axisLine,
                 axisLabel: {
                     color: theme.mutedText,
                     interval: 0,
                     hideOverlap: true,
-                    rotate: model.distribution.categories.length > 6 ? (narrow ? 40 : 24) : 0,
+                    rotate: dist.categories.length > 6 ? (narrow ? 40 : 24) : 0,
                     formatter: function (value) { return trimAxisLabel(value, narrow ? 12 : 20); },
                 },
             },
@@ -772,7 +820,7 @@
                             shadowColor: theme.shadowAccent,
                         },
                     },
-                    data: model.distribution.boxes,
+                    data: dist.boxes,
                 },
                 {
                     name: 'Mean',
@@ -780,9 +828,7 @@
                     symbolSize: 10,
                     itemStyle: { color: paletteColor(1) },
                     emphasis: { scale: 1.4 },
-                    data: model.distribution.means.map(function (value, index) {
-                        return [model.distribution.categories[index], value];
-                    }),
+                    data: meanScatter,
                 },
             ],
         };
@@ -1245,7 +1291,7 @@
         if (!instance || !element) return;
         instance.resize();
         var size = chartSizeWithFallback(element);
-        var option = optionForView(view, model, fields, size);
+        var option = optionForView(view, model, fields, size, chartState);
         var timeAxisViews = view === 'timeRibbon' || view === 'tdTermTime' || view === 'compare' || view === 'surface';
         if (timeAxisViews && option && Array.isArray(rbaHistory) && rbaHistory.length && helpers.addRbaMarkLine) {
             helpers.addRbaMarkLine(option, rbaHistory);
@@ -1259,7 +1305,9 @@
         var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
         var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
         var hasCategoryAxis = (xAxisOpt && xAxisOpt.type === 'category') || (yAxisOpt && yAxisOpt.type === 'category');
-        if (hasCategoryAxis && option.grid != null) bindChartStatusLine(instance, element, option, fields, { view: view, model: model, chartState: chartState });
+        if (view !== 'distribution' && hasCategoryAxis && option.grid != null) {
+            bindChartStatusLine(instance, element, option, fields, { view: view, model: model, chartState: chartState });
+        }
 
         instance.off('click');
         if (!handlers || typeof handlers.onMainClick !== 'function') return;
