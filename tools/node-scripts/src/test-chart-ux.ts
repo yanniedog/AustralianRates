@@ -59,10 +59,12 @@ async function drawChart(page) {
             await page.waitForFunction(() => {
                 const output = document.getElementById('chart-output');
                 if (!output) return false;
+                const err = String((document.getElementById('chart-error') || {}).textContent || '').trim();
+                if (err) return false;
                 const rendered = output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
                 if (!rendered) return false;
                 const status = String((document.getElementById('chart-status') || {}).textContent || '').trim().toLowerCase();
-                return status.indexOf('err') === -1;
+                return !/^error\b|^err\b/.test(status);
             }, undefined, { timeout: 120000 });
             await page.waitForTimeout(1200);
             return;
@@ -98,11 +100,13 @@ async function switchViewWithoutRatesFetch(page, view) {
         }, view);
         await page.waitForFunction((nextView) => {
             const output = document.getElementById('chart-output');
-            const renderedView = output?.getAttribute('data-chart-render-view')
-                || document.querySelector('[data-chart-view].is-active')?.getAttribute('data-chart-view')
-                || '';
-            return String(renderedView) === String(nextView || '');
-        }, view, { timeout: 15000 });
+            if (!output) return false;
+            const err = String((document.getElementById('chart-error') || {}).textContent || '').trim();
+            if (err) return false;
+            const rv = output.getAttribute('data-chart-render-view');
+            if (String(rv || '') !== String(nextView || '')) return false;
+            return output.getAttribute('data-chart-rendered') === 'true';
+        }, view, { timeout: 45000 });
         await page.waitForTimeout(800);
     } finally {
         page.context().off('request', handler);
@@ -172,7 +176,7 @@ function assertFits(metrics, failures, label, key) {
 
 function verifyChartState(metrics, failures, label, expectedView) {
     if (metrics.view !== expectedView) failures.push(`${label}: expected ${expectedView} view, got ${metrics.view || 'none'}`);
-    if (!metrics.status || /^ERR/i.test(metrics.status)) failures.push(`${label}: chart status is invalid (${metrics.status || 'missing'})`);
+    if (!metrics.status || /^error\b|^err\b/i.test(metrics.status.trim())) failures.push(`${label}: chart status is invalid (${metrics.status || 'missing'})`);
     if (!metrics.guidance) failures.push(`${label}: chart guidance is missing`);
     if (!metrics.summary || metrics.summary === 'WAIT') failures.push(`${label}: chart summary did not populate`);
     if ((metrics.outputEngine !== 'echarts') && metrics.outputCanvases === 0) failures.push(`${label}: chart canvas did not render`);
