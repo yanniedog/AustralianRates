@@ -979,7 +979,7 @@
                 statusEl.classList.add('visible');
                 return;
             }
-            statusEl.classList.remove('visible');
+            /* Do not hide: keep last content visible so the bar never disappears after ~400ms or on no-hit mousemove. */
         }
 
         function onMouseMove(event) {
@@ -1001,8 +1001,12 @@
             }
 
             if (useMarketStatus) {
-                hovered = findMarketPointUnderPixel(instance, option, point);
-                refreshStatus();
+                var hit = findMarketPointUnderPixel(instance, option, point);
+                hovered = hit;
+                if (hit) {
+                    setStatusFromPoint(hit);
+                    statusEl.classList.add('visible');
+                }
                 return;
             }
 
