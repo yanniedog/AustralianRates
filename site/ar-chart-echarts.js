@@ -1053,11 +1053,10 @@
 
         function onGlobalOut() {
             hovered = null;
-            if (!useMarketStatus || !pinned) {
-                statusEl.classList.remove('visible');
-            } else {
+            if (pinned && useMarketStatus) {
                 setStatusFromPoint(pinned);
             }
+            /* Keep status bar visible with last content; do not hide on globalout so it stays visible. */
         }
 
         function onClick(event) {

@@ -1,0 +1,19 @@
+---
+description: "Verification and testing must use the deployed production site only; never local."
+alwaysApply: true
+---
+
+# Verify on Deployed Site Only
+
+All verification and testing for this project must be done **only** against the deployed production site.
+
+## Rule
+
+- **Test and verify ONLY via:** https://www.australianrates.com (production).
+- **Do NOT** run or rely on local dev servers, localhost, or local builds for acceptance or verification of front-end or full-stack behaviour.
+- Use `npm run test:homepage` (Playwright vs production URL), `node diagnose-api.js` (production API), and production URLs when checking that fixes or features work.
+- Local dev (`npm run dev:api`, `wrangler pages dev`, etc.) is for development only; it must not be used as the source of truth for “does it work”.
+
+## Rationale
+
+Production is the only environment that reflects the real deploy (Cloudflare Pages, Workers, DNS, and config). Verifying there ensures the fix or feature actually works for users.
