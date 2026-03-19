@@ -23,11 +23,11 @@ body.ar-public .market-intro-session-label,
 body.ar-public .market-intro-session-status,
 body.ar-public .market-intro-console-kicker,
 body.ar-public .market-intro-console-status,
-body.ar-public .market-intro-live-label,
 body.ar-public .market-intro-bank-strip-label,
 body.ar-public .market-intro-console-log-label,
 body.ar-public .market-intro-step-index,
 body.ar-public .market-intro-step-label { color: var(--ar-text-muted); font-family: var(--ar-font-mono); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+body.ar-public .market-intro-live-label { color: var(--ar-text-muted); font-family: var(--ar-font-ui); font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.02em; text-transform: none; }
 body.ar-public .market-intro-session-label,
 body.ar-public .market-intro-session-status { min-height: 30px; padding: 0 10px; border: 1px solid var(--ar-line); border-radius: 12px; background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent); }
 body.ar-public .market-intro-session-status,
@@ -193,11 +193,17 @@ body.ar-public .market-intro-step {
     border-radius: 16px;
     background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 84%, #02050a), color-mix(in srgb, var(--ar-surface) 94%, #02050a));
 }
+body.ar-public .market-intro-live-card {
+    display: grid;
+    gap: 6px 0;
+}
 body.ar-public .market-intro-live-card strong {
-    font-family: var(--ar-font-mono);
-    font-size: clamp(1rem, 1.8vw, 1.4rem);
-    line-height: 1.08;
-    letter-spacing: -0.02em;
+    font-family: var(--ar-font-ui);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0;
+    color: var(--ar-text);
 }
 body.ar-public .market-intro-console-log-item {
     padding-bottom: 10px;
