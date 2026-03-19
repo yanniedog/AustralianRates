@@ -1266,6 +1266,28 @@
             scheduleHideTableLoader();
             emitExplorerTableUpdated('pageLoaded');
         });
+        (function attachHeaderSortClick() {
+            var tableContainer = document.getElementById('rate-table');
+            if (!tableContainer || !rateTable) return;
+            tableContainer.addEventListener('click', function (e) {
+                var colEl = e.target && e.target.closest ? e.target.closest('.tabulator-header .tabulator-col') : null;
+                if (!colEl || !rateTable) return;
+                if (!colEl.classList.contains('tabulator-sortable')) return;
+                var cols = rateTable.getColumns ? rateTable.getColumns() : [];
+                var headerCols = tableContainer.querySelectorAll('.tabulator-header .tabulator-col');
+                var idx = Array.prototype.indexOf.call(headerCols, colEl);
+                if (idx < 0 || idx >= cols.length) return;
+                var col = cols[idx];
+                var field = col && typeof col.getField === 'function' ? col.getField() : null;
+                if (!field) return;
+                e.preventDefault();
+                e.stopPropagation();
+                var nextDir = (currentSort.field === field && currentSort.dir === 'asc') ? 'desc' : 'asc';
+                applySorters([{ field: field, dir: nextDir }]);
+                if (typeof rateTable.setSort === 'function') rateTable.setSort(field, nextDir);
+                rateTable.setData();
+            });
+        })();
         clientLog('info', 'Explorer table init complete');
         if (!resizeBound) {
             window.addEventListener('resize', handleResize);
