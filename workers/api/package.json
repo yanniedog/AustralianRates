@@ -7,7 +7,7 @@
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude test/integration/** && npm run test:policy",
+    "test": "vitest run --config vitest.config.mts && npm run test:policy",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:policy": "node ../../scripts/enforce-api-test-policy.js"
   },
