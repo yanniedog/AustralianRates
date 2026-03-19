@@ -9,6 +9,12 @@
     display: grid;
     gap: 16px;
     min-width: 0;
+    max-width: 100%;
+}
+
+#chart.terminal-panel {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .chart-block-head {
