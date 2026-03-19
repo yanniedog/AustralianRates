@@ -94,6 +94,8 @@
             Q1: true,
             'Full range': true,
             'Interquartile range': true,
+            'Range floor': true,
+            'Market range': true,
         };
         return [
             '<strong>' + category.label + '</strong>',
@@ -292,13 +294,33 @@
 
         if (market.categories.length > 1) {
             series.push({
+                name: 'Range floor',
+                type: 'line',
+                stack: 'mktBg',
+                silent: true,
+                lineStyle: { opacity: 0 },
+                areaStyle: { opacity: 0 },
+                symbol: 'none',
+                data: market.categories.map(function (c) { return { value: [c.key, c.min], bucketKey: c.key }; }),
+            });
+            series.push({
+                name: 'Market range',
+                type: 'line',
+                stack: 'mktBg',
+                silent: true,
+                lineStyle: { opacity: 0 },
+                symbol: 'none',
+                areaStyle: { color: 'rgba(79, 141, 253, 0.07)' },
+                data: market.categories.map(function (c) { return { value: [c.key, c.max - c.min], bucketKey: c.key }; }),
+            });
+            series.push({
                 name: 'Market median',
                 type: 'line',
                 smooth: 0.28,
                 showSymbol: true,
-                symbolSize: 6,
-                lineStyle: { width: 3.2, color: theme.softText, type: 'dashed' },
-                itemStyle: { color: theme.softText },
+                symbolSize: 5,
+                lineStyle: { width: 2, color: theme.softText, type: 'dashed', opacity: 0.6 },
+                itemStyle: { color: theme.softText, opacity: 0.6 },
                 data: market.categories.map(function (category) {
                     return { value: [category.key, category.median], bucketKey: category.key };
                 }),
@@ -532,7 +554,107 @@
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
+        var compact = size && size.width < 420;
         var curveTitle = market.curveTitle || '';
+        var bankCurves = (market.bankCurves || []).slice(0, 5);
+        var legendData = ['Market median', market.bestLabel].concat(bankCurves.map(function (c) { return c.bankName; }));
+
+        var series = [
+            {
+                name: 'Floor',
+                type: 'line',
+                stack: 'envelope',
+                silent: true,
+                lineStyle: { opacity: 0 },
+                areaStyle: { opacity: 0 },
+                symbol: 'none',
+                data: market.categories.map(function (category) { return { value: category.min, bucketKey: category.key }; }),
+            },
+            {
+                name: 'Full range',
+                type: 'line',
+                stack: 'envelope',
+                lineStyle: { opacity: 0 },
+                symbol: 'none',
+                areaStyle: { color: 'rgba(79, 141, 253, 0.10)' },
+                data: market.categories.map(function (category) { return { value: category.max - category.min, bucketKey: category.key }; }),
+            },
+            {
+                name: 'Q1',
+                type: 'line',
+                stack: 'iqr',
+                silent: true,
+                lineStyle: { opacity: 0 },
+                areaStyle: { opacity: 0 },
+                symbol: 'none',
+                data: market.categories.map(function (category) { return { value: category.q1, bucketKey: category.key }; }),
+            },
+            {
+                name: 'Interquartile range',
+                type: 'line',
+                stack: 'iqr',
+                lineStyle: { opacity: 0 },
+                symbol: 'none',
+                areaStyle: { color: 'rgba(39, 194, 122, 0.26)' },
+                data: market.categories.map(function (category) { return { value: category.q3 - category.q1, bucketKey: category.key }; }),
+            },
+            {
+                name: 'Market median',
+                type: 'line',
+                smooth: 0.2,
+                showSymbol: true,
+                symbolSize: 7,
+                lineStyle: { width: 2.5, color: paletteColor(0) },
+                itemStyle: { color: paletteColor(0) },
+                emphasis: { focus: 'series', lineStyle: { width: 3.2 } },
+                data: market.categories.map(function (category) {
+                    return { value: [category.key, category.median], bucketKey: category.key };
+                }),
+            },
+            {
+                name: market.bestLabel,
+                type: 'line',
+                smooth: 0.2,
+                showSymbol: true,
+                symbolSize: 9,
+                symbol: 'diamond',
+                lineStyle: { width: 3, color: paletteColor(1) },
+                itemStyle: { color: paletteColor(1) },
+                emphasis: { focus: 'series', lineStyle: { width: 3.8 }, symbolSize: 13 },
+                label: {
+                    show: !compact && market.categories.length <= 12,
+                    position: 'top',
+                    distance: 6,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: theme.emphasisText,
+                    formatter: function (params) {
+                        var val = Array.isArray(params.value) ? params.value[1] : params.value;
+                        return chartConfig.formatMetricValue ? chartConfig.formatMetricValue(fields.yField, val) : '';
+                    },
+                },
+                data: market.categories.map(function (category) {
+                    return { value: [category.key, category.bestValue], bucketKey: category.key, row: category.bestRow };
+                }),
+            },
+        ];
+
+        bankCurves.forEach(function (curve, idx) {
+            var color = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
+                ? chartConfig.bankAccentColor(curve.bankName, idx)
+                : paletteColor(idx + 2);
+            series.push({
+                name: curve.bankName,
+                type: 'scatter',
+                symbolSize: narrow ? 7 : 10,
+                itemStyle: { color: color, borderColor: 'rgba(255,255,255,0.25)', borderWidth: 1.5 },
+                emphasis: { focus: 'series', scale: 1.5 },
+                data: (curve.points || []).filter(Boolean).map(function (point) {
+                    return { value: [point.bucketKey, point.value], bucketKey: point.bucketKey, row: point.row };
+                }),
+            });
+        });
+
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -542,10 +664,23 @@
             axisPointer: axisPointerConfig(theme),
             title: curveTitle ? {
                 text: curveTitle,
+                subtext: market.snapshotDateDisplay
+                    ? ('Snapshot ' + market.snapshotDateDisplay + '  ·  Band = market range  ·  Green = middle 50%  ·  Dots = individual banks')
+                    : 'Band = market range  ·  Green = middle 50%  ·  Dots = individual banks',
                 left: 0,
                 top: 2,
-                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+                textStyle: { color: theme.emphasisText, fontSize: 13, fontWeight: 700 },
+                subtextStyle: { color: theme.mutedText, fontSize: 10 },
             } : undefined,
+            legend: {
+                data: legendData,
+                bottom: 8,
+                left: 0,
+                right: 0,
+                type: 'scroll',
+                textStyle: { color: theme.softText, fontSize: 11 },
+                formatter: function (name) { return trimAxisLabel(name, compact ? 12 : 22); },
+            },
             tooltip: {
                 trigger: 'axis',
                 transitionDuration: 0,
@@ -561,9 +696,9 @@
             },
             grid: {
                 left: narrow ? 46 : 58,
-                right: 20,
-                top: curveTitle ? 42 : 24,
-                bottom: narrow ? 78 : 64,
+                right: compact ? 16 : 20,
+                top: curveTitle ? 58 : 24,
+                bottom: narrow ? 96 : 84,
                 containLabel: true,
             },
             xAxis: categoryAxis(market, narrow),
@@ -574,7 +709,7 @@
                     scale: true,
                     min: yRange.min,
                     max: yRange.max,
-                    name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
+                    name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
                     nameGap: narrow ? 18 : 26,
                     nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
                     axisLine: gridStyles().axisLine,
@@ -586,68 +721,7 @@
                     },
                 };
             })(),
-            series: [
-                {
-                    name: 'Floor',
-                    type: 'line',
-                    stack: 'envelope',
-                    silent: true,
-                    lineStyle: { opacity: 0 },
-                    areaStyle: { opacity: 0 },
-                    symbol: 'none',
-                    data: market.categories.map(function (category) { return { value: category.min, bucketKey: category.key }; }),
-                },
-                {
-                    name: 'Full range',
-                    type: 'line',
-                    stack: 'envelope',
-                    lineStyle: { opacity: 0 },
-                    symbol: 'none',
-                    areaStyle: { color: 'rgba(79, 141, 253, 0.12)' },
-                    data: market.categories.map(function (category) { return { value: category.max - category.min, bucketKey: category.key }; }),
-                },
-                {
-                    name: 'Q1',
-                    type: 'line',
-                    stack: 'iqr',
-                    silent: true,
-                    lineStyle: { opacity: 0 },
-                    areaStyle: { opacity: 0 },
-                    symbol: 'none',
-                    data: market.categories.map(function (category) { return { value: category.q1, bucketKey: category.key }; }),
-                },
-                {
-                    name: 'Interquartile range',
-                    type: 'line',
-                    stack: 'iqr',
-                    lineStyle: { opacity: 0 },
-                    symbol: 'none',
-                    areaStyle: { color: 'rgba(39, 194, 122, 0.18)' },
-                    data: market.categories.map(function (category) { return { value: category.q3 - category.q1, bucketKey: category.key }; }),
-                },
-                {
-                    name: 'Median',
-                    type: 'line',
-                    showSymbol: true,
-                    symbolSize: 7,
-                    lineStyle: { width: 3, color: paletteColor(0) },
-                    itemStyle: { color: paletteColor(0) },
-                    data: market.categories.map(function (category) {
-                        return { value: [category.key, category.median], bucketKey: category.key };
-                    }),
-                },
-                {
-                    name: market.bestLabel,
-                    type: 'line',
-                    showSymbol: true,
-                    symbolSize: 7,
-                    lineStyle: { width: 2.5, color: paletteColor(1), type: 'dashed' },
-                    itemStyle: { color: paletteColor(1) },
-                    data: market.categories.map(function (category) {
-                        return { value: [category.key, category.bestValue], bucketKey: category.key, row: category.bestRow };
-                    }),
-                },
-            ],
+            series: series,
         };
     }
 
@@ -655,7 +729,10 @@
         var base = baseTextStyles();
         var theme = chartTheme();
         var narrow = size && size.width < 760;
+        var compact = size && size.width < 420;
         var curveTitle = market.curveTitle || '';
+        var bankCurves = (market.bankCurves || []).slice(0, 5);
+        var legendData = [market.bestLabel].concat(bankCurves.map(function (c) { return c.bankName; }));
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -665,10 +742,23 @@
             axisPointer: axisPointerConfig(theme),
             title: curveTitle ? {
                 text: curveTitle,
+                subtext: market.snapshotDateDisplay
+                    ? ('Snapshot ' + market.snapshotDateDisplay + '  ·  Box = min/Q1/median/Q3/max  ·  Dots = individual banks')
+                    : 'Box = min/Q1/median/Q3/max  ·  Dots = individual banks',
                 left: 0,
                 top: 2,
-                textStyle: { color: theme.mutedText, fontSize: 12, fontWeight: 600 },
+                textStyle: { color: theme.emphasisText, fontSize: 13, fontWeight: 700 },
+                subtextStyle: { color: theme.mutedText, fontSize: 10 },
             } : undefined,
+            legend: {
+                data: legendData,
+                bottom: 8,
+                left: 0,
+                right: 0,
+                type: 'scroll',
+                textStyle: { color: theme.softText, fontSize: 11 },
+                formatter: function (name) { return trimAxisLabel(name, compact ? 12 : 22); },
+            },
             tooltip: {
                 trigger: 'item',
                 transitionDuration: 0,
@@ -682,9 +772,9 @@
             },
             grid: {
                 left: narrow ? 46 : 58,
-                right: 18,
-                top: curveTitle ? 42 : 24,
-                bottom: narrow ? 78 : 64,
+                right: compact ? 16 : 18,
+                top: curveTitle ? 56 : 24,
+                bottom: narrow ? 96 : 84,
                 containLabel: true,
             },
             xAxis: categoryAxis(market, narrow),
@@ -707,29 +797,69 @@
                     },
                 };
             })(),
-            series: [
-                {
-                    name: 'Distribution',
-                    type: 'boxplot',
-                    itemStyle: {
-                        color: 'rgba(79, 141, 253, 0.14)',
-                        borderColor: paletteColor(0),
-                        borderWidth: 2,
+            series: (function () {
+                var s = [
+                    {
+                        name: 'Distribution',
+                        type: 'boxplot',
+                        itemStyle: {
+                            color: 'rgba(79, 141, 253, 0.16)',
+                            borderColor: paletteColor(0),
+                            borderWidth: 2,
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                color: 'rgba(79, 141, 253, 0.26)',
+                                borderColor: paletteColor(0),
+                                borderWidth: 2.5,
+                            },
+                        },
+                        data: market.categories.map(function (category) {
+                            return { name: category.key, value: category.box, bucketKey: category.key };
+                        }),
                     },
-                    data: market.categories.map(function (category) {
-                        return { name: category.key, value: category.box, bucketKey: category.key };
-                    }),
-                },
-                {
-                    name: market.bestLabel,
-                    type: 'scatter',
-                    symbolSize: 10,
-                    itemStyle: { color: paletteColor(1) },
-                    data: market.categories.map(function (category) {
-                        return { value: [category.key, category.bestValue], bucketKey: category.key, row: category.bestRow };
-                    }),
-                },
-            ],
+                    {
+                        name: market.bestLabel,
+                        type: 'scatter',
+                        symbolSize: 11,
+                        symbol: 'diamond',
+                        itemStyle: { color: paletteColor(1), borderColor: 'rgba(255,255,255,0.3)', borderWidth: 1.5 },
+                        emphasis: { scale: 1.4 },
+                        label: {
+                            show: (size && size.width >= 480) && (market.categories.length <= 10),
+                            position: 'top',
+                            distance: 6,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: chartTheme().emphasisText,
+                            formatter: function (params) {
+                                var val = Array.isArray(params.value) ? params.value[1] : params.value;
+                                return chartConfig.formatMetricValue ? chartConfig.formatMetricValue(fields.yField, val) : '';
+                            },
+                        },
+                        data: market.categories.map(function (category) {
+                            return { value: [category.key, category.bestValue], bucketKey: category.key, row: category.bestRow };
+                        }),
+                    },
+                ];
+                (market.bankCurves || []).slice(0, 5).forEach(function (curve, idx) {
+                    var color = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
+                        ? chartConfig.bankAccentColor(curve.bankName, idx)
+                        : paletteColor(idx + 2);
+                    s.push({
+                        name: curve.bankName,
+                        type: 'scatter',
+                        symbolSize: (size && size.width < 760) ? 6 : 8,
+                        symbol: 'circle',
+                        itemStyle: { color: color, opacity: 0.8, borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1 },
+                        emphasis: { focus: 'series', scale: 1.4 },
+                        data: (curve.points || []).filter(Boolean).map(function (point) {
+                            return { value: [point.bucketKey, point.value], bucketKey: point.bucketKey, row: point.row };
+                        }),
+                    });
+                });
+                return s;
+            })(),
         };
     }
 
