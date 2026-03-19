@@ -858,6 +858,34 @@
         return (labelStr && valueStr ? labelStr + '   ' + valueStr : labelStr || valueStr || '').trim();
     }
 
+    function statusLineRepaymentShort(repaymentType) {
+        var v = String(repaymentType || '').trim().toLowerCase();
+        if (v === 'principal_and_interest' || v === 'p+i') return 'P+I';
+        if (v === 'interest_only' || v === 'io') return 'IO';
+        return v ? v : '';
+    }
+
+    function statusLineStructureShort(rateStructure) {
+        var v = String(rateStructure || '').trim().toLowerCase();
+        if (v === 'variable') return 'VAR';
+        var m = v.match(/^fixed_(\d+)yr$/);
+        if (m) return 'FT' + m[1];
+        return v ? v : '';
+    }
+
+    function statusLineTextFromMarketPoint(row, bucketKey, value, fields) {
+        if (!row) return '';
+        var bank = String(row.bank_name || '').trim() || '—';
+        var rateStr = (chartConfig.formatMetricValue && fields && value != null) ? chartConfig.formatMetricValue(fields.yField, value) : (value != null ? String(value) : '');
+        var dateStr = bucketKey != null ? formatDateAxisLabel(bucketKey, false) : '';
+        var lvrRaw = row.lvr_tier != null ? row.lvr_tier : '';
+        var lvrStr = (chartConfig.formatFieldValue && lvrRaw !== '') ? chartConfig.formatFieldValue('lvr_tier', lvrRaw, row) : (lvrRaw ? String(lvrRaw) : '');
+        var repayStr = statusLineRepaymentShort(row.repayment_type);
+        var structStr = statusLineStructureShort(row.rate_structure);
+        var parts = [bank, rateStr ? 'Rate: ' + rateStr : '', dateStr ? 'Date: ' + dateStr : '', lvrStr ? 'LVR: ' + lvrStr : '', repayStr ? repayStr : '', structStr ? structStr : ''];
+        return parts.filter(Boolean).join('  ·  ');
+    }
+
     function ensureChartStatusLine(element) {
         if (!element) return null;
         var el = element.querySelector('.chart-status-line');
@@ -869,16 +897,96 @@
         return el;
     }
 
-    function bindChartStatusLine(instance, element, option, fields) {
+    var HIT_RADIUS = 28;
+
+    function findMarketPointUnderPixel(instance, option, pixel) {
+        if (!instance || !option || !pixel || pixel.length < 2) return null;
+        var series = option.series;
+        if (!Array.isArray(series) || !series.length) return null;
+        var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+        var categoryAxis = (xAxisOpt && xAxisOpt.type === 'category') ? 'x' : null;
+        if (!categoryAxis || categoryAxis !== 'x') return null;
+        var dataCoord;
+        try {
+            dataCoord = instance.convertFromPixel({ seriesIndex: 0 }, pixel);
+        } catch (e) { return null; }
+        if (!dataCoord || !Array.isArray(dataCoord)) return null;
+        var xIndex = Math.round(dataCoord[0]);
+        var categories = xAxisOpt && xAxisOpt.data;
+        if (!Array.isArray(categories) || xIndex < 0 || xIndex >= categories.length) return null;
+        var best = null;
+        var bestDist = HIT_RADIUS * HIT_RADIUS;
+        for (var si = 0; si < series.length; si++) {
+            var s = series[si];
+            var data = s && s.data;
+            if (!Array.isArray(data) || xIndex >= data.length) continue;
+            var item = data[xIndex];
+            if (!item || typeof item !== 'object' || !item.row) continue;
+            var val = item.value;
+            var yVal = typeof val === 'number' ? val : (Array.isArray(val) ? val[1] : (val && val[1] != null ? val[1] : null));
+            if (yVal == null || !Number.isFinite(yVal)) continue;
+            var pointPixel;
+            try {
+                pointPixel = instance.convertToPixel({ seriesIndex: si }, [xIndex, yVal]);
+            } catch (e2) { continue; }
+            if (!pointPixel || pointPixel.length < 2) continue;
+            var dx = pixel[0] - pointPixel[0];
+            var dy = pixel[1] - pointPixel[1];
+            var dist = dx * dx + dy * dy;
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = { seriesIndex: si, dataIndex: xIndex, row: item.row, bucketKey: item.bucketKey, value: yVal };
+            }
+        }
+        return best;
+    }
+
+    function bindChartStatusLine(instance, element, option, fields, opts) {
         if (!instance || !element || !option) return;
         var statusEl = ensureChartStatusLine(element);
         if (!statusEl) return;
+        opts = opts || {};
+        var isMarket = opts.view === 'market' && opts.model && opts.model.market;
+        var series = option.series;
+        var hasMarketRows = isMarket && Array.isArray(series) && series.some(function (s) {
+            var d = s && s.data;
+            return Array.isArray(d) && d.length && d[0] && d[0].row;
+        });
+        var useMarketStatus = isMarket && hasMarketRows;
+
         statusEl.textContent = '\u2014';
         statusEl.classList.add('visible');
         var zr = instance.getZr && instance.getZr();
         if (!zr) return;
+
+        var pinned = null;
+        var hovered = null;
+
+        function setStatusFromPoint(pt) {
+            if (!pt || !pt.row) return;
+            statusEl.textContent = statusLineTextFromMarketPoint(pt.row, pt.bucketKey, pt.value, fields);
+            statusEl.classList.add('visible');
+        }
+
+        function refreshStatus() {
+            if (hovered) {
+                setStatusFromPoint(hovered);
+                return;
+            }
+            if (pinned) {
+                setStatusFromPoint(pinned);
+                statusEl.classList.add('visible');
+                return;
+            }
+            statusEl.classList.remove('visible');
+        }
+
         function onMouseMove(event) {
-            if (!event) { statusEl.classList.remove('visible'); return; }
+            if (!event) {
+                hovered = null;
+                refreshStatus();
+                return;
+            }
             var point = null;
             if (event.point && Array.isArray(event.point) && event.point.length >= 2) {
                 point = [event.point[0], event.point[1]];
@@ -888,17 +996,23 @@
                 point = [event.event.offsetX, event.event.offsetY];
             }
             if (!point) {
-                statusEl.classList.remove('visible');
+                hovered = null;
+                refreshStatus();
                 return;
             }
+
+            if (useMarketStatus) {
+                hovered = findMarketPointUnderPixel(instance, option, point);
+                refreshStatus();
+                return;
+            }
+
             statusEl.classList.add('visible');
             if (!statusEl.textContent) statusEl.textContent = '\u2014';
             if (!instance.convertFromPixel) return;
-            var inGrid = false;
+            var inGrid = true;
             if (instance.containPixel && typeof instance.containPixel === 'function') {
                 try { inGrid = instance.containPixel('grid', point); } catch (e) { inGrid = true; }
-            } else {
-                inGrid = true;
             }
             var dataCoord = null;
             try {
@@ -927,24 +1041,53 @@
                 statusEl.classList.remove('visible');
                 return;
             }
-            var series = option.series;
-            if (Array.isArray(series) && series.length && series[0].data && series[0].data[dataIndex] != null) {
-                var d = series[0].data[dataIndex];
+            var s0 = option.series;
+            if (Array.isArray(s0) && s0.length && s0[0].data && s0[0].data[dataIndex] != null) {
+                var d = s0[0].data[dataIndex];
                 if (d && typeof d === 'object' && d.value != null) otherVal = typeof d.value === 'number' ? d.value : (Array.isArray(d.value) ? d.value[0] : d.value);
             }
             var text = statusLineTextFromOption(option, dataIndex, otherVal, fields, categoryAxis);
             statusEl.textContent = text;
             statusEl.classList.toggle('visible', !!text);
         }
+
         function onGlobalOut() {
-            statusEl.classList.remove('visible');
+            hovered = null;
+            if (!useMarketStatus || !pinned) {
+                statusEl.classList.remove('visible');
+            } else {
+                setStatusFromPoint(pinned);
+            }
         }
+
+        function onClick(event) {
+            if (!useMarketStatus) return;
+            var point = null;
+            if (event && event.point && Array.isArray(event.point) && event.point.length >= 2) {
+                point = [event.point[0], event.point[1]];
+            } else if (event && event.offsetX != null && event.offsetY != null) {
+                point = [event.offsetX, event.offsetY];
+            } else if (event && event.event && event.event.offsetX != null && event.event.offsetY != null) {
+                point = [event.event.offsetX, event.event.offsetY];
+            }
+            if (point) {
+                var hit = findMarketPointUnderPixel(instance, option, point);
+                pinned = hit;
+            } else {
+                pinned = null;
+            }
+            refreshStatus();
+        }
+
         zr.off('mousemove', instance._statusLineMove);
         zr.off('globalout', instance._statusLineOut);
+        zr.off('click', instance._statusLineClick);
         instance._statusLineMove = onMouseMove;
         instance._statusLineOut = onGlobalOut;
+        instance._statusLineClick = onClick;
         zr.on('mousemove', onMouseMove);
         zr.on('globalout', onGlobalOut);
+        if (useMarketStatus) zr.on('click', onClick);
     }
 
     function renderMainChart(instance, element, view, model, fields, handlers, rbaHistory) {
@@ -965,7 +1108,7 @@
         var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
         var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
         var hasCategoryAxis = (xAxisOpt && xAxisOpt.type === 'category') || (yAxisOpt && yAxisOpt.type === 'category');
-        if (hasCategoryAxis && option.grid != null) bindChartStatusLine(instance, element, option, fields);
+        if (hasCategoryAxis && option.grid != null) bindChartStatusLine(instance, element, option, fields, { view: view, model: model });
 
         instance.off('click');
         if (!handlers || typeof handlers.onMainClick !== 'function') return;
