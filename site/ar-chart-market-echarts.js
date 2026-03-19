@@ -151,6 +151,14 @@
                 }
             });
         });
+        (market.bankLvrCurves || []).forEach(function (curve) {
+            (curve.points || []).forEach(function (point) {
+                if (point && Number.isFinite(point.value)) {
+                    lo = Math.min(lo, point.value);
+                    hi = Math.max(hi, point.value);
+                }
+            });
+        });
         (market.bankRibbons || []).forEach(function (ribbon) {
             (ribbon.points || []).forEach(function (p) {
                 if (p && Number.isFinite(p.lowRate)) lo = Math.min(lo, p.lowRate);
@@ -175,7 +183,24 @@
 
         if (market.bankLvrCurves && market.bankLvrCurves.length) {
             var curveTitle = market.curveTitle || 'Variable rate over time by LVR tier';
-            var yRange = marketCurveYRange(market, fields.yField);
+            var yRange = (function () {
+                var lo = Infinity;
+                var hi = -Infinity;
+                market.bankLvrCurves.forEach(function (curve) {
+                    (curve.points || []).forEach(function (point) {
+                        if (point && Number.isFinite(point.value)) {
+                            lo = Math.min(lo, point.value);
+                            hi = Math.max(hi, point.value);
+                        }
+                    });
+                });
+                if (!Number.isFinite(lo)) lo = 0;
+                if (!Number.isFinite(hi)) hi = lo + 1;
+                var pad = (hi - lo) * 0.06 || 0.25;
+                var minVal = lo - pad;
+                if (typeof chartConfig.isPercentField === 'function' && chartConfig.isPercentField(fields.yField)) minVal = Math.max(0, minVal);
+                return { min: minVal, max: hi + pad };
+            })();
             var legendBankNames = [];
             market.bankLvrCurves.forEach(function (curve, index) {
                 var bankColor = (chartConfig.bankAccentColor && typeof chartConfig.bankAccentColor === 'function')
