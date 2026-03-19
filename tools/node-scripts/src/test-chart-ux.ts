@@ -92,7 +92,10 @@ async function switchViewWithoutRatesFetch(page, view) {
 
     page.context().on('request', handler);
     try {
-        await page.click(`[data-chart-view="${view}"]`);
+        await page.evaluate((nextView) => {
+            const btn = document.querySelector(`[data-chart-view="${nextView}"]`);
+            if (btn instanceof HTMLElement) btn.click();
+        }, view);
         await page.waitForFunction((nextView) => {
             const output = document.getElementById('chart-output');
             const renderedView = output?.getAttribute('data-chart-render-view')

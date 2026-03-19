@@ -14,6 +14,14 @@
         : (typeof chartSize === 'function' ? chartSize : defaultChartSize);
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
     var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, minMetric = helpers.minMetric, categoryInterval = helpers.categoryInterval;
+    var trimAxisLabel = typeof helpers.trimAxisLabel === 'function'
+        ? helpers.trimAxisLabel
+        : function (value, maxLength) {
+            var s = String(value == null ? '' : value);
+            var n = Number(maxLength);
+            if (!Number.isFinite(n) || n <= 0 || s.length <= n) return s;
+            return s.slice(0, Math.max(0, n - 1)).trim() + '\u2026';
+        };
     var axisPointerConfig = helpers.axisPointerConfig, axisLabelFontSize = helpers.axisLabelFontSize, chartTheme = helpers.chartTheme;
     var themeFallback = function () {
         return (helpers.chartTheme && helpers.chartTheme()) || {
