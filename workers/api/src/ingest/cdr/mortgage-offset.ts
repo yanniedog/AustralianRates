@@ -21,27 +21,31 @@ function pushCandidateText(values: string[], value: unknown): void {
 function scanFeatureLikeRecords(values: string[], nodes: unknown[]): void {
   for (const node of nodes) {
     if (!isRecord(node)) continue
-    const directFlag = [
-      node.offset,
-      node.offsetAccount,
-      node.hasOffset,
-      node.hasOffsetAccount,
-      node.linkedOffsetAccount,
-      node.available,
-      node.isAvailable,
+    const candidateTexts = [
+      node.name,
+      node.featureType,
+      node.featureName,
+      node.additionalInfo,
+      node.additionalValue,
+      node.description,
+      node.value,
     ]
+      .map((value) => getText(value))
+      .filter(Boolean)
+    values.push(...candidateTexts)
+
+    const directOffsetFlag = [node.offset, node.offsetAccount, node.hasOffset, node.hasOffsetAccount, node.linkedOffsetAccount]
       .map(booleanish)
       .find((value) => value != null)
-    if (directFlag != null) {
-      values.push(directFlag ? 'offset available' : 'offset unavailable')
+    if (directOffsetFlag != null) {
+      values.push(directOffsetFlag ? 'offset available' : 'offset unavailable')
+      continue
     }
-    pushCandidateText(values, node.name)
-    pushCandidateText(values, node.featureType)
-    pushCandidateText(values, node.featureName)
-    pushCandidateText(values, node.additionalInfo)
-    pushCandidateText(values, node.additionalValue)
-    pushCandidateText(values, node.description)
-    pushCandidateText(values, node.value)
+
+    const genericAvailabilityFlag = [node.available, node.isAvailable].map(booleanish).find((value) => value != null)
+    if (genericAvailabilityFlag != null && candidateTexts.some((text) => POSITIVE_OFFSET_RE.test(text) || NEGATIVE_OFFSET_RE.test(text))) {
+      values.push(genericAvailabilityFlag ? 'offset available' : 'offset unavailable')
+    }
   }
 }
 

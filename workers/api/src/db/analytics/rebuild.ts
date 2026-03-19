@@ -131,6 +131,19 @@ async function getProjectionState(
   return row ?? null
 }
 
+
+async function resetProjectionDataset(db: D1Database, config: AnalyticsDatasetConfig): Promise<void> {
+  await db.prepare(`DELETE FROM ${config.eventsTable}`).run()
+  await db.prepare(`DELETE FROM ${config.intervalsTable}`).run()
+  await db
+    .prepare(
+      `DELETE FROM analytics_projection_state
+       WHERE state_key = ?1`,
+    )
+    .bind(stateKey(config.dataset))
+    .run()
+}
+
 async function readNextBatch(
   db: D1Database,
   config: AnalyticsDatasetConfig,
@@ -307,6 +320,9 @@ export async function rebuildAnalyticsProjections(
     let processedRows = 0
     let batches = 0
     let exhausted = false
+    if (input.resume === false) {
+      await resetProjectionDataset(db, config)
+    }
     const existingState = input.resume === false ? null : await getProjectionState(db, dataset)
     let cursor: ProjectionCursor | null =
       existingState?.last_collection_date && existingState.last_parsed_at && existingState.last_series_key

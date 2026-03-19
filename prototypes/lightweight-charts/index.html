@@ -11,12 +11,31 @@
     <link rel="stylesheet" href="../../admin-pages.css" />
     <script src="../../../theme.js"></script>
     <script type="module">
-      window.AR_ADMIN_API_BASE = import.meta.env.VITE_ADMIN_API_BASE || import.meta.env.VITE_HOME_LOANS_API_BASE || ''
+      const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '')
+      const params = new URLSearchParams(window.location.search)
+      const productionOrigin = 'https://www.australianrates.com'
+      const resolveBase = (queryKey, envValue, fallback) => {
+        const queryValue = params.get(queryKey)
+        if (queryValue) return trimTrailingSlash(queryValue)
+        if (envValue) return trimTrailingSlash(envValue)
+        return trimTrailingSlash(fallback)
+      }
+
+      window.AR_ADMIN_BASE = `${resolveBase('adminBase', import.meta.env.VITE_ADMIN_BASE, `${productionOrigin}/admin`)}/`
+      window.AR_ADMIN_API_BASE = resolveBase(
+        'adminApiBase',
+        import.meta.env.VITE_ADMIN_API_BASE || import.meta.env.VITE_HOME_LOANS_API_BASE,
+        `${productionOrigin}/api/home-loan-rates`,
+      )
       window.AR_LIGHTWEIGHT_CHARTS_CONFIG = {
         prototypeSlug: 'lightweight-charts',
-        homeLoansApiBase: import.meta.env.VITE_HOME_LOANS_API_BASE || `${window.location.origin}/api/home-loan-rates`,
-        savingsApiBase: import.meta.env.VITE_SAVINGS_API_BASE || `${window.location.origin}/api/savings-rates`,
-        termDepositsApiBase: import.meta.env.VITE_TERM_DEPOSITS_API_BASE || `${window.location.origin}/api/term-deposit-rates`,
+        homeLoansApiBase: resolveBase('homeLoansApiBase', import.meta.env.VITE_HOME_LOANS_API_BASE, `${productionOrigin}/api/home-loan-rates`),
+        savingsApiBase: resolveBase('savingsApiBase', import.meta.env.VITE_SAVINGS_API_BASE, `${productionOrigin}/api/savings-rates`),
+        termDepositsApiBase: resolveBase(
+          'termDepositsApiBase',
+          import.meta.env.VITE_TERM_DEPOSITS_API_BASE,
+          `${productionOrigin}/api/term-deposit-rates`,
+        ),
       }
     </script>
   </head>

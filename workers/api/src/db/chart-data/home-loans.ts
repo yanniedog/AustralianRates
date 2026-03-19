@@ -168,8 +168,8 @@ export async function queryHomeLoanChartData(
 
   await assertOffsetReadiness(db, input, lvrTier, securityPurpose, repaymentType)
 
-  const where: string[] = ['lvr_tier = ?1', 'security_purpose = ?2', 'repayment_type = ?3', 'has_offset_account = ?4']
-  const binds: Array<string | number> = [lvrTier, securityPurpose, repaymentType, input.offset ? 1 : 0]
+  const where: string[] = ['lvr_tier = ?1', 'security_purpose = ?2', 'repayment_type = ?3']
+  const binds: Array<string | number> = [lvrTier, securityPurpose, repaymentType]
   if (input.lenders.length > 0) {
     const placeholders = input.lenders.map((_value, index) => `?${binds.length + index + 1}`).join(', ')
     where.push(`bank_name IN (${placeholders})`)
@@ -233,7 +233,7 @@ export async function queryHomeLoanChartData(
     })
   }
 
-  const series = Array.from(seriesMap.values())
+  const series = Array.from(seriesMap.values()).filter((item) => item.offset === input.offset)
   const seriesIds = series.map((item) => item.id)
   const [rbaEvents, lenderEvents] = await Promise.all([
     queryRbaChartEvents(db, input.startDate, input.endDate),
