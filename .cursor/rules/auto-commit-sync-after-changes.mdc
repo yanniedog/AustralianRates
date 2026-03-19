@@ -1,0 +1,17 @@
+---
+description: "After making changes in this chat, commit and sync (push) automatically"
+alwaysApply: true
+---
+
+# Auto Commit and Sync After Changes
+
+Whenever you make code or config changes in this Cursor chat, you must **commit and sync** before considering the task complete.
+
+1. **After edits** – Once you have modified files in the repo:
+   - Stage the changed files: `git add` (relevant paths or `.` as appropriate).
+   - Commit with a clear message: `git commit -m "brief description of change"`.
+   - Sync (push): `git push` (or `git push origin <current-branch>`).
+2. **Scope** – Commit only the changes made in this conversation; use a message that describes what was done.
+3. **No skip** – Do not leave the repo with uncommitted or unpushed changes unless the user explicitly asks you to stop before syncing.
+
+If the user is not on `main` and project rules say to work on `main` (e.g. for production fixes), follow those rules; otherwise commit and push to the current branch.
