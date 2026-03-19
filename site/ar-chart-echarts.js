@@ -200,6 +200,7 @@
             },
             xAxis: {
                 type: 'value',
+                scale: true,
                 min: valueRange.min,
                 max: valueRange.max,
                 splitNumber: narrow ? 4 : 6,
@@ -385,6 +386,7 @@
             },
             yAxis: {
                 type: 'value',
+                scale: true,
                 name: compact ? '' : (slope.metricLabel || chartConfig.fieldLabel(fields.yField)),
                 nameGap: narrow ? 18 : 26,
                 nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
@@ -455,6 +457,7 @@
             },
             xAxis: {
                 type: 'value',
+                scale: true,
                 min: valueRange.min,
                 max: valueRange.max,
                 splitNumber: narrow ? 4 : 6,
@@ -634,6 +637,7 @@
             },
             yAxis: {
                 type: 'value',
+                scale: true,
                 min: yRange.min,
                 max: yRange.max,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
@@ -730,6 +734,7 @@
             },
             yAxis: {
                 type: 'value',
+                scale: true,
                 min: yRange.min,
                 max: yRange.max,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),

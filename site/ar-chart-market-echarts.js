@@ -247,6 +247,7 @@
                 xAxis: categoryAxis(market, compact),
                 yAxis: {
                     type: 'value',
+                    scale: true,
                     min: yRange.min,
                     max: yRange.max,
                     name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
@@ -345,6 +346,7 @@
             xAxis: categoryAxis(market, compact),
             yAxis: {
                 type: 'value',
+                scale: true,
                 min: yRange.min,
                 max: yRange.max,
                 name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
@@ -480,6 +482,7 @@
             xAxis: categoryAxis(market, narrow),
             yAxis: {
                 type: 'value',
+                scale: true,
                 min: yRange.min,
                 max: yRange.max,
                 name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
@@ -543,6 +546,7 @@
                 var yRange = marketCurveYRange(market, fields.yField);
                 return {
                     type: 'value',
+                    scale: true,
                     min: yRange.min,
                     max: yRange.max,
                     name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
@@ -663,6 +667,7 @@
                 var yRange = marketCurveYRange(market, fields.yField);
                 return {
                     type: 'value',
+                    scale: true,
                     min: yRange.min,
                     max: yRange.max,
                     name: (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
@@ -798,6 +803,7 @@
             },
             yAxis: {
                 type: 'value',
+                scale: true,
                 name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : ''),
                 nameGap: narrow ? 18 : 26,
                 nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
@@ -936,6 +942,7 @@
             },
             yAxis: {
                 type: 'value',
+                scale: true,
                 name: compact ? '' : (chartConfig.fieldLabel ? chartConfig.fieldLabel(fields.yField) : 'Rate (%)'),
                 min: sharedRange.min,
                 max: sharedRange.max,
