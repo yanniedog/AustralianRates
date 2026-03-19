@@ -152,6 +152,16 @@
         return max;
     }
 
+    function minMetric(entries) {
+        var min = null;
+        entries.forEach(function (entry) {
+            var value = Number(entry && entry.value);
+            if (!Number.isFinite(value)) return;
+            if (min == null || value < min) min = value;
+        });
+        return min;
+    }
+
     function categoryInterval(total, maxVisible) {
         if (!Number.isFinite(total) || !Number.isFinite(maxVisible) || maxVisible <= 0) return 0;
         if (total <= maxVisible) return 0;
@@ -254,6 +264,7 @@
         formatSurfaceAxisLabel: formatSurfaceAxisLabel,
         gridStyles: gridStyles,
         maxMetric: maxMetric,
+        minMetric: minMetric,
         metricAxisLabel: metricAxisLabel,
         paletteColor: paletteColor,
         chartTheme: chartTheme,

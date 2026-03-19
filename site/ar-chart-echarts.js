@@ -7,7 +7,7 @@
     var chartSizeWithFallback = (helpers.chartSizeWithFallback && typeof helpers.chartSizeWithFallback === 'function')
         ? helpers.chartSizeWithFallback : chartSize;
     var formatDateAxisLabel = helpers.formatDateAxisLabel, formatSurfaceAxisLabel = helpers.formatSurfaceAxisLabel;
-    var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, categoryInterval = helpers.categoryInterval;
+    var metricAxisLabel = helpers.metricAxisLabel, maxMetric = helpers.maxMetric, minMetric = helpers.minMetric, categoryInterval = helpers.categoryInterval;
     var axisPointerConfig = helpers.axisPointerConfig, axisLabelFontSize = helpers.axisLabelFontSize, chartTheme = helpers.chartTheme;
     var themeFallback = function () {
         return (helpers.chartTheme && helpers.chartTheme()) || {
@@ -156,7 +156,9 @@
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
+        var minValue = minMetric(entries);
         var maxValue = maxMetric(entries);
+        var valueRange = valueRangeWithPadding(minValue, maxValue, fields.yField);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -198,8 +200,8 @@
             },
             xAxis: {
                 type: 'value',
-                min: 0,
-                max: maxValue == null ? null : maxValue * (narrow ? 1.18 : 1.08),
+                min: valueRange.min,
+                max: valueRange.max,
                 splitNumber: narrow ? 4 : 6,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameGap: compact ? 10 : (narrow ? 18 : 26),
@@ -408,7 +410,9 @@
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
+        var minValue = minMetric(entries);
         var maxValue = maxMetric(entries);
+        var valueRange = valueRangeWithPadding(minValue, maxValue, fields.yField);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -451,8 +455,8 @@
             },
             xAxis: {
                 type: 'value',
-                min: 0,
-                max: maxValue == null ? null : maxValue * (narrow ? 1.18 : 1.08),
+                min: valueRange.min,
+                max: valueRange.max,
                 splitNumber: narrow ? 4 : 6,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameGap: compact ? 10 : (narrow ? 18 : 26),
@@ -524,6 +528,49 @@
         };
     }
 
+    /** Y-axis range that fits data with padding; for percent fields min is floored at 0. */
+    function valueRangeWithPadding(lo, hi, yField) {
+        if (lo == null || !Number.isFinite(lo)) lo = 0;
+        if (hi == null || !Number.isFinite(hi)) hi = lo + 1;
+        if (lo === hi) hi = lo + 1;
+        var pad = (hi - lo) * 0.06 || 0.25;
+        var minVal = lo - pad;
+        if (typeof chartConfig.isPercentField === 'function' && chartConfig.isPercentField(yField)) minVal = Math.max(0, minVal);
+        return { min: minVal, max: hi + pad };
+    }
+
+    function compareYRange(compareSeries, yField) {
+        var lo = Infinity;
+        var hi = -Infinity;
+        (compareSeries || []).forEach(function (series) {
+            (series.points || []).forEach(function (point) {
+                if (point && Number.isFinite(point.value)) {
+                    if (point.value < lo) lo = point.value;
+                    if (point.value > hi) hi = point.value;
+                }
+            });
+        });
+        return valueRangeWithPadding(lo === Infinity ? null : lo, hi === -Infinity ? null : hi, yField);
+    }
+
+    function distributionYRange(distribution, yField) {
+        var lo = Infinity;
+        var hi = -Infinity;
+        (distribution.boxes || []).forEach(function (box) {
+            if (Array.isArray(box) && box.length >= 5) {
+                if (Number.isFinite(box[0]) && box[0] < lo) lo = box[0];
+                if (Number.isFinite(box[4]) && box[4] > hi) hi = box[4];
+            }
+        });
+        (distribution.means || []).forEach(function (v) {
+            if (Number.isFinite(v)) {
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+            }
+        });
+        return valueRangeWithPadding(lo === Infinity ? null : lo, hi === -Infinity ? null : hi, yField);
+    }
+
     function buildCompareOption(model, fields, size) {
         var base = baseTextStyles();
         var styles = gridStyles();
@@ -533,6 +580,7 @@
         var showLegend = !narrow && model.compareSeries.length <= 3;
         var showEndLabels = !narrow && model.compareSeries.length <= 2;
         var focusBlur = theme.focusBlurOpacity != null ? theme.focusBlurOpacity : 0.22;
+        var yRange = compareYRange(model.compareSeries, fields.yField);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -586,6 +634,8 @@
             },
             yAxis: {
                 type: 'value',
+                min: yRange.min,
+                max: yRange.max,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
                 axisLine: styles.axisLine,
@@ -641,6 +691,7 @@
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
+        var yRange = distributionYRange(model.distribution, fields.yField);
         return {
             textStyle: base.textStyle,
             animationDuration: base.animationDuration,
@@ -679,6 +730,8 @@
             },
             yAxis: {
                 type: 'value',
+                min: yRange.min,
+                max: yRange.max,
                 name: compact ? '' : chartConfig.fieldLabel(fields.yField),
                 nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
                 axisLine: styles.axisLine,
