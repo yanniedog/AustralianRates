@@ -35,6 +35,7 @@ import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import { log } from '../utils/logger'
 import type { DatasetKind } from '../../../../packages/shared/src'
+import { backfillHomeLoanOffsetAccounts } from '../db/home-loans/offset-backfill'
 
 export const adminRoutes = new Hono<AppContext>()
 
@@ -285,6 +286,28 @@ adminRoutes.get('/runs/:runId', async (c) => {
     auth_mode: c.get('adminAuthState')?.mode || null,
     run,
   })
+})
+
+adminRoutes.post('/offset-backfill', async (c) => {
+  const limitHashes = clampInt(c.req.query('limit'), 250, 1, 5000)
+  const rebuild = String(c.req.query('rebuild') || 'true').trim().toLowerCase() !== 'false'
+  try {
+    const result = await backfillHomeLoanOffsetAccounts(c.env.DB, {
+      limitHashes,
+      rebuildProjections: rebuild,
+    })
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      ...result,
+    })
+  } catch (error) {
+    log.error('admin', 'offset_backfill_failed', {
+      error,
+      context: JSON.stringify({ route: '/admin/offset-backfill', limitHashes, rebuild }),
+    })
+    return jsonError(c, 500, 'OFFSET_BACKFILL_FAILED', 'Offset backfill failed to execute.')
+  }
 })
 
 adminRoutes.get('/diagnostics/backlog', async (c) => {

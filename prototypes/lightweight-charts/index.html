@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Real-Data Lightweight Charts | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="../../../foundation.css" />
+    <link rel="stylesheet" href="../../../public-shell.css" />
+    <link rel="stylesheet" href="../../admin-layout.css" />
+    <link rel="stylesheet" href="../../admin-pages.css" />
+    <script src="../../../theme.js"></script>
+    <script type="module">
+      window.AR_ADMIN_API_BASE = import.meta.env.VITE_ADMIN_API_BASE || import.meta.env.VITE_HOME_LOANS_API_BASE || ''
+      window.AR_LIGHTWEIGHT_CHARTS_CONFIG = {
+        prototypeSlug: 'lightweight-charts',
+        homeLoansApiBase: import.meta.env.VITE_HOME_LOANS_API_BASE || `${window.location.origin}/api/home-loan-rates`,
+        savingsApiBase: import.meta.env.VITE_SAVINGS_API_BASE || `${window.location.origin}/api/savings-rates`,
+        termDepositsApiBase: import.meta.env.VITE_TERM_DEPOSITS_API_BASE || `${window.location.origin}/api/term-deposit-rates`,
+      }
+    </script>
+  </head>
+  <body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+      <div class="site-header-inner">
+        <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+      </div>
+    </header>
+    <main class="admin-shell admin-shell--wide" id="main-content" tabindex="-1">
+      <div id="root"></div>
+    </main>
+    <script src="../../admin-portal.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+    <script src="../../admin-sidebar.js"></script>
+    <script src="../../../ui-icons.js"></script>
+    <script src="../../../frame.js"></script>
+  </body>
+</html>
