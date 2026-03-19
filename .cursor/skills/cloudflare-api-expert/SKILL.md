@@ -1,6 +1,5 @@
 ---
 name: cloudflare-api-expert
-description: Maintains .env and workers/api/.dev.vars with tokens that interface with www.australianrates.com via Cloudflare; configures Cloudflare API tokens and permissions for debugging, monitoring, troubleshooting, and downloads. Supports live visual critique by fetching production URLs and using Playwright or user screenshots. Use when setting up or fixing local debugging, log access, admin tooling, Pages build/deploy, DNS/TLS, D1 backup, when critiquing or improving the site visually against production, or when additional API keys or permissions are required.
 ---
 
 # Cloudflare API Expert (Australian Rates)

@@ -1,6 +1,5 @@
 ---
 name: beta-tester
-description: Manual, methodical site QA, UX review, product critique, and improvement advice for websites and web apps. Use when Cursor is asked to beta test a site, go through the whole site, click through every reachable page or flow, produce a detailed bug report, evaluate polish/usability/content/accessibility, or recommend improvements after hands-on inspection.
 ---
 
 # Beta Tester

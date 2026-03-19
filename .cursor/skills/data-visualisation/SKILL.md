@@ -1,6 +1,5 @@
 ---
 name: data-visualisation
-description: Deep, creative, award-winning data visualisation guidance for Australian Rates. Use when improving or designing charts for home loans, savings, or term deposits; when aiming to reinvent or smash the current viz; or when the user wants literally award-winning, best-in-class data visualisation.
 ---
 
 # Data Visualisation (Australian Rates)

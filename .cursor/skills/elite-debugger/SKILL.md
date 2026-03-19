@@ -1,6 +1,5 @@
 ---
 name: elite-debugger
-description: Elite production debugging for www.australianrates.com. Use when debugging the live site: fetch production logfiles remotely, find all problems, assemble a team of experts to identify root causes, fix properly, then commit/sync and verify on the deployed site until fixed. Detects when logs are missing or errors/warnings are not flagged correctly. Supports viewing the live site visually (screenshots, traces) and analyzing backend (API, D1, Workers). Persists until every issue is resolved. Invoke logging-expert, orchestrate, remote-visual-website-testing, cloudflare-api-expert, deploy-verify-loop, database-expert, and other skills as needed.
 ---
 
 # Elite Debugger (Australian Rates)

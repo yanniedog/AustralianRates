@@ -1,6 +1,5 @@
 ---
 name: logging-expert
-description: Methodical logging and logfile expertise for www.australianrates.com. Use when designing or implementing centralised logging; configuring retention and rollover (14d for errors/warnings, 48h for info); exposing logs to credentialed users via API; adding or improving log emission from front end, API worker, archive worker, or Cloudflare; or ensuring failures and errors produce verbose, rigorous debug output. Covers admin-portal logging control and consistent, helpful debug across all site processes.
 ---
 
 # Logging Expert (Australian Rates)

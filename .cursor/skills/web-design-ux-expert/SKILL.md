@@ -1,6 +1,5 @@
 ---
 name: web-design-ux-expert
-description: Makes intelligent decisions about web style, layout, formatting, placement, and UX. Advocates less-is-more, frictionless user journeys, and responsible ultramodern (including terminal-inspired) interfaces. Use when designing or refining site layout, styling, UX flows, component placement, or when the user asks for web design, UX, interface polish, or engagement-friendly design.
 ---
 
 # Web Design and UX Expert

@@ -1,6 +1,5 @@
 ---
 name: cdr-bank-api-expert
-description: Australian bank CDR (Consumer Data Right) API expert with awareness of ALL banks and their CDR API protocols. Use when configuring or fixing bank CDR endpoints and playbooks; ensuring full coverage of all data in the database in a consistent and properly organised manner with no datafeed gaps; obtaining and storing RBA cash rate, headline inflation rate, and another key inflation metric at the same frequency as bank data and reliably in the DB; diagnosing datafeed issues, coverage gaps, or missing data; adding or tuning a lender; or auditing/fixing CDR pipeline and coverage-gap reports.
 ---
 
 # Australian Bank CDR API Expert

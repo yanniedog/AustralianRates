@@ -1,6 +1,5 @@
 ---
 name: remote-visual-website-testing
-description: Enables remote visual testing of websites by capturing screenshots, snapshots, page content, and user interactions (clicks, mouse movements, scrolls, keyboard). Teams can autonomously analyze visual and graphical content and replay or inspect interaction recordings. Use when taking screenshots, capturing page snapshots, recording clicks or mouse movements, running visual regression, or when the user asks to test or analyze a website visually, capture screen content, record interactions, or review UI/layout remotely.
 ---
 
 # Remote Visual Website Testing

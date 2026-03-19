@@ -1,6 +1,5 @@
 ---
 name: database-expert
-description: Expert database administration, engineering, optimisation, and systems. Use when designing or changing schemas, writing or tuning SQL, adding or reviewing indexes and constraints, planning or reviewing migrations, improving query performance, ensuring data integrity and consistency, sizing or scaling databases, or securing and operating database systems (including Cloudflare D1 / SQLite).
 ---
 
 # Database Expert
