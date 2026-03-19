@@ -23,11 +23,21 @@ body.ar-public .chart-block {
 @media (max-width: 900px) and (min-width: 761px) {
     body.ar-public .market-terminal {
         grid-template-columns:
-            minmax(200px, 1fr)
+            minmax(180px, 1fr)
             var(--ar-splitter-track)
             minmax(0, 1fr)
             var(--ar-splitter-track)
-            minmax(200px, 1fr);
+            minmax(160px, 1fr);
+    }
+
+    body.ar-public .shell-public {
+        overflow-x: hidden;
+        max-width: 100%;
+    }
+
+    body.ar-public .site-header {
+        max-width: 100%;
+        overflow-x: hidden;
     }
 }
 
