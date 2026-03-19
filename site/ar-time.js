@@ -119,6 +119,11 @@
         };
     }
 
+    function padTwo(n) {
+        var s = String(n);
+        return s.length < 2 ? '0' + s : s;
+    }
+
     function formatSourceDateWithLocal(sourceDate, parsedAt, tz) {
         var canonical = asText(sourceDate) || '-';
         var timeZone = asText(tz) || getUserTimeZone();
@@ -126,7 +131,7 @@
         if (!parsed.ok) {
             var fallbackTitle = 'Source date: ' + canonical;
             if (asText(parsedAt)) {
-                fallbackTitle += ' | Local date unavailable (invalid parsed_at: ' + asText(parsedAt) + ')';
+                fallbackTitle += ' | Local date/time unavailable (invalid parsed_at: ' + asText(parsedAt) + ')';
             }
             return {
                 ok: false,
@@ -135,11 +140,13 @@
             };
         }
 
-        var localDate = formatLocalDate(parsed.date, timeZone);
+        var timeUtc = padTwo(parsed.date.getUTCHours()) + ':' + padTwo(parsed.date.getUTCMinutes());
+        var dateTimeCanonical = canonical + ' ' + timeUtc;
+        var localDateTime = formatLocalDateTime(parsed.date, timeZone);
         return {
             ok: true,
-            text: canonical + ' (local: ' + localDate + ')',
-            title: 'Source date: ' + canonical + ' | Local date in ' + timeZone + ': ' + localDate + ' | parsed_at: ' + parsed.raw
+            text: dateTimeCanonical + ' (local: ' + localDateTime + ')',
+            title: 'Source date: ' + canonical + ' | Local date/time in ' + timeZone + ': ' + localDateTime + ' | parsed_at: ' + parsed.raw
         };
     }
 
