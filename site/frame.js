@@ -326,10 +326,14 @@
             '</nav>';
     }
 
+    function isLocalHostForDevTools() {
+        var h = String((window.location && window.location.hostname) || '');
+        return /(^|\.)localhost$/i.test(h) || /^127(?:\.\d{1,3}){3}$/.test(h) || h === '::1';
+    }
+
     function headerActionsMarkup(context) {
         var menuLabel = context.legal || context.notFound ? 'Sections' : 'Menu';
-        var siteVariant = window.AR && window.AR.siteVariant;
-        var showColdRefresh = !!(siteVariant && siteVariant.isLocalHost);
+        var showColdRefresh = isLocalHostForDevTools();
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
