@@ -48,6 +48,15 @@
         return normalizeUiMode(runtimePrefs.uiMode || 'analyst');
     }
 
+    var cacheBustFromUrl = (function () {
+        try {
+            var p = new URLSearchParams(window.location.search);
+            var v = p.get('_');
+            if (v && /^\d+$/.test(String(v))) return Number(v);
+        } catch (_) {}
+        return null;
+    })();
+
     var state = {
         activeTab: initialActiveTab(),
         pivotLoaded: false,
@@ -55,6 +64,8 @@
         refreshTimerId: null,
         lastRefreshedAt: null,
         uiMode: currentUiMode(),
+        /** When set, API requests should include cache_bust so Worker cache is bypassed. Set from URL _= on load or when user triggers refresh. */
+        cacheBust: cacheBustFromUrl,
     };
 
     runtimePrefs.uiMode = state.uiMode;

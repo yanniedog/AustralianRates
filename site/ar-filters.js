@@ -586,7 +586,8 @@
                 : null;
             var data = result ? result.data : null;
             if (!data) {
-                var r = await fetch(apiBase + '/filters', { cache: 'no-store' });
+                var filtersUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(apiBase + '/filters') : apiBase + '/filters';
+                var r = await fetch(filtersUrl, { cache: 'no-store' });
                 if (!r.ok) throw new Error('HTTP ' + r.status + ' for /filters');
                 data = await r.json();
             }

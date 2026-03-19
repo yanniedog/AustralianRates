@@ -558,6 +558,7 @@
                                 '</select>',
                             '</div>',
                             '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
+                            '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>',
                             '<span id="last-refreshed" class="hint"></span>',
                         '</div>',
                     '</section>',

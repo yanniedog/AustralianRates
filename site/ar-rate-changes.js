@@ -147,7 +147,7 @@
                     retryCount: 1,
                     retryDelayMs: 700,
                 })).data
-                : await fetch(apiBase + '/changes?limit=200&offset=0', { cache: 'no-store' }).then(function (res) {
+                : await fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(apiBase + '/changes?limit=200&offset=0') : apiBase + '/changes?limit=200&offset=0'), { cache: 'no-store' }).then(function (res) {
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     return res.json();
                 });

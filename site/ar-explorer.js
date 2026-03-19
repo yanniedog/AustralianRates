@@ -1027,8 +1027,9 @@
                 return url + '?' + q.toString();
             },
             ajaxRequestFunc: function (url, ajaxConfig) {
+                var bustedUrl = (network && typeof network.appendCacheBust === 'function') ? network.appendCacheBust(url) : url;
                 var request = requestJson
-                    ? requestJson(url, {
+                    ? requestJson(bustedUrl, {
                         method: ajaxConfig && ajaxConfig.method ? ajaxConfig.method : 'GET',
                         headers: ajaxConfig && ajaxConfig.headers ? ajaxConfig.headers : undefined,
                         cache: 'no-store',
@@ -1039,7 +1040,7 @@
                     }).then(function (result) {
                         return result.data;
                     })
-                    : fetch(url, ajaxConfig || { method: 'GET', cache: 'no-store' }).then(function (response) {
+                    : fetch(bustedUrl, ajaxConfig || { method: 'GET', cache: 'no-store' }).then(function (response) {
                         if (!response.ok) throw new Error('HTTP ' + response.status + ' for /rates');
                         return response.json();
                     });

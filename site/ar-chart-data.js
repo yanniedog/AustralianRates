@@ -575,7 +575,8 @@
                 throw err;
             });
         }
-        return fetch(url, { cache: 'no-store' }).then(function (response) {
+        var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
+        return fetch(fetchUrl, { cache: 'no-store' }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/series');
             return response.json();
         });
@@ -627,7 +628,8 @@
                 })
                 .catch(function () { return []; });
         }
-        return fetch(url, { cache: 'default' })
+        var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
+        return fetch(fetchUrl, { cache: 'default' })
             .then(function (r) { return r.ok ? r.json() : { rows: [] }; })
             .then(function (res) {
                 var rows = (res && res.rows) ? res.rows : [];

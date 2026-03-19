@@ -57,8 +57,26 @@
         return /^http_(408|409|425|429|5\d\d)$/.test(String(error.code));
     }
 
+    /** Append cache_bust to URL when AR.state.state.cacheBust is set, so Worker cache is bypassed. */
+    function appendCacheBust(url) {
+        var u = String(url || '').trim();
+        if (!u) return u;
+        var state = window.AR && window.AR.state && window.AR.state.state ? window.AR.state.state : null;
+        var bust = state && (state.cacheBust != null) ? state.cacheBust : null;
+        if (bust == null) return u;
+        try {
+            var parsed = new URL(u, window.location.origin);
+            parsed.searchParams.set('cache_bust', String(bust));
+            return parsed.toString();
+        } catch (_) {
+            var sep = u.indexOf('?') >= 0 ? '&' : '?';
+            return u + sep + 'cache_bust=' + encodeURIComponent(String(bust));
+        }
+    }
+
     async function requestJson(url, options) {
         var opts = options || {};
+        url = appendCacheBust(url || '');
         var timeoutMs = asPositiveInt(opts.timeoutMs, 12000);
         var retryCount = Math.max(0, Math.floor(Number(opts.retryCount || 0)));
         var retryDelayMs = asPositiveInt(opts.retryDelayMs, 650);
@@ -76,7 +94,7 @@
                 : 0;
 
             try {
-                var response = await fetch(String(url || ''), {
+                var response = await fetch(url, {
                     method: opts.method || 'GET',
                     headers: opts.headers,
                     body: opts.body,
@@ -143,6 +161,7 @@
     }
 
     window.AR.network = {
+        appendCacheBust: appendCacheBust,
         describeError: describeError,
         isRetriable: isRetriable,
         isTimeoutError: isTimeoutError,

@@ -178,7 +178,7 @@
                     }
                 })
                 .catch(function () {})
-            : fetch(url, { cache: 'no-store' })
+            : fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(url) : url), { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
                     if (data && data.ok) {
@@ -292,7 +292,7 @@
                     retryCount: 1,
                     retryDelayMs: 700,
                 })).data
-                : await fetch(apiBase + '/latest?' + new URLSearchParams(params).toString(), { cache: 'no-store' }).then(function (response) {
+                : await fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(apiBase + '/latest?' + new URLSearchParams(params).toString()) : apiBase + '/latest?' + new URLSearchParams(params).toString()), { cache: 'no-store' }).then(function (response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
                     return response.json();
                 });

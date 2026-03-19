@@ -146,7 +146,7 @@
                 timeoutMs: 20000,
                 retryCount: 0,
             }).then(function (result) { return result.data; })
-            : fetch(apiBase + '/analytics/pivot', {
+            : fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(apiBase + '/analytics/pivot') : apiBase + '/analytics/pivot'), {
                 method: 'POST',
                 cache: 'no-store',
                 headers: { 'Content-Type': 'application/json' },

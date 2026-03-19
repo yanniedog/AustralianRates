@@ -153,7 +153,7 @@
                     retryCount: 1,
                     retryDelayMs: 700,
                 })).data
-                : await fetch(endpoint, { cache: 'no-store' }).then(function (res) {
+                : await fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(endpoint) : endpoint), { cache: 'no-store' }).then(function (res) {
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     return res.json();
                 });
