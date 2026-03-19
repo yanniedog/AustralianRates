@@ -98,9 +98,10 @@
 
     function clearSiteDataAndReload() {
         if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-            var confirmed = window.confirm('Reset local site data for AustralianRates and reload? This clears saved theme and workspace preferences in this browser.');
+            var confirmed = window.confirm('Cold refresh: clear all site cache, storage and cookies for this site, then reload so everything is loaded fresh from the server. Continue?');
             if (!confirmed) return;
         }
+        addSessionLog('info', 'Cold refresh requested', { action: 'clearSiteDataAndReload' });
         var hostname = typeof location !== 'undefined' && location.hostname ? location.hostname : '';
         var expired = 'expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
 
@@ -121,8 +122,9 @@
         } catch (_err) {}
 
         function doReload() {
-            var q = (window.location.search ? '&' : '?') + '_=' + Date.now();
-            window.location.replace(window.location.pathname + window.location.search + q + window.location.hash);
+            var sep = window.location.search ? '&' : '?';
+            var q = sep + '_nocache=' + Date.now();
+            window.location.replace(window.location.pathname + window.location.search + q + (window.location.hash || ''));
         }
 
         var p = Promise.resolve();
@@ -316,10 +318,8 @@
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
+            '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Cold refresh" title="Clear site cache, storage and cookies, then reload to load the latest version from the server">' + actionIconMarkup('refresh', 'Cold refresh') + '</button>',
         ];
-        if (context.admin) {
-            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Reset local site data and reload" title="Reset local site data for this browser and reload">' + actionIconMarkup('refresh', 'Reset') + '</button>');
-        }
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
@@ -424,6 +424,7 @@
                                     '<a href="#" id="footer-log-link" class="footer-log-badge" title="View log options"><span id="footer-log-link-text">log/0</span></a>' +
                                     '<div id="footer-log-popup" class="footer-log-popup" role="dialog" aria-label="Log download options" hidden>' +
                                         '<button type="button" id="footer-log-download-client" class="footer-log-popup-item">Download client log</button>' +
+                                        '<button type="button" id="footer-cold-refresh" class="footer-log-popup-item">Cold refresh (clear cache &amp; reload)</button>' +
                                     '</div>' +
                                 '</span>' +
                                 '<span class="footer-note">Admin tooling</span>' +
