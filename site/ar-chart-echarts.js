@@ -956,6 +956,7 @@
 
         statusEl.textContent = '\u2014';
         statusEl.classList.add('visible');
+        /* Visible by default and not hidden on globalout/spurious mousemove so the bar stays visible when using Sync now (refresh). */
         var zr = instance.getZr && instance.getZr();
         if (!zr) return;
 
