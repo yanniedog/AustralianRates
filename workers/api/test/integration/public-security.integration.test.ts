@@ -1,4 +1,4 @@
-import { SELF } from '@cloudflare/workers-test'
+import { SELF } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 
 describe('public security compatibility', () => {
