@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test'
+import { SELF } from '@cloudflare/workers-test'
 import { describe, expect, it } from 'vitest'
 
 describe('public security compatibility', () => {
@@ -19,4 +19,5 @@ describe('public security compatibility', () => {
     const response = await SELF.fetch('https://example.com/api/home-loan-rates/admin/runs')
     expect(response.status).toBe(401)
   })
-})
+}
+)
