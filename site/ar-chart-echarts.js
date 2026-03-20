@@ -1327,6 +1327,13 @@
             bindChartStatusLine(instance, element, option, fields, { view: view, model: model, chartState: chartState });
         }
 
+        if (view === 'economicReport') {
+            var reportMod = window.AR.chartSavingsReport || {};
+            if (typeof reportMod.bindAxisInteractions === 'function') {
+                reportMod.bindAxisInteractions(instance, element, option);
+            }
+        }
+
         instance.off('click');
         if (!handlers || typeof handlers.onMainClick !== 'function') return;
         instance.on('click', function (params) {

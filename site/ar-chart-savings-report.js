@@ -692,5 +692,178 @@
         };
     }
 
-    window.AR.chartSavingsReport = { buildOption: buildOption };
+    // ── TradingView-style axis interactions ───────────────────────────────────
+    /**
+     * Attach TradingView-style axis drag + double-click to an ECharts instance.
+     *
+     * X-axis:
+     *   - Drag right → zoom in (less time shown), drag left → zoom out
+     *   - Double-click → snap to 3-month default ending at latest data date
+     *
+     * Y-axis:
+     *   - Drag down → zoom in (less range shown), drag up → zoom out
+     *   - Double-click → snap back to auto-fit range
+     *
+     * Must be called after instance.setOption() so pixel geometry is ready.
+     */
+    function bindAxisInteractions(instance, element, option) {
+        if (!instance || !element) return;
+
+        function toMs(v) {
+            if (typeof v === 'number') return v;
+            var s = String(v || '').trim();
+            if (!s) return NaN;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00Z').getTime();
+            return new Date(s).getTime();
+        }
+
+        var xAxisOpt = option.xAxis && (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis);
+        var yAxisOpt = option.yAxis && (Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis);
+        var fullXMin  = toMs(xAxisOpt && xAxisOpt.min);
+        var fullXMax  = toMs(xAxisOpt && xAxisOpt.max);
+        var defYMin   = Number(yAxisOpt && yAxisOpt.min);
+        var defYMax   = Number(yAxisOpt && yAxisOpt.max);
+
+        // Default view: 3 months back from latest data date
+        var THREE_MONTHS_MS = 3 * 30.5 * 24 * 3600 * 1000;
+        var defXMax = fullXMax;
+        var defXMin = Math.max(fullXMin, defXMax - THREE_MONTHS_MS);
+
+        // Current viewport (starts at 3-month default)
+        var curXMin = defXMin, curXMax = defXMax;
+        var curYMin = defYMin, curYMax = defYMax;
+
+        // Apply initial 3-month view
+        instance.setOption({ xAxis: { min: curXMin, max: curXMax } });
+
+        // ── Remove any previous handlers ──────────────────────────────────────
+        var prev = element._arAxisHandlers;
+        if (prev) {
+            element.removeEventListener('mousedown',  prev.md);
+            element.removeEventListener('dblclick',   prev.dc);
+            element.removeEventListener('mousemove',  prev.hm);
+            element.removeEventListener('mouseleave', prev.hl);
+            document.removeEventListener('mousemove', prev.dm);
+            document.removeEventListener('mouseup',   prev.du);
+        }
+
+        // ── Grid pixel bounds (stable once rendered) ──────────────────────────
+        function gridBounds() {
+            try {
+                var p1 = instance.convertToPixel({ gridIndex: 0 }, [curXMin, curYMax]);
+                var p2 = instance.convertToPixel({ gridIndex: 0 }, [curXMax, curYMin]);
+                if (!p1 || !p2) return null;
+                return { left: p1[0], top: p1[1], right: p2[0], bottom: p2[1] };
+            } catch (ex) { return null; }
+        }
+
+        function hitAxis(px, py) {
+            var g = gridBounds();
+            if (!g) return null;
+            var w = instance.getWidth(), h = instance.getHeight();
+            if (px >= g.left && px <= g.right && py >= g.bottom && py <= h)    return 'x';
+            if (px >= 0     && px <  g.left  && py >= g.top   && py <= g.bottom) return 'y';
+            return null;
+        }
+
+        function relPos(e) {
+            var r = element.getBoundingClientRect();
+            return { x: e.clientX - r.left, y: e.clientY - r.top };
+        }
+
+        // ── Drag state ────────────────────────────────────────────────────────
+        var drag = {
+            active: false, axis: null,
+            startX: 0, startY: 0,
+            startXMin: 0, startXMax: 0,
+            startYMin: 0, startYMax: 0,
+            gridW: 1, gridH: 1,
+        };
+
+        function onHoverMove(e) {
+            if (drag.active) return;
+            var pos = relPos(e);
+            var ax = hitAxis(pos.x, pos.y);
+            element.style.cursor = ax === 'x' ? 'ew-resize' : (ax === 'y' ? 'ns-resize' : '');
+        }
+
+        function onHoverLeave() {
+            if (!drag.active) element.style.cursor = '';
+        }
+
+        function onMousedown(e) {
+            var pos = relPos(e);
+            var ax = hitAxis(pos.x, pos.y);
+            if (!ax) return;
+            e.preventDefault();
+            var g = gridBounds();
+            if (!g) return;
+            drag.active   = true;
+            drag.axis     = ax;
+            drag.startX   = e.clientX;
+            drag.startY   = e.clientY;
+            drag.startXMin = curXMin; drag.startXMax = curXMax;
+            drag.startYMin = curYMin; drag.startYMax = curYMax;
+            drag.gridW    = Math.max(1, g.right  - g.left);
+            drag.gridH    = Math.max(1, g.bottom - g.top);
+            element.style.cursor = ax === 'x' ? 'ew-resize' : 'ns-resize';
+        }
+
+        function onDocMove(e) {
+            if (!drag.active) return;
+            if (drag.axis === 'x') {
+                var dx     = e.clientX - drag.startX;
+                // drag right = zoom in (less time), drag left = zoom out (more time)
+                var scale  = Math.exp(-dx / drag.gridW * 1.6);
+                var range  = drag.startXMax - drag.startXMin;
+                var newR   = Math.max(7 * 86400000, Math.min(20 * 365 * 86400000, range * scale));
+                curXMin    = drag.startXMax - newR;
+                curXMax    = drag.startXMax;
+                instance.setOption({ xAxis: { min: curXMin, max: curXMax } });
+            } else {
+                var dy     = e.clientY - drag.startY;
+                // drag down = zoom in (less range), drag up = zoom out (more range)
+                var scale  = Math.exp(dy / drag.gridH * 1.6);
+                var range  = drag.startYMax - drag.startYMin;
+                var center = (drag.startYMin + drag.startYMax) / 2;
+                var newR   = Math.max(0.05, Math.min(30, range * scale));
+                curYMin    = parseFloat((center - newR / 2).toFixed(2));
+                curYMax    = parseFloat((center + newR / 2).toFixed(2));
+                instance.setOption({ yAxis: { min: curYMin, max: curYMax } });
+            }
+        }
+
+        function onDocUp() {
+            if (drag.active) {
+                drag.active = false;
+                drag.axis   = null;
+                element.style.cursor = '';
+            }
+        }
+
+        function onDblclick(e) {
+            var pos = relPos(e);
+            var ax  = hitAxis(pos.x, pos.y);
+            if (!ax) return;
+            e.preventDefault();
+            if (ax === 'x') {
+                curXMin = defXMin; curXMax = defXMax;
+                instance.setOption({ xAxis: { min: curXMin, max: curXMax } });
+            } else {
+                curYMin = defYMin; curYMax = defYMax;
+                instance.setOption({ yAxis: { min: curYMin, max: curYMax } });
+            }
+        }
+
+        element.addEventListener('mousedown',  onMousedown);
+        element.addEventListener('dblclick',   onDblclick);
+        element.addEventListener('mousemove',  onHoverMove);
+        element.addEventListener('mouseleave', onHoverLeave);
+        document.addEventListener('mousemove', onDocMove);
+        document.addEventListener('mouseup',   onDocUp);
+
+        element._arAxisHandlers = { md: onMousedown, dc: onDblclick, hm: onHoverMove, hl: onHoverLeave, dm: onDocMove, du: onDocUp };
+    }
+
+    window.AR.chartSavingsReport = { buildOption: buildOption, bindAxisInteractions: bindAxisInteractions };
 })();
