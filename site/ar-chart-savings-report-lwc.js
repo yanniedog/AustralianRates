@@ -294,8 +294,12 @@
             if (cpiLast.date < ctxMax) cpiPts.push({ date: ctxMax, value: cpiLast.value });
         }
 
-        // No carry rate before the first ever RBA decision
+        // Carry rate = last RBA decision before the visible window (for overlay arrows)
         var rbaCarryRate = null;
+        for (var ri = 0; ri < rbaData.decisions.length; ri++) {
+            if (rbaData.decisions[ri].date < ctxMin) rbaCarryRate = rbaData.decisions[ri].rate;
+            else break;
+        }
 
         var W = container.clientWidth || 800;
         var compact = W < 480, narrow = W < 720;
@@ -380,10 +384,25 @@
         // ── Bank lines ────────────────────────────────────────────────────────
         var bankSeriesApis = []; // [{api, bank}]
         visiBanks.forEach(function (bank) {
-            var rawPts = bank.points.slice();
-            // Carry-forward first known rate back to ctxMin
-            if (rawPts.length && rawPts[0].date > ctxMin) {
+            var allPts = bank.points;
+            // Find the last point at-or-before ctxMin for carry-back
+            var carryPt = null;
+            for (var j = 0; j < allPts.length; j++) {
+                if (allPts[j].date <= ctxMin) carryPt = allPts[j];
+                else break;
+            }
+            // Only include points strictly inside [ctxMin, ctxMax]
+            var rawPts = allPts.filter(function (p) { return p.date >= ctxMin && p.date <= ctxMax; });
+            // Carry the last known rate back to ctxMin
+            if (carryPt) {
+                rawPts = [{ date: ctxMin, value: carryPt.value }].concat(rawPts);
+            } else if (rawPts.length && rawPts[0].date > ctxMin) {
                 rawPts = [{ date: ctxMin, value: rawPts[0].value }].concat(rawPts);
+            }
+            // Carry-forward to ctxMax so the line reaches the right edge
+            if (rawPts.length) {
+                var lastPt = rawPts[rawPts.length - 1];
+                if (lastPt.date < ctxMax) rawPts = rawPts.concat([{ date: ctxMax, value: lastPt.value }]);
             }
             var data = rawPts.map(function (p) { return { time: p.date, value: p.value }; });
             var ser = chart.addSeries(L.LineSeries, {
@@ -449,6 +468,8 @@
             'min-width:160px',
         ].join(';');
         mount.appendChild(tooltipEl);
+
+        mount.addEventListener('mouseleave', function () { tooltipEl.style.display = 'none'; });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
