@@ -514,13 +514,18 @@
                         chartState.detailChart = disposeChart(chartState.detailChart);
                         chartState.lwcMain = chartLightweight.dispose(chartState.lwcMain);
                         chartState.lwcDetail = chartLightweight.dispose(chartState.lwcDetail);
-                        chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields);
+                        var isEconReport = currentFields.view === 'economicReport';
+                        if (isEconReport && typeof chartLightweight.renderEconomicReport === 'function') {
+                            chartState.lwcMain = chartLightweight.renderEconomicReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
+                        } else {
+                            chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields);
+                        }
                         if (els.chartOutput) {
                             els.chartOutput.setAttribute('data-chart-engine', 'lightweight');
                             els.chartOutput.setAttribute('data-chart-render-view', currentFields.view);
                             els.chartOutput.setAttribute('data-chart-rendered', 'true');
                         }
-                        chartState.lwcDetail = chartLightweight.renderDetail(els.chartDetailOutput, model, currentFields);
+                        chartState.lwcDetail = isEconReport ? null : chartLightweight.renderDetail(els.chartDetailOutput, model, currentFields);
                         if (els.chartDetailOutput) {
                             els.chartDetailOutput.setAttribute('data-chart-engine', 'lightweight');
                         }

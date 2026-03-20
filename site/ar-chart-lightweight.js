@@ -10,12 +10,16 @@
     }
 
     function isViewSupported(view) {
-        return String(view || '') === 'compare';
+        var v = String(view || '');
+        return v === 'compare' || v === 'economicReport';
     }
 
     function effectiveEngine(pref, view) {
+        var v = String(view || '');
+        // economicReport always uses lightweight — no ECharts fallback
+        if (v === 'economicReport') return 'lightweight';
         if (String(pref || 'echarts') !== 'lightweight') return 'echarts';
-        return isViewSupported(view) ? 'lightweight' : 'echarts';
+        return isViewSupported(v) ? 'lightweight' : 'echarts';
     }
 
     function engineStatusHint(pref, eff, view) {
@@ -26,6 +30,7 @@
             if (v === 'compare') return 'Classic charts — Lightweight unavailable or failed to load.';
             return 'Classic charts — switch to Compare view for Lightweight mode.';
         }
+        if (e === 'lightweight' && v === 'economicReport') return 'Lightweight (TradingView)';
         if (e === 'lightweight') return 'Lightweight (TradingView); RBA markers not shown.';
         return '';
     }
@@ -70,7 +75,12 @@
     function dispose(state) {
         if (!state) return null;
         try {
-            if (state.chart && typeof state.chart.remove === 'function') state.chart.remove();
+            if (typeof state.dispose === 'function') {
+                // economicReport state has its own dispose() that handles cleanup
+                state.dispose();
+            } else if (state.chart && typeof state.chart.remove === 'function') {
+                state.chart.remove();
+            }
         } catch (_e) { /* ignore */ }
         if (state.mount && state.mount.parentNode) state.mount.parentNode.removeChild(state.mount);
         return null;
@@ -233,11 +243,21 @@
         return { chart: chart, mount: mount, kind: 'detail' };
     }
 
+    function renderEconomicReport(container, model, fields, rbaHistory) {
+        var mod = window.AR.chartSavingsReportLwc;
+        if (!mod || typeof mod.render !== 'function') {
+            throw new Error('chartSavingsReportLwc not loaded');
+        }
+        return mod.render(container, model, rbaHistory);
+    }
+
     function resizeState(state) {
-        if (!state || !state.chart || !state.mount) return;
-        var w = Math.max(0, state.mount.clientWidth);
-        var h = Math.max(0, state.mount.clientHeight);
-        if (w > 0 && h > 0) state.chart.resize(w, h);
+        if (!state || !state.mount) return;
+        if (state.chart && typeof state.chart.resize === 'function') {
+            var w = Math.max(0, state.mount.clientWidth);
+            var h = Math.max(0, state.mount.clientHeight);
+            if (w > 0 && h > 0) state.chart.resize(w, h);
+        }
     }
 
     window.AR.chartLightweight = {
@@ -248,6 +268,7 @@
         ensureLoaded: ensureLoaded,
         isViewSupported: isViewSupported,
         renderDetail: renderDetail,
+        renderEconomicReport: renderEconomicReport,
         renderMainCompare: renderMainCompare,
         resizeState: resizeState,
     };
