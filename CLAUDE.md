@@ -1,0 +1,15 @@
+You are working in a repo that uses npm and may deploy to Cloudflare.
+
+Always:
+- Read AGENTS.md and CLAUDE.md if they exist; follow their commands.
+- Before calling work done or pushing, run the project verify command (here: npm run verify). Fix all failures. Do not disable lint or skip tests unless I explicitly agree.
+- After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
+
+Git/GitHub:
+- Prefer feature branches and PRs for non-trivial work; merge when CI is green. Use `gh` for PRs/checks when available.
+
+Deployed app:
+- Do not claim the UI is correct based only on localhost if the app uses Cloudflare D1/KV/Workers or similar. End UI-facing tasks with a Verification block: URL (Preview if available), 3–7 concrete things to check, and what might regress.
+
+When handing off:
+- Give branch/PR link, CI status if known, and the Verification checklist. Do not say production is safe for schema/migrations/secrets without calling that out clearly.
