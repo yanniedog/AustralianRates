@@ -110,10 +110,6 @@
     }
 
     function clearSiteDataAndReload() {
-        if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-            var confirmed = window.confirm('Cold refresh: clear all site cache, storage and cookies for this site, then reload so everything is loaded fresh from the server. Continue?');
-            if (!confirmed) return;
-        }
         addSessionLog('info', 'Cold refresh requested', { action: 'clearSiteDataAndReload' });
         var hostname = typeof location !== 'undefined' && location.hostname ? location.hostname : '';
         var expired = 'expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;max-age=0';
