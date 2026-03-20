@@ -50,6 +50,7 @@
         detailChart: null,
         lwcMain: null,
         lwcDetail: null,
+        lwcNeedsRedraw: false,
         renderGen: 0,
         statusLine: freshStatusLineState(),
         includedRateStructures: section === 'home-loans' ? ['variable'] : null,
@@ -308,6 +309,15 @@
                 resizeCharts();
                 return;
             }
+            // LWC charts handle their own resizing internally via their own ResizeObserver.
+            // Avoid a full destroy+recreate on every container resize — only re-render when
+            // the data/view actually changed or a theme/mode change was flagged.
+            var currentView = fields && fields().view;
+            if (chartState.lwcMain && chartState.lwcMain.kind === currentView && !chartState.lwcNeedsRedraw) {
+                resizeCharts();
+                return;
+            }
+            chartState.lwcNeedsRedraw = false;
             renderFromCache();
         }, 150);
     }
@@ -754,8 +764,8 @@
     window.addEventListener('resize', scheduleResponsiveSync);
     window.addEventListener('orientationchange', scheduleResponsiveSync);
     window.addEventListener('ar:tab-changed', scheduleResponsiveSync);
-    window.addEventListener('ar:ui-mode-changed', scheduleResponsiveSync);
-    window.addEventListener('ar:theme-changed', scheduleResponsiveSync);
+    window.addEventListener('ar:ui-mode-changed', function () { chartState.lwcNeedsRedraw = true; scheduleResponsiveSync(); });
+    window.addEventListener('ar:theme-changed', function () { chartState.lwcNeedsRedraw = true; scheduleResponsiveSync(); });
     window.addEventListener('beforeunload', disconnectResizeObserver);
 
     window.AR.charts = {
