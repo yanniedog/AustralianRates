@@ -171,7 +171,7 @@
             });
     }
 
-    function buildRbaSeries(rbaHistory, contextMin, contextMax) {
+    function buildRbaSeries(rbaHistory) {
         if (!Array.isArray(rbaHistory) || !rbaHistory.length) return { points: [], decisions: [] };
         var all = rbaHistory
             .map(function (r) {
@@ -188,35 +188,11 @@
             if (!deduped.length || r.rate !== deduped[deduped.length - 1].rate) deduped.push(r);
         });
 
-        var carry = null, decisions = [];
-        deduped.forEach(function (r) {
-            if (r.date < contextMin) carry = r;
-            else if (r.date <= contextMax) decisions.push(r);
-        });
-
-        var carryRate = carry ? carry.rate : (decisions.length ? decisions[0].rate : null);
-        var points = [];
-        if (carryRate != null) points.push({ date: contextMin, rate: carryRate });
-        decisions.forEach(function (r) { points.push({ date: r.date, rate: r.rate }); });
-
-        var rateDecisions = decisions.filter(function (r, i) {
-            var prev = i === 0 ? carryRate : decisions[i - 1].rate;
-            return prev == null || r.rate !== prev;
-        });
-
-        return { points: points, decisions: rateDecisions };
+        return { points: deduped.slice(), decisions: deduped.slice() };
     }
 
-    function buildCpiSeries(contextMin, contextMax) {
-        var carry = null, inRange = [];
-        ABS_CPI.forEach(function (e) {
-            if (e.date < contextMin) carry = e;
-            else if (e.date <= contextMax) inRange.push(e);
-        });
-        var pts = [];
-        if (carry) pts.push({ date: contextMin, value: carry.value });
-        inRange.forEach(function (e) { pts.push({ date: e.date, value: e.value }); });
-        return pts;
+    function buildCpiSeries() {
+        return ABS_CPI.map(function (e) { return { date: e.date, value: e.value }; });
     }
 
     function extendToMax(pts, ctxMax, keyFn, valFn) {
@@ -305,8 +281,8 @@
         var ctxMin = subtractMonths(bankMax, 18);
         var ctxMax = bankMax;
 
-        var rbaData = buildRbaSeries(rbaHistory || [], ctxMin, ctxMax);
-        var cpiPts  = buildCpiSeries(ctxMin, ctxMax);
+        var rbaData = buildRbaSeries(rbaHistory || []);
+        var cpiPts  = buildCpiSeries();
 
         // Extend step lines to ctxMax so carry-forward reaches right edge
         if (rbaData.points.length) {
@@ -318,8 +294,8 @@
             if (cpiLast.date < ctxMax) cpiPts.push({ date: ctxMax, value: cpiLast.value });
         }
 
-        // Carry-forward rate used for decisions preceeding context window
-        var rbaCarryRate = rbaData.points.length ? rbaData.points[0].rate : null;
+        // No carry rate before the first ever RBA decision
+        var rbaCarryRate = null;
 
         var W = container.clientWidth || 800;
         var compact = W < 480, narrow = W < 720;
