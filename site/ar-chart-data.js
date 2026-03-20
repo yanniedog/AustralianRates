@@ -622,7 +622,8 @@
         if (requestJson) {
             return requestJson(url, { requestLabel: 'RBA history', timeoutMs: 10000, retryCount: 0 })
                 .then(function (res) {
-                    var rows = (res && res.rows) ? res.rows : [];
+                    var body = res && res.data ? res.data : res;
+                    var rows = (body && body.rows) ? body.rows : [];
                     rbaHistoryCache = Array.isArray(rows) ? rows : [];
                     return rbaHistoryCache;
                 })

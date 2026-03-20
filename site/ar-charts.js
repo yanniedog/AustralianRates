@@ -202,6 +202,10 @@
             parts.push(model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel);
             return parts.join(' | ');
         }
+        if (currentFields.view === 'economicReport') {
+            parts.push(model.meta.visibleLenders.toLocaleString() + ' banks');
+            return parts.join(' | ');
+        }
         parts.push(model.meta.visibleSeries.toLocaleString() + '/' + model.meta.totalSeries.toLocaleString() + ' series');
         return parts.join(' | ');
     }
