@@ -11,7 +11,7 @@
     function sendDebugLog(payload) {
         if (!apiBase) return;
         var body = JSON.stringify(payload);
-        fetch(apiBase + '/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd301fc' }, body: body }).catch(function () {});
+        fetch(apiBase + '/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }).catch(function () {});
     }
 
     function numericValue(row, field) {

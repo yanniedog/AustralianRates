@@ -320,6 +320,7 @@
     function renderSeriesRail(model, selectionState) {
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
         var fields = getChartFields();
+        var pal = chartConfig.palette();
         var marketOk = model && model.market && model.market.categories && model.market.categories.length;
         var timeRibbonOk = model && model.timeRibbon && model.timeRibbon.categories && model.timeRibbon.categories.length;
         var tdTermTimeOk = model && model.tdTermTime && model.tdTermTime.terms && model.tdTermTime.terms.length;
@@ -352,7 +353,7 @@
                     metaRight: '',
                     isSelected: false,
                     isSpotlight: false,
-                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                    color: pal[index % pal.length],
                 });
             }).join('');
             return;
@@ -368,7 +369,7 @@
                     metaRight: '',
                     isSelected: false,
                     isSpotlight: false,
-                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                    color: pal[index % pal.length],
                 });
             }).join('');
             return;
@@ -385,7 +386,7 @@
                     metaRight: '',
                     isSelected: false,
                     isSpotlight: false,
-                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                    color: pal[index % pal.length],
                 });
             }).join('');
             return;
@@ -403,7 +404,7 @@
                     metaRight: entry.pointCount.toLocaleString() + ' pts',
                     isSelected: isSelected,
                     isSpotlight: isSpotlight,
-                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                    color: pal[index % pal.length],
                 });
             }).join('');
             return;
@@ -420,7 +421,7 @@
                     metaRight: category.bankCount.toLocaleString() + ' banks',
                     isSelected: isSpotlight,
                     isSpotlight: isSpotlight,
-                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                    color: pal[index % pal.length],
                 });
             }).join('');
             return;
@@ -438,13 +439,12 @@
                     metaRight: entry.pointCount.toLocaleString() + ' pts',
                     isSelected: isSelected,
                     isSpotlight: isSpotlight,
-                    color: chartConfig.palette()[index % chartConfig.palette().length],
+                    color: pal[index % pal.length],
                 });
             }).join('');
             return;
         }
         if (fields.view === 'distribution' && model.distribution && model.distribution.categories && model.distribution.categories.length) {
-            var pal = chartConfig.palette();
             els.chartSeriesList.innerHTML = model.distribution.categories.map(function (cat, index) {
                 var meanV = model.distribution.means && model.distribution.means[index];
                 var cnt = model.distribution.counts && model.distribution.counts[index];
@@ -481,7 +481,7 @@
                 metaRight: series.pointCount.toLocaleString() + ' pts',
                 isSelected: isSelected,
                 isSpotlight: isSpotlight,
-                color: chartConfig.palette()[series.colorIndex % chartConfig.palette().length],
+                color: pal[series.colorIndex % pal.length],
             });
         }).join('');
     }

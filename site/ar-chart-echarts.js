@@ -48,6 +48,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var narrow = size && size.width < 760;
         var veryNarrow = size && size.width < 420;
         var denseSurface = model.surface.yLabels.length > (narrow ? 12 : 16);
@@ -65,10 +66,10 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
                 formatter: function (params) {
                     var row = params.data && params.data.row ? params.data.row : null;
                     return [
@@ -167,6 +168,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
@@ -185,10 +187,10 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
                 formatter: function (params) {
                     var data = params.data || {};
                     var row = data.row || {};
@@ -299,6 +301,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var slope = model.slope;
@@ -353,10 +356,10 @@
                 hideDelay: 1e9,
                 alwaysShowContent: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
                 formatter: function (params) {
                     var list = Array.isArray(params) ? params.filter(Boolean) : [];
                     if (!list.length) return '';
@@ -423,6 +426,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var entries = model.lenderRanking && model.lenderRanking.entries ? model.lenderRanking.entries : [];
@@ -449,10 +453,10 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
                 formatter: function (params) {
                     var data = params.data || {};
                     var row = data.row || {};
@@ -624,6 +628,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var showLegend = !narrow && model.compareSeries.length <= 3;
@@ -644,10 +649,10 @@
                 hideDelay: 1e9,
                 alwaysShowContent: true,
                 axisPointer: { type: 'line', lineStyle: { color: theme.crosshairLine || theme.shadowAccent, width: 1.5 } },
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
             },
             grid: {
                 left: narrow ? 52 : 62,
@@ -739,6 +744,7 @@
         var base = baseTextStyles();
         var styles = gridStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var narrow = size && size.width < 760;
         var compact = size && size.width < 420;
         var dist = sanitizeDistributionForChart(model && model.distribution ? model.distribution : null);
@@ -770,10 +776,10 @@
                 transitionDuration: 0,
                 confine: true,
                 hideDelay: 1e9,
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
             },
             grid: {
                 left: narrow ? 54 : 62,
@@ -844,6 +850,7 @@
     function buildDetailOption(model, fields, size) {
         var base = baseTextStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var tStyles = tooltipStyles();
         var spotlight = model.spotlight;
         var narrow = size && size.width < 340;
         var compact = size && size.width < 420;
@@ -871,10 +878,10 @@
                 confine: true,
                 hideDelay: 1e9,
                 alwaysShowContent: true,
-                backgroundColor: tooltipStyles().backgroundColor,
-                borderColor: tooltipStyles().borderColor,
-                textStyle: tooltipStyles().textStyle,
-                extraCssText: tooltipStyles().extraCssText,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
             },
             grid: {
                 left: narrow ? 44 : 48,
@@ -930,9 +937,7 @@
                 var idx = (chartState && chartState.tdCurveFrameIndex != null)
                     ? Math.max(0, Math.min(chartState.tdCurveFrameIndex, frames.length - 1))
                     : frames.length - 1;
-                marketModel = { market: frames[idx] };
-                for (var k in model) { if (Object.prototype.hasOwnProperty.call(model, k)) marketModel[k] = model[k]; }
-                marketModel.market = frames[idx];
+                marketModel = Object.assign({}, model, { market: frames[idx] });
             }
             return marketModule.buildMainOption(marketModel, fields, size);
         }
@@ -1297,7 +1302,6 @@
 
     function renderMainChart(instance, element, view, model, fields, handlers, rbaHistory, chartState) {
         if (!instance || !element) return;
-        instance.resize();
         var size = chartSizeWithFallback(element);
         var option = optionForView(view, model, fields, size, chartState);
         var timeAxisViews = view === 'timeRibbon' || view === 'tdTermTime' || view === 'compare' || view === 'surface';
@@ -1333,9 +1337,7 @@
             var detailModel = model;
             if (model.tdCurveFrames && model.tdCurveFrames.length && chartState && chartState.tdCurveFrameIndex != null) {
                 var idx = Math.max(0, Math.min(chartState.tdCurveFrameIndex, model.tdCurveFrames.length - 1));
-                detailModel = { market: model.tdCurveFrames[idx] };
-                for (var k in model) { if (Object.prototype.hasOwnProperty.call(model, k)) detailModel[k] = model[k]; }
-                detailModel.market = model.tdCurveFrames[idx];
+                detailModel = Object.assign({}, model, { market: model.tdCurveFrames[idx] });
             }
             instance.setOption(marketModule.buildDetailOption(detailModel, fields, size), true);
             if (element) instance.resize();
