@@ -284,6 +284,22 @@
         var rbaData = buildRbaSeries(rbaHistory || []);
         var cpiPts  = buildCpiSeries();
 
+        // Clip RBA points to context window with carry-back at ctxMin
+        // (decisions array stays unclipped — used for overlay markers and carry-rate lookup)
+        (function () {
+            var all = rbaData.points;
+            var carry = null, inWindow = [];
+            all.forEach(function (p) {
+                if (p.date < ctxMin) carry = p;
+                else if (p.date <= ctxMax) inWindow.push(p);
+            });
+            var carryRate = carry ? carry.rate : (inWindow.length ? inWindow[0].rate : null);
+            var pts = [];
+            if (carryRate != null) pts.push({ date: ctxMin, rate: carryRate });
+            inWindow.forEach(function (p) { pts.push(p); });
+            rbaData.points = pts;
+        }());
+
         // Extend step lines to ctxMax so carry-forward reaches right edge
         if (rbaData.points.length) {
             var rbaLast = rbaData.points[rbaData.points.length - 1];
@@ -470,6 +486,7 @@
         mount.appendChild(tooltipEl);
 
         mount.addEventListener('mouseleave', function () { tooltipEl.style.display = 'none'; });
+        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax }); });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
