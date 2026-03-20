@@ -692,10 +692,21 @@
 
     var AUTO_REFRESH_MS = 45000;
     var refreshIntervalId = setInterval(function () { refreshAll(false); }, AUTO_REFRESH_MS);
+    // REQUIRED: cache-busts to guarantee the live deployed version loads. Do not remove.
     document.getElementById('refresh-btn').addEventListener('click', function () {
-        var u = new URL(window.location.href);
-        u.searchParams.set('_', String(Date.now()));
-        window.location.href = u.toString();
+        function doReload() {
+            var u = new URL(window.location.href);
+            u.searchParams.set('_', String(Date.now()));
+            window.location.replace(u.toString());
+        }
+        // Flush Cache API entries (service worker caches) without touching sessionStorage
+        // (sessionStorage holds the admin auth token — clearing it would log you out).
+        var p = (typeof caches !== 'undefined' && caches.keys)
+            ? caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            })
+            : Promise.resolve();
+        p.then(doReload).catch(doReload);
     });
     document.getElementById('run-check-btn').addEventListener('click', runNow);
     document.getElementById('run-cdr-audit-btn').addEventListener('click', runCdrAuditNow);
