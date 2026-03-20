@@ -169,7 +169,7 @@
 
         chart.timeScale().fitContent();
 
-        return { chart: chart, mount: mount, kind: 'main' };
+        return { chart: chart, mount: mount, kind: (fields && fields.view) || 'compare' };
     }
 
     function renderDetail(container, model, fields) {
