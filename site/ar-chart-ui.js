@@ -58,6 +58,10 @@
             caps.representation = false;
             return caps;
         }
+        if (key === 'economicReport') {
+            caps.representation = false;
+            return caps;
+        }
         return caps;
     }
 

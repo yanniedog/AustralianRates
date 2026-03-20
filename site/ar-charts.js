@@ -387,6 +387,14 @@
                     return;
                 }
             }
+            if (currentFields.view === 'economicReport') {
+                if (!model.visibleSeries || !model.visibleSeries.length) {
+                    if (chartUi.clearErrorState) chartUi.clearErrorState();
+                    clearOutput('No data');
+                    if (chartUi.setStatus) chartUi.setStatus('No data');
+                    return;
+                }
+            }
             var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
             var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
             if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && currentFields.view !== 'distribution' && (!model.visibleSeries.length || !model.surface.cells.length)) {
@@ -570,7 +578,7 @@
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
-        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope';
+        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         return params;
     }

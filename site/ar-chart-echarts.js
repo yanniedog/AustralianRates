@@ -952,6 +952,12 @@
         if (view === 'lenders') return buildLenderOption(model, fields, size);
         if (view === 'compare') return buildCompareOption(model, fields, size);
         if (view === 'distribution') return buildDistributionOption(model, fields, size);
+        if (view === 'economicReport') {
+            var reportModule = window.AR.chartSavingsReport || {};
+            if (typeof reportModule.buildOption === 'function') {
+                return reportModule.buildOption(model, fields, size, chartState && chartState.rbaHistory);
+            }
+        }
         return buildSurfaceOption(model, fields, size);
     }
 

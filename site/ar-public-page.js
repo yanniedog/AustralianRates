@@ -134,6 +134,11 @@
         var curveFirst = { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: true };
         var restViews = BASE_CHART_VIEWS.filter(function (v) { return v.value !== 'market'; }).map(function (v) { return Object.assign({}, v, { selected: false }); });
         CHART_VIEWS = [curveFirst].concat(restViews);
+    } else if (section === 'savings') {
+        // Economic report is the headline view for savings — tells the rate-vs-RBA-vs-inflation story.
+        var savingsEconomicView = { value: 'economicReport', label: 'Economic Report', icon: 'history', help: 'Savings rates vs RBA cash rate and CPI inflation over time.', selected: true };
+        var savingsOtherViews = BASE_CHART_VIEWS.map(function (v) { return Object.assign({}, v, { selected: false }); });
+        CHART_VIEWS = [savingsEconomicView].concat(savingsOtherViews);
     } else {
         CHART_VIEWS = section === 'term-deposits'
             ? BASE_CHART_VIEWS.concat(TD_EXTRA_VIEWS)
