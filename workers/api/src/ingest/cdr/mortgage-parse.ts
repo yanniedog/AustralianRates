@@ -148,6 +148,7 @@ export function parseRatesFromDetail(input: {
   const publishedAt = publishedAtFromDetail(detail)
   const result: NormalizedRateRow[] = []
   const playbook = getLenderPlaybook(input.lender)
+  const EXCLUDED_RATE_TYPES = ['DISCOUNT', 'BUNDLE_DISCOUNT', 'INTRODUCTORY', 'PENALTY', 'CASH_ADVANCE', 'PURCHASE']
 
   for (const rate of rates) {
     const rawInterestValue = rate.rate ?? rate.interestRate ?? rate.value
@@ -170,7 +171,10 @@ export function parseRatesFromDetail(input: {
     if (lvrResult.wasDefault) confidence -= 0.05
     if (!contextLower.includes('loan')) confidence -= 0.02
 
-    const lendingRateType = pickText(rate, ['lendingRateType'])
+    const lendingRateType = pickText(rate, ['lendingRateType']).toUpperCase()
+    if (lendingRateType && EXCLUDED_RATE_TYPES.includes(lendingRateType)) {
+      continue
+    }
     const repaymentText = `${lendingRateType} ${pickText(rate, ['repaymentType'])} ${pickText(detail, ['repaymentType'])} ${contextText}`
     const rateStructureText = `${lendingRateType} ${pickText(rate, ['name'])} ${pickText(detail, ['name'])} ${contextText}`
 
