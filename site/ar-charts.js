@@ -203,7 +203,7 @@
             parts.push(model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel);
             return parts.join(' | ');
         }
-        if (currentFields.view === 'economicReport') {
+        if (currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport') {
             parts.push(model.meta.visibleLenders.toLocaleString() + ' banks');
             return parts.join(' | ');
         }
@@ -401,7 +401,7 @@
                     return;
                 }
             }
-            if (currentFields.view === 'economicReport') {
+            if (currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport') {
                 if (!model.visibleSeries || !model.visibleSeries.length) {
                     if (chartUi.clearErrorState) chartUi.clearErrorState();
                     clearOutput('No data');
@@ -524,9 +524,16 @@
                         chartState.detailChart = disposeChart(chartState.detailChart);
                         chartState.lwcMain = chartLightweight.dispose(chartState.lwcMain);
                         chartState.lwcDetail = chartLightweight.dispose(chartState.lwcDetail);
-                        var isEconReport = currentFields.view === 'economicReport';
+                        var isEconReport   = currentFields.view === 'economicReport';
+                        var isHlReport     = currentFields.view === 'homeLoanReport';
+                        var isTdReport     = currentFields.view === 'termDepositReport';
+                        var isAnyReport    = isEconReport || isHlReport || isTdReport;
                         if (isEconReport && typeof chartLightweight.renderEconomicReport === 'function') {
                             chartState.lwcMain = chartLightweight.renderEconomicReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
+                        } else if (isHlReport && typeof chartLightweight.renderHomeLoanReport === 'function') {
+                            chartState.lwcMain = chartLightweight.renderHomeLoanReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
+                        } else if (isTdReport && typeof chartLightweight.renderTermDepositReport === 'function') {
+                            chartState.lwcMain = chartLightweight.renderTermDepositReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
                         } else {
                             chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields);
                         }
@@ -535,7 +542,7 @@
                             els.chartOutput.setAttribute('data-chart-render-view', currentFields.view);
                             els.chartOutput.setAttribute('data-chart-rendered', 'true');
                         }
-                        chartState.lwcDetail = isEconReport ? null : chartLightweight.renderDetail(els.chartDetailOutput, model, currentFields);
+                        chartState.lwcDetail = isAnyReport ? null : chartLightweight.renderDetail(els.chartDetailOutput, model, currentFields);
                         if (els.chartDetailOutput) {
                             els.chartDetailOutput.setAttribute('data-chart-engine', 'lightweight');
                         }
@@ -597,7 +604,7 @@
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
-        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport';
+        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         return params;
     }

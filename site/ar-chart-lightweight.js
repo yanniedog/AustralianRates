@@ -11,13 +11,13 @@
 
     function isViewSupported(view) {
         var v = String(view || '');
-        return v === 'compare' || v === 'economicReport';
+        return v === 'compare' || v === 'economicReport' || v === 'homeLoanReport' || v === 'termDepositReport';
     }
 
     function effectiveEngine(pref, view) {
         var v = String(view || '');
-        // economicReport always uses lightweight — no ECharts fallback
-        if (v === 'economicReport') return 'lightweight';
+        // report views always use lightweight — no ECharts fallback
+        if (v === 'economicReport' || v === 'homeLoanReport' || v === 'termDepositReport') return 'lightweight';
         if (String(pref || 'echarts') !== 'lightweight') return 'echarts';
         return isViewSupported(v) ? 'lightweight' : 'echarts';
     }
@@ -30,7 +30,7 @@
             if (v === 'compare') return 'Classic charts — Lightweight unavailable or failed to load.';
             return 'Classic charts — switch to Compare view for Lightweight mode.';
         }
-        if (e === 'lightweight' && v === 'economicReport') return 'Lightweight (TradingView)';
+        if (e === 'lightweight' && (v === 'economicReport' || v === 'homeLoanReport' || v === 'termDepositReport')) return 'Lightweight (TradingView)';
         if (e === 'lightweight') return 'Lightweight (TradingView); RBA markers not shown.';
         return '';
     }
@@ -251,6 +251,18 @@
         return mod.render(container, model, rbaHistory);
     }
 
+    function renderHomeLoanReport(container, model, fields, rbaHistory) {
+        var mod = window.AR.chartHomeLoanReportLwc;
+        if (!mod || typeof mod.render !== 'function') throw new Error('chartHomeLoanReportLwc not loaded');
+        return mod.render(container, model, rbaHistory);
+    }
+
+    function renderTermDepositReport(container, model, fields, rbaHistory) {
+        var mod = window.AR.chartTermDepositReportLwc;
+        if (!mod || typeof mod.render !== 'function') throw new Error('chartTermDepositReportLwc not loaded');
+        return mod.render(container, model, rbaHistory);
+    }
+
     function resizeState(state) {
         if (!state || !state.mount) return;
         if (state.chart && typeof state.chart.resize === 'function') {
@@ -269,6 +281,8 @@
         isViewSupported: isViewSupported,
         renderDetail: renderDetail,
         renderEconomicReport: renderEconomicReport,
+        renderHomeLoanReport: renderHomeLoanReport,
+        renderTermDepositReport: renderTermDepositReport,
         renderMainCompare: renderMainCompare,
         resizeState: resizeState,
     };

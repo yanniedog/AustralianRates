@@ -58,7 +58,7 @@
             caps.representation = false;
             return caps;
         }
-        if (key === 'economicReport') {
+        if (key === 'economicReport' || key === 'homeLoanReport' || key === 'termDepositReport') {
             caps.representation = false;
             return caps;
         }
