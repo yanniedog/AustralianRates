@@ -18,7 +18,18 @@
         try {
             var u = new URL(window.location.href);
             u.searchParams.set('_', String(Date.now()));
-            window.location.href = u.toString();
+            var bustUrl = u.toString();
+            if (window.fetch) {
+                // cache:'reload' bypasses the browser disk cache unconditionally (even
+                // stale entries with old max-age headers), fetching fresh from the network.
+                // We wait for it to complete before navigating so the browser cache is
+                // updated and the navigation uses the fresh response.
+                fetch(bustUrl, { cache: 'reload' })
+                    .catch(function () {})
+                    .finally(function () { window.location.replace(bustUrl); });
+            } else {
+                window.location.href = bustUrl;
+            }
         } catch (_) {
             var sep = window.location.search ? '&' : '?';
             window.location.href = window.location.pathname + window.location.search + sep + '_=' + Date.now();
@@ -32,6 +43,11 @@
             if (!u.searchParams.has('_')) return;
             u.searchParams.delete('_');
             var replacement = u.pathname + (u.search || '') + u.hash;
+            // Also evict the canonical URL's stale browser cache entry so the next
+            // direct visit (without _=) also gets a fresh fetch, not a disk-cached copy.
+            if (window.fetch) {
+                fetch(u.toString(), { cache: 'reload' }).catch(function () {});
+            }
             if (window.history && window.history.replaceState) {
                 window.history.replaceState(window.history.state || {}, '', replacement);
             }

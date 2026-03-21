@@ -632,7 +632,7 @@
                 .catch(function () { return []; });
         }
         var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
-        return fetch(fetchUrl, { cache: 'default' })
+        return fetch(fetchUrl, { cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : { rows: [] }; })
             .then(function (res) {
                 var rows = (res && res.rows) ? res.rows : [];
@@ -658,7 +658,7 @@
                 .catch(function () { return []; });
         }
         var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
-        return fetch(fetchUrl, { cache: 'default' })
+        return fetch(fetchUrl, { cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : { rows: [] }; })
             .then(function (res) {
                 var rows = (res && res.rows) ? res.rows : [];
