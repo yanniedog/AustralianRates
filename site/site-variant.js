@@ -10,7 +10,7 @@
     var hasCounterpartHost = isMobileHost;
     var desktopHost = isMobileHost ? host.replace(/^m\./i, 'www.') : host;
     var mobileHost = isMobileHost ? host : '';
-    // Public-page analytics is enforced by scripts/check-clarity-installation.js and homepage QA.
+    // Clarity bootstrap is enforced by scripts/check-clarity-installation.js and homepage QA.
     var clarityProjectId = 'vt4vtenviy';
 
     function swapHost(nextHost, path) {

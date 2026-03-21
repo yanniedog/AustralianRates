@@ -17,7 +17,21 @@ const PUBLIC_HTML_FILES = [
   path.join(ROOT, 'site', 'terms', 'index.html'),
 ];
 
+/** Matches root, one-level-up, or deeper-relative site-variant.js loaders (public + admin). */
+const SITE_VARIANT_SCRIPT_RE =
+  /<script[^>]+src="(?:\.\.\/)*site-variant\.js(?:\?v=[^"]+)?"><\/script>/i;
+
 const violations = [];
+
+function collectHtmlFilesUnder(dir) {
+  const out = [];
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, ent.name);
+    if (ent.isDirectory()) out.push(...collectHtmlFilesUnder(p));
+    else if (ent.name.endsWith('.html')) out.push(p);
+  }
+  return out;
+}
 
 function rel(filePath) {
   return path.relative(ROOT, filePath).replace(/\\/g, '/');
@@ -45,12 +59,13 @@ expectIncludes(SITE_VARIANT_PATH, siteVariant, 'clarityEnabled: !isLocalHost,', 
 
 for (const filePath of PUBLIC_HTML_FILES) {
   const html = fs.readFileSync(filePath, 'utf8');
-  expectMatches(
-    filePath,
-    html,
-    /<script[^>]+src="(?:\.\.\/)?site-variant\.js(?:\?v=[^"]+)?"><\/script>/i,
-    'missing site-variant.js loader on a public/legal page',
-  );
+  expectMatches(filePath, html, SITE_VARIANT_SCRIPT_RE, 'missing site-variant.js loader on a public/legal page');
+}
+
+const adminSiteDir = path.join(ROOT, 'site', 'admin');
+for (const filePath of collectHtmlFilesUnder(adminSiteDir)) {
+  const html = fs.readFileSync(filePath, 'utf8');
+  expectMatches(filePath, html, SITE_VARIANT_SCRIPT_RE, 'missing site-variant.js loader on an admin page');
 }
 
 const privacyHtml = fs.readFileSync(PRIVACY_PATH, 'utf8');
@@ -64,4 +79,6 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log(`[check-clarity-installation] PASS: Clarity ${CLARITY_PROJECT_ID} is hardwired into the public site and disclosed in privacy copy.`);
+console.log(
+  `[check-clarity-installation] PASS: Clarity ${CLARITY_PROJECT_ID} is hardwired into public and admin pages and disclosed in privacy copy.`,
+);
