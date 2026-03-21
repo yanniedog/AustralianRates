@@ -170,7 +170,8 @@
             (s.points || []).forEach(function (p) {
                 var d = String(p.date || '');
                 var v = Number(p.value);
-                if (!d || !Number.isFinite(v)) return;
+                // Exclude points below 0.5% — collection errors or non-TD products
+                if (!d || !Number.isFinite(v) || v < 0.5) return;
                 // MAX rate per bank per date (higher = better for depositor)
                 if (byBank[k].byDate[d] == null || v > byBank[k].byDate[d]) byBank[k].byDate[d] = v;
             });

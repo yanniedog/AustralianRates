@@ -126,7 +126,8 @@
             (s.points || []).forEach(function (p) {
                 var d = String(p.date || '');
                 var v = Number(p.value);
-                if (!d || !Number.isFinite(v)) return;
+                // Exclude points below 1% — collection errors or non-savings products
+                if (!d || !Number.isFinite(v) || v < 1.0) return;
                 if (byBank[k].byDate[d] == null || v > byBank[k].byDate[d]) byBank[k].byDate[d] = v;
             });
         });
