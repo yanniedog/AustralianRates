@@ -115,21 +115,48 @@
     }
 
     // ── Data helpers ──────────────────────────────────────────────────────────
-    // Uses lenderRanking (already aggregated to lowest-rate product per bank, sorted asc).
-    // This avoids the product-density trap where visibleSeries might only contain one bank's
-    // high-rate specialty products when sorted by rate DESC.
-    function buildBankSeries(lenderEntries) {
-        return (lenderEntries || [])
-            .filter(function (e) { return e.series && e.series.points && e.series.points.length; })
-            .map(function (e, i) {
-                var pts = (e.series.points || []).map(function (p) { return { date: p.date, value: p.value }; });
-                return {
-                    bankName: e.bankName,
-                    points: pts,
-                    latest: Number(e.value) || (pts.length ? pts[pts.length - 1].value : 0),
-                    short: bankShort(e.bankName),
-                    color: bankColor(e.bankName, i),
-                };
+    // Builds one stepped line per bank showing the lowest variable OO P&I rate over time.
+    // Uses allSeries (full unfiltered list) so density truncation doesn't exclude banks.
+    function buildBankSeries(allSeries) {
+        // Filter to variable owner-occupied P&I products only
+        var filtered = (allSeries || []).filter(function (s) {
+            var row = (s.points && s.points[0] && s.points[0].row) || s.latestRow || {};
+            var rs = row.rate_structure;
+            var sp = row.security_purpose;
+            var rt = row.repayment_type;
+            var okRs = (rs == null || rs === '' || rs === 'variable');
+            var okSp = (sp == null || sp === '' || sp === 'owner_occupied');
+            var okRt = (rt == null || rt === '' || rt === 'principal_and_interest');
+            return okRs && okSp && okRt;
+        });
+
+        // Per-bank MIN rate per date
+        var byBank = {};
+        filtered.forEach(function (s) {
+            var bn = String(s.bankName || '').trim();
+            if (!bn) return;
+            var k = bn.toLowerCase();
+            if (!byBank[k]) byBank[k] = { bankName: bn, byDate: {} };
+            (s.points || []).forEach(function (p) {
+                var d = String(p.date || '');
+                var v = Number(p.value);
+                if (!d || !Number.isFinite(v)) return;
+                if (byBank[k].byDate[d] == null || v < byBank[k].byDate[d]) byBank[k].byDate[d] = v;
+            });
+        });
+
+        return Object.keys(byBank)
+            .map(function (k) {
+                var e = byBank[k];
+                var pts = Object.keys(e.byDate).sort().map(function (d) { return { date: d, value: e.byDate[d] }; });
+                return { bankName: e.bankName, points: pts, latest: pts.length ? pts[pts.length - 1].value : 0 };
+            })
+            .filter(function (b) { return b.points.length > 0; })
+            .sort(function (a, b) { return a.latest - b.latest; })
+            .map(function (b, i) {
+                b.short = bankShort(b.bankName);
+                b.color = bankColor(b.bankName, i);
+                return b;
             });
     }
 
@@ -159,10 +186,10 @@
         if (!L || !container) return null;
 
         // ── Prepare data ──────────────────────────────────────────────────────
-        // Use lenderRanking (lowest-rate product per bank, sorted asc) so that specialty
-        // high-rate products don't crowd out other banks via the product-level density limit.
-        var lenderEntries = (model && model.lenderRanking && model.lenderRanking.entries) || [];
-        var banks = buildBankSeries(lenderEntries);
+        // Use allSeries (full product list, not density-truncated) filtered to variable OO P&I
+        // so we show the competitive advertised rate per bank, not specialty products.
+        var allSeries = (model && (model.allSeries || model.visibleSeries)) || [];
+        var banks = buildBankSeries(allSeries);
 
         var bankMax = null, bankMin = null;
         banks.forEach(function (b) {
@@ -218,7 +245,7 @@
 
         // ── Context label ─────────────────────────────────────────────────────
         var ctxLabelEl = document.createElement('div');
-        ctxLabelEl.textContent = 'Lowest variable rate';
+        ctxLabelEl.textContent = 'Variable OO P&I';
         ctxLabelEl.style.cssText = [
             'position:absolute',
             'bottom:44px',
