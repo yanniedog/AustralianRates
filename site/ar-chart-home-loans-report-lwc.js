@@ -289,10 +289,8 @@
             }
         }
 
-        var width = container.clientWidth || 800;
-        var compact = width < 480;
-        var narrow = width < 720;
-        var maxBanks = compact ? 6 : (narrow ? 10 : banks.length);
+        var compact = (container.clientWidth || 800) < 480;
+        var maxBanks = Math.min(banks.length, 100);
         var visibleBanks = banks.slice(0, maxBanks);
 
         container.innerHTML = '';
@@ -362,8 +360,8 @@
                 priceFormatter: function (price) { return Number(price).toFixed(2) + '%'; },
                 timeFormatter: function (time) { return fmtMonYr(String(time).slice(0, 10)); }
             },
-            handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
-            handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true }
+            handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
+            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true }
         });
 
         var cpiSeriesApi = null;
@@ -429,16 +427,18 @@
             'z-index:10',
             'pointer-events:none',
             'display:none',
+            'top:6px',
+            'right:6px',
             'background:' + t.ttBg,
             'border:1px solid ' + t.ttBorder,
-            'border-radius:8px',
-            'padding:10px 14px',
-            'font-size:12px',
+            'border-radius:6px',
+            'padding:6px 10px',
+            'font-size:10px',
+            'line-height:1.5',
             'color:' + t.ttText,
             "font-family:'Space Grotesk',system-ui,sans-serif",
-            'box-shadow:0 8px 32px rgba(0,0,0,0.18)',
-            'max-width:320px',
-            'min-width:180px'
+            'box-shadow:0 4px 16px rgba(0,0,0,0.12)',
+            'min-width:120px'
         ].join(';');
         mount.appendChild(tooltipEl);
 
@@ -459,7 +459,7 @@
             var rbaValue = null;
             var cpiValue = cpiAtDate(cpiPoints, time);
             var lines = [
-                '<div style="font-size:10.5px;color:' + t.muted + ';letter-spacing:0.04em;margin-bottom:5px;">' + fmtFull(time) + '</div>'
+                '<div style="font-size:9.5px;color:' + t.muted + ';letter-spacing:0.03em;margin-bottom:3px;">' + fmtFull(time) + '</div>'
             ];
 
             if (rbaSeriesApi) {
@@ -473,43 +473,35 @@
                 var value = point && Number.isFinite(point.value) ? point.value : null;
                 if (value == null) return;
                 hasBanks = true;
-                var spreadHtml = '';
-                if (rbaValue != null) {
-                    var spread = value - rbaValue;
-                    var spreadLabel = (spread >= 0 ? '+' : '') + spread.toFixed(2) + '% vs RBA';
-                    spreadHtml = ' <span style="color:' + t.spread + ';font-size:9.5px;">' + spreadLabel + '</span>';
-                }
                 lines.push(
-                    '<div style="margin:2px 0;display:flex;align-items:baseline;gap:4px;">' +
-                        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
-                        '<span style="font-weight:600;white-space:nowrap;">' + entry.bank.short + '</span>' +
-                        '<span style="margin-left:auto;padding-left:10px;font-variant-numeric:tabular-nums;">' + value.toFixed(2) + '%</span>' +
-                        spreadHtml +
+                    '<div style="display:flex;align-items:center;gap:5px;">' +
+                        '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
+                        '<span style="flex:1;white-space:nowrap;">' + entry.bank.short + '</span>' +
+                        '<span style="font-variant-numeric:tabular-nums;">' + value.toFixed(2) + '%</span>' +
                     '</div>'
                 );
             });
 
             if (hasBanks && (rbaValue != null || cpiValue != null)) {
-                lines.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:5px 0 3px;"></div>');
+                lines.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:3px 0 2px;"></div>');
             }
 
             if (rbaValue != null) {
                 lines.push(
-                    '<div style="margin:2px 0;display:flex;align-items:baseline;gap:4px;">' +
-                        '<span style="display:inline-block;width:12px;height:3px;background:' + t.rba + ';flex-shrink:0;"></span>' +
-                        '<span style="color:' + t.rba + ';font-weight:700;">RBA</span>' +
-                        '<span style="margin-left:auto;padding-left:10px;color:' + t.rba + ';font-variant-numeric:tabular-nums;">' + rbaValue.toFixed(2) + '%</span>' +
+                    '<div style="display:flex;align-items:center;gap:5px;">' +
+                        '<span style="display:inline-block;width:10px;height:2px;background:' + t.rba + ';flex-shrink:0;"></span>' +
+                        '<span style="flex:1;color:' + t.rba + ';">RBA</span>' +
+                        '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;">' + rbaValue.toFixed(2) + '%</span>' +
                     '</div>'
                 );
             }
 
             if (cpiValue != null) {
                 lines.push(
-                    '<div style="margin:2px 0;display:flex;align-items:baseline;gap:4px;">' +
-                        '<span style="display:inline-block;width:12px;height:2px;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
-                        '<span style="color:' + t.cpi + ';font-weight:600;">CPI</span>' +
-                        '<span style="color:' + t.muted + ';font-size:9px;margin-left:2px;">annual</span>' +
-                        '<span style="margin-left:auto;padding-left:10px;color:' + t.cpi + ';font-variant-numeric:tabular-nums;">' + Number(cpiValue).toFixed(1) + '%</span>' +
+                    '<div style="display:flex;align-items:center;gap:5px;">' +
+                        '<span style="display:inline-block;width:10px;height:2px;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
+                        '<span style="flex:1;color:' + t.cpi + ';">CPI</span>' +
+                        '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;">' + Number(cpiValue).toFixed(1) + '%</span>' +
                     '</div>'
                 );
             }
@@ -521,19 +513,6 @@
 
             tooltipEl.innerHTML = lines.join('');
             tooltipEl.style.display = 'block';
-
-            var mountWidth = mount.clientWidth;
-            var mountHeight = mount.clientHeight;
-            var tooltipWidth = 300;
-            var tooltipHeight = tooltipEl.offsetHeight || 120;
-            var left = param.point.x + 14;
-            var top = param.point.y + 14;
-
-            if (left + tooltipWidth > mountWidth - 4) left = param.point.x - tooltipWidth - 10;
-            if (top + tooltipHeight > mountHeight - 4) top = param.point.y - tooltipHeight - 10;
-
-            tooltipEl.style.left = Math.max(4, left) + 'px';
-            tooltipEl.style.top = Math.max(4, top) + 'px';
         });
 
         var resizeObserver = new ResizeObserver(function (entries) {

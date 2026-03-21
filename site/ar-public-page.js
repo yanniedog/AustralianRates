@@ -516,11 +516,7 @@
                         '<button id="workspace-status-retry" class="secondary small" type="button">Retry startup</button>' +
                     '</div>' +
                 '</div>' +
-                '<div class="terminal-filter-state-row chart-filter-state-row">' +
-                    '<span id="filter-dirty-indicator" class="pill">0</span>' +
-                    '<div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>' +
-                    '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
-                '</div>' +
+                '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
                 '<details class="chart-filter-more" id="filter-bar">' +
                     '<summary class="terminal-more-summary" data-help="Open banks, dates, exports, and workspace controls." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
                     '<div class="chart-filter-more-grid">' +

@@ -248,9 +248,8 @@
             if (cpiLast.date < ctxMax) cpiPts.push({ date: ctxMax, value: cpiLast.value });
         }
 
-        var W = container.clientWidth || 800;
-        var compact = W < 480, narrow = W < 720;
-        var maxBanks = compact ? 4 : (narrow ? 7 : 10);
+        var compact = (container.clientWidth || 800) < 480;
+        var maxBanks = Math.min(banks.length, 100);
         var visiBanks = banks.slice(0, maxBanks);
 
         // ── DOM: mount fills container (same pattern as renderMainCompare) ─────
@@ -307,8 +306,8 @@
                 priceFormatter: function (p) { return Number(p).toFixed(2) + '%'; },
                 timeFormatter: function (time) { return fmtMonYr(String(time).slice(0, 10)); },
             },
-            handleScroll:  { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
-            handleScale:   { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+            handleScroll:  { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
+            handleScale:   { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
         });
 
         // ── CPI line ──────────────────────────────────────────────────────────
@@ -392,16 +391,18 @@
             'z-index:10',
             'pointer-events:none',
             'display:none',
+            'top:6px',
+            'right:6px',
             'background:' + t.ttBg,
             'border:1px solid ' + t.ttBorder,
-            'border-radius:8px',
-            'padding:10px 14px',
-            'font-size:12px',
+            'border-radius:6px',
+            'padding:6px 10px',
+            'font-size:10px',
+            'line-height:1.5',
             'color:' + t.ttText,
             "font-family:'Space Grotesk',system-ui,sans-serif",
-            'box-shadow:0 8px 32px rgba(0,0,0,0.18)',
-            'max-width:300px',
-            'min-width:160px',
+            'box-shadow:0 4px 16px rgba(0,0,0,0.12)',
+            'min-width:120px',
         ].join(';');
         mount.appendChild(tooltipEl);
 
@@ -413,31 +414,22 @@
                 tooltipEl.style.display = 'none';
                 return;
             }
-            var time    = String(param.time).slice(0, 10);
-            var T       = th();
-            var cpiVal  = cpiAtDate(cpiPts, time);
-            var sep     = '<div style="border-top:1px solid rgba(148,163,184,0.15);margin:5px 0 3px;"></div>';
-            var lines   = ['<div style="font-size:10.5px;color:' + T.muted + ';letter-spacing:0.04em;margin-bottom:5px;">' + fmtFull(time) + '</div>'];
+            var time = String(param.time).slice(0, 10);
+            var T    = th();
+            var cpiVal = cpiAtDate(cpiPts, time);
+            var lines = ['<div style="font-size:9.5px;color:' + T.muted + ';letter-spacing:0.03em;margin-bottom:3px;">' + fmtFull(time) + '</div>'];
 
             var hasBanks = false;
             bankSeriesApis.forEach(function (si) {
-                var sd = param.seriesData && param.seriesData.get(si.api);
+                var sd  = param.seriesData && param.seriesData.get(si.api);
                 var val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
                 if (val == null) return;
                 hasBanks = true;
-                var real = (cpiVal != null) ? val - cpiVal : null;
-                var realHtml = '';
-                if (real != null) {
-                    var c  = real >= 0 ? T.good : T.bad;
-                    var rl = (real >= 0 ? '+' : '') + real.toFixed(2) + '% real';
-                    realHtml = ' <span style="color:' + c + ';font-size:9.5px;">' + rl + '</span>';
-                }
                 lines.push(
-                    '<div style="margin:2px 0;display:flex;align-items:baseline;gap:4px;">'
-                    + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + si.bank.color + ';flex-shrink:0;"></span>'
-                    + '<span style="font-weight:600;white-space:nowrap;">' + si.bank.short + '</span>'
-                    + '<span style="margin-left:auto;padding-left:10px;font-variant-numeric:tabular-nums;">' + val.toFixed(2) + '%</span>'
-                    + realHtml
+                    '<div style="display:flex;align-items:center;gap:5px;">'
+                    + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + si.bank.color + ';flex-shrink:0;"></span>'
+                    + '<span style="flex:1;white-space:nowrap;">' + si.bank.short + '</span>'
+                    + '<span style="font-variant-numeric:tabular-nums;">' + val.toFixed(2) + '%</span>'
                     + '</div>'
                 );
             });
@@ -454,24 +446,25 @@
                 else if (cpiVal != null) cpiDisplayVal = cpiVal;
             }
 
-            if (hasBanks && (rbaVal != null || cpiDisplayVal != null)) lines.push(sep);
+            if (hasBanks && (rbaVal != null || cpiDisplayVal != null)) {
+                lines.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:3px 0 2px;"></div>');
+            }
 
             if (rbaVal != null) {
                 lines.push(
-                    '<div style="margin:2px 0;display:flex;align-items:baseline;gap:4px;">'
-                    + '<span style="display:inline-block;width:12px;height:3px;background:' + T.rba + ';flex-shrink:0;"></span>'
-                    + '<span style="color:' + T.rba + ';font-weight:700;">RBA</span>'
-                    + '<span style="margin-left:auto;padding-left:10px;color:' + T.rba + ';font-variant-numeric:tabular-nums;">' + rbaVal.toFixed(2) + '%</span>'
+                    '<div style="display:flex;align-items:center;gap:5px;">'
+                    + '<span style="display:inline-block;width:10px;height:2px;background:' + T.rba + ';flex-shrink:0;"></span>'
+                    + '<span style="flex:1;color:' + T.rba + ';">RBA</span>'
+                    + '<span style="color:' + T.rba + ';font-variant-numeric:tabular-nums;">' + rbaVal.toFixed(2) + '%</span>'
                     + '</div>'
                 );
             }
             if (cpiDisplayVal != null) {
                 lines.push(
-                    '<div style="margin:2px 0;display:flex;align-items:baseline;gap:4px;">'
-                    + '<span style="display:inline-block;width:12px;height:2px;border-top:2px dashed ' + T.cpi + ';flex-shrink:0;"></span>'
-                    + '<span style="color:' + T.cpi + ';font-weight:600;">CPI</span>'
-                    + '<span style="color:' + T.muted + ';font-size:9px;margin-left:2px;">annual</span>'
-                    + '<span style="margin-left:auto;padding-left:10px;color:' + T.cpi + ';font-variant-numeric:tabular-nums;">' + Number(cpiDisplayVal).toFixed(1) + '%</span>'
+                    '<div style="display:flex;align-items:center;gap:5px;">'
+                    + '<span style="display:inline-block;width:10px;height:2px;border-top:2px dashed ' + T.cpi + ';flex-shrink:0;"></span>'
+                    + '<span style="flex:1;color:' + T.cpi + ';">CPI</span>'
+                    + '<span style="color:' + T.cpi + ';font-variant-numeric:tabular-nums;">' + Number(cpiDisplayVal).toFixed(1) + '%</span>'
                     + '</div>'
                 );
             }
@@ -480,14 +473,6 @@
 
             tooltipEl.innerHTML = lines.join('');
             tooltipEl.style.display = 'block';
-
-            var mW = mount.clientWidth, mH = mount.clientHeight;
-            var ttW = 290, ttH = tooltipEl.offsetHeight || 120;
-            var px = param.point.x + 14, py = param.point.y + 14;
-            if (px + ttW > mW - 4) px = param.point.x - ttW - 10;
-            if (py + ttH > mH - 4) py = param.point.y - ttH - 10;
-            tooltipEl.style.left = Math.max(4, px) + 'px';
-            tooltipEl.style.top  = Math.max(4, py) + 'px';
         });
 
         // ── Resize observer ───────────────────────────────────────────────────
