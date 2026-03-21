@@ -130,7 +130,10 @@
             return okRs && okSp && okRt;
         });
 
-        // Per-bank MIN rate per date
+        // Per-bank MIN rate per date.
+        // Apply a floor of 4.0% to exclude anomalously low rates (gov-backed veterans products,
+        // data collection errors) that are below typical cash-rate floors.
+        var MIN_RATE = 4.0;
         var byBank = {};
         filtered.forEach(function (s) {
             var bn = String(s.bankName || '').trim();
@@ -140,7 +143,7 @@
             (s.points || []).forEach(function (p) {
                 var d = String(p.date || '');
                 var v = Number(p.value);
-                if (!d || !Number.isFinite(v)) return;
+                if (!d || !Number.isFinite(v) || v < MIN_RATE) return;
                 if (byBank[k].byDate[d] == null || v < byBank[k].byDate[d]) byBank[k].byDate[d] = v;
             });
         });
