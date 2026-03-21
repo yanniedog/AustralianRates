@@ -13,29 +13,29 @@
     window.AR = window.AR || {};
 
     // ── Embedded CPI data ─────────────────────────────────────────────────────
+    // Source: ABS All Groups CPI, annual % change. Via RBA G1 table (published 29-Jan-2026).
+    // Latest confirmed quarter: Dec 2025. Updated manually when ABS releases quarterly data.
     var ABS_CPI = [
         { date: '2021-01-01', value: 1.1 },
         { date: '2021-04-01', value: 3.8 },
-        { date: '2021-07-01', value: 3.0 },
+        { date: '2021-07-01', value: 3.1 },
         { date: '2021-10-01', value: 3.5 },
         { date: '2022-01-01', value: 5.1 },
-        { date: '2022-04-01', value: 6.1 },
-        { date: '2022-07-01', value: 6.1 },
-        { date: '2022-10-01', value: 7.3 },
-        { date: '2023-01-01', value: 7.8 },
-        { date: '2023-04-01', value: 7.0 },
-        { date: '2023-07-01', value: 6.0 },
-        { date: '2023-10-01', value: 5.4 },
-        { date: '2024-01-01', value: 4.1 },
-        { date: '2024-04-01', value: 3.6 },
-        { date: '2024-07-01', value: 3.8 },
-        { date: '2024-10-01', value: 2.8 },
+        { date: '2022-04-01', value: 6.2 },
+        { date: '2022-07-01', value: 7.3 },
+        { date: '2022-10-01', value: 7.9 },
+        { date: '2023-01-01', value: 7.0 },
+        { date: '2023-04-01', value: 6.0 },
+        { date: '2023-07-01', value: 5.3 },
+        { date: '2023-10-01', value: 4.1 },
+        { date: '2024-01-01', value: 3.6 },
+        { date: '2024-04-01', value: 3.8 },
+        { date: '2024-07-01', value: 2.9 },
+        { date: '2024-10-01', value: 2.4 },
         { date: '2025-01-01', value: 2.4 },
-        { date: '2025-04-01', value: 2.7 },
-        { date: '2025-07-01', value: 2.9 },
-        { date: '2025-10-01', value: 2.8 },
-        { date: '2026-01-01', value: 2.6 },
-        { date: '2026-04-01', value: 2.5 },
+        { date: '2025-04-01', value: 2.1 },
+        { date: '2025-07-01', value: 3.2 },
+        { date: '2025-10-01', value: 3.6 },
     ];
 
     // ── Bank labels & brand colours ───────────────────────────────────────────
@@ -409,11 +409,11 @@
             }
             // Only include points strictly inside [ctxMin, ctxMax]
             var rawPts = allPts.filter(function (p) { return p.date >= ctxMin && p.date <= ctxMax; });
-            // Carry the last known rate back to ctxMin
+            // Carry the last known rate back to ctxMin only when we have data preceding ctxMin.
+            // Do NOT carry forward when bank data starts after ctxMin — that would fabricate
+            // a flat "historical" line across months where we have no actual data.
             if (carryPt) {
                 rawPts = [{ date: ctxMin, value: carryPt.value }].concat(rawPts);
-            } else if (rawPts.length && rawPts[0].date > ctxMin) {
-                rawPts = [{ date: ctxMin, value: rawPts[0].value }].concat(rawPts);
             }
             // Carry-forward to ctxMax so the line reaches the right edge
             if (rawPts.length) {

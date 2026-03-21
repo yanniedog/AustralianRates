@@ -381,11 +381,10 @@
             }
             // Only include points strictly inside [ctxMin, ctxMax]
             var rawPts = allPts.filter(function (p) { return p.date >= ctxMin && p.date <= ctxMax; });
-            // Carry the last known rate back to ctxMin
+            // Carry back to ctxMin only when we have data predating ctxMin.
+            // No fabricated carry-back when bank data starts after ctxMin.
             if (carryPt) {
                 rawPts = [{ date: ctxMin, value: carryPt.value }].concat(rawPts);
-            } else if (rawPts.length && rawPts[0].date > ctxMin) {
-                rawPts = [{ date: ctxMin, value: rawPts[0].value }].concat(rawPts);
             }
             // Carry-forward to ctxMax so the line reaches the right edge
             if (rawPts.length) {
