@@ -139,41 +139,50 @@
     }
 
     function buildBankSeries(model) {
-        var ranking = model && model.lenderRanking && Array.isArray(model.lenderRanking.entries)
-            ? model.lenderRanking.entries
-            : [];
+        // Use allSeries so MIN aggregation covers all products across the current filter slice.
+        // Each bank shows its best (lowest) rate at each date for the selected product type.
+        var allSeries = (model && (model.allSeries || model.visibleSeries)) || [];
+        var byBank = {};
 
-        return ranking.map(function (entry, index) {
-            var series = entry && entry.series ? entry.series : null;
-            var points = series && Array.isArray(series.points)
-                ? series.points.map(function (point) {
-                    return {
-                        date: String(point.date || ''),
-                        value: Number(point.value),
-                        row: point.row || null
-                    };
-                }).filter(function (point) {
-                    return point.date && Number.isFinite(point.value) && point.value > 0.5;
-                })
-                : [];
-
-            return {
-                bankName: entry.bankName,
-                productName: entry.productName || '',
-                seriesKey: entry.seriesKey || (series ? series.key : ''),
-                short: bankShort(entry.bankName),
-                color: bankColor(entry.bankName, index),
-                latest: Number(entry.value),
-                points: points
-            };
-        }).filter(function (entry) {
-            return entry.points.length > 0;
-        }).sort(function (left, right) {
-            if (Number.isFinite(left.latest) && Number.isFinite(right.latest) && left.latest !== right.latest) {
-                return left.latest - right.latest;
-            }
-            return String(left.bankName || '').localeCompare(String(right.bankName || ''));
+        allSeries.forEach(function (s) {
+            var bn = String(s.bankName || '').trim();
+            if (!bn) return;
+            var k = bn.toLowerCase();
+            if (!byBank[k]) byBank[k] = { bankName: bn, byDate: {} };
+            (s.points || []).forEach(function (p) {
+                var d = String(p.date || '');
+                var v = Number(p.value);
+                // 4% floor excludes collection errors, government-backed or specialty loans
+                if (!d || !Number.isFinite(v) || v < 4.0) return;
+                // MIN rate per bank per date (lower = better for borrower)
+                if (byBank[k].byDate[d] == null || v < byBank[k].byDate[d]) byBank[k].byDate[d] = v;
+            });
         });
+
+        return Object.keys(byBank)
+            .map(function (k, index) {
+                var e = byBank[k];
+                var pts = Object.keys(e.byDate).sort().map(function (d) { return { date: d, value: e.byDate[d] }; });
+                var latest = pts.length ? pts[pts.length - 1].value : 0;
+                return {
+                    bankName: e.bankName,
+                    short: bankShort(e.bankName),
+                    color: bankColor(e.bankName, index),
+                    latest: latest,
+                    points: pts
+                };
+            })
+            .filter(function (entry) { return entry.points.length > 0; })
+            .sort(function (left, right) {
+                if (Number.isFinite(left.latest) && Number.isFinite(right.latest) && left.latest !== right.latest) {
+                    return left.latest - right.latest;
+                }
+                return String(left.bankName || '').localeCompare(String(right.bankName || ''));
+            })
+            .map(function (entry, index) {
+                entry.color = bankColor(entry.bankName, index);
+                return entry;
+            });
     }
 
     function buildRbaSeries(rbaHistory) {
