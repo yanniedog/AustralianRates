@@ -50,13 +50,16 @@ body.ar-admin {
 }
 
 .site-header-segment-link.is-active {
-    color: var(--ar-accent);
-    background: color-mix(in srgb, var(--ar-accent) 12%, transparent);
+    color: var(--ar-text) !important;
+    background: var(--ar-surface) !important;
+    border: 1px solid var(--ar-line-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-text) 4%, transparent);
 }
 
 .site-header-segment-link.is-active:hover {
-    color: var(--ar-accent);
-    background: color-mix(in srgb, var(--ar-accent) 18%, transparent);
+    color: var(--ar-text) !important;
+    background: var(--ar-surface-2) !important;
+    border-color: var(--ar-line-strong);
 }
 
 .site-brand-lockup,

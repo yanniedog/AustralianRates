@@ -52,6 +52,7 @@
         lwcDetail: null,
         lwcNeedsRedraw: false,
         renderGen: 0,
+        pendingReload: false,
         statusLine: freshStatusLineState(),
         includedRateStructures: section === 'home-loans' ? ['variable'] : null,
     };
@@ -611,7 +612,11 @@
 
     async function drawChart() {
         if (!els.chartOutput) return;
-        if (chartLoadPromise) return chartLoadPromise;
+        if (chartLoadPromise) {
+            chartState.pendingReload = true;
+            return chartLoadPromise;
+        }
+        chartState.pendingReload = false;
         disposeCharts();
         resetStatusLine();
         chartState.fallbackReason = '';
@@ -699,6 +704,10 @@
             if (chartUi.setStatus) chartUi.setStatus('Error loading chart');
         }).finally(function () {
             chartLoadPromise = null;
+            if (chartState.pendingReload) {
+                chartState.pendingReload = false;
+                drawChart();
+            }
         });
 
         return chartLoadPromise;

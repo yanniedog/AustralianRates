@@ -420,6 +420,184 @@
             '</section>';
     }
 
+    function findUiField(ui, id) {
+        var fields = (ui && ui.advancedFields) || [];
+        for (var i = 0; i < fields.length; i++) {
+            if (fields[i].id === id) return fields[i];
+        }
+        return null;
+    }
+
+    function compactSelectFieldMarkup(field) {
+        if (!field) return '';
+        var labelId = fieldLabelId(field);
+        return '' +
+            '<label class="terminal-field chart-filter-field"' + helpAttrs(field.label, field.help) + '>' +
+                fieldLabelBlock(field, { forId: field.id }) +
+                '<select id="' + field.id + '" class="small" aria-labelledby="' + esc(labelId) + '">' +
+                    optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) +
+                '</select>' +
+            '</label>';
+    }
+
+    function compactNumberFieldMarkup(field) {
+        if (!field) return '';
+        return '' +
+            '<label class="terminal-field chart-filter-field"' + helpAttrs(field.label, field.help) + '>' +
+                fieldLabelBlock(field, { forId: field.id }) +
+                '<input id="' + field.id + '" class="small" type="number" step="0.001" min="0" placeholder="' + esc(field.placeholder || '') + '">' +
+            '</label>';
+    }
+
+    function compactDateFieldMarkup(id, label, icon, help) {
+        var field = { id: id, label: label, icon: icon };
+        return '' +
+            '<label class="terminal-field chart-filter-field"' + helpAttrs(label, help) + '>' +
+                fieldLabelBlock(field, { forId: id }) +
+                '<input id="' + id + '" class="small" type="date" autocomplete="off">' +
+            '</label>';
+    }
+
+    function compactHomeLoanScenarioMarkup(ui) {
+        return [
+            compactSelectFieldMarkup(findUiField(ui, 'filter-security')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-repayment')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-structure')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-lvr')),
+        ].join('');
+    }
+
+    function compactSavingsScenarioMarkup(ui) {
+        return [
+            compactSelectFieldMarkup(findUiField(ui, 'filter-account-type')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-rate-type')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-deposit-tier')),
+        ].join('');
+    }
+
+    function compactTermDepositScenarioMarkup(ui) {
+        return [
+            compactSelectFieldMarkup(findUiField(ui, 'filter-term-months')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-deposit-tier')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-interest-payment')),
+        ].join('');
+    }
+
+    function compactScenarioMarkup(ui) {
+        if (section === 'home-loans') return compactHomeLoanScenarioMarkup(ui);
+        if (section === 'savings') return compactSavingsScenarioMarkup(ui);
+        if (section === 'term-deposits') return compactTermDepositScenarioMarkup(ui);
+        return '';
+    }
+
+    function compactChartFilterBarMarkup(ui) {
+        return '' +
+            '<section class="chart-filter-bar" aria-label="Chart filters">' +
+                '<div class="chart-filter-bar-head">' +
+                    '<div class="chart-filter-bar-copy">' +
+                        '<strong>Comparison filter</strong>' +
+                        '<p>Choose one product slice and the chart redraws immediately.</p>' +
+                    '</div>' +
+                    '<div class="chart-filter-bar-actions">' +
+                        '<span id="filter-live-status" class="pill filter-live-pill is-live">Live sync on</span>' +
+                        '<button id="reset-filters" class="secondary small" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>' +
+                        '<button id="workspace-copy-link" class="secondary small" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="chart-filter-grid chart-filter-grid-primary">' +
+                    compactScenarioMarkup(ui) +
+                '</div>' +
+                '<div id="workspace-status" class="terminal-inline-feedback workspace-status is-warning" role="status" aria-live="polite" hidden>' +
+                    '<div class="workspace-status-copy">' +
+                        '<strong id="workspace-status-title">Startup degraded</strong>' +
+                        '<span id="workspace-status-message">Some controls are taking longer than expected.</span>' +
+                    '</div>' +
+                    '<div class="workspace-status-actions">' +
+                        '<button id="workspace-status-retry" class="secondary small" type="button">Retry startup</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="terminal-filter-state-row chart-filter-state-row">' +
+                    '<span id="filter-dirty-indicator" class="pill">0</span>' +
+                    '<div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>' +
+                    '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
+                '</div>' +
+                '<details class="chart-filter-more" id="filter-bar">' +
+                    '<summary class="terminal-more-summary" data-help="Open banks, dates, exports, and workspace controls." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
+                    '<div class="chart-filter-more-grid">' +
+                        '<section class="chart-filter-more-section chart-filter-more-section-bank">' +
+                            '<div class="terminal-filter-group-head">' +
+                                '<strong>Banks</strong>' +
+                                '<span class="hint">Optional shortlist</span>' +
+                            '</div>' +
+                            '<div class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
+                                '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
+                                '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
+                                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-labelledby="filter-bank-label">' +
+                                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>' +
+                                    '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
+                                '</div>' +
+                                '<div id="filter-bank-options" class="bank-picker-grid bank-picker-grid-compact" role="group" aria-labelledby="filter-bank-label"></div>' +
+                                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
+                            '</div>' +
+                        '</section>' +
+                        '<section class="chart-filter-more-section">' +
+                            '<div class="terminal-filter-group-head">' +
+                                '<strong>Dates and limits</strong>' +
+                                '<span class="hint">Optional narrowing</span>' +
+                            '</div>' +
+                            '<div class="chart-filter-grid chart-filter-grid-secondary">' +
+                                compactNumberFieldMarkup({ id: 'filter-min-rate', label: 'Min rate', icon: 'summary', placeholder: ui.minRatePlaceholder, help: 'Minimum visible headline rate.' }) +
+                                compactNumberFieldMarkup({ id: 'filter-max-rate', label: 'Max rate', icon: 'summary', placeholder: ui.maxRatePlaceholder, help: 'Maximum visible headline rate.' }) +
+                                compactDateFieldMarkup('filter-start-date', 'From date', 'calendar', 'Choose a start date or type YYYY-MM-DD.') +
+                                compactDateFieldMarkup('filter-end-date', 'To date', 'calendar', 'Choose an end date or type YYYY-MM-DD.') +
+                            '</div>' +
+                            '<div class="chart-filter-shortcuts-wrap">' +
+                                dateShortcutMarkup() +
+                                '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>' +
+                            '</div>' +
+                        '</section>' +
+                        '<section class="chart-filter-more-section">' +
+                            '<div class="terminal-filter-group-head">' +
+                                '<strong>Additional slice controls</strong>' +
+                                '<span class="hint">Less common filters</span>' +
+                            '</div>' +
+                            '<div class="chart-filter-grid chart-filter-grid-secondary">' +
+                                (ui.advancedFields || []).map(function (field) {
+                                    if (section === 'home-loans' && ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr'].indexOf(field.id) >= 0) return '';
+                                    if (section === 'savings' && ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'].indexOf(field.id) >= 0) return '';
+                                    if (section === 'term-deposits' && ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'].indexOf(field.id) >= 0) return '';
+                                    return fieldMarkup(Object.assign({}, field, { padGrid: false }));
+                                }).join('') +
+                            '</div>' +
+                        '</section>' +
+                        '<section class="chart-filter-more-section">' +
+                            '<div class="terminal-filter-group-head">' +
+                                '<strong>Workspace</strong>' +
+                                '<span class="hint">Export and refresh</span>' +
+                            '</div>' +
+                            '<div class="chart-filter-grid chart-filter-grid-secondary">' +
+                                SHARED_ADVANCED_FIELDS.map(fieldMarkup).join('') +
+                                '<div id="export" class="chart-filter-export">' +
+                                    '<div class="terminal-field" data-help="Export the current table view." data-help-label="Download">' +
+                                        '<label id="download-format-label" class="terminal-field-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>' +
+                                        '<select id="download-format" class="small" aria-labelledby="download-format-label">' +
+                                            '<option value="">Format</option>' +
+                                            '<option value="csv">CSV</option>' +
+                                            '<option value="xls">Excel</option>' +
+                                            '<option value="json">JSON</option>' +
+                                        '</select>' +
+                                    '</div>' +
+                                    '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>' +
+                                    '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>' +
+                                    '<span id="last-refreshed" class="hint"></span>' +
+                                '</div>' +
+                            '</div>' +
+                        '</section>' +
+                    '</div>' +
+                '</details>' +
+            '</section>';
+    }
+
     function chartQuestionMarkup() {
         return '' +
             '<div class="chart-question-row" role="group" aria-label="Chart view">' +
@@ -432,13 +610,10 @@
                             ' aria-label="' + esc(view.label) + '"' +
                             ' aria-pressed="' + (view.selected ? 'true' : 'false') + '"' +
                             helpAttrs(view.label, view.help) +
-                        '>' +
+                            '>' +
                             iconText(view.icon, view.label, 'control-chip-label') +
                         '</button>';
                 }).join('') +
-                '<button id="draw-chart" type="button" class="small" data-help="Render the chart using the selected view and filters." data-help-label="Draw chart">' +
-                    iconText('chart', 'Draw Chart', 'control-chip-label') +
-                '</button>' +
             '</div>';
     }
 
@@ -487,104 +662,6 @@
     function render(ui) {
         root.innerHTML = [
             '<section class="market-terminal" aria-label="' + esc(ui.title) + ' workspace">',
-                '<aside class="terminal-column terminal-column-left">',
-                    '<section class="panel terminal-panel terminal-nav-panel">',
-                        '<div class="terminal-panel-head">',
-                            panelIcon('nav', 'Navigation'),
-                            panelHeadingMarkup('h2', ui.title),
-                            '<button type="button" class="icon-btn secondary terminal-panel-close-mobile" data-menu-close aria-label="Close menu">' + iconOnly('close', 'Close') + '</button>',
-                        '</div>',
-                        '<div id="market-nav-tree" class="market-nav-tree" aria-label="Market navigation"></div>',
-                    '</section>',
-                    '<section id="scenario" class="panel terminal-panel terminal-filter-panel">',
-                        '<div class="terminal-panel-head terminal-panel-head-control">',
-                            '<div class="terminal-panel-head-main">',
-                                panelIcon('filter', 'Filters'),
-                                panelHeadingMarkup('h2', 'Control panel'),
-                            '</div>',
-                            '<span id="filter-live-status" class="pill filter-live-pill">Live sync on</span>',
-                        '</div>',
-                        '<p class="terminal-control-copy">Click a lender or adjust any filter. The table, pivot grid, charts, summary, and export stay locked to the same slice.</p>',
-                        '<div id="workspace-status" class="terminal-inline-feedback workspace-status is-warning" role="status" aria-live="polite" hidden>',
-                            '<div class="workspace-status-copy">',
-                                '<strong id="workspace-status-title">Startup degraded</strong>',
-                                '<span id="workspace-status-message">Some controls are taking longer than expected.</span>',
-                            '</div>',
-                            '<div class="workspace-status-actions">',
-                                '<button id="workspace-status-retry" class="secondary" type="button">Retry startup</button>',
-                            '</div>',
-                        '</div>',
-                        '<div class="terminal-filter-grid terminal-filter-grid-primary">',
-                            '<div class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">',
-                                '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>',
-                                '<div class="terminal-inline-inputs terminal-inline-inputs-bank">',
-                                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-labelledby="filter-bank-label">',
-                                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>',
-                                    '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>',
-                                '</div>',
-                                '<div id="filter-bank-options" class="bank-picker-grid" role="group" aria-labelledby="filter-bank-label"></div>',
-                                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>',
-                            '</div>',
-                            '<label class="terminal-field" data-help="Minimum visible headline rate." data-help-label="Minimum rate">',
-                                iconText('summary', 'Minimum rate', 'field-code'),
-                                '<input id="filter-min-rate" type="number" step="0.001" min="0" placeholder="' + ui.minRatePlaceholder + '">' +
-                            '</label>',
-                            '<label class="terminal-field" data-help="Maximum visible headline rate." data-help-label="Maximum rate">',
-                                iconText('summary', 'Maximum rate', 'field-code'),
-                                '<input id="filter-max-rate" type="number" step="0.001" min="0" placeholder="' + ui.maxRatePlaceholder + '">' +
-                            '</label>',
-                            '<label class="terminal-field" data-help="Choose a start date or type YYYY-MM-DD." data-help-label="From date">',
-                                iconText('calendar', 'From date', 'field-code'),
-                                '<input id="filter-start-date" type="date" autocomplete="off">' +
-                            '</label>',
-                            '<label class="terminal-field" data-help="Choose an end date or type YYYY-MM-DD." data-help-label="To date">',
-                                iconText('calendar', 'To date', 'field-code'),
-                                '<input id="filter-end-date" type="date" autocomplete="off">' +
-                            '</label>',
-                        '</div>',
-                        '<div class="terminal-date-rail">',
-                            '<div class="terminal-filter-group-head">',
-                                panelHeadingMarkup('h3', 'Quick window'),
-                                '<span class="hint">Jump the date range</span>',
-                            '</div>',
-                            dateShortcutMarkup(),
-                        '</div>',
-                        '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>',
-                        filterGroupMarkup('Slice dimensions', 'Live filters', ui.advancedFields),
-                        '<div class="terminal-action-row">',
-                            '<button id="apply-filters" class="secondary" type="button" data-help="Force an immediate refresh. The panel also syncs automatically while you work." data-help-label="Sync now">' + iconText('refresh', 'Sync now', 'control-chip-label') + '</button>',
-                            '<button id="reset-filters" class="secondary" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>',
-                            '<button id="workspace-copy-link" class="secondary" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>',
-                        '</div>',
-                        '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>',
-                        '<div class="terminal-filter-state-row">',
-                            '<span id="filter-dirty-indicator" class="pill">0</span>',
-                            '<div id="active-filter-chips" class="active-filter-chips" aria-live="polite"></div>',
-                        '</div>',
-                        '<details class="terminal-more-filters" id="filter-bar">',
-                            '<summary class="terminal-more-summary" data-help="Open workspace controls such as data scope, manual runs, and auto refresh." data-help-label="Workspace settings">' + iconText('filter', 'Workspace settings', 'control-chip-label') + '</summary>',
-                            '<div class="terminal-filter-grid terminal-filter-grid-advanced terminal-filter-grid-secondary">',
-                                SHARED_ADVANCED_FIELDS.map(fieldMarkup).join(''),
-                            '</div>',
-                        '</details>',
-                        '<div id="export" class="terminal-export-row">',
-                            '<div class="terminal-field" data-help="Export the current table view." data-help-label="Download">',
-                                '<label id="download-format-label" class="terminal-field-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>',
-                                '<select id="download-format" class="small" aria-labelledby="download-format-label">',
-                                    '<option value="">Format</option>',
-                                    '<option value="csv">CSV</option>',
-                                    '<option value="xls">Excel</option>',
-                                    '<option value="json">JSON</option>',
-                                '</select>',
-                            '</div>',
-                            '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
-                            '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>',
-                            '<span id="last-refreshed" class="hint"></span>',
-                        '</div>',
-                    '</section>',
-                    notesMarkup(ui),
-                '</aside>',
-                '<div id="left-rail-resizer" class="terminal-resizer terminal-resizer-left" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize filters panel"></div>',
                 '<section class="terminal-column terminal-column-center">',
                     '<section id="chart" class="panel terminal-panel terminal-stage-panel">',
                         '<div class="chart-block">',
@@ -594,6 +671,7 @@
                                     panelHeadingMarkup('h2', ui.title),
                                 '</div>',
                             '</div>',
+                            compactChartFilterBarMarkup(ui),
                             '<div class="chart-figure">',
                                 '<div class="chart-toolbar">',
                                     '<div class="chart-toolbar-stack">',
@@ -670,6 +748,7 @@
                             '<p id="chart-status" class="hint">Idle</p>',
                         '</div>',
                     '</section>',
+                    notesMarkup(ui),
                     '<details class="terminal-mobile-fold terminal-table-fold" id="table-details">',
                         '<summary class="terminal-more-summary" data-help="Expand to see the data table, pivot grid, history, and rate changes." data-help-label="Data table">' +
                             panelIcon('table', 'Table') +
@@ -734,24 +813,9 @@
                                 '</section>',
                             '</div>',
                         '</section>',
-                    '</section>',
+                        '</section>',
                     '</details>',
                 '</section>',
-                '<div id="right-rail-resizer" class="terminal-resizer terminal-resizer-right" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize leaders panel"></div>',
-                '<aside class="terminal-column terminal-column-right" aria-label="Leaders">',
-                    '<section class="panel terminal-panel terminal-context-panel">',
-                        '<div class="terminal-panel-head">',
-                            panelIcon('ladder', 'Leaders'),
-                            panelHeadingMarkup('h2', 'Leaders'),
-                        '</div>',
-                        '<p class="hint">Fast view of the best rates in the current slice.</p>',
-                        '<label class="terminal-field">',
-                            iconText('search', 'Search', 'field-code'),
-                            '<input id="ladder-search" class="small" type="search" placeholder="Search banks or products" autocomplete="off" spellcheck="false">',
-                        '</label>',
-                        '<div id="quick-compare-cards" class="quick-compare-cards" aria-live="polite"></div>',
-                    '</section>',
-                '</aside>',
             '</section>'
         ].join('');
     }

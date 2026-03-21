@@ -237,7 +237,8 @@
         } else if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'STALE';
         }
-        if (charts && charts.markStale) charts.markStale('STALE');
+        if (charts && charts.drawChart) charts.drawChart();
+        else if (charts && charts.markStale) charts.markStale('STALE');
         if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();

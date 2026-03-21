@@ -60,6 +60,8 @@
         }
         if (key === 'economicReport' || key === 'homeLoanReport' || key === 'termDepositReport') {
             caps.representation = false;
+            caps.xField = false;
+            caps.groupField = false;
             return caps;
         }
         return caps;
@@ -205,7 +207,7 @@
             );
         });
 
-        if (fields.view === 'lenders' && !String(params.banks || '').trim()) {
+        if ((fields.view === 'lenders' || fields.view === 'homeLoanReport') && !String(params.banks || '').trim()) {
             pills.unshift('<span class="chart-summary-pill is-config">Banks: All lenders</span>');
         }
 
@@ -223,6 +225,7 @@
         if (fields.view === 'tdTermTime') tags.push('Term vs time');
         if (fields.view === 'compare') tags.push('Compare');
         if (fields.view === 'distribution') tags.push('Distribution');
+        if (fields.view === 'homeLoanReport') tags.push('Like-for-like');
         if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('Limited');
         else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) tags.push('Limited');
         if (stale) tags.push('Stale');
@@ -264,7 +267,7 @@
         } else if (fields.view === 'slope' && model.slope && model.slope.lines) {
             pills.push('<span class="chart-summary-pill">' + esc(model.slope.lines.length + ' slopes') + '</span>');
             pills.push('<span class="chart-summary-pill">' + esc(model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel) + '</span>');
-        } else if (fields.view === 'ladder' || fields.view === 'lenders') {
+        } else if (fields.view === 'ladder' || fields.view === 'lenders' || fields.view === 'homeLoanReport') {
             pills.push('<span class="chart-summary-pill">' + esc(model.meta.visibleLenders + ' lenders') + '</span>');
         } else {
             pills.push('<span class="chart-summary-pill">' + esc(model.meta.visibleSeries + ' visible series') + '</span>');
@@ -292,6 +295,7 @@
     function railNote(fields, model) {
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
+        if (fields.view === 'homeLoanReport') return 'One product per bank';
         if (fields.view === 'market' && model.market) return marketDimensionLabel(model.market) + ' curve';
         if (fields.view === 'slope' && model.slope) return 'Who moved';
         if (fields.view === 'ladder') return 'Rate ladder';
@@ -411,6 +415,44 @@
                     color: pal[index % pal.length],
                 });
             }).join('');
+            return;
+        }
+        if (fields.view === 'homeLoanReport' && model.lenderRanking && model.lenderRanking.entries.length) {
+            els.chartSeriesList.innerHTML = model.lenderRanking.entries.map(function (entry, index) {
+                var isSelected = selected.indexOf(entry.seriesKey) >= 0;
+                var isSpotlight = selectionState && selectionState.spotlightSeriesKey === entry.seriesKey;
+                return seriesCardMarkup({
+                    key: entry.seriesKey,
+                    title: chartConfig.formatFieldValue('bank_name', entry.bankName, entry.row || null),
+                    valueText: chartConfig.formatMetricValue(fields.yField, entry.value),
+                    caption: entry.productName || 'Selected comparison product',
+                    metaLeft: entry.latestDate ? chartConfig.formatFieldValue('collection_date', entry.latestDate, entry.row || null) : 'Latest',
+                    metaRight: entry.pointCount.toLocaleString() + ' pts',
+                    isSelected: isSelected,
+                    isSpotlight: isSpotlight,
+                    color: pal[index % pal.length],
+                });
+            }).join('') +
+            '<div class="chart-series-card secondary is-reference" style="--series-accent:#f59e0b;" role="listitem">' +
+                '<span class="chart-series-topline">' +
+                    '<span class="chart-series-name-wrap">' +
+                        '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                        '<span class="chart-series-name">RBA</span>' +
+                    '</span>' +
+                    '<span class="chart-series-value">Reference</span>' +
+                '</span>' +
+                '<span class="chart-series-caption">Cash rate is always shown</span>' +
+            '</div>' +
+            '<div class="chart-series-card secondary is-reference" style="--series-accent:#dc2626;" role="listitem">' +
+                '<span class="chart-series-topline">' +
+                    '<span class="chart-series-name-wrap">' +
+                        '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                        '<span class="chart-series-name">CPI</span>' +
+                    '</span>' +
+                    '<span class="chart-series-value">Reference</span>' +
+                '</span>' +
+                '<span class="chart-series-caption">Annual inflation is always shown</span>' +
+            '</div>';
             return;
         }
         if (fields.view === 'market' && model.market) {
@@ -554,19 +596,19 @@
         }
 
         var spotlight = model.spotlight;
-        var lenderEntry = fields.view === 'lenders' && model.lenderRanking ? model.lenderRanking.activeEntry : null;
+        var lenderEntry = (fields.view === 'lenders' || fields.view === 'homeLoanReport') && model.lenderRanking ? model.lenderRanking.activeEntry : null;
         var row = spotlight.row || {};
         var title = lenderEntry
             ? chartConfig.formatFieldValue('bank_name', lenderEntry.bankName, lenderEntry.row || null)
             : spotlight.series.name;
         var subtitle = lenderEntry
-            ? 'Best current ' + chartConfig.fieldLabel(fields.yField).toLowerCase()
+            ? (fields.view === 'homeLoanReport' ? 'Selected comparison product' : 'Best current ' + chartConfig.fieldLabel(fields.yField).toLowerCase())
             : (spotlight.series.subtitle || 'product_key');
         els.chartPointDetails.hidden = false;
         els.chartPointDetails.innerHTML = '' +
             '<div class="chart-spotlight-card">' +
                 '<div class="chart-spotlight-copy">' +
-                    '<p class="chart-series-kicker">' + esc(lenderEntry ? 'Lender spotlight' : 'Series spotlight') + '</p>' +
+                    '<p class="chart-series-kicker">' + esc(lenderEntry ? (fields.view === 'homeLoanReport' ? 'Comparison spotlight' : 'Lender spotlight') : 'Series spotlight') + '</p>' +
                     '<strong>' + esc(title) + '</strong>' +
                     '<span class="chart-spotlight-subtitle">' + esc(subtitle) + '</span>' +
                 '</div>' +
@@ -574,7 +616,7 @@
                     '<span class="chart-summary-pill is-emphasis">' + esc(chartConfig.formatMetricValue(fields.yField, spotlight.value)) + '</span>' +
                     '<span class="chart-summary-pill">' + esc(chartConfig.formatFieldValue('collection_date', spotlight.date, row)) + '</span>' +
                     '<span class="chart-summary-pill">' + esc(spotlight.series.pointCount.toLocaleString()) + ' observations</span>' +
-                    (lenderEntry ? '<span class="chart-summary-pill is-config">Best product by bank</span>' : '') +
+                    (lenderEntry ? '<span class="chart-summary-pill is-config">' + esc(fields.view === 'homeLoanReport' ? 'Product tracked for this bank' : 'Best product by bank') + '</span>' : '') +
                 '</div>' +
                 '<div class="chart-spotlight-grid">' +
                     spotlightField('Bank', chartConfig.formatFieldValue('bank_name', row.bank_name || '-', row)) +

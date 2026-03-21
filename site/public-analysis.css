@@ -29,6 +29,112 @@
     margin: 0;
 }
 
+.chart-filter-bar,
+.chart-filter-more,
+.chart-filter-more-section,
+.chart-filter-export,
+.chart-filter-shortcuts-wrap {
+    display: grid;
+    gap: 12px;
+}
+
+.chart-filter-bar {
+    padding: 14px 16px;
+    border: 1px solid var(--ar-line);
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--ar-surface-2) 92%, transparent), color-mix(in srgb, var(--ar-surface-3) 88%, transparent)),
+        radial-gradient(circle at top right, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 42%);
+}
+
+.chart-filter-bar-head,
+.chart-filter-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.chart-filter-bar-head {
+    justify-content: space-between;
+}
+
+.chart-filter-bar-copy {
+    display: grid;
+    gap: 4px;
+}
+
+.chart-filter-bar-copy p {
+    margin: 0;
+    color: var(--ar-text-soft);
+    font-size: 0.8rem;
+}
+
+.chart-filter-grid,
+.chart-filter-more-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.chart-filter-grid-primary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.chart-filter-grid-secondary {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.chart-filter-field {
+    gap: 8px;
+    min-width: 0;
+}
+
+.chart-filter-state-row {
+    align-items: center;
+}
+
+.chart-filter-state-row .terminal-copy-status[hidden] {
+    display: none;
+}
+
+.chart-filter-state-row .terminal-copy-status:not([hidden]) {
+    margin: 0;
+}
+
+.chart-filter-more {
+    border: 1px solid var(--ar-line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ar-surface-2) 84%, var(--ar-surface));
+    overflow: hidden;
+}
+
+.chart-filter-more > summary {
+    padding: 10px 12px;
+}
+
+.chart-filter-more-grid {
+    padding: 0 12px 12px;
+}
+
+.chart-filter-more-section {
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--ar-line) 82%, transparent);
+}
+
+.chart-filter-more-section:first-child {
+    border-top: 0;
+}
+
+.bank-picker-grid-compact {
+    grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.chart-filter-export {
+    align-content: start;
+}
+
 .chart-figure {
     border: 1px solid var(--ar-line);
     border-radius: 12px 12px 0 0;
@@ -428,6 +534,10 @@
     text-align: left;
 }
 
+.chart-series-card.is-reference {
+    cursor: default;
+}
+
 .chart-series-topline,
 .chart-series-meta,
 .chart-spotlight-grid,
@@ -812,6 +922,19 @@
         grid-template-columns: 1fr;
     }
 
+    .chart-filter-grid-primary,
+    .chart-filter-grid-secondary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .chart-filter-bar-head {
+        align-items: flex-start;
+    }
+
+    .chart-filter-bar-actions {
+        width: 100%;
+    }
+
     .chart-toolbar {
         flex-direction: column;
         align-items: stretch;
@@ -852,6 +975,15 @@
 @media (max-width: 420px) {
     .chart-toolbar {
         padding: 12px;
+    }
+
+    .chart-filter-bar {
+        padding: 12px;
+    }
+
+    .chart-filter-grid-primary,
+    .chart-filter-grid-secondary {
+        grid-template-columns: 1fr;
     }
 
     .chart-footer {

@@ -1,12 +1,7 @@
-/* Three-column layout: left rail + chart + leaders column. */
+/* Single-column layout: full-width chart workspace. */
 body.ar-public .market-terminal {
     gap: 18px;
-    grid-template-columns:
-        minmax(270px, 292px)
-        var(--ar-splitter-track)
-        minmax(0, 1fr)
-        var(--ar-splitter-track)
-        minmax(260px, var(--ar-right-rail-width));
+    grid-template-columns: minmax(0, 1fr);
 }
 
 body.ar-public .terminal-column-center {
@@ -31,12 +26,7 @@ body.ar-public .chart-block {
     }
 
     body.ar-public .market-terminal {
-        grid-template-columns:
-            minmax(180px, 1fr)
-            var(--ar-splitter-track)
-            minmax(0, 1fr)
-            var(--ar-splitter-track)
-            minmax(160px, 1fr);
+        grid-template-columns: minmax(0, 1fr);
     }
 
     body.ar-public .shell-public {
@@ -165,15 +155,13 @@ body.ar-public .ladder-rate {
     font-size: 1.26rem;
 }
 
-body.ar-public .terminal-column-center > .panel,
-body.ar-public .terminal-column-right > .panel {
+body.ar-public .terminal-column-center > .panel {
     transition:
         box-shadow var(--ar-motion-base) var(--ar-ease),
         border-color var(--ar-motion-base) var(--ar-ease);
 }
 
-body.ar-public .terminal-column-center > .panel:hover,
-body.ar-public .terminal-column-right > .panel:hover {
+body.ar-public .terminal-column-center > .panel:hover {
     border-color: color-mix(in srgb, var(--ar-showcase-spark) 20%, var(--ar-line-strong));
     box-shadow: var(--ar-shadow-soft);
 }
@@ -260,7 +248,6 @@ body.ar-legal .legal-support-card p + p {
 
 body.ar-public .market-intro,
 body.ar-public .terminal-column-center > .panel:first-child,
-body.ar-public .terminal-column-right > .panel:first-child,
 body.ar-legal .legal-hero {
     animation: ar-showcase-rise 720ms var(--ar-ease) both;
 }
@@ -491,12 +478,6 @@ body.ar-public .market-intro-step:nth-child(3) {
         min-height: 0;
     }
 
-    body.ar-public .terminal-column-left {
-        border: 1px solid var(--ar-line);
-        border-radius: 24px;
-        background: color-mix(in srgb, var(--ar-surface) 96%, transparent);
-        box-shadow: var(--ar-shadow);
-    }
 }
 
 @media (max-width: 560px) {

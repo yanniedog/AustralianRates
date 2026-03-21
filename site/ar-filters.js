@@ -63,7 +63,16 @@
     }
 
     function getConsumerFilterIds() {
-        return ['filter-bank', 'filter-min-rate', 'filter-max-rate'];
+        if (section === 'home-loans') {
+            return ['filter-bank', 'filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature', 'filter-min-rate', 'filter-max-rate', 'filter-start-date', 'filter-end-date'];
+        }
+        if (section === 'savings') {
+            return ['filter-bank', 'filter-account-type', 'filter-rate-type', 'filter-deposit-tier', 'filter-min-rate', 'filter-max-rate', 'filter-start-date', 'filter-end-date'];
+        }
+        if (section === 'term-deposits') {
+            return ['filter-bank', 'filter-term-months', 'filter-deposit-tier', 'filter-interest-payment', 'filter-min-rate', 'filter-max-rate', 'filter-start-date', 'filter-end-date'];
+        }
+        return ['filter-bank', 'filter-min-rate', 'filter-max-rate', 'filter-start-date', 'filter-end-date'];
     }
 
     function normalizeParamsForSignature(params) {
@@ -619,6 +628,7 @@
             }
             restoreUrlState();
             applyDefaultMinRateIfEmpty();
+            applyDefaultHomeLoanScenarioIfEmpty();
             if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
@@ -630,6 +640,7 @@
             });
             restoreUrlState();
             applyDefaultMinRateIfEmpty();
+            applyDefaultHomeLoanScenarioIfEmpty();
             if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
@@ -644,6 +655,41 @@
         var el = getFilterEl(field.id);
         if (!el || String(el.value || '').trim() !== '') return;
         el.value = '0.01';
+    }
+
+    function selectFirstMatchingOption(el, matchers) {
+        if (!el || !el.options) return false;
+        for (var i = 0; i < el.options.length; i++) {
+            var value = String(el.options[i].value || '').trim();
+            if (!value) continue;
+            for (var j = 0; j < matchers.length; j++) {
+                if (matchers[j](value)) {
+                    el.value = value;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function applyDefaultHomeLoanScenarioIfEmpty() {
+        if (section !== 'home-loans') return;
+
+        var securityEl = getFilterEl('filter-security');
+        var repaymentEl = getFilterEl('filter-repayment');
+        var structureEl = getFilterEl('filter-structure');
+        var lvrEl = getFilterEl('filter-lvr');
+
+        if (securityEl && !String(securityEl.value || '').trim()) securityEl.value = 'owner_occupied';
+        if (repaymentEl && !String(repaymentEl.value || '').trim()) repaymentEl.value = 'principal_and_interest';
+        if (structureEl && !String(structureEl.value || '').trim()) structureEl.value = 'variable';
+        if (lvrEl && !String(lvrEl.value || '').trim()) {
+            selectFirstMatchingOption(lvrEl, [
+                function (value) { return value === 'lvr_80-85%'; },
+                function (value) { return value.indexOf('80-85') >= 0; },
+                function (value) { return value.indexOf('80') >= 0; },
+            ]);
+        }
     }
 
     window.AR.filters = {
