@@ -243,24 +243,24 @@
         return { chart: chart, mount: mount, kind: 'detail' };
     }
 
-    function renderEconomicReport(container, model, fields, rbaHistory) {
+    function renderEconomicReport(container, model, fields, rbaHistory, cpiHistory) {
         var mod = window.AR.chartSavingsReportLwc;
         if (!mod || typeof mod.render !== 'function') {
             throw new Error('chartSavingsReportLwc not loaded');
         }
-        return mod.render(container, model, rbaHistory);
+        return mod.render(container, model, rbaHistory, cpiHistory);
     }
 
-    function renderHomeLoanReport(container, model, fields, rbaHistory) {
+    function renderHomeLoanReport(container, model, fields, rbaHistory, cpiHistory) {
         var mod = window.AR.chartHomeLoanReportLwc;
         if (!mod || typeof mod.render !== 'function') throw new Error('chartHomeLoanReportLwc not loaded');
-        return mod.render(container, model, rbaHistory);
+        return mod.render(container, model, rbaHistory, cpiHistory);
     }
 
-    function renderTermDepositReport(container, model, fields, rbaHistory) {
+    function renderTermDepositReport(container, model, fields, rbaHistory, cpiHistory) {
         var mod = window.AR.chartTermDepositReportLwc;
         if (!mod || typeof mod.render !== 'function') throw new Error('chartTermDepositReportLwc not loaded');
-        return mod.render(container, model, rbaHistory);
+        return mod.render(container, model, rbaHistory, cpiHistory);
     }
 
     function resizeState(state) {

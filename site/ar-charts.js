@@ -529,11 +529,11 @@
                         var isTdReport     = currentFields.view === 'termDepositReport';
                         var isAnyReport    = isEconReport || isHlReport || isTdReport;
                         if (isEconReport && typeof chartLightweight.renderEconomicReport === 'function') {
-                            chartState.lwcMain = chartLightweight.renderEconomicReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
+                            chartState.lwcMain = chartLightweight.renderEconomicReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory);
                         } else if (isHlReport && typeof chartLightweight.renderHomeLoanReport === 'function') {
-                            chartState.lwcMain = chartLightweight.renderHomeLoanReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
+                            chartState.lwcMain = chartLightweight.renderHomeLoanReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory);
                         } else if (isTdReport && typeof chartLightweight.renderTermDepositReport === 'function') {
-                            chartState.lwcMain = chartLightweight.renderTermDepositReport(els.chartOutput, model, currentFields, chartState.rbaHistory);
+                            chartState.lwcMain = chartLightweight.renderTermDepositReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory);
                         } else {
                             chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields);
                         }
@@ -639,9 +639,15 @@
             }
             resetSelection();
             try {
-                chartState.rbaHistory = chartData.fetchRbaHistory ? await chartData.fetchRbaHistory() : [];
+                var _fetched = await Promise.all([
+                    chartData.fetchRbaHistory ? chartData.fetchRbaHistory() : Promise.resolve([]),
+                    chartData.fetchCpiHistory ? chartData.fetchCpiHistory() : Promise.resolve([]),
+                ]);
+                chartState.rbaHistory = _fetched[0];
+                chartState.cpiHistory = _fetched[1];
             } catch (e) {
                 chartState.rbaHistory = [];
+                chartState.cpiHistory = [];
             }
 
             if (!chartState.rows.length) {

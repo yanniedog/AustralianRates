@@ -13,6 +13,7 @@ import {
 } from '../db/run-reports'
 import { getCompletedLenderCodesForDailyCollection } from '../db/lender-dataset-status'
 import { collectRbaCashRateForDate } from '../ingest/rba'
+import { collectCpiFromRbaG1 } from '../ingest/cpi'
 import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
 import { enqueueBackfillJobs, enqueueDailyLenderJobs, enqueueDailySavingsLenderJobs } from '../queue/producer'
 import type { EnvBindings, LenderConfig } from '../types'
@@ -191,7 +192,10 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       : []
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
-      await collectRbaCashRateForDate(env.DB, collectionDate, env)
+      await Promise.all([
+        collectRbaCashRateForDate(env.DB, collectionDate, env),
+        collectCpiFromRbaG1(env.DB, env),
+      ])
       return {
         ok: true,
         skipped: true,
@@ -236,8 +240,11 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
     }
 
     try {
-      log.info('pipeline', `Daily run ${runId} starting: collecting RBA rate and refreshing endpoints`, { runId })
-      const rbaCollection = await collectRbaCashRateForDate(env.DB, collectionDate, env)
+      log.info('pipeline', `Daily run ${runId} starting: collecting RBA/CPI data and refreshing endpoints`, { runId })
+      const [rbaCollection] = await Promise.all([
+        collectRbaCashRateForDate(env.DB, collectionDate, env),
+        collectCpiFromRbaG1(env.DB, env),
+      ])
       const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS, 24, env)
 
       const enqueue = await enqueueDailyLenderJobs(env, {

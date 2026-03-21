@@ -613,6 +613,7 @@
     }
 
     var rbaHistoryCache = null;
+    var cpiHistoryCache = null;
 
     function fetchRbaHistory() {
         if (rbaHistoryCache && Array.isArray(rbaHistoryCache)) return Promise.resolve(rbaHistoryCache);
@@ -640,10 +641,37 @@
             .catch(function () { return []; });
     }
 
+    function fetchCpiHistory() {
+        if (cpiHistoryCache && Array.isArray(cpiHistoryCache)) return Promise.resolve(cpiHistoryCache);
+        var base = getApiBase();
+        if (!base) return Promise.resolve([]);
+        var url = base + '/cpi/history';
+        if (requestJson) {
+            return requestJson(url, { requestLabel: 'CPI history', timeoutMs: 10000, retryCount: 0 })
+                .then(function (res) {
+                    var body = res && res.data ? res.data : res;
+                    var rows = (body && body.rows) ? body.rows : [];
+                    cpiHistoryCache = Array.isArray(rows) ? rows : [];
+                    return cpiHistoryCache;
+                })
+                .catch(function () { return []; });
+        }
+        var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
+        return fetch(fetchUrl, { cache: 'default' })
+            .then(function (r) { return r.ok ? r.json() : { rows: [] }; })
+            .then(function (res) {
+                var rows = (res && res.rows) ? res.rows : [];
+                cpiHistoryCache = Array.isArray(rows) ? rows : [];
+                return cpiHistoryCache;
+            })
+            .catch(function () { return []; });
+    }
+
     window.AR.chartData = {
         buildChartModel: buildChartModel,
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
         fetchRbaHistory: fetchRbaHistory,
+        fetchCpiHistory: fetchCpiHistory,
     };
 })();

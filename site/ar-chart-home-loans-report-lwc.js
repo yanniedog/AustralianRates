@@ -3,7 +3,7 @@
  *
  * Shows:
  *   - Lowest variable OO P&I rate per bank (stepped lines, title-labelled)
- *   - RBA cash rate             (thick amber step line, decision markers)
+ *   - RBA cash rate             (amber step line)
  *
  * Native LWC pan / zoom / crosshair — no manual axis-drag code needed.
  */
@@ -79,7 +79,6 @@
             grid:     dark ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.16)',
             axis:     dark ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.35)',
             rba:      '#f59e0b',
-            rbaLine:  dark ? 'rgba(245,158,11,0.20)'  : 'rgba(245,158,11,0.16)',
             cdrLine:  dark ? 'rgba(148,163,184,0.22)' : 'rgba(100,116,139,0.18)',
             ttBg:     dark ? 'rgba(15,23,42,0.96)'    : 'rgba(255,255,255,0.97)',
             ttBorder: dark ? 'rgba(100,116,139,0.30)' : 'rgba(100,116,139,0.20)',
@@ -196,46 +195,6 @@
         return { points: deduped.slice(), decisions: deduped.slice() };
     }
 
-    // ── Overlay: RBA vertical decision markers ────────────────────────────────
-    function updateRbaOverlay(overlayEl, chart, decisions, carryRate, chartW, t, narrow) {
-        overlayEl.innerHTML = '';
-        if (narrow || !decisions.length) return;
-        decisions.forEach(function (r, i) {
-            var x = chart.timeScale().timeToCoordinate(r.date);
-            if (x == null || !Number.isFinite(x) || x < 2 || x > chartW - 2) return;
-
-            var line = document.createElement('div');
-            line.style.cssText = [
-                'position:absolute',
-                'top:0',
-                'bottom:0',
-                'left:' + Math.round(x) + 'px',
-                'width:0',
-                'border-left:1.5px dashed ' + t.rba,
-                'opacity:0.30',
-            ].join(';');
-            overlayEl.appendChild(line);
-
-            var prev = i === 0 ? carryRate : decisions[i - 1].rate;
-            var delta = (prev != null) ? r.rate - prev : null;
-            var arrow = delta == null ? '' : (delta > 0 ? ' ↑' : (delta < 0 ? ' ↓' : ''));
-            var lbl = document.createElement('span');
-            lbl.textContent = r.rate.toFixed(2) + '%' + arrow;
-            lbl.style.cssText = [
-                'position:absolute',
-                'bottom:28px',
-                'left:' + (Math.round(x) + 3) + 'px',
-                'font-size:9px',
-                'color:' + t.rba,
-                'white-space:nowrap',
-                "font-family:'Space Grotesk',system-ui,sans-serif",
-                'writing-mode:vertical-rl',
-                'transform:rotate(180deg)',
-            ].join(';');
-            overlayEl.appendChild(lbl);
-        });
-    }
-
     // ── Main render ───────────────────────────────────────────────────────────
     function render(container, model, rbaHistory) {
         var L = window.LightweightCharts;
@@ -280,13 +239,6 @@
         if (rbaData.points.length) {
             var rbaLast = rbaData.points[rbaData.points.length - 1];
             if (rbaLast.date < ctxMax) rbaData.points.push({ date: ctxMax, rate: rbaLast.rate });
-        }
-
-        // Carry rate = last RBA decision before the visible window (for overlay arrows)
-        var rbaCarryRate = null;
-        for (var ri = 0; ri < rbaData.decisions.length; ri++) {
-            if (rbaData.decisions[ri].date < ctxMin) rbaCarryRate = rbaData.decisions[ri].rate;
-            else break;
         }
 
         var W = container.clientWidth || 800;
@@ -411,30 +363,19 @@
         if (rbaData.points.length) {
             rbaSeriesApi = chart.addSeries(L.LineSeries, {
                 color:                   t.rba,
-                lineWidth:               compact ? 2.5 : 3.5,
+                lineWidth:               2,
                 lineType:                LineType.WithSteps,
                 title:                   'RBA',
                 priceLineVisible:        false,
                 lastValueVisible:        true,
                 crosshairMarkerVisible:  true,
-                crosshairMarkerRadius:   4,
+                crosshairMarkerRadius:   3,
             });
             rbaSeriesApi.setData(rbaData.points.map(function (p) { return { time: p.date, value: p.rate }; }));
         }
 
         // Fit to 18-month context window
         chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
-
-        // ── RBA decision vertical marker overlay ──────────────────────────────
-        var overlayEl = document.createElement('div');
-        overlayEl.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;';
-        mount.appendChild(overlayEl);
-
-        function refreshRbaOverlay() {
-            updateRbaOverlay(overlayEl, chart, rbaData.decisions, rbaCarryRate, mount.clientWidth, t, narrow || compact);
-        }
-
-        chart.timeScale().subscribeVisibleTimeRangeChange(refreshRbaOverlay);
 
         // ── Crosshair tooltip ─────────────────────────────────────────────────
         var tooltipEl = document.createElement('div');
@@ -532,12 +473,8 @@
             var w = entry.contentRect.width;
             var h = Math.max(200, entry.contentRect.height);
             chart.resize(w, h);
-            refreshRbaOverlay();
         });
         ro.observe(mount);
-
-        // Initial overlay draw after first paint
-        setTimeout(refreshRbaOverlay, 80);
 
         return {
             chart: chart,
