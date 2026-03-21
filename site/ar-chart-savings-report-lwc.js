@@ -201,7 +201,9 @@
         if (!L || !container) return null;
 
         // ── Prepare data ──────────────────────────────────────────────────────
-        var visibleSeries = (model && model.visibleSeries) || [];
+        // Use allSeries so MAX aggregation covers all products from all banks,
+        // not just the density-limited visibleSeries (which might over-represent one bank).
+        var visibleSeries = (model && (model.allSeries || model.visibleSeries)) || [];
         var banks = buildBankSeries(visibleSeries);
 
         var bankMax = null, bankMin = null;

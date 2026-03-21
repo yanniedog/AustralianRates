@@ -544,6 +544,7 @@
                 selectedCount: selectedKeys.length,
             },
             lenderRanking: lenderRanking,
+            allSeries: allSeries,
             surface: buildSurfaceModel(visibleSeries),
             distribution: buildDistributionModel(rows, fields),
             visibleSeries: visibleSeries,

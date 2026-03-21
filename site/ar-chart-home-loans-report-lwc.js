@@ -115,64 +115,22 @@
     }
 
     // ── Data helpers ──────────────────────────────────────────────────────────
-    function buildBankSeries(visibleSeries) {
-        // First pass: variable OO P&I filter
-        var byBank = {};
-        var strictSeries = (visibleSeries || []).filter(function (s) {
-            var sampleRow = (s.points && s.points[0]) ? (s.points[0].row || {}) : {};
-            var rs = sampleRow.rate_structure;
-            var sp = sampleRow.security_purpose;
-            var rt = sampleRow.repayment_type;
-            var okRs = (rs == null || rs === undefined || rs === '' || rs === 'variable');
-            var okSp = (sp == null || sp === undefined || sp === '' || sp === 'owner_occupied');
-            var okRt = (rt == null || rt === undefined || rt === '' || rt === 'principal_and_interest');
-            return okRs && okSp && okRt;
-        });
-
-        var filterApplied = true;
-        var sourceSeries = strictSeries;
-
-        // Count banks in strict pass
-        var strictBanks = {};
-        strictSeries.forEach(function (s) {
-            var bn = String(s.bankName || '').trim();
-            if (bn) strictBanks[bn.toLowerCase()] = true;
-        });
-
-        if (Object.keys(strictBanks).length === 0) {
-            // Fallback: accept all series
-            sourceSeries = visibleSeries || [];
-            filterApplied = false;
-        }
-
-        sourceSeries.forEach(function (s) {
-            var bn = String(s.bankName || '').trim();
-            if (!bn) return;
-            var k = bn.toLowerCase();
-            if (!byBank[k]) byBank[k] = { bankName: bn, byDate: {} };
-            (s.points || []).forEach(function (p) {
-                var d = String(p.date || '');
-                var v = Number(p.value);
-                if (!d || !Number.isFinite(v)) return;
-                // MIN rate per bank per date (lower = better for borrower)
-                if (byBank[k].byDate[d] == null || v < byBank[k].byDate[d]) byBank[k].byDate[d] = v;
+    // Uses lenderRanking (already aggregated to lowest-rate product per bank, sorted asc).
+    // This avoids the product-density trap where visibleSeries might only contain one bank's
+    // high-rate specialty products when sorted by rate DESC.
+    function buildBankSeries(lenderEntries) {
+        return (lenderEntries || [])
+            .filter(function (e) { return e.series && e.series.points && e.series.points.length; })
+            .map(function (e, i) {
+                var pts = (e.series.points || []).map(function (p) { return { date: p.date, value: p.value }; });
+                return {
+                    bankName: e.bankName,
+                    points: pts,
+                    latest: Number(e.value) || (pts.length ? pts[pts.length - 1].value : 0),
+                    short: bankShort(e.bankName),
+                    color: bankColor(e.bankName, i),
+                };
             });
-        });
-
-        var result = Object.keys(byBank)
-            .map(function (k) {
-                var e = byBank[k];
-                var pts = Object.keys(e.byDate).sort().map(function (d) { return { date: d, value: e.byDate[d] }; });
-                return { bankName: e.bankName, points: pts, latest: pts.length ? pts[pts.length - 1].value : 0 };
-            })
-            .sort(function (a, b) { return a.latest - b.latest; }) // ascending: lowest first
-            .map(function (b, i) {
-                b.short = bankShort(b.bankName);
-                b.color = bankColor(b.bankName, i);
-                return b;
-            });
-
-        return { banks: result, filterApplied: filterApplied };
     }
 
     function buildRbaSeries(rbaHistory) {
@@ -201,10 +159,10 @@
         if (!L || !container) return null;
 
         // ── Prepare data ──────────────────────────────────────────────────────
-        var visibleSeries = (model && model.visibleSeries) || [];
-        var seriesResult = buildBankSeries(visibleSeries);
-        var banks = seriesResult.banks;
-        var filterApplied = seriesResult.filterApplied;
+        // Use lenderRanking (lowest-rate product per bank, sorted asc) so that specialty
+        // high-rate products don't crowd out other banks via the product-level density limit.
+        var lenderEntries = (model && model.lenderRanking && model.lenderRanking.entries) || [];
+        var banks = buildBankSeries(lenderEntries);
 
         var bankMax = null, bankMin = null;
         banks.forEach(function (b) {
@@ -260,7 +218,7 @@
 
         // ── Context label ─────────────────────────────────────────────────────
         var ctxLabelEl = document.createElement('div');
-        ctxLabelEl.textContent = filterApplied ? 'Variable OO P&I' : '';
+        ctxLabelEl.textContent = 'Lowest variable rate';
         ctxLabelEl.style.cssText = [
             'position:absolute',
             'bottom:44px',
