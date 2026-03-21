@@ -18,6 +18,7 @@ import { runDailyBackup } from './daily-backup'
 import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
 import { getMelbourneNowParts } from '../utils/time'
+import { collectRbaCashRateForDate } from '../ingest/rba'
 
 type CronEvent = ScheduledController & { cron?: string }
 export type ScheduledTask = 'daily' | 'hourly_wayback' | 'site_health' | 'monthly_export' | 'integrity_audit' | 'daily_backup'
@@ -177,11 +178,20 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       context: `scheduled_time=${scheduledIso}`,
     })
 
-    const [coverageResult, siteHealthResult, chartCacheResult] = await Promise.allSettled([
+    const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
+    const [coverageResult, siteHealthResult, chartCacheResult, rbaResult] = await Promise.allSettled([
       handleScheduledHourlyWayback(event, env),
       runSiteHealthCron(env),
       refreshChartPivotCache(env),
+      collectRbaCashRateForDate(env.DB, melbourneParts.date, env),
     ])
+
+    if (rbaResult.status === 'rejected') {
+      log.warn('scheduler', 'RBA cash rate collection failed in site health cron', {
+        code: 'rba_collection_failed',
+        context: (rbaResult.reason as Error)?.message ?? String(rbaResult.reason),
+      })
+    }
 
     if (coverageResult.status === 'rejected' || siteHealthResult.status === 'rejected') {
       const failureContext = JSON.stringify({
@@ -222,6 +232,7 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       hourly_wayback: coverageResult.value,
       site_health: siteHealthResult.value,
       chart_cache: chartCacheResult.status === 'fulfilled' ? chartCacheResult.value : undefined,
+      rba: rbaResult.status === 'fulfilled' ? rbaResult.value : undefined,
     }
   }
 

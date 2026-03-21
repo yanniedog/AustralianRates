@@ -3,6 +3,7 @@ import {
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
+import { collectRbaCashRateForDate } from '../ingest/rba'
 import { runCoverageGapAudit } from './coverage-gap-audit'
 import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
@@ -107,6 +108,16 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     log.error('scheduler', 'Lender universe audit failed', {
       code: 'lender_universe_drift',
       error,
+      context: (error as Error)?.message || String(error),
+    })
+  }
+
+  // Collect RBA cash rate regardless of ingest pause state — rate changes must never be missed.
+  try {
+    await collectRbaCashRateForDate(env.DB, collectionDate, env)
+  } catch (error) {
+    log.warn('scheduler', 'RBA cash rate pre-pause collection failed', {
+      code: 'rba_collection_failed',
       context: (error as Error)?.message || String(error),
     })
   }
