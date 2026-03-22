@@ -539,6 +539,7 @@
             var w = entry.contentRect.width;
             var h = Math.max(200, entry.contentRect.height);
             chart.resize(w, h);
+            chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
         });
         ro.observe(mount);
 

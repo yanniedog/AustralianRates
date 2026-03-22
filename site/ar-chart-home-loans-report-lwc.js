@@ -574,6 +574,7 @@
             var entry = entries[0];
             if (!entry) return;
             chart.resize(entry.contentRect.width, Math.max(200, entry.contentRect.height));
+            chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
         });
         resizeObserver.observe(mount);
 
