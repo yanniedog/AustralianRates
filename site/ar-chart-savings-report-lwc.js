@@ -254,10 +254,12 @@
 
         // ── DOM: mount fills container (same pattern as renderMainCompare) ─────
         container.innerHTML = '';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
         var mount = document.createElement('div');
         mount.className = 'lwc-chart-mount lwc-chart-mount--econ-report';
         mount.style.width    = '100%';
-        mount.style.height   = '100%';
+        mount.style.flex     = '1';
         mount.style.minHeight = '400px';
         mount.style.position = 'relative';
         container.appendChild(mount);
@@ -362,7 +364,7 @@
                 crosshairMarkerRadius:   3,
             });
             ser.setData(data);
-            bankSeriesApis.push({ api: ser, bank: bank });
+            bankSeriesApis.push({ api: ser, bank: bank, lastValue: data.length ? data[data.length - 1].value : null });
         });
 
         // ── RBA line (added last = topmost render order) ───────────────────────
@@ -383,6 +385,56 @@
 
         // Fit to 18-month context window
         chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
+
+        // ── Persistent legend strip (below chart, no overlap) ─────────────────
+        var legendEl = document.createElement('div');
+        legendEl.style.cssText = [
+            'display:flex',
+            'flex-wrap:wrap',
+            'align-items:center',
+            'gap:3px 10px',
+            'padding:5px 8px',
+            'font-size:10px',
+            'line-height:1.6',
+            "font-family:'Space Grotesk',system-ui,sans-serif",
+            'color:' + t.ttText,
+            'border-top:1px solid ' + t.grid,
+            'flex-shrink:0'
+        ].join(';');
+        var sortedLegend = bankSeriesApis.slice().sort(function (a, b) {
+            return (b.lastValue != null ? b.lastValue : -Infinity) - (a.lastValue != null ? a.lastValue : -Infinity);
+        });
+        sortedLegend.forEach(function (entry) {
+            if (entry.lastValue == null) return;
+            var item = document.createElement('span');
+            item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+            item.innerHTML =
+                '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
+                '<span>' + entry.bank.short + '</span>' +
+                '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.lastValue.toFixed(2) + '%</span>';
+            legendEl.appendChild(item);
+        });
+        if (rbaSeriesApi && rbaData.points.length) {
+            var rbaLast = rbaData.points[rbaData.points.length - 1].rate;
+            var rbaItem = document.createElement('span');
+            rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;padding-left:8px;border-left:1px solid rgba(148,163,184,0.2);';
+            rbaItem.innerHTML =
+                '<span style="display:inline-block;width:10px;height:2px;background:' + t.rba + ';flex-shrink:0;"></span>' +
+                '<span style="color:' + t.rba + ';">RBA</span>' +
+                '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaLast.toFixed(2) + '%</span>';
+            legendEl.appendChild(rbaItem);
+        }
+        if (cpiSeriesApi && cpiPts.length) {
+            var cpiLast = cpiPts[cpiPts.length - 1].value;
+            var cpiItem = document.createElement('span');
+            cpiItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+            cpiItem.innerHTML =
+                '<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
+                '<span style="color:' + t.cpi + ';">CPI</span>' +
+                '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiLast).toFixed(1) + '%</span>';
+            legendEl.appendChild(cpiItem);
+        }
+        container.appendChild(legendEl);
 
         // ── Crosshair tooltip ─────────────────────────────────────────────────
         var tooltipEl = document.createElement('div');
