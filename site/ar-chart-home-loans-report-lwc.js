@@ -410,7 +410,7 @@
                 color: t.cpi,
                 lineWidth: 2,
                 lineStyle: LineStyle.Dashed,
-                lineType: LineType.WithSteps,
+                lineType: LineType.Simple,
                 title: '',
                 priceLineVisible: false,
                 lastValueVisible: false,
@@ -432,7 +432,7 @@
             var seriesApi = chart.addSeries(L.LineSeries, {
                 color: bank.color,
                 lineWidth: compact ? 1.5 : 2,
-                lineType: LineType.WithSteps,
+                lineType: LineType.Simple,
                 title: '',
                 priceLineVisible: false,
                 lastValueVisible: false,
@@ -448,7 +448,7 @@
             rbaSeriesApi = chart.addSeries(L.LineSeries, {
                 color: t.rba,
                 lineWidth: 2,
-                lineType: LineType.WithSteps,
+                lineType: LineType.Simple,
                 title: '',
                 priceLineVisible: false,
                 lastValueVisible: false,
