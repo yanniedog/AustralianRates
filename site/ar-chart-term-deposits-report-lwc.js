@@ -401,7 +401,7 @@
             },
             localization: {
                 priceFormatter: function (p) { return Number(p).toFixed(2) + '%'; },
-                timeFormatter: function (time) { return fmtMonYr(utcToYmd(time)); },
+                timeFormatter: function (time) { return fmtFull(utcToYmd(time)); },
             },
             handleScroll:  { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
             handleScale:   { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
