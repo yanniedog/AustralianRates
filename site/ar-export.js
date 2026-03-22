@@ -4,15 +4,12 @@
 
     var dom = window.AR.dom;
     var config = window.AR.config;
-    var filters = window.AR.filters;
-    var explorer = window.AR.explorer;
     var utils = window.AR.utils || {};
     var els = dom && dom.els ? dom.els : {};
     var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
     var pathApiPath = (path.indexOf('/savings') !== -1) ? '/api/savings-rates' : (path.indexOf('/term-deposits') !== -1) ? '/api/term-deposit-rates' : '/api/home-loan-rates';
     var effectiveApiPath = (window.AR.sectionConfig && window.AR.sectionConfig.apiPath) ? window.AR.sectionConfig.apiPath : pathApiPath;
     var apiBase = (config && config.apiBase) ? config.apiBase : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin + effectiveApiPath : '');
-    var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var clientLog = utils.clientLog || function () {};
     var downloadInFlight = false;
     var downloadStatusTimer = 0;
@@ -24,23 +21,8 @@
         return 'home-loan-rates';
     }
 
-    function buildExportQuery() {
-        var fp = buildFilterParams();
-        var sortState = explorer && explorer.getCurrentSort ? explorer.getCurrentSort() : null;
-        if (sortState && sortState.field) {
-            fp.sort = sortState.field;
-            fp.dir = String(sortState.dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
-        }
-        return new URLSearchParams(fp);
-    }
-
     function buildExportRequestBody(format) {
-        var query = buildExportQuery();
-        var body = { format: format, export_type: 'rates' };
-        query.forEach(function (value, key) {
-            body[key] = value;
-        });
-        return body;
+        return { format: format, export_type: 'rates' };
     }
 
     function parseFileName(contentDisposition, fallback) {
@@ -155,9 +137,7 @@
     }
 
     async function fetchLegacyExport(format) {
-        var query = buildExportQuery();
-        query.set('format', format);
-        var response = await fetch(apiBase + '/export?' + query.toString(), { cache: 'no-store' });
+        var response = await fetch(apiBase + '/export?format=' + encodeURIComponent(format), { cache: 'no-store' });
         if (!response.ok) throw createHttpError('Export failed (HTTP ' + response.status + ')', response.status);
         return {
             response: response,
