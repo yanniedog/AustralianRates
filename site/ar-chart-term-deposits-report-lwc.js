@@ -104,6 +104,28 @@
         return new Date(Number(ts) * 1000).toISOString().slice(0, 10);
     }
 
+    // Fill a sparse step-function array forward to daily resolution.
+    // Returns [{date, value}] for every calendar day in [startYmd, endYmd],
+    // carrying the last known value forward. Guarantees uniform data density
+    // across the full x-axis range regardless of LWC time-scale mode.
+    function fillForwardDaily(points, dateKey, valKey, startYmd, endYmd) {
+        var result = [];
+        var cur = new Date(startYmd + 'T00:00:00Z');
+        var end = new Date(endYmd + 'T00:00:00Z');
+        var last = null;
+        var idx = 0;
+        while (cur <= end) {
+            var d = cur.toISOString().slice(0, 10);
+            while (idx < points.length && points[idx][dateKey] <= d) {
+                last = points[idx][valKey];
+                idx++;
+            }
+            if (last !== null) result.push({ date: d, value: last });
+            cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+        return result;
+    }
+
     function subtractMonths(ymd, n) {
         var d = new Date(ymd + 'T12:00:00Z');
         d.setUTCMonth(d.getUTCMonth() - n);
@@ -398,7 +420,10 @@
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });
-            cpiSeriesApi.setData(cpiPts.map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; }));
+            cpiSeriesApi.setData(
+                fillForwardDaily(cpiPts, 'date', 'value', rbaStart, ctxMax)
+                    .map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; })
+            );
         }
 
         // ── Bank lines ────────────────────────────────────────────────────────
@@ -451,7 +476,10 @@
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });
-            rbaSeriesApi.setData(rbaData.points.map(function (p) { return { time: ymdToUtc(p.date), value: p.rate }; }));
+            rbaSeriesApi.setData(
+                fillForwardDaily(rbaData.points, 'date', 'rate', rbaStart, ctxMax)
+                    .map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; })
+            );
         }
 
         chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
