@@ -20,7 +20,8 @@ import { handlePublicTriggerRun } from './trigger-run'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore, withPublicCache } from '../utils/http'
 import { buildListMeta, setCsvMetaHeaders, sourceMixFromRows } from '../utils/response-meta'
-import { paginateRows, parseCursorOffset, parsePageSize } from '../utils/cursor-pagination'
+import { PUBLIC_EXPORT_MAX_EXPLICIT_LIMIT } from '../constants'
+import { paginateRows, parseCursorOffset, parseOptionalExportLimit, parsePageSize } from '../utils/cursor-pagination'
 import { parseSourceMode } from '../utils/source-mode'
 import { handlePublicRunStatus } from './public-run-status'
 import { querySavingsRateChangeIntegrity, querySavingsRateChanges } from '../db/rate-change-log'
@@ -411,7 +412,7 @@ savingsPublicRoutes.get('/export', async (c) => {
   if (format !== 'csv' && format !== 'json') {
     return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
   }
-  const exportLimit = parsePageSize(String(q.limit || ''), 10000, 10000)
+  const exportLimit = parseOptionalExportLimit(q.limit, PUBLIC_EXPORT_MAX_EXPLICIT_LIMIT)
   const dir = String(q.dir || 'desc').toLowerCase()
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
@@ -434,7 +435,8 @@ savingsPublicRoutes.get('/export', async (c) => {
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
     sourceMode,
-  }, exportLimit)
+    ...(exportLimit != null ? { limit: exportLimit } : {}),
+  })
   const meta = buildListMeta({
     sourceMode,
     totalRows: total,

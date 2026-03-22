@@ -4,6 +4,14 @@ export function parseCursorOffset(value: string | undefined): number {
   return Math.max(0, Math.floor(parsed))
 }
 
+/** When absent or blank, export all matching rows; otherwise clamp to [1, maxExplicit]. */
+export function parseOptionalExportLimit(value: string | undefined, maxExplicit: number): number | undefined {
+  if (value === undefined) return undefined
+  const trimmed = String(value).trim()
+  if (trimmed === '') return undefined
+  return parsePageSize(trimmed, 1, maxExplicit)
+}
+
 export function parsePageSize(value: string | undefined, fallback = 1000, max = 1000): number {
   const trimmed = String(value ?? '').trim()
   // Number('') is 0 in JS; empty must mean "use default", not "clamp to min page size 1".

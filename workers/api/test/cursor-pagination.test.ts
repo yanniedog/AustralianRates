@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCursorOffset, parsePageSize } from '../src/utils/cursor-pagination'
+import { parseCursorOffset, parseOptionalExportLimit, parsePageSize } from '../src/utils/cursor-pagination'
 
 describe('parsePageSize', () => {
   it('uses fallback when limit param is omitted (empty string)', () => {
@@ -21,6 +21,19 @@ describe('parsePageSize', () => {
 
   it('accepts explicit small limits', () => {
     expect(parsePageSize('1', 1000, 1000)).toBe(1)
+  })
+})
+
+describe('parseOptionalExportLimit', () => {
+  it('returns undefined when param is absent or blank (export all)', () => {
+    expect(parseOptionalExportLimit(undefined, 1e6)).toBeUndefined()
+    expect(parseOptionalExportLimit('', 1e6)).toBeUndefined()
+    expect(parseOptionalExportLimit('  ', 1e6)).toBeUndefined()
+  })
+
+  it('parses explicit positive limits capped by maxExplicit', () => {
+    expect(parseOptionalExportLimit('500', 1000)).toBe(500)
+    expect(parseOptionalExportLimit('2000', 1000)).toBe(1000)
   })
 })
 

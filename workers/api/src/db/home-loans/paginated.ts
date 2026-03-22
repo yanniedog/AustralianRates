@@ -2,8 +2,8 @@ import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentCoreRowFields, presentHomeLoanRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { addBankWhere, addRateBoundsWhere, rows } from '../query-common'
+import { PUBLIC_EXPORT_FETCH_CHUNK_SIZE } from '../../constants'
 import {
-  EXPORT_MAX_ROWS,
   MAX_PUBLIC_RATE,
   MIN_CONFIDENCE_ALL,
   MIN_CONFIDENCE_DAILY,
@@ -291,7 +291,6 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
 export async function queryRatesForExport(
   db: D1Database,
   filters: RatesExportFilters,
-  maxRows: number = EXPORT_MAX_ROWS,
 ): Promise<{ data: Array<Record<string, unknown>>; total: number; source_mix: { scheduled: number; manual: number } }> {
   const where: string[] = []; const binds: Array<string | number> = []
 
@@ -352,7 +351,7 @@ export async function queryRatesForExport(
   const sortCol = PAGINATED_SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
   const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
   const orderClause = `ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC`
-  const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(filters.limit) || maxRows)))
+  const chunkSize = Math.max(1, Math.floor(PUBLIC_EXPORT_FETCH_CHUNK_SIZE))
 
   const countSql = `
     SELECT COUNT(*) AS total
@@ -435,7 +434,7 @@ export async function queryRatesForExport(
       AND pps.product_id = h.product_id
     ${whereClause}
     ${orderClause}
-    LIMIT ?
+    LIMIT ? OFFSET ?
   `
   const dataSqlNoPps = `
     SELECT
@@ -489,29 +488,25 @@ export async function queryRatesForExport(
     FROM historical_loan_rates h
     ${whereClauseNoPps}
     ${orderClause}
-    LIMIT ?
+    LIMIT ? OFFSET ?
   `
 
-  let countResult: { total: number } | null; let sourceResult: D1Result<{ run_source: string; n: number }>; let dataResult: D1Result<Record<string, unknown>>
-
+  let countResult: { total: number } | null
+  let sourceResult: D1Result<{ run_source: string; n: number }>
   try {
-    const [c, s, d] = await Promise.all([
+    const [c, s] = await Promise.all([
       db.prepare(countSql).bind(...binds).first<{ total: number }>(),
       db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
-      db.prepare(dataSql).bind(...binds, limit).all<Record<string, unknown>>(),
     ])
     countResult = c ?? null
     sourceResult = s
-    dataResult = d
   } catch {
-    const [c, s, d] = await Promise.all([
+    const [c, s] = await Promise.all([
       db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>(),
       db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>(),
-      db.prepare(dataSqlNoPps).bind(...binds, limit).all<Record<string, unknown>>(),
     ])
     countResult = c ?? null
     sourceResult = s
-    dataResult = d
   }
 
   const total = Number(countResult?.total ?? 0)
@@ -521,7 +516,32 @@ export async function queryRatesForExport(
     if (String(row.run_source).toLowerCase() === 'manual') manual += Number(row.n)
     else scheduled += Number(row.n)
   }
-  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
+
+  const cap =
+    filters.limit != null && Number.isFinite(Number(filters.limit))
+      ? Math.min(total, Math.max(0, Math.floor(Number(filters.limit))))
+      : total
+  const rawRows: Record<string, unknown>[] = []
+  let dataQuery = dataSql
+  let offset = 0
+  while (offset < cap) {
+    const take = Math.min(chunkSize, cap - offset)
+    if (take <= 0) break
+    let dataResult: D1Result<Record<string, unknown>>
+    try {
+      dataResult = await db.prepare(dataQuery).bind(...binds, take, offset).all<Record<string, unknown>>()
+    } catch {
+      dataQuery = dataSqlNoPps
+      dataResult = await db.prepare(dataQuery).bind(...binds, take, offset).all<Record<string, unknown>>()
+    }
+    const chunk = rows(dataResult)
+    if (chunk.length === 0) break
+    rawRows.push(...chunk)
+    offset += chunk.length
+    if (chunk.length < take) break
+  }
+
+  const hydratedData = await hydrateCdrDetailJson(db, rawRows)
   return {
     data: hydratedData.map((row) => presentCoreRowFields(row)),
     total,

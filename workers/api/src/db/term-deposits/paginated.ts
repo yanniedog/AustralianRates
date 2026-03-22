@@ -1,3 +1,4 @@
+import { PUBLIC_EXPORT_FETCH_CHUNK_SIZE } from '../../constants'
 import { presentCoreRowFields, presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { rows } from '../query-common'
@@ -105,11 +106,11 @@ export async function queryTdCollectionDateRange(
   return { startDate: row.min_date, endDate: row.max_date }
 }
 
-export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilters, maxRows = 10000) {
+export async function queryTdForExport(db: D1Database, filters: TdPaginatedFilters) {
   const { clause: whereClause, binds } = buildWhere(filters)
   const sortCol = SORT_COLUMNS[filters.sort ?? ''] ?? 'h.collection_date'
   const sortDir = filters.dir === 'desc' ? 'DESC' : 'ASC'
-  const limit = Math.min(maxRows, Math.max(1, Math.floor(Number(maxRows))))
+  const chunkSize = Math.max(1, Math.floor(PUBLIC_EXPORT_FETCH_CHUNK_SIZE))
 
   const countSql = `
     SELECT COUNT(*) AS total
@@ -153,24 +154,38 @@ FROM historical_term_deposit_rates h
       AND pps.product_id = h.product_id
     ${whereClause}
     ORDER BY ${sortCol} ${sortDir}, h.bank_name ASC, h.product_name ASC
-    LIMIT ?
+    LIMIT ? OFFSET ?
   `
 
-  const [countResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(...binds).first<{ total: number }>(),
-    db.prepare(dataSql).bind(...binds, limit).all<Record<string, unknown>>(),
-  ])
+  const countResult = await db.prepare(countSql).bind(...binds).first<{ total: number }>()
+  const total = Number(countResult?.total ?? 0)
+  const cap =
+    filters.limit != null && Number.isFinite(Number(filters.limit))
+      ? Math.min(total, Math.max(0, Math.floor(Number(filters.limit))))
+      : total
+  const rawRows: Record<string, unknown>[] = []
+  let offset = 0
+  while (offset < cap) {
+    const take = Math.min(chunkSize, cap - offset)
+    if (take <= 0) break
+    const dataResult = await db.prepare(dataSql).bind(...binds, take, offset).all<Record<string, unknown>>()
+    const chunk = rows(dataResult)
+    if (chunk.length === 0) break
+    rawRows.push(...chunk)
+    offset += chunk.length
+    if (chunk.length < take) break
+  }
 
   let scheduled = 0
   let manual = 0
-  for (const row of rows(dataResult)) {
+  for (const row of rawRows) {
     if (String((row as Record<string, unknown>).run_source ?? 'scheduled').toLowerCase() === 'manual') manual += 1
     else scheduled += 1
   }
-  const hydratedData = await hydrateCdrDetailJson(db, rows(dataResult))
+  const hydratedData = await hydrateCdrDetailJson(db, rawRows)
   return {
     data: hydratedData.map((row) => presentCoreRowFields(row)),
-    total: Number(countResult?.total ?? 0),
+    total,
     source_mix: { scheduled, manual },
   }
 }

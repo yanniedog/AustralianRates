@@ -104,4 +104,3 @@ export const MAX_PUBLIC_RATE = 25
 export const MIN_CONFIDENCE_ALL = 0.85
 export const MIN_CONFIDENCE_DAILY = 0.9
 export const MIN_CONFIDENCE_HISTORICAL = 0.82
-export const EXPORT_MAX_ROWS = 10000

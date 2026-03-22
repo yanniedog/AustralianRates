@@ -9,6 +9,8 @@ export const MIN_CONFIDENCE_HISTORICAL = 0.65
 export type TdPaginatedFilters = {
   page?: number
   size?: number
+  /** Optional export cap; omitted means all matching rows. */
+  limit?: number
   startDate?: string
   endDate?: string
   bank?: string

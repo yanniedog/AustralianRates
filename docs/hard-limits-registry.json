@@ -220,12 +220,12 @@
     "component": "workers/api",
     "category": "query",
     "scope": "legacy synchronous export endpoints",
-    "current_value": 10000,
+    "current_value": "unbounded default; optional limit capped at PUBLIC_EXPORT_MAX_EXPLICIT_LIMIT; chunked SELECT PUBLIC_EXPORT_FETCH_CHUNK_SIZE",
     "unit": "rows",
-    "risk_class": "abuse_guardrail",
-    "replacement_behavior": "Use `POST /exports` plus artifact download routes for complete public exports.",
-    "rationale": "Legacy sync exports remain for compatibility, but full retrieval must use async export jobs.",
-    "source_file": "workers/api/src/db/queries.ts"
+    "risk_class": "platform_budget",
+    "replacement_behavior": "Full filtered datasets are streamed via chunked D1 reads; optional `limit` caps response size.",
+    "rationale": "Default public export returns all matching rows; explicit limits remain for abuse control.",
+    "source_file": "workers/api/src/db/home-loans/paginated.ts"
   },
   {
     "id": "api.admin.db_rows_limit",
