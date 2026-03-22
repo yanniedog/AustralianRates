@@ -93,6 +93,17 @@
     // ── Date helpers ──────────────────────────────────────────────────────────
     function todayYmd() { return new Date().toISOString().slice(0, 10); }
 
+    // Convert YYYY-MM-DD → UTCTimestamp (seconds since epoch).
+    // Using UTCTimestamp forces LWC to use proportional calendar-time scaling.
+    function ymdToUtc(ymd) {
+        var p = ymd.split('-');
+        return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 1000;
+    }
+
+    function utcToYmd(ts) {
+        return new Date(Number(ts) * 1000).toISOString().slice(0, 10);
+    }
+
     function subtractMonths(ymd, n) {
         var d = new Date(ymd + 'T12:00:00Z');
         d.setUTCMonth(d.getUTCMonth() - n);
@@ -222,18 +233,21 @@
         var rbaData = buildRbaSeries(rbaHistory || []);
         var cpiPts  = buildCpiSeries(cpiData);
 
-        // Clip RBA points to context window with carry-back at ctxMin
+        // Use CPI's earliest date as the RBA start anchor so both series
+        // begin at the same point on the x-axis.
+        var rbaStart = cpiPts.length ? cpiPts[0].date : ctxMin;
+        // Clip RBA points to [rbaStart, ctxMax] with carry-back at rbaStart
         // (decisions array stays unclipped — used for overlay markers and carry-rate lookup)
         (function () {
             var all = rbaData.points;
             var carry = null, inWindow = [];
             all.forEach(function (p) {
-                if (p.date < ctxMin) carry = p;
+                if (p.date < rbaStart) carry = p;
                 else if (p.date <= ctxMax) inWindow.push(p);
             });
             var carryRate = carry ? carry.rate : (inWindow.length ? inWindow[0].rate : null);
             var pts = [];
-            if (carryRate != null) pts.push({ date: ctxMin, rate: carryRate });
+            if (carryRate != null) pts.push({ date: rbaStart, rate: carryRate });
             inWindow.forEach(function (p) { pts.push(p); });
             rbaData.points = pts;
         }());
@@ -305,7 +319,7 @@
             },
             localization: {
                 priceFormatter: function (p) { return Number(p).toFixed(2) + '%'; },
-                timeFormatter: function (time) { return fmtMonYr(String(time).slice(0, 10)); },
+                timeFormatter: function (time) { return fmtMonYr(utcToYmd(time)); },
             },
             handleScroll:  { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
             handleScale:   { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
@@ -325,7 +339,7 @@
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });
-            cpiSeriesApi.setData(cpiPts.map(function (p) { return { time: p.date, value: p.value }; }));
+            cpiSeriesApi.setData(cpiPts.map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; }));
         }
 
         // ── Bank lines ────────────────────────────────────────────────────────
@@ -351,7 +365,7 @@
                 var lastPt = rawPts[rawPts.length - 1];
                 if (lastPt.date < ctxMax) rawPts = rawPts.concat([{ date: ctxMax, value: lastPt.value }]);
             }
-            var data = rawPts.map(function (p) { return { time: p.date, value: p.value }; });
+            var data = rawPts.map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; });
             var ser = chart.addSeries(L.LineSeries, {
                 color:                   bank.color,
                 lineWidth:               compact ? 1.5 : 2,
@@ -379,11 +393,10 @@
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });
-            rbaSeriesApi.setData(rbaData.points.map(function (p) { return { time: p.date, value: p.rate }; }));
+            rbaSeriesApi.setData(rbaData.points.map(function (p) { return { time: ymdToUtc(p.date), value: p.rate }; }));
         }
 
-        // Fit to 18-month context window
-        chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
+        chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
 
         // ── Persistent legend strip (absolute inside mount, sits in bottom scale margin) ──
         var legendEl = document.createElement('div');
@@ -486,14 +499,14 @@
         }
 
         mount.addEventListener('mouseleave', function () { legendEl.innerHTML = defaultLegendHTML; });
-        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax }); });
+        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) }); });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
                 legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-            var time = String(param.time).slice(0, 10);
+            var time = utcToYmd(param.time);
             var cpiVal = cpiAtDate(cpiPts, time);
             var rbaVal = null;
             if (rbaSeriesApi) {

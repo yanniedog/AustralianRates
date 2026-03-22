@@ -87,6 +87,19 @@
         return new Date().toISOString().slice(0, 10);
     }
 
+    // Convert YYYY-MM-DD → UTCTimestamp (seconds since epoch).
+    // Using UTCTimestamp instead of date strings forces LWC to use proportional
+    // calendar-time scaling, so each calendar day gets equal pixel width regardless
+    // of data density — fixing the compressed/stretched x-axis.
+    function ymdToUtc(ymd) {
+        var p = ymd.split('-');
+        return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 1000;
+    }
+
+    function utcToYmd(ts) {
+        return new Date(Number(ts) * 1000).toISOString().slice(0, 10);
+    }
+
     function subtractMonths(ymd, count) {
         var d = new Date(ymd + 'T12:00:00Z');
         d.setUTCMonth(d.getUTCMonth() - count);
@@ -264,16 +277,19 @@
         var rbaData = buildRbaSeries(rbaHistory || []);
         var cpiPoints = buildCpiSeries(cpiData || []);
 
+        // Use CPI's earliest date as the RBA start anchor so both series
+        // begin at the same point on the x-axis.
+        var rbaStart = cpiPoints.length ? cpiPoints[0].date : ctxMin;
         (function clipRba() {
             var carry = null;
             var inWindow = [];
             rbaData.points.forEach(function (point) {
-                if (point.date < ctxMin) carry = point;
+                if (point.date < rbaStart) carry = point;
                 else if (point.date <= ctxMax) inWindow.push(point);
             });
             var next = [];
             var carryRate = carry ? carry.rate : (inWindow.length ? inWindow[0].rate : null);
-            if (carryRate != null) next.push({ date: ctxMin, rate: carryRate });
+            if (carryRate != null) next.push({ date: rbaStart, rate: carryRate });
             next = next.concat(inWindow);
             if (next.length) {
                 var last = next[next.length - 1];
@@ -359,7 +375,7 @@
             },
             localization: {
                 priceFormatter: function (price) { return Number(price).toFixed(2) + '%'; },
-                timeFormatter: function (time) { return fmtMonYr(String(time).slice(0, 10)); }
+                timeFormatter: function (time) { return fmtMonYr(utcToYmd(time)); }
             },
             handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
             handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true }
@@ -379,14 +395,14 @@
                 crosshairMarkerRadius: 3
             });
             cpiSeriesApi.setData(cpiPoints.map(function (point) {
-                return { time: point.date, value: point.value };
+                return { time: ymdToUtc(point.date), value: point.value };
             }));
         }
 
         var bankSeriesApis = [];
         visibleBanks.forEach(function (bank) {
             var data = clipSteppedPoints(bank.points, ctxMin, ctxMax).map(function (point) {
-                return { time: point.date, value: point.value };
+                return { time: ymdToUtc(point.date), value: point.value };
             });
             if (!data.length) return;
             var seriesApi = chart.addSeries(L.LineSeries, {
@@ -416,11 +432,11 @@
                 crosshairMarkerRadius: 3
             });
             rbaSeriesApi.setData(rbaData.points.map(function (point) {
-                return { time: point.date, value: point.rate };
+                return { time: ymdToUtc(point.date), value: point.rate };
             }));
         }
 
-        chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
+        chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
 
         // ── Persistent legend strip (absolute inside mount, sits in bottom scale margin) ──
         var legendEl = document.createElement('div');
@@ -526,7 +542,7 @@
             legendEl.innerHTML = defaultLegendHTML;
         });
         mount.addEventListener('dblclick', function () {
-            chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
+            chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
         });
 
         chart.subscribeCrosshairMove(function (param) {
@@ -534,7 +550,7 @@
                 legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-            var time = String(param.time).slice(0, 10);
+            var time = utcToYmd(param.time);
             var rbaValue = null;
             var cpiValue = cpiAtDate(cpiPoints, time);
             if (rbaSeriesApi) {
