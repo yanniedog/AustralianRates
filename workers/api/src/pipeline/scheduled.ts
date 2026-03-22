@@ -4,6 +4,7 @@ import {
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
+import { collectCpiFromRbaG1 } from '../ingest/cpi'
 import { runCoverageGapAudit } from './coverage-gap-audit'
 import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
@@ -112,10 +113,9 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     })
   }
 
-  // Rolling 7-day RBA backfill — runs regardless of ingest pause state.
-  // Fetches the HTML decisions page (primary) or CSV (fallback) once and corrects every
-  // collection_date in the window. If the RBA announced a rate change within the last week
-  // and a previous run stored the wrong rate, this self-heals without manual intervention.
+  // RBA + CPI collection — runs regardless of ingest pause state so rate changes are never missed.
+  // RBA: rolling 7-day backfill self-heals any dates that stored a stale rate.
+  // CPI: full quarter upsert (idempotent) — always reflects the latest ABS release.
   try {
     const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -124,6 +124,14 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   } catch (error) {
     log.warn('scheduler', 'RBA cash rate rolling backfill failed', {
       code: 'rba_collection_failed',
+      context: (error as Error)?.message || String(error),
+    })
+  }
+  try {
+    await collectCpiFromRbaG1(env.DB, env)
+  } catch (error) {
+    log.warn('scheduler', 'CPI collection failed', {
+      code: 'cpi_collection_failed',
       context: (error as Error)?.message || String(error),
     })
   }

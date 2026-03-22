@@ -1,10 +1,9 @@
-const CPI_SOURCE_URL = 'https://www.rba.gov.au/statistics/tables/csv/g1-data.csv'
-
 export async function upsertCpiData(
   db: D1Database,
   input: {
     quarterDate: string
     annualChange: number
+    sourceUrl: string
   },
 ): Promise<void> {
   await db
@@ -16,7 +15,7 @@ export async function upsertCpiData(
          source_url    = excluded.source_url,
          fetched_at    = CURRENT_TIMESTAMP`,
     )
-    .bind(input.quarterDate, input.annualChange, CPI_SOURCE_URL)
+    .bind(input.quarterDate, input.annualChange, input.sourceUrl)
     .run()
 }
 

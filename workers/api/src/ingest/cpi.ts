@@ -156,7 +156,7 @@ export async function collectCpiFromRbaG1(
       const points = parseMeasuresCpiHtml(await response.text())
       if (points.length > 0) {
         for (const p of points) {
-          await upsertCpiData(db, { quarterDate: p.quarterDate, annualChange: p.annualChange })
+          await upsertCpiData(db, { quarterDate: p.quarterDate, annualChange: p.annualChange, sourceUrl: RBA_MEASURES_CPI_URL })
         }
         return { ok: true, upserted: points.length, sourceUrl: RBA_MEASURES_CPI_URL }
       }
@@ -189,7 +189,7 @@ export async function collectCpiFromRbaG1(
       return { ok: false, upserted: 0, sourceUrl: RBA_G1_DATA_URL, message: 'G1 CSV returned no parseable CPI points' }
     }
     for (const p of points) {
-      await upsertCpiData(db, { quarterDate: p.quarterDate, annualChange: p.annualChange })
+      await upsertCpiData(db, { quarterDate: p.quarterDate, annualChange: p.annualChange, sourceUrl: RBA_G1_DATA_URL })
     }
     return { ok: true, upserted: points.length, sourceUrl: RBA_G1_DATA_URL }
   } catch (error) {
