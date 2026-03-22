@@ -93,6 +93,10 @@
         setControlVisibility(els.chartGroup, !!caps.groupField, 'Grouping is only available where implemented for this view.');
         setControlVisibility(els.chartType, !!caps.chartType, 'Curve style only applies to the Curve view.');
         setControlVisibility(els.chartRepresentation, !!caps.representation, 'This view always uses daily snapshots.');
+        var engineRow = document.querySelector('.chart-engine-row');
+        var v = String(view || '');
+        var engineForced = v === 'economicReport' || v === 'homeLoanReport' || v === 'termDepositReport';
+        if (engineRow) engineRow.hidden = engineForced;
     }
 
     function chartEngineStorageKey() {

@@ -334,7 +334,8 @@
             },
             rightPriceScale: {
                 borderColor: t.axis,
-                scaleMargins: { top: 0.06, bottom: 0.12 }
+                scaleMargins: { top: 0.06, bottom: 0.12 },
+                lastValueVisible: false
             },
             timeScale: {
                 borderColor: t.axis,
@@ -371,7 +372,7 @@
                 lineWidth: 2,
                 lineStyle: LineStyle.Dashed,
                 lineType: LineType.WithSteps,
-                title: 'CPI',
+                title: '',
                 priceLineVisible: false,
                 lastValueVisible: false,
                 crosshairMarkerVisible: true,
@@ -392,7 +393,7 @@
                 color: bank.color,
                 lineWidth: compact ? 1.5 : 2,
                 lineType: LineType.WithSteps,
-                title: bank.short,
+                title: '',
                 priceLineVisible: false,
                 lastValueVisible: false,
                 crosshairMarkerVisible: true,
@@ -408,7 +409,7 @@
                 color: t.rba,
                 lineWidth: 2,
                 lineType: LineType.WithSteps,
-                title: 'RBA',
+                title: '',
                 priceLineVisible: false,
                 lastValueVisible: false,
                 crosshairMarkerVisible: true,
