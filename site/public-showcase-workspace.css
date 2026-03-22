@@ -462,6 +462,8 @@ body.ar-public .market-intro-step:nth-child(3) {
     }
 
     body.ar-public .chart-figure .terminal-chart-surface {
+        display: flex;
+        flex-direction: column;
         flex: 1 1 0;
         min-height: 0;
         overflow: hidden;
@@ -470,12 +472,17 @@ body.ar-public .market-intro-step:nth-child(3) {
     body.ar-public .terminal-chart-output,
     body.ar-public #chart-output {
         flex: 1 1 0;
-        min-height: 0;
+        min-height: 140px;
     }
 
     body.ar-public #chart-detail-output {
         flex: 1 1 0;
         min-height: 0;
+    }
+
+    /* Cap the series rail so the chart canvas keeps enough vertical space */
+    body.ar-public .chart-selection-rail {
+        max-height: min(120px, 18vh);
     }
 
 }
