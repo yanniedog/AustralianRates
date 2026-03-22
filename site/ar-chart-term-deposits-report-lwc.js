@@ -290,6 +290,7 @@
 
         var ctxMin = subtractMonths(bankMax, 18);
         var ctxMax = bankMax;
+        var viewStart = subtractMonths(ctxMax, 3);
 
         var rbaData = buildRbaSeries(rbaHistory || []);
         var cpiPts  = buildCpiSeries(cpiData);
@@ -482,7 +483,7 @@
             );
         }
 
-        chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
+        chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) });
 
         // ── Persistent legend strip (absolute inside mount, sits in bottom scale margin) ──
         var legendEl = document.createElement('div');
@@ -585,7 +586,7 @@
         }
 
         mount.addEventListener('mouseleave', function () { legendEl.innerHTML = defaultLegendHTML; });
-        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) }); });
+        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) }); });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
@@ -625,7 +626,7 @@
             var w = entry.contentRect.width;
             var h = Math.max(200, entry.contentRect.height);
             chart.resize(w, h);
-            chart.timeScale().setVisibleRange({ from: ymdToUtc(rbaStart), to: ymdToUtc(ctxMax) });
+            chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) });
         });
         ro.observe(mount);
 
