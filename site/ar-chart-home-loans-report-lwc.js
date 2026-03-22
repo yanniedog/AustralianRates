@@ -294,12 +294,10 @@
         var visibleBanks = banks.slice(0, maxBanks);
 
         container.innerHTML = '';
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
         var mount = document.createElement('div');
         mount.className = 'lwc-chart-mount lwc-chart-mount--hl-report';
         mount.style.width = '100%';
-        mount.style.flex = '1';
+        mount.style.height = '100%';
         mount.style.minHeight = '400px';
         mount.style.position = 'relative';
         container.appendChild(mount);
@@ -336,7 +334,7 @@
             },
             rightPriceScale: {
                 borderColor: t.axis,
-                scaleMargins: { top: 0.06, bottom: 0.06 }
+                scaleMargins: { top: 0.06, bottom: 0.12 }
             },
             timeScale: {
                 borderColor: t.axis,
@@ -423,20 +421,27 @@
 
         chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
 
-        // ── Persistent legend strip (below chart, no overlap) ─────────────────
+        // ── Persistent legend strip (absolute inside mount, sits in bottom scale margin) ──
         var legendEl = document.createElement('div');
         legendEl.style.cssText = [
+            'position:absolute',
+            'bottom:26px',
+            'left:8px',
+            'right:65px',
             'display:flex',
             'flex-wrap:wrap',
             'align-items:center',
-            'gap:3px 10px',
-            'padding:5px 8px',
-            'font-size:10px',
-            'line-height:1.6',
+            'gap:2px 8px',
+            'padding:3px 6px',
+            'font-size:9.5px',
+            'line-height:1.5',
             "font-family:'Space Grotesk',system-ui,sans-serif",
             'color:' + t.ttText,
-            'border-top:1px solid ' + t.grid,
-            'flex-shrink:0'
+            'background:' + t.ttBg,
+            'border:1px solid ' + t.ttBorder,
+            'border-radius:5px',
+            'pointer-events:none',
+            'z-index:5'
         ].join(';');
         var sortedLegend = bankSeriesApis.slice().sort(function (a, b) {
             return (b.lastValue != null ? b.lastValue : -Infinity) - (a.lastValue != null ? a.lastValue : -Infinity);
@@ -471,7 +476,7 @@
                 '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiLast).toFixed(1) + '%</span>';
             legendEl.appendChild(cpiItem);
         }
-        container.appendChild(legendEl);
+        mount.appendChild(legendEl);
 
         var tooltipEl = document.createElement('div');
         tooltipEl.style.cssText = [
