@@ -77,6 +77,21 @@ function collectConditionsText(rate: JsonRecord, detail: JsonRecord): string {
   return parts.filter(Boolean).join(' | ')
 }
 
+function isBonusOnlyTermDepositRate(rate: JsonRecord, interestRate: number): boolean {
+  const additionalInfo = getText(rate.additionalInfo).toLowerCase()
+  const additionalValue = getText(rate.additionalValue).toLowerCase()
+  const depositRateType = getText(rate.depositRateType || rate.rateType || rate.type).toLowerCase()
+  const applicabilityText = `${getText(rate.rateApplicabilityType)} ${getText(rate.applicationType)}`.toLowerCase()
+  const bonusHint =
+    depositRateType.includes('bonus') ||
+    additionalInfo.includes('online bonus') ||
+    (additionalInfo.includes('bonus') && additionalInfo.includes('additional')) ||
+    (additionalValue.includes('bonus') && additionalValue.includes('additional'))
+  const onlineHint = applicabilityText.includes('online') || additionalInfo.includes('online')
+  const maturityHint = applicabilityText.includes('maturity')
+  return bonusHint && onlineHint && maturityHint && interestRate <= 0.5
+}
+
 function parseMonthlyFeeFromDetail(detail: JsonRecord): number | null {
   const fees = asArray(detail.fees).filter(isRecord)
   for (const fee of fees) {
@@ -173,6 +188,7 @@ export function parseTermDepositRatesFromDetail(input: {
   for (const rate of rates) {
     const interestRate = parseSavingsInterestRate(rate.rate ?? rate.interestRate ?? rate.value)
     if (interestRate == null) continue
+    if (isBonusOnlyTermDepositRate(rate, interestRate)) continue
 
     const additionalValue = getText(rate.additionalValue)
     const termMonths = parseTermMonths(additionalValue) ?? parseTermMonths(getText(rate.name)) ?? parseTermMonths(productName)

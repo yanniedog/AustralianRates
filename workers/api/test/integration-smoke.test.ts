@@ -70,11 +70,16 @@ describe('api route integration smoke', () => {
   })
 
   it('requires authentication for admin CDR audit endpoints', async () => {
-    for (const endpoint of ['/api/home-loan-rates/admin/cdr-audit', '/api/home-loan-rates/admin/cdr-audit/run']) {
+    for (const endpoint of [
+      '/api/home-loan-rates/admin/cdr-audit',
+      '/api/home-loan-rates/admin/cdr-audit/run',
+      '/api/home-loan-rates/admin/repairs/known-cdr-anomalies',
+    ]) {
       const method = endpoint.endsWith('/run') ? 'POST' : 'GET'
+      const requestMethod = endpoint.endsWith('/known-cdr-anomalies') ? 'POST' : method
       const fetchHandler = worker.fetch?.bind(worker)
       if (!fetchHandler) throw new Error('worker fetch handler is missing')
-      const request = new Request(`https://example.com${endpoint}`, { method }) as unknown as Request<
+      const request = new Request(`https://example.com${endpoint}`, { method: requestMethod }) as unknown as Request<
         unknown,
         IncomingRequestCfProperties<unknown>
       >

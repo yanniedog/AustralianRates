@@ -128,7 +128,12 @@ export async function upsertLatestHomeLoanSeries(db: D1Database, row: HomeRow): 
          run_id = excluded.run_id,
          run_source = excluded.run_source,
          is_removed = excluded.is_removed,
-         removed_at = excluded.removed_at`,
+         removed_at = excluded.removed_at
+       WHERE excluded.collection_date > latest_home_loan_series.collection_date
+          OR (
+            excluded.collection_date = latest_home_loan_series.collection_date
+            AND excluded.parsed_at >= latest_home_loan_series.parsed_at
+          )`,
     )
     .bind(
       row.seriesKey,
@@ -203,7 +208,12 @@ export async function upsertLatestSavingsSeries(db: D1Database, row: SavingsRow)
          run_id = excluded.run_id,
          run_source = excluded.run_source,
          is_removed = excluded.is_removed,
-         removed_at = excluded.removed_at`,
+         removed_at = excluded.removed_at
+       WHERE excluded.collection_date > latest_savings_series.collection_date
+          OR (
+            excluded.collection_date = latest_savings_series.collection_date
+            AND excluded.parsed_at >= latest_savings_series.parsed_at
+          )`,
     )
     .bind(
       row.seriesKey,
@@ -275,7 +285,12 @@ export async function upsertLatestTdSeries(db: D1Database, row: TdRow): Promise<
          run_id = excluded.run_id,
          run_source = excluded.run_source,
          is_removed = excluded.is_removed,
-         removed_at = excluded.removed_at`,
+         removed_at = excluded.removed_at
+       WHERE excluded.collection_date > latest_td_series.collection_date
+          OR (
+            excluded.collection_date = latest_td_series.collection_date
+            AND excluded.parsed_at >= latest_td_series.parsed_at
+          )`,
     )
     .bind(
       row.seriesKey,

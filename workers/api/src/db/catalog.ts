@@ -23,16 +23,57 @@ export async function upsertProductCatalog(db: D1Database, input: CommonObserveI
          first_seen_at, last_seen_at, is_removed, removed_at, last_successful_run_id
        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, NULL, ?10)
        ON CONFLICT(dataset_kind, bank_name, product_id) DO UPDATE SET
-         product_code = excluded.product_code,
-         latest_product_name = excluded.latest_product_name,
-         latest_source_url = excluded.latest_source_url,
-         latest_product_url = excluded.latest_product_url,
-         latest_published_at = excluded.latest_published_at,
-         last_seen_collection_date = excluded.last_seen_collection_date,
+         product_code = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.product_code
+           ELSE product_catalog.product_code
+         END,
+         latest_product_name = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.latest_product_name
+           ELSE product_catalog.latest_product_name
+         END,
+         latest_source_url = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.latest_source_url
+           ELSE product_catalog.latest_source_url
+         END,
+         latest_product_url = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.latest_product_url
+           ELSE product_catalog.latest_product_url
+         END,
+         latest_published_at = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.latest_published_at
+           ELSE product_catalog.latest_published_at
+         END,
+         first_seen_collection_date = CASE
+           WHEN excluded.first_seen_collection_date < product_catalog.first_seen_collection_date
+           THEN excluded.first_seen_collection_date
+           ELSE product_catalog.first_seen_collection_date
+         END,
+         last_seen_collection_date = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.last_seen_collection_date
+           ELSE product_catalog.last_seen_collection_date
+         END,
          last_seen_at = CURRENT_TIMESTAMP,
-         is_removed = 0,
-         removed_at = NULL,
-         last_successful_run_id = excluded.last_successful_run_id`,
+         is_removed = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN 0
+           ELSE product_catalog.is_removed
+         END,
+         removed_at = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN NULL
+           ELSE product_catalog.removed_at
+         END,
+         last_successful_run_id = CASE
+           WHEN excluded.last_seen_collection_date >= product_catalog.last_seen_collection_date
+           THEN excluded.last_successful_run_id
+           ELSE product_catalog.last_successful_run_id
+         END`,
     )
     .bind(
       input.dataset,
@@ -83,26 +124,107 @@ export async function upsertSeriesCatalog(
          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0, NULL, ?21
        )
        ON CONFLICT(series_key) DO UPDATE SET
-         product_code = excluded.product_code,
-         product_name = excluded.product_name,
-         security_purpose = excluded.security_purpose,
-         repayment_type = excluded.repayment_type,
-         lvr_tier = excluded.lvr_tier,
-         rate_structure = excluded.rate_structure,
-         account_type = excluded.account_type,
-         rate_type = excluded.rate_type,
-         deposit_tier = excluded.deposit_tier,
-         term_months = excluded.term_months,
-         interest_payment = excluded.interest_payment,
-         raw_dimensions_json = excluded.raw_dimensions_json,
-         latest_source_url = excluded.latest_source_url,
-         latest_product_url = excluded.latest_product_url,
-         latest_published_at = excluded.latest_published_at,
-         last_seen_collection_date = excluded.last_seen_collection_date,
+         product_code = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.product_code
+           ELSE series_catalog.product_code
+         END,
+         product_name = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.product_name
+           ELSE series_catalog.product_name
+         END,
+         security_purpose = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.security_purpose
+           ELSE series_catalog.security_purpose
+         END,
+         repayment_type = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.repayment_type
+           ELSE series_catalog.repayment_type
+         END,
+         lvr_tier = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.lvr_tier
+           ELSE series_catalog.lvr_tier
+         END,
+         rate_structure = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.rate_structure
+           ELSE series_catalog.rate_structure
+         END,
+         account_type = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.account_type
+           ELSE series_catalog.account_type
+         END,
+         rate_type = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.rate_type
+           ELSE series_catalog.rate_type
+         END,
+         deposit_tier = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.deposit_tier
+           ELSE series_catalog.deposit_tier
+         END,
+         term_months = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.term_months
+           ELSE series_catalog.term_months
+         END,
+         interest_payment = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.interest_payment
+           ELSE series_catalog.interest_payment
+         END,
+         raw_dimensions_json = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.raw_dimensions_json
+           ELSE series_catalog.raw_dimensions_json
+         END,
+         latest_source_url = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.latest_source_url
+           ELSE series_catalog.latest_source_url
+         END,
+         latest_product_url = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.latest_product_url
+           ELSE series_catalog.latest_product_url
+         END,
+         latest_published_at = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.latest_published_at
+           ELSE series_catalog.latest_published_at
+         END,
+         first_seen_collection_date = CASE
+           WHEN excluded.first_seen_collection_date < series_catalog.first_seen_collection_date
+           THEN excluded.first_seen_collection_date
+           ELSE series_catalog.first_seen_collection_date
+         END,
+         last_seen_collection_date = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.last_seen_collection_date
+           ELSE series_catalog.last_seen_collection_date
+         END,
          last_seen_at = CURRENT_TIMESTAMP,
-         is_removed = 0,
-         removed_at = NULL,
-         last_successful_run_id = excluded.last_successful_run_id`,
+         is_removed = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN 0
+           ELSE series_catalog.is_removed
+         END,
+         removed_at = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN NULL
+           ELSE series_catalog.removed_at
+         END,
+         last_successful_run_id = CASE
+           WHEN excluded.last_seen_collection_date >= series_catalog.last_seen_collection_date
+           THEN excluded.last_successful_run_id
+           ELSE series_catalog.last_successful_run_id
+         END`,
     )
     .bind(
       input.dataset,

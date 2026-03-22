@@ -49,11 +49,27 @@ export async function markProductsSeen(
           last_seen_run_id
         ) VALUES (?1, ?2, ?3, 0, NULL, ?4, CURRENT_TIMESTAMP, ?5)
         ON CONFLICT(section, bank_name, product_id) DO UPDATE SET
-          is_removed = 0,
-          removed_at = NULL,
-          last_seen_collection_date = excluded.last_seen_collection_date,
+          is_removed = CASE
+            WHEN excluded.last_seen_collection_date >= product_presence_status.last_seen_collection_date
+            THEN 0
+            ELSE product_presence_status.is_removed
+          END,
+          removed_at = CASE
+            WHEN excluded.last_seen_collection_date >= product_presence_status.last_seen_collection_date
+            THEN NULL
+            ELSE product_presence_status.removed_at
+          END,
+          last_seen_collection_date = CASE
+            WHEN excluded.last_seen_collection_date >= product_presence_status.last_seen_collection_date
+            THEN excluded.last_seen_collection_date
+            ELSE product_presence_status.last_seen_collection_date
+          END,
           last_seen_at = CURRENT_TIMESTAMP,
-          last_seen_run_id = excluded.last_seen_run_id`,
+          last_seen_run_id = CASE
+            WHEN excluded.last_seen_collection_date >= product_presence_status.last_seen_collection_date
+            THEN excluded.last_seen_run_id
+            ELSE product_presence_status.last_seen_run_id
+          END`,
       )
       .bind(input.section, input.bankName, productId, input.collectionDate, input.runId ?? null)
       .run()

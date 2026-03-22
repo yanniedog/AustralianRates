@@ -28,6 +28,7 @@ import { adminBackupRoutes } from './admin-backups'
 import { adminDownloadRoutes } from './admin-downloads'
 import { adminHardeningRoutes } from './admin-hardening'
 import { adminHealthRoutes } from './admin-health'
+import { adminKnownCdrRepairRoutes } from './admin-known-cdr-repair'
 import { adminLiveCdrRepairRoutes } from './admin-live-cdr-repair'
 import { adminLogRoutes } from './admin-logs'
 import { getMelbourneNowParts } from '../utils/time'
@@ -102,6 +103,7 @@ adminRoutes.route('/', adminClearRoutes)
 adminRoutes.route('/', adminLogRoutes)
 adminRoutes.route('/', adminHealthRoutes)
 adminRoutes.route('/', adminHardeningRoutes)
+adminRoutes.route('/', adminKnownCdrRepairRoutes)
 adminRoutes.route('/', adminLiveCdrRepairRoutes)
 adminRoutes.route('/', adminRemediationRoutes)
 

@@ -320,7 +320,7 @@
                 lineType:                LineType.WithSteps,
                 title:                   'CPI',
                 priceLineVisible:        false,
-                lastValueVisible:        true,
+                lastValueVisible:        false,
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });
@@ -357,7 +357,7 @@
                 lineType:                LineType.WithSteps,
                 title:                   bank.short,
                 priceLineVisible:        false,
-                lastValueVisible:        true,
+                lastValueVisible:        false,
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });
@@ -374,7 +374,7 @@
                 lineType:                LineType.WithSteps,
                 title:                   'RBA',
                 priceLineVisible:        false,
-                lastValueVisible:        true,
+                lastValueVisible:        false,
                 crosshairMarkerVisible:  true,
                 crosshairMarkerRadius:   3,
             });

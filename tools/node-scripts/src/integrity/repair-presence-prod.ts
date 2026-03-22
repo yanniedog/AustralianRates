@@ -1242,6 +1242,22 @@ export function executeRemoteSqlWithFallbackForTest(
   return executeRemoteSql(db, sql, 'test', { spawnRunner, phase: options?.phase, expectedAlias: options?.expectedAlias })
 }
 
+export function executeRemoteSqlCommandForTest(
+  db: string,
+  sql: string,
+  spawnRunner: SpawnRunner,
+): ExecuteCommandResult {
+  return runD1SqlCommand(db, true, sql, 'test', { spawnRunner })
+}
+
+export function executeRemoteSqlFileForTest(
+  db: string,
+  sql: string,
+  spawnRunner: SpawnRunner,
+): ExecuteCommandResult {
+  return runD1SqlFile(db, true, sql, 'test', { spawnRunner })
+}
+
 function asNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'bigint') return Number(value)

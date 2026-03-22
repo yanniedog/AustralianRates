@@ -129,6 +129,14 @@ function parseAnnualFeeFromDetail(detail: JsonRecord): number | null {
   return null
 }
 
+function structuredRepaymentText(rate: JsonRecord, detail: JsonRecord): string {
+  return `${pickText(rate, ['repaymentType'])} ${pickText(detail, ['repaymentType'])}`.trim()
+}
+
+function structuredPurposeText(rate: JsonRecord, detail: JsonRecord): string {
+  return `${pickText(rate, ['loanPurpose'])} ${pickText(detail, ['loanPurpose'])}`.trim()
+}
+
 export function parseRatesFromDetail(input: {
   lender: LenderConfig
   detail: JsonRecord
@@ -175,14 +183,16 @@ export function parseRatesFromDetail(input: {
     if (lendingRateType && EXCLUDED_RATE_TYPES.includes(lendingRateType)) {
       continue
     }
-    const repaymentText = `${lendingRateType} ${pickText(rate, ['repaymentType'])} ${pickText(detail, ['repaymentType'])} ${contextText}`
+    const repaymentHints = structuredRepaymentText(rate, detail)
+    const repaymentText = repaymentHints || `${lendingRateType} ${contextText}`
     const rateStructureText = `${lendingRateType} ${pickText(rate, ['name'])} ${pickText(detail, ['name'])} ${contextText}`
 
-    const rawPurpose = `${pickText(rate, ['loanPurpose'])} ${pickText(detail, ['loanPurpose'])}`.toLowerCase()
+    const structuredPurpose = structuredPurposeText(rate, detail).toLowerCase()
+    const rawPurpose = structuredPurpose || contextLower
     const isBothPurpose = rawPurpose.includes('both')
     const purposes: Array<'owner_occupied' | 'investment'> = isBothPurpose
       ? ['owner_occupied', 'investment']
-      : [normalizeSecurityPurpose(`${rawPurpose} ${contextText}`)]
+      : [normalizeSecurityPurpose(rawPurpose)]
 
     for (const securityPurpose of purposes) {
       const row: NormalizedRateRow = {

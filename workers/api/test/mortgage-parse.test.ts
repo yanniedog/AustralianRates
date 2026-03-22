@@ -27,6 +27,15 @@ const ANZ_LENDER: LenderConfig = {
   seed_rate_urls: [],
 }
 
+const GREAT_SOUTHERN_LENDER: LenderConfig = {
+  code: 'great_southern',
+  name: 'Great Southern Bank',
+  canonical_bank_name: 'Great Southern Bank',
+  register_brand_name: 'Great Southern Bank',
+  products_endpoint: 'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products',
+  seed_rate_urls: [],
+}
+
 // Real CDR detail excerpt captured from ANZ on 2026-03-09.
 const ANZ_SIMPLICITY_PLUS_DETAIL: JsonRecord = {
   productId: '544ad5cb-7e52-4a30-b1d7-a080abafbfac',
@@ -56,6 +65,32 @@ const ANZ_SIMPLICITY_PLUS_DETAIL: JsonRecord = {
           unitOfMeasure: 'DOLLAR',
         },
       ],
+    },
+  ],
+}
+
+// Real-shape Great Southern CDR excerpt seen in production on 2026-03-09.
+const GREAT_SOUTHERN_DETAIL: JsonRecord = {
+  productId: '4200-0211',
+  productCategory: 'RESIDENTIAL_MORTGAGES',
+  name: 'Basic Home Loan',
+  description: 'Residential mortgage product.',
+  lendingRates: [
+    {
+      lendingRateType: 'VARIABLE',
+      rate: '0.075',
+      comparisonRate: '0.056',
+      loanPurpose: 'OWNER_OCCUPIED',
+      repaymentType: 'PRINCIPAL_AND_INTEREST',
+      additionalInfo: 'Principal and interest or construction interest only repayments.',
+    },
+    {
+      lendingRateType: 'DISCOUNT',
+      rate: '0.0196',
+      comparisonRate: null,
+      loanPurpose: 'OWNER_OCCUPIED',
+      repaymentType: 'PRINCIPAL_AND_INTEREST',
+      additionalInfo: 'Discount off standard variable rate.',
     },
   ],
 }
@@ -110,6 +145,26 @@ describe('mortgage detail parsing', () => {
         rateStructure: 'variable',
         interestRate: 7.49,
         comparisonRate: 7.49,
+      }),
+    )
+  })
+
+  it('prefers structured repayment type over freeform eligibility text and drops discount rows', () => {
+    const rows = parseRatesFromDetail({
+      lender: GREAT_SOUTHERN_LENDER,
+      detail: GREAT_SOUTHERN_DETAIL,
+      sourceUrl: 'https://api.open-banking.greatsouthernbank.com.au/cds-au/v1/banking/products/4200-0211',
+      collectionDate: '2026-03-09',
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        productId: '4200-0211',
+        repaymentType: 'principal_and_interest',
+        rateStructure: 'variable',
+        interestRate: 7.5,
+        comparisonRate: 5.6,
       }),
     )
   })
