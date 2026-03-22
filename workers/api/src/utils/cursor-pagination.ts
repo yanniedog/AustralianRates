@@ -5,8 +5,11 @@ export function parseCursorOffset(value: string | undefined): number {
 }
 
 export function parsePageSize(value: string | undefined, fallback = 1000, max = 1000): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
+  const trimmed = String(value ?? '').trim()
+  // Number('') is 0 in JS; empty must mean "use default", not "clamp to min page size 1".
+  if (trimmed === '') return fallback
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
   return Math.max(1, Math.min(max, Math.floor(parsed)))
 }
 
