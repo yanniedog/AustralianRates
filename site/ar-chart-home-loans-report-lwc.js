@@ -479,29 +479,51 @@
         }
         mount.appendChild(legendEl);
 
-        var tooltipEl = document.createElement('div');
-        tooltipEl.style.cssText = [
-            'position:absolute',
-            'z-index:10',
-            'pointer-events:none',
-            'display:none',
-            'top:6px',
-            'right:6px',
-            'background:' + t.ttBg,
-            'border:1px solid ' + t.ttBorder,
-            'border-radius:6px',
-            'padding:6px 10px',
-            'font-size:10px',
-            'line-height:1.5',
-            'color:' + t.ttText,
-            "font-family:'Space Grotesk',system-ui,sans-serif",
-            'box-shadow:0 4px 16px rgba(0,0,0,0.12)',
-            'min-width:120px'
-        ].join(';');
-        mount.appendChild(tooltipEl);
+        var defaultLegendHTML = legendEl.innerHTML;
+
+        function populateLegend(bankItems, rbaValue, cpiValue, dateLabel) {
+            legendEl.innerHTML = '';
+            if (dateLabel) {
+                var dl = document.createElement('span');
+                dl.style.cssText = 'font-size:9px;color:' + t.muted + ';white-space:nowrap;padding-right:6px;border-right:1px solid rgba(148,163,184,0.2);margin-right:2px;flex-shrink:0;';
+                dl.textContent = dateLabel;
+                legendEl.appendChild(dl);
+            }
+            var sorted = bankItems.slice().sort(function (a, b) {
+                return (b.value != null ? b.value : -Infinity) - (a.value != null ? a.value : -Infinity);
+            });
+            sorted.forEach(function (entry) {
+                if (entry.value == null) return;
+                var item = document.createElement('span');
+                item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+                item.innerHTML =
+                    '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
+                    '<span>' + entry.bank.short + '</span>' +
+                    '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.value.toFixed(2) + '%</span>';
+                legendEl.appendChild(item);
+            });
+            if (rbaValue != null) {
+                var rbaItem = document.createElement('span');
+                rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;padding-left:8px;border-left:1px solid rgba(148,163,184,0.2);';
+                rbaItem.innerHTML =
+                    '<span style="display:inline-block;width:10px;height:2px;background:' + t.rba + ';flex-shrink:0;"></span>' +
+                    '<span style="color:' + t.rba + ';">RBA</span>' +
+                    '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaValue.toFixed(2) + '%</span>';
+                legendEl.appendChild(rbaItem);
+            }
+            if (cpiValue != null) {
+                var cpiItem = document.createElement('span');
+                cpiItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+                cpiItem.innerHTML =
+                    '<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
+                    '<span style="color:' + t.cpi + ';">CPI</span>' +
+                    '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiValue).toFixed(1) + '%</span>';
+                legendEl.appendChild(cpiItem);
+            }
+        }
 
         mount.addEventListener('mouseleave', function () {
-            tooltipEl.style.display = 'none';
+            legendEl.innerHTML = defaultLegendHTML;
         });
         mount.addEventListener('dblclick', function () {
             chart.timeScale().setVisibleRange({ from: ctxMin, to: ctxMax });
@@ -509,68 +531,27 @@
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
-                tooltipEl.style.display = 'none';
+                legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-
             var time = String(param.time).slice(0, 10);
             var rbaValue = null;
             var cpiValue = cpiAtDate(cpiPoints, time);
-            var lines = [
-                '<div style="font-size:9.5px;color:' + t.muted + ';letter-spacing:0.03em;margin-bottom:3px;">' + fmtFull(time) + '</div>'
-            ];
-
             if (rbaSeriesApi) {
                 var rbaDataPoint = param.seriesData && param.seriesData.get(rbaSeriesApi);
                 if (rbaDataPoint && Number.isFinite(rbaDataPoint.value)) rbaValue = rbaDataPoint.value;
             }
-
-            var hasBanks = false;
+            var bankItems = [];
             bankSeriesApis.forEach(function (entry) {
                 var point = param.seriesData && param.seriesData.get(entry.api);
                 var value = point && Number.isFinite(point.value) ? point.value : null;
-                if (value == null) return;
-                hasBanks = true;
-                lines.push(
-                    '<div style="display:flex;align-items:center;gap:5px;">' +
-                        '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
-                        '<span style="flex:1;white-space:nowrap;">' + entry.bank.short + '</span>' +
-                        '<span style="font-variant-numeric:tabular-nums;">' + value.toFixed(2) + '%</span>' +
-                    '</div>'
-                );
+                if (value != null) bankItems.push({ bank: entry.bank, value: value });
             });
-
-            if (hasBanks && (rbaValue != null || cpiValue != null)) {
-                lines.push('<div style="border-top:1px solid rgba(148,163,184,0.15);margin:3px 0 2px;"></div>');
-            }
-
-            if (rbaValue != null) {
-                lines.push(
-                    '<div style="display:flex;align-items:center;gap:5px;">' +
-                        '<span style="display:inline-block;width:10px;height:2px;background:' + t.rba + ';flex-shrink:0;"></span>' +
-                        '<span style="flex:1;color:' + t.rba + ';">RBA</span>' +
-                        '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;">' + rbaValue.toFixed(2) + '%</span>' +
-                    '</div>'
-                );
-            }
-
-            if (cpiValue != null) {
-                lines.push(
-                    '<div style="display:flex;align-items:center;gap:5px;">' +
-                        '<span style="display:inline-block;width:10px;height:2px;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
-                        '<span style="flex:1;color:' + t.cpi + ';">CPI</span>' +
-                        '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;">' + Number(cpiValue).toFixed(1) + '%</span>' +
-                    '</div>'
-                );
-            }
-
-            if (lines.length <= 1) {
-                tooltipEl.style.display = 'none';
+            if (!bankItems.length && rbaValue == null && cpiValue == null) {
+                legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-
-            tooltipEl.innerHTML = lines.join('');
-            tooltipEl.style.display = 'block';
+            populateLegend(bankItems, rbaValue, cpiValue, fmtFull(time));
         });
 
         var resizeObserver = new ResizeObserver(function (entries) {
