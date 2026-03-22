@@ -3,7 +3,7 @@ import {
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
-import { collectRbaCashRateForDate } from '../ingest/rba'
+import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { runCoverageGapAudit } from './coverage-gap-audit'
 import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
@@ -112,11 +112,17 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     })
   }
 
-  // Collect RBA cash rate regardless of ingest pause state — rate changes must never be missed.
+  // Rolling 7-day RBA backfill — runs regardless of ingest pause state.
+  // Fetches the HTML decisions page (primary) or CSV (fallback) once and corrects every
+  // collection_date in the window. If the RBA announced a rate change within the last week
+  // and a previous run stored the wrong rate, this self-heals without manual intervention.
   try {
-    await collectRbaCashRateForDate(env.DB, collectionDate, env)
+    const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10)
+    await backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env)
   } catch (error) {
-    log.warn('scheduler', 'RBA cash rate pre-pause collection failed', {
+    log.warn('scheduler', 'RBA cash rate rolling backfill failed', {
       code: 'rba_collection_failed',
       context: (error as Error)?.message || String(error),
     })

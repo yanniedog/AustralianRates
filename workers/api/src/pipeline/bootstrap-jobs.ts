@@ -12,7 +12,7 @@ import {
   setRunEnqueuedSummary,
 } from '../db/run-reports'
 import { getCompletedLenderCodesForDailyCollection } from '../db/lender-dataset-status'
-import { collectRbaCashRateForDate } from '../ingest/rba'
+import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { collectCpiFromRbaG1 } from '../ingest/cpi'
 import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
 import { enqueueBackfillJobs, enqueueDailyLenderJobs, enqueueDailySavingsLenderJobs } from '../queue/producer'
@@ -192,8 +192,11 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       : []
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
+      const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10)
       await Promise.all([
-        collectRbaCashRateForDate(env.DB, collectionDate, env),
+        backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env),
         collectCpiFromRbaG1(env.DB, env),
       ])
       return {
@@ -241,8 +244,11 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
 
     try {
       log.info('pipeline', `Daily run ${runId} starting: collecting RBA/CPI data and refreshing endpoints`, { runId })
+      const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10)
       const [rbaCollection] = await Promise.all([
-        collectRbaCashRateForDate(env.DB, collectionDate, env),
+        backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env),
         collectCpiFromRbaG1(env.DB, env),
       ])
       const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS, 24, env)
