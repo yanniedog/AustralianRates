@@ -830,6 +830,9 @@ async function verifyFilterAccessibleNames(page, results, label) {
         const slice = document.getElementById('scenario');
         if (slice && slice.tagName === 'DETAILS') slice.open = true;
     });
+    await page.waitForSelector('#scenario[open]', { timeout: 20000 });
+    await page.waitForSelector('#filter-bank-search', { state: 'visible', timeout: 15000 });
+    await page.waitForSelector('#filter-security-pads .filter-pad-btn', { timeout: 25000 });
 
     const checks = [
         { name: 'bank search', locator: page.locator('#filter-bank-search'), reject: 'All All' },
@@ -841,7 +844,12 @@ async function verifyFilterAccessibleNames(page, results, label) {
     ];
 
     for (const check of checks) {
-        const snapshot = await check.locator.ariaSnapshot().catch(() => '');
+        const snapshot = await check.locator.evaluate((el) => {
+            if (!el) return '';
+            var al = el.getAttribute('aria-label') || '';
+            var text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+            return [al, text].filter(Boolean).join(' | ');
+        }).catch(() => '');
         if (snapshot && snapshot.indexOf(check.reject) === -1) pass(results, `${label}: ${check.name} keeps a concise accessible name`);
         else fail(results, `${label}: ${check.name} accessible name is noisy (${snapshot || 'missing'})`);
     }

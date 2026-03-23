@@ -1,6 +1,12 @@
 /* Single-column layout: full-width chart workspace. */
+html:has(body.ar-public) {
+    overflow-x: clip;
+    max-width: 100%;
+}
+
 body.ar-public {
     overflow-x: clip;
+    max-width: 100%;
 }
 
 body.ar-public .market-terminal {
