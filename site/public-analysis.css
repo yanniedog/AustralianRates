@@ -201,14 +201,14 @@
 
 .chart-options-details {
     border: 1px solid var(--ar-line);
-    border-radius: 12px;
-    background: var(--ar-surface-2);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface-2) 94%, var(--ar-surface));
     overflow: hidden;
 }
 
 .chart-options-summary {
-    padding: 8px 12px;
-    font-size: 0.8rem;
+    padding: 7px 10px;
+    font-size: 0.76rem;
     font-weight: 600;
     color: var(--ar-text-soft);
     cursor: pointer;
@@ -228,7 +228,7 @@
 }
 
 .chart-options-details .terminal-chart-controls {
-    padding: 12px;
+    padding: 10px;
 }
 
 .chart-guidance-wrap,
@@ -242,8 +242,8 @@
 
 .terminal-chart-controls {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    gap: 8px;
     align-items: end;
 }
 
@@ -275,6 +275,7 @@
 .tab-btn {
     border-radius: 999px;
     white-space: normal;
+    font-size: 0.78rem;
 }
 
 .chart-preset,
@@ -303,7 +304,7 @@
 }
 
 .terminal-chart-surface {
-    min-height: 560px;
+    min-height: 520px;
     overflow: hidden;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -321,7 +322,7 @@
     display: grid;
     gap: 10px;
     min-width: 0;
-    max-height: min(320px, 42vh);
+    max-height: min(280px, 38vh);
     overflow: auto;
     padding: 12px 14px 16px;
     border-top: 1px solid var(--ar-line);
@@ -331,7 +332,7 @@
 .terminal-chart-output,
 #chart-output,
 #chart-detail-output {
-    min-height: 520px;
+    min-height: 500px;
     width: 100%;
     touch-action: manipulation;
     position: relative;

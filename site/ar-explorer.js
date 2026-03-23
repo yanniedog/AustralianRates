@@ -43,7 +43,7 @@
     var filtersPayloadEventName = filters && filters.filtersPayloadEventName ? filters.filtersPayloadEventName : 'ar:filters-payload-loaded';
 
     function defaultColumnPrefs() {
-        return { visible: {}, showRemoved: false, moveColumnsMode: false, columnOrder: null };
+        return { visible: {}, showRemoved: false, moveColumnsMode: false, showAdvanced: false, columnOrder: null };
     }
 
     function normalizeColumnPrefs(input) {
@@ -52,6 +52,7 @@
             visible: prefs.visible && typeof prefs.visible === 'object' ? prefs.visible : {},
             showRemoved: !!prefs.showRemoved,
             moveColumnsMode: !!prefs.moveColumnsMode,
+            showAdvanced: !!prefs.showAdvanced,
             columnOrder: Array.isArray(prefs.columnOrder) ? prefs.columnOrder.slice() : null,
         };
     }
@@ -330,6 +331,7 @@
             ]);
         } else {
             base = base.concat([
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
                 { title: 'Structure', field: 'rate_structure', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('rate_structure_display', 'rate_structure', 'rate_structure') },
                 { title: 'Purpose', field: 'security_purpose', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('security_purpose_display', 'security_purpose', 'security_purpose') },
                 { title: 'Repayment', field: 'repayment_type', headerSort: true, minWidth: 102, formatter: enumDisplayFormatter('repayment_type_display', 'repayment_type', 'repayment_type') },
@@ -360,6 +362,7 @@
             ]);
         } else {
             base = base.concat([
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
                 { title: 'Account Type', field: 'account_type', headerSort: true, minWidth: 104, formatter: enumDisplayFormatter('account_type_display', 'account_type', 'account_type') },
                 { title: 'Rate Type', field: 'rate_type', headerSort: true, minWidth: 92, formatter: enumDisplayFormatter('rate_type_display', 'rate_type', 'rate_type') },
                 { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 98, formatter: depositTierFormatter },
@@ -389,6 +392,7 @@
             ]);
         } else {
             base = base.concat([
+                { title: 'Product', field: 'product_name', headerSort: true, minWidth: 140 },
                 { title: 'Term (months)', field: 'term_months', headerSort: true, minWidth: 100, formatter: enumDisplayFormatter('term_months_display', 'term_months', 'term_months') },
                 { title: 'Deposit Tier', field: 'deposit_tier', headerSort: true, minWidth: 98, formatter: depositTierFormatter },
                 { title: 'Payment', field: 'interest_payment', headerSort: true, minWidth: 98, formatter: enumDisplayFormatter('interest_payment_display', 'interest_payment', 'interest_payment') },
@@ -477,17 +481,32 @@
     function getMobilePreferredFields() {
         if (isAnalystMode()) return null;
         if (section === 'savings') {
-            return ['found_at', 'interest_rate', 'bank_name', 'rate_type', 'deposit_tier', 'urls'];
+            return ['found_at', 'interest_rate', 'bank_name', 'product_name', 'rate_type'];
         }
         if (section === 'term-deposits') {
-            return ['found_at', 'interest_rate', 'bank_name', 'term_months', 'deposit_tier', 'urls'];
+            return ['found_at', 'interest_rate', 'bank_name', 'product_name', 'term_months'];
         }
-        return ['found_at', 'interest_rate', 'comparison_rate', 'bank_name', 'rate_structure', 'urls'];
+        return ['found_at', 'interest_rate', 'comparison_rate', 'bank_name', 'product_name', 'rate_structure'];
+    }
+
+    function curatedDefaultFields() {
+        if (isAnalystMode()) return null;
+        if (section === 'savings') {
+            return ['found_at', 'interest_rate', 'bank_name', 'product_name', 'account_type', 'rate_type'];
+        }
+        if (section === 'term-deposits') {
+            return ['found_at', 'interest_rate', 'bank_name', 'product_name', 'term_months', 'interest_payment'];
+        }
+        return ['found_at', 'interest_rate', 'comparison_rate', 'bank_name', 'product_name', 'rate_structure', 'lvr_tier'];
     }
 
     function isColumnVisible(field) {
         if (columnPrefs.visible[field] === false) return false;
         if (columnPrefs.visible[field] === true) return true;
+        if (!columnPrefs.showAdvanced) {
+            var curated = curatedDefaultFields();
+            if (Array.isArray(curated) && curated.length && curated.indexOf(field) === -1) return false;
+        }
         if (singleValueColumns && singleValueColumns.indexOf(field) >= 0) return false;
         return true;
     }
@@ -823,6 +842,10 @@
                     '<input type=\"checkbox\" data-setting=\"move-columns\"' + (columnPrefs.moveColumnsMode ? ' checked' : '') + '>' +
                     '<span>Move columns</span>' +
                 '</label>' +
+                '<label class=\"table-settings-item\">' +
+                    '<input type=\"checkbox\" data-setting=\"show-advanced\"' + (columnPrefs.showAdvanced ? ' checked' : '') + '>' +
+                    '<span>Show advanced columns</span>' +
+                '</label>' +
             '</div>' +
             '<div class=\"table-settings-section\">' +
                 '<p class=\"table-settings-title\">Visible columns</p>' +
@@ -935,6 +958,13 @@
                     initRateTable();
                 }
                 setSettingsOpen(false);
+                return;
+            }
+            if (setting === 'show-advanced') {
+                columnPrefs.showAdvanced = !!target.checked;
+                writeColumnPrefs(columnPrefs);
+                applyColumnPreferences();
+                renderSettingsPopover();
                 return;
             }
 

@@ -100,20 +100,12 @@ body.ar-public .terminal-more-summary {
 
 body.ar-public .chart-figure {
     border-radius: 20px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
 }
 
 body.ar-public .chart-figure .terminal-chart-surface {
     min-height: 480px;
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent)),
-        repeating-linear-gradient(
-            90deg,
-            transparent 0,
-            transparent 58px,
-            color-mix(in srgb, var(--ar-line) 72%, transparent) 58px,
-            color-mix(in srgb, var(--ar-line) 72%, transparent) 59px
-        );
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent));
 }
 
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
@@ -123,9 +115,7 @@ body.ar-public .chart-figure .terminal-chart-surface {
     }
 }
 
-body.ar-public .chart-figure:has(#chart-output[data-chart-rendered="true"]) {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 18%, transparent);
-}
+body.ar-public .chart-figure:has(#chart-output[data-chart-rendered="true"]) { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); }
 
 body.ar-public .terminal-stat,
 body.ar-public .ladder-card,
@@ -133,12 +123,13 @@ body.ar-public .exec-card,
 body.ar-public .chart-series-card,
 body.ar-public .chart-spotlight-card {
     border-radius: 20px;
-    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface) 92%, transparent));
+    box-shadow: none;
 }
 
 body.ar-public .chart-series-card:hover,
 body.ar-public .chart-spotlight-card:hover {
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 body.ar-public .chart-preset.is-active {
@@ -162,7 +153,7 @@ body.ar-public .terminal-column-center > .panel {
 }
 
 body.ar-public .terminal-column-center > .panel:hover {
-    border-color: color-mix(in srgb, var(--ar-showcase-spark) 20%, var(--ar-line-strong));
+    border-color: var(--ar-line-strong);
     box-shadow: var(--ar-shadow-soft);
 }
 
@@ -248,19 +239,7 @@ body.ar-legal .legal-support-card p + p {
 
 body.ar-public .market-intro,
 body.ar-public .terminal-column-center > .panel:first-child,
-body.ar-legal .legal-hero {
-    animation: ar-showcase-rise 720ms var(--ar-ease) both;
-}
-
-body.ar-public .market-intro-live-card:nth-child(2),
-body.ar-public .market-intro-step:nth-child(2) {
-    animation-delay: 60ms;
-}
-
-body.ar-public .market-intro-live-card:nth-child(3),
-body.ar-public .market-intro-step:nth-child(3) {
-    animation-delay: 120ms;
-}
+body.ar-legal .legal-hero { animation: none; }
 
 @media (min-width: 761px) {
     body.ar-public .terminal-mobile-fold > summary,
@@ -269,17 +248,7 @@ body.ar-public .market-intro-step:nth-child(3) {
     }
 }
 
-@keyframes ar-showcase-rise {
-    from {
-        opacity: 0;
-        transform: translate3d(0, 22px, 0);
-    }
-
-    to {
-        opacity: 1;
-        transform: translate3d(0, 0, 0);
-    }
-}
+@keyframes ar-showcase-rise { from { opacity: 1; } to { opacity: 1; } }
 
 @media (max-width: 1280px) {
     body.ar-public .market-intro-grid {

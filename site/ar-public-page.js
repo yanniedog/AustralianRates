@@ -433,10 +433,8 @@
         var labelId = fieldLabelId(field);
         return '' +
             '<label class="terminal-field chart-filter-field"' + helpAttrs(field.label, field.help) + '>' +
-                fieldLabelBlock(field, { forId: field.id }) +
-                '<select id="' + field.id + '" class="small" aria-labelledby="' + esc(labelId) + '">' +
-                    optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) +
-                '</select>' +
+                fieldLabelBlock(field, { tagName: 'div' }) +
+                filterPadMarkup(field, labelId) +
             '</label>';
     }
 
@@ -495,11 +493,13 @@
             '<section class="chart-filter-bar" aria-label="Chart filters">' +
                 '<div class="chart-filter-bar-head">' +
                     '<div class="chart-filter-bar-copy">' +
-                        '<strong>Comparison filter</strong>' +
-                        '<p>Choose one product slice and the chart redraws immediately.</p>' +
+                        '<strong>Chart-first comparison</strong>' +
+                        '<p>Set one slice, read the chart, then use the table for detail checks.</p>' +
                     '</div>' +
                     '<div class="chart-filter-bar-actions">' +
                         '<span id="filter-live-status" class="pill filter-live-pill is-live">Live sync on</span>' +
+                        '<button id="apply-filters" class="secondary small" type="button" data-help="Apply the current filter slice immediately." data-help-label="Apply filters">' + iconText('filter', 'Apply', 'control-chip-label') + '</button>' +
+                        '<button id="draw-chart" class="primary small" type="button" data-help="Redraw the chart using current filters and controls." data-help-label="Draw chart">' + iconText('chart', 'Draw chart', 'control-chip-label') + '</button>' +
                         '<button id="reset-filters" class="secondary small" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>' +
                         '<button id="workspace-copy-link" class="secondary small" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>' +
                     '</div>' +
@@ -702,7 +702,7 @@
                             '</footer>',
                             '<p id="hero-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
                             '<details class="chart-options-details" id="chart-options-details">',
-                                '<summary class="chart-options-summary">Options</summary>',
+                                '<summary class="chart-options-summary">Chart controls</summary>',
                                 '<div class="terminal-chart-controls">',
                                     '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
                                         iconText('stats', 'Y axis', 'field-code'),
@@ -718,7 +718,7 @@
                                     '</label>',
                                     '<label class="terminal-field" data-help="Visible series density." data-help-label="Density">',
                                         iconText('summary', 'Density', 'field-code'),
-                                        '<select id="chart-series-limit"><option value="compact">Compact</option><option value="standard" selected>Standard</option><option value="expanded">Expanded</option></select>',
+                                        '<select id="chart-series-limit"><option value="compact" selected>Compact</option><option value="standard">Standard</option><option value="expanded">Expanded</option></select>',
                                     '</label>',
                                     '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="History basis">',
                                         iconText('history', 'History basis', 'field-code'),
