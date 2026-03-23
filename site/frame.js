@@ -705,6 +705,14 @@
         if (!isPublicMobileMenuContext(context)) return;
         var target = getHashTarget(window.location.hash);
         if (!target) return;
+        if (target.id === 'scenario' && target.tagName === 'DETAILS') {
+            target.open = true;
+            if (typeof target.scrollIntoView === 'function') {
+                window.requestAnimationFrame(function () {
+                    target.scrollIntoView({ block: 'start', behavior: 'auto' });
+                });
+            }
+        }
         setMenuOpen(isLeftRailTarget(target));
     }
 

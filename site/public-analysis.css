@@ -54,6 +54,11 @@
     background: color-mix(in srgb, var(--ar-surface-2) 94%, var(--ar-surface));
     display: grid;
     gap: 12px;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .chart-filter-actions {
@@ -61,6 +66,8 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .chart-filter-actions-export {

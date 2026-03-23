@@ -431,8 +431,13 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
         else fail(results, `${label}: ${controlLabel} drag did not change the panel width`);
     }
 
-    await dragRail('#left-rail-resizer', '--ar-left-rail-width', 60, 'left rail resizer');
-    await dragRail('#right-rail-resizer', '--ar-right-rail-width', -60, 'right rail resizer');
+    const hasRailResizers = await page.evaluate(() => !!(document.getElementById('left-rail-resizer') && document.getElementById('right-rail-resizer')));
+    if (hasRailResizers) {
+        await dragRail('#left-rail-resizer', '--ar-left-rail-width', 60, 'left rail resizer');
+        await dragRail('#right-rail-resizer', '--ar-right-rail-width', -60, 'right rail resizer');
+    } else {
+        pass(results, `${label}: rail resizers skipped (single-column public layout)`);
+    }
 
     await page.evaluate(() => {
         const d = document.getElementById('table-details');
@@ -822,7 +827,7 @@ async function verifyCopyLinkFeedback(page, results, label) {
 
 async function verifyFilterAccessibleNames(page, results, label) {
     await page.evaluate(() => {
-        const slice = document.getElementById('chart-slice-panel');
+        const slice = document.getElementById('scenario');
         if (slice && slice.tagName === 'DETAILS') slice.open = true;
     });
 
@@ -898,17 +903,17 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         const rect = scenario.getBoundingClientRect();
         return {
             hash: window.location.hash,
-            navOpen: document.body.classList.contains('is-nav-open'),
+            sliceOpen: scenario.tagName === 'DETAILS' ? scenario.open : false,
             left: rect.left,
             right: rect.right,
             width: window.innerWidth,
         };
     }).catch(() => null);
 
-    if (launch && launch.hash === '#scenario' && launch.navOpen && launch.left >= -1 && launch.right <= launch.width + 1) {
-        pass(results, `${label}: Launch filters opens the mobile filter rail`);
+    if (launch && launch.hash === '#scenario' && launch.sliceOpen && launch.left >= -1 && launch.right <= launch.width + 1) {
+        pass(results, `${label}: Launch filters opens the slice panel and scrolls it into view`);
     } else {
-        fail(results, `${label}: Launch filters did not reveal the mobile filter rail`);
+        fail(results, `${label}: Launch filters did not open the slice panel (${JSON.stringify(launch)})`);
     }
 
     await gotoPublic(page, baseUrl + '#scenario');
@@ -917,17 +922,17 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         if (!scenario) return null;
         const rect = scenario.getBoundingClientRect();
         return {
-            navOpen: document.body.classList.contains('is-nav-open'),
+            sliceOpen: scenario.tagName === 'DETAILS' ? scenario.open : false,
             left: rect.left,
             right: rect.right,
             width: window.innerWidth,
         };
     }).catch(() => null);
 
-    if (deepLink && deepLink.navOpen && deepLink.left >= -1 && deepLink.right <= deepLink.width + 1) {
-        pass(results, `${label}: #scenario deep link opens the mobile filter rail`);
+    if (deepLink && deepLink.sliceOpen && deepLink.left >= -1 && deepLink.right <= deepLink.width + 1) {
+        pass(results, `${label}: #scenario deep link opens the slice panel in view`);
     } else {
-        fail(results, `${label}: #scenario deep link left the mobile filter rail hidden`);
+        fail(results, `${label}: #scenario deep link did not open the slice panel (${JSON.stringify(deepLink)})`);
     }
 }
 

@@ -541,7 +541,7 @@
                     '</div>' +
                 '</div>' +
                 '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
-                '<details class="chart-filter-slice chart-filter-more" id="chart-slice-panel">' +
+                '<details class="chart-filter-slice chart-filter-more" id="scenario">' +
                     '<summary class="terminal-more-summary" data-help="Choose banks and product scenario for the chart and table." data-help-label="Banks and scenario">' + iconText('bank', 'Banks and scenario', 'control-chip-label') + '</summary>' +
                     '<div class="chart-filter-more-grid">' +
                         '<div class="chart-filter-grid chart-filter-grid-primary">' +
