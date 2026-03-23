@@ -268,6 +268,17 @@
     grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
 }
 
+.chart-filter-export-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+}
+
+.chart-filter-export-inline .terminal-field {
+    min-width: 180px;
+}
+
 .terminal-more-summary {
     display: flex;
     align-items: center;

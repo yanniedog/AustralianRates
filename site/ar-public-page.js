@@ -489,6 +489,20 @@
         return '';
     }
 
+    function compactBankPickerMarkup() {
+        return '' +
+            '<div class="terminal-field terminal-field-bank chart-filter-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
+                '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
+                '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
+                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-labelledby="filter-bank-label">' +
+                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>' +
+                    '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
+                '</div>' +
+                '<div id="filter-bank-options" class="bank-picker-grid bank-picker-grid-compact" role="group" aria-labelledby="filter-bank-label"></div>' +
+                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
+            '</div>';
+    }
+
     function compactChartFilterBarMarkup(ui) {
         return '' +
             '<section class="chart-filter-bar" aria-label="Chart filters">' +
@@ -506,7 +520,22 @@
                     '</div>' +
                 '</div>' +
                 '<div class="chart-filter-grid chart-filter-grid-primary">' +
+                    compactBankPickerMarkup() +
                     compactScenarioMarkup(ui) +
+                '</div>' +
+                '<div class="chart-filter-export-inline">' +
+                    '<div class="terminal-field" data-help="Export the current table view." data-help-label="Download">' +
+                        '<label id="download-format-label" class="terminal-field-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>' +
+                        '<select id="download-format" class="small" aria-labelledby="download-format-label">' +
+                            '<option value="">Format</option>' +
+                            '<option value="csv">CSV</option>' +
+                            '<option value="xls">Excel</option>' +
+                            '<option value="json">JSON</option>' +
+                        '</select>' +
+                    '</div>' +
+                    '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>' +
+                    '<span id="last-refreshed" class="hint"></span>' +
+                    '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>' +
                 '</div>' +
                 '<div id="workspace-status" class="terminal-inline-feedback workspace-status is-warning" role="status" aria-live="polite" hidden>' +
                     '<div class="workspace-status-copy">' +
@@ -521,22 +550,6 @@
                 '<details class="chart-filter-more" id="filter-bar" open>' +
                     '<summary class="terminal-more-summary" data-help="Open banks, dates, exports, and workspace controls." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
                     '<div class="chart-filter-more-grid">' +
-                        '<section class="chart-filter-more-section chart-filter-more-section-bank">' +
-                            '<div class="terminal-filter-group-head">' +
-                                '<strong>Banks</strong>' +
-                                '<span class="hint">Optional shortlist</span>' +
-                            '</div>' +
-                            '<div class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
-                                '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
-                                '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
-                                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-labelledby="filter-bank-label">' +
-                                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>' +
-                                    '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
-                                '</div>' +
-                                '<div id="filter-bank-options" class="bank-picker-grid bank-picker-grid-compact" role="group" aria-labelledby="filter-bank-label"></div>' +
-                                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
-                            '</div>' +
-                        '</section>' +
                         '<section class="chart-filter-more-section">' +
                             '<div class="terminal-filter-group-head">' +
                                 '<strong>Dates and limits</strong>' +
@@ -574,20 +587,7 @@
                             '</div>' +
                             '<div class="chart-filter-grid chart-filter-grid-secondary">' +
                                 SHARED_ADVANCED_FIELDS.map(fieldMarkup).join('') +
-                                '<div id="export" class="chart-filter-export">' +
-                                    '<div class="terminal-field" data-help="Export the current table view." data-help-label="Download">' +
-                                        '<label id="download-format-label" class="terminal-field-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>' +
-                                        '<select id="download-format" class="small" aria-labelledby="download-format-label">' +
-                                            '<option value="">Format</option>' +
-                                            '<option value="csv">CSV</option>' +
-                                            '<option value="xls">Excel</option>' +
-                                            '<option value="json">JSON</option>' +
-                                        '</select>' +
-                                    '</div>' +
-                                    '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>' +
-                                    '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>' +
-                                    '<span id="last-refreshed" class="hint"></span>' +
-                                '</div>' +
+                                '<div id="export" class="chart-filter-export"></div>' +
                             '</div>' +
                         '</section>' +
                     '</div>' +
