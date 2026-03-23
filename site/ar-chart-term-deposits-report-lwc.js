@@ -485,25 +485,24 @@
 
         chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) });
 
-        // ── Persistent legend strip (absolute inside mount, sits in bottom scale margin) ──
+        // ── Persistent legend column (top-left, vertical stack) ──
         var legendEl = document.createElement('div');
         legendEl.style.cssText = [
             'position:absolute',
-            'bottom:26px',
+            'top:8px',
             'left:8px',
-            'right:65px',
             'display:flex',
-            'flex-wrap:wrap',
-            'align-items:center',
-            'gap:2px 8px',
-            'padding:3px 6px',
-            'font-size:9.5px',
-            'line-height:1.5',
+            'flex-direction:column',
+            'align-items:flex-start',
+            'gap:1px',
+            'padding:4px 6px',
+            'font-size:9px',
+            'line-height:1.4',
             "font-family:'Space Grotesk',system-ui,sans-serif",
             'color:' + t.ttText,
             'background:' + t.ttBg,
             'border:1px solid ' + t.ttBorder,
-            'border-radius:5px',
+            'border-radius:4px',
             'pointer-events:none',
             'z-index:5'
         ].join(';');
@@ -515,18 +514,18 @@
             var item = document.createElement('span');
             item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
             item.innerHTML =
-                '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
-                '<span>' + entry.bank.short + '</span>' +
+                '<span style="display:inline-block;width:14px;height:2px;background:' + entry.bank.color + ';flex-shrink:0;border-radius:1px;"></span>' +
+                '<span style="opacity:0.7;">' + entry.bank.short + '</span>' +
                 '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.lastValue.toFixed(2) + '%</span>';
             legendEl.appendChild(item);
         });
         if (rbaSeriesApi && rbaData.points.length) {
             var rbaLast = rbaData.points[rbaData.points.length - 1].rate;
             var rbaItem = document.createElement('span');
-            rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;padding-left:8px;border-left:1px solid rgba(148,163,184,0.2);';
+            rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);';
             rbaItem.innerHTML =
-                '<span style="display:inline-block;width:10px;height:2px;background:' + t.rba + ';flex-shrink:0;"></span>' +
-                '<span style="color:' + t.rba + ';">RBA</span>' +
+                '<span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span>' +
+                '<span style="color:' + t.rba + ';opacity:0.8;">RBA</span>' +
                 '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaLast.toFixed(2) + '%</span>';
             legendEl.appendChild(rbaItem);
         }
@@ -535,8 +534,8 @@
             var cpiItem = document.createElement('span');
             cpiItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
             cpiItem.innerHTML =
-                '<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
-                '<span style="color:' + t.cpi + ';">CPI</span>' +
+                '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
+                '<span style="color:' + t.cpi + ';opacity:0.8;">CPI</span>' +
                 '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiLast).toFixed(1) + '%</span>';
             legendEl.appendChild(cpiItem);
         }
@@ -548,7 +547,7 @@
             legendEl.innerHTML = '';
             if (dateLabel) {
                 var dl = document.createElement('span');
-                dl.style.cssText = 'font-size:9px;color:' + t.muted + ';white-space:nowrap;padding-right:6px;border-right:1px solid rgba(148,163,184,0.2);margin-right:2px;flex-shrink:0;';
+                dl.style.cssText = 'font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);flex-shrink:0;letter-spacing:0.02em;';
                 dl.textContent = dateLabel;
                 legendEl.appendChild(dl);
             }
@@ -560,17 +559,17 @@
                 var item = document.createElement('span');
                 item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
                 item.innerHTML =
-                    '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + entry.bank.color + ';flex-shrink:0;"></span>' +
-                    '<span>' + entry.bank.short + '</span>' +
+                    '<span style="display:inline-block;width:14px;height:2px;background:' + entry.bank.color + ';flex-shrink:0;border-radius:1px;"></span>' +
+                    '<span style="opacity:0.7;">' + entry.bank.short + '</span>' +
                     '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.value.toFixed(2) + '%</span>';
                 legendEl.appendChild(item);
             });
             if (rbaVal != null) {
                 var rbaItem = document.createElement('span');
-                rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;padding-left:8px;border-left:1px solid rgba(148,163,184,0.2);';
+                rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);';
                 rbaItem.innerHTML =
-                    '<span style="display:inline-block;width:10px;height:2px;background:' + t.rba + ';flex-shrink:0;"></span>' +
-                    '<span style="color:' + t.rba + ';">RBA</span>' +
+                    '<span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span>' +
+                    '<span style="color:' + t.rba + ';opacity:0.8;">RBA</span>' +
                     '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaVal.toFixed(2) + '%</span>';
                 legendEl.appendChild(rbaItem);
             }
@@ -578,8 +577,8 @@
                 var cpiItem = document.createElement('span');
                 cpiItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
                 cpiItem.innerHTML =
-                    '<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
-                    '<span style="color:' + t.cpi + ';">CPI</span>' +
+                    '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
+                    '<span style="color:' + t.cpi + ';opacity:0.8;">CPI</span>' +
                     '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiDisplayVal).toFixed(1) + '%</span>';
                 legendEl.appendChild(cpiItem);
             }
