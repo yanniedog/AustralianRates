@@ -36,6 +36,31 @@
         }
     }
 
+    /**
+     * Clear Cache Storage (cached images/files) and service worker registrations,
+     * then do a cache-busted reload. Does NOT clear cookies or localStorage.
+     * Equivalent to Chrome "Delete browsing data" with only "Cached images and files"
+     * and "Hosted app data" checked.
+     */
+    function clearCacheAndRefresh() {
+        var p = Promise.resolve();
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            p = p.then(function () {
+                return navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                });
+            }).catch(function () {});
+        }
+        if (typeof caches !== 'undefined' && caches.keys) {
+            p = p.then(function () {
+                return caches.keys().then(function (keys) {
+                    return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+                });
+            }).catch(function () {});
+        }
+        p.then(function () { fullPageRefreshWithCacheBust(); }).catch(function () { fullPageRefreshWithCacheBust(); });
+    }
+
     /** Remove _= from URL after load so the bar stays clean; state.cacheBust is already set from it. */
     function cleanRefreshParamFromUrl() {
         try {
@@ -97,7 +122,7 @@
 
     var refreshPageBtn = document.getElementById('refresh-page-btn');
     if (refreshPageBtn) {
-        refreshPageBtn.addEventListener('click', function () { fullPageRefreshWithCacheBust(); });
+        refreshPageBtn.addEventListener('click', function () { clearCacheAndRefresh(); });
     }
 
     window.AR.refresh = {
@@ -105,5 +130,6 @@
         doAutoRefresh: doAutoRefresh,
         setupAutoRefresh: setupAutoRefresh,
         fullPageRefreshWithCacheBust: fullPageRefreshWithCacheBust,
+        clearCacheAndRefresh: clearCacheAndRefresh,
     };
 })();
