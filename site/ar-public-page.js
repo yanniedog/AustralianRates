@@ -462,6 +462,7 @@
             compactSelectFieldMarkup(findUiField(ui, 'filter-repayment')),
             compactSelectFieldMarkup(findUiField(ui, 'filter-structure')),
             compactSelectFieldMarkup(findUiField(ui, 'filter-lvr')),
+            compactSelectFieldMarkup(findUiField(ui, 'filter-feature')),
         ].join('');
     }
 
@@ -517,7 +518,7 @@
                     '</div>' +
                 '</div>' +
                 '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
-                '<details class="chart-filter-more" id="filter-bar">' +
+                '<details class="chart-filter-more" id="filter-bar" open>' +
                     '<summary class="terminal-more-summary" data-help="Open banks, dates, exports, and workspace controls." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
                     '<div class="chart-filter-more-grid">' +
                         '<section class="chart-filter-more-section chart-filter-more-section-bank">' +
@@ -559,7 +560,7 @@
                             '</div>' +
                             '<div class="chart-filter-grid chart-filter-grid-secondary">' +
                                 (ui.advancedFields || []).map(function (field) {
-                                    if (section === 'home-loans' && ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr'].indexOf(field.id) >= 0) return '';
+                                    if (section === 'home-loans' && ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'].indexOf(field.id) >= 0) return '';
                                     if (section === 'savings' && ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'].indexOf(field.id) >= 0) return '';
                                     if (section === 'term-deposits' && ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'].indexOf(field.id) >= 0) return '';
                                     return fieldMarkup(Object.assign({}, field, { padGrid: false }));
@@ -687,6 +688,7 @@
                                         '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
                                         '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
                                         '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
+                                    '<div id="quick-compare-cards" class="quick-compare-cards" hidden></div>',
                                     '</div>',
                                 '</div>',
                             '</div>',

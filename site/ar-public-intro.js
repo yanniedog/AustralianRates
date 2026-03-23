@@ -82,6 +82,16 @@
         if (noteEl && note != null) noteEl.textContent = String(note);
     }
 
+    function stepCard(step) {
+        return '<article class="market-intro-step"><span class="market-intro-step-index">' + esc(step.index) + '</span><p>' + esc(step.text) + '</p></article>';
+    }
+
+    var steps = [
+        { index: '01', text: 'Define your product slice.' },
+        { index: '02', text: 'Read leaders and chart movement.' },
+        { index: '03', text: 'Validate with table details.' }
+    ];
+
     var intro = document.createElement('section');
     intro.className = 'panel market-intro';
     intro.setAttribute('aria-label', 'Page introduction');
@@ -101,6 +111,7 @@
         + '<div class="market-intro-body">'
         + '  <div class="market-intro-live-grid" aria-label="Live stats">' + copy.liveCards.map(liveCard).join('') + '</div>'
         + '  <nav class="market-intro-nav" aria-label="Rate datasets">' + DATASET_LINKS.map(navLink).join('') + '</nav>'
+        + '  <div class="market-intro-steps" aria-label="How to use this view">' + steps.map(stepCard).join('') + '</div>'
         + '</div>';
 
     root.insertBefore(intro, terminal);

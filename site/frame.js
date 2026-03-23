@@ -329,13 +329,13 @@
 
     function headerActionsMarkup(context) {
         var menuLabel = context.legal || context.notFound ? 'Sections' : 'Menu';
-        // REQUIRED: refresh-site-btn must always be present so users can force-load the live deployed version.
-        // Do not gate this on isLocalHostForDevTools() — it must work on the live site too.
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
-            '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="Clear site cache and reload to get the latest version">' + actionIconMarkup('refresh', 'Refresh') + '</button>',
         ];
+        if (context.admin || isLocalHostForDevTools()) {
+            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="Clear site cache and reload to get the latest version">' + actionIconMarkup('refresh', 'Refresh') + '</button>');
+        }
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
