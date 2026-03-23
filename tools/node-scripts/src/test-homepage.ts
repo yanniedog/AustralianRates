@@ -544,10 +544,16 @@ async function verifyPublicFooter(page, results, label) {
     }
 }
 
-async function verifyNoPublicResetControl(page, results, label) {
-    const count = await page.locator('#refresh-site-btn').count().catch(() => 0);
-    if (count === 0) pass(results, `${label}: public reset-site control remains hidden`);
-    else fail(results, `${label}: public reset-site control leaked into the header`);
+async function verifyPublicHeaderRefresh(page, results, label) {
+    const btn = page.locator('#refresh-site-btn');
+    const count = await btn.count().catch(() => 0);
+    if (count === 0) {
+        fail(results, `${label}: header Refresh control missing`);
+        return;
+    }
+    const visible = await btn.first().isVisible().catch(() => false);
+    if (visible) pass(results, `${label}: header Refresh control is visible`);
+    else fail(results, `${label}: header Refresh control not visible`);
 }
 
 async function verifyExplorerHeading(page, results, label) {
@@ -1071,7 +1077,7 @@ async function verifyLegalPages(page, results) {
         await gotoPublic(page, url);
         await verifyClarityPresent(page, results, legal.name);
         await verifyNoPrimaryMobileHostArtifacts(page, results, legal.name);
-        await verifyNoPublicResetControl(page, results, legal.name);
+        await verifyPublicHeaderRefresh(page, results, legal.name);
         await verifyPublicFooter(page, results, legal.name);
         await verifyLegalMenuSimplified(page, results, legal.name);
         const state = await page.evaluate(() => ({
@@ -1142,7 +1148,7 @@ async function verifyNotFoundRoute(page, results) {
     if (status === 404) pass(results, 'Invalid route: HTTP status is 404');
     else fail(results, `Invalid route: expected HTTP 404 but received ${status || 'no response'}`);
 
-    await verifyNoPublicResetControl(page, results, 'Invalid route');
+    await verifyPublicHeaderRefresh(page, results, 'Invalid route');
     await verifyPublicFooter(page, results, 'Invalid route');
 }
 
@@ -1171,7 +1177,7 @@ async function verifySectionSmoke(page, results, section) {
     await verifyClarityPresent(page, results, section.name);
     await verifyHeader(page, results, section.name, section.name);
     await verifyNoPrimaryMobileHostArtifacts(page, results, section.name);
-    await verifyNoPublicResetControl(page, results, section.name);
+    await verifyPublicHeaderRefresh(page, results, section.name);
     await verifyWorkspaceShell(page, results, section.name);
     await verifyExplorerHeading(page, results, section.name);
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
@@ -1235,7 +1241,7 @@ async function runTests() {
         await verifyClarityPresent(page, results, 'Homepage');
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
         await verifyNoPrimaryMobileHostArtifacts(page, results, 'Homepage');
-        await verifyNoPublicResetControl(page, results, 'Homepage');
+        await verifyPublicHeaderRefresh(page, results, 'Homepage');
         await verifyWorkspaceShell(page, results, 'Homepage');
         await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);

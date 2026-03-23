@@ -154,6 +154,22 @@
         p.then(doReload).catch(doReload);
     }
 
+    /** Cache-bust reload without clearing sessionStorage (admin auth lives there). */
+    function softCacheBustReload() {
+        addSessionLog('info', 'Cache-bust reload requested', { action: 'softCacheBustReload' });
+        function doReload() {
+            var u = new URL(window.location.href);
+            u.searchParams.set('_', String(Date.now()));
+            window.location.replace(u.toString());
+        }
+        var p = (typeof caches !== 'undefined' && caches.keys)
+            ? caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            })
+            : Promise.resolve();
+        p.then(doReload).catch(doReload);
+    }
+
     function getPageContext() {
         var body = document.body;
         if (!body) return { section: 'home-loans', admin: false, legal: false };
@@ -322,20 +338,16 @@
             '</nav>';
     }
 
-    function isLocalHostForDevTools() {
-        var h = String((window.location && window.location.hostname) || '');
-        return /(^|\.)localhost$/i.test(h) || /^127(?:\.\d{1,3}){3}$/.test(h) || h === '::1';
-    }
-
     function headerActionsMarkup(context) {
         var menuLabel = context.legal || context.notFound ? 'Sections' : 'Menu';
+        var refreshTitle = context.admin
+            ? 'Reload and bypass cached assets (keeps admin session)'
+            : 'Clear site cache and reload to get the latest version';
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
+            '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>',
         ];
-        if (context.admin || isLocalHostForDevTools()) {
-            actions.push('<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="Clear site cache and reload to get the latest version">' + actionIconMarkup('refresh', 'Refresh') + '</button>');
-        }
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
     }
@@ -855,7 +867,13 @@
         var helpBtn = document.getElementById('site-help-btn');
         var menuBtn = document.getElementById('site-menu-toggle');
         syncMenuButtonState(context);
-        if (refreshBtn) refreshBtn.addEventListener('click', clearSiteDataAndReload);
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function () {
+                var ctx = getPageContext();
+                if (ctx.admin) softCacheBustReload();
+                else clearSiteDataAndReload();
+            });
+        }
         if (helpBtn) {
             helpBtn.addEventListener('click', function () {
                 openHelpSheet(currentPageLabel(context), pageHelpText(context));
