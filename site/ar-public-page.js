@@ -356,9 +356,10 @@
     }
 
     function filterPadMarkup(field, labelId) {
+        var groupAccName = (field.label || field.code || 'Filter') + ' options';
         return '' +
             '<div class="filter-pad-shell">' +
-                '<div id="' + field.id + '-pads" class="filter-pad-grid" data-filter-pads-for="' + field.id + '" role="group" aria-labelledby="' + esc(labelId) + '"></div>' +
+                '<div id="' + field.id + '-pads" class="filter-pad-grid" data-filter-pads-for="' + field.id + '" role="group" aria-label="' + esc(groupAccName) + '"></div>' +
                 '<select id="' + field.id + '" class="filter-native-select" aria-labelledby="' + esc(labelId) + '">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
             '</div>';
     }
@@ -494,7 +495,7 @@
             '<div class="terminal-field terminal-field-bank chart-filter-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
                 '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
                 '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
-                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-labelledby="filter-bank-label">' +
+                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-label="Search banks">' +
                     '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>' +
                     '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
                 '</div>' +
@@ -503,40 +504,33 @@
             '</div>';
     }
 
+    function chartFilterActionsRowMarkup() {
+        return '' +
+            '<div class="chart-filter-actions" role="toolbar" aria-label="Chart and data actions">' +
+                '<span id="filter-live-status" class="pill filter-live-pill is-live">Live sync on</span>' +
+                '<button id="apply-filters" class="secondary small" type="button" data-help="Apply the current filter slice immediately." data-help-label="Apply filters">' + iconText('filter', 'Apply', 'control-chip-label') + '</button>' +
+                '<button id="draw-chart" class="primary small" type="button" data-help="Redraw the chart using current filters and controls." data-help-label="Draw chart">' + iconText('chart', 'Draw chart', 'control-chip-label') + '</button>' +
+                '<button id="reset-filters" class="secondary small" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>' +
+                '<button id="workspace-copy-link" class="secondary small" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>' +
+                '<div class="chart-filter-actions-export">' +
+                    '<label id="download-format-label" class="terminal-field-label chart-filter-download-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>' +
+                    '<select id="download-format" class="small" aria-labelledby="download-format-label">' +
+                        '<option value="">Format</option>' +
+                        '<option value="csv">CSV</option>' +
+                        '<option value="xls">Excel</option>' +
+                        '<option value="json">JSON</option>' +
+                    '</select>' +
+                '</div>' +
+                '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>' +
+                '<span id="last-refreshed" class="hint"></span>' +
+                '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>' +
+            '</div>';
+    }
+
     function compactChartFilterBarMarkup(ui) {
         return '' +
-            '<section class="chart-filter-bar" aria-label="Chart filters">' +
-                '<div class="chart-filter-bar-head">' +
-                    '<div class="chart-filter-bar-copy">' +
-                        '<strong>Chart-first comparison</strong>' +
-                        '<p>Set one slice, read the chart, then use the table for detail checks.</p>' +
-                    '</div>' +
-                    '<div class="chart-filter-bar-actions">' +
-                        '<span id="filter-live-status" class="pill filter-live-pill is-live">Live sync on</span>' +
-                        '<button id="apply-filters" class="secondary small" type="button" data-help="Apply the current filter slice immediately." data-help-label="Apply filters">' + iconText('filter', 'Apply', 'control-chip-label') + '</button>' +
-                        '<button id="draw-chart" class="primary small" type="button" data-help="Redraw the chart using current filters and controls." data-help-label="Draw chart">' + iconText('chart', 'Draw chart', 'control-chip-label') + '</button>' +
-                        '<button id="reset-filters" class="secondary small" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>' +
-                        '<button id="workspace-copy-link" class="secondary small" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="chart-filter-grid chart-filter-grid-primary">' +
-                    compactBankPickerMarkup() +
-                    compactScenarioMarkup(ui) +
-                '</div>' +
-                '<div class="chart-filter-export-inline">' +
-                    '<div class="terminal-field" data-help="Export the current table view." data-help-label="Download">' +
-                        '<label id="download-format-label" class="terminal-field-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>' +
-                        '<select id="download-format" class="small" aria-labelledby="download-format-label">' +
-                            '<option value="">Format</option>' +
-                            '<option value="csv">CSV</option>' +
-                            '<option value="xls">Excel</option>' +
-                            '<option value="json">JSON</option>' +
-                        '</select>' +
-                    '</div>' +
-                    '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>' +
-                    '<span id="last-refreshed" class="hint"></span>' +
-                    '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>' +
-                '</div>' +
+            '<section class="chart-filter-bar chart-filter-bar-below-chart" aria-label="Chart filters">' +
+                chartFilterActionsRowMarkup() +
                 '<div id="workspace-status" class="terminal-inline-feedback workspace-status is-warning" role="status" aria-live="polite" hidden>' +
                     '<div class="workspace-status-copy">' +
                         '<strong id="workspace-status-title">Startup degraded</strong>' +
@@ -547,8 +541,17 @@
                     '</div>' +
                 '</div>' +
                 '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
-                '<details class="chart-filter-more" id="filter-bar" open>' +
-                    '<summary class="terminal-more-summary" data-help="Open banks, dates, exports, and workspace controls." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
+                '<details class="chart-filter-slice chart-filter-more" id="chart-slice-panel">' +
+                    '<summary class="terminal-more-summary" data-help="Choose banks and product scenario for the chart and table." data-help-label="Banks and scenario">' + iconText('bank', 'Banks and scenario', 'control-chip-label') + '</summary>' +
+                    '<div class="chart-filter-more-grid">' +
+                        '<div class="chart-filter-grid chart-filter-grid-primary">' +
+                            compactBankPickerMarkup() +
+                            compactScenarioMarkup(ui) +
+                        '</div>' +
+                    '</div>' +
+                '</details>' +
+                '<details class="chart-filter-more" id="filter-bar">' +
+                    '<summary class="terminal-more-summary" data-help="Dates, rate limits, advanced filters, and workspace export." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
                     '<div class="chart-filter-more-grid">' +
                         '<section class="chart-filter-more-section">' +
                             '<div class="terminal-filter-group-head">' +
@@ -668,7 +671,6 @@
                                     panelHeadingMarkup('h2', ui.title),
                                 '</div>',
                             '</div>',
-                            compactChartFilterBarMarkup(ui),
                             '<div class="chart-figure">',
                                 '<div class="chart-toolbar">',
                                     '<div class="chart-toolbar-stack">',
@@ -744,6 +746,7 @@
                             '</details>',
                             '<p id="chart-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
                             '<p id="chart-status" class="hint">Idle</p>',
+                            compactChartFilterBarMarkup(ui),
                         '</div>',
                     '</section>',
                     notesMarkup(ui),

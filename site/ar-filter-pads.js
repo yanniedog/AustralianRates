@@ -69,6 +69,7 @@
                 ' data-filter-pad-field="' + esc(fieldId) + '"' +
                 ' data-filter-pad-value="' + esc(value) + '"' +
                 ' aria-pressed="' + (selected ? 'true' : 'false') + '"' +
+                ' aria-label="' + esc(display) + '"' +
                 ' title="' + esc(display) + '"' +
             '>' +
                 '<span class="filter-pad-btn-value">' + esc(display) + '</span>' +

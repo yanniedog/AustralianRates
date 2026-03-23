@@ -779,7 +779,7 @@
         });
     }
 
-    [document.getElementById('notes'), document.getElementById('filter-bar'), document.getElementById('chart-options-details')].forEach(function (details) {
+    [document.getElementById('notes'), document.getElementById('chart-slice-panel'), document.getElementById('filter-bar'), document.getElementById('chart-options-details')].forEach(function (details) {
         if (details && details.tagName === 'DETAILS') details.addEventListener('toggle', scheduleResponsiveSync);
     });
 

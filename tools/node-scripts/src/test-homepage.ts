@@ -821,6 +821,11 @@ async function verifyCopyLinkFeedback(page, results, label) {
 }
 
 async function verifyFilterAccessibleNames(page, results, label) {
+    await page.evaluate(() => {
+        const slice = document.getElementById('chart-slice-panel');
+        if (slice && slice.tagName === 'DETAILS') slice.open = true;
+    });
+
     const checks = [
         { name: 'bank search', locator: page.locator('#filter-bank-search'), reject: 'All All' },
         { name: 'purpose filter', locator: page.locator('#filter-security-pads button').first(), reject: 'Purpose Purpose' },

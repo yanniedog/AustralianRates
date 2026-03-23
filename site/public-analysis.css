@@ -47,6 +47,33 @@
         radial-gradient(circle at top right, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 42%);
 }
 
+.chart-filter-bar.chart-filter-bar-below-chart {
+    margin-top: 6px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ar-surface-2) 94%, var(--ar-surface));
+    display: grid;
+    gap: 12px;
+}
+
+.chart-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.chart-filter-actions-export {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.chart-filter-download-label {
+    margin: 0;
+}
+
 .chart-filter-bar-head,
 .chart-filter-bar-actions {
     display: flex;

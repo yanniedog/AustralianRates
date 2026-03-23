@@ -279,6 +279,15 @@
     min-width: 180px;
 }
 
+.chart-filter-actions {
+    align-items: center;
+}
+
+.chart-filter-actions-export .small,
+.chart-filter-actions-export select {
+    min-width: 7.5rem;
+}
+
 .terminal-more-summary {
     display: flex;
     align-items: center;
