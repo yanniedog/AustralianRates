@@ -55,6 +55,40 @@
         }).catch(function () {});
     }
 
+    function isPayloadViewerCopyable() {
+        if (!payloadViewerEl) return false;
+        var t = (payloadViewerEl.textContent || '').trim();
+        if (!t) return false;
+        if (t === 'No payload selected.') return false;
+        return true;
+    }
+
+    function updatePayloadViewerCopyButtonState() {
+        var btn = document.getElementById('payload-viewer-copy-btn');
+        if (!btn) return;
+        var clip = !!(navigator.clipboard && navigator.clipboard.writeText);
+        var ok = clip && isPayloadViewerCopyable();
+        btn.disabled = !ok;
+        btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+    }
+
+    function copyPayloadViewerToClipboard() {
+        var btn = document.getElementById('payload-viewer-copy-btn');
+        if (!btn || btn.disabled || !payloadViewerEl || !navigator.clipboard || !navigator.clipboard.writeText) return;
+        var text = payloadViewerEl.textContent || '';
+        if (!text.trim()) return;
+        var origTitle = btn.getAttribute('title') || '';
+        var origLabel = btn.getAttribute('aria-label') || '';
+        navigator.clipboard.writeText(text).then(function () {
+            btn.setAttribute('title', 'Copied');
+            btn.setAttribute('aria-label', 'Copied to clipboard');
+            setTimeout(function () {
+                btn.setAttribute('title', origTitle);
+                btn.setAttribute('aria-label', origLabel);
+            }, 2000);
+        }).catch(function () {});
+    }
+
     function boolPill(ok) {
         return '<span class="pill ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'OK' : 'Attention') + '</span>';
     }
@@ -530,6 +564,7 @@
     async function loadPayload(fetchEventId, mode) {
         payloadViewerStatusEl.textContent = 'Loading payload ' + String(fetchEventId) + '...';
         payloadViewerEl.textContent = '';
+        updatePayloadViewerCopyButtonState();
         try {
             var rawMode = mode === 'raw';
             var path = '/diagnostics/fetch-events/' + encodeURIComponent(fetchEventId) + '/payload' + (rawMode ? '?raw=1' : '');
@@ -540,6 +575,7 @@
                 var rawText = await res.text();
                 payloadViewerStatusEl.textContent = 'Viewing raw payload for fetch_event_id=' + String(fetchEventId);
                 payloadViewerEl.textContent = rawText;
+                updatePayloadViewerCopyButtonState();
                 return;
             }
 
@@ -551,9 +587,11 @@
             };
             payloadViewerStatusEl.textContent = 'Viewing JSON payload for fetch_event_id=' + String(fetchEventId);
             payloadViewerEl.textContent = JSON.stringify(rendered, null, 2);
+            updatePayloadViewerCopyButtonState();
         } catch (err) {
             payloadViewerStatusEl.textContent = 'Failed to load payload ' + String(fetchEventId) + '.';
             payloadViewerEl.textContent = err && err.message ? err.message : String(err);
+            updatePayloadViewerCopyButtonState();
         }
     }
 
@@ -747,6 +785,14 @@
             });
         }
     });
+    (function initPayloadViewerCopy() {
+        var btn = document.getElementById('payload-viewer-copy-btn');
+        if (btn) {
+            btn.innerHTML = clipboardIconHtml();
+            btn.addEventListener('click', copyPayloadViewerToClipboard);
+        }
+        updatePayloadViewerCopyButtonState();
+    })();
     document.addEventListener('click', function (event) {
         var target = event.target;
         if (coverageGapManager && coverageGapManager.handleClick(target)) {

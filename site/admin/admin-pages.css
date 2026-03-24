@@ -89,6 +89,22 @@
     display: block;
 }
 
+.admin-status .payload-viewer-toolbar .admin-status-line {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-status .admin-payload-copy-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.admin-status .admin-payload-copy-btn:disabled:hover,
+.admin-status .admin-payload-copy-btn:disabled:focus-visible {
+    background: transparent;
+    box-shadow: none;
+}
+
 .admin-status pre,
 .admin-runs pre {
     margin: 0;
