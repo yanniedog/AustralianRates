@@ -402,13 +402,13 @@ body.ar-legal .legal-hero { animation: none; }
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    /* Chart fits entirely within the visible viewport on mobile */
+    /* Chart workspace is 3x one mobile viewport tall (scroll for full height) */
     body.ar-public .chart-block {
         display: flex;
         flex-direction: column;
         min-height: 0;
-        height: calc(100dvh - var(--ar-header-height) - 16px);
-        max-height: calc(100dvh - var(--ar-header-height) - 16px);
+        height: calc(3 * (100dvh - var(--ar-header-height) - 16px));
+        max-height: none;
     }
 
     body.ar-public .chart-block .chart-block-head {
@@ -438,7 +438,7 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .terminal-chart-output,
     body.ar-public #chart-output {
         flex: 1 1 0;
-        min-height: 140px;
+        min-height: 420px;
     }
 
     body.ar-public #chart-detail-output {

@@ -983,7 +983,7 @@
     .terminal-chart-output,
     #chart-output,
     #chart-detail-output {
-        min-height: 300px;
+        min-height: 900px;
     }
 
     .chart-question-row {
@@ -1030,7 +1030,7 @@
     .terminal-chart-output,
     #chart-output,
     #chart-detail-output {
-        min-height: 260px;
+        min-height: 780px;
     }
 
     #pivot-output {
