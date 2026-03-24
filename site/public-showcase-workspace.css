@@ -374,21 +374,6 @@ body.ar-legal .legal-hero { animation: none; }
         padding-inline: 14px;
     }
 
-    body.ar-public #tab-history {
-        order: 1;
-    }
-
-    body.ar-public #tab-changes {
-        order: 2;
-    }
-
-    body.ar-public #tab-explorer {
-        order: 3;
-    }
-
-    body.ar-public #tab-pivot {
-        order: 4;
-    }
 
     body.ar-public .terminal-mobile-fold,
     body.ar-public .terminal-context-panel {
