@@ -1026,6 +1026,28 @@
             singleValueColumns = sharedFilters.single_value_columns;
         }
 
+        function buildExplorerRatesRequestUrl(baseUrl, params) {
+            var safeParams = params && typeof params === 'object' ? params : {};
+            var sorters = resolveSorters(safeParams);
+            if (!sorters.length && rateTable && rateTable.getSorters) {
+                sorters = resolveSorters({ sorters: rateTable.getSorters() });
+            }
+            applySorters(sorters);
+            var q = new URLSearchParams();
+            var fp = buildFilterParams();
+            Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
+            q.set('page', String(safeParams.page != null ? safeParams.page : 1));
+            q.set('size', '50');
+            q.set('sort', currentSort.field);
+            q.set('dir', currentSort.dir);
+            emitExplorerState({
+                status: 'loading',
+                currentPage: Number(safeParams && safeParams.page != null ? safeParams.page : 1) || 1,
+                message: '',
+            });
+            return baseUrl + '?' + q.toString();
+        }
+
         rateTable = new Tabulator('#rate-table', {
             ajaxURL: apiBase + '/rates',
             ajaxConfig: { method: 'GET', cache: 'no-store' },
@@ -1036,28 +1058,11 @@
                 return fp;
             },
             ajaxURLGenerator: function (url, _config, params) {
-                var sorters = resolveSorters(params);
-                if (!sorters.length && rateTable && rateTable.getSorters) {
-                    sorters = resolveSorters({ sorters: rateTable.getSorters() });
-                }
-                applySorters(sorters);
-                var q = new URLSearchParams();
-                var fp = buildFilterParams();
-                Object.keys(fp).forEach(function (k) { q.set(k, fp[k]); });
-                q.set('page', String(params.page != null ? params.page : 1));
-                q.set('size', '50');
-                q.set('sort', currentSort.field);
-                q.set('dir', currentSort.dir);
-                emitExplorerState({
-                    status: 'loading',
-                    currentPage: Number(params && params.page != null ? params.page : 1) || 1,
-                    message: '',
-                });
-
-                return url + '?' + q.toString();
+                return buildExplorerRatesRequestUrl(url, params);
             },
-            ajaxRequestFunc: function (url, ajaxConfig) {
-                var bustedUrl = (network && typeof network.appendCacheBust === 'function') ? network.appendCacheBust(url) : url;
+            ajaxRequestFunc: function (url, ajaxConfig, params) {
+                var fullUrl = buildExplorerRatesRequestUrl(url, params);
+                var bustedUrl = (network && typeof network.appendCacheBust === 'function') ? network.appendCacheBust(fullUrl) : fullUrl;
                 var request = requestJson
                     ? requestJson(bustedUrl, {
                         method: ajaxConfig && ajaxConfig.method ? ajaxConfig.method : 'GET',
