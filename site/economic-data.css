@@ -1,3 +1,17 @@
+/* Economic Data: scoped theme + layout (overrides generic .market-terminal breakpoints from public-shell.css). */
+body.ar-section-economic-data {
+    --ar-showcase-ink: #091625;
+    --ar-showcase-glow: rgba(102, 246, 207, 0.14);
+    --ar-showcase-spark: #66f6cf;
+}
+
+body.ar-section-economic-data .market-terminal.economic-terminal {
+    display: grid;
+    grid-template-columns: minmax(240px, 300px) minmax(280px, 1.35fr) minmax(240px, 320px);
+    gap: 18px;
+    align-items: start;
+}
+
 .economic-hero {
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
@@ -22,9 +36,26 @@
     align-content: start;
 }
 
-.economic-terminal {
-    grid-template-columns: minmax(250px, 290px) minmax(0, 1fr) minmax(280px, 340px);
-    gap: 18px;
+/* Long right-rail lists scroll in-view instead of stretching the page height. */
+body.ar-section-economic-data .terminal-column-right {
+    position: sticky;
+    top: calc(var(--ar-header-height) + 18px);
+    align-self: start;
+    max-height: calc(100vh - var(--ar-header-height) - 36px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+body.ar-section-economic-data .terminal-column-center {
+    min-width: 0;
+}
+
+body.ar-section-economic-data #chart,
+body.ar-section-economic-data #scenario,
+body.ar-section-economic-data #details,
+body.ar-section-economic-data #sources {
+    scroll-margin-top: calc(var(--ar-header-height) + 20px);
 }
 
 .economic-panel-copy,
@@ -154,13 +185,20 @@
 }
 
 @media (max-width: 1100px) {
-    .economic-hero,
-    .economic-terminal {
+    .economic-hero {
         grid-template-columns: 1fr;
     }
 
-    .terminal-column-left,
-    .terminal-column-right {
+    body.ar-section-economic-data .market-terminal.economic-terminal {
+        grid-template-columns: 1fr;
+    }
+
+    /* Chart first on small screens; controls and rails follow. */
+    body.ar-section-economic-data .terminal-column-center {
+        order: -1;
+    }
+
+    body.ar-section-economic-data .terminal-column-right {
         position: static;
         top: auto;
         max-height: none;
@@ -169,5 +207,15 @@
 
     .economic-chart {
         min-height: 420px;
+    }
+}
+
+/* Stacked tablet: release left rail from sticky so it flows; keep shell mobile drawer (<=760px) untouched. */
+@media (max-width: 1100px) and (min-width: 761px) {
+    body.ar-section-economic-data .terminal-column-left {
+        position: static;
+        top: auto;
+        max-height: none;
+        overflow: visible;
     }
 }
