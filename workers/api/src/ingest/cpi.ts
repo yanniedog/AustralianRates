@@ -143,6 +143,8 @@ export async function collectCpiFromRbaG1(
   db: D1Database,
   env?: Pick<EnvBindings, 'FETCH_TIMEOUT_MS' | 'FETCH_MAX_RETRIES' | 'FETCH_RETRY_BASE_MS' | 'FETCH_RETRY_CAP_MS'>,
 ): Promise<CollectCpiResult> {
+  let htmlFailure: string | null = null
+
   // Attempt 1: HTML measures page — authoritative, updates immediately after ABS releases.
   try {
     const fetched = await fetchWithTimeout(RBA_MEASURES_CPI_URL, undefined, { env })
@@ -161,17 +163,14 @@ export async function collectCpiFromRbaG1(
         return { ok: true, upserted: points.length, sourceUrl: RBA_MEASURES_CPI_URL }
       }
     }
-    log.warn('pipeline', 'cpi_html_fallback', {
-      context: `status=${fetched.meta.status ?? 0} reason=no_points_or_non_ok`,
-    })
+    htmlFailure = `html status=${fetched.meta.status ?? 0} reason=no_points_or_non_ok`
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
-    log.warn('pipeline', 'cpi_html_fallback', {
-      context: `reason=fetch_error elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`,
-    })
+    htmlFailure = `html reason=fetch_error elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`
   }
 
   // Attempt 2: G1 CSV fallback.
+  let csvFailure: string | null = null
   try {
     const fetched = await fetchWithTimeout(RBA_G1_DATA_URL, undefined, { env })
     const response = fetched.response
@@ -182,16 +181,17 @@ export async function collectCpiFromRbaG1(
     })
     const csv = await response.text()
     if (!response.ok) {
-      return { ok: false, upserted: 0, sourceUrl: RBA_G1_DATA_URL, message: `G1 fetch failed: ${response.status}` }
+      csvFailure = `g1 status=${response.status} reason=non_ok`
+    } else {
+      const points = parseCpiCsv(csv)
+      if (points.length > 0) {
+        for (const p of points) {
+          await upsertCpiData(db, { quarterDate: p.quarterDate, annualChange: p.annualChange, sourceUrl: RBA_G1_DATA_URL })
+        }
+        return { ok: true, upserted: points.length, sourceUrl: RBA_G1_DATA_URL }
+      }
+      csvFailure = 'g1 reason=no_parseable_points'
     }
-    const points = parseCpiCsv(csv)
-    if (points.length === 0) {
-      return { ok: false, upserted: 0, sourceUrl: RBA_G1_DATA_URL, message: 'G1 CSV returned no parseable CPI points' }
-    }
-    for (const p of points) {
-      await upsertCpiData(db, { quarterDate: p.quarterDate, annualChange: p.annualChange, sourceUrl: RBA_G1_DATA_URL })
-    }
-    return { ok: true, upserted: points.length, sourceUrl: RBA_G1_DATA_URL }
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
     log.warn('pipeline', 'upstream_fetch', {
@@ -199,11 +199,16 @@ export async function collectCpiFromRbaG1(
         `source=rba_g1 host=${hostFromUrl(RBA_G1_DATA_URL)}` +
         ` elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`,
     })
-    return {
-      ok: false,
-      upserted: 0,
-      sourceUrl: RBA_G1_DATA_URL,
-      message: (error as Error)?.message ?? String(error),
-    }
+    csvFailure = `g1 reason=fetch_error elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`
+  }
+
+  log.warn('pipeline', 'cpi_collection_unavailable', {
+    context: `${htmlFailure || 'html=unknown'} ${csvFailure || 'g1=unknown'}`,
+  })
+  return {
+    ok: false,
+    upserted: 0,
+    sourceUrl: RBA_G1_DATA_URL,
+    message: `${htmlFailure || 'html=unknown'}; ${csvFailure || 'g1=unknown'}`,
   }
 }

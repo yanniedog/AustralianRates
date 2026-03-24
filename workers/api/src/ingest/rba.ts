@@ -1,4 +1,4 @@
-import { upsertRbaCashRate } from '../db/rba-cash-rate'
+import { getNearestRbaCashRateSnapshot, upsertRbaCashRate } from '../db/rba-cash-rate'
 import type { EnvBindings } from '../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
@@ -107,7 +107,15 @@ export async function collectRbaCashRateForDate(
   db: D1Database,
   collectionDate: string,
   env?: Pick<EnvBindings, 'FETCH_TIMEOUT_MS' | 'FETCH_MAX_RETRIES' | 'FETCH_RETRY_BASE_MS' | 'FETCH_RETRY_CAP_MS'>,
-): Promise<{ ok: boolean; cashRate: number | null; effectiveDate: string | null; sourceUrl: string }> {
+): Promise<{
+  ok: boolean
+  cashRate: number | null
+  effectiveDate: string | null
+  sourceUrl: string
+  fallbackToStored?: boolean
+}> {
+  let htmlFailure: string | null = null
+
   // Attempt 1: HTML decisions page — authoritative, updates immediately after each announcement.
   try {
     const fetched = await fetchWithTimeout(RBA_DECISIONS_URL, undefined, { env })
@@ -134,19 +142,16 @@ export async function collectRbaCashRateForDate(
         return { ok: true, cashRate: nearest.cashRate, effectiveDate: nearest.date, sourceUrl: RBA_DECISIONS_URL }
       }
     }
-    log.warn('pipeline', 'rba_html_fallback', {
-      context: `collectionDate=${collectionDate} status=${fetched.meta.status ?? 0} reason=no_points_or_non_ok`,
-    })
+    htmlFailure = `html status=${fetched.meta.status ?? 0} reason=no_points_or_non_ok`
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
-    log.warn('pipeline', 'rba_html_fallback', {
-      context:
-        `collectionDate=${collectionDate} reason=fetch_error` +
-        ` elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`,
-    })
+    htmlFailure =
+      `html reason=fetch_error` +
+      ` elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`
   }
 
   // Attempt 2: F1 CSV fallback.
+  let csvFailure: string | null = null
   try {
     const fetched = await fetchWithTimeout(RBA_F1_DATA_URL, undefined, { env })
     const response = fetched.response
@@ -160,20 +165,21 @@ export async function collectRbaCashRateForDate(
     })
     const csv = await response.text()
     if (!response.ok) {
-      return { ok: false, cashRate: null, effectiveDate: null, sourceUrl: RBA_F1_DATA_URL }
+      csvFailure = `csv status=${response.status} reason=non_ok`
+    } else {
+      const points = parseCsvLines(csv)
+      const nearest = latestPointOnOrBefore(points, collectionDate)
+      if (nearest) {
+        await upsertRbaCashRate(db, {
+          collectionDate,
+          cashRate: nearest.cashRate,
+          effectiveDate: nearest.date,
+          sourceUrl: RBA_F1_DATA_URL,
+        })
+        return { ok: true, cashRate: nearest.cashRate, effectiveDate: nearest.date, sourceUrl: RBA_F1_DATA_URL }
+      }
+      csvFailure = 'csv reason=no_points_on_or_before_collection_date'
     }
-    const points = parseCsvLines(csv)
-    const nearest = latestPointOnOrBefore(points, collectionDate)
-    if (!nearest) {
-      return { ok: false, cashRate: null, effectiveDate: null, sourceUrl: RBA_F1_DATA_URL }
-    }
-    await upsertRbaCashRate(db, {
-      collectionDate,
-      cashRate: nearest.cashRate,
-      effectiveDate: nearest.date,
-      sourceUrl: RBA_F1_DATA_URL,
-    })
-    return { ok: true, cashRate: nearest.cashRate, effectiveDate: nearest.date, sourceUrl: RBA_F1_DATA_URL }
   } catch (error) {
     const meta = error instanceof FetchWithTimeoutError ? error.meta : null
     log.warn('pipeline', 'upstream_fetch', {
@@ -184,8 +190,29 @@ export async function collectRbaCashRateForDate(
         ` timed_out=${meta?.timed_out ? 1 : 0} timeout=${meta?.timed_out ? 1 : 0}` +
         ` status=${meta?.status ?? 0}`,
     })
-    return { ok: false, cashRate: null, effectiveDate: null, sourceUrl: RBA_F1_DATA_URL }
+    csvFailure =
+      `csv reason=fetch_error` +
+      ` elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`
   }
+
+  const stored = await getNearestRbaCashRateSnapshot(db, collectionDate)
+  if (stored) {
+    log.warn('pipeline', 'rba_collection_used_stored_rate', {
+      context: `collectionDate=${collectionDate} ${htmlFailure || 'html=unknown'} ${csvFailure || 'csv=unknown'} effectiveDate=${stored.effectiveDate} sourceUrl=${stored.sourceUrl}`,
+    })
+    return {
+      ok: true,
+      cashRate: stored.cashRate,
+      effectiveDate: stored.effectiveDate,
+      sourceUrl: stored.sourceUrl,
+      fallbackToStored: true,
+    }
+  }
+
+  log.warn('pipeline', 'rba_collection_unavailable', {
+    context: `collectionDate=${collectionDate} ${htmlFailure || 'html=unknown'} ${csvFailure || 'csv=unknown'}`,
+  })
+  return { ok: false, cashRate: null, effectiveDate: null, sourceUrl: RBA_F1_DATA_URL }
 }
 
 function* dateRangeInclusive(startDate: string, endDate: string): Generator<string> {

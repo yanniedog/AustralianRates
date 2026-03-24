@@ -63,6 +63,36 @@ export async function finalizePresenceForRun(
     collectionDate: input.collectionDate,
     runId: input.runId,
   })
+
+  // Fill in any product_catalog entries for this bank+dataset that have no presence row.
+  // This catches products written via backfill or admin-repair paths that bypass run_seen_products.
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO product_presence_status (
+         section,
+         bank_name,
+         product_id,
+         is_removed,
+         removed_at,
+         last_seen_collection_date,
+         last_seen_at,
+         last_seen_run_id
+       )
+       SELECT
+         dataset_kind,
+         bank_name,
+         product_id,
+         COALESCE(is_removed, 0),
+         removed_at,
+         last_seen_collection_date,
+         COALESCE(last_seen_at, CURRENT_TIMESTAMP),
+         last_successful_run_id
+       FROM product_catalog
+       WHERE dataset_kind = ?1
+         AND bank_name = ?2`,
+    )
+    .bind(input.dataset, input.bankName)
+    .run()
   const removedProducts = await markMissingProductsRemoved(db, {
     section: sectionForDataset(input.dataset),
     bankName: input.bankName,

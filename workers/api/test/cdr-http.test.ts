@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fetchCdrJson, fetchJson } from '../src/ingest/cdr/http'
+import { log } from '../src/utils/logger'
 
 type TestServer = {
   server: Server
@@ -34,6 +35,7 @@ afterEach(async () => {
     const next = activeServers.pop()
     if (next) await next.close()
   }
+  vi.restoreAllMocks()
 })
 
 describe('CDR HTTP helpers', () => {
@@ -86,5 +88,41 @@ describe('CDR HTTP helpers', () => {
     expect(result.ok).toBe(true)
     expect(requestedVersions).toContain('3')
     expect(requestedVersions).toContain('4')
+  })
+
+  it('does not warn for 406 version probes when a later fallback version succeeds', async () => {
+    const requestedVersions: string[] = []
+    const warnSpy = vi.spyOn(log, 'warn')
+    const testServer = await startTestServer((req, res) => {
+      const version = String(req.headers['x-v'] || '')
+      requestedVersions.push(version)
+      res.writeHead(version === '2' ? 200 : 406, { 'Content-Type': 'application/json' })
+      if (version === '2') {
+        res.end(JSON.stringify({ data: { products: [] } }))
+        return
+      }
+      res.end(
+        JSON.stringify({
+          errors: [
+            {
+              code: 'PCUA006',
+              title: 'Unsupported Version',
+              detail: 'Unable to find the version requested in x-v',
+            },
+          ],
+        }),
+      )
+    })
+    activeServers.push(testServer)
+
+    const result = await fetchCdrJson(`${testServer.baseUrl}/products`, [3, 4])
+
+    expect(result.ok).toBe(true)
+    expect(requestedVersions).toContain('3')
+    expect(requestedVersions).toContain('4')
+    expect(requestedVersions).toContain('2')
+    expect(
+      warnSpy.mock.calls.some((call) => call[1] === 'cdr_406_no_versions_advertised'),
+    ).toBe(false)
   })
 })

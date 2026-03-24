@@ -138,9 +138,15 @@ function parseSupportedVersions(body: string): number[] {
     .filter((x) => Number.isFinite(x))
 }
 
+type UnsupportedVersionProbe = {
+  versionTried: number
+  bodySnippet: string
+}
+
 export async function fetchCdrJson(url: string, versions: number[], context?: FetchRequestContext): Promise<FetchJsonResult> {
   const tried = new Set<number>()
   const queue = [...versions]
+  const unsupportedVersionProbes: UnsupportedVersionProbe[] = []
   while (queue.length > 0) {
     const version = Number(queue.shift())
     if (!Number.isFinite(version) || tried.has(version)) continue
@@ -175,11 +181,9 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
         if (!tried.has(x)) queue.push(x)
       }
       if (advertised.length === 0) {
-        const snippet = (res.text || '').slice(0, 300).replace(/\s+/g, ' ').trim()
-        log.warn('ingest', 'cdr_406_no_versions_advertised', {
-          runId: context?.runId,
-          lenderCode: context?.lenderCode,
-          context: `url=${url} x_v_tried=${version} body_snippet=${snippet || 'empty'}`,
+        unsupportedVersionProbes.push({
+          versionTried: version,
+          bodySnippet: (res.text || '').slice(0, 300).replace(/\s+/g, ' ').trim() || 'empty',
         })
       }
     }
@@ -212,5 +216,18 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
     }
   }
 
-  return fetchJson(url, context)
+  const finalResult = await fetchJson(url, context)
+  if (!finalResult.ok && unsupportedVersionProbes.length > 0) {
+    const attempts = unsupportedVersionProbes
+      .slice(0, 4)
+      .map((probe) => `x_v_tried=${probe.versionTried} body_snippet=${probe.bodySnippet}`)
+      .join(' | ')
+    log.warn('ingest', 'cdr_406_no_versions_advertised', {
+      runId: context?.runId,
+      lenderCode: context?.lenderCode,
+      context: `url=${url} attempts=${unsupportedVersionProbes.length} ${attempts}`,
+    })
+  }
+
+  return finalResult
 }
