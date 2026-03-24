@@ -34,6 +34,12 @@ This checklist describes **products and row types** that skew min/max, means, or
 | Short term noise | GSB 1m / 2m TDs; St.George / Bank of Melbourne TDs with **0.1%** floor rows | Extreme quantiles across terms |
 | High tail | AMP Bank GO 6m/12m TDs (~5.2%) | Upper range of file |
 
-## Default views
+## Default views (site and API)
 
-For “typical consumer” comparisons, consider filtering or tagging: transaction accounts (0%), bridging/LOC, farm placeholder tiers, FX products, and mis-filed TD rows in savings exports.
+- **Savings (site):** On first load, the savings section defaults **Account type** to `savings` so transaction accounts (0% rows) are not mixed into the default table. Users can clear it or pick `transaction` / `at_call` to see all types.
+- **Public API:** List endpoints (`/rates`, `/latest`, `/export`, etc.) apply **compare edge exclusions** by default (`exclude_compare_edge_cases` omitted or true):
+  - **Home loans:** Excludes product names containing `veterans`, `sustainable upgrades`, or `bridging` (case-insensitive).
+  - **Savings:** Excludes names containing `foreign currency` or `term deposit` (mis-filed TD-style rows).
+  - **Term deposits:** Excludes `min_deposit` below 1000 (when set) and names containing `farm management` (placeholder / agri tiers).
+- **Full rows:** Pass `exclude_compare_edge_cases=0` (or `false`/`off`) on API requests. The site **Analyst** mode sends `exclude_compare_edge_cases=0` to show all rows.
+- **Response meta:** JSON `meta.compare_view.exclude_edge_cases` mirrors the active setting.

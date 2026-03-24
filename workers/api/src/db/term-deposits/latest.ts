@@ -1,3 +1,4 @@
+import { applyTdCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
@@ -57,6 +58,8 @@ function buildLatestWhere(filters: LatestTdFilters): { clause: string; binds: Ar
   }
 
   where.push(runSourceWhereClause('l.run_source', filters.sourceMode ?? 'all'))
+
+  applyTdCompareEdgeExclusions(where, 'l.product_name', 'l.min_deposit', filters.excludeCompareEdgeCases)
 
   return {
     clause: where.length ? `WHERE ${where.join(' AND ')}` : '',

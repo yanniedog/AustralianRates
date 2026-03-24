@@ -1,3 +1,4 @@
+import { applyHomeLoanCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentCoreRowFields, presentHomeLoanRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
@@ -69,6 +70,8 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   if (!filters.includeRemoved) {
     where.push('COALESCE(pps.is_removed, 0) = 0')
   }
+
+  applyHomeLoanCompareEdgeExclusions(where, 'h.product_name', filters.excludeCompareEdgeCases)
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
   const whereWithoutPps = where.filter((w) => !w.includes('pps.'))
@@ -345,6 +348,8 @@ export async function queryRatesForExport(
     where.push('COALESCE(pps.is_removed, 0) = 0')
   }
 
+  applyHomeLoanCompareEdgeExclusions(where, 'h.product_name', filters.excludeCompareEdgeCases)
+
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
   const whereNoPps = where.filter((w) => !w.includes('pps.'))
   const whereClauseNoPps = whereNoPps.length ? `WHERE ${whereNoPps.join(' AND ')}` : ''
@@ -601,6 +606,7 @@ function buildHomeLoanWhereNoDates(filters: RatesPaginatedFilters): { whereClaus
   if (!filters.includeRemoved) {
     where.push('COALESCE(pps.is_removed, 0) = 0')
   }
+  applyHomeLoanCompareEdgeExclusions(where, 'h.product_name', filters.excludeCompareEdgeCases)
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
   return { whereClause, binds }
 }

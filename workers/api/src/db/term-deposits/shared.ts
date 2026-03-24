@@ -1,3 +1,4 @@
+import { applyTdCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
 import { addBankWhere } from '../query-common'
 
@@ -21,6 +22,7 @@ export type TdPaginatedFilters = {
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
+  excludeCompareEdgeCases?: boolean
   sort?: string
   dir?: 'asc' | 'desc'
   mode?: 'all' | 'daily' | 'historical'
@@ -36,6 +38,7 @@ export type LatestTdFilters = {
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
+  excludeCompareEdgeCases?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number
@@ -129,6 +132,8 @@ export function buildWhere(filters: TdPaginatedFilters): { clause: string; binds
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+
+  applyTdCompareEdgeExclusions(where, 'h.product_name', 'h.min_deposit', filters.excludeCompareEdgeCases)
 
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }

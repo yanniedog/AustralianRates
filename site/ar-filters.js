@@ -126,6 +126,7 @@
         if (!text) return true;
         if (key === 'include_removed') return true;
         if (key === 'min_rate' && text === '0.01') return true;
+        if (section === 'savings' && key === 'account_type' && text === 'savings') return true;
         if (key === 'mode' && text === 'all') return true;
         return false;
     }
@@ -304,6 +305,8 @@
         if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
         if (els.refreshInterval) els.refreshInterval.value = '60';
         applyDefaultMinRateIfEmpty();
+        applyDefaultHomeLoanScenarioIfEmpty();
+        applyDefaultSavingsCompareIfEmpty();
         if (filterUi && filterUi.resetUi) filterUi.resetUi();
         refreshFilterUiState();
     }
@@ -487,6 +490,9 @@
         if (readColumnPrefs().showRemoved) {
             p.include_removed = 'true';
         }
+        if (isAnalystMode()) {
+            p.exclude_compare_edge_cases = '0';
+        }
         return p;
     }
 
@@ -501,6 +507,7 @@
             var value = fp[field.param];
             if (value == null || String(value).trim() === '') continue;
             if (field.param === 'min_rate' && String(value).trim() === '0.01') continue;
+            if (section === 'savings' && field.param === 'account_type' && String(value).trim() === 'savings') continue;
             q.set(field.url || field.param, String(value).trim());
         }
         if (fp.start_date) q.set('start_date', fp.start_date);
@@ -508,6 +515,7 @@
         if (fp.mode && fp.mode !== 'all') q.set('mode', fp.mode);
         if (fp.include_manual) q.set('include_manual', fp.include_manual);
         if (fp.include_removed) q.set('include_removed', fp.include_removed);
+        if (isAnalystMode() && fp.exclude_compare_edge_cases) q.set('exclude_compare_edge_cases', fp.exclude_compare_edge_cases);
 
         if (els.refreshInterval && els.refreshInterval.value !== '60') q.set('refresh_interval', els.refreshInterval.value);
         if (apiOverride) q.set('apiBase', apiOverride);
@@ -629,6 +637,7 @@
             restoreUrlState();
             applyDefaultMinRateIfEmpty();
             applyDefaultHomeLoanScenarioIfEmpty();
+            applyDefaultSavingsCompareIfEmpty();
             if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
@@ -641,6 +650,7 @@
             restoreUrlState();
             applyDefaultMinRateIfEmpty();
             applyDefaultHomeLoanScenarioIfEmpty();
+            applyDefaultSavingsCompareIfEmpty();
             if (filterUi && filterUi.init) filterUi.init();
             applyUiMode();
             bindInteractionListeners();
@@ -690,6 +700,13 @@
                 function (value) { return value.indexOf('80') >= 0; },
             ]);
         }
+    }
+
+    /** Default savings compare: interest-bearing savings only (excludes transaction accounts at 0%). */
+    function applyDefaultSavingsCompareIfEmpty() {
+        if (section !== 'savings') return;
+        var el = getFilterEl('filter-account-type');
+        if (el && !String(el.value || '').trim()) el.value = 'savings';
     }
 
     window.AR.filters = {

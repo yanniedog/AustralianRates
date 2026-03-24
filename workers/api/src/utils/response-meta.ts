@@ -15,6 +15,10 @@ export type ListMeta = {
     limited: boolean
   }
   generated_at: string
+  /** Present when the response applies optional compare-view exclusions (niche/mis-filed rows). */
+  compare_view?: {
+    exclude_edge_cases: boolean
+  }
   disclosures?: {
     comparison_rate?: {
       loan_amount_aud: number
@@ -54,6 +58,7 @@ export function buildListMeta(input: {
   returnedRows: number
   sourceMix?: Partial<SourceMix> | null
   limited?: boolean
+  excludeCompareEdgeCases?: boolean
   disclosures?: ListMeta['disclosures']
 }): ListMeta {
   const meta: ListMeta = {
@@ -66,6 +71,10 @@ export function buildListMeta(input: {
       limited: Boolean(input.limited),
     },
     generated_at: new Date().toISOString(),
+  }
+
+  if (typeof input.excludeCompareEdgeCases === 'boolean') {
+    meta.compare_view = { exclude_edge_cases: input.excludeCompareEdgeCases }
   }
 
   if (input.disclosures && input.disclosures.comparison_rate) {

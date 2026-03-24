@@ -32,7 +32,7 @@ import {
 import { toCsv } from '../utils/csv'
 import { queryHomeLoanRepresentationTimeseriesResolved } from './analytics-data'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
-import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerCpiRoutes } from './cpi-routes'
@@ -124,6 +124,7 @@ publicRoutes.get('/rates', async (c) => {
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
   const filters: RatesPaginatedFilters = {
     page: Number(query.page || 1),
@@ -142,6 +143,7 @@ publicRoutes.get('/rates', async (c) => {
     minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
     maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -171,6 +173,7 @@ publicRoutes.get('/rates', async (c) => {
     returnedRows: result.data.length,
     sourceMix: result.source_mix,
     limited: result.total > result.data.length,
+    excludeCompareEdgeCases,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
@@ -199,6 +202,7 @@ publicRoutes.get('/export', async (c) => {
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
   const { data, total, source_mix } = await queryRatesForExport(c.env.DB, {
     startDate: query.start_date,
@@ -215,6 +219,7 @@ publicRoutes.get('/export', async (c) => {
     minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
     maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     sort: query.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -227,6 +232,7 @@ publicRoutes.get('/export', async (c) => {
     returnedRows: data.length,
     sourceMix: source_mix,
     limited: total > data.length,
+    excludeCompareEdgeCases,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 
@@ -263,6 +269,7 @@ publicRoutes.get('/latest', async (c) => {
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
   const filters = {
     bank: query.bank,
@@ -277,6 +284,7 @@ publicRoutes.get('/latest', async (c) => {
     minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
     maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     mode,
     sourceMode,
     limit,
@@ -299,6 +307,7 @@ publicRoutes.get('/latest', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    excludeCompareEdgeCases,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
   const jsonStartedAt = Date.now()
@@ -340,6 +349,7 @@ publicRoutes.get('/latest-all', async (c) => {
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   const rows = await queryLatestAllRates(c.env.DB, {
@@ -355,6 +365,7 @@ publicRoutes.get('/latest-all', async (c) => {
     minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
     maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     mode,
     sourceMode,
     limit,
@@ -366,6 +377,7 @@ publicRoutes.get('/latest-all', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    excludeCompareEdgeCases,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
   const jsonStartedAt = Date.now()
@@ -494,6 +506,7 @@ publicRoutes.get('/export.csv', async (c) => {
   const modeRaw = String(query.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
   if (dataset === 'timeseries') {
     const productKey = query.product_key || query.productKey || query.series_key
@@ -546,6 +559,7 @@ publicRoutes.get('/export.csv', async (c) => {
     minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
     maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
     includeRemoved: parseIncludeRemoved(query.include_removed),
+    excludeCompareEdgeCases,
     mode,
     sourceMode,
     limit: Number(query.limit || 1000),
@@ -556,6 +570,7 @@ publicRoutes.get('/export.csv', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: false,
+    excludeCompareEdgeCases,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
 

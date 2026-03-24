@@ -20,3 +20,12 @@ export function parseIncludeRemoved(value: string | undefined): boolean {
   const normalized = String(value || '').trim().toLowerCase()
   return normalized === '1' || normalized === 'true' || normalized === 'yes'
 }
+
+/** Default true: omit niche/mis-filed compare outliers. Set 0/false/off for full rows. */
+export function parseExcludeCompareEdgeCases(value: string | undefined): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false
+  }
+  return true
+}

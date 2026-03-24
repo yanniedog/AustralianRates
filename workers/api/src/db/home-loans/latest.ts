@@ -1,3 +1,4 @@
+import { applyHomeLoanCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentHomeLoanRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
@@ -64,6 +65,8 @@ function buildLatestWhere(filters: LatestFilters): { clause: string; binds: Arra
     where.push('l.confidence_score >= ?')
     binds.push(MIN_CONFIDENCE_ALL)
   }
+
+  applyHomeLoanCompareEdgeExclusions(where, 'l.product_name', filters.excludeCompareEdgeCases)
 
   return {
     clause: where.length ? `WHERE ${where.join(' AND ')}` : '',

@@ -43,7 +43,7 @@ import {
   storePublicReadCache,
 } from './latest-response'
 import { toCsv } from '../utils/csv'
-import { parseCsvList, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerRbaRoutes } from './rba-routes'
 import { registerSavingsChartDataRoute } from './chart-data/savings'
 
@@ -182,6 +182,7 @@ savingsPublicRoutes.get('/rates', async (c) => {
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const result = await querySavingsRatesPaginated(c.env.DB, {
     page: Number(q.page || 1),
@@ -196,6 +197,7 @@ savingsPublicRoutes.get('/rates', async (c) => {
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     sort: q.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -207,6 +209,7 @@ savingsPublicRoutes.get('/rates', async (c) => {
     returnedRows: result.data.length,
     sourceMix: result.source_mix,
     limited: result.total > result.data.length,
+    excludeCompareEdgeCases,
   })
   const response = c.json({ ...result, meta })
   storePublicReadCache(c, cacheKey, response)
@@ -230,6 +233,7 @@ savingsPublicRoutes.get('/latest', async (c) => {
   const limit = Number(q.limit || 1000)
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const filters = {
     bank: q.bank,
@@ -240,6 +244,7 @@ savingsPublicRoutes.get('/latest', async (c) => {
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     mode,
     sourceMode,
     limit,
@@ -262,6 +267,7 @@ savingsPublicRoutes.get('/latest', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    excludeCompareEdgeCases,
   })
   const jsonStartedAt = Date.now()
   const response = c.json({ ok: true, count: rows.length, total, rows, meta })
@@ -296,6 +302,7 @@ savingsPublicRoutes.get('/latest-all', async (c) => {
   const limit = Number(q.limit || 1000)
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   const rows = await queryLatestAllSavingsRates(c.env.DB, {
@@ -307,6 +314,7 @@ savingsPublicRoutes.get('/latest-all', async (c) => {
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     mode,
     sourceMode,
     limit,
@@ -318,6 +326,7 @@ savingsPublicRoutes.get('/latest-all', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: rows.length >= Math.max(1, Math.floor(limit)),
+    excludeCompareEdgeCases,
   })
   const jsonStartedAt = Date.now()
   const response = c.json({ ok: true, count: rows.length, rows, meta })
@@ -419,6 +428,7 @@ savingsPublicRoutes.get('/export', async (c) => {
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const { data, total, source_mix } = await querySavingsForExport(c.env.DB, {
     startDate: q.start_date,
@@ -431,6 +441,7 @@ savingsPublicRoutes.get('/export', async (c) => {
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved,
+    excludeCompareEdgeCases,
     sort: q.sort,
     dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
     mode,
@@ -443,6 +454,7 @@ savingsPublicRoutes.get('/export', async (c) => {
     returnedRows: data.length,
     sourceMix: source_mix,
     limited: total > data.length,
+    excludeCompareEdgeCases,
   })
 
   if (format === 'csv') {
@@ -466,6 +478,7 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
   const modeRaw = String(q.mode || 'all').toLowerCase()
   const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
+  const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   if (dataset === 'timeseries') {
     const productKey = q.product_key || q.productKey || q.series_key
@@ -510,6 +523,7 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
     minRate: parseOptionalNumber(q.min_rate),
     maxRate: parseOptionalNumber(q.max_rate),
     includeRemoved: parseIncludeRemoved(q.include_removed),
+    excludeCompareEdgeCases,
     mode,
     sourceMode,
     limit: Number(q.limit || 1000),
@@ -520,6 +534,7 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
     returnedRows: rows.length,
     sourceMix: sourceMixFromRows(rows as Array<Record<string, unknown>>),
     limited: false,
+    excludeCompareEdgeCases,
   })
   c.header('Content-Type', 'text/csv; charset=utf-8')
   c.header('Content-Disposition', 'attachment; filename="savings-latest.csv"')

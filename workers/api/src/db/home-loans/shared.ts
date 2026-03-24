@@ -13,6 +13,8 @@ export type LatestFilters = {
   minComparisonRate?: number
   maxComparisonRate?: number
   includeRemoved?: boolean
+  /** Omit Veterans / sustainable / bridging-style names from default compare views. Default true. */
+  excludeCompareEdgeCases?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   limit?: number
@@ -57,6 +59,7 @@ export type RatesPaginatedFilters = {
   minComparisonRate?: number
   maxComparisonRate?: number
   includeRemoved?: boolean
+  excludeCompareEdgeCases?: boolean
   sort?: string
   dir?: 'asc' | 'desc'
   mode?: 'all' | 'daily' | 'historical'
