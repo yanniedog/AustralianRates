@@ -34,3 +34,4 @@ artifacts/**/*.db
 artifacts/**/*.sqlite
 artifacts/**/*.sqlite3
 artifacts/**/*.json
+*.xlsx
