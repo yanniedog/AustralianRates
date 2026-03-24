@@ -14,6 +14,7 @@ import type {
 export const API_BASE_PATH = '/api/home-loan-rates'
 export const SAVINGS_API_BASE_PATH = '/api/savings-rates'
 export const TD_API_BASE_PATH = '/api/term-deposit-rates'
+export const ECONOMIC_API_BASE_PATH = '/api/economic-data'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
 export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 */6 * * *'

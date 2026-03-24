@@ -22,6 +22,8 @@
         '/savings/index.html': 'savings',
         '/term-deposits/': 'term-deposits',
         '/term-deposits/index.html': 'term-deposits',
+        '/economic-data/': 'economic-data',
+        '/economic-data/index.html': 'economic-data',
     };
     var sectionFromPath = publicSectionByPath[normalizedPath] || null;
     var sectionFromBody = bodyEl ? bodyEl.getAttribute('data-ar-section') : null;
@@ -131,6 +133,13 @@
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
             chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank. For over-time comparison, filter by one term (e.g. 12m) so lines are like-for-like.'
+        },
+        'economic-data': {
+            apiPath: '/api/economic-data',
+            requestTimeoutMs: 15000,
+            heroEyebrow: 'Australian Economic Data Dashboard',
+            heroHeading: 'Track macro indicators that shape the RBA path',
+            heroSubtitle: 'Daily-updated economic, market, and global series collected from official public sources and plotted in a normalized compare view.'
         }
     };
 

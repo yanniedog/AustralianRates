@@ -71,6 +71,29 @@ async function fetchText(url: string, env: EnvBindings, sourceCode: string): Pro
   return fetched.response.text()
 }
 
+async function fetchTextWithFallback(
+  primaryUrl: string,
+  fallbackUrl: string | undefined,
+  env: EnvBindings,
+  sourceCode: string,
+): Promise<string> {
+  try {
+    return await fetchText(primaryUrl, env, sourceCode)
+  } catch (error) {
+    if (!fallbackUrl || fallbackUrl === primaryUrl) throw error
+    log.warn('economic', 'Primary upstream fetch failed; retrying fallback transport', {
+      code: 'economic_series_fetch_failed',
+      context: JSON.stringify({
+        source: sourceCode,
+        primary_url: primaryUrl,
+        fallback_url: fallbackUrl,
+        message: (error as Error)?.message ?? String(error),
+      }),
+    })
+    return fetchText(fallbackUrl, env, sourceCode)
+  }
+}
+
 async function persistSeries(
   env: EnvBindings,
   definition: EconomicSeriesDefinition,
@@ -127,12 +150,13 @@ async function markSeriesFailure(env: EnvBindings, definition: EconomicSeriesDef
       message: (error as Error)?.message ?? String(error),
     }),
   })
+  const previous = (await getEconomicStatusMap(env.DB, [definition.id])).get(definition.id)
   await upsertEconomicStatus(env.DB, {
     seriesId: definition.id,
     lastCheckedAt: checkedAt,
-    lastSuccessAt: null,
-    lastObservationDate: null,
-    lastValue: null,
+    lastSuccessAt: previous?.last_success_at ?? null,
+    lastObservationDate: previous?.last_observation_date ?? null,
+    lastValue: previous?.last_value ?? null,
     status: 'error',
     message: (error as Error)?.message ?? String(error),
     sourceUrl: definition.sourceUrl,
@@ -222,13 +246,23 @@ async function collectLendingProxy(
 
 async function collectRbnzSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
   if (definition.collector.kind !== 'rbnz_ocr_history') return []
-  const text = await fetchText(definition.collector.transportUrl, env, 'economic_rbnz_ocr')
+  const text = await fetchTextWithFallback(
+    definition.collector.url,
+    definition.collector.transportUrl,
+    env,
+    'economic_rbnz_ocr',
+  )
   return parseRbnzOcrText(text, definition.id, definition.sourceUrl, definition.proxy)
 }
 
 async function collectFedSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
   if (definition.collector.kind !== 'fed_target_history') return []
-  const html = await fetchText(definition.collector.url, env, 'economic_fed_target')
+  const html = await fetchTextWithFallback(
+    definition.collector.url,
+    definition.collector.transportUrl,
+    env,
+    'economic_fed_target',
+  )
   return parseFedTargetHistoryHtml(html, definition.id, definition.sourceUrl, definition.proxy)
 }
 

@@ -6,7 +6,13 @@
     var params = new URLSearchParams(window.location.search);
     var apiOverride = params.get('apiBase');
     var path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
-    var pathApiPath = (path.indexOf('/savings') !== -1) ? '/api/savings-rates' : (path.indexOf('/term-deposits') !== -1) ? '/api/term-deposit-rates' : null;
+    var pathApiPath = (path.indexOf('/savings') !== -1)
+        ? '/api/savings-rates'
+        : (path.indexOf('/term-deposits') !== -1)
+            ? '/api/term-deposit-rates'
+            : (path.indexOf('/economic-data') !== -1)
+                ? '/api/economic-data'
+                : null;
     var effectiveApiPath = sc.apiPath || pathApiPath || '/api/home-loan-rates';
     var apiBase = (apiOverride ? String(apiOverride).replace(/\/+$/, '') : '') ||
                   (window.location.origin + effectiveApiPath);

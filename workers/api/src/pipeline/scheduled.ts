@@ -5,6 +5,7 @@ import {
 import { triggerDailyRun } from './bootstrap-jobs'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { collectCpiFromRbaG1 } from '../ingest/cpi'
+import { collectEconomicSeries } from '../economic/collect'
 import { runCoverageGapAudit } from './coverage-gap-audit'
 import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
@@ -45,6 +46,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   let coverageAudit: Awaited<ReturnType<typeof runCoverageGapAudit>> | null = null
   let coverageRemediation: Awaited<ReturnType<typeof runCoverageGapRemediation>> | null = null
   let lenderUniverseAudit: Awaited<ReturnType<typeof runLenderUniverseAudit>> | null = null
+  let economic: Awaited<ReturnType<typeof collectEconomicSeries>> | null = null
   try {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
@@ -135,6 +137,14 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       context: (error as Error)?.message || String(error),
     })
   }
+  try {
+    economic = await collectEconomicSeries(env)
+  } catch (error) {
+    log.warn('scheduler', 'Economic series collection failed', {
+      code: 'economic_series_fetch_failed',
+      context: (error as Error)?.message || String(error),
+    })
+  }
 
   const pause = await getIngestPauseConfig(env.DB)
   if (pause.mode === 'repair_pause') {
@@ -153,6 +163,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       pause,
       reconciliation,
       coverageAudit,
+      economic,
       lenderUniverseAudit,
       melbourne: melbourneParts,
       intervalMinutes: 0,
@@ -196,6 +207,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     reconciliation,
     coverageAudit,
     coverageRemediation,
+    economic,
     lenderUniverseAudit,
     melbourne: melbourneParts,
     intervalMinutes: 0,

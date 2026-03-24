@@ -45,6 +45,12 @@ describe('api route integration smoke', () => {
     expect(json.ok).toBe(true)
   })
 
+  it('serves economic health endpoint contract', async () => {
+    const { status, json } = await fetchJson('/api/economic-data/health')
+    expect(status).toBe(200)
+    expect(json.ok).toBe(true)
+  })
+
   it('disables public system log routes with stable 403 payload', async () => {
     for (const endpoint of ['/api/home-loan-rates/logs', '/api/home-loan-rates/logs/stats']) {
       const { status, json } = await fetchJson(endpoint)

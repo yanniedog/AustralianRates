@@ -108,4 +108,14 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_ingest_replay_queue_dispatch')
     expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_ingest_replay_queue_scope')
   })
+
+  it('includes economic series schema migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0039_economic_series.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS economic_series_observations')
+    expect(sql).toContain('PRIMARY KEY (series_id, observation_date)')
+    expect(sql).toContain("frequency IN ('daily', 'monthly', 'quarterly', 'policy')")
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS economic_series_status')
+    expect(sql).toContain("status IN ('ok', 'stale', 'error')")
+  })
 })

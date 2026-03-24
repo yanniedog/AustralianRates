@@ -170,7 +170,7 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     sourceLabel: 'RBA G1',
     sourceUrl: RBA_G1,
     staleAfterDays: 140,
-    description: 'Year-ended trimmed mean inflation, the RBA’s preferred core CPI measure.',
+    description: "Year-ended trimmed mean inflation, the RBA's preferred core CPI measure.",
     presets: ['rba_watchlist'],
     collector: { kind: 'rba_csv', url: RBA_G1, seriesId: 'GCPIOCPMTMYP' },
   },

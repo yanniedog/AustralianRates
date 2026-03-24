@@ -69,7 +69,7 @@ export function parseDelimitedText(text: string): string[][] {
 export function parseNumber(value: string | null | undefined): number | null {
   if (value == null) return null
   const normalized = String(value).trim().replace(/,/g, '')
-  if (!normalized || normalized === '..' || normalized === 'n.a.' || normalized === '—') return null
+  if (!normalized || normalized === '..' || normalized === 'n.a.' || normalized === '\u2014') return null
   const parsed = Number(normalized)
   return Number.isFinite(parsed) ? parsed : null
 }

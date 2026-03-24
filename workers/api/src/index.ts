@@ -2,11 +2,12 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
-import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from './constants'
+import { API_BASE_PATH, ECONOMIC_API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from './constants'
 import { RunLockDO } from './durable/run-lock'
 import { dispatchScheduledEvent } from './pipeline/scheduler-dispatch'
 import { consumeIngestQueue } from './queue/consumer'
 import { adminRoutes } from './routes/admin'
+import { economicPublicRoutes } from './routes/economic-public'
 import { publicRoutes } from './routes/public'
 import { savingsPublicRoutes } from './routes/savings-public'
 import { tdPublicRoutes } from './routes/td-public'
@@ -72,6 +73,7 @@ app.use(
 
 app.route(`${API_BASE_PATH}/admin`, adminRoutes)
 app.route(API_BASE_PATH, publicRoutes)
+app.route(ECONOMIC_API_BASE_PATH, economicPublicRoutes)
 app.route(SAVINGS_API_BASE_PATH, savingsPublicRoutes)
 app.route(TD_API_BASE_PATH, tdPublicRoutes)
 

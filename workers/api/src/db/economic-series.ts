@@ -245,7 +245,8 @@ export function expandEconomicObservationsDaily(
     points.push({
       date,
       raw_value: active.value,
-      normalized_value: baselineValue ? Number(((active.value / baselineValue) * 100).toFixed(3)) : null,
+      normalized_value:
+        baselineValue == null || baselineValue === 0 ? null : Number(((active.value / baselineValue) * 100).toFixed(3)),
       observation_date: active.observation_date,
       release_date: active.release_date,
     })

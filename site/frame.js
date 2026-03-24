@@ -184,6 +184,7 @@
     function sectionMeta(section) {
         if (section === 'savings') return { label: 'Savings', code: 'SAV', icon: 'stats', path: '/savings/' };
         if (section === 'term-deposits') return { label: 'Term Deposits', code: 'TD', icon: 'history', path: '/term-deposits/' };
+        if (section === 'economic-data') return { label: 'Economic Data', code: 'ECO', icon: 'chart', path: '/economic-data/' };
         return { label: 'Home Loans', code: 'HL', icon: 'home', path: '/' };
     }
 
@@ -191,7 +192,8 @@
         return [
             sectionMeta('home-loans'),
             sectionMeta('savings'),
-            sectionMeta('term-deposits')
+            sectionMeta('term-deposits'),
+            sectionMeta('economic-data')
         ];
     }
 
@@ -228,6 +230,14 @@
     }
 
     function buildMarketLinks(baseHref) {
+        if (baseHref === '/economic-data/') {
+            return [
+                { href: baseHref + '#chart', label: 'Chart', icon: 'chart' },
+                { href: baseHref + '#scenario', label: 'Indicators', icon: 'filter' },
+                { href: baseHref + '#details', label: 'Details', icon: 'history' },
+                { href: baseHref + '#sources', label: 'Sources', icon: 'notes' }
+            ];
+        }
         return [
             { href: baseHref + '#chart', label: 'Charts', icon: 'chart' },
             { href: baseHref + '#table', label: 'Table', icon: 'table' },
@@ -670,6 +680,7 @@
             return 'Use the admin sidebar for destinations. Hover or focus controls for field definitions.';
         }
         if (context.legal) return 'Use the menu for Home Loans, Savings, Term Deposits, and reference pages. The header keeps theme, help, and quick links available without interrupting the page content.';
+        if (context.section === 'economic-data') return 'Use a preset or the grouped indicator list, change the visible date window, then read the normalized chart with raw values and source details on hover.';
         return 'Set the scenario once, then use leaders, charts, table, pivot, and history without losing the same filtered slice.';
     }
 

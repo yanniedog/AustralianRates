@@ -589,7 +589,7 @@ async function verifyLegalMenuSimplified(page, results, label) {
         return Array.from(document.querySelectorAll('#site-menu-drawer a[href]')).map((el) => String(el.getAttribute('href') || '').trim());
     }).catch(() => []);
 
-    const expected = ['/', '/savings/', '/term-deposits/', '/about/', '/contact/', '/privacy/', '/terms/'];
+    const expected = ['/', '/savings/', '/term-deposits/', '/economic-data/', '/about/', '/contact/', '/privacy/', '/terms/'];
     const missing = expected.filter((href) => !payload.includes(href));
     const extras = payload.filter((href) => expected.indexOf(href) === -1);
     const hasHashes = payload.some((href) => href.indexOf('#') >= 0);

@@ -22,7 +22,8 @@
     var DATASET_LINKS = [
         { href: '/', label: 'Home loans', key: 'home-loans' },
         { href: '/savings/', label: 'Savings', key: 'savings' },
-        { href: '/term-deposits/', label: 'Term deposits', key: 'term-deposits' }
+        { href: '/term-deposits/', label: 'Term deposits', key: 'term-deposits' },
+        { href: '/economic-data/', label: 'Economic data', key: 'economic-data' }
     ];
     var SECTION_COPY = {
         'home-loans': sectionCopy({
