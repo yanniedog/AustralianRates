@@ -30,4 +30,12 @@ describe('economic site smoke', () => {
     expect(siteFile('ar-section-config.js')).toContain("'economic-data'")
     expect(siteFile('ar-config.js')).toContain('/api/economic-data')
   })
+
+  it('ships economic dashboard logging and debug hooks', () => {
+    const js = siteFile('economic-data.js')
+    expect(js).toContain('clientLog')
+    expect(js).toContain("apiBase + '/debug-log'")
+    expect(js).toContain('ar.economicData =')
+    expect(js).toContain("window.addEventListener('unhandledrejection'")
+  })
 })

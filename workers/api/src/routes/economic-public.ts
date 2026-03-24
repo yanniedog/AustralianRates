@@ -3,6 +3,7 @@ import { getEconomicObservationsForSeries, getEconomicStatusMap, expandEconomicO
 import { ECONOMIC_PRESETS, ECONOMIC_SERIES_DEFINITIONS, getEconomicPreset, getEconomicSeriesDefinition, groupEconomicSeriesByCategory } from '../economic/registry'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
+import { registerDebugLogRoutes } from './debug-log'
 
 const DEFAULT_LOOKBACK_YEARS = 5
 const MAX_SERIES_PER_REQUEST = 12
@@ -64,6 +65,8 @@ function statusPayload(
 }
 
 export const economicPublicRoutes = new Hono<AppContext>()
+
+registerDebugLogRoutes(economicPublicRoutes)
 
 economicPublicRoutes.get('/health', async (c) => {
   withPublicCache(c, 30)

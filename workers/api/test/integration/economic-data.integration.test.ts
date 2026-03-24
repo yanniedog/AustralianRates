@@ -12,6 +12,30 @@ beforeEach(async () => {
 })
 
 describe('economic data routes', () => {
+  it('accepts debug-log traffic under the economic namespace', async () => {
+    const postResponse = await SELF.fetch('https://example.com/api/economic-data/debug-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'economic-debug-test',
+        level: 'warn',
+        message: 'Economic chart render degraded',
+        url: 'https://example.com/economic-data/',
+        data: { section: 'economic-data', code: 'chart_render_degraded' },
+      }),
+    })
+    expect(postResponse.status).toBe(200)
+    const postJson = await postResponse.json() as { ok: boolean; count: number }
+    expect(postJson.ok).toBe(true)
+    expect(postJson.count).toBeGreaterThan(0)
+
+    const getResponse = await SELF.fetch('https://example.com/api/economic-data/debug-log?session=economic-debug-test')
+    expect(getResponse.status).toBe(200)
+    const getJson = await getResponse.json() as { entries: Array<{ message?: string; data?: { code?: string } }> }
+    expect(getJson.entries.some((entry) => entry.message === 'Economic chart render degraded')).toBe(true)
+    expect(getJson.entries.some((entry) => entry.data?.code === 'chart_render_degraded')).toBe(true)
+  })
+
   it('returns grouped catalog metadata with freshness and proxy flags', async () => {
     await upsertEconomicStatus(env.DB, {
       seriesId: 'bank_bill_90d',

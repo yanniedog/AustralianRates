@@ -1,9 +1,14 @@
 (function () {
     'use strict';
 
-    var config = (window.AR && window.AR.config) ? window.AR.config : {};
+    window.AR = window.AR || {};
+
+    var ar = window.AR;
+    var config = ar.config || {};
+    var utils = ar.utils || {};
     var apiBase = config.apiBase || (window.location.origin + '/api/economic-data');
-    var log = typeof window.addSessionLog === 'function' ? window.addSessionLog : function () {};
+    var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
+    var sessionKey = 'ar-economic-data-debug-session';
     var state = {
         catalog: null,
         range: '5Y',
@@ -11,7 +16,11 @@
         selectedIds: [],
         series: [],
         chart: null,
-        hoveredDate: null
+        hoveredDate: null,
+        lastCatalogLoadedAt: '',
+        lastSeriesLoadedAt: '',
+        lastLoadReason: 'startup',
+        requestCount: 0
     };
 
     var refs = {
@@ -38,6 +47,14 @@
             .replace(/"/g, '&quot;');
     }
 
+    function describeError(error, fallback) {
+        if (error && typeof error === 'object') {
+            if (error.userMessage) return String(error.userMessage);
+            if (error.message) return String(error.message);
+        }
+        return String(fallback || 'Request failed.');
+    }
+
     function todayIso() { return new Date().toISOString().slice(0, 10); }
 
     function shiftYears(isoDate, years) {
@@ -52,6 +69,48 @@
         return { start_date: shiftYears(endDate, -Number(String(state.range).replace('Y', ''))), end_date: endDate };
     }
 
+    function getDebugSessionId() {
+        try {
+            var existing = window.sessionStorage.getItem(sessionKey);
+            if (existing) return existing;
+            var created = 'economic-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+            window.sessionStorage.setItem(sessionKey, created);
+            return created;
+        } catch (_error) {
+            return 'economic-anon';
+        }
+    }
+
+    function toRemotePayload(level, message, detail) {
+        return {
+            sessionId: getDebugSessionId(),
+            level: String(level || 'info'),
+            message: String(message || ''),
+            location: 'economic-data.js',
+            section: 'economic-data',
+            url: window.location.href,
+            timestamp: Date.now(),
+            data: detail && typeof detail === 'object' ? detail : { detail: detail }
+        };
+    }
+
+    function postDebugLog(level, message, detail) {
+        if (!apiBase) return;
+        fetch(apiBase + '/debug-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toRemotePayload(level, message, detail)),
+        }).catch(function () {});
+    }
+
+    function logEvent(level, message, detail, options) {
+        clientLog(level, message, detail);
+        var opts = options || {};
+        if (opts.remote || level === 'warn' || level === 'error') {
+            postDebugLog(level, message, detail);
+        }
+    }
+
     function fetchJson(path, params) {
         var url = new URL(apiBase + path, window.location.origin);
         Object.keys(params || {}).forEach(function (key) {
@@ -59,7 +118,12 @@
         });
         return fetch(url.toString(), { headers: { 'Accept': 'application/json' } }).then(function (response) {
             return response.json().then(function (json) {
-                if (!response.ok || !json || json.ok === false) throw new Error((json && json.error && json.error.message) || ('Request failed: ' + response.status));
+                if (!response.ok || !json || json.ok === false) {
+                    var error = new Error((json && json.error && json.error.message) || ('Request failed: ' + response.status));
+                    error.status = response.status;
+                    error.url = url.toString();
+                    throw error;
+                }
                 return json;
             });
         });
@@ -85,6 +149,37 @@
 
     function setStatus(text) {
         if (refs.statusText) refs.statusText.textContent = text;
+    }
+
+    function pointCount(seriesList) {
+        return (seriesList || []).reduce(function (sum, series) {
+            return sum + ((series && series.points) ? series.points.length : 0);
+        }, 0);
+    }
+
+    function syncDebugSurface() {
+        ar.economicData = {
+            reloadCatalog: loadCatalog,
+            reloadSeries: loadSeries,
+            getState: function () {
+                return {
+                    range: state.range,
+                    selectedPreset: state.selectedPreset,
+                    selectedIds: state.selectedIds.slice(),
+                    seriesCount: state.series.length,
+                    requestCount: state.requestCount,
+                    hoveredDate: state.hoveredDate,
+                    lastCatalogLoadedAt: state.lastCatalogLoadedAt,
+                    lastSeriesLoadedAt: state.lastSeriesLoadedAt,
+                    lastLoadReason: state.lastLoadReason,
+                    debugSessionId: getDebugSessionId(),
+                };
+            },
+            getCatalog: function () { return state.catalog; },
+            getSeries: function () { return state.series.slice(); },
+            getHoveredDate: function () { return state.hoveredDate; },
+            downloadClientLog: typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries : null,
+        };
     }
 
     function renderPresets() {
@@ -137,6 +232,7 @@
             var lastPoint = series0 && (series0.points || []).filter(function (point) { return point.raw_value != null; }).slice(-1)[0];
             date = lastPoint ? lastPoint.date : null;
         }
+        state.hoveredDate = date || null;
         if (!date) {
             refs.pointDetails.innerHTML = '<p class="hint">Hover the chart to inspect raw values for a specific day.</p>';
             return;
@@ -165,7 +261,17 @@
     }
 
     function renderChart() {
-        if (!state.chart) state.chart = window.echarts.init(refs.chartEl);
+        if (!window.echarts || !refs.chartEl) throw new Error('Chart library unavailable.');
+        if (!state.chart) {
+            state.chart = window.echarts.init(refs.chartEl);
+            logEvent('info', 'Economic chart initialized', { renderer: 'echarts' });
+        }
+        logEvent('info', 'Economic chart render started', {
+            seriesCount: state.series.length,
+            pointCount: pointCount(state.series),
+            range: state.range,
+            reason: state.lastLoadReason,
+        });
         var palette = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
         state.chart.setOption({
             animation: false,
@@ -199,13 +305,18 @@
                     })
                 };
             })
-        });
+        }, true);
         state.chart.off('updateAxisPointer');
         state.chart.on('updateAxisPointer', function (event) {
             var info = event && event.axesInfo && event.axesInfo[0];
             renderPointDetails(info && info.value ? new Date(info.value).toISOString().slice(0, 10) : null);
         });
         state.chart.resize();
+        logEvent('info', 'Economic chart render completed', {
+            seriesCount: state.series.length,
+            pointCount: pointCount(state.series),
+            hoveredDate: state.hoveredDate,
+        });
     }
 
     function updateSummary() {
@@ -215,38 +326,106 @@
         refs.rangeNote.textContent = state.range === 'All' ? 'Visible window: full available history.' : ('Visible window: last ' + state.range + ' to ' + todayIso() + '.');
     }
 
-    function loadSeries() {
+    function loadSeries(reason) {
+        state.lastLoadReason = reason || state.lastLoadReason || 'manual';
+        state.requestCount += 1;
         updateSummary();
         setStatus('Loading...');
         refs.emptyEl.hidden = true;
         var range = currentRange();
+        logEvent('info', 'Economic series load started', {
+            requestCount: state.requestCount,
+            reason: state.lastLoadReason,
+            range: state.range,
+            startDate: range.start_date,
+            endDate: range.end_date,
+            selectedIds: state.selectedIds.slice(),
+        });
         return fetchJson('/series', {
             ids: state.selectedIds.join(','),
             start_date: range.start_date,
             end_date: range.end_date
         }).then(function (payload) {
             state.series = payload.series || [];
-            if (!state.series.length) throw new Error('No data returned for the selected indicators.');
+            state.lastSeriesLoadedAt = new Date().toISOString();
+            syncDebugSurface();
+            if (!state.series.length) {
+                logEvent('warn', 'Economic series load returned no rows', {
+                    reason: state.lastLoadReason,
+                    range: state.range,
+                    selectedIds: state.selectedIds.slice(),
+                });
+                throw new Error('No data returned for the selected indicators.');
+            }
             refs.chartMeta.textContent = 'Index = 100 at ' + formatDate(payload.start_date) + ' for each visible series.';
             renderSeriesCards();
             renderSources();
             renderChart();
             renderPointDetails(null);
             setStatus('Ready');
-            log('info', 'Economic series loaded', { count: state.series.length, range: state.range });
+            logEvent('info', 'Economic series load completed', {
+                count: state.series.length,
+                pointCount: pointCount(state.series),
+                range: state.range,
+                reason: state.lastLoadReason,
+            });
         }).catch(function (error) {
             state.series = [];
+            syncDebugSurface();
             refs.seriesList.innerHTML = '';
             refs.sourceList.innerHTML = '';
             refs.pointDetails.innerHTML = '<p class="hint">No point details available.</p>';
             refs.emptyEl.hidden = false;
-            refs.emptyEl.textContent = error.message || 'Failed to load economic data.';
+            refs.emptyEl.textContent = describeError(error, 'Failed to load economic data.');
             setStatus('Error');
-            log('error', 'Economic series load failed', { message: error.message || String(error) });
+            logEvent('error', 'Economic series load failed', {
+                reason: state.lastLoadReason,
+                range: state.range,
+                selectedIds: state.selectedIds.slice(),
+                message: describeError(error, 'Failed to load economic data.'),
+                status: error && error.status,
+                url: error && error.url,
+            }, { remote: true });
+        });
+    }
+
+    function loadCatalog() {
+        state.requestCount += 1;
+        setStatus('Loading...');
+        logEvent('info', 'Economic catalog load started', {
+            requestCount: state.requestCount,
+            apiBase: apiBase,
+        });
+        return fetchJson('/catalog').then(function (payload) {
+            state.catalog = payload;
+            state.lastCatalogLoadedAt = new Date().toISOString();
+            state.selectedIds = (findPreset('rba_watchlist') || { seriesIds: [] }).seriesIds.slice();
+            renderPresets();
+            renderCategories();
+            syncDebugSurface();
+            logEvent('info', 'Economic catalog load completed', {
+                presets: (payload.presets || []).length,
+                categories: (payload.categories || []).length,
+                selectedIds: state.selectedIds.slice(),
+            });
+            bindControls();
+            return loadSeries('catalog-loaded');
+        }).catch(function (error) {
+            refs.emptyEl.hidden = false;
+            refs.emptyEl.textContent = describeError(error, 'Failed to load economic catalog.');
+            setStatus('Error');
+            logEvent('error', 'Economic catalog load failed', {
+                message: describeError(error, 'Failed to load economic catalog.'),
+                status: error && error.status,
+                url: error && error.url,
+            }, { remote: true });
+            throw error;
         });
     }
 
     function bindControls() {
+        if (bindControls.bound) return;
+        bindControls.bound = true;
         refs.presetRow.addEventListener('click', function (event) {
             var button = event.target.closest('[data-preset-id]');
             if (!button) return;
@@ -256,14 +435,22 @@
             state.selectedIds = preset.seriesIds.slice();
             renderPresets();
             renderCategories();
-            loadSeries();
+            logEvent('info', 'Economic preset changed', {
+                presetId: preset.id,
+                selectedIds: state.selectedIds.slice(),
+            });
+            loadSeries('preset-change');
         });
         refs.rangeRow.addEventListener('click', function (event) {
             var button = event.target.closest('[data-range]');
             if (!button) return;
             state.range = button.getAttribute('data-range');
             Array.from(refs.rangeRow.querySelectorAll('[data-range]')).forEach(function (node) { node.classList.toggle('active', node === button); });
-            loadSeries();
+            logEvent('info', 'Economic range changed', {
+                range: state.range,
+                selectedIds: state.selectedIds.slice(),
+            });
+            loadSeries('range-change');
         });
         refs.categoryGroups.addEventListener('change', function (event) {
             var input = event.target.closest('input[data-series-id]');
@@ -271,29 +458,68 @@
             var next = Array.from(refs.categoryGroups.querySelectorAll('input[data-series-id]:checked')).map(function (node) { return node.getAttribute('data-series-id'); });
             if (!next.length) {
                 input.checked = true;
+                logEvent('warn', 'Economic selection prevented empty state', {
+                    attemptedSeriesId: input.getAttribute('data-series-id'),
+                });
                 return;
             }
             state.selectedPreset = 'custom';
             state.selectedIds = next;
             renderPresets();
-            loadSeries();
+            logEvent('info', 'Economic selection changed', {
+                selectedIds: state.selectedIds.slice(),
+                count: state.selectedIds.length,
+            });
+            loadSeries('selection-change');
         });
         window.addEventListener('resize', function () {
-            if (state.chart) state.chart.resize();
+            if (!state.chart) return;
+            state.chart.resize();
+            logEvent('info', 'Economic chart resized', {
+                width: window.innerWidth,
+                height: window.innerHeight,
+            });
         });
     }
 
-    fetchJson('/catalog').then(function (payload) {
-        state.catalog = payload;
-        state.selectedIds = (findPreset('rba_watchlist') || { seriesIds: [] }).seriesIds.slice();
-        renderPresets();
-        renderCategories();
-        bindControls();
-        return loadSeries();
-    }).catch(function (error) {
-        refs.emptyEl.hidden = false;
-        refs.emptyEl.textContent = error.message || 'Failed to load economic catalog.';
-        setStatus('Error');
-        log('error', 'Economic catalog load failed', { message: error.message || String(error) });
+    function bindGlobalDebugHooks() {
+        if (window.__arEconomicDebugHooksBound) return;
+        window.__arEconomicDebugHooksBound = true;
+        window.addEventListener('error', function (event) {
+            var target = event && event.target;
+            if (target && target !== window && target.tagName) {
+                logEvent('warn', 'Economic page resource load error', {
+                    tagName: String(target.tagName || ''),
+                    source: target.src || target.href || '',
+                }, { remote: true });
+                return;
+            }
+            logEvent('error', 'Economic page unhandled error', {
+                message: event && event.message ? String(event.message) : 'Unhandled client error',
+                filename: event && event.filename ? String(event.filename) : '',
+                line: event && event.lineno,
+                column: event && event.colno,
+            }, { remote: true });
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+            var reason = event && event.reason;
+            logEvent('error', 'Economic page unhandled rejection', {
+                message: describeError(reason, 'Unhandled promise rejection'),
+            }, { remote: true });
+        });
+    }
+
+    bindGlobalDebugHooks();
+    syncDebugSurface();
+    logEvent('info', 'Economic data init start', {
+        apiBase: apiBase,
+        debugSessionId: getDebugSessionId(),
     });
+    loadCatalog().then(function () {
+        syncDebugSurface();
+        logEvent('info', 'Economic data init complete', {
+            selectedPreset: state.selectedPreset,
+            selectedCount: state.selectedIds.length,
+        });
+    }).catch(function () {});
 })();
