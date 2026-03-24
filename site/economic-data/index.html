@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Australian Economic Data Dashboard | AustralianRates</title>
+    <meta name="description" content="Track Australian macro indicators that shape RBA decisions, including unemployment, trimmed mean CPI, inflation expectations, bank bill yields, credit, housing, and global policy proxies.">
+    <link rel="canonical" href="https://www.australianrates.com/economic-data/">
+    <link rel="icon" type="image/svg+xml" href="/assets/branding/ar-mark.svg">
+    <link rel="shortcut icon" href="/assets/branding/ar-mark.svg">
+    <link rel="apple-touch-icon" href="/assets/branding/ar-mark.svg">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Australian Economic Data Dashboard | AustralianRates">
+    <meta property="og:description" content="Normalized compare charts for macro indicators that shape the RBA path, collected daily from public official sources.">
+    <meta property="og:url" content="https://www.australianrates.com/economic-data/">
+    <meta property="og:site_name" content="AustralianRates">
+    <script src="../site-variant.js?v=cb50b53"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=cb50b53">
+    <link rel="stylesheet" href="../public-shell.css?v=cb50b53">
+    <link rel="stylesheet" href="../public-showcase.css?v=cb50b53">
+    <link rel="stylesheet" href="../public-showcase-hero.css?v=cb50b53">
+    <link rel="stylesheet" href="../mobile-host.css?v=cb50b53">
+    <link rel="stylesheet" href="../economic-data.css?v=cb50b53">
+    <script src="../theme.js?v=cb50b53"></script>
+</head>
+<body class="ar-public ar-section-economic-data" data-ar-section="economic-data">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+            <nav class="site-header-segment" aria-label="Rate products">
+                <a href="/" class="site-header-segment-link">Mortgage</a>
+                <a href="/savings/" class="site-header-segment-link">Savings</a>
+                <a href="/term-deposits/" class="site-header-segment-link">Term Deposits</a>
+                <a href="/economic-data/" class="site-header-segment-link is-active" aria-current="page">Economic Data</a>
+            </nav>
+        </div>
+    </header>
+    <div class="bg-layer" aria-hidden="true"></div>
+    <main class="shell shell-public" id="main-content" tabindex="-1">
+        <noscript>
+            <section class="panel noscript-panel" aria-label="No JavaScript fallback">
+                <p>JavaScript is off. Use the direct economic-data endpoints below.</p>
+                <div class="noscript-links">
+                    <a href="/api/economic-data/catalog" target="_blank" rel="noopener">Catalog</a>
+                    <a href="/api/economic-data/series?preset=rba_watchlist" target="_blank" rel="noopener">Series</a>
+                    <a href="/api/economic-data/health" target="_blank" rel="noopener">Health</a>
+                </div>
+            </section>
+        </noscript>
+        <section class="panel economic-hero" aria-label="Economic dashboard introduction">
+            <div class="economic-hero-copy">
+                <div class="economic-topline">
+                    <span class="market-intro-session-label">session::economic-data</span>
+                    <span class="market-intro-session-status">live</span>
+                </div>
+                <p class="eyebrow">Australian Economic Data Dashboard</p>
+                <h1 class="market-intro-title">Track macro indicators that shape the RBA path.</h1>
+                <p class="market-intro-summary">The chart defaults to normalized compare mode, rebasing each selected series to 100 at the start of the visible window. Hover always shows raw values, units, frequency, source, and proxy status.</p>
+            </div>
+            <div class="economic-hero-stats">
+                <article class="terminal-stat">
+                    <span class="metric-code">Preset</span>
+                    <strong id="economic-active-preset">RBA Watchlist</strong>
+                </article>
+                <article class="terminal-stat">
+                    <span class="metric-code">Series</span>
+                    <strong id="economic-selected-count">5 selected</strong>
+                </article>
+                <article class="terminal-stat">
+                    <span class="metric-code">Status</span>
+                    <strong id="economic-status-text">Loading...</strong>
+                </article>
+            </div>
+        </section>
+        <section class="market-terminal economic-terminal" aria-label="Economic data workspace">
+            <aside class="terminal-column terminal-column-left">
+                <section class="panel" aria-label="Navigation">
+                    <div class="terminal-panel-head">
+                        <span class="panel-code">NAV</span>
+                        <h2 class="terminal-panel-title">Sections</h2>
+                    </div>
+                    <div id="market-nav-tree"></div>
+                </section>
+                <section id="scenario" class="panel" aria-label="Indicator controls">
+                    <div class="terminal-panel-head">
+                        <span class="panel-code">SET</span>
+                        <h2 class="terminal-panel-title">Indicator Set</h2>
+                    </div>
+                    <p class="hint economic-panel-copy">Use preset chips for fast context, or build your own watchlist from grouped indicators.</p>
+                    <div id="preset-row" class="economic-chip-row">
+                        <button type="button" class="chip-btn secondary active" data-preset-id="rba_watchlist">RBA Watchlist</button>
+                    </div>
+                    <div id="category-groups" class="economic-groups" aria-live="polite"></div>
+                </section>
+            </aside>
+            <section class="terminal-column terminal-column-center">
+                <section id="chart" class="panel terminal-panel terminal-stage-panel" aria-label="Economic chart">
+                    <div class="chart-block">
+                        <div class="chart-block-head">
+                            <div class="terminal-panel-head">
+                                <span class="panel-code">CHT</span>
+                                <h2 class="terminal-panel-title">Normalized Compare</h2>
+                            </div>
+                            <p id="chart-meta" class="hint">Index = 100 at the start of the visible range for each selected series.</p>
+                        </div>
+                        <div class="economic-toolbar">
+                            <div id="range-row" class="economic-chip-row" role="group" aria-label="Date range shortcuts">
+                                <button type="button" class="chip-btn secondary" data-range="1Y">1Y</button>
+                                <button type="button" class="chip-btn secondary" data-range="3Y">3Y</button>
+                                <button type="button" class="chip-btn secondary active" data-range="5Y">5Y</button>
+                                <button type="button" class="chip-btn secondary" data-range="10Y">10Y</button>
+                                <button type="button" class="chip-btn secondary" data-range="All">All</button>
+                            </div>
+                            <p id="economic-range-note" class="hint">Loading current range...</p>
+                        </div>
+                        <div id="economic-chart" class="economic-chart" role="img" aria-label="Economic data chart"></div>
+                        <p id="economic-empty" class="terminal-inline-feedback" hidden></p>
+                    </div>
+                </section>
+            </section>
+            <aside class="terminal-column terminal-column-right">
+                <section id="details" class="panel" aria-label="Series details">
+                    <div class="terminal-panel-head">
+                        <span class="panel-code">DET</span>
+                        <h2 class="terminal-panel-title">Series Details</h2>
+                    </div>
+                    <div id="economic-series-list" class="economic-series-list"></div>
+                    <div id="economic-point-details" class="economic-point-details"></div>
+                </section>
+                <section id="sources" class="panel" aria-label="Sources">
+                    <div class="terminal-panel-head">
+                        <span class="panel-code">SRC</span>
+                        <h2 class="terminal-panel-title">Sources</h2>
+                    </div>
+                    <p class="hint economic-panel-copy">Proxies are clearly marked where the public source is an accessible stand-in rather than the exact latent concept.</p>
+                    <div id="economic-source-list" class="economic-source-list"></div>
+                </section>
+            </aside>
+        </section>
+    </main>
+    <script src="../vendor/echarts/echarts.min.js?v=cb50b53"></script>
+    <script src="../ar-utils.js?v=cb50b53"></script>
+    <script src="../ui-icons.js?v=cb50b53"></script>
+    <script src="../ar-time.js?v=cb50b53"></script>
+    <script src="../ar-section-config.js?v=cb50b53"></script>
+    <script src="../ar-config.js?v=cb50b53"></script>
+    <script src="../economic-data.js?v=cb50b53"></script>
+    <script src="../frame.js?v=cb50b53"></script>
+    <script src="../site-variant-ui.js?v=cb50b53"></script>
+</body>
+</html>

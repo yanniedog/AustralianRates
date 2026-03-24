@@ -372,7 +372,12 @@
                 crosshairMarkerRadius:   3,
             });
             ser.setData(data);
-            bankSeriesApis.push({ api: ser, bank: bank, lastValue: data.length ? data[data.length - 1].value : null });
+            bankSeriesApis.push({
+                api: ser,
+                bank: bank,
+                lastValue: data.length ? data[data.length - 1].value : null,
+                stepPoints: rawPts,
+            });
         });
 
         // ── RBA line (added last = topmost render order) ───────────────────────
@@ -424,42 +429,48 @@
             if (entry.lastValue == null) return;
             var item = document.createElement('span');
             item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+            var prevB = M.prevStepValue(entry.stepPoints, ctxMax, 'value');
+            var arrB = M.rateLegendArrowHtml(entry.lastValue, prevB, 'deposit', t.good, t.bad);
             item.innerHTML =
                 '<span style="display:inline-block;width:14px;height:2px;background:' + entry.bank.color + ';flex-shrink:0;border-radius:1px;"></span>' +
                 '<span style="opacity:0.7;">' + entry.bank.short + '</span>' +
-                '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.lastValue.toFixed(2) + '%</span>';
+                '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.lastValue.toFixed(2) + '%' + arrB + '</span>';
             legendEl.appendChild(item);
         });
         if (rbaSeriesApi && rbaData.points.length) {
             var rbaLast = rbaData.points[rbaData.points.length - 1].rate;
             var rbaItem = document.createElement('span');
             rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);';
+            var prevR = M.prevStepValue(rbaData.points, ctxMax, 'rate');
+            var arrR = M.rateLegendArrowHtml(rbaLast, prevR, 'deposit', t.good, t.bad);
             rbaItem.innerHTML =
                 '<span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span>' +
                 '<span style="color:' + t.rba + ';opacity:0.8;">RBA</span>' +
-                '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaLast.toFixed(2) + '%</span>';
+                '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaLast.toFixed(2) + '%' + arrR + '</span>';
             legendEl.appendChild(rbaItem);
         }
         if (cpiSeriesApi && cpiPts.length) {
             var cpiLast = cpiPts[cpiPts.length - 1].value;
             var cpiItem = document.createElement('span');
             cpiItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+            var prevC = M.prevStepValue(cpiPts, ctxMax, 'value');
+            var arrC = M.rateLegendArrowHtml(Number(cpiLast), prevC, 'deposit', t.good, t.bad);
             cpiItem.innerHTML =
                 '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
                 '<span style="color:' + t.cpi + ';opacity:0.8;">CPI</span>' +
-                '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiLast).toFixed(1) + '%</span>';
+                '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiLast).toFixed(1) + '%' + arrC + '</span>';
             legendEl.appendChild(cpiItem);
         }
         mount.appendChild(legendEl);
 
         var defaultLegendHTML = legendEl.innerHTML;
 
-        function populateLegend(bankItems, rbaVal, cpiDisplayVal, dateLabel) {
+        function populateLegend(bankItems, rbaVal, cpiDisplayVal, crosshairYmd) {
             legendEl.innerHTML = '';
-            if (dateLabel) {
+            if (crosshairYmd) {
                 var dl = document.createElement('span');
                 dl.style.cssText = 'font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);flex-shrink:0;letter-spacing:0.02em;';
-                dl.textContent = dateLabel;
+                dl.textContent = fmtFull(crosshairYmd);
                 legendEl.appendChild(dl);
             }
             var sorted = bankItems.slice().sort(function (a, b) {
@@ -469,28 +480,34 @@
                 if (entry.value == null) return;
                 var item = document.createElement('span');
                 item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+                var prevB = M.prevStepValue(entry.stepPoints, crosshairYmd, 'value');
+                var arrB = M.rateLegendArrowHtml(entry.value, prevB, 'deposit', t.good, t.bad);
                 item.innerHTML =
                     '<span style="display:inline-block;width:14px;height:2px;background:' + entry.bank.color + ';flex-shrink:0;border-radius:1px;"></span>' +
                     '<span style="opacity:0.7;">' + entry.bank.short + '</span>' +
-                    '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.value.toFixed(2) + '%</span>';
+                    '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.value.toFixed(2) + '%' + arrB + '</span>';
                 legendEl.appendChild(item);
             });
             if (rbaVal != null) {
                 var rbaItem = document.createElement('span');
                 rbaItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);';
+                var prevR = M.prevStepValue(rbaData.points, crosshairYmd, 'rate');
+                var arrR = M.rateLegendArrowHtml(rbaVal, prevR, 'deposit', t.good, t.bad);
                 rbaItem.innerHTML =
                     '<span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span>' +
                     '<span style="color:' + t.rba + ';opacity:0.8;">RBA</span>' +
-                    '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaVal.toFixed(2) + '%</span>';
+                    '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaVal.toFixed(2) + '%' + arrR + '</span>';
                 legendEl.appendChild(rbaItem);
             }
             if (cpiDisplayVal != null) {
                 var cpiItem = document.createElement('span');
                 cpiItem.style.cssText = 'display:inline-flex;align-items:center;gap:4px;white-space:nowrap;';
+                var prevC = M.prevStepValue(cpiPts, crosshairYmd, 'value');
+                var arrC = M.rateLegendArrowHtml(Number(cpiDisplayVal), prevC, 'deposit', t.good, t.bad);
                 cpiItem.innerHTML =
                     '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
                     '<span style="color:' + t.cpi + ';opacity:0.8;">CPI</span>' +
-                    '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiDisplayVal).toFixed(1) + '%</span>';
+                    '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiDisplayVal).toFixed(1) + '%' + arrC + '</span>';
                 legendEl.appendChild(cpiItem);
             }
         }
@@ -514,13 +531,13 @@
             bankSeriesApis.forEach(function (si) {
                 var sd  = param.seriesData && param.seriesData.get(si.api);
                 var val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
-                if (val != null) bankItems.push({ bank: si.bank, value: val });
+                if (val != null) bankItems.push({ bank: si.bank, value: val, stepPoints: si.stepPoints });
             });
+            if (!bankItems.length && rbaVal == null && cpiVal == null) legendEl.innerHTML = defaultLegendHTML;
             if (!bankItems.length && rbaVal == null && cpiVal == null) {
-                legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-            populateLegend(bankItems, rbaVal, cpiVal, fmtFull(time));
+            populateLegend(bankItems, rbaVal, cpiVal, time);
         });
 
         // ── Resize observer ───────────────────────────────────────────────────

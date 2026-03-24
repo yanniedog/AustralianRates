@@ -110,11 +110,51 @@
         return { rbaData: rbaData, cpiPoints: cpiPoints, rbaStart: rbaStart };
     }
 
+    /**
+     * Value of the step immediately before the segment active at ymd (same semantics as LWC step lines).
+     * rows: ascending { date, [valueKey] } (e.g. value or rate).
+     */
+    function prevStepValue(rows, ymd, valueKey) {
+        if (!rows || !rows.length || !ymd) return null;
+        var vk = valueKey || 'value';
+        var y = String(ymd).slice(0, 10);
+        var i = -1;
+        for (var k = 0; k < rows.length; k++) {
+            if (String(rows[k].date).slice(0, 10) <= y) i = k;
+            else break;
+        }
+        if (i <= 0) return null;
+        var prev = Number(rows[i - 1][vk]);
+        return Number.isFinite(prev) ? prev : null;
+    }
+
+    /**
+     * Tiny arrow after "%" for legend: deposit = green up / red down; mortgage = red up / green down.
+     */
+    function rateLegendArrowHtml(current, previous, semantics, goodColor, badColor) {
+        var cur = Number(current);
+        var prev = previous == null ? null : Number(previous);
+        if (prev == null || !Number.isFinite(cur) || !Number.isFinite(prev)) return '';
+        if (Math.abs(cur - prev) < 1e-6) return '';
+        var up = cur > prev;
+        var st = 'font-size:7px;line-height:1;margin-left:1px;display:inline-block;vertical-align:0.08em;';
+        var g = goodColor || '#059669';
+        var b = badColor || '#dc2626';
+        if (semantics === 'mortgage') {
+            if (up) return '<span style="' + st + 'color:' + b + ';">\u25b2</span>';
+            return '<span style="' + st + 'color:' + g + ';">\u25bc</span>';
+        }
+        if (up) return '<span style="' + st + 'color:' + g + ';">\u25b2</span>';
+        return '<span style="' + st + 'color:' + b + ';">\u25bc</span>';
+    }
+
     window.AR.chartMacroLwcShared = {
         ymdToUtc: ymdToUtc,
         utcToYmd: utcToYmd,
         fillForwardDaily: fillForwardDaily,
         cpiAtDate: cpiAtDate,
         prepareRbaCpiForReport: prepareRbaCpiForReport,
+        prevStepValue: prevStepValue,
+        rateLegendArrowHtml: rateLegendArrowHtml,
     };
 })();

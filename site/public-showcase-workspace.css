@@ -403,16 +403,15 @@ body.ar-legal .legal-hero { animation: none; }
     }
 
     /*
-     * Mobile chart band: ~52% of viewport below header (toolbar + rail eat space inside).
-     * Clamped so short phones keep a usable canvas (min) and tall phones do not monopolise the screen (max).
+     * One full dynamic viewport below the header for the chart workspace (scroll page for intro/table).
+     * Avoids a short fixed band that squashes the plot or leaves odd empty space.
      */
     body.ar-public .chart-block {
         display: flex;
         flex-direction: column;
         min-height: 0;
-        --ar-mobile-chart-usable: calc(100dvh - var(--ar-header-height) - 24px);
-        height: max(300px, min(440px, calc(var(--ar-mobile-chart-usable) * 0.52)));
-        max-height: max(300px, min(440px, calc(var(--ar-mobile-chart-usable) * 0.52)));
+        height: calc(100dvh - var(--ar-header-height) - 16px);
+        max-height: calc(100dvh - var(--ar-header-height) - 16px);
     }
 
     body.ar-public .chart-block .chart-block-head {
@@ -442,7 +441,7 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .terminal-chart-output,
     body.ar-public #chart-output {
         flex: 1 1 0;
-        min-height: max(160px, min(220px, 28dvh));
+        min-height: 160px;
     }
 
     body.ar-public #chart-detail-output {

@@ -1,0 +1,15 @@
+sample,h5
+Title,Unemployment rate,Participation rate
+,,
+Frequency,Monthly,Monthly
+,,
+Units,Per cent,Per cent
+,,
+,,
+Source,ABS,ABS
+Publication date,20-Mar-2026,20-Mar-2026
+Series ID,GLFSURSA,GLFSPRSA
+28/02/1978,6.6,61.2
+31/03/1978,6.3,61.0
+30/04/1978,6.3,61.2
+31/05/1978,6.2,61.1
