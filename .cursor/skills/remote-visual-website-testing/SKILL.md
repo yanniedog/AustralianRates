@@ -8,6 +8,22 @@ Enables the team to capture website content (screenshots, HTML, snapshots) and *
 
 ---
 
+## Browser-agent MCP (preferred for agent-driven UX)
+
+When Cursor has the **browser-agent** MCP server enabled, use it as the primary engine for live UX audits (full tool contract: `session_create`, `trace_start`, `navigate`, `click`, `screenshot`, `snapshot_dom`, `network_capture`, `console_capture`, `trace_stop`, `session_close`).
+
+| Step | Action |
+|------|--------|
+| Install | In sibling repo `../browser-agent`: `npm install`, `npx playwright install`. |
+| Cursor MCP | Alias **`browser_agent_cursor`** — see repo `.cursor/mcp.json` (fix `cwd` if your checkout path differs). |
+| Policy | From repo root use **`browser-agent.manifest.json`**; in `session_create` pass `projectId: "australianrates"` and `manifestPath` resolvable from browser-agent cwd (e.g. `../australianrates/browser-agent.manifest.json`). |
+| Prompts | `../browser-agent/cursor-ux-skill.md`, `../browser-agent/ux-browser-runbook.md`, `../browser-agent/cursor-adapter.md`. |
+| Host scope | Production UX verification stays on `https://www.australianrates.com` per project rules. |
+
+Manual server smoke (stdio): from **australianrates** repo root, `npm run browser-agent` (expects `../browser-agent/server.js`). For normal Cursor use, the IDE spawns the MCP server; do not run two stdio servers on the same channel.
+
+---
+
 ## Capture methods
 
 | Goal | How | Output |

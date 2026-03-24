@@ -1,0 +1,21 @@
+{
+  "projectId": "australianrates",
+  "baseUrl": "https://www.australianrates.com",
+  "allowlistHosts": [
+    "www.australianrates.com",
+    "australianrates.com"
+  ],
+  "blockedActions": [
+    "download"
+  ],
+  "environments": {
+    "prod": "https://www.australianrates.com"
+  },
+  "criticalFlows": [
+    "rate-explorer-table",
+    "filters-and-scenario",
+    "charts-and-views",
+    "pivot-and-export",
+    "legal-and-not-found"
+  ]
+}

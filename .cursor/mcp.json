@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "browser_agent_cursor": {
+      "command": "node",
+      "args": ["server.js"],
+      "cwd": "${workspaceFolder}/../browser-agent"
+    }
+  }
+}

@@ -32,6 +32,7 @@ These rules are mandatory and override any conflicting preference.
 | Purpose | Command | Notes |
 |--------|---------|------|
 | Test homepage (production URL) | `npm run test:homepage` | From repo root. Playwright. |
+| Start browser-agent MCP (stdio) | `npm run browser-agent` | From repo root. Requires sibling repo `../browser-agent`. Cursor normally spawns this via `.cursor/mcp.json`; use this for manual smoke tests. |
 | Test API worker | `npm run test:api` | From repo root. |
 | Test archive worker | `npm run test:archive` | From repo root. |
 | Typecheck API | `npm run typecheck:api` | From repo root. |
@@ -122,6 +123,16 @@ See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and 
 - `npm run typecheck:api` runs TypeScript type checking on the API worker.
 - `npm run test:homepage` runs Playwright E2E tests against the **production** URL and requires network access.
 - Playwright needs Chromium installed (`npx playwright install --with-deps chromium`).
+
+### Browser-agent MCP (interactive UX audits)
+
+For **agent-driven** UX (navigate/click/screenshot/trace) with the canonical tool contract, use the **browser-agent** sibling repo (local path typically `../browser-agent` next to this repo).
+
+1. **One-time in `browser-agent`:** `npm install` and `npx playwright install` (Chromium, Firefox, WebKit if you replay cross-engine).
+2. **Cursor:** Project file `.cursor/mcp.json` registers MCP alias **`browser_agent_cursor`** (stdio server). If `${workspaceFolder}/../browser-agent` is wrong on your machine, fix `cwd`/`args` to your `browser-agent` checkout. Reload MCP after changes.
+3. **Policy manifest:** Repo root **`browser-agent.manifest.json`** — allowlist hosts and `projectId` **`australianrates`**. When calling `session_create`, set `manifestPath` to a path readable from the browser-agent process cwd (e.g. `../australianrates/browser-agent.manifest.json` when cwd is `browser-agent`).
+4. **Tool order:** Follow [browser-agent `cursor-adapter.md`](../browser-agent/cursor-adapter.md): `session_create` → `trace_start` → actions → milestone screenshots → on failure bundle → `trace_stop` → `session_close`. Use **`/ux_cursor`** prompt pack in `../browser-agent/cursor-ux-skill.md` and shared steps in `../browser-agent/ux-browser-runbook.md`.
+5. **Verification:** Prefer production-only checks per workspace rules (`npm run test:homepage`, etc.). Browser-agent complements them; it does not replace them for deploy sign-off.
 
 ### Debugging and production logfiles
 
