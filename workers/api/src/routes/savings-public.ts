@@ -44,6 +44,7 @@ import {
 } from './latest-response'
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import { registerCpiRoutes } from './cpi-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerSavingsChartDataRoute } from './chart-data/savings'
 
@@ -59,6 +60,7 @@ savingsPublicRoutes.use('*', async (c, next) => {
 registerSavingsExportRoutes(savingsPublicRoutes)
 registerSavingsAnalyticsRoutes(savingsPublicRoutes)
 registerRbaRoutes(savingsPublicRoutes)
+registerCpiRoutes(savingsPublicRoutes)
 registerSavingsChartDataRoute(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/overview', async (c) => {

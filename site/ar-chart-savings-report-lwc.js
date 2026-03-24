@@ -93,39 +93,6 @@
     // ── Date helpers ──────────────────────────────────────────────────────────
     function todayYmd() { return new Date().toISOString().slice(0, 10); }
 
-    // Convert YYYY-MM-DD → UTCTimestamp (seconds since epoch).
-    // Using UTCTimestamp forces LWC to use proportional calendar-time scaling.
-    function ymdToUtc(ymd) {
-        var p = ymd.split('-');
-        return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 1000;
-    }
-
-    function utcToYmd(ts) {
-        return new Date(Number(ts) * 1000).toISOString().slice(0, 10);
-    }
-
-    // Fill a sparse step-function array forward to daily resolution.
-    // Returns [{date, value}] for every calendar day in [startYmd, endYmd],
-    // carrying the last known value forward. Guarantees uniform data density
-    // across the full x-axis range regardless of LWC time-scale mode.
-    function fillForwardDaily(points, dateKey, valKey, startYmd, endYmd) {
-        var result = [];
-        var cur = new Date(startYmd + 'T00:00:00Z');
-        var end = new Date(endYmd + 'T00:00:00Z');
-        var last = null;
-        var idx = 0;
-        while (cur <= end) {
-            var d = cur.toISOString().slice(0, 10);
-            while (idx < points.length && points[idx][dateKey] <= d) {
-                last = points[idx][valKey];
-                idx++;
-            }
-            if (last !== null) result.push({ date: d, value: last });
-            cur.setUTCDate(cur.getUTCDate() + 1);
-        }
-        return result;
-    }
-
     function subtractMonths(ymd, n) {
         var d = new Date(ymd + 'T12:00:00Z');
         d.setUTCMonth(d.getUTCMonth() - n);
@@ -178,68 +145,15 @@
             });
     }
 
-    function buildRbaSeries(rbaHistory) {
-        if (!Array.isArray(rbaHistory) || !rbaHistory.length) return { points: [], decisions: [] };
-        var all = rbaHistory
-            .map(function (r) {
-                return {
-                    date: String(r.effective_date || r.date || '').slice(0, 10),
-                    rate: Number(r.cash_rate != null ? r.cash_rate : r.value),
-                };
-            })
-            .filter(function (r) { return r.date && Number.isFinite(r.rate); })
-            .sort(function (a, b) { return a.date.localeCompare(b.date); });
-
-        var deduped = [];
-        all.forEach(function (r) {
-            if (!deduped.length || r.rate !== deduped[deduped.length - 1].rate) deduped.push(r);
-        });
-
-        return { points: deduped.slice(), decisions: deduped.slice() };
-    }
-
-    function buildCpiSeries(cpiData) {
-        return (Array.isArray(cpiData) ? cpiData : []).map(function (row) {
-            return {
-                date: String(row.quarter_date || row.date || '').slice(0, 10),
-                value: Number(row.annual_change != null ? row.annual_change : row.value)
-            };
-        }).filter(function (row) {
-            return row.date && Number.isFinite(row.value);
-        }).sort(function (left, right) {
-            return left.date.localeCompare(right.date);
-        });
-    }
-
-    function extendToMax(pts, ctxMax, keyFn, valFn) {
-        if (!pts.length) return pts;
-        var last = pts[pts.length - 1];
-        if (String(keyFn(last)) < ctxMax) {
-            var clone = {};
-            Object.keys(last).forEach(function (k) { clone[k] = last[k]; });
-            clone[Object.keys(last)[0]] = ctxMax; // update date/first key — fine since all our objects have 'date' first
-            // Safer: just push a new object
-            var ext = {};
-            if ('rate' in last) { ext.date = ctxMax; ext.rate = valFn(last); }
-            else                { ext.date = ctxMax; ext.value = valFn(last); }
-            return pts.concat([ext]);
-        }
-        return pts;
-    }
-
-    // CPI step carry-forward for tooltip
-    function cpiAtDate(cpiPts, dateStr) {
-        var best = null;
-        for (var i = 0; i < cpiPts.length; i++) {
-            if (String(cpiPts[i].date) <= dateStr) best = cpiPts[i].value;
-        }
-        return best;
-    }
-
     // ── Main render ───────────────────────────────────────────────────────────
     function render(container, model, rbaHistory, cpiData) {
         var L = window.LightweightCharts;
         if (!L || !container) return null;
+
+        var M = window.AR.chartMacroLwcShared;
+        if (!M || typeof M.prepareRbaCpiForReport !== 'function') {
+            throw new Error('chartMacroLwcShared not loaded');
+        }
 
         // ── Prepare data ──────────────────────────────────────────────────────
         // Use allSeries so MAX aggregation covers all products from all banks,
@@ -260,37 +174,10 @@
         var ctxMax = bankMax;
         var viewStart = subtractMonths(ctxMax, 3);
 
-        var rbaData = buildRbaSeries(rbaHistory || []);
-        var cpiPts  = buildCpiSeries(cpiData);
-
-        // Use CPI's earliest date as the RBA start anchor so both series
-        // begin at the same point on the x-axis.
-        var rbaStart = cpiPts.length ? cpiPts[0].date : ctxMin;
-        // Clip RBA points to [rbaStart, ctxMax] with carry-back at rbaStart
-        // (decisions array stays unclipped — used for overlay markers and carry-rate lookup)
-        (function () {
-            var all = rbaData.points;
-            var carry = null, inWindow = [];
-            all.forEach(function (p) {
-                if (p.date < rbaStart) carry = p;
-                else if (p.date <= ctxMax) inWindow.push(p);
-            });
-            var carryRate = carry ? carry.rate : (inWindow.length ? inWindow[0].rate : null);
-            var pts = [];
-            if (carryRate != null) pts.push({ date: rbaStart, rate: carryRate });
-            inWindow.forEach(function (p) { pts.push(p); });
-            rbaData.points = pts;
-        }());
-
-        // Extend step lines to ctxMax so carry-forward reaches right edge
-        if (rbaData.points.length) {
-            var rbaLast = rbaData.points[rbaData.points.length - 1];
-            if (rbaLast.date < ctxMax) rbaData.points.push({ date: ctxMax, rate: rbaLast.rate });
-        }
-        if (cpiPts.length) {
-            var cpiLast = cpiPts[cpiPts.length - 1];
-            if (cpiLast.date < ctxMax) cpiPts.push({ date: ctxMax, value: cpiLast.value });
-        }
+        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMax);
+        var rbaData = prep.rbaData;
+        var cpiPts = prep.cpiPoints;
+        var rbaStart = prep.rbaStart;
 
         var compact = (container.clientWidth || 800) < 480;
         var maxBanks = Math.min(banks.length, 100);
@@ -349,7 +236,7 @@
             },
             localization: {
                 priceFormatter: function (p) { return Number(p).toFixed(2) + '%'; },
-                timeFormatter: function (time) { return fmtFull(utcToYmd(time)); },
+                timeFormatter: function (time) { return fmtFull(M.utcToYmd(time)); },
             },
             handleScroll:  { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
             handleScale:   { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
@@ -370,8 +257,8 @@
                 crosshairMarkerRadius:   3,
             });
             cpiSeriesApi.setData(
-                fillForwardDaily(cpiPts, 'date', 'value', rbaStart, ctxMax)
-                    .map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; })
+                M.fillForwardDaily(cpiPts, 'date', 'value', rbaStart, ctxMax)
+                    .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
             );
         }
 
@@ -398,7 +285,7 @@
                 var lastPt = rawPts[rawPts.length - 1];
                 if (lastPt.date < ctxMax) rawPts = rawPts.concat([{ date: ctxMax, value: lastPt.value }]);
             }
-            var data = rawPts.map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; });
+            var data = rawPts.map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; });
             var ser = chart.addSeries(L.LineSeries, {
                 color:                   bank.color,
                 lineWidth:               compact ? 1.5 : 2,
@@ -427,12 +314,12 @@
                 crosshairMarkerRadius:   3,
             });
             rbaSeriesApi.setData(
-                fillForwardDaily(rbaData.points, 'date', 'rate', rbaStart, ctxMax)
-                    .map(function (p) { return { time: ymdToUtc(p.date), value: p.value }; })
+                M.fillForwardDaily(rbaData.points, 'date', 'rate', rbaStart, ctxMax)
+                    .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
             );
         }
 
-        chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) });
+        chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
 
         // ── Persistent legend column (top-left, vertical stack) ──
         var legendEl = document.createElement('div');
@@ -534,15 +421,15 @@
         }
 
         mount.addEventListener('mouseleave', function () { legendEl.innerHTML = defaultLegendHTML; });
-        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) }); });
+        mount.addEventListener('dblclick',   function () { chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) }); });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
                 legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-            var time = utcToYmd(param.time);
-            var cpiVal = cpiAtDate(cpiPts, time);
+            var time = M.utcToYmd(param.time);
+            var cpiVal = M.cpiAtDate(cpiPts, time);
             var rbaVal = null;
             if (rbaSeriesApi) {
                 var rd = param.seriesData && param.seriesData.get(rbaSeriesApi);
@@ -568,7 +455,7 @@
             var w = entry.contentRect.width;
             var h = Math.max(200, entry.contentRect.height);
             chart.resize(w, h);
-            chart.timeScale().setVisibleRange({ from: ymdToUtc(viewStart), to: ymdToUtc(ctxMax) });
+            chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
         });
         ro.observe(mount);
 
