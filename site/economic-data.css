@@ -5,6 +5,12 @@ body.ar-section-economic-data {
     --ar-showcase-spark: #66f6cf;
 }
 
+/* Light mode: calmer accent glow/spark (matches site green accent on pale backgrounds). */
+:root[data-theme="light"] body.ar-section-economic-data {
+    --ar-showcase-glow: rgba(22, 143, 114, 0.14);
+    --ar-showcase-spark: #168f72;
+}
+
 body.ar-section-economic-data .market-terminal.economic-terminal {
     display: grid;
     grid-template-columns: minmax(240px, 300px) minmax(280px, 1.35fr) minmax(240px, 320px);
@@ -184,6 +190,27 @@ body.ar-section-economic-data #sources {
     text-decoration: underline;
 }
 
+body.ar-section-economic-data .economic-source-link:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+/* Light: clearer card edges and badge contrast */
+:root[data-theme="light"] body.ar-section-economic-data .economic-group,
+:root[data-theme="light"] body.ar-section-economic-data .economic-series-card,
+:root[data-theme="light"] body.ar-section-economic-data .economic-source-card,
+:root[data-theme="light"] body.ar-section-economic-data .economic-point-row {
+    border-color: var(--ar-line-strong);
+    background: color-mix(in srgb, var(--ar-surface) 96%, var(--ar-surface-2));
+}
+
+:root[data-theme="light"] body.ar-section-economic-data .economic-badge {
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, var(--ar-surface-3));
+    color: var(--ar-text);
+    border-color: var(--ar-line-strong);
+}
+
 @media (max-width: 1100px) {
     .economic-hero {
         grid-template-columns: 1fr;
@@ -217,5 +244,95 @@ body.ar-section-economic-data #sources {
         top: auto;
         max-height: none;
         overflow: visible;
+    }
+}
+
+/* Mobile: touch targets, chart vs viewport, tighter stacks */
+@media (max-width: 760px) {
+    body.ar-section-economic-data .market-terminal.economic-terminal {
+        gap: 14px;
+    }
+
+    body.ar-section-economic-data .economic-hero {
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    body.ar-section-economic-data .economic-hero-stats {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.ar-section-economic-data .economic-hero-stats .terminal-stat {
+        width: 100%;
+        min-height: 44px;
+        box-sizing: border-box;
+    }
+
+    body.ar-section-economic-data .economic-topline {
+        gap: 8px;
+    }
+
+    body.ar-section-economic-data #chart,
+    body.ar-section-economic-data #scenario,
+    body.ar-section-economic-data #details,
+    body.ar-section-economic-data #sources {
+        scroll-margin-top: calc(var(--ar-header-height) + 12px);
+    }
+
+    body.ar-section-economic-data .economic-chip-row {
+        gap: 8px;
+        row-gap: 10px;
+    }
+
+    body.ar-section-economic-data .economic-chip-row .chip-btn {
+        min-height: 44px;
+        padding-inline: 14px;
+    }
+
+    body.ar-section-economic-data .economic-chart {
+        min-height: min(52vh, 380px);
+    }
+
+    body.ar-section-economic-data .economic-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    body.ar-section-economic-data .economic-option {
+        padding: 14px 0;
+        gap: 12px;
+    }
+
+    body.ar-section-economic-data .economic-option input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        margin-top: 0.1rem;
+    }
+
+    body.ar-section-economic-data .economic-group,
+    body.ar-section-economic-data .economic-series-card,
+    body.ar-section-economic-data .economic-source-card {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    body.ar-section-economic-data .terminal-column-left .panel,
+    body.ar-section-economic-data .terminal-column-center .panel,
+    body.ar-section-economic-data .terminal-column-right .panel {
+        padding: 14px;
+    }
+}
+
+@media (max-width: 420px) {
+    body.ar-section-economic-data .economic-chart {
+        min-height: min(48vh, 320px);
+    }
+
+    body.ar-section-economic-data .market-intro-title {
+        font-size: clamp(1.25rem, 5.5vw, 1.65rem);
     }
 }
