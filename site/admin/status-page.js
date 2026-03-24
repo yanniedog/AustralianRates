@@ -32,6 +32,29 @@
             .replace(/"/g, '&quot;');
     }
 
+    /** Inline SVG clipboard icon (14px) for copy buttons beside “View payload”. */
+    function clipboardIconHtml() {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    }
+
+    function copyPayloadFromDetailsButton(btn) {
+        if (!btn || !navigator.clipboard || !navigator.clipboard.writeText) return;
+        var details = btn.closest('details');
+        var pre = details && details.querySelector('pre.mono');
+        var text = pre ? pre.textContent : '';
+        if (!text) return;
+        var origTitle = btn.getAttribute('title') || '';
+        var origLabel = btn.getAttribute('aria-label') || '';
+        navigator.clipboard.writeText(text).then(function () {
+            btn.setAttribute('title', 'Copied');
+            btn.setAttribute('aria-label', 'Copied to clipboard');
+            setTimeout(function () {
+                btn.setAttribute('title', origTitle);
+                btn.setAttribute('aria-label', origLabel);
+            }, 2000);
+        }).catch(function () {});
+    }
+
     function boolPill(ok) {
         return '<span class="pill ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'OK' : 'Attention') + '</span>';
     }
@@ -379,7 +402,10 @@
                         + '<td>' + boolPill(!!check.passed) + '</td>'
                         + '<td class="mono">' + esc(check.severity || '') + '</td>'
                         + '<td>' + esc(check.summary || '') + '</td>'
-                        + '<td><details><summary>View payload</summary><pre class="mono">' + esc(JSON.stringify(technicalPayload, null, 2)) + '</pre></details></td>'
+                        + '<td><details><summary class="payload-summary-with-copy"><span>View payload</span>'
+                        + '<button type="button" class="admin-payload-copy-btn js-copy-cdr-payload" title="Copy payload to clipboard" aria-label="Copy payload to clipboard">'
+                        + clipboardIconHtml()
+                        + '</button></summary><pre class="mono">' + esc(JSON.stringify(technicalPayload, null, 2)) + '</pre></details></td>'
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
@@ -725,6 +751,13 @@
         var target = event.target;
         if (coverageGapManager && coverageGapManager.handleClick(target)) {
             event.preventDefault();
+            return;
+        }
+        var copyPayloadBtn = target && target.closest ? target.closest('.js-copy-cdr-payload') : null;
+        if (copyPayloadBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            copyPayloadFromDetailsButton(copyPayloadBtn);
             return;
         }
         var button = target && target.closest ? target.closest('.js-payload-link') : null;

@@ -48,6 +48,47 @@
     text-decoration: underline;
 }
 
+.admin-status .payload-summary-with-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    list-style: none;
+}
+
+.admin-status .payload-summary-with-copy::-webkit-details-marker {
+    display: none;
+}
+
+.admin-status .admin-payload-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.3rem;
+    margin: 0;
+    border: none;
+    border-radius: var(--ar-radius-1, 4px);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.admin-status .admin-payload-copy-btn:hover,
+.admin-status .admin-payload-copy-btn:focus-visible {
+    opacity: 1;
+    background: var(--ar-surface-soft);
+    outline: none;
+}
+
+.admin-status .admin-payload-copy-btn:focus-visible {
+    box-shadow: 0 0 0 2px var(--ar-accent);
+}
+
+.admin-status .admin-payload-copy-btn svg {
+    display: block;
+}
+
 .admin-status pre,
 .admin-runs pre {
     margin: 0;
