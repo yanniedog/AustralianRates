@@ -5,7 +5,7 @@ import { runE2ECheck } from './e2e-alignment'
 import { dispatchInternalPublicApiRequest } from './internal-public-api-request'
 import type { EnvBindings } from '../types'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
-import { log, queryLogs } from '../utils/logger'
+import { log, queryProblemLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
 import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
 import { captureProbePayload, type ProbeCapturePolicy } from './probe-capture'
@@ -340,7 +340,7 @@ export async function runSiteHealthChecks(
     }),
     integrityPromise,
     runE2ECheck(env, { origin, capturePolicy }),
-    queryLogs(env.DB, { sinceTs: actionableSinceTs, limit: 200 }),
+    queryProblemLogs(env.DB, { sinceTs: actionableSinceTs, limit: 500 }),
     pauseConfigPromise,
   ])
 

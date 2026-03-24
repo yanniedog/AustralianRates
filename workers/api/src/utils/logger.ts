@@ -278,6 +278,47 @@ export async function queryLogs(
   return { entries: dataResult.results ?? [], total }
 }
 
+/**
+ * Latest warn/error rows only (newest first). Use for actionable triage: plain queryLogs(limit)
+ * returns the N newest rows of any level, so heavy info/debug traffic can hide failures from the window.
+ */
+export async function queryProblemLogs(
+  db: D1Database,
+  opts: { sinceTs?: string; limit?: number; offset?: number } = {},
+): Promise<{ entries: Array<Record<string, unknown>>; total: number }> {
+  const whereParts = [`(level = 'warn' OR level = 'error')`]
+  const binds: Array<string | number> = []
+  if (opts.sinceTs) {
+    whereParts.push('ts >= ?')
+    binds.push(opts.sinceTs)
+  }
+  const whereClause = `WHERE ${whereParts.join(' AND ')}`
+  const limit = Math.min(Math.max(1, opts.limit ?? 500), 10000)
+  const offset = Math.max(0, opts.offset ?? 0)
+
+  const countResult = await db
+    .prepare(`SELECT COUNT(*) AS total FROM global_log ${whereClause}`)
+    .bind(...binds)
+    .first<{ total: number }>()
+  const total = Number(countResult?.total ?? 0)
+
+  try {
+    const dataSql = `SELECT id, ts, level, source, message, code, context, run_id, lender_code FROM global_log ${whereClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
+    const dataResult = await db
+      .prepare(dataSql)
+      .bind(...binds, limit, offset)
+      .all<Record<string, unknown>>()
+    return { entries: dataResult.results ?? [], total }
+  } catch {
+    const dataSqlLegacy = `SELECT id, ts, level, source, message, context, run_id, lender_code FROM global_log ${whereClause} ORDER BY ts DESC LIMIT ? OFFSET ?`
+    const dataResult = await db
+      .prepare(dataSqlLegacy)
+      .bind(...binds, limit, offset)
+      .all<Record<string, unknown>>()
+    return { entries: dataResult.results ?? [], total }
+  }
+}
+
 export async function getLogStats(db: D1Database): Promise<{ count: number; latest_ts: string | null }> {
   const result = await db
     .prepare('SELECT COUNT(*) AS cnt, MAX(ts) AS latest_ts FROM global_log')
