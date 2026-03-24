@@ -417,6 +417,37 @@ body.ar-legal .legal-hero { animation: none; }
         flex-shrink: 0;
     }
 
+    /*
+     * chart-figure is flex-grow, but siblings below it (Chart controls, filters) were using their full
+     * content height and shrinking the plot to ~20–30% of the screen. Cap them and scroll inside.
+     */
+    body.ar-public .chart-block > .chart-options-details {
+        flex: 0 1 auto;
+        min-height: 0;
+    }
+
+    body.ar-public .chart-block > .chart-options-details[open] {
+        max-height: min(240px, 34dvh);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.ar-public .chart-block > .chart-filter-bar.chart-filter-bar-below-chart {
+        flex: 0 1 auto;
+        min-height: 0;
+        max-height: min(220px, 32dvh);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.ar-public .chart-block > #chart-status {
+        flex: 0 0 auto;
+        font-size: 0.72rem;
+        line-height: 1.3;
+        margin: 0;
+        padding-block: 2px;
+    }
+
     body.ar-public .chart-figure {
         flex: 1 1 0;
         min-height: 0;
@@ -440,7 +471,7 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .terminal-chart-output,
     body.ar-public #chart-output {
         flex: 1 1 0;
-        min-height: 180px;
+        min-height: max(240px, min(52dvh, calc((100dvh - var(--ar-header-height) - 4px) * 0.5)));
     }
 
     body.ar-public #chart-detail-output {
@@ -448,9 +479,10 @@ body.ar-legal .legal-hero { animation: none; }
         min-height: 0;
     }
 
-    /* Cap the series rail so the chart canvas keeps enough vertical space */
+    /* Tighter rail so more height stays on the ECharts canvas */
     body.ar-public .chart-selection-rail {
-        max-height: min(120px, 18vh);
+        max-height: min(88px, 14vh);
+        flex-shrink: 0;
     }
 
 }
