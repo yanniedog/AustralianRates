@@ -45,7 +45,6 @@
         tdCurveFrameIndex: null,
         tdCurveDates: [],
         tdCurveFrames: [],
-        tdPlayInterval: null,
         mainChart: null,
         detailChart: null,
         lwcMain: null,
@@ -68,8 +67,6 @@
     var responsiveSyncTimer = 0;
     var resizeObserver = null;
     var chartLoadPromise = null;
-    var chartTimeSliderBound = false;
-
     function fields() {
         var defaultView = (window.AR.chartConfig && window.AR.chartConfig.defaultView) ? window.AR.chartConfig.defaultView() : 'lenders';
         return chartUi.getChartFields ? chartUi.getChartFields() : { view: defaultView, yField: 'interest_rate', density: 'standard' };
@@ -115,6 +112,7 @@
         disposeCharts();
         chartState.tdCurveDates = [];
         chartState.tdCurveFrames = [];
+        chartState.tdCurveFrameIndex = null;
         if (chartUi.setCanvasPlaceholder) chartUi.setCanvasPlaceholder(message);
         if (chartUi.renderSummary) chartUi.renderSummary(null, fields(), payloadMeta(), chartState.stale);
         if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, chartState);
@@ -122,58 +120,11 @@
         if (chartSummary && chartSummary.clear) chartSummary.clear(message);
     }
 
-    function stopTdPlayback() {
-        if (!chartState.tdPlayInterval) return;
-        clearInterval(chartState.tdPlayInterval);
-        chartState.tdPlayInterval = null;
-    }
-
-    function tdFrameCount() {
-        return Array.isArray(chartState.tdCurveFrames) ? chartState.tdCurveFrames.length : 0;
-    }
-
-    function tdCurrentDateLabel() {
-        if (!Array.isArray(chartState.tdCurveDates) || !chartState.tdCurveDates.length) return '';
-        var idx = Number(chartState.tdCurveFrameIndex);
-        if (!Number.isFinite(idx) || idx < 0 || idx >= chartState.tdCurveDates.length) return '';
-        return chartState.tdCurveDates[idx] || '';
-    }
-
-    function syncTdTimeControls() {
-        var active = tdFrameCount() > 0;
-        if (els.chartTimeSliderWrap) els.chartTimeSliderWrap.hidden = !active;
-        if (!active) {
-            if (els.chartTimeSlider) {
-                els.chartTimeSlider.value = '0';
-                els.chartTimeSlider.max = '0';
-                els.chartTimeSlider.setAttribute('aria-valuetext', '');
-            }
-            if (els.chartTimeSliderDate) els.chartTimeSliderDate.textContent = '';
-            if (els.chartTimePlay) {
-                els.chartTimePlay.textContent = 'Play';
-                els.chartTimePlay.setAttribute('aria-label', 'Play animation');
-                els.chartTimePlay.setAttribute('aria-pressed', 'false');
-            }
-            return;
-        }
-
-        var maxIdx = Math.max(0, tdFrameCount() - 1);
-        if (chartState.tdCurveFrameIndex == null || chartState.tdCurveFrameIndex < 0 || chartState.tdCurveFrameIndex > maxIdx) {
-            chartState.tdCurveFrameIndex = maxIdx;
-        }
-        var dateLabel = tdCurrentDateLabel();
-        if (els.chartTimeSlider) {
-            els.chartTimeSlider.min = 0;
-            els.chartTimeSlider.max = String(maxIdx);
-            els.chartTimeSlider.value = String(chartState.tdCurveFrameIndex);
-            els.chartTimeSlider.setAttribute('aria-valuetext', dateLabel);
-        }
-        if (els.chartTimeSliderDate) els.chartTimeSliderDate.textContent = dateLabel;
-        if (els.chartTimePlay) {
-            var playing = !!chartState.tdPlayInterval;
-            els.chartTimePlay.textContent = playing ? 'Pause' : 'Play';
-            els.chartTimePlay.setAttribute('aria-label', playing ? 'Pause animation' : 'Play animation');
-            els.chartTimePlay.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    function syncTdCurveFrameIndex() {
+        if (chartState.tdCurveFrames && chartState.tdCurveFrames.length > 0) {
+            chartState.tdCurveFrameIndex = chartState.tdCurveFrames.length - 1;
+        } else {
+            chartState.tdCurveFrameIndex = null;
         }
     }
 
@@ -429,45 +380,7 @@
                 chartState.marketFocusKey = model.market.focusBucket.key;
             }
 
-            var section = window.AR.section || '';
-            var showTdTimeSlider = section === 'term-deposits' && currentFields.view === 'market' && chartState.tdCurveFrames.length && chartState.tdCurveDates.length;
-            if (showTdTimeSlider) {
-                syncTdTimeControls();
-                if (!chartTimeSliderBound && els.chartTimeSlider) {
-                    chartTimeSliderBound = true;
-                    els.chartTimeSlider.addEventListener('input', function () {
-                        var val = parseInt(els.chartTimeSlider.value, 10);
-                        if (Number.isFinite(val)) chartState.tdCurveFrameIndex = val;
-                        syncTdTimeControls();
-                        renderFromCache();
-                    });
-                    if (els.chartTimePlay) {
-                        els.chartTimePlay.addEventListener('click', function () {
-                            var maxIdx = Math.max(0, tdFrameCount() - 1);
-                            if (chartState.tdPlayInterval) {
-                                stopTdPlayback();
-                                syncTdTimeControls();
-                                return;
-                            }
-                            if (chartState.tdCurveFrameIndex >= maxIdx) chartState.tdCurveFrameIndex = 0;
-                            chartState.tdPlayInterval = setInterval(function () {
-                                var lastIdx = Math.max(0, tdFrameCount() - 1);
-                                chartState.tdCurveFrameIndex = (chartState.tdCurveFrameIndex + 1) <= lastIdx ? chartState.tdCurveFrameIndex + 1 : 0;
-                                syncTdTimeControls();
-                                renderFromCache();
-                                if (chartState.tdCurveFrameIndex >= lastIdx) {
-                                    stopTdPlayback();
-                                    syncTdTimeControls();
-                                }
-                            }, 400);
-                            syncTdTimeControls();
-                        });
-                    }
-                }
-            } else {
-                stopTdPlayback();
-                syncTdTimeControls();
-            }
+            syncTdCurveFrameIndex();
 
             var pref = currentFields.chartEngine || 'echarts';
             var eff = typeof chartLightweight.effectiveEngine === 'function'
@@ -639,6 +552,7 @@
             chartState.fallbackReason = payload.fallbackReason || '';
             chartState.tdCurveDates = [];
             chartState.tdCurveFrames = [];
+            chartState.tdCurveFrameIndex = null;
             if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
                 els.chartRepresentation.value = payload.representation;
             }
