@@ -247,9 +247,16 @@
     }
 
     function buildCpiSeries(cpiData) {
-        return (Array.isArray(cpiData) ? cpiData : []).map(function (e) {
-            return { date: String(e.quarter_date || e.date || ''), value: Number(e.annual_change != null ? e.annual_change : e.value) };
-        }).filter(function (p) { return p.date && Number.isFinite(p.value); });
+        return (Array.isArray(cpiData) ? cpiData : []).map(function (row) {
+            return {
+                date: String(row.quarter_date || row.date || '').slice(0, 10),
+                value: Number(row.annual_change != null ? row.annual_change : row.value)
+            };
+        }).filter(function (row) {
+            return row.date && Number.isFinite(row.value);
+        }).sort(function (left, right) {
+            return left.date.localeCompare(right.date);
+        });
     }
 
     // CPI step carry-forward for tooltip
@@ -599,23 +606,17 @@
                 var rd = param.seriesData && param.seriesData.get(rbaSeriesApi);
                 if (rd && Number.isFinite(rd.value)) rbaVal = rd.value;
             }
-            var cpiDisplayVal = null;
-            if (cpiSeriesApi) {
-                var cd = param.seriesData && param.seriesData.get(cpiSeriesApi);
-                if (cd && Number.isFinite(cd.value)) cpiDisplayVal = cd.value;
-                else if (cpiVal != null) cpiDisplayVal = cpiVal;
-            }
             var bankItems = [];
             bankSeriesApis.forEach(function (si) {
                 var sd  = param.seriesData && param.seriesData.get(si.api);
                 var val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
                 if (val != null) bankItems.push({ bank: si.bank, value: val });
             });
-            if (!bankItems.length && rbaVal == null && cpiDisplayVal == null) {
+            if (!bankItems.length && rbaVal == null && cpiVal == null) {
                 legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
-            populateLegend(bankItems, rbaVal, cpiDisplayVal, fmtFull(time));
+            populateLegend(bankItems, rbaVal, cpiVal, fmtFull(time));
         });
 
         // ── Resize observer ───────────────────────────────────────────────────
