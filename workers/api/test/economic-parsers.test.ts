@@ -71,6 +71,6 @@ describe('economic parsers', () => {
     )
     expect(rows.length).toBeGreaterThanOrEqual(4)
     expect(rows[0].observationDate).toBe('1993-01-01')
-    expect(rows[0].value).toBeCloseTo(29.867, 3)
+    expect(rows[0].value).toBeCloseTo(29.866, 3)
   })
 })

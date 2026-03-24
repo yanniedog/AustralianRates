@@ -1,14 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { SELF, env } from 'cloudflare:test'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { upsertEconomicObservations, upsertEconomicStatus } from '../../src/db/economic-series'
 import { parseFedTargetHistoryHtml } from '../../src/economic/external-parsers'
 import { parseRbaTableCsv, extractRbaSeriesObservations } from '../../src/economic/rba-table'
-
-function fixture(name: string): string {
-  return readFileSync(resolve(process.cwd(), 'test/fixtures/economic', name), 'utf8')
-}
+import fedFixture from '../fixtures/economic/fed-open-market.html?raw'
+import h3Fixture from '../fixtures/economic/rba-h3.csv?raw'
 
 beforeEach(async () => {
   await env.DB.prepare('DELETE FROM economic_series_observations').run()
@@ -51,11 +47,11 @@ describe('economic data routes', () => {
   })
 
   it('returns step-filled normalized series payloads', async () => {
-    const table = parseRbaTableCsv(fixture('rba-h3.csv'), 'https://example.com/rba-h3.csv')
+    const table = parseRbaTableCsv(h3Fixture, 'https://example.com/rba-h3.csv')
     const sentimentRows = extractRbaSeriesObservations(table, 'consumer_sentiment', 'GICWMICS', false)
     const conditionsRows = extractRbaSeriesObservations(table, 'business_conditions', 'GICNBC', false)
     const fedRows = parseFedTargetHistoryHtml(
-      fixture('fed-open-market.html'),
+      fedFixture,
       'fed_funds_proxy',
       'https://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp',
       true,

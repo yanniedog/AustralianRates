@@ -107,6 +107,13 @@ export function parseFlexibleDate(value: string): string | null {
     return isoDateFromParts(Number(match[3]), monthIndex, Number(match[1]))
   }
 
+  match = raw.match(/^([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})$/)
+  if (match) {
+    const monthIndex = MONTH_INDEX[match[1].slice(0, 3).toLowerCase()]
+    if (monthIndex == null) return null
+    return isoDateFromParts(Number(match[3]), monthIndex, Number(match[2]))
+  }
+
   return null
 }
 

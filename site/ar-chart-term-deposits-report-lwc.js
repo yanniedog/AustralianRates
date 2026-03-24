@@ -533,8 +533,8 @@
                 var val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
                 if (val != null) bankItems.push({ bank: si.bank, value: val, stepPoints: si.stepPoints });
             });
-            if (!bankItems.length && rbaVal == null && cpiVal == null) legendEl.innerHTML = defaultLegendHTML;
             if (!bankItems.length && rbaVal == null && cpiVal == null) {
+                legendEl.innerHTML = defaultLegendHTML;
                 return;
             }
             populateLegend(bankItems, rbaVal, cpiVal, time);

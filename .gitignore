@@ -13,11 +13,17 @@ site/version.json
 Thumbs.db
 .DS_Store
 tmp/
+.tmp/
 test-screenshots/
 docs/CLOUDFLARE_USAGE.md
 *.log
+debug-*.log
 logs/
 *australianrates-log*.txt
+page_content.html
+test-homepage-output.txt
+tmp-*.json
+tmp-*.js
 
 # Ephemeral production log downloads: never commit; always fetch fresh; delete after use
 errors.jsonl
