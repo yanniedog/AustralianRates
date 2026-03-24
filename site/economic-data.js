@@ -256,6 +256,38 @@
             }).join('');
     }
 
+    function chartHelpers() {
+        return window.AR && window.AR.chartEchartsHelpers;
+    }
+
+    /** Mirrors ar-chart-echarts-helpers chartTheme when that script is not loaded. */
+    function economicThemeFallback() {
+        var light = document.documentElement.getAttribute('data-theme') === 'light';
+        return {
+            emphasisText: light ? '#0c1220' : '#f0f6ff',
+            mutedText: light ? '#4a5c72' : '#94a3b8',
+            softText: light ? '#1e3a52' : '#b8c5d6',
+            splitLine: light ? 'rgba(59, 78, 104, 0.08)' : 'rgba(226, 232, 240, 0.06)',
+            text: light ? '#0f172a' : '#e2e8f0',
+            tooltipBackground: light ? '#ffffff' : '#0f1419',
+            tooltipBorder: light ? 'rgba(37, 99, 235, 0.35)' : 'rgba(79, 141, 253, 0.35)',
+            tooltipShadow: light
+                ? 'box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06); border-radius: 10px;'
+                : 'box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.08); border-radius: 10px;',
+            tooltipText: light ? '#0f172a' : '#e2e8f0',
+            axisLine: light ? 'rgba(59, 78, 104, 0.35)' : 'rgba(226, 232, 240, 0.18)',
+            crosshairLine: light ? 'rgba(37, 99, 235, 0.55)' : 'rgba(99, 179, 237, 0.6)',
+            crosshairLabelBg: light ? 'rgba(255,255,255,0.98)' : 'rgba(15, 20, 25, 0.96)',
+            dataFont: '"JetBrains Mono", "SF Mono", "Consolas", "Monaco", "ui-monospace", monospace',
+        };
+    }
+
+    function getEconomicChartTheme() {
+        var h = chartHelpers();
+        if (h && typeof h.chartTheme === 'function') return h.chartTheme();
+        return economicThemeFallback();
+    }
+
     function renderSources() {
         refs.sourceList.innerHTML = state.series.map(function (series) {
             var freshness = series.freshness || {};
@@ -280,12 +312,61 @@
             range: state.range,
             reason: state.lastLoadReason,
         });
+        var h = chartHelpers();
+        var theme = getEconomicChartTheme();
+        var styles = h && typeof h.gridStyles === 'function' ? h.gridStyles() : {
+            axisLine: { lineStyle: { color: theme.axisLine, width: 1 } },
+            splitLine: { lineStyle: { color: theme.splitLine, width: 1, type: 'solid' } },
+        };
+        var tStyles = h && typeof h.tooltipStyles === 'function' ? h.tooltipStyles() : {
+            backgroundColor: theme.tooltipBackground,
+            borderColor: theme.tooltipBorder,
+            borderWidth: 1,
+            textStyle: {
+                color: theme.tooltipText,
+                fontSize: 13,
+                lineHeight: 1.55,
+                fontFamily: theme.dataFont || undefined,
+            },
+            padding: [14, 18],
+            extraCssText: theme.tooltipShadow + '; font-variant-numeric: tabular-nums;',
+        };
+        var axisPointer = h && typeof h.axisPointerConfig === 'function' ? h.axisPointerConfig(theme) : {
+            type: 'cross',
+            lineStyle: { color: theme.crosshairLine, width: 1.5, type: 'dashed' },
+            crossStyle: { color: theme.crosshairLine, width: 1 },
+            label: {
+                backgroundColor: theme.crosshairLabelBg != null ? theme.crosshairLabelBg : theme.tooltipBackground,
+                borderColor: theme.tooltipBorder,
+                borderWidth: 1,
+                color: theme.tooltipText,
+                fontSize: 11,
+                fontFamily: theme.dataFont || undefined,
+                padding: [4, 8],
+            },
+        };
+        var chartW = refs.chartEl.clientWidth || 400;
+        var narrow = chartW < 760;
+        var compact = chartW < 420;
+        var gridLeft = compact ? 46 : (narrow ? 50 : 56);
+        var gridBottom = compact ? 36 : (narrow ? 40 : 44);
         var palette = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
         state.chart.setOption({
             animation: false,
+            textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", system-ui, sans-serif' },
+            backgroundColor: 'transparent',
             color: palette,
+            axisPointer: axisPointer,
             tooltip: {
                 trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
+                hideDelay: 220,
+                backgroundColor: tStyles.backgroundColor,
+                borderColor: tStyles.borderColor,
+                borderWidth: tStyles.borderWidth,
+                textStyle: tStyles.textStyle,
+                extraCssText: tStyles.extraCssText,
                 formatter: function (items) {
                     var rows = ['<strong>' + esc(formatDate(items[0] && items[0].axisValue)) + '</strong>'];
                     items.forEach(function (item) {
@@ -296,10 +377,28 @@
                     return rows.join('<br>');
                 }
             },
-            legend: { type: 'scroll', top: 8 },
-            grid: { left: 52, right: 18, top: 56, bottom: 44 },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'value', name: 'Index (start = 100)' },
+            legend: {
+                type: 'scroll',
+                top: 8,
+                textStyle: { color: theme.softText, fontSize: narrow ? 11 : 12 },
+                pageIconColor: theme.softText,
+                pageTextStyle: { color: theme.mutedText },
+            },
+            grid: { left: gridLeft, right: narrow ? 10 : 18, top: 56, bottom: gridBottom, containLabel: true },
+            xAxis: {
+                type: 'time',
+                axisLine: styles.axisLine,
+                axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11, hideOverlap: true },
+                splitLine: { show: false },
+            },
+            yAxis: {
+                type: 'value',
+                name: 'Index (start = 100)',
+                nameTextStyle: { color: theme.softText, fontSize: 11 },
+                axisLine: styles.axisLine,
+                axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
+                splitLine: { show: true, lineStyle: styles.splitLine.lineStyle },
+            },
             series: state.series.map(function (series) {
                 return {
                     id: series.id,
@@ -495,6 +594,10 @@
                 width: window.innerWidth,
                 height: window.innerHeight,
             });
+        });
+        window.addEventListener('ar:theme-changed', function () {
+            if (!state.chart || !state.series.length) return;
+            renderChart();
         });
     }
 

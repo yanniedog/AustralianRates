@@ -22,6 +22,7 @@ describe('economic site smoke', () => {
     expect(html).toContain('id="scenario"')
     expect(html).toContain('id="details"')
     expect(html).toContain('id="sources"')
+    expect(html).toContain('ar-chart-echarts-helpers.js')
   })
 
   it('wires economic section paths through shared shell files', () => {
