@@ -19,6 +19,7 @@ import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
+import { collectEconomicSeries } from '../economic/collect'
 import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { adminClearRoutes } from './admin-clear'
@@ -721,6 +722,25 @@ adminRoutes.post('/rba/backfill', async (c) => {
     auth_mode: c.get('adminAuthState')?.mode || null,
     result,
   })
+})
+
+adminRoutes.post('/economic/collect', async (c) => {
+  try {
+    const result = await collectEconomicSeries(c.env)
+    return c.json({
+      ok: result.ok,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      result,
+    })
+  } catch (error) {
+    log.error('admin', 'economic_collect_failed', {
+      error,
+      context: JSON.stringify({
+        route: '/admin/economic/collect',
+      }),
+    })
+    return jsonError(c, 500, 'ECONOMIC_COLLECT_FAILED', 'Economic collection failed to execute.')
+  }
 })
 
 adminRoutes.post('/runs/reconcile', async (c) => {

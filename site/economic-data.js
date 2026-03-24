@@ -157,6 +157,14 @@
         }, 0);
     }
 
+    function hasRenderablePoints(seriesList) {
+        return (seriesList || []).some(function (series) {
+            return (series.points || []).some(function (point) {
+                return point && point.normalized_value != null;
+            });
+        });
+    }
+
     function syncDebugSurface() {
         ar.economicData = {
             reloadCatalog: loadCatalog,
@@ -356,6 +364,14 @@
                     selectedIds: state.selectedIds.slice(),
                 });
                 throw new Error('No data returned for the selected indicators.');
+            }
+            if (!hasRenderablePoints(state.series)) {
+                logEvent('warn', 'Economic series load returned no usable chart points', {
+                    reason: state.lastLoadReason,
+                    range: state.range,
+                    selectedIds: state.selectedIds.slice(),
+                }, { remote: true });
+                throw new Error('Economic data has not been populated yet for the selected indicators.');
             }
             refs.chartMeta.textContent = 'Index = 100 at ' + formatDate(payload.start_date) + ' for each visible series.';
             renderSeriesCards();
