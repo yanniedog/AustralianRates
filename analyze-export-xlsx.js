@@ -2,12 +2,15 @@
 /**
  * Read-only analysis of site-downloaded *-export.xlsx files in ./exports/
  * Uses vendor SheetJS (buffer read — readFile path not wired in browser bundle).
+ * Emits per-file JSON: column stats, dup keys, and `product_key_rates` (median/IQR/spread
+ * outliers) via export-xlsx-product-key-stats.js. See exports/OUTLIER_PRODUCTS.md.
  */
 'use strict'
 
 const fs = require('fs')
 const path = require('path')
 const XLSX = require('./site/vendor/sheetjs/xlsx.full.min.js')
+const { summarizeProductKeyRates } = require('./export-xlsx-product-key-stats.js')
 
 const EXCEL_MAX_CHARS = 32767
 const EXPORTS_DIR = path.join(__dirname, 'exports')
@@ -130,6 +133,10 @@ function analyzeFile(filePath) {
 
   if (keys.includes('conditions')) {
     report.conditions = colLens(rows, 'conditions')
+  }
+
+  if (keys.includes('product_key') && keys.includes('interest_rate')) {
+    report.product_key_rates = summarizeProductKeyRates(rows)
   }
 
   return report
