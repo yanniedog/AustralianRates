@@ -123,16 +123,39 @@ function isPastEndOfStartDay(startedAtIso: string): boolean {
   return new Date().toISOString() > endOfDay
 }
 
-type UnfinalizedLenderDatasetRow = {
+type LenderDatasetReadinessRow = {
   run_id: string
   lender_code: string
   dataset_kind: 'home_loans' | 'savings' | 'term_deposits'
   bank_name: string
   collection_date: string
+  expected_detail_count: number
+  index_fetch_succeeded: number
+  accepted_row_count: number
+  written_row_count: number
+  detail_fetch_event_count: number
+  lineage_error_count: number
+  completed_detail_count: number
+  failed_detail_count: number
+}
+
+function snapshotForReadiness(row: LenderDatasetReadinessRow): Parameters<typeof isLenderDatasetReadyForFinalization>[0] {
+  return {
+    expected_detail_count: Number(row.expected_detail_count ?? 0),
+    index_fetch_succeeded: Number(row.index_fetch_succeeded ?? 0),
+    accepted_row_count: Number(row.accepted_row_count ?? 0),
+    written_row_count: Number(row.written_row_count ?? 0),
+    detail_fetch_event_count: Number(row.detail_fetch_event_count ?? 0),
+    lineage_error_count: Number(row.lineage_error_count ?? 0),
+    completed_detail_count: Number(row.completed_detail_count ?? 0),
+    failed_detail_count: Number(row.failed_detail_count ?? 0),
+  }
 }
 
 /**
  * Force-finalize all unfinalized lender_dataset_runs for a run (retain as much info as possible when abandoning).
+ * Skips rows that are not yet ready per {@link isLenderDatasetReadyForFinalization} so we do not set `finalized_at`
+ * while detail work is still incomplete (e.g. EOD run close shortly after midnight UTC).
  */
 async function forceFinalizeAllUnfinalizedForRun(
   db: D1Database,
@@ -142,14 +165,25 @@ async function forceFinalizeAllUnfinalizedForRun(
   let finalized = 0
   const rows = await db
     .prepare(
-      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date
+      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date,
+              expected_detail_count, index_fetch_succeeded, accepted_row_count, written_row_count,
+              detail_fetch_event_count, lineage_error_count, completed_detail_count, failed_detail_count
        FROM lender_dataset_runs
        WHERE run_id = ?1 AND finalized_at IS NULL`,
     )
     .bind(runId)
-    .all<UnfinalizedLenderDatasetRow>()
+    .all<LenderDatasetReadinessRow>()
 
   for (const row of rows.results ?? []) {
+    const readiness = isLenderDatasetReadyForFinalization(snapshotForReadiness(row))
+    if (!readiness.ready) {
+      log.info('run_reconciliation', 'force_finalize_skipped_not_ready', {
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        context: { dataset: row.dataset_kind, reason: readiness.reason ?? 'unknown' },
+      })
+      continue
+    }
     try {
       await finalizePresenceForRun(db, {
         runId: row.run_id,
@@ -503,17 +537,10 @@ export async function cancelAllRunningRuns(
   }
 }
 
-type StaleUnfinalizedRow = {
-  run_id: string
-  lender_code: string
-  dataset_kind: 'home_loans' | 'savings' | 'term_deposits'
-  bank_name: string
-  collection_date: string
-}
-
 /**
  * Force-close lender_dataset_runs that have been unfinalized longer than staleUnfinalizedMinutes.
  * Prevents reconciliation stall when rows never become "ready" (e.g. index_fetch_not_succeeded, failed_detail_fetches).
+ * Rows that are still not {@link isLenderDatasetReadyForFinalization} are skipped so we do not mark incomplete datasets finalized.
  */
 export async function forceCloseStaleUnfinalizedLenderDatasets(
   db: D1Database,
@@ -531,7 +558,9 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
 
   const rows = await db
     .prepare(
-      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date
+      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date,
+              expected_detail_count, index_fetch_succeeded, accepted_row_count, written_row_count,
+              detail_fetch_event_count, lineage_error_count, completed_detail_count, failed_detail_count
        FROM lender_dataset_runs
        WHERE finalized_at IS NULL
          AND updated_at < ?1
@@ -539,11 +568,20 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
        LIMIT ?2`,
     )
     .bind(cutoff, maxRows)
-    .all<StaleUnfinalizedRow>()
+    .all<LenderDatasetReadinessRow>()
 
   for (const row of rows.results ?? []) {
     if (dryRun) {
       forceClosedRows += 1
+      continue
+    }
+    const readiness = isLenderDatasetReadyForFinalization(snapshotForReadiness(row))
+    if (!readiness.ready) {
+      log.info('run_reconciliation', 'stale_unfinalized_force_close_skipped_not_ready', {
+        runId: row.run_id,
+        lenderCode: row.lender_code,
+        context: { dataset: row.dataset_kind, reason: readiness.reason ?? 'unknown', updated_at_cutoff: cutoff },
+      })
       continue
     }
     try {

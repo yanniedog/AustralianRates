@@ -87,4 +87,21 @@ describe('lender dataset invariants', () => {
       reason: 'failed_detail_fetches_present',
     })
   })
+
+  it('blocks finalization when most expected detail jobs never ran (e.g. EOD must not force-finalize incomplete)', () => {
+    const snapshot = {
+      expected_detail_count: 17,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 38,
+      written_row_count: 38,
+      detail_fetch_event_count: 5,
+      lineage_error_count: 0,
+      completed_detail_count: 5,
+      failed_detail_count: 0,
+    }
+    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({
+      ready: false,
+      reason: 'detail_processing_incomplete',
+    })
+  })
 })
