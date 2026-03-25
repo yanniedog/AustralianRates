@@ -45,6 +45,27 @@ export function isTermDeposit(product: JsonRecord): boolean {
   return false
 }
 
+/**
+ * Macquarie exposes a business TD (BB001…) in the product list, but the CDR detail payload has no
+ * depositRates / rates, so ingestion yields zero rows. Exclude at index so expected_detail_count matches
+ * the retail TD (TD001…) that carries rate tiers.
+ */
+export function includeTermDepositIndexProduct(product: JsonRecord, lenderCode?: string): boolean {
+  if (!isTermDeposit(product)) return false
+  const code = String(lenderCode || '').trim().toLowerCase()
+  if (code === 'macquarie') {
+    const name = pickText(product, ['name', 'productName']).toUpperCase()
+    if (name.includes('BUSINESS BANKING')) return false
+  }
+  return true
+}
+
+/** Aligns with {@link includeTermDepositIndexProduct}: catalog supplements must not re-add excluded business TD IDs. */
+export function excludeMacquarieBusinessTermDepositProductId(productId: string): boolean {
+  const id = String(productId || '').trim().toUpperCase()
+  return id.startsWith('BB') && id.includes('MBLTDA')
+}
+
 function extractDepositRatesArray(detail: JsonRecord): JsonRecord[] {
   const arrays = [detail.depositRates, detail.rates, detail.rateTiers, detail.rate]
   for (const candidate of arrays) {
@@ -313,7 +334,7 @@ export async function fetchTermDepositProductIds(
 
     const products = extractProducts(response.data)
     for (const product of products) {
-      if (!isTermDeposit(product)) continue
+      if (!includeTermDepositIndexProduct(product, options?.lenderCode)) continue
       const id = pickText(product, ['productId', 'id'])
       if (id) ids.add(id)
     }

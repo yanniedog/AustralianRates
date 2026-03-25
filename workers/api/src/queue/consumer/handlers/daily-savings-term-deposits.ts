@@ -9,7 +9,11 @@ import { getActiveCdrProductRefs } from '../../../db/active-cdr-products'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { persistRawPayload } from '../../../db/raw-payloads'
 import { discoverProductsEndpoint } from '../../../ingest/cdr'
-import { fetchSavingsProductIds, fetchTermDepositProductIds } from '../../../ingest/cdr-savings'
+import {
+  excludeMacquarieBusinessTermDepositProductId,
+  fetchSavingsProductIds,
+  fetchTermDepositProductIds,
+} from '../../../ingest/cdr-savings'
 import { candidateProductEndpoints } from '../../../ingest/product-endpoints'
 import { getLenderPlaybook } from '../../../ingest/lender-playbooks'
 import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../producer'
@@ -346,6 +350,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
   if (shouldFetchTd && tdIndexSucceeded) {
     const refs = await getActiveCdrProductRefs(env.DB, { dataset: 'term_deposits', bankName })
     for (const ref of refs) {
+      if (job.lenderCode === 'macquarie' && excludeMacquarieBusinessTermDepositProductId(ref.productId)) continue
       if (tdProductEndpointMap.has(ref.productId)) continue
       tdProductEndpointMap.set(ref.productId, ref.endpointUrl)
       tdCatalogSupplements += 1
