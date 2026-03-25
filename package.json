@@ -27,6 +27,7 @@
     "test:theme-contrast": "node test-theme-contrast.js",
     "test:table-errors": "node test-table-error-detect.js",
     "test:site": "node test-homepage.js && node diagnose-api.js",
+    "verify:macquarie-td-e2e": "node verify-macquarie-td-e2e.js",
     "audit:visual": "node visual-audit.js",
     "capture:mobile-admin": "node capture-mobile-admin.js",
     "diagnose:api": "node diagnose-api.js",

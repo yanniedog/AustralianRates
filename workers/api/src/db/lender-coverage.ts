@@ -45,7 +45,7 @@ export async function getLenderDatasetCoverage(
       updated_at
     FROM lender_dataset_runs
     WHERE ${where.join(' AND ')}
-    ORDER BY collection_date DESC, lender_code ASC
+    ORDER BY collection_date DESC, updated_at DESC, lender_code ASC
     LIMIT ?
   `
 
