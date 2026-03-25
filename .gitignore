@@ -18,6 +18,8 @@ test-screenshots/
 docs/CLOUDFLARE_USAGE.md
 *.log
 debug-*.log
+# Claude MCP diagnostic state (transition detection; do not commit)
+debug-claude-mcp.state.json
 logs/
 *australianrates-log*.txt
 page_content.html

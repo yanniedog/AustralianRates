@@ -8,7 +8,7 @@ alwaysApply: true
 When the user reports **Claude Code**, **Cursor**, **`claude-vscode`**, **MCP -32601**, or extension log problems:
 
 1. **Run first** from repo root: `npm run diagnose` (no manual log export). Use **`npm run diagnose:full`** only if production API checks are relevant (`--with-api`).
-2. Treat script output and **`debug-local-diagnose.log`** as **runtime evidence** before suggesting fixes. Exit code **2** means MCP error signatures were still found in Cursor logs (typically upstream Anthropic extension/binary).
+2. Treat script output and **`debug-local-diagnose.log`** as **runtime evidence** before suggesting fixes. Exit code **2** means MCP error signatures were still found in Cursor logs (typically upstream Anthropic extension/binary). When a previous run had hits and the current run is clean, **`npm run diagnose`** prints a **FIXED** banner (see **`debug-claude-mcp.state.json`** for last transition).
 3. **Do not** ask the user to manually reproduce or paste Output panel text unless the scripts fail to run or paths are missing.
 
 For **site, API, or Cloudflare** issues, use the usual production checks (`npm run diagnose:api`, `npm run test:homepage`, etc.) instead of or in addition to the above.
