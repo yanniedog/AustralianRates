@@ -255,68 +255,129 @@
 
 .chart-overlay-picker-panel {
     display: grid;
-    gap: 10px;
-    padding: 10px 12px 12px;
+    gap: 8px;
+    padding: 8px 10px 10px;
     border-top: 1px solid var(--ar-line);
+}
+
+.chart-overlay-picker-panel .hint {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    margin: 0;
 }
 
 .chart-overlay-picker-options {
     display: grid;
-    gap: 10px;
-    max-height: 280px;
-    overflow: auto;
-    padding-right: 2px;
+    gap: 8px;
+    max-height: min(220px, 42vh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 2px 4px 2px 0;
+    scrollbar-gutter: stable;
 }
 
 .chart-overlay-group {
     display: grid;
-    gap: 8px;
+    gap: 5px;
+}
+
+.chart-overlay-group + .chart-overlay-group {
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, var(--ar-line) 70%, transparent);
 }
 
 .chart-overlay-group-title {
     margin: 0;
     color: var(--ar-text-soft);
-    font-size: 0.7rem;
+    font-size: 0.62rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
 }
 
 .chart-overlay-group-options {
     display: grid;
-    gap: 6px;
+    gap: 4px;
 }
 
 .chart-overlay-option {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
-    padding: 8px 10px;
-    border: 1px solid var(--ar-line);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--ar-surface-2) 82%, var(--ar-surface));
+    max-width: 100%;
+    padding: 5px 8px;
+    border: 1px solid color-mix(in srgb, var(--ar-line) 92%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-surface-2) 78%, var(--ar-surface));
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chart-overlay-option:hover {
+    border-color: color-mix(in srgb, var(--ar-text-soft) 28%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
+}
+
+.chart-overlay-option:has(input:checked) {
+    border-color: color-mix(in srgb, var(--ar-accent) 42%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-accent) 9%, var(--ar-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-accent) 18%, transparent);
+}
+
+.chart-overlay-option:has(input:focus-visible) {
+    outline: 2px solid color-mix(in srgb, var(--ar-accent) 55%, transparent);
+    outline-offset: 1px;
+}
+
+.chart-overlay-option input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--ar-accent);
     cursor: pointer;
 }
 
-.chart-overlay-option input {
-    margin-top: 2px;
+.chart-overlay-option-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.4rem;
+    min-width: 0;
+    flex: 1;
+    line-height: 1.25;
 }
 
-.chart-overlay-option-copy {
-    display: grid;
-    gap: 2px;
+.chart-overlay-option-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--ar-text);
     min-width: 0;
 }
 
-.chart-overlay-option-copy strong {
-    font-size: 0.78rem;
+.chart-overlay-option-caption {
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--ar-text-soft);
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
-.chart-overlay-option-copy span,
+.chart-overlay-option-caption::before {
+    content: '·';
+    margin-right: 0.3em;
+    opacity: 0.55;
+}
+
 .chart-overlay-picker-empty {
     color: var(--ar-text-soft);
-    font-size: 0.72rem;
+    font-size: 0.7rem;
 }
 
 .chart-toolbar .chart-question-row {

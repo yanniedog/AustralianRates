@@ -144,12 +144,13 @@
         var id = String(series && series.id || '');
         var label = String((series && (series.short_label || series.shortLabel || series.label)) || id);
         var caption = String(series && series.category_label || '');
+        var titleText = caption ? (label + ' — ' + caption) : label;
         return '' +
-            '<label class="chart-overlay-option">' +
+            '<label class="chart-overlay-option" title="' + esc(titleText) + '">' +
                 '<input type="checkbox" data-economic-series-id="' + esc(id) + '"' + (checked ? ' checked' : '') + '>' +
-                '<span class="chart-overlay-option-copy">' +
-                    '<strong>' + esc(label) + '</strong>' +
-                    (caption ? '<span>' + esc(caption) + '</span>' : '') +
+                '<span class="chart-overlay-option-body">' +
+                    '<span class="chart-overlay-option-label">' + esc(label) + '</span>' +
+                    (caption ? '<span class="chart-overlay-option-caption">' + esc(caption) + '</span>' : '') +
                 '</span>' +
             '</label>';
     }
