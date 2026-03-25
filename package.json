@@ -30,6 +30,7 @@
     "audit:visual": "node visual-audit.js",
     "capture:mobile-admin": "node capture-mobile-admin.js",
     "diagnose:api": "node diagnose-api.js",
+    "diagnose:claude-code-mcp": "node diagnose-claude-code-mcp.js",
     "test:logs-api": "node test-logs-api.js",
     "verify:prod-hosting": "node scripts/verify-production-hosting.mjs",
     "fix:cloudflare-dns-tls": "node scripts/fix-cloudflare-dns-tls.js",
