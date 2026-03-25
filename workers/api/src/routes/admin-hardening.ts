@@ -62,7 +62,6 @@ adminHardeningRoutes.get('/diagnostics/coverage-gaps', async (c) => {
       dataset,
       lenderCode,
       collectionDate,
-      runSource: 'scheduled',
       limit,
     })
     return c.json({
@@ -222,7 +221,6 @@ adminHardeningRoutes.post('/runs/reconcile-lender-day', async (c) => {
     collectionDate: collectionDate || (await latestCoverageCollectionDate(c.env.DB)) || undefined,
     lenderCode: lenderCodes[0],
     limit: 100,
-    runSource: 'scheduled',
   })
 
   return c.json({

@@ -92,6 +92,96 @@ export async function listDailyLenderDatasetStatusRows(
   return result.results ?? []
 }
 
+/**
+ * One row per (collection_date, lender_code, dataset_kind): the most recently updated
+ * daily run among scheduled and manual. Used for coverage gaps so a successful manual
+ * reconcile supersedes a stale failed scheduled run for the same calendar day.
+ */
+export async function listLatestDailyLenderDatasetStatusRows(
+  db: D1Database,
+  input: {
+    collectionDate?: string
+    dataset?: DatasetKind
+    lenderCode?: string
+    limit?: number
+  } = {},
+): Promise<DailyLenderDatasetStatusRow[]> {
+  const where = [
+    `rr.run_type = 'daily'`,
+    `(rr.run_source IS NULL OR rr.run_source IN ('scheduled', 'manual'))`,
+  ]
+  const binds: Array<string | number> = []
+  if (input.collectionDate) {
+    where.push(`ldr.collection_date = ?`)
+    binds.push(input.collectionDate)
+  }
+  if (input.dataset) {
+    where.push(`ldr.dataset_kind = ?`)
+    binds.push(input.dataset)
+  }
+  if (input.lenderCode) {
+    where.push(`ldr.lender_code = ?`)
+    binds.push(input.lenderCode)
+  }
+  const limit = Math.max(1, Math.min(2000, Math.floor(Number(input.limit) || 500)))
+  binds.push(limit)
+
+  const result = await db
+    .prepare(
+      `SELECT
+         run_id,
+         run_source,
+         lender_code,
+         dataset_kind,
+         bank_name,
+         collection_date,
+         expected_detail_count,
+         index_fetch_succeeded,
+         accepted_row_count,
+         written_row_count,
+         detail_fetch_event_count,
+         lineage_error_count,
+         completed_detail_count,
+         failed_detail_count,
+         finalized_at,
+         updated_at
+       FROM (
+         SELECT
+           ldr.run_id AS run_id,
+           rr.run_source AS run_source,
+           ldr.lender_code AS lender_code,
+           ldr.dataset_kind AS dataset_kind,
+           ldr.bank_name AS bank_name,
+           ldr.collection_date AS collection_date,
+           ldr.expected_detail_count AS expected_detail_count,
+           ldr.index_fetch_succeeded AS index_fetch_succeeded,
+           ldr.accepted_row_count AS accepted_row_count,
+           ldr.written_row_count AS written_row_count,
+           ldr.detail_fetch_event_count AS detail_fetch_event_count,
+           ldr.lineage_error_count AS lineage_error_count,
+           ldr.completed_detail_count AS completed_detail_count,
+           ldr.failed_detail_count AS failed_detail_count,
+           ldr.finalized_at AS finalized_at,
+           ldr.updated_at AS updated_at,
+           ROW_NUMBER() OVER (
+             PARTITION BY ldr.collection_date, ldr.lender_code, ldr.dataset_kind
+             ORDER BY ldr.updated_at DESC
+           ) AS rn
+         FROM lender_dataset_runs ldr
+         JOIN run_reports rr
+           ON rr.run_id = ldr.run_id
+         WHERE ${where.join(' AND ')}
+       ) ranked
+       WHERE rn = 1
+       ORDER BY collection_date DESC, lender_code ASC, dataset_kind ASC
+       LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<DailyLenderDatasetStatusRow>()
+
+  return result.results ?? []
+}
+
 export async function getCompletedLenderCodesForDailyCollection(
   db: D1Database,
   input: { collectionDate: string; dataset: DatasetKind; runSource: RunSource },
@@ -117,11 +207,12 @@ export async function listCoverageGapRows(
     collectionDate?: string
     dataset?: DatasetKind
     lenderCode?: string
+    /** @deprecated Ignored; gaps use latest run per lender/day/dataset (scheduled or manual). */
     runSource?: RunSource
     limit?: number
   } = {},
 ): Promise<LenderDatasetGapRow[]> {
-  const rows = await listDailyLenderDatasetStatusRows(db, input)
+  const rows = await listLatestDailyLenderDatasetStatusRows(db, input)
   return rows
     .map((row) => {
       const assessment = assessLenderDatasetCoverage(row)

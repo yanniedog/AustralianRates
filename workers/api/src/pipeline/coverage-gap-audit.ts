@@ -112,7 +112,6 @@ export async function runCoverageGapAudit(
   const rawRows = collectionDate
     ? await listCoverageGapRows(env.DB, {
         collectionDate,
-        runSource,
         limit: input.limit ?? 200,
       })
     : []
