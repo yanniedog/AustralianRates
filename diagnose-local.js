@@ -16,69 +16,10 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { readMcpState, writeMcpState, printMcpVerdict } = require('./mcp-diagnostic-state.cjs');
 
 const ROOT = __dirname;
 const OUT_LOG = path.join(ROOT, 'debug-local-diagnose.log');
-const MCP_STATE = path.join(ROOT, 'debug-claude-mcp.state.json');
-
-function readMcpState() {
-  try {
-    const raw = fs.readFileSync(MCP_STATE, 'utf8');
-    const j = JSON.parse(raw);
-    return {
-      lastMcpHadHits: Boolean(j.lastMcpHadHits),
-      lastRunIso: typeof j.lastRunIso === 'string' ? j.lastRunIso : '',
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeMcpState(hadHits) {
-  try {
-    fs.writeFileSync(
-      MCP_STATE,
-      `${JSON.stringify(
-        { lastMcpHadHits: hadHits, lastRunIso: new Date().toISOString() },
-        null,
-        2,
-      )}\n`,
-      'utf8',
-    );
-  } catch (e) {
-    console.error('Could not write', MCP_STATE, e.message);
-  }
-}
-
-function printMcpVerdict(parsed, prev) {
-  const hadHits = parsed && parsed.ok === false;
-  const lines = [];
-
-  if (hadHits) {
-    lines.push('');
-    lines.push('>>> MCP bridge: NOT FIXED YET');
-    lines.push('    Anthropic MCP error signatures still appear in recent Cursor logs (upstream extension/binary).');
-    lines.push('    Next: update Claude Code extension; re-run: npm run diagnose');
-  } else if (parsed && parsed.ok === true) {
-    const wasBroken = prev && prev.lastMcpHadHits === true;
-    if (wasBroken) {
-      lines.push('');
-      lines.push('================================================================================');
-      lines.push('  FIXED (automated diagnostic): MCP signatures GONE from the scan window.');
-      lines.push('  Previous run had hits; this run found none — treat the IDE MCP check as passing.');
-      lines.push('  Re-run after Cursor sessions if you want to confirm it stays clean.');
-      lines.push('================================================================================');
-    } else {
-      lines.push('');
-      lines.push('>>> MCP bridge: CLEAN (no matching signatures in scanned logs)');
-      lines.push('    If you never had failures, this is the steady state. Exit code 0 = OK for this check.');
-    }
-  }
-
-  const block = lines.join('\n');
-  if (block) process.stdout.write(`${block}\n`);
-  return hadHits;
-}
 
 function runNode(script, extraArgs = []) {
   const r = spawnSync(process.execPath, [path.join(ROOT, script), ...extraArgs], {
@@ -126,7 +67,9 @@ function main() {
       if (!parsed.ok && parsed.hits?.[0]?.file) {
         console.log(`  Example log: ${parsed.hits[0].file}`);
       }
-      const hadHits = printMcpVerdict(parsed, prevMcpState);
+      const hadHits = printMcpVerdict(parsed, prevMcpState, {
+        reRunCommands: 'npm run diagnose  |  npm run diagnose:full',
+      });
       writeMcpState(hadHits);
       lines.push(`[claude-code-mcp] ${JSON.stringify({ ok: parsed.ok, exit: mcp.code, hits: parsed.hits?.length })}`);
       worst = Math.max(worst, mcp.code === 2 ? 2 : mcp.code === 0 ? 0 : 1);

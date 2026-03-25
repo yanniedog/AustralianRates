@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
+const { readMcpState, writeMcpState, printMcpVerdict } = require('./mcp-diagnostic-state.cjs');
 
 const OUT_LOG = path.join(__dirname, 'debug-claude-mcp.log');
 const MAX_LOG_DEPTH = 4;
@@ -260,14 +261,15 @@ function main() {
     if (!noFile) {
       fs.appendFileSync(OUT_LOG, `\n${textOut}`, 'utf8');
     }
+    const prev = readMcpState();
+    const parsed = { ok: allHits.length === 0, hits: allHits, report };
+    const hadHits = printMcpVerdict(parsed, prev, {
+      reRunCommands: 'npm run diagnose  |  npm run diagnose:claude-code-mcp',
+    });
+    writeMcpState(hadHits);
   }
 
   if (allHits.length > 0) {
-    if (!jsonMode) {
-      process.stderr.write(
-        '\nAutomated scan found MCP error signatures in Cursor logs. See debug-claude-mcp.log for lines.\n',
-      );
-    }
     process.exit(2);
   }
   process.exit(0);
