@@ -86,32 +86,36 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`verify-ubank-savings-gap: collection_date=${collectionDate} base=${base}`)
+  const skipReconcile = ['1', 'true', 'yes'].includes(String(process.env.VERIFY_SKIP_RECONCILE || '').toLowerCase())
 
-  const reconcile = await adminFetch('/runs/reconcile-lender-day', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      collection_date: collectionDate,
-      lender_code: 'ubank',
-      datasets: ['savings', 'term_deposits'],
-    }),
-  })
+  console.log(`verify-ubank-savings-gap: collection_date=${collectionDate} base=${base} skip_reconcile=${skipReconcile}`)
 
-  ndlog({
-    sessionId: 'cfdd1c',
-    hypothesisId: 'E2E',
-    location: 'verify-ubank-savings-gap.mjs',
-    message: 'reconcile_response',
-    data: { status: reconcile.res.status, ok: reconcile.json?.ok, result: reconcile.json?.result },
-  })
+  if (!skipReconcile) {
+    const reconcile = await adminFetch('/runs/reconcile-lender-day', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        collection_date: collectionDate,
+        lender_code: 'ubank',
+        datasets: ['savings', 'term_deposits'],
+      }),
+    })
 
-  if (!reconcile.res.ok) {
-    console.error('reconcile HTTP', reconcile.res.status, JSON.stringify(reconcile.json).slice(0, 500))
-    process.exit(1)
+    ndlog({
+      sessionId: 'cfdd1c',
+      hypothesisId: 'E2E',
+      location: 'verify-ubank-savings-gap.mjs',
+      message: 'reconcile_response',
+      data: { status: reconcile.res.status, ok: reconcile.json?.ok, result: reconcile.json?.result },
+    })
+
+    if (!reconcile.res.ok) {
+      console.error('reconcile HTTP', reconcile.res.status, JSON.stringify(reconcile.json).slice(0, 500))
+      process.exit(1)
+    }
+
+    console.log('reconcile queued:', JSON.stringify(reconcile.json?.result || {}, null, 0).slice(0, 300))
   }
-
-  console.log('reconcile queued:', JSON.stringify(reconcile.json?.result || {}, null, 0).slice(0, 300))
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const gaps = await adminFetch(
