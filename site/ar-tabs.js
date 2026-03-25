@@ -9,15 +9,14 @@
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
     var TAB_MAP = {
+        chart: { button: els.tabChart, panel: els.panelChart, hash: 'chart' },
         explorer: { button: els.tabExplorer, panel: els.panelExplorer, hash: 'table' },
         pivot: { button: els.tabPivot, panel: els.panelPivot, hash: 'pivot' },
-        history: { button: els.tabHistory, panel: els.panelHistory, hash: 'history' },
-        changes: { button: els.tabChanges, panel: els.panelChanges, hash: 'changes' },
     };
 
     function normalizeTabId(tabId) {
-        var candidate = String(tabId || 'explorer').toLowerCase();
-        return Object.prototype.hasOwnProperty.call(TAB_MAP, candidate) ? candidate : 'explorer';
+        var candidate = String(tabId || 'chart').toLowerCase();
+        return Object.prototype.hasOwnProperty.call(TAB_MAP, candidate) ? candidate : 'chart';
     }
 
     function updateHash(tabId) {
@@ -118,9 +117,8 @@
     window.addEventListener('hashchange', function () {
         var hash = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
         if (hash === 'pivot') activateTab('pivot', { skipHash: true });
-        else if (hash === 'history') activateTab('history', { skipHash: true });
-        else if (hash === 'changes') activateTab('changes', { skipHash: true });
-        else if (!hash || hash === 'table') activateTab('explorer', { skipHash: true });
+        else if (hash === 'table') activateTab('explorer', { skipHash: true });
+        else if (!hash || hash === 'chart') activateTab('chart', { skipHash: true });
     });
 
     window.AR.tabs = {

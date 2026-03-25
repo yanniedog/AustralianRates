@@ -3,16 +3,12 @@
     window.AR = window.AR || {};
 
     var els = {
+        tabChart: document.getElementById('tab-chart'),
         tabExplorer: document.getElementById('tab-explorer'),
         tabPivot: document.getElementById('tab-pivot'),
-        tabHistory: document.getElementById('tab-history'),
-        tabChanges: document.getElementById('tab-changes'),
-        tabCharts: document.getElementById('tab-charts'),
+        panelChart: document.getElementById('panel-chart'),
         panelExplorer: document.getElementById('panel-explorer'),
         panelPivot: document.getElementById('panel-pivot'),
-        panelHistory: document.getElementById('panel-history'),
-        panelChanges: document.getElementById('panel-changes'),
-        panelCharts: document.getElementById('panel-charts'),
         modeConsumer: document.getElementById('mode-consumer'),
         modeAnalyst: document.getElementById('mode-analyst'),
         quickCompareCards: document.getElementById('quick-compare-cards'),

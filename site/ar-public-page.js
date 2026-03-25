@@ -718,34 +718,26 @@
                                             iconText('chart', 'Curve style (Curve only)', 'field-code'),
                                             '<select id="chart-type">' + optionsMarkup(ui.chartTypes || BASE_CHART_TYPES) + '</select>',
                                     '</label>' +
-                                    (section === 'home-loans'
-                                        ? '<div class="terminal-field chart-structure-filters-wrap" id="chart-structure-filters-wrap" data-help="Include or exclude rate structures in slope and curve charts. Variable only by default." data-help-label="Show structures">' +
-                                            '<span class="field-code">' + (typeof iconText === 'function' ? iconText('compare', 'Show structures', 'field-code') : 'Show structures') + '</span>' +
-                                            '<div id="chart-structure-filters" class="chart-structure-filters" role="group" aria-label="Rate structures to show"></div>' +
-                                            '</div>'
-                                        : ''),
+                                        (section === 'home-loans'
+                                            ? '<div class="terminal-field chart-structure-filters-wrap" id="chart-structure-filters-wrap" data-help="Include or exclude rate structures in slope and curve charts." data-help-label="Show structures">' +
+                                                '<span class="field-code">' + (typeof iconText === 'function' ? iconText('compare', 'Show structures', 'field-code') : 'Show structures') + '</span>' +
+                                                '<div id="chart-structure-filters" class="chart-structure-filters" role="group" aria-label="Rate structures to show"></div>' +
+                                                '</div>'
+                                            : ''),
+                                    '</div>',
+                                '</details>',
+                                '<p id="chart-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
+                                '<p id="chart-status" class="hint">Idle</p>',
+                                // Spotlight detail — populated on chart series interaction
+                                '<div class="chart-detail-area" id="chart-detail-area" hidden>',
+                                    '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('focus', 'Spotlight') + panelHeadingMarkup('h3', 'Spotlight') + '</div><div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div></section>',
+                                    '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('history', 'History') + panelHeadingMarkup('h3', 'History summary') + '</div><div id="chart-data-summary" class="chart-data-summary" aria-live="polite"><p class="chart-data-summary-empty">History populates after chart load.</p></div></section>',
                                 '</div>',
-                            '</details>',
-                            '<p id="chart-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
-                            '<p id="chart-status" class="hint">Idle</p>',
-                            compactChartFilterBarMarkup(ui),
-                        '</div>',
-                    '</section>',
-                    notesMarkup(ui),
-                    '<details class="terminal-mobile-fold terminal-table-fold" id="table-details">',
-                        '<summary class="terminal-more-summary" data-help="Expand to see the data table, pivot grid, history, and rate changes." data-help-label="Data table">' +
-                            panelIcon('table', 'Table') +
-                            panelHeadingMarkup('h3', 'Table, pivot, history, changes') +
-                            '<span class="pill">Expand for data</span>' +
-                        '</summary>',
-                        '<section class="panel terminal-panel terminal-bottom-panel" id="table">',
-                        '<nav class="terminal-bottom-tabs" role="tablist" aria-label="Data panes">',
-                            tabButtonMarkup(WORKSPACE_TABS[0], true),
-                            tabButtonMarkup(WORKSPACE_TABS[1], false),
-                            tabButtonMarkup(WORKSPACE_TABS[2], false),
-                            tabButtonMarkup(WORKSPACE_TABS[3], false),
-                        '</nav>',
-                        '<section id="panel-explorer" class="tab-panel active shortlist-panel" role="tabpanel" aria-labelledby="tab-explorer">',
+                            '</div>',
+                        '</section>',
+
+                        // ── Table tab panel ──────────────────────────────────────
+                        '<section id="panel-explorer" class="tab-panel" role="tabpanel" aria-labelledby="tab-explorer" hidden>',
                             '<div class="terminal-data-head">',
                                 '<div>',
                                     panelIcon('table', 'Table'),
@@ -759,7 +751,18 @@
                             '</div>',
                             '<p id="explorer-overview-text" class="hint">Waiting for live rates</p>',
                             '<div id="rate-table" class="terminal-rate-table"></div>',
+                            // Inline 24h rate changes
+                            '<section class="rate-change-inline-section" aria-label="Recent rate changes">',
+                                '<details id="rate-change-details" class="rate-change-details" open>',
+                                    '<summary id="rate-change-summary" class="rate-change-summary">' + panelIcon('changes', 'Changes') + '<span id="rate-change-headline" class="rate-change-headline">Recent changes</span></summary>',
+                                    '<p id="rate-change-warning" class="rate-change-warning" hidden></p>',
+                                    '<p id="rate-change-status" class="hint">Loading changes</p>',
+                                    '<ul id="rate-change-list" class="rate-change-list"><li class="rate-change-item-empty">Loading changes</li></ul>',
+                                '</details>',
+                            '</section>',
                         '</section>',
+
+                        // ── Pivot tab panel ──────────────────────────────────────
                         '<section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>',
                             '<div id="pivot" class="pivot-panel">',
                                 '<div class="pivot-controls">',
@@ -773,33 +776,10 @@
                                 '<div id="pivot-output"></div>',
                             '</div>',
                         '</section>',
-                        '<section id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="tab-history" hidden>',
-                            '<div class="terminal-history-grid" id="history">',
-                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('focus', 'Spotlight') + panelHeadingMarkup('h3', 'Spotlight') + '</div><div id="chart-detail-output" class="chart-detail-output" aria-label="Focused detail trend"></div></section>',
-                                '<section class="panel terminal-subpanel"><div class="terminal-panel-head">' + panelIcon('history', 'History') + panelHeadingMarkup('h3', 'History summary') + '</div><div id="chart-data-summary" class="chart-data-summary" aria-live="polite"><p class="chart-data-summary-empty">History populates after chart load.</p></div></section>',
-                            '</div>',
-                        '</section>',
-                        '<section id="panel-changes" class="tab-panel" role="tabpanel" aria-labelledby="tab-changes" hidden>',
-                            '<div class="terminal-changes-grid" id="changes">',
-                                '<section class="panel terminal-subpanel executive-summary" id="executive-summary-panel" aria-label="Executive summary">',
-                                    '<div class="terminal-panel-head">' + panelIcon('summary', 'Summary') + panelHeadingMarkup('h3', 'Summary') + '</div>',
-                                    '<p id="executive-summary-status" class="hint">Loading summary</p>',
-                                    '<div id="executive-summary-sections" class="executive-summary-sections"></div>',
-                                '</section>',
-                                '<section class="panel terminal-subpanel rate-change-log" aria-label="Rate changes">',
-                                    '<details id="rate-change-details" class="rate-change-details" open>',
-                                        '<summary id="rate-change-summary" class="rate-change-summary">' + panelIcon('changes', 'Changes') + '<span id="rate-change-headline" class="rate-change-headline">Loading recent changes</span></summary>',
-                                        '<p id="rate-change-warning" class="rate-change-warning" hidden></p>',
-                                        '<p id="rate-change-status" class="hint">Loading changes</p>',
-                                        '<ul id="rate-change-list" class="rate-change-list"><li class="rate-change-item-empty">Loading changes</li></ul>',
-                                    '</details>',
-                                '</section>',
-                            '</div>',
-                        '</section>',
-                        '</section>',
-                    '</details>',
+
+                    '</section>',
                 '</section>',
-            '</section>'
+            '</section>',
         ].join('');
     }
 

@@ -196,7 +196,7 @@ async function verifyWorkspaceShell(page, results, label) {
         fail(results, `${label}: chart view controls mismatch (${actualChartViews.join(', ')})`);
     }
 
-    const expectedTabs = ['Table', 'Pivot', 'History', 'Changes'];
+    const expectedTabs = ['Chart', 'Table', 'Pivot'];
     const actualTabs = shell.tabs.map((tab) => tab.label);
     if (expectedTabs.every((tab) => actualTabs.includes(tab)) && shell.tabs.every((tab) => tab.hasIcon)) {
         pass(results, `${label}: workspace tabs render with icon labels`);
@@ -204,9 +204,9 @@ async function verifyWorkspaceShell(page, results, label) {
         fail(results, `${label}: workspace tabs mismatch (${actualTabs.join(', ')})`);
     }
 
-    const activeExplorer = shell.tabs.find((tab) => tab.id === 'tab-explorer' && tab.active);
-    if (activeExplorer) pass(results, `${label}: explorer tab is active on load`);
-    else fail(results, `${label}: explorer tab is not active on load`);
+    const activeChart = shell.tabs.find((tab) => tab.id === 'tab-chart' && tab.active);
+    if (activeChart) pass(results, `${label}: chart tab is active on load`);
+    else fail(results, `${label}: chart tab is not active on load`);
 
     if (Object.values(shell.controls).every(Boolean)) pass(results, `${label}: core controls are present`);
     else fail(results, `${label}: one or more core controls are missing`);

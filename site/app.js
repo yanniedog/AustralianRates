@@ -260,13 +260,6 @@
 
     function collapsePanelsByDefault() {
         if (els.filterBar && els.filterBar.tagName === 'DETAILS') els.filterBar.open = false;
-        var notes = document.getElementById('notes');
-        if (notes && notes.tagName === 'DETAILS') notes.open = false;
-        var tableDetails = document.getElementById('table-details');
-        if (tableDetails && tableDetails.tagName === 'DETAILS') {
-            var desktop = window.matchMedia ? window.matchMedia('(min-width: 761px)') : null;
-            if (!desktop || desktop.matches) tableDetails.open = true;
-        }
     }
 
     function finishAppInit(source) {
@@ -274,7 +267,7 @@
         appInitialized = true;
 
         applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst', { skipRefresh: true });
-        if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'explorer', { skipHash: false });
+        if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'chart', { skipHash: false });
         if (explorer && explorer.initRateTable) explorer.initRateTable();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
@@ -420,8 +413,8 @@
     });
     window.addEventListener('ar:tab-changed', function (event) {
         var tab = event && event.detail && event.detail.tab;
-        if (tab === 'history' && charts) {
-            if (charts.refreshFromCache) charts.refreshFromCache('history-tab');
+        if (tab === 'chart' && charts) {
+            if (charts.refreshFromCache) charts.refreshFromCache('chart-tab');
         }
         if (tab === 'pivot' && pivot && pivot.ensurePivotLoaded) {
             pivot.ensurePivotLoaded({ reason: 'pivot-tab-activated' });
