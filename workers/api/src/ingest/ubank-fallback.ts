@@ -22,6 +22,12 @@ export const UBANK_HOME_LOAN_FALLBACK_URLS = [
   'https://www.ubank.com.au/home-loans/flex-fixed-rate-home-loans',
 ]
 
+/** Akamai WAF on ubank.com.au allows curl-style UA; Worker fetch with no UA (or `node`) is blocked with 403 or a tiny Access Denied body. */
+export const UBANK_PUBLIC_HTML_FETCH_HEADERS: Record<string, string> = {
+  'User-Agent': 'curl/8.18.0',
+  Accept: '*/*',
+}
+
 export const UBANK_SAVINGS_FALLBACK_URLS = {
   saveOverview: 'https://www.ubank.com.au/banking/savings-account',
   saveRateHelp: 'https://www.ubank.com.au/help/current/everyday-banking/earning-interest/whats-my-current-save-account-interest-rate',

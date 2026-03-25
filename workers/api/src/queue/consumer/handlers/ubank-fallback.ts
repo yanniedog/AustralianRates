@@ -12,6 +12,7 @@ import {
   parseUbankHomeLoanRatesFromHtml,
   parseUbankSavingsRows,
   UBANK_HOME_LOAN_FALLBACK_URLS,
+  UBANK_PUBLIC_HTML_FETCH_HEADERS,
   UBANK_SAVINGS_FALLBACK_URLS,
 } from '../../../ingest/ubank-fallback'
 import type { DailyLenderJob, DailySavingsLenderJob, EnvBindings, LenderConfig } from '../../../types'
@@ -46,7 +47,7 @@ async function fetchAndPersistPage(input: {
   let response: Response
   let html = ''
   try {
-    const fetched = await fetchWithTimeout(input.url, undefined, { env: input.env })
+    const fetched = await fetchWithTimeout(input.url, { headers: UBANK_PUBLIC_HTML_FETCH_HEADERS }, { env: input.env })
     response = fetched.response
     html = await response.text()
     log.info('consumer', 'upstream_fetch', {
@@ -407,26 +408,6 @@ export async function handleDailyUbankSavingsFallback(
       row.fetchEventId = pageByUrl[row.sourceUrl]?.fetchEventId ?? null
     }
     const parsedProductIds = Array.from(new Set(parsed.rows.map((row) => row.productId).filter(Boolean)))
-    // #region agent log
-    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfdd1c' },
-      body: JSON.stringify({
-        sessionId: 'cfdd1c',
-        hypothesisId: 'A',
-        location: 'ubank-fallback.ts:handleDailyUbankSavingsFallback',
-        message: 'ubank_savings_parse_snapshot',
-        data: {
-          runId: job.runId,
-          parsedRowCount: parsed.rows.length,
-          parsedProductCount: parsedProductIds.length,
-          pageStatuses: pageResults.map((p) => p.status),
-          bodyLens: pageResults.map((p) => p.body.length),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     if (parsed.rows.length === 0) {
       log.warn('consumer', 'ubank_savings_fallback_zero_parsed_rows', {
         runId: job.runId,

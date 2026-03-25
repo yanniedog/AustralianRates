@@ -36,6 +36,7 @@
     "diagnose:full": "node diagnose-local.js --with-api",
     "test:logs-api": "node test-logs-api.js",
     "verify:prod-hosting": "node scripts/verify-production-hosting.mjs",
+    "verify:ubank-savings-gap": "node verify-ubank-savings-gap.mjs",
     "fix:cloudflare-dns-tls": "node scripts/fix-cloudflare-dns-tls.js",
     "sync:hard-limits": "node scripts/sync-hard-limits.mjs",
     "pages:set-build": "node set-pages-build-config.js",
@@ -49,6 +50,7 @@
     "db:breakdown": "node fetch-db-stats.js",
     "db:summary": "node fetch-db-stats.js --summary",
     "deploy:api": "node scripts/deploy-api.mjs",
+    "verify:ubank-fetch": "node scripts/verify-ubank-public-html.mjs",
     "deploy:archive": "npm run deploy -w workers/archive --"
   },
   "devDependencies": {

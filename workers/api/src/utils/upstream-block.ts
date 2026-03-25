@@ -38,6 +38,9 @@ function wafMarker(body: string): string | null {
   if (body.includes('access denied') && (body.includes('firewall') || body.includes('waf'))) {
     return 'access denied + firewall'
   }
+  if (body.includes('access denied') && body.includes('edgesuite.net')) {
+    return 'akamai edgesuite access denied'
+  }
   return null
 }
 
