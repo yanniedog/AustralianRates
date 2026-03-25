@@ -8,12 +8,6 @@
     var apiBase = config.apiBase || '';
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
 
-    function sendDebugLog(payload) {
-        if (!apiBase) return;
-        var body = JSON.stringify(payload);
-        fetch(apiBase + '/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }).catch(function () {});
-    }
-
     function numericValue(row, field) {
         var num = Number(row && row[field]);
         return Number.isFinite(num) ? num : null;
