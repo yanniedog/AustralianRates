@@ -336,17 +336,33 @@ export async function handleDailyUbankSavingsFallback(
     UBANK_SAVINGS_FALLBACK_URLS.billsHelp,
   ]
   const pageResults = await Promise.all(
-    pageUrls.map((url) =>
-      fetchAndPersistPage({
-        env,
-        url,
-        runId: job.runId,
-        lenderCode: job.lenderCode,
-        dataset: 'savings',
-        collectionDate: job.collectionDate,
-        jobKind: 'daily_deposit_index_fetch',
-      }),
-    ),
+    pageUrls.map(async (url) => {
+      try {
+        return await fetchAndPersistPage({
+          env,
+          url,
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          dataset: 'savings',
+          collectionDate: job.collectionDate,
+          jobKind: 'daily_deposit_index_fetch',
+        })
+      } catch (error) {
+        log.warn('consumer', 'ubank_savings_fallback_page_fetch_failed', {
+          runId: job.runId,
+          lenderCode: job.lenderCode,
+          context:
+            `url=${serializeForLog(url)} err=${error instanceof Error ? error.message : String(error)}`,
+        })
+        return {
+          url,
+          status: 0,
+          body: '',
+          fetchEventId: null as number | null,
+          upstreamBlock: detectUpstreamBlock({ status: 0, body: '' }),
+        }
+      }
+    }),
   )
   const pageByUrl = Object.fromEntries(pageResults.map((page) => [page.url, page]))
   const observedUpstreamStatuses = pageResults.map((page) => page.status)
@@ -373,6 +389,35 @@ export async function handleDailyUbankSavingsFallback(
       row.fetchEventId = pageByUrl[row.sourceUrl]?.fetchEventId ?? null
     }
     const parsedProductIds = Array.from(new Set(parsed.rows.map((row) => row.productId).filter(Boolean)))
+    // #region agent log
+    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfdd1c' },
+      body: JSON.stringify({
+        sessionId: 'cfdd1c',
+        hypothesisId: 'A',
+        location: 'ubank-fallback.ts:handleDailyUbankSavingsFallback',
+        message: 'ubank_savings_parse_snapshot',
+        data: {
+          runId: job.runId,
+          parsedRowCount: parsed.rows.length,
+          parsedProductCount: parsedProductIds.length,
+          pageStatuses: pageResults.map((p) => p.status),
+          bodyLens: pageResults.map((p) => p.body.length),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
+    if (parsed.rows.length === 0) {
+      log.warn('consumer', 'ubank_savings_fallback_zero_parsed_rows', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `statuses=${serializeForLog(pageResults.map((p) => p.status))}` +
+          ` body_lens=${serializeForLog(pageResults.map((p) => p.body.length))}`,
+      })
+    }
     if (parsedProductIds.length > 0) {
       await setLenderDatasetExpectedDetails(env.DB, {
         runId: job.runId,
