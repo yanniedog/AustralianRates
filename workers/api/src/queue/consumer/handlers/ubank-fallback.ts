@@ -108,6 +108,7 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
   const pageDiagnostics: Array<Record<string, unknown>> = []
   let inspectedHtml = 0
   let droppedByParser = 0
+  let successfulFallbackPageFetches = 0
 
   for (const pageUrl of UBANK_HOME_LOAN_FALLBACK_URLS) {
     const pageStartedAt = Date.now()
@@ -120,6 +121,9 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
       collectionDate: job.collectionDate,
       jobKind: 'daily_home_index_fetch',
     })
+    if (!fetched.upstreamBlock.reasonCode && fetched.status >= 200 && fetched.status < 400) {
+      successfulFallbackPageFetches += 1
+    }
     observedUpstreamStatuses.push(fetched.status)
     if (fetched.upstreamBlock.reasonCode) {
       observedUpstreamBlocks.push({
@@ -178,6 +182,20 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
       runId: job.runId,
       lenderCode: job.lenderCode,
       dataset: 'home_loans',
+    })
+  } else if (successfulFallbackPageFetches > 0) {
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+    log.info('consumer', 'ubank_home_fallback_index_ok_without_product_ids', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      context:
+        `successful_pages=${successfulFallbackPageFetches}` +
+        ` inspected=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
+        ` statuses=${serializeForLog(observedUpstreamStatuses)}`,
     })
   }
 
