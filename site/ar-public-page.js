@@ -149,10 +149,9 @@
     }
 
     var WORKSPACE_TABS = [
+        { id: 'chart', label: 'Chart', icon: 'chart', help: 'Interactive chart view.' },
         { id: 'explorer', label: 'Table', icon: 'table', help: 'Live rates table.' },
-        { id: 'pivot', label: 'Pivot', icon: 'pivot', help: 'Pivot workspace for the active slice.' },
-        { id: 'history', label: 'History', icon: 'history', help: 'Series detail, spotlight trend, and chart summary.' },
-        { id: 'changes', label: 'Changes', icon: 'changes', help: 'Summary metrics and recent rate changes.' }
+        { id: 'pivot', label: 'Pivot', icon: 'pivot', help: 'Pivot workspace for the active slice.' }
     ];
 
     var SHARED_ADVANCED_FIELDS = [
@@ -458,145 +457,88 @@
             '</label>';
     }
 
-    function compactHomeLoanScenarioMarkup(ui) {
-        return [
-            compactSelectFieldMarkup(findUiField(ui, 'filter-security')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-repayment')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-structure')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-lvr')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-feature')),
-        ].join('');
+    function drawerScenarioMarkup(ui) {
+        var ids;
+        if (section === 'home-loans') ids = ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'];
+        else if (section === 'savings') ids = ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'];
+        else if (section === 'term-deposits') ids = ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'];
+        else return '';
+        return ids.map(function (id) {
+            var f = findUiField(ui, id);
+            return f ? fieldMarkup(Object.assign({}, f, { padGrid: false })) : '';
+        }).join('');
     }
 
-    function compactSavingsScenarioMarkup(ui) {
-        return [
-            compactSelectFieldMarkup(findUiField(ui, 'filter-account-type')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-rate-type')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-deposit-tier')),
-        ].join('');
-    }
+    function filterDrawerMarkup(ui) {
+        var scenarioSection = section !== 'economic-data' ? (
+            '<div class="filters-drawer-section filters-scenarios">' +
+                '<div class="terminal-filter-group-head"><strong>Scenario</strong></div>' +
+                '<div class="filters-scenarios-grid">' + drawerScenarioMarkup(ui) + '</div>' +
+            '</div>'
+        ) : '';
 
-    function compactTermDepositScenarioMarkup(ui) {
-        return [
-            compactSelectFieldMarkup(findUiField(ui, 'filter-term-months')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-deposit-tier')),
-            compactSelectFieldMarkup(findUiField(ui, 'filter-interest-payment')),
-        ].join('');
-    }
+        var extraAdvancedFields = (ui.advancedFields || []).filter(function (f) {
+            if (section === 'home-loans' && ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'].indexOf(f.id) >= 0) return false;
+            if (section === 'savings' && ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'].indexOf(f.id) >= 0) return false;
+            if (section === 'term-deposits' && ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'].indexOf(f.id) >= 0) return false;
+            return true;
+        });
 
-    function compactScenarioMarkup(ui) {
-        if (section === 'home-loans') return compactHomeLoanScenarioMarkup(ui);
-        if (section === 'savings') return compactSavingsScenarioMarkup(ui);
-        if (section === 'term-deposits') return compactTermDepositScenarioMarkup(ui);
-        return '';
-    }
-
-    function compactBankPickerMarkup() {
         return '' +
-            '<div class="terminal-field terminal-field-bank chart-filter-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
-                '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
-                '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
-                    '<input id="filter-bank-search" type="search" placeholder="Search banks or codes" aria-label="Search banks">' +
-                    '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear selected banks">All</button>' +
-                    '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
-                '</div>' +
-                '<div id="filter-bank-options" class="bank-picker-grid bank-picker-grid-compact" role="group" aria-labelledby="filter-bank-label"></div>' +
-                '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
-            '</div>';
-    }
-
-    function chartFilterActionsRowMarkup() {
-        return '' +
-            '<div class="chart-filter-actions" role="toolbar" aria-label="Chart and data actions">' +
-                '<span id="filter-live-status" class="pill filter-live-pill is-live">Live sync on</span>' +
-                '<button id="apply-filters" class="secondary small" type="button" data-help="Apply the current filter slice immediately." data-help-label="Apply filters">' + iconText('filter', 'Apply', 'control-chip-label') + '</button>' +
-                '<button id="draw-chart" class="primary small" type="button" data-help="Redraw the chart using current filters and controls." data-help-label="Draw chart">' + iconText('chart', 'Draw chart', 'control-chip-label') + '</button>' +
-                '<button id="reset-filters" class="secondary small" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>' +
-                '<button id="workspace-copy-link" class="secondary small" type="button" data-help="Copy the current route, filters, pane, and hash state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>' +
-                '<div class="chart-filter-actions-export">' +
-                    '<label id="download-format-label" class="terminal-field-label chart-filter-download-label" for="download-format">' + iconText('download', 'Download', 'field-code') + '</label>' +
-                    '<select id="download-format" class="small" aria-labelledby="download-format-label">' +
-                        '<option value="">Format</option>' +
-                        '<option value="csv">CSV</option>' +
-                        '<option value="xls">Excel</option>' +
-                        '<option value="json">JSON</option>' +
-                    '</select>' +
-                '</div>' +
-                '<button type="button" id="refresh-page-btn" class="buttonish secondary small" aria-label="Refresh page and data to load latest site and bypass cache">Refresh</button>' +
-                '<span id="last-refreshed" class="hint"></span>' +
-                '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>' +
-            '</div>';
-    }
-
-    function compactChartFilterBarMarkup(ui) {
-        return '' +
-            '<section class="chart-filter-bar chart-filter-bar-below-chart" aria-label="Chart filters">' +
-                chartFilterActionsRowMarkup() +
-                '<div id="workspace-status" class="terminal-inline-feedback workspace-status is-warning" role="status" aria-live="polite" hidden>' +
-                    '<div class="workspace-status-copy">' +
-                        '<strong id="workspace-status-title">Startup degraded</strong>' +
-                        '<span id="workspace-status-message">Some controls are taking longer than expected.</span>' +
-                    '</div>' +
-                    '<div class="workspace-status-actions">' +
-                        '<button id="workspace-status-retry" class="secondary small" type="button">Retry startup</button>' +
-                    '</div>' +
-                '</div>' +
-                '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>' +
-                '<details class="chart-filter-slice chart-filter-more" id="scenario">' +
-                    '<summary class="terminal-more-summary" data-help="Choose banks and product scenario for the chart and table." data-help-label="Banks and scenario">' + iconText('bank', 'Banks and scenario', 'control-chip-label') + '</summary>' +
-                    '<div class="chart-filter-more-grid">' +
-                        '<div class="chart-filter-grid chart-filter-grid-primary">' +
-                            compactBankPickerMarkup() +
-                            compactScenarioMarkup(ui) +
+            '<details class="filters-drawer" id="filter-bar">' +
+                '<summary class="filters-drawer-summary">' +
+                    iconText('filter', 'Filters', 'control-chip-label') +
+                    '<span id="active-filter-chips" class="filters-active-count"></span>' +
+                    '<span id="filter-dirty-indicator" class="filter-dirty-dot" hidden></span>' +
+                '</summary>' +
+                '<div class="filters-drawer-body">' +
+                    '<div class="filters-drawer-section">' +
+                        '<div class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
+                            '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
+                            '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
+                                '<input id="filter-bank-search" type="search" placeholder="Search banks…" aria-label="Search banks">' +
+                                '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear bank selection">All</button>' +
+                                '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
+                            '</div>' +
+                            '<div id="filter-bank-options" class="bank-picker-grid bank-picker-compact" role="group" aria-labelledby="filter-bank-label"></div>' +
+                            '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
                         '</div>' +
                     '</div>' +
-                '</details>' +
-                '<details class="chart-filter-more" id="filter-bar">' +
-                    '<summary class="terminal-more-summary" data-help="Dates, rate limits, advanced filters, and workspace export." data-help-label="More filters">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
-                    '<div class="chart-filter-more-grid">' +
-                        '<section class="chart-filter-more-section">' +
-                            '<div class="terminal-filter-group-head">' +
-                                '<strong>Dates and limits</strong>' +
-                                '<span class="hint">Optional narrowing</span>' +
+                    scenarioSection +
+                    '<details class="filters-more">' +
+                        '<summary class="filters-more-summary">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
+                        '<div class="filters-more-body">' +
+                            '<div class="filters-drawer-section">' +
+                                '<div class="terminal-filter-group-head"><strong>Dates and limits</strong></div>' +
+                                '<div class="filters-more-grid">' +
+                                    compactNumberFieldMarkup({ id: 'filter-min-rate', label: 'Min rate', icon: 'summary', placeholder: ui.minRatePlaceholder || '', help: 'Minimum visible headline rate.' }) +
+                                    compactNumberFieldMarkup({ id: 'filter-max-rate', label: 'Max rate', icon: 'summary', placeholder: ui.maxRatePlaceholder || '', help: 'Maximum visible headline rate.' }) +
+                                    compactDateFieldMarkup('filter-start-date', 'From date', 'calendar', 'Choose a start date or type YYYY-MM-DD.') +
+                                    compactDateFieldMarkup('filter-end-date', 'To date', 'calendar', 'Choose an end date or type YYYY-MM-DD.') +
+                                '</div>' +
+                                '<div class="chart-filter-shortcuts-wrap">' +
+                                    dateShortcutMarkup() +
+                                    '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>' +
+                                '</div>' +
                             '</div>' +
-                            '<div class="chart-filter-grid chart-filter-grid-secondary">' +
-                                compactNumberFieldMarkup({ id: 'filter-min-rate', label: 'Min rate', icon: 'summary', placeholder: ui.minRatePlaceholder, help: 'Minimum visible headline rate.' }) +
-                                compactNumberFieldMarkup({ id: 'filter-max-rate', label: 'Max rate', icon: 'summary', placeholder: ui.maxRatePlaceholder, help: 'Maximum visible headline rate.' }) +
-                                compactDateFieldMarkup('filter-start-date', 'From date', 'calendar', 'Choose a start date or type YYYY-MM-DD.') +
-                                compactDateFieldMarkup('filter-end-date', 'To date', 'calendar', 'Choose an end date or type YYYY-MM-DD.') +
+                            (extraAdvancedFields.length ? (
+                                '<div class="filters-drawer-section">' +
+                                    '<div class="terminal-filter-group-head"><strong>Advanced</strong></div>' +
+                                    '<div class="filters-more-grid">' +
+                                        extraAdvancedFields.map(function (f) { return fieldMarkup(Object.assign({}, f, { padGrid: false })); }).join('') +
+                                    '</div>' +
+                                '</div>'
+                            ) : '') +
+                            '<div class="filters-drawer-section">' +
+                                '<div class="terminal-filter-group-head"><strong>Workspace</strong></div>' +
+                                '<div class="filters-more-grid">' +
+                                    SHARED_ADVANCED_FIELDS.map(function (f) { return fieldMarkup(Object.assign({}, f, { padGrid: false })); }).join('') +
+                                '</div>' +
                             '</div>' +
-                            '<div class="chart-filter-shortcuts-wrap">' +
-                                dateShortcutMarkup() +
-                                '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>' +
-                            '</div>' +
-                        '</section>' +
-                        '<section class="chart-filter-more-section">' +
-                            '<div class="terminal-filter-group-head">' +
-                                '<strong>Additional slice controls</strong>' +
-                                '<span class="hint">Less common filters</span>' +
-                            '</div>' +
-                            '<div class="chart-filter-grid chart-filter-grid-secondary">' +
-                                (ui.advancedFields || []).map(function (field) {
-                                    if (section === 'home-loans' && ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'].indexOf(field.id) >= 0) return '';
-                                    if (section === 'savings' && ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'].indexOf(field.id) >= 0) return '';
-                                    if (section === 'term-deposits' && ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'].indexOf(field.id) >= 0) return '';
-                                    return fieldMarkup(Object.assign({}, field, { padGrid: false }));
-                                }).join('') +
-                            '</div>' +
-                        '</section>' +
-                        '<section class="chart-filter-more-section">' +
-                            '<div class="terminal-filter-group-head">' +
-                                '<strong>Workspace</strong>' +
-                                '<span class="hint">Export and refresh</span>' +
-                            '</div>' +
-                            '<div class="chart-filter-grid chart-filter-grid-secondary">' +
-                                SHARED_ADVANCED_FIELDS.map(fieldMarkup).join('') +
-                                '<div id="export" class="chart-filter-export"></div>' +
-                            '</div>' +
-                        '</section>' +
-                    '</div>' +
-                '</details>' +
-            '</section>';
+                        '</div>' +
+                    '</details>' +
+                '</div>' +
+            '</details>';
     }
 
     function chartQuestionMarkup() {
@@ -647,20 +589,6 @@
             '</details>';
     }
 
-    function notesMarkup(ui) {
-        return '' +
-            '<details class="panel terminal-notes" id="market-notes">' +
-                '<summary class="terminal-panel-head" data-help="Open methodology and disclosure notes." data-help-label="Notes">' +
-                    panelIcon('notes', 'Notes') +
-                    '<strong>' + esc(ui.notesHeading) + '</strong>' +
-                '</summary>' +
-                '<div class="terminal-notes-body">' +
-                    '<p>' + esc(ui.notesText) + '</p>' +
-                    '<p id="comparison-rate-disclosure">' + esc(ui.continuityText) + '</p>' +
-                '</div>' +
-            '</details>';
-    }
-
     function tabButtonMarkup(tab, active) {
         return '' +
             '<button id="tab-' + esc(tab.id) + '" class="tab-btn chip-btn secondary' + (active ? ' active' : '') + '"' +
@@ -677,76 +605,118 @@
     }
 
     function render(ui) {
+        var statSecondaryHelp = ui.statSecondaryHelp || '';
+        var statSecondaryLabel = ui.statSecondaryLabel || 'Cash rate';
+        var statSecondaryIcon = ui.statSecondaryIcon || 'stats';
+        var statSecondaryValue = ui.statSecondaryValue || '...';
         root.innerHTML = [
             '<section class="market-terminal" aria-label="' + esc(ui.title) + ' workspace">',
                 '<section class="terminal-column terminal-column-center">',
-                    '<section id="chart" class="panel terminal-panel terminal-stage-panel">',
-                        '<div class="chart-block">',
-                            '<div class="chart-block-head">',
-                                '<div class="terminal-panel-head">',
-                                    panelIcon('chart', 'Charts'),
-                                    panelHeadingMarkup('h2', ui.title),
-                                '</div>',
+                    '<section class="panel terminal-panel terminal-workspace-panel" id="workspace">',
+
+                        // Workspace nav: subtabs + actions
+                        '<div class="workspace-nav-row">',
+                            '<nav class="workspace-tab-nav" role="tablist" aria-label="' + esc(ui.title) + ' views">',
+                                tabButtonMarkup(WORKSPACE_TABS[0], true),
+                                tabButtonMarkup(WORKSPACE_TABS[1], false),
+                                tabButtonMarkup(WORKSPACE_TABS[2], false),
+                            '</nav>',
+                            '<div class="workspace-nav-actions" role="toolbar" aria-label="Workspace actions">',
+                                '<span id="filter-live-status" class="pill filter-live-pill is-live" aria-live="polite">Live</span>',
+                                '<button id="apply-filters" class="secondary small" type="button" data-help="Apply the current filter slice immediately." data-help-label="Apply filters">' + iconText('filter', 'Apply', 'control-chip-label') + '</button>',
+                                '<button id="draw-chart" class="secondary small" type="button" data-help="Redraw the chart using current filters and controls." data-help-label="Draw chart">' + iconText('chart', 'Draw', 'control-chip-label') + '</button>',
+                                '<button id="reset-filters" class="secondary small" type="button" data-help="Reset the current slice to defaults." data-help-label="Reset filters">' + iconText('reset', 'Reset', 'control-chip-label') + '</button>',
+                                '<button id="workspace-copy-link" class="secondary small" type="button" data-help="Copy the current route and filter state." data-help-label="Copy link">' + iconText('link', 'Link', 'control-chip-label') + '</button>',
+                                '<label class="sr-only" id="download-format-label" for="download-format">Export format</label>',
+                                '<select id="download-format" class="small" aria-labelledby="download-format-label">',
+                                    '<option value="">Export…</option>',
+                                    '<option value="csv">CSV</option>',
+                                    '<option value="xls">Excel</option>',
+                                    '<option value="json">JSON</option>',
+                                '</select>',
+                                '<button type="button" id="refresh-page-btn" class="secondary small" aria-label="Refresh page and data">Refresh</button>',
+                                '<span id="last-refreshed" class="hint"></span>',
                             '</div>',
-                            '<div class="chart-figure">',
-                                '<div class="chart-toolbar">',
-                                    '<div class="chart-toolbar-stack">',
-                                        chartQuestionMarkup(),
-                                        chartEngineMarkup(),
-                                    '</div>',
-                                    chartEconomicOverlayMarkup(),
-                                '</div>',
-                                '<div class="terminal-chart-surface">',
-                                    '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
-                                    '<div class="chart-selection-rail" aria-label="Series and selection">',
-                                        '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
-                                        '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
-                                        '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
-                                    '<div id="quick-compare-cards" class="quick-compare-cards" hidden></div>',
-                                    '</div>',
-                                '</div>',
+                        '</div>',
+
+                        // Inline status messages
+                        '<div id="workspace-status" class="terminal-inline-feedback workspace-status is-warning" role="status" aria-live="polite" hidden>',
+                            '<div class="workspace-status-copy">',
+                                '<strong id="workspace-status-title">Startup degraded</strong>',
+                                '<span id="workspace-status-message">Some controls are taking longer than expected.</span>',
                             '</div>',
-                            '<footer class="chart-footer" aria-label="Chart overview">',
-                                '<span id="chart-guidance" class="chart-footer-guidance hint">On demand</span>',
-                                '<div class="terminal-stat-grid chart-footer-stats" id="hero-stats">',
-                                    '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="Updated"><span class="metric-code">' + iconText('calendar', 'Updated') + '</span><strong>...</strong></div>',
-                                    '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(ui.statSecondaryHelp) + '" data-help-label="' + esc(ui.statSecondaryLabel) + '"><span class="metric-code">' + iconText(ui.statSecondaryIcon, ui.statSecondaryLabel) + '</span><strong>' + esc(ui.statSecondaryValue) + '</strong></div>',
-                                    '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>...</strong></div>',
-                                    '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored; latest bank and product with data." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>...</strong></div>',
+                            '<div class="workspace-status-actions">',
+                                '<button id="workspace-status-retry" class="secondary small" type="button">Retry startup</button>',
+                            '</div>',
+                        '</div>',
+                        '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>',
+                        '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
+
+                        // Filter drawer (collapsed by default)
+                        filterDrawerMarkup(ui),
+
+                        // ── Chart tab panel ──────────────────────────────────────
+                        '<section id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="tab-chart">',
+                            '<div class="chart-block">',
+                                '<div class="chart-figure">',
+                                    '<div class="chart-toolbar">',
+                                        '<div class="chart-toolbar-stack">',
+                                            chartQuestionMarkup(),
+                                            chartEngineMarkup(),
+                                        '</div>',
+                                        chartEconomicOverlayMarkup(),
+                                    '</div>',
+                                    '<div class="terminal-chart-surface">',
+                                        '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
+                                        '<div class="chart-selection-rail" aria-label="Series and selection">',
+                                            '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
+                                            '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
+                                            '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
+                                            '<div id="quick-compare-cards" class="quick-compare-cards" hidden></div>',
+                                        '</div>',
+                                    '</div>',
                                 '</div>',
-                                '<div id="chart-summary" class="chart-summary chart-footer-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
-                            '</footer>',
-                            '<p id="hero-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
-                            '<details class="chart-options-details" id="chart-options-details">',
-                                '<summary class="chart-options-summary">Chart controls</summary>',
-                                '<div class="terminal-chart-controls">',
-                                    '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
-                                        iconText('stats', 'Y axis', 'field-code'),
-                                        '<select id="chart-y">' + optionsMarkup(ui.chartMetrics) + '</select>',
-                                    '</label>',
-                                    '<label class="terminal-field" data-help="Axis or category shown on the X axis." data-help-label="X axis">',
-                                        iconText('history', 'X axis', 'field-code'),
-                                        '<select id="chart-x">' + optionsMarkup(ui.chartX) + '</select>',
-                                    '</label>',
-                                    '<label class="terminal-field" data-help="Series grouping field." data-help-label="Group by">',
-                                        iconText('series', 'Group by', 'field-code'),
-                                        '<select id="chart-group">' + optionsMarkup(ui.chartGroups) + '</select>',
-                                    '</label>',
-                                    '<label class="terminal-field" data-help="Visible series density." data-help-label="Density">',
-                                        iconText('summary', 'Density', 'field-code'),
-                                        '<select id="chart-series-limit"><option value="compact" selected>Compact</option><option value="standard">Standard</option><option value="expanded">Expanded</option></select>',
-                                    '</label>',
-                                    '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="History basis">',
-                                        iconText('history', 'History basis', 'field-code'),
-                                        '<select id="chart-representation">' +
-                                        (section === 'home-loans'
-                                            ? '<option value="change">Change basis</option><option value="day" selected>Daily basis</option>'
-                                            : '<option value="change" selected>Change basis</option><option value="day">Daily basis</option>') +
-                                        '</select>',
-                                    '</label>',
-                                    '<label class="terminal-field" data-help="Line, ribbon, or box-whisker. Applies to Curve view only." data-help-label="Curve style">',
-                                        iconText('chart', 'Curve style (Curve only)', 'field-code'),
-                                        '<select id="chart-type">' + optionsMarkup(ui.chartTypes || BASE_CHART_TYPES) + '</select>',
+                                '<footer class="chart-footer" aria-label="Chart overview">',
+                                    '<span id="chart-guidance" class="chart-footer-guidance hint">On demand</span>',
+                                    '<div class="terminal-stat-grid chart-footer-stats" id="hero-stats">',
+                                        '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="Updated"><span class="metric-code">' + iconText('calendar', 'Updated') + '</span><strong>...</strong></div>',
+                                        '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(statSecondaryHelp) + '" data-help-label="' + esc(statSecondaryLabel) + '"><span class="metric-code">' + iconText(statSecondaryIcon, statSecondaryLabel) + '</span><strong>' + esc(statSecondaryValue) + '</strong></div>',
+                                        '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>...</strong></div>',
+                                        '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>...</strong></div>',
+                                    '</div>',
+                                    '<div id="chart-summary" class="chart-summary chart-footer-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
+                                '</footer>',
+                                '<p id="hero-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
+                                '<details class="chart-options-details" id="chart-options-details">',
+                                    '<summary class="chart-options-summary">Chart controls</summary>',
+                                    '<div class="terminal-chart-controls">',
+                                        '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
+                                            iconText('stats', 'Y axis', 'field-code'),
+                                            '<select id="chart-y">' + optionsMarkup(ui.chartMetrics) + '</select>',
+                                        '</label>',
+                                        '<label class="terminal-field" data-help="Axis or category shown on the X axis." data-help-label="X axis">',
+                                            iconText('history', 'X axis', 'field-code'),
+                                            '<select id="chart-x">' + optionsMarkup(ui.chartX) + '</select>',
+                                        '</label>',
+                                        '<label class="terminal-field" data-help="Series grouping field." data-help-label="Group by">',
+                                            iconText('series', 'Group by', 'field-code'),
+                                            '<select id="chart-group">' + optionsMarkup(ui.chartGroups) + '</select>',
+                                        '</label>',
+                                        '<label class="terminal-field" data-help="Visible series density." data-help-label="Density">',
+                                            iconText('summary', 'Density', 'field-code'),
+                                            '<select id="chart-series-limit"><option value="compact" selected>Compact</option><option value="standard">Standard</option><option value="expanded">Expanded</option></select>',
+                                        '</label>',
+                                        '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="History basis">',
+                                            iconText('history', 'History basis', 'field-code'),
+                                            '<select id="chart-representation">' +
+                                            (section === 'home-loans'
+                                                ? '<option value="change">Change basis</option><option value="day" selected>Daily basis</option>'
+                                                : '<option value="change" selected>Change basis</option><option value="day">Daily basis</option>') +
+                                            '</select>',
+                                        '</label>',
+                                        '<label class="terminal-field" data-help="Line, ribbon, or box-whisker. Applies to Curve view only." data-help-label="Curve style">',
+                                            iconText('chart', 'Curve style (Curve only)', 'field-code'),
+                                            '<select id="chart-type">' + optionsMarkup(ui.chartTypes || BASE_CHART_TYPES) + '</select>',
                                     '</label>' +
                                     (section === 'home-loans'
                                         ? '<div class="terminal-field chart-structure-filters-wrap" id="chart-structure-filters-wrap" data-help="Include or exclude rate structures in slope and curve charts. Variable only by default." data-help-label="Show structures">' +
