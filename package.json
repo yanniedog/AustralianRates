@@ -33,6 +33,7 @@
     "diagnose:claude-code-mcp": "node diagnose-claude-code-mcp.js",
     "diagnose": "node diagnose-local.js",
     "diagnose:local": "node diagnose-local.js",
+    "diagnose:full": "node diagnose-local.js --with-api",
     "test:logs-api": "node test-logs-api.js",
     "verify:prod-hosting": "node scripts/verify-production-hosting.mjs",
     "fix:cloudflare-dns-tls": "node scripts/fix-cloudflare-dns-tls.js",
