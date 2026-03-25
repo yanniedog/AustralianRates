@@ -10,6 +10,8 @@
  * - Writes debug-claude-mcp.log (gitignored) with NDJSON + summary
  *
  * Exit: 0 = no matching error lines in scanned logs; 2 = signatures found; 1 = script/runtime error
+ *
+ * Flags: --json | -j  Print one JSON object to stdout (for orchestrators); still writes debug-claude-mcp.log unless --no-file
  */
 
 const fs = require('fs');
@@ -144,23 +146,30 @@ function scanLogContent(text, filePath) {
 }
 
 function appendNdjson(obj) {
+  if (process.argv.includes('--no-file')) return;
   fs.appendFileSync(OUT_LOG, `${JSON.stringify(obj)}\n`, 'utf8');
 }
 
 function main() {
+  const argv = process.argv.slice(2);
+  const jsonMode = argv.includes('--json') || argv.includes('-j');
+  const noFile = argv.includes('--no-file');
+
   const days = Math.max(1, Number(process.env.DIAGNOSE_CLAUDE_LOG_DAYS || 7) || 7);
   const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
   const ts = new Date().toISOString();
 
-  try {
-    fs.writeFileSync(
-      OUT_LOG,
-      `# diagnose-claude-code-mcp ${ts}\n`,
-      'utf8',
-    );
-  } catch (e) {
-    console.error('Cannot write', OUT_LOG, e.message);
-    process.exit(1);
+  if (!noFile) {
+    try {
+      fs.writeFileSync(
+        OUT_LOG,
+        `# diagnose-claude-code-mcp ${ts}\n`,
+        'utf8',
+      );
+    } catch (e) {
+      console.error('Cannot write', OUT_LOG, e.message);
+      process.exit(1);
+    }
   }
 
   const report = {
@@ -231,17 +240,34 @@ function main() {
     `Cursor logs: ${logsDir} (exists: ${fs.existsSync(logsDir)})`,
     `Recent .log files scanned (tail ${Math.round(TAIL_BYTES / 1024)} KB each): ${allLogs.length}`,
     `MCP-related signature hits: ${allHits.length}`,
-    `Full NDJSON: ${OUT_LOG}`,
+    `Full NDJSON: ${noFile ? '(disabled)' : OUT_LOG}`,
   ];
 
   const textOut = `${summaryLines.join('\n')}\n`;
-  process.stdout.write(textOut);
-  fs.appendFileSync(OUT_LOG, `\n${textOut}`, 'utf8');
+
+  if (jsonMode) {
+    const payload = {
+      tool: 'diagnose-claude-code-mcp',
+      ok: allHits.length === 0,
+      exitCode: allHits.length > 0 ? 2 : 0,
+      report,
+      hits: allHits,
+      summaryText: textOut.trim(),
+    };
+    process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+  } else {
+    process.stdout.write(textOut);
+    if (!noFile) {
+      fs.appendFileSync(OUT_LOG, `\n${textOut}`, 'utf8');
+    }
+  }
 
   if (allHits.length > 0) {
-    process.stderr.write(
-      '\nAutomated scan found MCP error signatures in Cursor logs. See debug-claude-mcp.log for lines.\n',
-    );
+    if (!jsonMode) {
+      process.stderr.write(
+        '\nAutomated scan found MCP error signatures in Cursor logs. See debug-claude-mcp.log for lines.\n',
+      );
+    }
     process.exit(2);
   }
   process.exit(0);
