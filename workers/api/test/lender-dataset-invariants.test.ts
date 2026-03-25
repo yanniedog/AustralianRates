@@ -4,6 +4,20 @@ import {
   isLenderDatasetCollectionComplete,
   isLenderDatasetReadyForFinalization,
 } from '../src/utils/lender-dataset-invariants'
+import westpacSavingsGap from './fixtures/real-westpac-savings-gap-lender-dataset-row.json'
+
+function readinessSnapshotFromFixture(row: {
+  expected_detail_count: number
+  index_fetch_succeeded: number
+  accepted_row_count: number
+  written_row_count: number
+  detail_fetch_event_count: number
+  lineage_error_count: number
+  completed_detail_count: number
+  failed_detail_count: number
+}) {
+  return { ...row }
+}
 
 describe('lender dataset invariants', () => {
   it('treats successful zero-expected rows as ready and complete only after finalization', () => {
@@ -88,20 +102,22 @@ describe('lender dataset invariants', () => {
     })
   })
 
-  it('blocks finalization when most expected detail jobs never ran (e.g. EOD must not force-finalize incomplete)', () => {
-    const snapshot = {
-      expected_detail_count: 17,
-      index_fetch_succeeded: 1,
-      accepted_row_count: 38,
-      written_row_count: 38,
-      detail_fetch_event_count: 5,
-      lineage_error_count: 0,
-      completed_detail_count: 5,
-      failed_detail_count: 0,
-    }
-    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({
+  it('production Westpac savings gap fixture (real lender_dataset row) is not ready: stale force-close must skip', () => {
+    expect(isLenderDatasetReadyForFinalization(readinessSnapshotFromFixture(westpacSavingsGap))).toEqual({
       ready: false,
       reason: 'detail_processing_incomplete',
+    })
+  })
+
+  it('same real fixture with all 17 details completed is ready for finalization', () => {
+    const complete = {
+      ...westpacSavingsGap,
+      completed_detail_count: 17,
+      detail_fetch_event_count: 17,
+    }
+    expect(isLenderDatasetReadyForFinalization(readinessSnapshotFromFixture(complete))).toEqual({
+      ready: true,
+      reason: null,
     })
   })
 })

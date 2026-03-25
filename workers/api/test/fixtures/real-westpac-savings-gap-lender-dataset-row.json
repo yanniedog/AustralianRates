@@ -1,0 +1,15 @@
+{
+  "run_id": "daily:2026-03-25:2026-03-24T18:00:12.000Z",
+  "lender_code": "westpac",
+  "dataset_kind": "savings",
+  "bank_name": "Westpac Banking Corporation",
+  "collection_date": "2026-03-25",
+  "expected_detail_count": 17,
+  "index_fetch_succeeded": 1,
+  "accepted_row_count": 38,
+  "written_row_count": 38,
+  "detail_fetch_event_count": 5,
+  "lineage_error_count": 0,
+  "completed_detail_count": 5,
+  "failed_detail_count": 0
+}

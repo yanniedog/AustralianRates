@@ -1,3 +1,6 @@
+/**
+ * Stale unfinalized / incomplete-detail regression: see lender-dataset-invariants.test.ts + fixtures/real-westpac-savings-gap-lender-dataset-row.json.
+ */
 import { describe, expect, it } from 'vitest'
 import { deriveTerminalRunStatus } from '../src/pipeline/run-reconciliation'
 
@@ -57,7 +60,4 @@ describe('run lifecycle reconciliation status derivation', () => {
     ).toBe('partial')
   })
 
-  it.todo(
-    'reconcile ready finalizations against a real lender_dataset_runs fixture or integration database; the fabricated D1 result-set test was removed under the real-data-only policy',
-  )
 })

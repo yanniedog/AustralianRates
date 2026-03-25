@@ -571,11 +571,13 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
     .all<LenderDatasetReadinessRow>()
 
   for (const row of rows.results ?? []) {
+    const readiness = isLenderDatasetReadyForFinalization(snapshotForReadiness(row))
     if (dryRun) {
-      forceClosedRows += 1
+      if (readiness.ready) {
+        forceClosedRows += 1
+      }
       continue
     }
-    const readiness = isLenderDatasetReadyForFinalization(snapshotForReadiness(row))
     if (!readiness.ready) {
       log.info('run_reconciliation', 'stale_unfinalized_force_close_skipped_not_ready', {
         runId: row.run_id,
