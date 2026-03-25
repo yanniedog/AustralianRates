@@ -93,6 +93,75 @@
         return '<span class="pill ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'OK' : 'Attention') + '</span>';
     }
 
+    /** Three-state row status pill (matches .pill.ok / .pill.warn / .pill.bad in admin CSS). */
+    function statusPillHtml(severity) {
+        var s = severity || 'green';
+        if (s === 'red') return '<span class="pill bad">Critical</span>';
+        if (s === 'yellow') return '<span class="pill warn">Attention</span>';
+        return '<span class="pill ok">OK</span>';
+    }
+
+    function rowSeverityCoverageGap(row) {
+        var sev = String(row && row.severity || '').toLowerCase();
+        if (sev === 'error') return 'red';
+        if (sev === 'warn') return 'yellow';
+        return 'green';
+    }
+
+    function rowSeverityLenderUniverse(row) {
+        var st = String(row && row.status || '').toLowerCase();
+        if (st === 'missing_from_register') return 'red';
+        if (st === 'endpoint_drift') return 'yellow';
+        return 'green';
+    }
+
+    function rowSeverityReplayQueue(row) {
+        var st = String(row && row.status || '').toLowerCase();
+        if (st === 'failed') return 'red';
+        if (st === 'queued' || st === 'dispatching') return 'yellow';
+        return 'green';
+    }
+
+    function rowSeverityHistory(h) {
+        if (!h || !h.overall_ok) return 'red';
+        if (!(h.e2e && h.e2e.aligned)) return 'yellow';
+        return 'green';
+    }
+
+    function coverageGapRemediationScope(row) {
+        return [
+            String(row && row.collection_date || '').trim(),
+            String(row && row.lender_code || '').trim(),
+            String(row && row.dataset_kind || '').trim()
+        ].join('|');
+    }
+
+    function replayRowDiagnosticObject(row) {
+        var o = {};
+        var k;
+        for (k in row) {
+            if (!Object.prototype.hasOwnProperty.call(row, k)) continue;
+            if (k === 'payload_json') continue;
+            o[k] = row[k];
+        }
+        if (row && typeof row.payload_json === 'string' && row.payload_json) {
+            try {
+                o.payload_parsed = JSON.parse(row.payload_json);
+            } catch (_err) {
+                o.payload_json = row.payload_json;
+            }
+        }
+        return o;
+    }
+
+    /** Collapsible JSON + clipboard (same pattern as CDR audit technical column). */
+    function diagnosticCell(obj) {
+        return '<td><details><summary class="payload-summary-with-copy"><span>View diagnostic</span>'
+            + '<button type="button" class="admin-payload-copy-btn js-copy-cdr-payload" title="Copy diagnostic to clipboard" aria-label="Copy diagnostic to clipboard">'
+            + clipboardIconHtml()
+            + '</button></summary><pre class="mono">' + esc(JSON.stringify(obj, null, 2)) + '</pre></details></td>';
+    }
+
     function severityFromOverall(latest) {
         if (!latest) return 'green';
         if (!latest.overall_ok) return 'red';
@@ -338,7 +407,7 @@
             return (s === 'red' || (s === 'yellow' && acc !== 'red')) ? s : acc;
         }, 'green');
         applyCardSeverity(card, worstIssueSev);
-        issuesEl.innerHTML = '<table><thead><tr><th>Code</th><th>Title</th><th>Count</th><th>Action</th><th>Latest</th></tr></thead><tbody>'
+        issuesEl.innerHTML = '<table><thead><tr><th>Code</th><th>Title</th><th>Count</th><th>Action</th><th>Latest</th><th>Diagnostic</th></tr></thead><tbody>'
             + issues.map(function (i) {
                 var sev = severityFromIssueCount(i.count);
                 return '<tr class="severity-' + sev + '">'
@@ -347,6 +416,7 @@
                     + '<td>' + esc(i.count) + '</td>'
                     + '<td>' + esc(i.action) + '</td>'
                     + '<td class="mono">' + esc(i.latest_ts || '') + '</td>'
+                    + diagnosticCell(i)
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
@@ -378,9 +448,11 @@
             historyEl.innerHTML = '<div>No history yet.</div>';
             return;
         }
-        historyEl.innerHTML = '<table><thead><tr><th>Time</th><th>Trigger</th><th>Overall</th><th>E2E</th><th>Reason</th><th>Source mode</th><th>Duration</th></tr></thead><tbody>'
+        historyEl.innerHTML = '<table><thead><tr><th>Status</th><th>Time</th><th>Trigger</th><th>Overall</th><th>E2E</th><th>Reason</th><th>Source mode</th><th>Duration</th><th>Diagnostic</th></tr></thead><tbody>'
             + history.map(function (h) {
-                return '<tr>'
+                var hSev = rowSeverityHistory(h);
+                return '<tr class="severity-' + hSev + '">'
+                    + '<td>' + statusPillHtml(hSev) + '</td>'
                     + '<td class="mono">' + esc(h.checked_at) + '</td>'
                     + '<td>' + esc(h.trigger_source) + '</td>'
                     + '<td>' + boolPill(!!h.overall_ok) + '</td>'
@@ -388,6 +460,7 @@
                     + '<td class="mono">' + esc(h.e2e && h.e2e.reasonCode ? h.e2e.reasonCode : '') + '</td>'
                     + '<td class="mono">' + esc(h.e2e && h.e2e.sourceMode ? h.e2e.sourceMode : '') + '</td>'
                     + '<td>' + esc(h.duration_ms) + ' ms</td>'
+                    + diagnosticCell(h)
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
@@ -471,17 +544,21 @@
             return;
         }
 
-        coverageGapWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Dataset</th><th>Severity</th><th>Expected</th><th>Processed</th><th>Written</th><th>Reasons</th><th>Updated</th></tr></thead><tbody>'
+        coverageGapWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Dataset</th><th>Status</th><th>Expected</th><th>Processed</th><th>Written</th><th>Reasons</th><th>Updated</th><th>Diagnostic</th></tr></thead><tbody>'
             + rows.map(function (row) {
-                return '<tr>'
+                var rSev = rowSeverityCoverageGap(row);
+                var diag = Object.assign({}, row);
+                diag.remediation_scope = coverageGapRemediationScope(row);
+                return '<tr class="severity-' + rSev + '">'
                     + '<td>' + esc(row.lender_code || row.bank_name || '') + '</td>'
                     + '<td>' + esc(datasetLabel(row.dataset_kind)) + '</td>'
-                    + '<td class="mono">' + esc(row.severity || '') + '</td>'
+                    + '<td>' + statusPillHtml(rSev) + '</td>'
                     + '<td>' + esc(String(row.expected_detail_count || 0)) + '</td>'
                     + '<td>' + esc(String(row.processed_detail_count || 0)) + '</td>'
                     + '<td>' + esc(String(row.written_row_count || 0)) + '</td>'
                     + '<td class="mono">' + esc((row.reasons || []).join(', ')) + '</td>'
                     + '<td class="mono">' + esc(row.updated_at || '') + '</td>'
+                    + diagnosticCell(diag)
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
@@ -497,6 +574,10 @@
             datasetLabel: datasetLabel,
             cardCell: cardCell,
             esc: esc,
+            statusPillHtml: statusPillHtml,
+            diagnosticCell: diagnosticCell,
+            rowSeverityCoverageGap: rowSeverityCoverageGap,
+            coverageGapRemediationScope: coverageGapRemediationScope,
             refreshCoverage: loadCoverageGapAudit,
             refreshReplayQueue: loadReplayQueue,
             refreshStatus: loadStatus
@@ -525,13 +606,16 @@
             return;
         }
 
-        lenderUniverseWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Status</th><th>Configured endpoint</th><th>Register endpoint</th></tr></thead><tbody>'
+        lenderUniverseWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Status</th><th>Kind</th><th>Configured endpoint</th><th>Register endpoint</th><th>Diagnostic</th></tr></thead><tbody>'
             + rows.map(function (row) {
-                return '<tr>'
+                var rSev = rowSeverityLenderUniverse(row);
+                return '<tr class="severity-' + rSev + '">'
                     + '<td>' + esc(row.lender_code || '') + '</td>'
+                    + '<td>' + statusPillHtml(rSev) + '</td>'
                     + '<td class="mono">' + esc(row.status || '') + '</td>'
                     + '<td class="mono">' + esc(row.configured_endpoint || '--') + '</td>'
                     + '<td class="mono">' + esc(row.register_endpoint || '--') + '</td>'
+                    + diagnosticCell(row)
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
@@ -545,9 +629,11 @@
             replayQueueWrapEl.innerHTML = '<div>No replay queue rows currently exist.</div>';
             return;
         }
-        replayQueueWrapEl.innerHTML = '<table><thead><tr><th>Status</th><th>Kind</th><th>Lender</th><th>Dataset</th><th>Collection date</th><th>Attempts</th><th>Next attempt</th><th>Last error</th></tr></thead><tbody>'
+        replayQueueWrapEl.innerHTML = '<table><thead><tr><th>Health</th><th>Phase</th><th>Kind</th><th>Lender</th><th>Dataset</th><th>Collection date</th><th>Attempts</th><th>Next attempt</th><th>Last error</th><th>Diagnostic</th></tr></thead><tbody>'
             + rows.map(function (row) {
-                return '<tr>'
+                var rSev = rowSeverityReplayQueue(row);
+                return '<tr class="severity-' + rSev + '">'
+                    + '<td>' + statusPillHtml(rSev) + '</td>'
                     + '<td class="mono">' + esc(row.status || '') + '</td>'
                     + '<td class="mono">' + esc(row.message_kind || '') + '</td>'
                     + '<td>' + esc(row.lender_code || '--') + '</td>'
@@ -556,6 +642,7 @@
                     + '<td>' + esc(String(row.replay_attempt_count || 0)) + '/' + esc(String(row.max_replay_attempts || 0)) + '</td>'
                     + '<td class="mono">' + esc(row.next_attempt_at || '--') + '</td>'
                     + '<td class="mono">' + esc(row.last_error || '--') + '</td>'
+                    + diagnosticCell(replayRowDiagnosticObject(row))
                     + '</tr>';
             }).join('')
             + '</tbody></table>';

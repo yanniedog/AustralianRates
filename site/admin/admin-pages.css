@@ -119,6 +119,9 @@
 .admin-status #components-wrap,
 .admin-status #integrity-wrap,
 .admin-status #issues-wrap,
+.admin-status #coverage-gap-wrap,
+.admin-status #lender-universe-wrap,
+.admin-status #replay-queue-wrap,
 .admin-status #probe-payloads-wrap,
 .admin-status #history-wrap,
 .admin-status #cdr-audit-overview,
@@ -211,8 +214,20 @@
 .admin-status table tr.severity-green td:first-child { border-left: 3px solid var(--ar-positive); }
 .admin-status table tr.severity-yellow td:first-child { border-left: 3px solid var(--ar-warning); }
 .admin-status table tr.severity-red td:first-child { border-left: 3px solid var(--ar-danger); }
-.admin-status #issues-wrap table tr.severity-yellow { background: color-mix(in srgb, var(--ar-warning) 6%, var(--ar-surface-soft)); }
-.admin-status #issues-wrap table tr.severity-red { background: color-mix(in srgb, var(--ar-danger) 6%, var(--ar-surface-soft)); }
+.admin-status #issues-wrap table tr.severity-yellow,
+.admin-status #coverage-gap-wrap table tr.severity-yellow,
+.admin-status #lender-universe-wrap table tr.severity-yellow,
+.admin-status #replay-queue-wrap table tr.severity-yellow,
+.admin-status #history-wrap table tr.severity-yellow {
+    background: color-mix(in srgb, var(--ar-warning) 6%, var(--ar-surface-soft));
+}
+.admin-status #issues-wrap table tr.severity-red,
+.admin-status #coverage-gap-wrap table tr.severity-red,
+.admin-status #lender-universe-wrap table tr.severity-red,
+.admin-status #replay-queue-wrap table tr.severity-red,
+.admin-status #history-wrap table tr.severity-red {
+    background: color-mix(in srgb, var(--ar-danger) 6%, var(--ar-surface-soft));
+}
 .admin-status #cdr-audit-status.severity-green { color: var(--ar-positive); font-weight: 600; }
 .admin-status #cdr-audit-status.severity-yellow { color: var(--ar-warning); font-weight: 600; }
 .admin-status #cdr-audit-status.severity-red { color: var(--ar-danger); font-weight: 600; }

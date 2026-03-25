@@ -12,6 +12,10 @@
         var refreshCoverage = input.refreshCoverage;
         var refreshReplayQueue = input.refreshReplayQueue;
         var refreshStatus = input.refreshStatus;
+        var statusPillHtml = input.statusPillHtml;
+        var diagnosticCell = input.diagnosticCell;
+        var rowSeverityCoverageGap = input.rowSeverityCoverageGap;
+        var coverageGapRemediationScope = input.coverageGapRemediationScope;
         var report = null;
         var lastRemediation = null;
         var actionStates = {};
@@ -108,18 +112,24 @@
                 return;
             }
 
-            wrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Dataset</th><th>Severity</th><th>Expected</th><th>Processed</th><th>Written</th><th>Reasons</th><th>Updated</th><th>Actions</th></tr></thead><tbody>'
+            wrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Dataset</th><th>Status</th><th>Expected</th><th>Processed</th><th>Written</th><th>Reasons</th><th>Updated</th><th>Diagnostic</th><th>Actions</th></tr></thead><tbody>'
                 + rows.map(function (row) {
                     var normalized = normalizeRow(row);
-                    return '<tr>'
+                    var rSev = rowSeverityCoverageGap ? rowSeverityCoverageGap(row) : 'green';
+                    var diag = Object.assign({}, row);
+                    if (coverageGapRemediationScope) {
+                        diag.remediation_scope = coverageGapRemediationScope(row);
+                    }
+                    return '<tr class="severity-' + rSev + '">'
                         + '<td>' + esc(normalized.lender_code || normalized.bank_name || '') + '</td>'
                         + '<td>' + esc(datasetLabel(normalized.dataset_kind)) + '</td>'
-                        + '<td class="mono">' + esc(row.severity || '') + '</td>'
+                        + '<td>' + (statusPillHtml ? statusPillHtml(rSev) : esc(row.severity || '')) + '</td>'
                         + '<td>' + esc(String(row.expected_detail_count || 0)) + '</td>'
                         + '<td>' + esc(String(row.processed_detail_count || 0)) + '</td>'
                         + '<td>' + esc(String(row.written_row_count || 0)) + '</td>'
                         + '<td class="mono">' + esc((row.reasons || []).join(', ')) + '</td>'
                         + '<td class="mono">' + esc(row.updated_at || '') + '</td>'
+                        + (diagnosticCell ? diagnosticCell(diag) : '<td></td>')
                         + '<td>' + actionMarkup(normalized) + '</td>'
                         + '</tr>';
                 }).join('')
