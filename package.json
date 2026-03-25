@@ -51,6 +51,7 @@
     "db:summary": "node fetch-db-stats.js --summary",
     "deploy:api": "node scripts/deploy-api.mjs",
     "verify:ubank-fetch": "node scripts/verify-ubank-public-html.mjs",
+    "verify:ubank-e2e": "npm run verify:ubank-fetch && node diagnose-api.js",
     "deploy:archive": "npm run deploy -w workers/archive --"
   },
   "devDependencies": {
