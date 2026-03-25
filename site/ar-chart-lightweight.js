@@ -96,14 +96,18 @@
         };
     }
 
-    function renderMainCompare(container, model, fields) {
+    function renderMainCompare(container, model, fields, economicOverlaySeries) {
         var L = window.LightweightCharts;
         var h = helpers();
+        var overlayModule = window.AR.chartEconomicOverlays || {};
         var paletteColor = typeof h.paletteColor === 'function' ? h.paletteColor : function (i) { return '#2563eb'; };
         var chartThemeFn = typeof h.chartTheme === 'function' ? h.chartTheme : function () { return themeFallback(); };
         var theme = chartThemeFn();
         var compareSeries = model.compareSeries || [];
         var xLabels = (model.surface && model.surface.xLabels) || [];
+        var overlayDefs = overlayModule.prepareWindowSeries && xLabels.length
+            ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], xLabels[0], xLabels[xLabels.length - 1])
+            : [];
 
         container.innerHTML = '';
         var mount = document.createElement('div');
@@ -123,6 +127,11 @@
                 horzLines: { color: theme.splitLine || 'rgba(148,163,184,0.12)' },
             },
             rightPriceScale: {
+                borderColor: theme.axisLine || 'rgba(148,163,184,0.55)',
+                scaleMargins: { top: 0.08, bottom: 0.12 },
+            },
+            leftPriceScale: {
+                visible: overlayDefs.length > 0,
                 borderColor: theme.axisLine || 'rgba(148,163,184,0.55)',
                 scaleMargins: { top: 0.08, bottom: 0.12 },
             },
@@ -165,6 +174,28 @@
                 lastValueVisible: compareSeries.length <= 3,
             });
             line.setData(data);
+        });
+
+        overlayDefs.forEach(function (series) {
+            var line = chart.addSeries(L.LineSeries, {
+                color: series.color,
+                lineWidth: 2,
+                lineStyle: L.LineStyle && L.LineStyle.Dashed != null ? L.LineStyle.Dashed : 2,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                priceScaleId: 'left',
+                crosshairMarkerVisible: true,
+                crosshairMarkerRadius: 3,
+                priceFormat: {
+                    type: 'price',
+                    precision: 1,
+                    minMove: 0.1,
+                },
+            });
+            line.setData((series.points || []).map(function (point) {
+                if (!Number.isFinite(Number(point.normalized_value))) return { time: point.date };
+                return { time: point.date, value: point.normalized_value };
+            }));
         });
 
         chart.timeScale().fitContent();
@@ -243,24 +274,24 @@
         return { chart: chart, mount: mount, kind: 'detail' };
     }
 
-    function renderEconomicReport(container, model, fields, rbaHistory, cpiHistory) {
+    function renderEconomicReport(container, model, fields, rbaHistory, cpiHistory, economicOverlaySeries) {
         var mod = window.AR.chartSavingsReportLwc;
         if (!mod || typeof mod.render !== 'function') {
             throw new Error('chartSavingsReportLwc not loaded');
         }
-        return mod.render(container, model, rbaHistory, cpiHistory);
+        return mod.render(container, model, fields, rbaHistory, cpiHistory, economicOverlaySeries);
     }
 
-    function renderHomeLoanReport(container, model, fields, rbaHistory, cpiHistory) {
+    function renderHomeLoanReport(container, model, fields, rbaHistory, cpiHistory, economicOverlaySeries) {
         var mod = window.AR.chartHomeLoanReportLwc;
         if (!mod || typeof mod.render !== 'function') throw new Error('chartHomeLoanReportLwc not loaded');
-        return mod.render(container, model, rbaHistory, cpiHistory);
+        return mod.render(container, model, fields, rbaHistory, cpiHistory, economicOverlaySeries);
     }
 
-    function renderTermDepositReport(container, model, fields, rbaHistory, cpiHistory) {
+    function renderTermDepositReport(container, model, fields, rbaHistory, cpiHistory, economicOverlaySeries) {
         var mod = window.AR.chartTermDepositReportLwc;
         if (!mod || typeof mod.render !== 'function') throw new Error('chartTermDepositReportLwc not loaded');
-        return mod.render(container, model, rbaHistory, cpiHistory);
+        return mod.render(container, model, fields, rbaHistory, cpiHistory, economicOverlaySeries);
     }
 
     function resizeState(state) {

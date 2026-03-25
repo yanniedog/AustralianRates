@@ -631,6 +631,22 @@
             '</div>';
     }
 
+    function chartEconomicOverlayMarkup() {
+        return '' +
+            '<details class="chart-overlay-picker" id="chart-economic-overlay-picker">' +
+                '<summary class="chart-overlay-picker-summary">' +
+                    '<span class="chart-overlay-picker-title">Economic overlays</span>' +
+                    '<span id="chart-economic-overlay-summary" class="chart-overlay-picker-count">None</span>' +
+                '</summary>' +
+                '<div class="chart-overlay-picker-panel">' +
+                    '<p id="chart-economic-overlay-hint" class="hint">Plot indexed economic metrics alongside bank rates in Rate Report and Compare views.</p>' +
+                    '<div id="chart-economic-overlay-options" class="chart-overlay-picker-options">' +
+                        '<p class="chart-overlay-picker-empty">Loading overlays…</p>' +
+                    '</div>' +
+                '</div>' +
+            '</details>';
+    }
+
     function notesMarkup(ui) {
         return '' +
             '<details class="panel terminal-notes" id="market-notes">' +
@@ -678,6 +694,7 @@
                                         chartQuestionMarkup(),
                                         chartEngineMarkup(),
                                     '</div>',
+                                    chartEconomicOverlayMarkup(),
                                 '</div>',
                                 '<div class="terminal-chart-surface">',
                                     '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',

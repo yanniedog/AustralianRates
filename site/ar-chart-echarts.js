@@ -2,6 +2,7 @@
     'use strict';
     window.AR = window.AR || {};
     var chartConfig = window.AR.chartConfig || {}, helpers = window.AR.chartEchartsHelpers || {};
+    var economicOverlays = window.AR.chartEconomicOverlays || {};
     var paletteColor = helpers.paletteColor, tooltipMetric = helpers.tooltipMetric, baseTextStyles = helpers.baseTextStyles, gridStyles = helpers.gridStyles;
     var tooltipStyles = helpers.tooltipStyles, chartSize = helpers.chartSize;
     function defaultChartSize(el) {
@@ -847,6 +848,93 @@
             ],
         };
     }
+
+    function appendEconomicOverlaySeries(option, model, fields, chartState, size) {
+        if (!option || !model || !fields || fields.view !== 'compare' || !economicOverlays.prepareWindowSeries) return option;
+        var dates = model.surface && model.surface.xLabels ? model.surface.xLabels : [];
+        if (!dates.length) return option;
+        var overlays = economicOverlays.prepareWindowSeries(
+            chartState && chartState.economicOverlaySeries ? chartState.economicOverlaySeries : [],
+            dates[0],
+            dates[dates.length - 1]
+        );
+        if (!overlays.length) return option;
+        var overlayMin = null;
+        var overlayMax = null;
+        overlays.forEach(function (series) {
+            (series.points || []).forEach(function (point) {
+                var value = Number(point && point.normalized_value);
+                if (!Number.isFinite(value)) return;
+                if (overlayMin == null || value < overlayMin) overlayMin = value;
+                if (overlayMax == null || value > overlayMax) overlayMax = value;
+            });
+        });
+        if (overlayMin == null || overlayMax == null) return option;
+        var pad = Math.max((overlayMax - overlayMin) * 0.08, 4);
+        var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
+        var narrow = size && size.width < 760;
+        var compact = size && size.width < 420;
+        var yAxes = Array.isArray(option.yAxis) ? option.yAxis.slice() : [option.yAxis];
+        yAxes.push({
+            type: 'value',
+            scale: true,
+            position: 'right',
+            offset: 54,
+            min: overlayMin - pad,
+            max: overlayMax + pad,
+            name: compact ? '' : 'Economic overlay index',
+            nameTextStyle: { color: theme.mutedText, fontFamily: theme.dataFont || undefined },
+            axisLine: { lineStyle: { color: theme.axisLine } },
+            splitLine: { show: false },
+            axisLabel: {
+                color: theme.softText,
+                fontFamily: theme.dataFont || undefined,
+                formatter: function (value) { return Number(value).toFixed(0); },
+            },
+        });
+        option.yAxis = yAxes;
+        option.grid = Object.assign({}, option.grid || {}, {
+            right: Math.max(Number(option.grid && option.grid.right) || 0, narrow ? 92 : 144),
+        });
+        option.series = (option.series || []).concat(overlays.map(function (series) {
+            var byDate = {};
+            (series.points || []).forEach(function (point) {
+                byDate[point.date] = point;
+            });
+            return {
+                id: 'economic:' + series.id,
+                name: series.shortLabel + ' (idx)',
+                type: 'line',
+                yAxisIndex: 1,
+                smooth: false,
+                showSymbol: false,
+                symbolSize: 5,
+                connectNulls: false,
+                endLabel: {
+                    show: !narrow && overlays.length <= 2,
+                    color: theme.emphasisText,
+                    distance: 10,
+                    formatter: function () {
+                        var latest = series.latestPoint && Number.isFinite(Number(series.latestPoint.normalized_value))
+                            ? Number(series.latestPoint.normalized_value).toFixed(1)
+                            : '';
+                        return trimAxisLabel(series.shortLabel, 18) + (latest ? ' ' + latest : '');
+                    },
+                },
+                labelLayout: { hideOverlap: true },
+                emphasis: { focus: 'series', blurScope: 'coordinateSystem', lineStyle: { width: narrow ? 2.5 : 3 } },
+                lineStyle: { width: 2, type: 'dashed', color: series.color },
+                itemStyle: { color: series.color },
+                data: dates.map(function (date) {
+                    var point = byDate[date];
+                    return point && Number.isFinite(Number(point.normalized_value))
+                        ? { value: [date, point.normalized_value], rawValue: point.raw_value, seriesKey: 'economic:' + series.id }
+                        : [date, null];
+                }),
+            };
+        }));
+        return option;
+    }
     function buildDetailOption(model, fields, size) {
         var base = baseTextStyles();
         var theme = (typeof chartTheme === 'function' ? chartTheme : themeFallback)();
@@ -1310,6 +1398,7 @@
         if (!instance || !element) return;
         var size = chartSizeWithFallback(element);
         var option = optionForView(view, model, fields, size, chartState);
+        option = appendEconomicOverlaySeries(option, model, fields, chartState, size);
         var timeAxisViews = view === 'timeRibbon' || view === 'tdTermTime' || view === 'compare' || view === 'surface';
         if (timeAxisViews && option && Array.isArray(rbaHistory) && rbaHistory.length && helpers.addRbaMarkLine) {
             helpers.addRbaMarkLine(option, rbaHistory);

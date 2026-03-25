@@ -205,6 +205,120 @@
     gap: 10px;
 }
 
+.chart-overlay-picker {
+    flex: 0 0 auto;
+    min-width: min(300px, 100%);
+    align-self: flex-start;
+    border: 1px solid var(--ar-line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, var(--ar-surface));
+    overflow: hidden;
+}
+
+.chart-overlay-picker.is-disabled {
+    opacity: 0.8;
+}
+
+.chart-overlay-picker-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding: 8px 12px;
+    list-style: none;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ar-text-soft);
+}
+
+.chart-overlay-picker-summary::-webkit-details-marker {
+    display: none;
+}
+
+.chart-overlay-picker-title {
+    color: var(--ar-text);
+}
+
+.chart-overlay-picker-count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--ar-line);
+    border-radius: 999px;
+    background: var(--ar-surface);
+    font-size: 0.68rem;
+    font-family: var(--ar-font-mono, ui-monospace, "SF Mono", Consolas, monospace);
+}
+
+.chart-overlay-picker-panel {
+    display: grid;
+    gap: 10px;
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--ar-line);
+}
+
+.chart-overlay-picker-options {
+    display: grid;
+    gap: 10px;
+    max-height: 280px;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.chart-overlay-group {
+    display: grid;
+    gap: 8px;
+}
+
+.chart-overlay-group-title {
+    margin: 0;
+    color: var(--ar-text-soft);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.chart-overlay-group-options {
+    display: grid;
+    gap: 6px;
+}
+
+.chart-overlay-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--ar-surface-2) 82%, var(--ar-surface));
+    cursor: pointer;
+}
+
+.chart-overlay-option input {
+    margin-top: 2px;
+}
+
+.chart-overlay-option-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.chart-overlay-option-copy strong {
+    font-size: 0.78rem;
+}
+
+.chart-overlay-option-copy span,
+.chart-overlay-picker-empty {
+    color: var(--ar-text-soft);
+    font-size: 0.72rem;
+}
+
 .chart-toolbar .chart-question-row {
     flex: 1 1 auto;
     min-width: 0;
@@ -936,6 +1050,11 @@
     .chart-toolbar {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .chart-overlay-picker {
+        width: 100%;
+        min-width: 0;
     }
 
     .chart-toolbar .chart-toolbar-btn {

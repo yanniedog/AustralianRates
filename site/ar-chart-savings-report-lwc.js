@@ -146,11 +146,12 @@
     }
 
     // ── Main render ───────────────────────────────────────────────────────────
-    function render(container, model, rbaHistory, cpiData) {
+    function render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries) {
         var L = window.LightweightCharts;
         if (!L || !container) return null;
 
         var M = window.AR.chartMacroLwcShared;
+        var overlayModule = window.AR.chartEconomicOverlays || {};
         if (!M || typeof M.prepareRbaCpiForReport !== 'function') {
             throw new Error('chartMacroLwcShared not loaded');
         }
@@ -178,6 +179,9 @@
         var rbaData = prep.rbaData;
         var cpiPts = prep.cpiPoints;
         var rbaStart = prep.rbaStart;
+        var overlayDefs = overlayModule.prepareWindowSeries
+            ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], ctxMin, ctxMax)
+            : [];
 
         var compact = (container.clientWidth || 800) < 480;
         var maxBanks = Math.min(banks.length, 100);
@@ -210,6 +214,12 @@
                 horzLines: { color: t.grid },
             },
             rightPriceScale: {
+                borderColor: t.axis,
+                scaleMargins: { top: 0.06, bottom: 0.12 },
+                lastValueVisible: false,
+            },
+            leftPriceScale: {
+                visible: overlayDefs.length > 0,
                 borderColor: t.axis,
                 scaleMargins: { top: 0.06, bottom: 0.12 },
                 lastValueVisible: false,
@@ -323,6 +333,32 @@
                     .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
             );
         }
+
+        overlayDefs.forEach(function (series) {
+            var data = (series.points || []).map(function (point) {
+                if (!Number.isFinite(Number(point.normalized_value))) return { time: M.ymdToUtc(point.date) };
+                return { time: M.ymdToUtc(point.date), value: point.normalized_value };
+            });
+            if (!data.length) return;
+            var overlayApi = chart.addSeries(L.LineSeries, {
+                color:                   series.color,
+                lineWidth:               2,
+                lineStyle:               LineStyle.Dashed,
+                lineType:                LineType.Simple,
+                title:                   '',
+                priceLineVisible:        false,
+                lastValueVisible:        false,
+                crosshairMarkerVisible:  true,
+                crosshairMarkerRadius:   3,
+                priceScaleId:            'left',
+                priceFormat: {
+                    type: 'price',
+                    precision: 1,
+                    minMove: 0.1,
+                },
+            });
+            overlayApi.setData(data);
+        });
 
         chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
 

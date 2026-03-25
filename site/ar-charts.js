@@ -8,6 +8,7 @@
     var state = window.AR.state;
     var chartData = window.AR.chartData || {};
     var chartEcharts = window.AR.chartEcharts || {};
+    var economicOverlays = window.AR.chartEconomicOverlays || {};
     var chartLightweight = window.AR.chartLightweight || {};
     var chartSummary = window.AR.chartSummary || {};
     var chartUi = window.AR.chartUi || {};
@@ -45,6 +46,8 @@
         tdCurveFrameIndex: null,
         tdCurveDates: [],
         tdCurveFrames: [],
+        economicOverlayIds: [],
+        economicOverlaySeries: [],
         mainChart: null,
         detailChart: null,
         lwcMain: null,
@@ -126,6 +129,18 @@
         } else {
             chartState.tdCurveFrameIndex = null;
         }
+    }
+
+    function rowsDateRange(rows) {
+        var minDate = '';
+        var maxDate = '';
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            var date = String(row && row.collection_date || '').slice(0, 10);
+            if (!date) return;
+            if (!minDate || date < minDate) minDate = date;
+            if (!maxDate || date > maxDate) maxDate = date;
+        });
+        return { minDate: minDate, maxDate: maxDate };
     }
 
     function statusText(model, currentFields) {
@@ -409,7 +424,11 @@
                 if (chartUi.renderSpotlight) chartUi.renderSpotlight(model, currentFields);
                 if (chartSummary && chartSummary.render) chartSummary.render(model, currentFields);
                 var statusLine = chartState.stale ? 'STALE' : statusText(model, currentFields);
+                var overlayNote = economicOverlays.overlayStatusNote
+                    ? economicOverlays.overlayStatusNote(currentFields.economicOverlayIds, currentFields.view)
+                    : '';
                 statusLine = appendEngineHint(statusLine);
+                if (overlayNote) statusLine = statusLine + ' | ' + overlayNote;
                 if (extraSuffix) statusLine = statusLine + ' · ' + extraSuffix;
                 if (chartUi.setStatus) chartUi.setStatus(statusLine);
                 tabState.chartDrawn = true;
@@ -443,13 +462,13 @@
                         var isTdReport     = currentFields.view === 'termDepositReport';
                         var isAnyReport    = isEconReport || isHlReport || isTdReport;
                         if (isEconReport && typeof chartLightweight.renderEconomicReport === 'function') {
-                            chartState.lwcMain = chartLightweight.renderEconomicReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory);
+                            chartState.lwcMain = chartLightweight.renderEconomicReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory, chartState.economicOverlaySeries);
                         } else if (isHlReport && typeof chartLightweight.renderHomeLoanReport === 'function') {
-                            chartState.lwcMain = chartLightweight.renderHomeLoanReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory);
+                            chartState.lwcMain = chartLightweight.renderHomeLoanReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory, chartState.economicOverlaySeries);
                         } else if (isTdReport && typeof chartLightweight.renderTermDepositReport === 'function') {
-                            chartState.lwcMain = chartLightweight.renderTermDepositReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory);
+                            chartState.lwcMain = chartLightweight.renderTermDepositReport(els.chartOutput, model, currentFields, chartState.rbaHistory, chartState.cpiHistory, chartState.economicOverlaySeries);
                         } else {
-                            chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields);
+                            chartState.lwcMain = chartLightweight.renderMainCompare(els.chartOutput, model, currentFields, chartState.economicOverlaySeries);
                         }
                         if (els.chartOutput) {
                             els.chartOutput.setAttribute('data-chart-engine', 'lightweight');
@@ -553,6 +572,8 @@
             chartState.tdCurveDates = [];
             chartState.tdCurveFrames = [];
             chartState.tdCurveFrameIndex = null;
+            chartState.economicOverlayIds = fields().economicOverlayIds ? fields().economicOverlayIds.slice() : [];
+            chartState.economicOverlaySeries = [];
             if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
                 els.chartRepresentation.value = payload.representation;
             }
@@ -567,6 +588,20 @@
             } catch (e) {
                 chartState.rbaHistory = [];
                 chartState.cpiHistory = [];
+            }
+            try {
+                if (chartState.economicOverlayIds.length && economicOverlays.fetchSeries) {
+                    var range = rowsDateRange(chartState.rows);
+                    if (range.minDate && range.maxDate) {
+                        chartState.economicOverlaySeries = await economicOverlays.fetchSeries(chartState.economicOverlayIds, range.minDate, range.maxDate);
+                    }
+                }
+            } catch (overlayError) {
+                chartState.economicOverlaySeries = [];
+                clientLog('warn', 'Economic overlays unavailable', {
+                    message: String(overlayError && overlayError.message || 'Overlay fetch failed'),
+                    ids: chartState.economicOverlayIds,
+                });
             }
 
             if (!chartState.rows.length) {
@@ -628,11 +663,17 @@
     }
 
     function refreshFromCache(reason) {
-        if (reason === 'representation') {
+        if (reason === 'representation' || reason === 'economic-overlay') {
             drawChart();
             return;
         }
-        if ((fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'slope') && chartState.loadedRepresentation !== 'day') {
+        var currentFields = fields();
+        var nextOverlayIds = currentFields.economicOverlayIds || [];
+        if (nextOverlayIds.join(',') !== (chartState.economicOverlayIds || []).join(',')) {
+            drawChart();
+            return;
+        }
+        if ((currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope') && chartState.loadedRepresentation !== 'day') {
             drawChart();
             return;
         }
@@ -646,7 +687,7 @@
             return;
         }
         renderFromCache();
-        if (chartUi.setStatus) chartUi.setStatus('LIVE ' + fields().view + (reason ? ' | ' + reason : ''));
+        if (chartUi.setStatus) chartUi.setStatus('LIVE ' + currentFields.view + (reason ? ' | ' + reason : ''));
     }
 
     function toggleSeries(seriesKey) {
@@ -673,9 +714,9 @@
 
     if (chartUi.bindUi) {
         chartUi.bindUi({
-            onControlChange: function () {
+            onControlChange: function (reason) {
                 resetStatusLine();
-                refreshFromCache('control');
+                refreshFromCache(reason || 'control');
             },
             onSeriesToggle: toggleSeries,
             onViewChange: function () {

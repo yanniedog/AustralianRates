@@ -8,6 +8,7 @@
     var state = window.AR.state;
     var utils = window.AR.utils || {};
     var chartConfig = window.AR.chartConfig || {};
+    var economicOverlays = window.AR.chartEconomicOverlays || {};
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var esc = utils.esc || window._arEsc || function (value) { return String(value == null ? '' : value); };
@@ -44,6 +45,7 @@
             groupField: false,
             chartType: false,
             representation: true,
+            economicOverlays: false,
         };
         if (key === 'market') {
             caps.chartType = true;
@@ -62,8 +64,10 @@
             caps.representation = false;
             caps.xField = false;
             caps.groupField = false;
+            caps.economicOverlays = true;
             return caps;
         }
+        if (key === 'compare') caps.economicOverlays = true;
         return caps;
     }
 
@@ -93,10 +97,94 @@
         setControlVisibility(els.chartGroup, !!caps.groupField, 'Grouping is only available where implemented for this view.');
         setControlVisibility(els.chartType, !!caps.chartType, 'Curve style only applies to the Curve view.');
         setControlVisibility(els.chartRepresentation, !!caps.representation, 'This view always uses daily snapshots.');
+        syncEconomicOverlayAvailability(view, !!caps.economicOverlays);
         var engineRow = document.querySelector('.chart-engine-row');
         var v = String(view || '');
         var engineForced = v === 'economicReport' || v === 'homeLoanReport' || v === 'termDepositReport';
         if (engineRow) engineRow.hidden = engineForced;
+    }
+
+    function selectedEconomicOverlayIds() {
+        if (!els.chartEconomicOverlayOptions) {
+            return economicOverlays.getSelectedIds ? economicOverlays.getSelectedIds() : [];
+        }
+        var inputs = els.chartEconomicOverlayOptions.querySelectorAll('input[type="checkbox"][data-economic-series-id]');
+        if (!inputs.length) {
+            return economicOverlays.getSelectedIds ? economicOverlays.getSelectedIds() : [];
+        }
+        var checked = els.chartEconomicOverlayOptions.querySelectorAll('input[type="checkbox"][data-economic-series-id]:checked');
+        var ids = [];
+        checked.forEach(function (input) {
+            var value = String(input.getAttribute('data-economic-series-id') || '').trim();
+            if (value) ids.push(value);
+        });
+        return ids;
+    }
+
+    function updateEconomicOverlaySummary() {
+        if (!els.chartEconomicOverlaySummary) return;
+        var ids = selectedEconomicOverlayIds();
+        els.chartEconomicOverlaySummary.textContent = economicOverlays.selectionSummary
+            ? economicOverlays.selectionSummary(ids)
+            : (ids.length ? ids.length + ' selected' : 'None');
+    }
+
+    function syncEconomicOverlayAvailability(view, enabled) {
+        if (!els.chartEconomicOverlayPicker) return;
+        els.chartEconomicOverlayPicker.classList.toggle('is-disabled', !enabled);
+        if (!els.chartEconomicOverlayHint) return;
+        if (enabled) {
+            els.chartEconomicOverlayHint.textContent = 'Plot indexed economic metrics alongside bank rates in this view.';
+            return;
+        }
+        els.chartEconomicOverlayHint.textContent = 'Economic overlays appear in Rate Report and Compare views.';
+    }
+
+    function economicOverlayOptionMarkup(series, checked) {
+        var id = String(series && series.id || '');
+        var label = String((series && (series.short_label || series.shortLabel || series.label)) || id);
+        var caption = String(series && series.category_label || '');
+        return '' +
+            '<label class="chart-overlay-option">' +
+                '<input type="checkbox" data-economic-series-id="' + esc(id) + '"' + (checked ? ' checked' : '') + '>' +
+                '<span class="chart-overlay-option-copy">' +
+                    '<strong>' + esc(label) + '</strong>' +
+                    (caption ? '<span>' + esc(caption) + '</span>' : '') +
+                '</span>' +
+            '</label>';
+    }
+
+    function renderEconomicOverlayPicker() {
+        if (!els.chartEconomicOverlayOptions || !economicOverlays.fetchCatalog) return Promise.resolve();
+        els.chartEconomicOverlayOptions.innerHTML = '<p class="chart-overlay-picker-empty">Loading overlays…</p>';
+        return economicOverlays.fetchCatalog().then(function (catalog) {
+            var selected = {};
+            (economicOverlays.getSelectedIds ? economicOverlays.getSelectedIds() : []).forEach(function (id) {
+                selected[String(id)] = true;
+            });
+            var rows = [];
+            (catalog && catalog.categories || []).forEach(function (category) {
+                var seriesMarkup = (category.series || []).map(function (series) {
+                    return economicOverlayOptionMarkup(Object.assign({ category_label: category.label || category.id || '' }, series), !!selected[String(series.id || '')]);
+                }).join('');
+                if (!seriesMarkup) return;
+                rows.push(
+                    '<section class="chart-overlay-group">' +
+                        '<p class="chart-overlay-group-title">' + esc(category.label || category.id || '') + '</p>' +
+                        '<div class="chart-overlay-group-options">' + seriesMarkup + '</div>' +
+                    '</section>'
+                );
+            });
+            els.chartEconomicOverlayOptions.innerHTML = rows.join('') || '<p class="chart-overlay-picker-empty">No overlays available.</p>';
+            updateEconomicOverlaySummary();
+            syncEconomicOverlayAvailability(activeView(), viewCapabilities(activeView()).economicOverlays);
+        }).catch(function () {
+            els.chartEconomicOverlayOptions.innerHTML = '<p class="chart-overlay-picker-empty">Overlay list unavailable.</p>';
+            if (els.chartEconomicOverlayHint) {
+                els.chartEconomicOverlayHint.textContent = 'Economic overlay catalog could not be loaded.';
+            }
+            updateEconomicOverlaySummary();
+        });
     }
 
     function chartEngineStorageKey() {
@@ -143,6 +231,7 @@
             density: els.chartSeriesLimit ? els.chartSeriesLimit.value : defaults.density || 'standard',
             representation: els.chartRepresentation ? els.chartRepresentation.value : 'change',
             chartEngine: activeChartEngine(),
+            economicOverlayIds: selectedEconomicOverlayIds(),
         };
     }
 
@@ -281,10 +370,40 @@
         if (payloadMeta && Number.isFinite(Number(payloadMeta.totalRows))) {
             pills.push('<span class="chart-summary-pill">' + esc(Number(payloadMeta.totalRows).toLocaleString()) + ' rows loaded</span>');
         }
+        if (fields.economicOverlayIds && fields.economicOverlayIds.length) {
+            pills.push('<span class="chart-summary-pill is-config">' + esc('Economic overlays: ' + (economicOverlays.selectionSummary ? economicOverlays.selectionSummary(fields.economicOverlayIds) : fields.economicOverlayIds.length + ' selected')) + '</span>');
+        }
         if (stale) {
             pills.push('<span class="chart-summary-pill is-warning">Stale</span>');
         }
         return pills.join('');
+    }
+
+    function economicOverlayReferenceCards(selectionState) {
+        var rows = Array.isArray(selectionState && selectionState.economicOverlaySeries)
+            ? selectionState.economicOverlaySeries
+            : [];
+        if (!rows.length) return '';
+        return rows.map(function (series) {
+            var latest = series.latestPoint || null;
+            var valueText = latest && Number.isFinite(Number(latest.raw_value))
+                ? chartConfig.formatMetricValue('', latest.raw_value) + (series.unit ? ' ' + series.unit : '')
+                : 'Indexed';
+            var caption = series.proxy
+                ? 'Economic overlay proxy · indexed to window'
+                : 'Economic overlay · indexed to window';
+            return '' +
+                '<div class="chart-series-card secondary is-reference" style="--series-accent:' + esc(series.color || '#94a3b8') + ';" role="listitem">' +
+                    '<span class="chart-series-topline">' +
+                        '<span class="chart-series-name-wrap">' +
+                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                            '<span class="chart-series-name">' + esc(series.shortLabel || series.label || series.id || 'Overlay') + '</span>' +
+                        '</span>' +
+                        '<span class="chart-series-value">' + esc(valueText) + '</span>' +
+                    '</span>' +
+                    '<span class="chart-series-caption">' + esc(caption) + '</span>' +
+                '</div>';
+        }).join('');
     }
 
     function renderSummary(model, fields, payloadMeta, stale) {
@@ -456,7 +575,8 @@
                     '<span class="chart-series-value">Reference</span>' +
                 '</span>' +
                 '<span class="chart-series-caption">Annual inflation is always shown</span>' +
-            '</div>';
+            '</div>' +
+            economicOverlayReferenceCards(selectionState);
             return;
         }
         if (fields.view === 'market' && model.market) {
@@ -533,7 +653,7 @@
                 isSpotlight: isSpotlight,
                 color: pal[series.colorIndex % pal.length],
             });
-        }).join('');
+        }).join('') + economicOverlayReferenceCards(selectionState);
     }
 
     function productLink(row) {
@@ -691,6 +811,7 @@
         uiBound = true;
 
         initChartEngineFromStorage();
+        renderEconomicOverlayPicker();
 
         var controlHandler = function (reason) {
             if (!handlers || typeof handlers.onControlChange !== 'function') return;
@@ -723,6 +844,17 @@
                 controlHandler(control === els.chartRepresentation ? 'representation' : 'advanced');
             });
         });
+
+        if (els.chartEconomicOverlayOptions) {
+            els.chartEconomicOverlayOptions.addEventListener('change', function (event) {
+                var input = event.target;
+                if (!input || !input.matches || !input.matches('input[type="checkbox"][data-economic-series-id]')) return;
+                var ids = selectedEconomicOverlayIds();
+                if (economicOverlays.saveSelectedIds) economicOverlays.saveSelectedIds(ids);
+                updateEconomicOverlaySummary();
+                controlHandler('economic-overlay');
+            });
+        }
 
         if (els.chartSeriesList) {
             els.chartSeriesList.addEventListener('click', function (event) {
