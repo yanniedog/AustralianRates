@@ -9,6 +9,8 @@
     var apiBase = config.apiBase || (window.location.origin + '/api/economic-data');
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
     var sessionKey = 'ar-economic-data-debug-session';
+    var ECONOMIC_CHART_PALETTE = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
+
     var state = {
         catalog: null,
         range: '5Y',
@@ -17,6 +19,7 @@
         series: [],
         chart: null,
         hoveredDate: null,
+        legendHoverYmd: null,
         lastCatalogLoadedAt: '',
         lastSeriesLoadedAt: '',
         lastLoadReason: 'startup',
@@ -279,7 +282,128 @@
             crosshairLine: light ? 'rgba(37, 99, 235, 0.55)' : 'rgba(99, 179, 237, 0.6)',
             crosshairLabelBg: light ? 'rgba(255,255,255,0.98)' : 'rgba(15, 20, 25, 0.96)',
             dataFont: '"JetBrains Mono", "SF Mono", "Consolas", "Monaco", "ui-monospace", monospace',
+            stackBg: light ? 'rgba(255,255,255,0.97)' : 'rgba(15,23,42,0.96)',
+            stackBorder: light ? 'rgba(100,116,139,0.20)' : 'rgba(100,116,139,0.30)',
+            stackText: light ? '#1e293b' : '#e2e8f0',
         };
+    }
+
+    function stackOverlayTheme() {
+        var theme = getEconomicChartTheme();
+        return {
+            ttBg: theme.stackBg != null ? theme.stackBg : (document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.97)' : 'rgba(15,23,42,0.96)'),
+            ttBorder: theme.stackBorder != null ? theme.stackBorder : (document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(100,116,139,0.20)' : 'rgba(100,116,139,0.30)'),
+            ttText: theme.stackText != null ? theme.stackText : theme.text,
+        };
+    }
+
+    function ensureLegendStackEl() {
+        if (!refs.chartEl) return null;
+        var el = refs.chartEl.querySelector('.economic-chart-legend-stack');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'economic-chart-legend-stack';
+            el.setAttribute('aria-hidden', 'true');
+            refs.chartEl.appendChild(el);
+        }
+        return el;
+    }
+
+    /** Latest normalized observation on or before ymd (ISO); if ymd null, use last point per series. */
+    function resolvedNormalizedForLegend(series, ymd) {
+        var pts = (series.points || []).filter(function (p) { return p != null && p.normalized_value != null && isFinite(Number(p.normalized_value)); });
+        if (!pts.length) return null;
+        if (!ymd) {
+            var last = pts[pts.length - 1];
+            return { value: Number(last.normalized_value), atYmd: last.date };
+        }
+        var exact = pts.filter(function (p) { return p.date === ymd; })[0];
+        if (exact) return { value: Number(exact.normalized_value), atYmd: exact.date };
+        var best = null;
+        for (var i = 0; i < pts.length; i++) {
+            if (pts[i].date <= ymd) best = pts[i];
+        }
+        if (!best) return null;
+        return { value: Number(best.normalized_value), atYmd: best.date };
+    }
+
+    function formatLegendIndex(value) {
+        if (value == null || !isFinite(value)) return 'n/a';
+        return Number(value).toLocaleString('en-AU', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+    }
+
+    function syncEconomicLegendStack() {
+        var legendEl = ensureLegendStackEl();
+        if (!legendEl) return;
+        if (!state.series.length) {
+            legendEl.innerHTML = '';
+            return;
+        }
+        var t = stackOverlayTheme();
+        var chartW = refs.chartEl.clientWidth || 400;
+        var narrow = chartW < 760;
+        var compact = chartW < 420;
+        var gridLeft = compact ? 46 : (narrow ? 50 : 56);
+        var fontSize = compact ? '8px' : '9px';
+        var hoverYmd = state.legendHoverYmd;
+        legendEl.style.cssText = [
+            'position:absolute',
+            'top:8px',
+            'left:' + (gridLeft + 6) + 'px',
+            'display:flex',
+            'flex-direction:column',
+            'align-items:flex-start',
+            'gap:1px',
+            'padding:4px 6px',
+            'font-size:' + fontSize,
+            'line-height:1.4',
+            "font-family:'Space Grotesk',system-ui,sans-serif",
+            'color:' + t.ttText,
+            'background:' + t.ttBg,
+            'border:1px solid ' + t.ttBorder,
+            'border-radius:4px',
+            'z-index:5',
+            'max-width:min(42%, 220px)',
+            'max-height:calc(100% - 16px)',
+            'overflow-x:hidden',
+            'overflow-y:auto',
+            '-webkit-overflow-scrolling:touch',
+            'box-sizing:border-box',
+            'pointer-events:auto',
+            'cursor:default'
+        ].join(';');
+
+        var rows = [];
+        state.series.forEach(function (series, idx) {
+            var res = resolvedNormalizedForLegend(series, hoverYmd);
+            if (!res) return;
+            rows.push({
+                series: series,
+                color: ECONOMIC_CHART_PALETTE[idx % ECONOMIC_CHART_PALETTE.length],
+                value: res.value,
+                atYmd: res.atYmd,
+            });
+        });
+        rows.sort(function (a, b) { return b.value - a.value; });
+
+        var parts = [];
+        if (hoverYmd) {
+            parts.push(
+                '<div class="economic-chart-legend-stack-date" style="font-size:' + (compact ? '7px' : '8px') + ';opacity:0.75;white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;">' +
+                esc(formatDate(hoverYmd.indexOf('T') >= 0 ? hoverYmd : (hoverYmd + 'T12:00:00.000Z'))) +
+                '</div>'
+            );
+        }
+        rows.forEach(function (row) {
+            parts.push(
+                '<span class="economic-chart-legend-stack-row" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;max-width:100%;">' +
+                '<span style="display:inline-block;width:14px;height:2px;background:' + esc(row.color) + ';flex-shrink:0;border-radius:1px;"></span>' +
+                '<span style="opacity:0.7;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(row.series.short_label) + '</span>' +
+                '<span style="font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;">' + esc(formatLegendIndex(row.value)) + '</span>' +
+                '</span>'
+            );
+        });
+        legendEl.innerHTML = parts.join('');
     }
 
     function getEconomicChartTheme() {
@@ -350,12 +474,11 @@
         var compact = chartW < 420;
         var gridLeft = compact ? 46 : (narrow ? 50 : 56);
         var gridBottom = compact ? 36 : (narrow ? 40 : 44);
-        var palette = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
         state.chart.setOption({
             animation: false,
             textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", system-ui, sans-serif' },
             backgroundColor: 'transparent',
-            color: palette,
+            color: ECONOMIC_CHART_PALETTE,
             axisPointer: axisPointer,
             tooltip: {
                 trigger: 'axis',
@@ -377,14 +500,8 @@
                     return rows.join('<br>');
                 }
             },
-            legend: {
-                type: 'scroll',
-                top: 8,
-                textStyle: { color: theme.softText, fontSize: narrow ? 11 : 12 },
-                pageIconColor: theme.softText,
-                pageTextStyle: { color: theme.mutedText },
-            },
-            grid: { left: gridLeft, right: narrow ? 10 : 18, top: 56, bottom: gridBottom, containLabel: true },
+            legend: { show: false },
+            grid: { left: gridLeft, right: narrow ? 10 : 18, top: 20, bottom: gridBottom, containLabel: true },
             xAxis: {
                 type: 'time',
                 axisLine: styles.axisLine,
@@ -414,11 +531,21 @@
             })
         }, true);
         state.chart.off('updateAxisPointer');
+        state.chart.off('globalout');
         state.chart.on('updateAxisPointer', function (event) {
             var info = event && event.axesInfo && event.axesInfo[0];
-            renderPointDetails(info && info.value ? new Date(info.value).toISOString().slice(0, 10) : null);
+            var ymd = info && info.value != null ? new Date(info.value).toISOString().slice(0, 10) : null;
+            state.legendHoverYmd = ymd;
+            syncEconomicLegendStack();
+            renderPointDetails(ymd);
+        });
+        state.chart.on('globalout', function () {
+            state.legendHoverYmd = null;
+            syncEconomicLegendStack();
+            renderPointDetails(null);
         });
         state.chart.resize();
+        syncEconomicLegendStack();
         logEvent('info', 'Economic chart render completed', {
             seriesCount: state.series.length,
             pointCount: pointCount(state.series),
@@ -590,6 +717,7 @@
         window.addEventListener('resize', function () {
             if (!state.chart) return;
             state.chart.resize();
+            syncEconomicLegendStack();
             logEvent('info', 'Economic chart resized', {
                 width: window.innerWidth,
                 height: window.innerHeight,

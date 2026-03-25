@@ -175,6 +175,21 @@ body.ar-section-economic-data #sources {
 .economic-chart {
     width: 100%;
     min-height: 560px;
+    position: relative;
+}
+
+/* Left stack legend (matches economic report LWC charts: swatch + label + value). */
+.economic-chart-legend-stack {
+    scrollbar-width: thin;
+}
+
+.economic-chart-legend-stack::-webkit-scrollbar {
+    width: 4px;
+}
+
+.economic-chart-legend-stack::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--ar-muted) 45%, transparent);
+    border-radius: 4px;
 }
 
 .economic-empty {
