@@ -65,6 +65,15 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'pipeline' && message === 'cpi_collection_unavailable' && ctxLower.includes('403')) {
     return true
   }
+  // RBA G1 occasionally returns no parseable points despite upstream 200 responses.
+  // This is tracked separately in economic health and should not page actionable.
+  if (
+    source === 'pipeline' &&
+    message === 'cpi_collection_unavailable' &&
+    ctxLower.includes('reason=no_parseable_points')
+  ) {
+    return true
+  }
   // Economic RBA CSV/HTML fetches hit the same 403 bot wall without browser-like headers.
   // Each failed series emits markSeriesFailure ("collection failed") then a second warn ("parsing failed");
   // both must be ignored when the underlying error is upstream 403.
@@ -72,6 +81,18 @@ export function shouldIgnoreStatusActionableLog(
   if (
     source === 'economic' &&
     ctxStr.includes('upstream_not_ok:403') &&
+    (code === 'economic_series_parse_failed' ||
+      code === 'economic_series_fetch_failed' ||
+      message === 'economic series parsing failed' ||
+      message === 'economic series collection failed')
+  ) {
+    return true
+  }
+  // Economic proxy sources can intermittently return 422/429 from edge mirrors.
+  // These are upstream transport failures, not local regressions.
+  if (
+    source === 'economic' &&
+    (ctxStr.includes('upstream_not_ok:422') || ctxStr.includes('upstream_not_ok:429')) &&
     (code === 'economic_series_parse_failed' ||
       code === 'economic_series_fetch_failed' ||
       message === 'economic series parsing failed' ||
@@ -112,11 +133,37 @@ export function shouldIgnoreStatusActionableLog(
   ) {
     return true
   }
+  // Temporary D1 overload spikes can emit one-off failed queue/upsert logs that self-heal on retry.
+  if (
+    (source === 'consumer' || source === 'db') &&
+    ctxLower.includes('d1 db is overloaded. requests queued for too long.') &&
+    (code === 'queue_message_failed' ||
+      code === 'historical_task_execute_failed' ||
+      message.includes('queue_message_failed') ||
+      message.includes('historical_task_execute failed') ||
+      message.includes('td_upsert_failed'))
+  ) {
+    return true
+  }
+  if (source === 'consumer' && message === 'queue_message_retry_scheduled') {
+    return true
+  }
+  // Staleness is reported in economic health summaries and should not fail actionable checks.
+  if (source === 'economic' && (code === 'economic_series_stale' || message === 'economic series is stale')) {
+    return true
+  }
   if (isHistoricalNoSignalNoise(entry, source, message)) {
     return true
   }
   if (source === 'chart_cache_refresh' && message.startsWith(CHART_CACHE_REFRESH_NOISE_PREFIX)) {
     return true
   }
-  return lenderCode === 'ubank' && source === 'consumer' && KNOWN_UBANK_NOISE_MESSAGES.has(message)
+  if (
+    source === 'consumer' &&
+    KNOWN_UBANK_NOISE_MESSAGES.has(message) &&
+    (lenderCode === 'ubank' || lenderCode.length === 0 || message === 'daily_savings_lender_fetch empty_result')
+  ) {
+    return true
+  }
+  return false
 }
