@@ -68,6 +68,30 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores admin auth-check failures (expired sessions / unauthenticated probes)', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'admin',
+          level: 'warn',
+          message: 'auth_check_failed',
+          code: 'admin_auth_check_failed',
+        },
+        'active',
+      ),
+    ).toBe(true)
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'admin',
+          level: 'warn',
+          message: 'auth_check_failed',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores chart_cache_refresh "Failed to refresh" messages in status summaries', () => {
     expect(
       shouldIgnoreStatusActionableLog(

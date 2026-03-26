@@ -41,6 +41,10 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'admin' && (KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message) || KNOWN_ADMIN_STATUS_DUPLICATE_CODES.has(code))) {
     return true
   }
+  // Expected when the admin UI probes /auth-check without a valid session or token (expired tab, scanners).
+  if (source === 'admin' && (message === 'auth_check_failed' || code === 'admin_auth_check_failed')) {
+    return true
+  }
   if (isHistoricalNoSignalNoise(entry, source, message)) {
     return true
   }

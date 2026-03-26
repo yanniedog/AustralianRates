@@ -58,6 +58,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     const staleUnfinalized = reconciliation.stale_unfinalized
     const context = JSON.stringify({
       scanned_rows: ready.scanned_rows,
+      ready_candidate_rows: ready.ready_candidate_rows,
       finalized_rows: ready.finalized_rows,
       skipped_rows: ready.skipped_rows,
       ready_passes: ready.pass_count ?? 1,
@@ -77,7 +78,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     log.info('scheduler', 'Run lifecycle reconciliation completed', {
       context,
     })
-    if (ready.scanned_rows > 0 && ready.finalized_rows === 0) {
+    if (ready.stalled) {
       log.error('scheduler', 'Run lifecycle reconciliation stalled', {
         code: 'run_lifecycle_reconciliation_stalled',
         context,

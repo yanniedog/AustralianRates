@@ -48,6 +48,8 @@ export type ReadyFinalizationReconciliation = {
   cutoff_iso: string
   idle_minutes: number
   scanned_rows: number
+  /** Rows that passed {@link isLenderDatasetReadyForFinalization} (eligible for finalize this pass). */
+  ready_candidate_rows: number
   finalized_rows: number
   skipped_rows: number
   errors: string[]
@@ -258,6 +260,7 @@ export async function reconcileReadyFinalizations(
   const errors: string[] = []
   let finalizedRows = 0
   let skippedRows = 0
+  let readyCandidateRows = 0
 
   const rows = await db
     .prepare(
@@ -297,6 +300,8 @@ export async function reconcileReadyFinalizations(
       })
       continue
     }
+
+    readyCandidateRows += 1
 
     if (dryRun) {
       finalizedRows += 1
@@ -342,6 +347,7 @@ export async function reconcileReadyFinalizations(
     cutoff_iso: cutoff,
     idle_minutes: idleMinutes,
     scanned_rows: (rows.results ?? []).length,
+    ready_candidate_rows: readyCandidateRows,
     finalized_rows: finalizedRows,
     skipped_rows: skippedRows,
     errors,
@@ -672,11 +678,15 @@ export async function runLifecycleReconciliation(
     }
   }
 
+  const totalReadyCandidates = readyPasses.reduce((sum, pass) => sum + pass.ready_candidate_rows, 0)
+  const totalFinalized = readyPasses.reduce((sum, pass) => sum + pass.finalized_rows, 0)
+
   const readyFinalizations: ReadyFinalizationReconciliation = {
     cutoff_iso: readyPasses[readyPasses.length - 1]?.cutoff_iso || checkedAt,
     idle_minutes: readyPasses[0]?.idle_minutes || Math.max(1, Math.floor(Number(options?.idleMinutes) || 5)),
     scanned_rows: readyPasses.reduce((sum, pass) => sum + pass.scanned_rows, 0),
-    finalized_rows: readyPasses.reduce((sum, pass) => sum + pass.finalized_rows, 0),
+    ready_candidate_rows: totalReadyCandidates,
+    finalized_rows: totalFinalized,
     skipped_rows: readyPasses.reduce((sum, pass) => sum + pass.skipped_rows, 0),
     errors: readyPasses.flatMap((pass) => pass.errors).slice(-20),
     dry_run: dryRun,
@@ -687,10 +697,7 @@ export async function runLifecycleReconciliation(
       : readyPasses[readyPasses.length - 1]?.scanned_rows === 0
         ? 'exhausted'
         : 'max_passes',
-    stalled:
-      !dryRun &&
-      readyPasses.reduce((sum, pass) => sum + pass.scanned_rows, 0) > 0 &&
-      readyPasses.reduce((sum, pass) => sum + pass.finalized_rows, 0) === 0,
+    stalled: !dryRun && totalReadyCandidates > 0 && totalFinalized === 0,
   }
 
   return {
