@@ -417,21 +417,6 @@ body.ar-legal .legal-hero { animation: none; }
         flex-shrink: 0;
     }
 
-    /*
-     * chart-figure is flex-grow, but siblings below it (Chart controls, filters) were using their full
-     * content height and shrinking the plot to ~20–30% of the screen. Cap them and scroll inside.
-     */
-    body.ar-public .chart-block > .chart-options-details {
-        flex: 0 1 auto;
-        min-height: 0;
-    }
-
-    body.ar-public .chart-block > .chart-options-details[open] {
-        max-height: min(240px, 34dvh);
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
     body.ar-public .chart-block > .chart-filter-bar.chart-filter-bar-below-chart {
         flex: 0 1 auto;
         min-height: 0;
@@ -479,13 +464,8 @@ body.ar-legal .legal-hero { animation: none; }
         min-height: 0;
     }
 
-    /* Tighter rail so more height stays on the ECharts canvas */
-    body.ar-public .chart-selection-rail {
-        max-height: min(88px, 14vh);
-        flex-shrink: 0;
-    }
-
 }
+
 
 @media (max-width: 560px) {
     body.ar-public .market-intro-actions {

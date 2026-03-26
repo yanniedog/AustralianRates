@@ -117,35 +117,24 @@
         { value: '90', label: '90D' }
     ];
 
-    var BASE_CHART_VIEWS = [
-        { value: 'lenders', label: 'Leaders', icon: 'snapshot', help: 'Best rate now per lender.' },
-        { value: 'ladder', label: 'Ladder', icon: 'chart', help: 'Rank and value: who is first and by how much.' },
-        { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: section !== 'home-loans' },
-        { value: 'slope', label: 'Slope', icon: 'compare', help: 'Who moved? Rate change between two dates.', selected: section === 'home-loans' },
-        { value: 'surface', label: 'Movement', icon: 'movement', help: 'Rate over time (heatmap).' },
-        { value: 'compare', label: 'Compare', icon: 'compare', help: 'Selected products over time.' },
-        { value: 'distribution', label: 'Distribution', icon: 'distribution', help: 'Spread by group.' }
-    ];
     var TD_EXTRA_VIEWS = [
-        { value: 'timeRibbon', label: 'Ribbon (time)', icon: 'history', help: 'Rate range and mean over time, all banks.' },
-        { value: 'tdTermTime', label: 'Term vs time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.' }
+        { value: 'timeRibbon', label: 'Ribbon (time)', icon: 'history', help: 'Rate range and mean over time, all banks.', selected: false },
+        { value: 'tdTermTime', label: 'Term vs time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.', selected: false }
     ];
     var CHART_VIEWS;
     if (section === 'home-loans') {
-        var hlReportView = { value: 'homeLoanReport', label: 'Rate Report', icon: 'history', help: 'Variable home loan rates vs RBA cash rate over time.', selected: true };
-        var curveFirst = { value: 'market', label: 'Curve', icon: 'history', help: 'Market shape by structure, term, or tier.', selected: false };
-        var restViews = BASE_CHART_VIEWS.filter(function (v) { return v.value !== 'market'; }).map(function (v) { return Object.assign({}, v, { selected: false }); });
-        CHART_VIEWS = [hlReportView, curveFirst].concat(restViews);
+        CHART_VIEWS = [
+            { value: 'homeLoanReport', label: 'Rate Report', icon: 'history', help: 'Variable home loan rates vs RBA cash rate over time.', selected: true }
+        ];
     } else if (section === 'savings') {
-        // Economic report is the headline view for savings — tells the rate-vs-RBA-vs-inflation story.
-        var savingsEconomicView = { value: 'economicReport', label: 'Economic Report', icon: 'history', help: 'Savings rates vs RBA cash rate and CPI inflation over time.', selected: true };
-        var savingsOtherViews = BASE_CHART_VIEWS.map(function (v) { return Object.assign({}, v, { selected: false }); });
-        CHART_VIEWS = [savingsEconomicView].concat(savingsOtherViews);
+        CHART_VIEWS = [
+            { value: 'economicReport', label: 'Economic Report', icon: 'history', help: 'Savings rates vs RBA cash rate and CPI inflation over time.', selected: true }
+        ];
     } else if (section === 'term-deposits') {
-        var tdReportView = { value: 'termDepositReport', label: 'Rate Report', icon: 'history', help: 'Term deposit rates vs RBA cash rate and CPI over time.' };
-        CHART_VIEWS = [Object.assign({}, tdReportView, { selected: true })].concat(BASE_CHART_VIEWS.map(function (v) { return Object.assign({}, v, { selected: false }); })).concat(TD_EXTRA_VIEWS);
+        var tdReportView = { value: 'termDepositReport', label: 'Rate Report', icon: 'history', help: 'Term deposit rates vs RBA cash rate and CPI over time.', selected: true };
+        CHART_VIEWS = [tdReportView].concat(TD_EXTRA_VIEWS);
     } else {
-        CHART_VIEWS = BASE_CHART_VIEWS;
+        CHART_VIEWS = [];
     }
 
     var WORKSPACE_TABS = [
@@ -542,6 +531,9 @@
     }
 
     function chartQuestionMarkup() {
+        if (!CHART_VIEWS.length || CHART_VIEWS.length <= 1) {
+            return '';
+        }
         return '' +
             '<div class="chart-question-row" role="group" aria-label="Chart view">' +
                 CHART_VIEWS.map(function (view) {
@@ -671,27 +663,25 @@
                                     '</div>',
                                     '<div class="terminal-chart-surface">',
                                         '<div id="chart-output" class="terminal-chart-output" aria-label="Interactive chart"></div>',
-                                        '<div class="chart-selection-rail" aria-label="Series and selection">',
-                                            '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
-                                            '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
-                                            '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
-                                            '<div id="quick-compare-cards" class="quick-compare-cards" hidden></div>',
-                                        '</div>',
                                     '</div>',
                                 '</div>',
                                 '<footer class="chart-footer" aria-label="Chart overview">',
-                                    '<span id="chart-guidance" class="chart-footer-guidance hint">On demand</span>',
                                     '<div class="terminal-stat-grid chart-footer-stats" id="hero-stats">',
                                         '<div class="terminal-stat" id="stat-updated" data-help="Last collection date in the active slice." data-help-label="Updated"><span class="metric-code">' + iconText('calendar', 'Updated') + '</span><strong>...</strong></div>',
                                         '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(statSecondaryHelp) + '" data-help-label="' + esc(statSecondaryLabel) + '"><span class="metric-code">' + iconText(statSecondaryIcon, statSecondaryLabel) + '</span><strong>' + esc(statSecondaryValue) + '</strong></div>',
                                         '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>...</strong></div>',
                                         '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>...</strong></div>',
                                     '</div>',
-                                    '<div id="chart-summary" class="chart-summary chart-footer-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
                                 '</footer>',
-                                '<p id="hero-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
-                                '<details class="chart-options-details" id="chart-options-details">',
-                                    '<summary class="chart-options-summary">Chart controls</summary>',
+                                '<div class="chart-hidden-aux" hidden aria-hidden="true">',
+                                    '<span id="chart-guidance" class="chart-footer-guidance hint">On demand</span>',
+                                    '<div id="chart-summary" class="chart-summary chart-footer-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
+                                    '<div class="chart-selection-rail" aria-label="Series and selection">',
+                                        '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
+                                        '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
+                                        '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
+                                        '<div id="quick-compare-cards" class="quick-compare-cards" hidden></div>',
+                                    '</div>',
                                     '<div class="terminal-chart-controls">',
                                         '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
                                             iconText('stats', 'Y axis', 'field-code'),
@@ -720,7 +710,7 @@
                                         '<label class="terminal-field" data-help="Line, ribbon, or box-whisker. Applies to Curve view only." data-help-label="Curve style">',
                                             iconText('chart', 'Curve style (Curve only)', 'field-code'),
                                             '<select id="chart-type">' + optionsMarkup(ui.chartTypes || BASE_CHART_TYPES) + '</select>',
-                                    '</label>' +
+                                        '</label>' +
                                         (section === 'home-loans'
                                             ? '<div class="terminal-field chart-structure-filters-wrap" id="chart-structure-filters-wrap" data-help="Include or exclude rate structures in slope and curve charts." data-help-label="Show structures">' +
                                                 '<span class="field-code">' + (typeof iconText === 'function' ? iconText('compare', 'Show structures', 'field-code') : 'Show structures') + '</span>' +
@@ -728,7 +718,8 @@
                                                 '</div>'
                                             : ''),
                                     '</div>',
-                                '</details>',
+                                '</div>',
+                                '<p id="hero-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
                                 '<p id="chart-error" class="terminal-inline-feedback is-error" role="alert" hidden></p>',
                                 '<p id="chart-status" class="hint">Idle</p>',
                                 // Spotlight detail — populated on chart series interaction
