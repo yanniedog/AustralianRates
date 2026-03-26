@@ -7,22 +7,69 @@ body.ar-public .filter-pad-shell {
 }
 
 body.ar-public .terminal-field-pad {
-    gap: 10px;
+    gap: 5px;
 }
 
+/* Scenario filter chips — compact inline toggles */
 body.ar-public .filter-pad-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
-body.ar-public .filter-pad-btn,
+body.ar-public .filter-pad-btn {
+    position: relative;
+    width: auto;
+    min-width: 0;
+    padding: 4px 9px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 55%, transparent);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--ar-surface-2) 50%, transparent);
+    box-shadow: none;
+    transition:
+        border-color var(--ar-motion-fast) var(--ar-ease),
+        background var(--ar-motion-fast) var(--ar-ease);
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+body.ar-public .filter-pad-btn:hover {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 40%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-surface-3) 60%, transparent);
+}
+
+body.ar-public .filter-pad-btn.is-selected {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 70%, transparent);
+    background: color-mix(in srgb, var(--ar-showcase-spark) 14%, var(--ar-surface-2));
+}
+
+body.ar-public .filter-pad-btn-value {
+    display: block;
+    color: var(--ar-text);
+    font-size: 0.74rem;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+body.ar-public .filter-pad-empty {
+    padding: 8px 10px;
+    border: 1px dashed var(--ar-line);
+    color: var(--ar-text-muted);
+    font-size: 0.74rem;
+}
+
+/* Bank option cards retain the original square pad style */
 body.ar-public button.bank-option-card {
     position: relative;
+    display: grid;
+    align-content: end;
+    justify-content: stretch;
     width: 100%;
     min-width: 0;
-    min-height: 92px;
-    padding: 12px 10px 10px;
+    min-height: 104px;
+    padding: 18px 10px 10px;
     border: 1px solid color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
     border-radius: 0;
     background:
@@ -35,10 +82,8 @@ body.ar-public button.bank-option-card {
         border-color var(--ar-motion-fast) var(--ar-ease),
         background-color var(--ar-motion-fast) var(--ar-ease),
         box-shadow var(--ar-motion-fast) var(--ar-ease);
-    aspect-ratio: 1 / 1;
 }
 
-body.ar-public .filter-pad-btn::before,
 body.ar-public button.bank-option-card::before {
     content: "";
     position: absolute;
@@ -50,7 +95,6 @@ body.ar-public button.bank-option-card::before {
     transition: background-color var(--ar-motion-fast) var(--ar-ease);
 }
 
-body.ar-public .filter-pad-btn:hover,
 body.ar-public button.bank-option-card:hover {
     transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--ar-showcase-spark) 38%, var(--ar-line-strong));
@@ -58,7 +102,6 @@ body.ar-public button.bank-option-card:hover {
         linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-3) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 90%, transparent)) !important;
 }
 
-body.ar-public .filter-pad-btn.is-selected,
 body.ar-public button.bank-option-card.is-selected {
     border-color: color-mix(in srgb, var(--ar-showcase-spark) 74%, white 4%);
     background:
@@ -68,35 +111,12 @@ body.ar-public button.bank-option-card.is-selected {
         0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 16%, transparent);
 }
 
-body.ar-public .filter-pad-btn.is-selected::before,
 body.ar-public button.bank-option-card.is-selected::before {
     background: var(--ar-showcase-spark);
 }
 
-body.ar-public .filter-pad-btn {
-    align-items: flex-end;
-    justify-content: flex-start;
-    text-align: left;
-}
-
-body.ar-public .filter-pad-btn-value {
-    display: block;
-    width: 100%;
-    color: var(--ar-text);
-    font-size: 0.78rem;
-    font-weight: 700;
-    line-height: 1.18;
-    overflow-wrap: anywhere;
-}
-
-body.ar-public .filter-pad-empty {
-    padding: 12px 10px;
-    border: 1px dashed var(--ar-line);
-    color: var(--ar-text-muted);
-    font-size: 0.74rem;
-}
-
 body.ar-public .bank-picker-grid {
+    display: grid;
     grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
     gap: 8px;
     max-height: 344px;
@@ -104,14 +124,6 @@ body.ar-public .bank-picker-grid {
     border: 0;
     border-radius: 0;
     background: transparent;
-}
-
-body.ar-public button.bank-option-card {
-    display: grid;
-    align-content: end;
-    justify-content: stretch;
-    min-height: 104px;
-    padding-top: 18px;
 }
 
 body.ar-public .bank-option-card .bank-badge {
@@ -142,25 +154,19 @@ body.ar-public .filter-bank-count {
 }
 
 @media (max-width: 760px) {
-    body.ar-public .filter-pad-grid,
     body.ar-public .bank-picker-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    body.ar-public .bank-picker-grid {
         max-height: 200px;
         overflow-y: auto;
     }
 
-    body.ar-public .filter-pad-btn,
     body.ar-public button.bank-option-card {
-        aspect-ratio: auto;
         min-height: 86px;
     }
 }
 
 @media (max-width: 480px) {
     body.ar-public .filter-pad-btn-value {
-        font-size: 0.74rem;
+        font-size: 0.72rem;
     }
 }
