@@ -25,6 +25,9 @@
     var lenderUniverseOverviewEl = document.getElementById('lender-universe-overview');
     var lenderUniverseWrapEl = document.getElementById('lender-universe-wrap');
     var replayQueueWrapEl = document.getElementById('replay-queue-wrap');
+    var mainContentEl = document.getElementById('main-content');
+    var showFailuresOnly = true;
+    var syncFailuresFilterScheduled = false;
 
     function esc(v) {
         return String(v == null ? '' : v)
@@ -128,6 +131,139 @@
         if (!h || !h.overall_ok) return 'red';
         if (!(h.e2e && h.e2e.aligned)) return 'yellow';
         return 'green';
+    }
+
+    /** Map to data-ar-status on table rows: ok = hide in failures-only view; warn/bad = show. */
+    function severityToRowFilterAttr(sev) {
+        if (sev === 'red') return 'bad';
+        if (sev === 'yellow') return 'warn';
+        return 'ok';
+    }
+
+    function boolToRowFilterAttr(ok) {
+        return ok ? 'ok' : 'bad';
+    }
+
+    function cdrCheckRowFilterAttr(check) {
+        if (!check || !check.passed) return 'bad';
+        var sev = String(check.severity || '').toLowerCase();
+        if (sev.indexOf('warn') >= 0 || sev === 'yellow') return 'warn';
+        return 'ok';
+    }
+
+    function severityFromComponents(rows) {
+        var r = Array.isArray(rows) ? rows : [];
+        var failed = 0;
+        for (var i = 0; i < r.length; i++) {
+            if (!r[i].ok) failed++;
+        }
+        if (failed >= 3) return 'red';
+        if (failed >= 1) return 'yellow';
+        return 'green';
+    }
+
+    function severityFromIntegrityChecks(checks) {
+        var c = Array.isArray(checks) ? checks : [];
+        for (var i = 0; i < c.length; i++) {
+            if (!c[i].passed) return 'red';
+        }
+        return 'green';
+    }
+
+    function severityFromHistoryList(history) {
+        if (!Array.isArray(history) || history.length === 0) return 'green';
+        var worst = 'green';
+        for (var i = 0; i < history.length; i++) {
+            var s = rowSeverityHistory(history[i]);
+            if (s === 'red') return 'red';
+            if (s === 'yellow') worst = 'yellow';
+        }
+        return worst;
+    }
+
+    function updateFailuresToggleButtons() {
+        var bFail = document.getElementById('status-view-failures-only');
+        var bAll = document.getElementById('status-view-all');
+        if (!bFail || !bAll) return;
+        bFail.setAttribute('aria-pressed', showFailuresOnly ? 'true' : 'false');
+        bAll.setAttribute('aria-pressed', showFailuresOnly ? 'false' : 'true');
+        bFail.classList.toggle('is-active', showFailuresOnly);
+        bAll.classList.toggle('is-active', !showFailuresOnly);
+    }
+
+    function syncFailuresFilter() {
+        var main = mainContentEl || document.getElementById('main-content');
+        if (!main) return;
+        updateFailuresToggleButtons();
+        main.classList.toggle('admin-status--failures-only', showFailuresOnly);
+
+        var wrapSelectors = [
+            '#e2e-datasets-wrap',
+            '#components-wrap',
+            '#economic-series-wrap',
+            '#integrity-wrap',
+            '#coverage-gap-wrap',
+            '#lender-universe-wrap',
+            '#replay-queue-wrap',
+            '#issues-wrap',
+            '#probe-payloads-wrap',
+            '#history-wrap'
+        ];
+
+        if (!showFailuresOnly) {
+            wrapSelectors.forEach(function (sel) {
+                var wrap = main.querySelector(sel);
+                if (!wrap) return;
+                wrap.querySelectorAll('.admin-status-filter-empty-note').forEach(function (n) { n.remove(); });
+                var table = wrap.querySelector('table');
+                if (table) table.hidden = false;
+            });
+            main.querySelectorAll('section.card[data-ar-suppressed-by-filter="1"]').forEach(function (sec) {
+                sec.removeAttribute('data-ar-suppressed-by-filter');
+                sec.style.display = '';
+            });
+            return;
+        }
+
+        main.querySelectorAll('section.card').forEach(function (sec) {
+            if (sec.querySelector('#payload-viewer-wrap')) return;
+            if (!sec.classList.contains('severity-green')) return;
+            sec.style.display = 'none';
+            sec.setAttribute('data-ar-suppressed-by-filter', '1');
+        });
+
+        wrapSelectors.forEach(function (sel) {
+            var wrap = main.querySelector(sel);
+            if (!wrap) return;
+            wrap.querySelectorAll('.admin-status-filter-empty-note').forEach(function (n) { n.remove(); });
+            var table = wrap.querySelector('table');
+            if (!table) return;
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            var rows = tbody.querySelectorAll('tr');
+            if (!rows.length) return;
+            var hasNonOk = Array.prototype.some.call(rows, function (tr) {
+                return tr.getAttribute('data-ar-status') !== 'ok';
+            });
+            if (!hasNonOk) {
+                table.hidden = true;
+                var note = document.createElement('p');
+                note.className = 'admin-status-filter-empty-note';
+                note.textContent = 'No failing rows in this section.';
+                wrap.appendChild(note);
+            } else {
+                table.hidden = false;
+            }
+        });
+    }
+
+    function scheduleSyncFailuresFilter() {
+        if (syncFailuresFilterScheduled) return;
+        syncFailuresFilterScheduled = true;
+        requestAnimationFrame(function () {
+            syncFailuresFilterScheduled = false;
+            syncFailuresFilter();
+        });
     }
 
     function coverageGapRemediationScope(row) {
@@ -305,7 +441,7 @@
         var card = overallEl && overallEl.parentElement;
         if (!latest) {
             overallEl.innerHTML = '<div>No health runs recorded yet.</div>';
-            applyCardSeverity(card, 'green');
+            applyCardSeverity(card, null);
             return;
         }
         overallEl.innerHTML = [
@@ -325,7 +461,9 @@
         if (!e2e) {
             e2eEl.innerHTML = '<div>No E2E result available.</div>';
             e2eDatasetsEl.innerHTML = '<div>No per-dataset E2E result available.</div>';
-            applyCardSeverity(card, 'green');
+            applyCardSeverity(card, null);
+            var dsCardNoE2e = e2eDatasetsEl && e2eDatasetsEl.closest ? e2eDatasetsEl.closest('.card') : null;
+            applyCardSeverity(dsCardNoE2e, null);
             return;
         }
         var criteria = e2e.criteria || {};
@@ -344,13 +482,16 @@
         ].join('');
 
         applyCardSeverity(card, severityFromE2E(latest));
+        var dsCard = e2eDatasetsEl && e2eDatasetsEl.closest ? e2eDatasetsEl.closest('.card') : null;
         if (!datasets.length) {
             e2eDatasetsEl.innerHTML = '<div>No dataset probes recorded.</div>';
+            applyCardSeverity(dsCard, null);
             return;
         }
+        applyCardSeverity(dsCard, failedDatasets >= 2 ? 'red' : (failedDatasets >= 1 ? 'yellow' : 'green'));
         e2eDatasetsEl.innerHTML = '<table><thead><tr><th>Dataset</th><th>Status</th><th>Failure</th><th>Detail</th><th>Payloads</th></tr></thead><tbody>'
             + datasets.map(function (row) {
-                return '<tr>'
+                return '<tr data-ar-status="' + boolToRowFilterAttr(!!row.ok) + '">'
                     + '<td>' + esc(datasetLabel(row.dataset)) + '</td>'
                     + '<td>' + boolPill(!!row.ok) + '</td>'
                     + '<td class="mono">' + esc(row.failureCode || '') + '</td>'
@@ -363,13 +504,16 @@
 
     function renderComponents(latest) {
         var rows = latest && Array.isArray(latest.components) ? latest.components : [];
+        var compCard = componentsEl && componentsEl.closest ? componentsEl.closest('.card') : null;
         if (!rows.length) {
             componentsEl.innerHTML = '<div>No component results available.</div>';
+            applyCardSeverity(compCard, null);
             return;
         }
+        applyCardSeverity(compCard, severityFromComponents(rows));
         componentsEl.innerHTML = '<table><thead><tr><th>Component</th><th>Status</th><th>HTTP</th><th>Duration</th><th>Detail</th><th>Payload</th></tr></thead><tbody>'
             + rows.map(function (r) {
-                return '<tr>'
+                return '<tr data-ar-status="' + boolToRowFilterAttr(!!r.ok) + '">'
                     + '<td class="mono">' + esc(r.key) + '</td>'
                     + '<td>' + boolPill(!!r.ok) + '</td>'
                     + '<td>' + esc(r.status) + '</td>'
@@ -387,7 +531,7 @@
         if (!report || !report.summary) {
             if (economicOverviewEl) economicOverviewEl.innerHTML = '<div>No Economic Data coverage result available.</div>';
             if (economicSeriesEl) economicSeriesEl.innerHTML = '<div>No Economic Data series status available.</div>';
-            applyCardSeverity(card, 'green');
+            applyCardSeverity(card, null);
             return;
         }
 
@@ -420,7 +564,9 @@
         if (economicSeriesEl) {
             economicSeriesEl.innerHTML = '<table><thead><tr><th>Series</th><th>Status</th><th>Stored</th><th>Observed rows</th><th>Last observation</th><th>Last checked</th><th>Issues</th></tr></thead><tbody>'
                 + rows.map(function (row) {
-                    return '<tr class="severity-' + esc(row.severity || 'green') + '">'
+                    var sev = row.severity || 'green';
+                    var sevNorm = (sev === 'red' || sev === 'yellow') ? sev : 'green';
+                    return '<tr class="severity-' + esc(sev) + '" data-ar-status="' + severityToRowFilterAttr(sevNorm) + '">'
                         + '<td><span class="mono">' + esc(row.series_id) + '</span><br>' + esc(row.label || '') + '</td>'
                         + '<td>' + statusPillHtml(row.severity || 'green') + '</td>'
                         + '<td class="mono">' + esc(row.stored_status || row.computed_status || '') + '</td>'
@@ -438,16 +584,19 @@
     function renderIntegrity(latest) {
         var integrity = latest && latest.integrity ? latest.integrity : null;
         var checks = integrity && Array.isArray(integrity.checks) ? integrity.checks : [];
+        var intCard = integrityEl && integrityEl.closest ? integrityEl.closest('.card') : null;
         if (!checks.length) {
             integrityEl.innerHTML = '<div class="integrity-empty">'
                 + '<p>No integrity checks from the latest health run.</p>'
                 + '<p>Use <strong>Run check now</strong> above to run a health check (includes integrity), or open <a href="integrity.html">Data integrity</a> for the full audit and history.</p>'
                 + '</div>';
+            applyCardSeverity(intCard, null);
             return;
         }
+        applyCardSeverity(intCard, severityFromIntegrityChecks(checks));
         integrityEl.innerHTML = '<table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>'
             + checks.map(function (c) {
-                return '<tr>'
+                return '<tr data-ar-status="' + boolToRowFilterAttr(!!c.passed) + '">'
                     + '<td class="mono">' + esc(c.name) + '</td>'
                     + '<td>' + boolPill(!!c.passed) + '</td>'
                     + '<td><span class="mono">' + esc(JSON.stringify(c.detail || {})) + '</span></td>'
@@ -472,7 +621,7 @@
         issuesEl.innerHTML = '<table><thead><tr><th>Code</th><th>Title</th><th>Count</th><th>Action</th><th>Latest</th><th>Diagnostic</th></tr></thead><tbody>'
             + issues.map(function (i) {
                 var sev = severityFromIssueCount(i.count);
-                return '<tr class="severity-' + sev + '">'
+                return '<tr class="severity-' + sev + '" data-ar-status="' + severityToRowFilterAttr(sev) + '">'
                     + '<td class="mono">' + esc(i.code) + '</td>'
                     + '<td>' + esc(i.title) + '</td>'
                     + '<td>' + esc(i.count) + '</td>'
@@ -494,7 +643,9 @@
         }
         probePayloadsEl.innerHTML = '<table><thead><tr><th>Fetched</th><th>Source</th><th>Dataset</th><th>Status</th><th>Payload</th></tr></thead><tbody>'
             + list.map(function (event) {
-                return '<tr>'
+                var hs = event.httpStatus;
+                var rowF = (hs != null && hs >= 200 && hs < 300) ? 'ok' : 'bad';
+                return '<tr data-ar-status="' + rowF + '">'
                     + '<td class="mono">' + esc(event.fetchedAt || '') + '</td>'
                     + '<td><span class="mono">' + esc(event.sourceType || '') + '</span><br>' + esc(event.sourceUrl || '') + '</td>'
                     + '<td>' + esc(datasetLabel(event.dataset)) + '</td>'
@@ -506,14 +657,17 @@
     }
 
     function renderHistory(history) {
+        var histCard = historyEl && historyEl.closest ? historyEl.closest('.card') : null;
         if (!Array.isArray(history) || history.length === 0) {
             historyEl.innerHTML = '<div>No history yet.</div>';
+            applyCardSeverity(histCard, 'green');
             return;
         }
+        applyCardSeverity(histCard, severityFromHistoryList(history));
         historyEl.innerHTML = '<table><thead><tr><th>Status</th><th>Time</th><th>Trigger</th><th>Overall</th><th>E2E</th><th>Reason</th><th>Source mode</th><th>Duration</th><th>Diagnostic</th></tr></thead><tbody>'
             + history.map(function (h) {
                 var hSev = rowSeverityHistory(h);
-                return '<tr class="severity-' + hSev + '">'
+                return '<tr class="severity-' + hSev + '" data-ar-status="' + severityToRowFilterAttr(hSev) + '">'
                     + '<td>' + statusPillHtml(hSev) + '</td>'
                     + '<td class="mono">' + esc(h.checked_at) + '</td>'
                     + '<td>' + esc(h.trigger_source) + '</td>'
@@ -529,13 +683,16 @@
     }
 
     function renderCdrAudit(report) {
+        var cdrCard = cdrAuditWrapEl && cdrAuditWrapEl.closest ? cdrAuditWrapEl.closest('.card') : null;
         if (!report) {
             cdrAuditStatusEl.textContent = 'No audit report available.';
             cdrAuditStatusEl.className = 'admin-status-line severity-green';
             cdrAuditOverviewEl.innerHTML = '';
             cdrAuditWrapEl.innerHTML = '<div>Run the CDR audit to inspect pipeline gaps.</div>';
+            applyCardSeverity(cdrCard, null);
             return;
         }
+        applyCardSeverity(cdrCard, severityFromCdrReport(report));
         var sev = severityFromCdrReport(report);
         cdrAuditStatusEl.className = 'admin-status-line severity-' + sev;
         cdrAuditStatusEl.textContent = report.ok
@@ -556,7 +713,7 @@
         cdrAuditWrapEl.innerHTML = stageOrder.map(function (stage) {
             var checks = Array.isArray(stages[stage]) ? stages[stage] : [];
             if (checks.length === 0) {
-                return '<h3>' + esc(stage) + '</h3><div>No checks returned for this stage.</div>';
+                return '<div class="cdr-audit-stage-block"><h3>' + esc(stage) + '</h3><div>No checks returned for this stage.</div></div>';
             }
             var table = '<table><thead><tr><th>Check</th><th>Status</th><th>Severity</th><th>Summary</th><th>Technical</th></tr></thead><tbody>'
                 + checks.map(function (check) {
@@ -566,7 +723,8 @@
                         debug: check.debug || {},
                         traceback: check.traceback || null
                     };
-                    return '<tr>'
+                    var rowF = cdrCheckRowFilterAttr(check);
+                    return '<tr data-ar-status="' + rowF + '">'
                         + '<td class="mono">' + esc(check.id || '') + '</td>'
                         + '<td>' + boolPill(!!check.passed) + '</td>'
                         + '<td class="mono">' + esc(check.severity || '') + '</td>'
@@ -578,7 +736,7 @@
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
-            return '<h3>' + esc(stage) + '</h3>' + table;
+            return '<div class="cdr-audit-stage-block"><h3>' + esc(stage) + '</h3>' + table + '</div>';
         }).join('');
     }
 
@@ -611,7 +769,7 @@
                 var rSev = rowSeverityCoverageGap(row);
                 var diag = Object.assign({}, row);
                 diag.remediation_scope = coverageGapRemediationScope(row);
-                return '<tr class="severity-' + rSev + '">'
+                return '<tr class="severity-' + rSev + '" data-ar-status="' + severityToRowFilterAttr(rSev) + '">'
                     + '<td>' + esc(row.lender_code || row.bank_name || '') + '</td>'
                     + '<td>' + esc(datasetLabel(row.dataset_kind)) + '</td>'
                     + '<td>' + statusPillHtml(rSev) + '</td>'
@@ -642,7 +800,8 @@
             coverageGapRemediationScope: coverageGapRemediationScope,
             refreshCoverage: loadCoverageGapAudit,
             refreshReplayQueue: loadReplayQueue,
-            refreshStatus: loadStatus
+            refreshStatus: loadStatus,
+            onRendered: scheduleSyncFailuresFilter
         })
         : null;
 
@@ -651,7 +810,7 @@
         if (!report) {
             lenderUniverseOverviewEl.innerHTML = '';
             lenderUniverseWrapEl.innerHTML = '<div>No lender-universe audit report available.</div>';
-            applyCardSeverity(card, 'green');
+            applyCardSeverity(card, null);
             return;
         }
         applyCardSeverity(card, severityFromLenderUniverse(report));
@@ -671,7 +830,7 @@
         lenderUniverseWrapEl.innerHTML = '<table><thead><tr><th>Lender</th><th>Status</th><th>Kind</th><th>Configured endpoint</th><th>Register endpoint</th><th>Diagnostic</th></tr></thead><tbody>'
             + rows.map(function (row) {
                 var rSev = rowSeverityLenderUniverse(row);
-                return '<tr class="severity-' + rSev + '">'
+                return '<tr class="severity-' + rSev + '" data-ar-status="' + severityToRowFilterAttr(rSev) + '">'
                     + '<td>' + esc(row.lender_code || '') + '</td>'
                     + '<td>' + statusPillHtml(rSev) + '</td>'
                     + '<td class="mono">' + esc(row.status || '') + '</td>'
@@ -694,7 +853,7 @@
         replayQueueWrapEl.innerHTML = '<table><thead><tr><th>Health</th><th>Phase</th><th>Kind</th><th>Lender</th><th>Dataset</th><th>Collection date</th><th>Attempts</th><th>Next attempt</th><th>Last error</th><th>Diagnostic</th></tr></thead><tbody>'
             + rows.map(function (row) {
                 var rSev = rowSeverityReplayQueue(row);
-                return '<tr class="severity-' + rSev + '">'
+                return '<tr class="severity-' + rSev + '" data-ar-status="' + severityToRowFilterAttr(rSev) + '">'
                     + '<td>' + statusPillHtml(rSev) + '</td>'
                     + '<td class="mono">' + esc(row.status || '') + '</td>'
                     + '<td class="mono">' + esc(row.message_kind || '') + '</td>'
@@ -773,6 +932,7 @@
             setStatusLineSeverity(statusEl, 'Failed to load status.', 'red');
             overallEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function runNow() {
@@ -802,6 +962,7 @@
             var probeCard = probePayloadsEl && probePayloadsEl.closest ? probePayloadsEl.closest('.card') : null;
             applyCardSeverity(probeCard, 'red');
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function loadCdrAudit() {
@@ -815,7 +976,10 @@
             cdrAuditStatusEl.textContent = 'Failed to load CDR audit.';
             cdrAuditOverviewEl.innerHTML = '';
             cdrAuditWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
+            var cdrCardErr = cdrAuditWrapEl && cdrAuditWrapEl.closest ? cdrAuditWrapEl.closest('.card') : null;
+            applyCardSeverity(cdrCardErr, 'red');
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function loadCoverageGapAudit(forceRefresh) {
@@ -849,6 +1013,7 @@
             var coverageGapCard = coverageGapOverviewEl && coverageGapOverviewEl.closest ? coverageGapOverviewEl.closest('.card') : null;
             applyCardSeverity(coverageGapCard, 'red');
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function loadLenderUniverse(forceRefresh) {
@@ -863,6 +1028,7 @@
             var lenderCard = lenderUniverseOverviewEl && lenderUniverseOverviewEl.closest ? lenderUniverseOverviewEl.closest('.card') : null;
             applyCardSeverity(lenderCard, 'red');
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function loadReplayQueue() {
@@ -876,6 +1042,7 @@
             var replayCard = replayQueueWrapEl && replayQueueWrapEl.closest ? replayQueueWrapEl.closest('.card') : null;
             applyCardSeverity(replayCard, 'red');
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function runCdrAuditNow() {
@@ -892,6 +1059,7 @@
         } finally {
             btn.disabled = false;
         }
+        scheduleSyncFailuresFilter();
     }
 
     async function refreshAll(forceRefresh) {
@@ -903,10 +1071,29 @@
             loadLenderUniverse(!!forceRefresh),
             loadReplayQueue()
         ]);
+        scheduleSyncFailuresFilter();
     }
 
     var AUTO_REFRESH_MS = 45000;
     var refreshIntervalId = setInterval(function () { refreshAll(false); }, AUTO_REFRESH_MS);
+
+    (function bindStatusViewToggle() {
+        var btnFail = document.getElementById('status-view-failures-only');
+        var btnAll = document.getElementById('status-view-all');
+        if (btnFail) {
+            btnFail.addEventListener('click', function () {
+                showFailuresOnly = true;
+                scheduleSyncFailuresFilter();
+            });
+        }
+        if (btnAll) {
+            btnAll.addEventListener('click', function () {
+                showFailuresOnly = false;
+                scheduleSyncFailuresFilter();
+            });
+        }
+    })();
+
     // REQUIRED: cache-busts to guarantee the live deployed version loads. Do not remove.
     document.getElementById('refresh-btn').addEventListener('click', function () {
         function doReload() {

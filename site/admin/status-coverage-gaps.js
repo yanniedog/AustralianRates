@@ -16,6 +16,7 @@
         var diagnosticCell = input.diagnosticCell;
         var rowSeverityCoverageGap = input.rowSeverityCoverageGap;
         var coverageGapRemediationScope = input.coverageGapRemediationScope;
+        var onRendered = typeof input.onRendered === 'function' ? input.onRendered : null;
         var report = null;
         var lastRemediation = null;
         var actionStates = {};
@@ -96,6 +97,7 @@
             if (!report) {
                 overviewEl.innerHTML = '';
                 wrapEl.innerHTML = '<div>No coverage-gap audit report available.</div>';
+                if (onRendered) onRendered();
                 return;
             }
 
@@ -109,6 +111,7 @@
             var rows = Array.isArray(report.rows) ? report.rows : [];
             if (!rows.length) {
                 wrapEl.innerHTML = '<div>No eligible lender/day coverage gaps are currently open.</div>';
+                if (onRendered) onRendered();
                 return;
             }
 
@@ -116,11 +119,12 @@
                 + rows.map(function (row) {
                     var normalized = normalizeRow(row);
                     var rSev = rowSeverityCoverageGap ? rowSeverityCoverageGap(row) : 'green';
+                    var rowFilter = rSev === 'red' ? 'bad' : (rSev === 'yellow' ? 'warn' : 'ok');
                     var diag = Object.assign({}, row);
                     if (coverageGapRemediationScope) {
                         diag.remediation_scope = coverageGapRemediationScope(row);
                     }
-                    return '<tr class="severity-' + rSev + '">'
+                    return '<tr class="severity-' + rSev + '" data-ar-status="' + esc(rowFilter) + '">'
                         + '<td>' + esc(normalized.lender_code || normalized.bank_name || '') + '</td>'
                         + '<td>' + esc(datasetLabel(normalized.dataset_kind)) + '</td>'
                         + '<td>' + (statusPillHtml ? statusPillHtml(rSev) : esc(row.severity || '')) + '</td>'
@@ -134,6 +138,7 @@
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
+            if (onRendered) onRendered();
         }
 
         async function requestAction(action, row) {

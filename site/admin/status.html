@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="../foundation.css?v=2544dd6">
     <link rel="stylesheet" href="../public-shell.css?v=2544dd6">
     <link rel="stylesheet" href="admin-layout.css?v=2544dd6">
-    <link rel="stylesheet" href="admin-pages.css?v=2544dd6">
+    <link rel="stylesheet" href="admin-pages.css?v=statusfail1">
     <script src="../site-variant.js?v=2544dd6"></script>
     <script src="../theme.js?v=2544dd6"></script>
 </head>
@@ -26,6 +26,11 @@
             <p class="eyebrow">Diagnostics</p>
             <h1>Status dashboard</h1>
             <p class="admin-subtitle">Health, integrity, and recent issues.</p>
+        </div>
+        <div class="admin-status-view-toggle" role="group" aria-label="Which status rows to show">
+            <span class="admin-status-view-toggle-label">View:</span>
+            <button type="button" class="secondary is-active" id="status-view-failures-only" aria-pressed="true">Show only failures</button>
+            <button type="button" class="secondary" id="status-view-all" aria-pressed="false">Show all</button>
         </div>
         <div class="admin-actions">
             <button type="button" class="primary" id="run-check-btn">Run check now</button>
@@ -131,8 +136,8 @@
     <script src="admin-sidebar.js?v=2544dd6"></script>
     <script src="../ui-icons.js?v=2544dd6"></script>
     <script src="../frame.js?v=2544dd6"></script>
-    <script src="status-coverage-gaps.js?v=2544dd6"></script>
-    <script src="status-page.js?v=2544dd6"></script>
+    <script src="status-coverage-gaps.js?v=statusfail1"></script>
+    <script src="status-page.js?v=statusfail1"></script>
 </body>
 </html>
 

@@ -238,6 +238,38 @@
 .admin-status .card.severity-yellow { border-color: color-mix(in srgb, var(--ar-warning) 40%, var(--ar-line)); }
 .admin-status .card.severity-red { border-color: color-mix(in srgb, var(--ar-danger) 40%, var(--ar-line)); }
 
+.admin-status-view-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    margin-bottom: 4px;
+}
+.admin-status-view-toggle-label {
+    font-weight: 600;
+    color: var(--ar-text-muted);
+    font-size: 0.9rem;
+}
+.admin-status-view-toggle button.is-active {
+    border-color: var(--ar-accent);
+    color: var(--ar-accent);
+    font-weight: 600;
+}
+
+/* Failures-only: hide OK table rows; collapse CDR stages that only contain OK checks */
+#main-content.admin-status--failures-only table tbody tr[data-ar-status="ok"] {
+    display: none;
+}
+#main-content.admin-status--failures-only #cdr-audit-wrap .cdr-audit-stage-block:not(:has(tbody tr[data-ar-status="warn"])):not(:has(tbody tr[data-ar-status="bad"])) {
+    display: none;
+}
+
+.admin-status-filter-empty-note {
+    margin: 0.5rem 0 0;
+    color: var(--ar-text-muted);
+    font-size: 0.92rem;
+}
+
 .admin-db #db-grid {
     min-height: 320px;
     border: 1px solid var(--ar-line);
