@@ -119,6 +119,16 @@ function dailyRunWillRetry(result: DailyRunResult | null | undefined): boolean {
   return Boolean(summary && summary.ok && !summary.skipped)
 }
 
+function hasDetailGapReasons(reasons: string[]): boolean {
+  const normalized = new Set((reasons || []).map((reason) => String(reason || '').trim()).filter(Boolean))
+  return (
+    normalized.has('detail_processing_incomplete') ||
+    normalized.has('detail_fetch_events_missing') ||
+    normalized.has('zero_accepted_rows_for_nonzero_expected_details') ||
+    normalized.has('zero_written_rows_for_nonzero_expected_details')
+  )
+}
+
 export function groupCoverageGapRowsForRemediation(
   rows: CoverageGapAuditReport['rows'],
   maxScopes = DEFAULT_SCOPE_LIMIT,
@@ -230,11 +240,11 @@ export async function runCoverageGapRemediation(
           replayResult.failed > 0
             ? `Replay dispatch failed for ${replayResult.failed} queued item(s).`
             : `Dispatched ${replayResult.dispatched} replay item(s) for this scope.`
-      } else if (dailyRunWillRetry(input.dailyRunResult)) {
-        action = 'scheduled_retry_pending'
-        status = 'pending'
-        note = 'Scheduled daily retry is already enqueuing incomplete lender/dataset work for the active date.'
-      } else if (dailyRunReason(input.dailyRunResult) === 'already_fresh_for_date' || !input.dailyRunResult) {
+      } else if (
+        hasDetailGapReasons(scope.reasons) ||
+        dailyRunReason(input.dailyRunResult) === 'already_fresh_for_date' ||
+        !input.dailyRunResult
+      ) {
         const reconcileResult = await triggerDailyRun(env, {
           source: 'manual',
           force: true,
@@ -260,6 +270,10 @@ export async function runCoverageGapRemediation(
           status = 'failed'
           note = `Forced lender/day reconciliation did not queue work (${reconcile.reason || 'unknown'}).`
         }
+      } else if (dailyRunWillRetry(input.dailyRunResult)) {
+        action = 'scheduled_retry_pending'
+        status = 'pending'
+        note = 'Scheduled daily retry is already enqueuing incomplete lender/dataset work for the active date.'
       } else {
         action = 'scheduled_retry_pending'
         status = 'pending'

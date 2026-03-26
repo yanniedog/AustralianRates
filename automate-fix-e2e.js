@@ -53,17 +53,18 @@ function runWithRetries(command, args, attempts, label) {
 }
 
 function main() {
+  const diagnoseAttempts = asInt(process.env.E2E_DIAGNOSE_ATTEMPTS, 2);
   const homepageAttempts = asInt(process.env.E2E_HOMEPAGE_ATTEMPTS, 2);
   const apiAttempts = asInt(process.env.E2E_API_ATTEMPTS, 1);
   const archiveAttempts = asInt(process.env.E2E_ARCHIVE_ATTEMPTS, 1);
 
   console.log(`[${nowIso()}] START automate-fix-e2e`);
   console.log(
-    `[${nowIso()}] CONFIG homepage_attempts=${homepageAttempts} api_attempts=${apiAttempts} archive_attempts=${archiveAttempts}`,
+    `[${nowIso()}] CONFIG diagnose_attempts=${diagnoseAttempts} homepage_attempts=${homepageAttempts} api_attempts=${apiAttempts} archive_attempts=${archiveAttempts}`,
   );
 
   // Always run diagnostics first to surface production API regressions quickly.
-  if (runStep('node', ['diagnose-api.js']) !== 0) {
+  if (runWithRetries('node', ['diagnose-api.js'], diagnoseAttempts, 'diagnose-api') !== 0) {
     console.error(`[${nowIso()}] FAIL diagnose-api`);
     process.exit(1);
   }
