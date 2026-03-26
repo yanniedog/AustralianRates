@@ -31,6 +31,19 @@ describe('includeTermDepositIndexProduct', () => {
     ).toBe(false)
   })
 
+  it('excludes Macquarie business TD by product id even when name text drifts', () => {
+    expect(
+      includeTermDepositIndexProduct(
+        {
+          productCategory: 'TERM_DEPOSITS',
+          productId: 'BB001MBLTDA001',
+          name: 'Macquarie TD',
+        },
+        'macquarie',
+      ),
+    ).toBe(false)
+  })
+
   it('flags Macquarie business TD product id for supplement skip', () => {
     expect(excludeMacquarieBusinessTermDepositProductId('BB001MBLTDA001')).toBe(true)
     expect(excludeMacquarieBusinessTermDepositProductId('TD001MBLTDA001')).toBe(false)

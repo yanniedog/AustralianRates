@@ -54,6 +54,8 @@ export function includeTermDepositIndexProduct(product: JsonRecord, lenderCode?:
   if (!isTermDeposit(product)) return false
   const code = String(lenderCode || '').trim().toLowerCase()
   if (code === 'macquarie') {
+    const productId = pickText(product, ['productId', 'id'])
+    if (excludeMacquarieBusinessTermDepositProductId(productId)) return false
     const name = pickText(product, ['name', 'productName']).toUpperCase()
     if (name.includes('BUSINESS BANKING')) return false
   }
