@@ -145,6 +145,7 @@ When debugging code anywhere on the site (front end, API worker, archive worker,
 - **Query params:** `format=jsonl` or `format=text`, `limit=1000` (max 10000), `level=error` or `level=warn`, `source=...`, `code=...`, `offset=...`.
 - **Stats:** `GET .../admin/logs/system/stats` (same auth) for row count and latest timestamp.
 - **Actionable issues:** `GET .../admin/logs/system/actionable` (same auth) for grouped operational issues.
+- **Status debug bundle (E2E triage):** `GET https://www.australianrates.com/api/home-loan-rates/admin/diagnostics/status-debug-bundle` (same Bearer auth) returns one JSON document aggregating health history, problem logs (optional `since`, `log_limit`, `log_hours_before_health`), CDR audit, coverage gaps, lender universe, replay queue, probe fetch-events, diagnostics backlog, optional inlined probe payloads (`include_probe_payloads=1`, capped), and a `remediation.hints` array with suggested `POST`/`GET` paths and bodies pointing at existing admin routes (suggestions only). Narrow with `sections=health,logs,...`. From repo root: `npm run fetch-status-debug-bundle` or `node fetch-status-debug-bundle.js --out=bundle.json`. The admin **Status** page includes **Download debug bundle (JSON)** and **Copy debug bundle curl**.
 
 Ensure `.env` contains `ADMIN_API_TOKEN` (or `ADMIN_API_TOKENS`) so that scripts and agents can fetch logs. If a variable is missing, add it (see `.env.example` for names and comments).
 

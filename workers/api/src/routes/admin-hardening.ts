@@ -17,8 +17,9 @@ import {
   runLenderUniverseAudit,
 } from '../pipeline/lender-universe-audit'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { buildStatusDebugBundle } from '../pipeline/status-debug-bundle'
 import type { AppContext } from '../types'
-import { jsonError } from '../utils/http'
+import { jsonError, withNoStore } from '../utils/http'
 import type { DatasetKind } from '../../../../packages/shared/src'
 
 export const adminHardeningRoutes = new Hono<AppContext>()
@@ -230,4 +231,30 @@ adminHardeningRoutes.post('/runs/reconcile-lender-day', async (c) => {
     result,
     post_reconcile_gap_rows: gapRows,
   })
+})
+
+adminHardeningRoutes.get('/diagnostics/status-debug-bundle', async (c) => {
+  withNoStore(c)
+  const q = c.req.query()
+  const bundle = await buildStatusDebugBundle(
+    c.env,
+    {
+      sections: q.sections,
+      healthHistoryLimit: q.health_history_limit,
+      refreshCoverage: q.refresh_coverage,
+      refreshLenderUniverse: q.refresh_lender_universe,
+      logLimit: q.log_limit,
+      since: q.since,
+      logHoursBeforeHealth: q.log_hours_before_health,
+      includeProbePayloads: q.include_probe_payloads,
+      maxProbePayloads: q.max_probe_payloads,
+      maxProbePayloadBytes: q.max_probe_payload_bytes,
+      backlogLimit: q.backlog_limit,
+      coverageLimit: q.coverage_limit,
+      replayLimit: q.replay_limit,
+      probeEventLimit: q.probe_event_limit,
+    },
+    c.get('adminAuthState')?.mode ?? null,
+  )
+  return c.json(bundle)
 })

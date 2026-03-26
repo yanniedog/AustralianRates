@@ -276,6 +276,46 @@ export async function getFetchEventById(
   return mapFetchEventRow(row, bodyBytes)
 }
 
+export type FetchEventPayloadTruncatedResult =
+  | {
+      ok: true
+      event: FetchEventRecord
+      body: string
+      truncated: boolean
+      content_type: string
+    }
+  | { ok: false; error: string; event: FetchEventRecord | null }
+
+/** Read raw body from R2 for a fetch event, truncating to maxBytes (UTF-8 code units). */
+export async function readFetchEventPayloadTruncated(
+  env: RawEnv,
+  fetchEventId: number,
+  maxBytes: number,
+): Promise<FetchEventPayloadTruncatedResult> {
+  const safeMax = Math.max(256, Math.min(2_000_000, Math.floor(maxBytes)))
+  const event = await getFetchEventById(env.DB, fetchEventId)
+  if (!event) {
+    return { ok: false, error: `Fetch event not found: ${fetchEventId}`, event: null }
+  }
+  if (!event.r2Key) {
+    return { ok: false, error: `No raw payload object for fetch event: ${fetchEventId}`, event }
+  }
+  const object = await env.RAW_BUCKET.get(event.r2Key)
+  if (!object) {
+    return { ok: false, error: `Raw payload missing from storage for fetch event: ${fetchEventId}`, event }
+  }
+  const bodyText = await object.text()
+  const truncated = bodyText.length > safeMax
+  const body = truncated ? bodyText.slice(0, safeMax) : bodyText
+  return {
+    ok: true,
+    event,
+    body,
+    truncated,
+    content_type: event.contentType || 'text/plain; charset=utf-8',
+  }
+}
+
 export async function resolveFetchEventIdByPayloadIdentity(
   db: D1Database,
   input: {

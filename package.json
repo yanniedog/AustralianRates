@@ -32,6 +32,7 @@
     "audit:visual": "node visual-audit.js",
     "capture:mobile-admin": "node capture-mobile-admin.js",
     "diagnose:api": "node diagnose-api.js",
+    "fetch-status-debug-bundle": "node fetch-status-debug-bundle.js",
     "diagnose:claude-code-mcp": "node diagnose-claude-code-mcp.js",
     "diagnose": "node diagnose-local.js",
     "diagnose:local": "node diagnose-local.js",

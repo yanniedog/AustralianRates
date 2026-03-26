@@ -936,6 +936,52 @@
             });
         }
     });
+
+    async function downloadDebugBundle() {
+        var btn = document.getElementById('download-debug-bundle-btn');
+        var orig = btn ? btn.textContent : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Downloading...';
+        }
+        try {
+            var res = await portal.fetchAdmin('/diagnostics/status-debug-bundle', { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+            var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'status-debug-bundle-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setStatusLineSeverity(statusEl, 'Debug bundle download failed: ' + (err && err.message ? err.message : String(err)), 'red');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = orig;
+            }
+        }
+    }
+
+    document.getElementById('download-debug-bundle-btn').addEventListener('click', downloadDebugBundle);
+
+    document.getElementById('copy-debug-bundle-curl-btn').addEventListener('click', function () {
+        var base = typeof portal.apiBase === 'function' ? portal.apiBase() : '';
+        var fullUrl = base + '/admin/diagnostics/status-debug-bundle';
+        var curl = 'curl -sS -H "Authorization: Bearer YOUR_ADMIN_TOKEN" "' + fullUrl + '"';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(curl).then(function () {
+                var btn = document.getElementById('copy-debug-bundle-curl-btn');
+                var orig = btn.textContent;
+                btn.textContent = 'Copied';
+                setTimeout(function () { btn.textContent = orig; }, 2000);
+            });
+        }
+    });
     (function initPayloadViewerCopy() {
         var btn = document.getElementById('payload-viewer-copy-btn');
         if (btn) {
