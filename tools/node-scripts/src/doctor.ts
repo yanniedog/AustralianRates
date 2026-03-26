@@ -3,7 +3,7 @@
  * optional full status-debug-bundle written to repo-root status-debug-bundle-latest.json (gitignored) plus
  * a short console summary. Does not write production log streams to disk (use fetch-production-logs for that).
  *
- * Usage: node doctor.js [--skip-bundle] [--strict-actionable]
+ * Usage: node doctor.js [--skip-bundle] [--tolerate-actionable]
  * Requires ADMIN_API_TOKEN in repo root .env for log/actionable/bundle slices.
  */
 
@@ -109,10 +109,7 @@ function fetchFullStatusBundleToFile(): boolean {
 
 function main(): void {
   const skipBundle = process.argv.includes('--skip-bundle')
-  const strictActionable =
-    process.argv.includes('--strict-actionable') ||
-    process.argv.includes('--fail-on-actionable') ||
-    process.argv.includes('--no-tolerate-actionable')
+  const strictActionable = !process.argv.includes('--tolerate-actionable')
 
   console.log('========================================')
   console.log('AustralianRates doctor (production triage)')
