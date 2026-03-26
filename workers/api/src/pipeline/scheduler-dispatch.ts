@@ -57,6 +57,7 @@ async function runSiteHealthCron(env: EnvBindings) {
     durationMs: result.durationMs,
     componentsJson: JSON.stringify(result.components),
     integrityJson: JSON.stringify(result.integrity),
+    economicJson: JSON.stringify(result.economic),
     e2eJson: JSON.stringify(result.e2e),
     e2eAligned: result.e2e.aligned,
     e2eReasonCode: result.e2e.reasonCode,

@@ -1,4 +1,6 @@
+import { attachEconomicCoverageProbes, runEconomicCoverageAudit, type EconomicCoverageProbe, type EconomicCoverageReport } from '../db/economic-coverage-audit'
 import { runIntegrityChecks } from '../db/integrity-checks'
+import { ECONOMIC_SERIES_DEFINITIONS } from '../economic/registry'
 import { getIngestPauseConfig } from '../db/app-config'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
@@ -22,8 +24,9 @@ type ComponentStatus = {
   fetch_event_id?: number | null
 }
 
-type ProbeValidation = 'none' | 'json_object' | 'rows_payload'
+type ProbeValidation = 'none' | 'json_object' | 'rows_payload' | 'economic_series_payload'
 const ACTIONABLE_LOG_LOOKBACK_MINUTES = 30
+const ECONOMIC_SERIES_PROBE_BATCH_SIZE = 12
 
 function isEnabled(value: string | undefined): boolean {
   const normalized = String(value || '').trim().toLowerCase()
@@ -38,6 +41,7 @@ export type SiteHealthRunResult = {
   origin: string
   components: ComponentStatus[]
   integrity: Awaited<ReturnType<typeof runIntegrityChecks>>
+  economic: EconomicCoverageReport
   e2e: Awaited<ReturnType<typeof runE2ECheck>>
   failures: string[]
   actionableIssues: ReturnType<typeof toActionableIssueSummaries>
@@ -55,10 +59,19 @@ async function finalizeProbeResponse(
     sourceUrl: string
     validation: ProbeValidation
     capturePolicy: ProbeCapturePolicy
+    expectedSeriesIds?: string[]
   },
   response: Response,
   durationMs: number,
-): Promise<{ ok: boolean; status: number; durationMs: number; detail?: string; fetchEventId: number | null }> {
+): Promise<{
+  ok: boolean
+  status: number
+  durationMs: number
+  detail?: string
+  fetchEventId: number | null
+  requestedIds?: string[]
+  returnedIds?: string[]
+}> {
   const bodyText = await response.text()
 
   if (!response.ok) {
@@ -79,10 +92,12 @@ async function finalizeProbeResponse(
       durationMs,
       detail: `HTTP ${response.status}`,
       fetchEventId: captured.fetchEventId,
+      requestedIds: input.expectedSeriesIds,
     }
   }
 
   let validationError: string | null = null
+  let returnedIds: string[] | undefined
   if (input.validation !== 'none') {
     const parsed = parseJsonText(bodyText)
     if (!parsed.ok) {
@@ -92,6 +107,22 @@ async function finalizeProbeResponse(
     } else if (input.validation === 'rows_payload') {
       const rowsResult = parseRowsPayload(parsed.value)
       if (!rowsResult.ok) validationError = rowsResult.reason
+    } else if (input.validation === 'economic_series_payload') {
+      if (!isJsonObject(parsed.value)) {
+        validationError = 'payload_not_object'
+      } else {
+        const series = Array.isArray(parsed.value.series) ? parsed.value.series : []
+        returnedIds = series
+          .map((row) => (isJsonObject(row) ? String(row.id || '').trim() : ''))
+          .filter(Boolean)
+        const requestedIds = input.expectedSeriesIds ?? []
+        if (
+          returnedIds.length !== requestedIds.length ||
+          returnedIds.some((id, index) => id !== requestedIds[index])
+        ) {
+          validationError = `series_id_mismatch expected=${requestedIds.join(',')} returned=${returnedIds.join(',')}`
+        }
+      }
     }
   }
 
@@ -118,6 +149,8 @@ async function finalizeProbeResponse(
       durationMs,
       detail: `invalid_payload:${validationError}${block.reasonCode ? `:${block.reasonCode}` : ''}`,
       fetchEventId: captured.fetchEventId,
+      requestedIds: input.expectedSeriesIds,
+      returnedIds,
     }
   }
 
@@ -137,6 +170,8 @@ async function finalizeProbeResponse(
     status: response.status,
     durationMs,
     fetchEventId: captured.fetchEventId,
+    requestedIds: input.expectedSeriesIds,
+    returnedIds,
   }
 }
 
@@ -148,8 +183,17 @@ async function requestProbe(
     sourceType: string
     validation: ProbeValidation
     capturePolicy: ProbeCapturePolicy
+    expectedSeriesIds?: string[]
   },
-): Promise<{ ok: boolean; status: number; durationMs: number; detail?: string; fetchEventId: number | null }> {
+): Promise<{
+  ok: boolean
+  status: number
+  durationMs: number
+  detail?: string
+  fetchEventId: number | null
+  requestedIds?: string[]
+  returnedIds?: string[]
+}> {
   const url = `${normalizeOrigin(input.origin)}${input.path}`
   const startedAt = Date.now()
   try {
@@ -170,6 +214,7 @@ async function requestProbe(
           sourceUrl: url,
           validation: input.validation,
           capturePolicy: input.capturePolicy,
+          expectedSeriesIds: input.expectedSeriesIds,
         },
         internalResponse,
         durationMs,
@@ -195,6 +240,7 @@ async function requestProbe(
         sourceUrl: url,
         validation: input.validation,
         capturePolicy: input.capturePolicy,
+        expectedSeriesIds: input.expectedSeriesIds,
       },
       res,
       durationMs,
@@ -230,6 +276,7 @@ async function requestProbe(
       durationMs,
       detail: (error as Error)?.message || String(error),
       fetchEventId: captured.fetchEventId,
+      requestedIds: input.expectedSeriesIds,
     }
   }
 }
@@ -298,6 +345,92 @@ async function checkDataset(
   ]
 }
 
+function chunkSeriesIds(seriesIds: string[], size: number): string[][] {
+  const chunks: string[][] = []
+  for (let index = 0; index < seriesIds.length; index += size) {
+    chunks.push(seriesIds.slice(index, index + size))
+  }
+  return chunks
+}
+
+async function checkEconomicData(
+  env: EnvBindings,
+  origin: string,
+  capturePolicy: ProbeCapturePolicy,
+): Promise<{ components: ComponentStatus[]; probes: EconomicCoverageProbe[] }> {
+  const allSeriesIds = ECONOMIC_SERIES_DEFINITIONS.map((definition) => definition.id)
+  const batches = chunkSeriesIds(allSeriesIds, ECONOMIC_SERIES_PROBE_BATCH_SIZE)
+  const probeResults = await Promise.all([
+    requestProbe(env, {
+      origin,
+      path: '/api/economic-data/health',
+      sourceType: 'probe_site_health_economic_health',
+      validation: 'json_object',
+      capturePolicy,
+    }),
+    requestProbe(env, {
+      origin,
+      path: '/api/economic-data/catalog',
+      sourceType: 'probe_site_health_economic_catalog',
+      validation: 'json_object',
+      capturePolicy,
+    }),
+    ...batches.map((ids, index) =>
+      requestProbe(env, {
+        origin,
+        path: `/api/economic-data/series?ids=${ids.join(',')}`,
+        sourceType: `probe_site_health_economic_series_batch_${index + 1}`,
+        validation: 'economic_series_payload',
+        capturePolicy,
+        expectedSeriesIds: ids,
+      }),
+    ),
+  ])
+
+  const [healthProbe, catalogProbe, ...seriesProbes] = probeResults
+  const probes: EconomicCoverageProbe[] = [
+    {
+      key: 'economic_health',
+      ok: healthProbe.ok,
+      status: healthProbe.status,
+      detail: healthProbe.detail,
+      fetch_event_id: healthProbe.fetchEventId,
+    },
+    {
+      key: 'economic_catalog',
+      ok: catalogProbe.ok,
+      status: catalogProbe.status,
+      detail: catalogProbe.detail,
+      fetch_event_id: catalogProbe.fetchEventId,
+    },
+    ...seriesProbes.map((probe, index) => ({
+      key: `economic_series_batch_${index + 1}`,
+      ok: probe.ok,
+      status: probe.status,
+      detail: probe.detail,
+      requested_ids: probe.requestedIds,
+      returned_ids: probe.returnedIds,
+      fetch_event_id: probe.fetchEventId,
+    })),
+  ]
+
+  const components: ComponentStatus[] = probes.map((probe) => ({
+    key: probe.key,
+    ok: probe.ok,
+    status: probe.status,
+    duration_ms:
+      probe.key === 'economic_health'
+        ? healthProbe.durationMs
+        : probe.key === 'economic_catalog'
+          ? catalogProbe.durationMs
+          : seriesProbes[Number(probe.key.slice(-1)) - 1]?.durationMs ?? 0,
+    detail: probe.detail,
+    fetch_event_id: probe.fetch_event_id ?? null,
+  }))
+
+  return { components, probes }
+}
+
 export async function runSiteHealthChecks(
   env: EnvBindings,
   input: { triggerSource: 'scheduled' | 'manual'; origin: string },
@@ -324,8 +457,35 @@ export async function runSiteHealthChecks(
         },
       ],
     }))
+  const economicPromise = runEconomicCoverageAudit(env.DB, { checkedAt }).catch(() => ({
+    checked_at: checkedAt,
+    summary: {
+      defined_series: ECONOMIC_SERIES_DEFINITIONS.length,
+      status_rows: 0,
+      observed_series: 0,
+      ok_series: 0,
+      stale_series: 0,
+      error_series: 0,
+      missing_series: ECONOMIC_SERIES_DEFINITIONS.length,
+      invalid_rows: 0,
+      orphan_rows: 0,
+      public_probe_failures: 0,
+      severity: 'red' as const,
+    },
+    probes: [],
+    findings: [
+      {
+        code: 'economic_coverage_runtime_error',
+        severity: 'error' as const,
+        message: 'Economic coverage audit failed to execute.',
+        count: 1,
+        sample: [],
+      },
+    ],
+    per_series: [],
+  }))
 
-  const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig] = await Promise.all([
+  const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig, economicCheck, economicCoverage] = await Promise.all([
     Promise.all(
       LATEST_ALL_DATASETS.map((dataset) =>
         checkDataset(env, origin, dataset.dataset, dataset.basePath, capturePolicy),
@@ -342,10 +502,14 @@ export async function runSiteHealthChecks(
     runE2ECheck(env, { origin, capturePolicy }),
     queryProblemLogs(env.DB, { sinceTs: actionableSinceTs, limit: 500 }),
     pauseConfigPromise,
+    checkEconomicData(env, origin, capturePolicy),
+    economicPromise,
   ])
+  const economic = attachEconomicCoverageProbes(economicCoverage, economicCheck.probes)
 
   const components: ComponentStatus[] = [
     ...datasetComponents.flat(),
+    ...economicCheck.components,
     {
       key: 'homepage',
       ok: homepage.ok,
@@ -361,6 +525,7 @@ export async function runSiteHealthChecks(
     .map((c) => `${c.key}: status=${c.status}${c.detail ? ` detail=${c.detail}` : ''}`)
 
   if (!integrity.ok) failures.push('integrity_checks_failed')
+  if (economic.summary.severity === 'red') failures.push('economic_coverage_failed')
   if (!e2e.aligned) failures.push(`e2e_not_aligned:${e2e.reasonCode}`)
 
   const actionableIssues = toActionableIssueSummaries(
@@ -380,6 +545,7 @@ export async function runSiteHealthChecks(
     origin,
     components,
     integrity,
+    economic,
     e2e,
     failures,
     actionableIssues,

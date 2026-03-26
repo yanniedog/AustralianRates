@@ -12,6 +12,8 @@ const ADMIN_DB_TABLES = [
   'historical_loan_rates',
   'historical_savings_rates',
   'historical_term_deposit_rates',
+  'economic_series_observations',
+  'economic_series_status',
   'raw_payloads',
   'run_reports',
   'lender_endpoint_cache',
@@ -29,18 +31,20 @@ const ADMIN_DB_TABLES = [
 type TableName = (typeof ADMIN_DB_TABLES)[number]
 
 /** Rate tables are read/delete only via admin; all writes must go through validated ingest pipeline. */
-const RATE_TABLES_READ_ONLY: TableName[] = [
+const ADMIN_DB_READ_ONLY_TABLES: TableName[] = [
   'historical_loan_rates',
   'historical_savings_rates',
   'historical_term_deposit_rates',
+  'economic_series_observations',
+  'economic_series_status',
 ]
 
 function isAllowedTable(name: string): name is TableName {
   return ADMIN_DB_TABLES.includes(name as TableName)
 }
 
-function isRateTableReadOnly(tableName: TableName): boolean {
-  return RATE_TABLES_READ_ONLY.includes(tableName)
+function isReadOnlyTable(tableName: TableName): boolean {
+  return ADMIN_DB_READ_ONLY_TABLES.includes(tableName)
 }
 
 /** Key columns for each table (for UPDATE/DELETE and get-by-key). */
@@ -83,6 +87,8 @@ const TABLE_KEY_COLUMNS: Record<TableName, string[]> = {
   dataset_coverage_progress: ['dataset_key'],
   rba_cash_rates: ['collection_date'],
   global_log: ['id'],
+  economic_series_observations: ['series_id', 'observation_date'],
+  economic_series_status: ['series_id'],
 }
 
 export const adminDbRoutes = new Hono<AppContext>()
@@ -281,18 +287,18 @@ adminDbRoutes.get('/db/duplicate-check', async (c) => {
 adminDbRoutes.get('/db/tables', async (c) => {
   const db = c.env.DB
   const withCounts = c.req.query('counts') === 'true'
-  const tables: { name: string; count?: number }[] = []
+  const tables: { name: string; count?: number; read_only: boolean }[] = []
 
   for (const name of ADMIN_DB_TABLES) {
     if (!withCounts) {
-      tables.push({ name })
+      tables.push({ name, read_only: isReadOnlyTable(name) })
       continue
     }
     try {
       const r = await db.prepare(`SELECT count(*) as n FROM ${name}`).first<{ n: number }>()
-      tables.push({ name, count: r?.n ?? 0 })
+      tables.push({ name, count: r?.n ?? 0, read_only: isReadOnlyTable(name) })
     } catch {
-      tables.push({ name, count: 0 })
+      tables.push({ name, count: 0, read_only: isReadOnlyTable(name) })
     }
   }
 
@@ -340,6 +346,7 @@ adminDbRoutes.get('/db/tables/:tableName/schema', async (c) => {
     columns,
     key_columns: keyCols,
     has_auto_increment_pk: hasAutoPk,
+    read_only: isReadOnlyTable(tableName),
   })
 })
 
@@ -416,12 +423,12 @@ adminDbRoutes.post('/db/tables/:tableName/rows', async (c) => {
   if (!isAllowedTable(tableName)) {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
-  if (isRateTableReadOnly(tableName as TableName)) {
+  if (isReadOnlyTable(tableName as TableName)) {
     return jsonError(
       c,
       400,
-      'RATE_TABLE_READ_ONLY',
-      'Rate data must be written via the ingest pipeline; admin DB is read/delete only for this table.',
+      'TABLE_READ_ONLY',
+      'This table is read-only in the admin database explorer.',
     )
   }
 
@@ -464,12 +471,12 @@ adminDbRoutes.put('/db/tables/:tableName/rows', async (c) => {
   if (!isAllowedTable(tableName)) {
     return jsonError(c, 400, 'BAD_REQUEST', `Table not allowed: ${tableName}`)
   }
-  if (isRateTableReadOnly(tableName as TableName)) {
+  if (isReadOnlyTable(tableName as TableName)) {
     return jsonError(
       c,
       400,
-      'RATE_TABLE_READ_ONLY',
-      'Rate data must be written via the ingest pipeline; admin DB is read/delete only for this table.',
+      'TABLE_READ_ONLY',
+      'This table is read-only in the admin database explorer.',
     )
   }
 
@@ -541,7 +548,7 @@ adminDbRoutes.delete('/db/tables/:tableName/rows', async (c) => {
   const where = whereParts.join(' AND ')
   const db = c.env.DB
   const tombstoneBinds = values.map((value) => (typeof value === 'number' ? value : String(value ?? '')))
-  const deletedKeys = isRateTableReadOnly(tableName)
+  const deletedKeys = isReadOnlyTable(tableName) && tableName.startsWith('historical_')
     ? await readHistoricalDeleteKeys(db, tableName, where, tombstoneBinds)
     : []
   const result = await db.prepare(`DELETE FROM ${tableName} WHERE ${where}`).bind(...values).run()

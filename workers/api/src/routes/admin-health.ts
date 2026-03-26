@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { SITE_HEALTH_CRON_EXPRESSION } from '../constants'
 import { getLatestHealthCheckRun, insertHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
+import type { EconomicCoverageReport } from '../db/economic-coverage-audit'
 import type { E2EResult } from '../pipeline/e2e-alignment'
 import { runSiteHealthChecks } from '../pipeline/site-health'
 import type { AppContext } from '../types'
@@ -17,6 +18,7 @@ type ParsedHealthRun = {
   duration_ms: number
   components: unknown
   integrity: unknown
+  economic: EconomicCoverageReport | Record<string, unknown>
   e2e: E2EResult
   actionable: unknown
   failures: unknown
@@ -61,6 +63,13 @@ function mapHealthRow(row: Awaited<ReturnType<typeof getLatestHealthCheckRun>>):
     duration_ms: Number(row.duration_ms || 0),
     components: parseJsonSafe(row.components_json, []),
     integrity: parseJsonSafe(row.integrity_json, { ok: false, checks: [] }),
+    economic: parseJsonSafe(row.economic_json, {
+      checked_at: row.checked_at,
+      summary: { severity: 'red', defined_series: 0, status_rows: 0, observed_series: 0, ok_series: 0, stale_series: 0, error_series: 0, missing_series: 0, invalid_rows: 0, orphan_rows: 0, public_probe_failures: 0 },
+      probes: [],
+      findings: [],
+      per_series: [],
+    }) as EconomicCoverageReport,
     e2e: legacyE2E || (parseJsonSafe(row.e2e_json, fallbackE2E) as E2EResult),
     actionable: parseJsonSafe(row.actionable_json, []),
     failures: parseJsonSafe(row.failures_json, []),
@@ -103,6 +112,7 @@ adminHealthRoutes.post('/health/run', async (c) => {
     durationMs: result.durationMs,
     componentsJson: JSON.stringify(result.components),
     integrityJson: JSON.stringify(result.integrity),
+    economicJson: JSON.stringify(result.economic),
     e2eJson: JSON.stringify(result.e2e),
     e2eAligned: result.e2e.aligned,
     e2eReasonCode: result.e2e.reasonCode,
@@ -129,6 +139,7 @@ adminHealthRoutes.post('/health/run', async (c) => {
       duration_ms: result.durationMs,
       components: result.components,
       integrity: result.integrity,
+      economic: result.economic,
       e2e: result.e2e,
       actionable: result.actionableIssues,
       failures: result.failures,

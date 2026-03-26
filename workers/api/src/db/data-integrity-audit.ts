@@ -4,6 +4,7 @@
  */
 
 import { runIntegrityChecks } from './integrity-checks'
+import { runEconomicCoverageAudit } from './economic-coverage-audit'
 
 export type IntegrityFinding = {
   category: 'dead' | 'invalid' | 'duplicate' | 'erroneous' | 'indicator'
@@ -36,6 +37,7 @@ const INFORMATIONAL_CHECKS = new Set([
   'legacy_raw_payload_backlog',
   'latest_vs_global_freshness_indicator',
   'latest_vs_global_freshness',
+  'economic_stale_status_rows',
 ])
 
 function num(value: unknown): number {
@@ -56,6 +58,7 @@ export async function runDataIntegrityAudit(
   const findings: IntegrityFinding[] = []
 
   let integrity: Awaited<ReturnType<typeof runIntegrityChecks>>
+  let economicCoverage: Awaited<ReturnType<typeof runEconomicCoverageAudit>> | null = null
   try {
     integrity = await runIntegrityChecks(db, timezone, { includeAnomalyProbes: true })
   } catch (e) {
@@ -66,6 +69,17 @@ export async function runDataIntegrityAudit(
       detail: { error: errorMessage(e), hint: 'runIntegrityChecks failed; check D1 tables and schema.' },
     })
     integrity = { ok: false, checked_at: checkedAt, checks: [] }
+  }
+
+  try {
+    economicCoverage = await runEconomicCoverageAudit(db, { checkedAt })
+  } catch (e) {
+    findings.push({
+      category: 'erroneous',
+      check: 'economic_coverage_run',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'economic coverage audit failed; check economic tables and schema.' },
+    })
   }
 
   for (const c of integrity.checks) {
@@ -139,6 +153,43 @@ export async function runDataIntegrityAudit(
       passed: false,
       detail: { error: errorMessage(e), hint: 'Tables latest_*_series or historical_*_rates may be missing.' },
     })
+  }
+
+  if (economicCoverage) {
+    for (const finding of economicCoverage.findings) {
+      const category =
+        finding.code === 'economic_stale_status_rows'
+          ? 'indicator'
+          : (
+            finding.code === 'economic_unknown_status_rows' ||
+            finding.code === 'economic_unknown_observation_rows' ||
+            finding.code === 'economic_missing_status_rows' ||
+            finding.code === 'economic_missing_observation_rows'
+          )
+            ? 'dead'
+            : (
+              finding.code === 'economic_status_field_mismatches' ||
+              finding.code === 'economic_observation_field_mismatches' ||
+              finding.code === 'economic_status_value_mismatches' ||
+              finding.code === 'economic_future_observation_dates' ||
+              finding.code === 'economic_release_before_observation'
+            )
+              ? 'invalid'
+              : 'erroneous'
+
+      findings.push({
+        category,
+        check: finding.code,
+        passed: finding.count === 0,
+        count: finding.count,
+        detail: {
+          severity: finding.severity,
+          message: finding.message,
+          sample: finding.sample,
+          summary: economicCoverage.summary,
+        },
+      })
+    }
   }
 
   try {

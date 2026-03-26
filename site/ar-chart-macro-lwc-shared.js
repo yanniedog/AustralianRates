@@ -148,6 +148,36 @@
         return '<span style="' + st + 'color:' + b + ';">\u25bc</span>';
     }
 
+    // ── View mode state for report charts ────────────────────────────────────
+    var _viewModeBySection = {};
+
+    function getViewMode(section) {
+        return _viewModeBySection[section] || { mode: 'bank', focusBank: '' };
+    }
+
+    function setViewMode(section, mode, focusBank) {
+        _viewModeBySection[section] = { mode: mode || 'bank', focusBank: focusBank || '' };
+    }
+
+    function productColorVariant(baseHex, idx, total) {
+        if (total <= 1 || idx === 0) return baseHex;
+        var r = parseInt(baseHex.slice(1, 3), 16);
+        var g = parseInt(baseHex.slice(3, 5), 16);
+        var b = parseInt(baseHex.slice(5, 7), 16);
+        var alpha = Math.max(0.35, 1 - idx * 0.22);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha.toFixed(2) + ')';
+    }
+
+    function shortProductName(name) {
+        var s = String(name || '').trim();
+        if (s.length <= 20) return s;
+        return s.slice(0, 19).trim() + '\u2026';
+    }
+
+    function escHtml(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     window.AR.chartMacroLwcShared = {
         ymdToUtc: ymdToUtc,
         utcToYmd: utcToYmd,
@@ -156,5 +186,10 @@
         prepareRbaCpiForReport: prepareRbaCpiForReport,
         prevStepValue: prevStepValue,
         rateLegendArrowHtml: rateLegendArrowHtml,
+        getViewMode: getViewMode,
+        setViewMode: setViewMode,
+        productColorVariant: productColorVariant,
+        shortProductName: shortProductName,
+        escHtml: escHtml,
     };
 })();

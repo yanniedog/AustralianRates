@@ -8,6 +8,7 @@ export type HealthCheckRunRow = {
   duration_ms: number
   components_json: string
   integrity_json: string
+  economic_json?: string | null
   e2e_json?: string | null
   e2e_aligned: number
   e2e_reason_code: string | null
@@ -24,6 +25,7 @@ export type InsertHealthCheckRunInput = {
   durationMs: number
   componentsJson: string
   integrityJson: string
+  economicJson: string
   e2eJson: string
   e2eAligned: boolean
   e2eReasonCode: string | null
@@ -72,9 +74,9 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
         .prepare(
           `INSERT INTO health_check_runs (
              run_id, checked_at, trigger_source, overall_ok, duration_ms,
-             components_json, integrity_json, e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail,
+             components_json, integrity_json, economic_json, e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail,
              actionable_json, failures_json
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
         )
         .bind(
           input.runId,
@@ -84,6 +86,7 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
           input.durationMs,
           input.componentsJson,
           input.integrityJson,
+          input.economicJson,
           input.e2eJson,
           input.e2eAligned ? 1 : 0,
           input.e2eReasonCode,
@@ -134,7 +137,7 @@ export async function getLatestHealthCheckRun(db: D1Database): Promise<HealthChe
       const row = await db
         .prepare(
           `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
-                  e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+                  economic_json, e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
            FROM health_check_runs
            ORDER BY checked_at DESC
            LIMIT 1`,
@@ -168,7 +171,7 @@ export async function listHealthCheckRuns(db: D1Database, limit = 48): Promise<H
       const rows = await db
         .prepare(
           `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
-                  e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
+                  economic_json, e2e_json, e2e_aligned, e2e_reason_code, e2e_reason_detail, actionable_json, failures_json
            FROM health_check_runs
            ORDER BY checked_at DESC
            LIMIT ?1`,
