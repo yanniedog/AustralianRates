@@ -153,9 +153,16 @@ async function persistSeries(
   return { updated: rowsToUpsert.length > 0, stale }
 }
 
+function economicFailureCode(error: unknown): 'economic_series_fetch_failed' | 'economic_series_parse_failed' {
+  const msg = String((error as Error)?.message ?? error)
+  if (msg.includes('upstream_not_ok:')) return 'economic_series_fetch_failed'
+  return 'economic_series_parse_failed'
+}
+
 async function markSeriesFailure(env: EnvBindings, definition: EconomicSeriesDefinition, checkedAt: string, error: unknown) {
+  const code = economicFailureCode(error)
   log.warn('economic', 'Economic series collection failed', {
-    code: 'economic_series_fetch_failed',
+    code,
     context: JSON.stringify({
       series_id: definition.id,
       source_url: definition.sourceUrl,
@@ -326,13 +333,6 @@ export async function collectEconomicSeries(env: EnvBindings): Promise<Collectio
     } catch (error) {
       failedSeries.push(definition.id)
       await markSeriesFailure(env, definition, checkedAt, error)
-      log.warn('economic', 'Economic series parsing failed', {
-        code: 'economic_series_parse_failed',
-        context: JSON.stringify({
-          series_id: definition.id,
-          message: (error as Error)?.message ?? String(error),
-        }),
-      })
     }
   }
 

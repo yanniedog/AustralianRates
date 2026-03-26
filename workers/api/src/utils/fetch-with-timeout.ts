@@ -32,9 +32,11 @@ export type FetchWithTimeoutOptions = {
 /** rba.gov.au often responds 403 to generic fetch clients (e.g. default Workers User-Agent). */
 export const RBA_GOV_AU_FETCH_INIT: RequestInit = {
   headers: {
-    'User-Agent': 'Mozilla/5.0 (compatible; AustralianRates/1.0; +https://www.australianrates.com)',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/csv,text/plain,*/*;q=0.8',
     'Accept-Language': 'en-AU,en;q=0.9',
+    Referer: 'https://www.rba.gov.au/',
   },
 }
 
