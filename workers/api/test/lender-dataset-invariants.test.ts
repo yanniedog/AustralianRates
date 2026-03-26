@@ -20,6 +20,36 @@ function readinessSnapshotFromFixture(row: {
 }
 
 describe('lender dataset invariants', () => {
+  it('reports detail_processing_incomplete when no details finished yet (finalize queue race vs product_detail)', () => {
+    expect(
+      isLenderDatasetReadyForFinalization({
+        expected_detail_count: 1,
+        index_fetch_succeeded: 1,
+        accepted_row_count: 0,
+        written_row_count: 0,
+        detail_fetch_event_count: 0,
+        lineage_error_count: 0,
+        completed_detail_count: 0,
+        failed_detail_count: 0,
+      }),
+    ).toEqual({ ready: false, reason: 'detail_processing_incomplete' })
+  })
+
+  it('reports detail_processing_incomplete when one product is still in flight and no rows accepted yet (not zero_accepted)', () => {
+    expect(
+      isLenderDatasetReadyForFinalization({
+        expected_detail_count: 5,
+        index_fetch_succeeded: 1,
+        accepted_row_count: 0,
+        written_row_count: 0,
+        detail_fetch_event_count: 4,
+        lineage_error_count: 0,
+        completed_detail_count: 4,
+        failed_detail_count: 0,
+      }),
+    ).toEqual({ ready: false, reason: 'detail_processing_incomplete' })
+  })
+
   it('treats successful zero-expected rows as ready and complete only after finalization', () => {
     const base = {
       expected_detail_count: 0,
@@ -33,6 +63,23 @@ describe('lender dataset invariants', () => {
       finalized_at: null,
     }
 
+    expect(isLenderDatasetReadyForFinalization(base)).toEqual({ ready: true, reason: null })
+    expect(isLenderDatasetCollectionComplete(base)).toBe(false)
+    expect(isLenderDatasetCollectionComplete({ ...base, finalized_at: '2026-03-14T00:00:00.000Z' })).toBe(true)
+  })
+
+  it('treats zero-expected rows as ready even when index was never marked (no detail work)', () => {
+    const base = {
+      expected_detail_count: 0,
+      index_fetch_succeeded: 0,
+      accepted_row_count: 0,
+      written_row_count: 0,
+      detail_fetch_event_count: 0,
+      lineage_error_count: 0,
+      completed_detail_count: 0,
+      failed_detail_count: 0,
+      finalized_at: null,
+    }
     expect(isLenderDatasetReadyForFinalization(base)).toEqual({ ready: true, reason: null })
     expect(isLenderDatasetCollectionComplete(base)).toBe(false)
     expect(isLenderDatasetCollectionComplete({ ...base, finalized_at: '2026-03-14T00:00:00.000Z' })).toBe(true)

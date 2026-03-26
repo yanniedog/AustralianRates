@@ -59,6 +59,23 @@ describe('CDR discovery brand matching', () => {
     expect(selected?.endpointUrl).toBe('https://api.commbank.com.au/public/cds-au/v1/banking/products')
   })
 
+  it('matches CDR retail brand CommBank (register no longer uses full legal name)', () => {
+    const cba = lender({
+      code: 'cba',
+      name: 'CBA',
+      canonical_bank_name: 'Commonwealth Bank of Australia',
+      register_brand_name: 'CommBank',
+      products_endpoint: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
+    })
+    const commbankRetail: RegisterBrand = {
+      brandName: 'CommBank',
+      legalEntityName: '',
+      endpointUrl: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
+    }
+    expect(brandMatchScore(cba, commbankRetail)).toBeGreaterThan(0)
+    expect(selectBestMatchingBrand(cba, [commbankRetail])?.endpointUrl).toBe(commbankRetail.endpointUrl)
+  })
+
   it('does not use short lender codes as standalone brand matches', () => {
     const cba = lender({
       code: 'cba',

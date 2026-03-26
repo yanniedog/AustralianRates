@@ -143,12 +143,12 @@ describe('finalization ordering', () => {
     expect(order).toEqual(['mark_finalized'])
   })
 
-  it('does not finalize when index fetch did not succeed', async () => {
+  it('does not finalize when index fetch did not succeed and detail work was expected', async () => {
     const deps = {
       getLenderDatasetRun: async () =>
         makeRunRow({
           run_id: 'run:4',
-          expected_detail_count: 0,
+          expected_detail_count: 1,
           completed_detail_count: 0,
           index_fetch_succeeded: 0,
         }),
@@ -173,6 +173,46 @@ describe('finalization ordering', () => {
     )
 
     expect(result).toBe(false)
+  })
+
+  it('finalizes zero-expected runs without index success (no detail work to wait on)', async () => {
+    const order: string[] = []
+    const deps = {
+      getLenderDatasetRun: async () =>
+        makeRunRow({
+          run_id: 'run:4b',
+          expected_detail_count: 0,
+          completed_detail_count: 0,
+          index_fetch_succeeded: 0,
+        }),
+      finalizePresenceForRun: async () => {
+        order.push('presence')
+        return {
+          seenProducts: 0,
+          removedProducts: 0,
+          removedSeries: 0,
+        }
+      },
+      tryMarkLenderDatasetFinalized: async () => {
+        order.push('mark_finalized')
+        return true
+      },
+      markLenderDatasetDetailProcessed: async () => {},
+    } as Parameters<typeof finalizeLenderDataset>[3]
+
+    const result = await finalizeLenderDataset(
+      makeEnv(),
+      {
+        runId: 'run:4b',
+        lenderCode: 'ubank',
+        dataset: 'home_loans',
+      },
+      { throwIfNotReady: false },
+      deps,
+    )
+
+    expect(result).toBe(true)
+    expect(order).toEqual(['mark_finalized'])
   })
 
   it('does not finalize when failed detail fetches remain', async () => {

@@ -121,9 +121,6 @@ export function isLenderDatasetReadyForFinalization(
     | 'failed_detail_count'
   >,
 ): { ready: boolean; reason: string | null } {
-  if (!hasIndexSuccess(snapshot)) {
-    return { ready: false, reason: 'index_fetch_not_succeeded' }
-  }
   if (asCount(snapshot.lineage_error_count) > 0) {
     return { ready: false, reason: 'lineage_errors_present' }
   }
@@ -134,6 +131,21 @@ export function isLenderDatasetReadyForFinalization(
 
   if (expectedDetails <= 0) {
     return { ready: true, reason: null }
+  }
+  if (!hasIndexSuccess(snapshot)) {
+    return { ready: false, reason: 'index_fetch_not_succeeded' }
+  }
+  // Before data checks: if detail jobs are still in the queue, report incomplete — not "zero accepted".
+  // Otherwise lender_finalize (enqueued with product_detail) races ahead and falsely signals validation failure.
+  // The "one short" bypass is only for the known-stuck case where some rows already landed; if accepted is
+  // still zero, one product may still be in flight — keep reporting incomplete, not zero_accepted.
+  if (processedDetails < expectedDetails) {
+    const missing = expectedDetails - processedDetails
+    const oneShortWithData =
+      missing === 1 && completedDetails >= 1 && asCount(snapshot.accepted_row_count) > 0
+    if (!oneShortWithData) {
+      return { ready: false, reason: 'detail_processing_incomplete' }
+    }
   }
   if (asCount(snapshot.accepted_row_count) <= 0) {
     return { ready: false, reason: 'zero_accepted_rows_for_nonzero_expected_details' }

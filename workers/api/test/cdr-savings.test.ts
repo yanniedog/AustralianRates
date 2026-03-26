@@ -17,7 +17,7 @@ const CBA_LENDER: LenderConfig = {
   code: 'cba',
   name: 'CBA',
   canonical_bank_name: 'Commonwealth Bank of Australia',
-  register_brand_name: 'Commonwealth Bank of Australia',
+  register_brand_name: 'CommBank',
   seed_rate_urls: [],
   products_endpoint: 'https://api.commbank.com.au/public/cds-au/v1/banking/products',
 }

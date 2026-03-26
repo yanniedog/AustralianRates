@@ -6,7 +6,7 @@
       "code": "cba",
       "name": "CBA",
       "canonical_bank_name": "Commonwealth Bank of Australia",
-      "register_brand_name": "Commonwealth Bank of Australia",
+      "register_brand_name": "CommBank",
       "products_endpoint": "https://api.commbank.com.au/public/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.commbank.com.au/home-loans/rates-and-fees.html"
