@@ -2,7 +2,7 @@
  * Production triage prelude (elite-debugger workflow): public API diagnostics, admin log stats/actionable,
  * optional slim status-debug-bundle (meta + remediation counts). Does not write local log copies.
  *
- * Usage: node doctor.js [--skip-bundle]
+ * Usage: node doctor.js [--skip-bundle] [--tolerate-actionable]
  * Requires ADMIN_API_TOKEN in repo root .env for log/actionable/bundle slices.
  */
 
@@ -93,6 +93,7 @@ async function fetchSlimBundle(): Promise<void> {
 
 async function main(): Promise<void> {
   const skipBundle = process.argv.includes('--skip-bundle')
+  const tolerateActionable = process.argv.includes('--tolerate-actionable')
 
   console.log('========================================')
   console.log('AustralianRates doctor (production triage)')
@@ -102,7 +103,9 @@ async function main(): Promise<void> {
   runNode('diagnose-api.js', [])
 
   console.log('\n--- Step 2: admin log stats + actionable (requires token) ---\n')
-  runNode('fetch-production-logs.js', ['--stats', '--actionable'])
+  const logArgs = ['--stats', '--actionable']
+  if (!tolerateActionable) logArgs.push('--fail-on-actionable')
+  runNode('fetch-production-logs.js', logArgs)
 
   if (!skipBundle) {
     console.log('\n--- Step 3: slim status-debug-bundle ---\n')
@@ -116,4 +119,7 @@ async function main(): Promise<void> {
   console.log('========================================')
 }
 
-void main()
+void main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

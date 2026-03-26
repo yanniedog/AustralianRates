@@ -3,7 +3,7 @@
  * Requires ADMIN_API_TOKEN in repo root .env.
  * Always fetches a fresh copy from the production API; never reads from local files.
  * If you redirect output to a local file (e.g. errors.jsonl), delete that file after processing.
- * Usage: node fetch-production-logs.js [--errors] [--warn] [--actionable] [--stats] [--limit=N] [--since=ISO]
+ * Usage: node fetch-production-logs.js [--errors] [--warn] [--actionable] [--stats] [--fail-on-actionable] [--limit=N] [--since=ISO]
  */
 
 const ORIGIN = process.env.API_BASE
@@ -76,6 +76,7 @@ async function main(): Promise<void> {
   const doWarn = args.includes('--warn');
   const doActionable = args.includes('--actionable') || args.length === 0;
   const doStats = args.includes('--stats') || args.length === 0;
+  const failOnActionable = args.includes('--fail-on-actionable');
   const sinceArg = args.find((a) => a.startsWith('--since='));
   const since = sinceArg ? sinceArg.slice('--since='.length).trim() : '';
 
@@ -98,6 +99,19 @@ async function main(): Promise<void> {
         `${BASE}/actionable?limit=50`
       );
       console.log(JSON.stringify(actionable, null, 2));
+      const issues = Array.isArray(actionable.issues) ? actionable.issues : [];
+      if (failOnActionable) {
+        if (!actionable.ok) {
+          console.error('[fetch-production-logs] --fail-on-actionable: actionable response ok=false.');
+          process.exit(1);
+        }
+        if (issues.length > 0) {
+          console.error(
+            `[fetch-production-logs] --fail-on-actionable: ${issues.length} actionable issue group(s). See JSON above.`,
+          );
+          process.exit(1);
+        }
+      }
     }
     if (doErrors) {
       const url = queryParams(`${BASE}`, { format: 'jsonl', limit: String(limit), level: 'error' });
@@ -117,4 +131,7 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+main().catch((e) => {
+  console.error((e as Error).message);
+  process.exit(1);
+});

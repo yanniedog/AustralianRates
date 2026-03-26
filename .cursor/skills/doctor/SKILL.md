@@ -27,12 +27,18 @@ npm run doctor
 This runs in order:
 
 1. **`node diagnose-api.js`** — public production API checks and benchmarks against `https://www.australianrates.com` (or `TEST_URL` / `API_BASE` if set).
-2. **`node fetch-production-logs.js --stats --actionable`** — **fresh** stats and actionable JSON from production (no full log file written by default).
-3. **`GET .../admin/diagnostics/status-debug-bundle?sections=meta,remediation`** — prints `health_run_id`, `health_checked_at`, and `remediation_hint_count` only.
+2. **`node fetch-production-logs.js --stats --actionable --fail-on-actionable`** — **fresh** stats and actionable JSON from production (no full log file written by default). **`--fail-on-actionable`** is added by doctor so the run **exits non-zero** if the actionable endpoint returns any issue groups (so “API benchmarks pass” is not mistaken for “nothing to fix”).
+3. **`GET .../admin/diagnostics/status-debug-bundle?sections=meta,remediation`** — prints `health_run_id`, `health_checked_at`, and `remediation_hint_count` only. Bundle HTTP errors are warnings only; they do not change the exit code once steps 1–2 succeeded.
+
+**Reading the output**
+
+- **`stats.count`** is the **total number of rows** in the production error log store (historical volume), not “new failures in this run.” It does not by itself fail doctor.
+- **Exit code:** `npm run doctor` exits **1** if step 1 fails **or** step 2 reports actionable issue groups. Use **`node doctor.js --tolerate-actionable`** only when you intentionally want the old behaviour (signal-only, always exit 0 after successful API + token checks).
 
 Variants:
 
 - **`node doctor.js --skip-bundle`** — omit the bundle HTTP call (faster or if the route is not yet deployed).
+- **`node doctor.js --tolerate-actionable`** — do not pass `--fail-on-actionable` to the log fetch (exit 0 even when actionable lists issues).
 
 ## Step 2 — Deepen signal (when triage needs more)
 
@@ -54,7 +60,7 @@ Variants:
 npm run doctor:verify
 ```
 
-Runs **`npm run doctor`** then **`npm run test:api`**, **`npm run test:archive`**, and **`npm run test:homepage`** (production URL). Do not mark deploy-related work complete until these pass or the user explicitly waives checks (per AGENTS.md).
+Runs **`npm run doctor`** then **`npm run test:api`**, **`npm run test:archive`**, and **`npm run test:homepage`** (production URL). Because doctor now fails on actionable issues, **`doctor:verify` stays red until production actionable is clean** (or you waive and use `node doctor.js --tolerate-actionable` for a signal-only prelude). Do not mark deploy-related work complete until these pass or the user explicitly waives checks (per AGENTS.md).
 
 ## References
 
