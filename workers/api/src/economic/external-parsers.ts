@@ -7,19 +7,16 @@ export function parseRbnzOcrText(
   sourceUrl: string,
   proxy: boolean,
 ): EconomicObservationInput[] {
-  const lines = String(raw || '')
+  const text = String(raw || '')
+  const lines = text
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
 
-  const rows: EconomicObservationInput[] = []
-  for (const line of lines) {
-    const match = line.match(/^(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s+([0-9.]+)(?:\s|\[|$)/)
-    if (!match) continue
-    const observationDate = parseFlexibleDate(match[1])
-    const value = parseNumber(match[2])
-    if (!observationDate || value == null) continue
-    rows.push({
+  const byDate = new Map<string, EconomicObservationInput>()
+  const pushRow = (observationDate: string | null, value: number | null) => {
+    if (!observationDate || value == null) return
+    byDate.set(observationDate, {
       seriesId,
       observationDate,
       value,
@@ -33,7 +30,22 @@ export function parseRbnzOcrText(
     })
   }
 
-  return rows
+  for (const line of lines) {
+    const match = line.match(/^(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s+([0-9.]+)(?:\s|\[|$)/)
+    if (!match) continue
+    pushRow(parseFlexibleDate(match[1]), parseNumber(match[2]))
+  }
+
+  if (byDate.size === 0) {
+    const flattened = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    const loose = /(\d{1,2}\s+[A-Za-z]+\s+\d{4})[^0-9%]{0,80}([0-9]{1,2}(?:\.[0-9]+)?)\s*%/g
+    let match: RegExpExecArray | null
+    while ((match = loose.exec(flattened)) !== null) {
+      pushRow(parseFlexibleDate(match[1]), parseNumber(match[2]))
+    }
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => b.observationDate.localeCompare(a.observationDate))
 }
 
 export function parseFedTargetHistoryHtml(

@@ -378,6 +378,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
   const missingStatusRows = perSeries.filter((row) => row.issues.includes('missing_status'))
   const missingObservationRows = perSeries.filter((row) => row.issues.includes('missing_observations'))
   const errorStatusRows = perSeries.filter((row) => row.issues.includes('error_status'))
+  const hardErrorStatusRows = errorStatusRows.filter((row) => row.proxy !== true)
+  const proxyErrorStatusRows = errorStatusRows.filter((row) => row.proxy === true)
   const staleStatusRows = perSeries.filter((row) => row.issues.includes('stale_status') && !row.issues.includes('error_status'))
   const statusFieldMismatchRows = perSeries.filter((row) =>
     row.issues.some((issue) => issue === 'status_proxy_mismatch' || issue === 'status_source_url_mismatch'),
@@ -416,8 +418,19 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     code: 'economic_error_status_rows',
     severity: 'error',
     message: 'Economic series currently report error status.',
-    count: errorStatusRows.length,
-    sample: errorStatusRows.map((row) => ({
+    count: hardErrorStatusRows.length,
+    sample: hardErrorStatusRows.map((row) => ({
+      series_id: row.series_id,
+      status_message: row.status_message,
+      last_checked_at: row.last_checked_at,
+    })),
+  })
+  pushFinding(findings, {
+    code: 'economic_proxy_error_status_rows',
+    severity: 'warn',
+    message: 'Proxy economic series currently report error status.',
+    count: proxyErrorStatusRows.length,
+    sample: proxyErrorStatusRows.map((row) => ({
       series_id: row.series_id,
       status_message: row.status_message,
       last_checked_at: row.last_checked_at,
@@ -475,7 +488,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     observed_series: perSeries.filter((row) => row.observation_row_count > 0).length,
     ok_series: perSeries.filter((row) => row.computed_status === 'ok' && row.severity === 'green').length,
     stale_series: staleStatusRows.length,
-    error_series: errorStatusRows.length,
+    error_series: hardErrorStatusRows.length,
     missing_series: missingStatusRows.length,
     invalid_rows: invalidRows,
     orphan_rows:

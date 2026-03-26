@@ -286,7 +286,12 @@ async function collectLendingProxy(
 
 async function collectRbnzSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
   if (definition.collector.kind !== 'rbnz_ocr_history') return []
-  const primaryText = await fetchText(definition.collector.url, env, 'economic_rbnz_ocr')
+  let primaryText = ''
+  try {
+    primaryText = await fetchText(definition.collector.url, env, 'economic_rbnz_ocr')
+  } catch {
+    // fall through to transport mirror
+  }
   const primaryRows = parseRbnzOcrText(primaryText, definition.id, definition.sourceUrl, definition.proxy)
   if (primaryRows.length > 0) return primaryRows
   const transportText = await fetchText(definition.collector.transportUrl, env, 'economic_rbnz_ocr')
