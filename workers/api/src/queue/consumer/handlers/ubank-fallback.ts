@@ -198,6 +198,29 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
         ` inspected=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
         ` statuses=${serializeForLog(observedUpstreamStatuses)}`,
     })
+  } else if (pageDiagnostics.length === UBANK_HOME_LOAN_FALLBACK_URLS.length) {
+    await setLenderDatasetExpectedDetails(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+      bankName: lender.canonical_bank_name,
+      collectionDate: job.collectionDate,
+      expectedDetailCount: 0,
+    })
+    await markLenderDatasetIndexFetchSucceeded(env.DB, {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      dataset: 'home_loans',
+    })
+    log.warn('consumer', 'ubank_home_fallback_index_closed_after_exhausted_pages', {
+      runId: job.runId,
+      lenderCode: job.lenderCode,
+      code: 'ubank_home_fallback_all_pages_blocked_or_empty',
+      context:
+        `pages=${pageDiagnostics.length}` +
+        ` inspected=${inspectedHtml} dropped_by_parser=${droppedByParser}` +
+        ` statuses=${serializeForLog(observedUpstreamStatuses)}`,
+    })
   }
 
   await markProductsSeenForRun(env.DB, {
@@ -394,6 +417,10 @@ export async function handleDailyUbankSavingsFallback(
       fetchEventId: page.fetchEventId,
     }))
 
+  const successfulSavingsPageFetches = pageResults.filter(
+    (page) => !page.upstreamBlock.reasonCode && page.status >= 200 && page.status < 400,
+  ).length
+
   if (selectedDatasets.has('savings')) {
     const parsed = parseUbankSavingsRows({
       lender,
@@ -430,6 +457,51 @@ export async function handleDailyUbankSavingsFallback(
         runId: job.runId,
         lenderCode: job.lenderCode,
         dataset: 'savings',
+      })
+    } else if (successfulSavingsPageFetches > 0) {
+      await setLenderDatasetExpectedDetails(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName: lender.canonical_bank_name,
+        collectionDate: job.collectionDate,
+        expectedDetailCount: 0,
+      })
+      await markLenderDatasetIndexFetchSucceeded(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+      })
+      log.info('consumer', 'ubank_savings_fallback_index_ok_without_product_ids', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        context:
+          `successful_pages=${successfulSavingsPageFetches}` +
+          ` inspected=${parsed.inspected} dropped_by_parser=${parsed.dropped}` +
+          ` statuses=${serializeForLog(observedUpstreamStatuses)}`,
+      })
+    } else if (pageResults.length === pageUrls.length) {
+      await setLenderDatasetExpectedDetails(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+        bankName: lender.canonical_bank_name,
+        collectionDate: job.collectionDate,
+        expectedDetailCount: 0,
+      })
+      await markLenderDatasetIndexFetchSucceeded(env.DB, {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        dataset: 'savings',
+      })
+      log.warn('consumer', 'ubank_savings_fallback_index_closed_after_exhausted_pages', {
+        runId: job.runId,
+        lenderCode: job.lenderCode,
+        code: 'ubank_savings_fallback_all_pages_blocked_or_fetch_failed',
+        context:
+          `pages=${pageResults.length}` +
+          ` inspected=${parsed.inspected} dropped_by_parser=${parsed.dropped}` +
+          ` statuses=${serializeForLog(observedUpstreamStatuses)}`,
       })
     }
     await markProductsSeenForRun(env.DB, {
