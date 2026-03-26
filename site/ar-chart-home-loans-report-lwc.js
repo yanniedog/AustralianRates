@@ -407,14 +407,21 @@
             rbaSeriesApi.setData(M.fillForwardDaily(rbaData.points, 'date', 'rate', rbaStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
         }
 
-        // Overlays
+        // Overlays (keep APIs for crosshair + left legend)
+        var overlaySeriesApis = [];
         overlayDefs.forEach(function (series) {
             var data = (series.points || []).map(function (point) {
                 if (!Number.isFinite(Number(point.normalized_value))) return { time: M.ymdToUtc(point.date) };
                 return { time: M.ymdToUtc(point.date), value: point.normalized_value };
             });
             if (!data.length) return;
-            chart.addSeries(L.LineSeries, { color: series.color, lineWidth: 2, lineStyle: LineStyle.Dashed, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3, priceScaleId: 'left', priceFormat: { type: 'price', precision: 1, minMove: 0.1 } }).setData(data);
+            var api = chart.addSeries(L.LineSeries, { color: series.color, lineWidth: 2, lineStyle: LineStyle.Dashed, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3, priceScaleId: 'left', priceFormat: { type: 'price', precision: 1, minMove: 0.1 } });
+            api.setData(data);
+            overlaySeriesApis.push({
+                api: api,
+                def: series,
+                lastValue: M.lastFiniteNormalizedOverlay(series.points),
+            });
         });
 
         chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
@@ -442,18 +449,36 @@
             if (cpiVal != null) { var pc = M.prevStepValue(cpiPoints, ymd || ctxMax, 'value'); var ac = M.rateLegendArrowHtml(Number(cpiVal), pc, 'mortgage', t.good, t.bad); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span><span style="color:' + t.cpi + ';opacity:0.8;">CPI</span><span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiVal).toFixed(1) + '%' + ac + '</span></span>'); }
             return items;
         }
-        function refreshLegend(bankItems, rbaVal, cpiVal, ymd) {
+        function buildEconomicOverlayLegendItems(param) {
+            var items = [];
+            overlaySeriesApis.forEach(function (entry) {
+                var val = entry.lastValue;
+                if (param && param.seriesData && entry.api) {
+                    var sd = param.seriesData.get(entry.api);
+                    val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
+                }
+                var row = M.economicOverlayLegendItemHtml(entry.def.color, entry.def.shortLabel || entry.def.label, val);
+                if (row) items.push(row);
+            });
+            return items;
+        }
+        function refreshLegend(bankItems, rbaVal, cpiVal, ymd, param) {
             var parts = [];
             if (ymd) parts.push('<span style="font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;">' + fmtFull(ymd) + '</span>');
             parts = parts.concat(buildLegendItems(bankItems, ymd));
             parts = parts.concat(buildMacroItems(rbaVal, cpiVal, ymd));
+            var econItems = buildEconomicOverlayLegendItems(param || null);
+            if (econItems.length) {
+                parts.push('<span aria-hidden="true" style="display:block;width:100%;height:0;margin-top:3px;margin-bottom:1px;border-top:1px solid rgba(148,163,184,0.2);"></span>');
+                parts = parts.concat(econItems);
+            }
             legendEl.innerHTML = parts.join('');
         }
 
         var defaultEntries = seriesApis.map(function (si) { return { line: si.line, value: si.lastValue, stepPoints: si.stepPoints }; });
         var defaultRba = (rbaSeriesApi && rbaData.points.length) ? rbaData.points[rbaData.points.length - 1].rate : null;
         var defaultCpi = (cpiSeriesApi && cpiPoints.length) ? cpiPoints[cpiPoints.length - 1].value : null;
-        refreshLegend(defaultEntries, defaultRba, defaultCpi, null);
+        refreshLegend(defaultEntries, defaultRba, defaultCpi, null, null);
         var defaultLegendHTML = legendEl.innerHTML;
         mount.appendChild(legendEl);
 
@@ -468,8 +493,13 @@
             if (rbaSeriesApi) { var rbaDataPoint = param.seriesData && param.seriesData.get(rbaSeriesApi); if (rbaDataPoint && Number.isFinite(rbaDataPoint.value)) rbaValue = rbaDataPoint.value; }
             var bankItems = [];
             seriesApis.forEach(function (entry) { var point = param.seriesData && param.seriesData.get(entry.api); var value = point && Number.isFinite(point.value) ? point.value : null; if (value != null) bankItems.push({ line: entry.line, value: value, stepPoints: entry.stepPoints }); });
-            if (!bankItems.length && rbaValue == null && cpiValue == null) { legendEl.innerHTML = defaultLegendHTML; return; }
-            refreshLegend(bankItems, rbaValue, cpiValue, time);
+            var hasEconOverlay = false;
+            overlaySeriesApis.forEach(function (e) {
+                var sd = param.seriesData && param.seriesData.get(e.api);
+                if (sd && Number.isFinite(sd.value)) hasEconOverlay = true;
+            });
+            if (!bankItems.length && rbaValue == null && cpiValue == null && !hasEconOverlay) { legendEl.innerHTML = defaultLegendHTML; return; }
+            refreshLegend(bankItems, rbaValue, cpiValue, time, param);
         });
 
         // Click → info box

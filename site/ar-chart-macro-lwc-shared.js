@@ -178,6 +178,29 @@
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    /** Last finite normalized_value along an economic overlay point list (chronological). */
+    function lastFiniteNormalizedOverlay(points) {
+        var last = null;
+        (Array.isArray(points) ? points : []).forEach(function (p) {
+            if (p && Number.isFinite(Number(p.normalized_value))) last = Number(p.normalized_value);
+        });
+        return last;
+    }
+
+    /**
+     * HTML row for indexed economic overlay in the report legend (dashed swatch matches LWC overlay series).
+     */
+    function economicOverlayLegendItemHtml(color, label, value) {
+        if (value == null || !Number.isFinite(Number(value))) return '';
+        var c = String(color || '#64748b').replace(/[<>"'&]/g, '');
+        var lbl = escHtml(String(label || ''));
+        var v = Number(value).toFixed(1);
+        return '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
+            '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + c + ';flex-shrink:0;"></span>' +
+            '<span style="opacity:0.75;color:' + c + ';">' + lbl + '</span>' +
+            '<span style="font-variant-numeric:tabular-nums;font-weight:600;color:' + c + ';">' + v + '</span></span>';
+    }
+
     window.AR.chartMacroLwcShared = {
         ymdToUtc: ymdToUtc,
         utcToYmd: utcToYmd,
@@ -191,5 +214,7 @@
         productColorVariant: productColorVariant,
         shortProductName: shortProductName,
         escHtml: escHtml,
+        lastFiniteNormalizedOverlay: lastFiniteNormalizedOverlay,
+        economicOverlayLegendItemHtml: economicOverlayLegendItemHtml,
     };
 })();

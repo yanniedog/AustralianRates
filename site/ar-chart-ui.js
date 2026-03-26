@@ -140,14 +140,16 @@
         els.chartEconomicOverlayHint.textContent = 'Economic overlays appear in Rate Report and Compare views.';
     }
 
-    function economicOverlayOptionMarkup(series, checked) {
+    function economicOverlayOptionMarkup(series, checked, lineColor) {
         var id = String(series && series.id || '');
         var label = String((series && (series.short_label || series.shortLabel || series.label)) || id);
         var caption = String(series && series.category_label || '');
         var titleText = caption ? (label + ' — ' + caption) : label;
+        var swatch = String(lineColor || '#64748b').replace(/[<>"'&;]/g, '');
         return '' +
             '<label class="chart-overlay-option" title="' + esc(titleText) + '">' +
                 '<input type="checkbox" data-economic-series-id="' + esc(id) + '"' + (checked ? ' checked' : '') + '>' +
+                '<span class="chart-overlay-option-swatch" style="--chart-overlay-swatch:' + swatch + '" aria-hidden="true"></span>' +
                 '<span class="chart-overlay-option-body">' +
                     '<span class="chart-overlay-option-label">' + esc(label) + '</span>' +
                     (caption ? '<span class="chart-overlay-option-caption">' + esc(caption) + '</span>' : '') +
@@ -164,9 +166,18 @@
                 selected[String(id)] = true;
             });
             var rows = [];
+            var colorIdx = 0;
             (catalog && catalog.categories || []).forEach(function (category) {
                 var seriesMarkup = (category.series || []).map(function (series) {
-                    return economicOverlayOptionMarkup(Object.assign({ category_label: category.label || category.id || '' }, series), !!selected[String(series.id || '')]);
+                    var col = economicOverlays.colorForSeries
+                        ? economicOverlays.colorForSeries(series.id, colorIdx)
+                        : '#64748b';
+                    colorIdx += 1;
+                    return economicOverlayOptionMarkup(
+                        Object.assign({ category_label: category.label || category.id || '' }, series),
+                        !!selected[String(series.id || '')],
+                        col
+                    );
                 }).join('');
                 if (!seriesMarkup) return;
                 rows.push(
