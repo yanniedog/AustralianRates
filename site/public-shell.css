@@ -869,6 +869,8 @@ body.ar-public .workspace-nav-actions {
 /* ── Filters drawer ────────────────────────────────────────────────── */
 body.ar-public .filters-drawer {
     border-bottom: 1px solid var(--ar-line);
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 body.ar-public .filters-drawer > summary {
@@ -934,6 +936,10 @@ body.ar-public .filters-drawer-body {
     gap: 0;
     padding: 12px 16px 14px;
     background: color-mix(in srgb, var(--ar-surface-2) 60%, transparent);
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    box-sizing: border-box;
 }
 
 body.ar-public .filters-drawer-section {

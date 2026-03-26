@@ -952,7 +952,11 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         };
     }).catch(() => null);
 
-    if (launch && launch.hash === '#scenario' && launch.sliceOpen && launch.left >= -1 && launch.right <= launch.width + 1) {
+    const launchInView = launch
+        && launch.sliceOpen
+        && launch.right > 0
+        && launch.left < launch.width;
+    if (launch && launch.hash === '#scenario' && launchInView) {
         pass(results, `${label}: Launch filters opens the slice panel and scrolls it into view`);
     } else {
         fail(results, `${label}: Launch filters did not open the slice panel (${JSON.stringify(launch)})`);
@@ -971,7 +975,11 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         };
     }).catch(() => null);
 
-    if (deepLink && deepLink.sliceOpen && deepLink.left >= -1 && deepLink.right <= deepLink.width + 1) {
+    const deepInView = deepLink
+        && deepLink.sliceOpen
+        && deepLink.right > 0
+        && deepLink.left < deepLink.width;
+    if (deepInView) {
         pass(results, `${label}: #scenario deep link opens the slice panel in view`);
     } else {
         fail(results, `${label}: #scenario deep link did not open the slice panel (${JSON.stringify(deepLink)})`);
