@@ -13,9 +13,20 @@ function normalizeValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
 }
 
+/** Serialize log context for substring checks (D1 may return TEXT as string or parsed JSON). */
+function contextToSearchString(raw: unknown): string {
+  if (raw == null) return ''
+  if (typeof raw === 'string') return raw
+  try {
+    return JSON.stringify(raw)
+  } catch {
+    return String(raw)
+  }
+}
+
 function isHistoricalNoSignalNoise(entry: Record<string, unknown>, source: string, message: string): boolean {
   if (source !== 'consumer') return false
-  const context = normalizeValue(entry.context)
+  const context = contextToSearchString(entry.context).toLowerCase()
   if (message === 'historical_task_execute completed') {
     return context.includes('completion=warn_no_writes') && context.includes('signals(wayback=0,final=0)')
   }
@@ -50,14 +61,14 @@ export function shouldIgnoreStatusActionableLog(
     return true
   }
   // Legacy CPI warns when both RBA HTML and G1 returned 403 to non-browser fetches (pre–browser-like UA).
-  const ctxLower = String(entry.context ?? '').toLowerCase()
+  const ctxLower = contextToSearchString(entry.context).toLowerCase()
   if (source === 'pipeline' && message === 'cpi_collection_unavailable' && ctxLower.includes('403')) {
     return true
   }
   // Economic RBA CSV/HTML fetches hit the same 403 bot wall without browser-like headers.
   // Each failed series emits markSeriesFailure ("collection failed") then a second warn ("parsing failed");
   // both must be ignored when the underlying error is upstream 403.
-  const ctxStr = String(entry.context ?? '')
+  const ctxStr = contextToSearchString(entry.context)
   if (
     source === 'economic' &&
     ctxStr.includes('upstream_not_ok:403') &&
@@ -70,7 +81,7 @@ export function shouldIgnoreStatusActionableLog(
   }
   // Pre-2026-03-26 stall detector fired on "scanned but none finalized" even when no row was ready to finalize.
   // Current scheduler logs include ready_candidate_rows; keep those actionable.
-  const ctx = String(entry.context ?? '')
+  const ctx = contextToSearchString(entry.context)
   if (
     source === 'scheduler' &&
     message === 'run lifecycle reconciliation stalled' &&
