@@ -84,6 +84,12 @@ async function gotoPublic(page, url) {
 }
 
 async function waitForExplorerTableReady(page, timeout = 25000) {
+    // Chart is the default tab; the table lives in a hidden panel until Table is selected.
+    await page.locator('#tab-explorer').click({ timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(() => {
+        const panel = document.getElementById('panel-explorer');
+        return !!(panel && !panel.hidden);
+    }, null, { timeout: 10000 }).catch(() => {});
     await page.waitForFunction(() => {
         const table = document.getElementById('rate-table');
         if (!table) return false;

@@ -21,7 +21,8 @@
 
     function updateHash(tabId) {
         var target = TAB_MAP[tabId] ? TAB_MAP[tabId].hash : '';
-        var nextHash = tabId === 'explorer' ? '' : ('#' + target);
+        // Default landing is chart; keep the address bar clean (same idea as explorer → empty hash).
+        var nextHash = tabId === 'explorer' || tabId === 'chart' ? '' : ('#' + target);
         if (window.location.hash === nextHash) return;
         window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
     }
