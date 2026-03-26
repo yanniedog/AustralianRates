@@ -276,6 +276,16 @@ select[multiple] {
     padding-block: 8px;
 }
 
+select {
+    accent-color: var(--ar-accent);
+}
+
+select option,
+select optgroup {
+    background-color: var(--ar-surface-2);
+    color: var(--ar-text);
+}
+
 input::placeholder,
 textarea::placeholder {
     color: var(--ar-text-muted);

@@ -129,6 +129,159 @@
     }
 
     /**
+     * Field on the active step segment at ymd (last row with date <= ymd).
+     * rows: ascending { date, ... }.
+     */
+    function stepFieldAtDate(rows, ymd, field) {
+        if (!rows || !rows.length || !ymd) return null;
+        var fk = field || 'value';
+        var y = String(ymd).slice(0, 10);
+        var i = -1;
+        for (var k = 0; k < rows.length; k++) {
+            if (String(rows[k].date).slice(0, 10) <= y) i = k;
+            else break;
+        }
+        if (i < 0) return null;
+        return rows[i][fk];
+    }
+
+    /** Best-per-bank merge: max rate; tie → lexicographically smaller product name. */
+    function mergeWinningDeposit(byDateCell, v, productName) {
+        var pn = String(productName || '');
+        if (byDateCell == null) return { value: v, productName: pn };
+        if (v > byDateCell.value + 1e-9) return { value: v, productName: pn };
+        if (Math.abs(v - byDateCell.value) <= 1e-9 && pn.localeCompare(byDateCell.productName) < 0) {
+            return { value: v, productName: pn };
+        }
+        return byDateCell;
+    }
+
+    /** Best-per-bank merge: min rate; tie → lexicographically smaller product name. */
+    function mergeWinningMortgage(byDateCell, v, productName) {
+        var pn = String(productName || '');
+        if (byDateCell == null) return { value: v, productName: pn };
+        if (v < byDateCell.value - 1e-9) return { value: v, productName: pn };
+        if (Math.abs(v - byDateCell.value) <= 1e-9 && pn.localeCompare(byDateCell.productName) < 0) {
+            return { value: v, productName: pn };
+        }
+        return byDateCell;
+    }
+
+    /**
+     * Legend label HTML for a series row at a given date (bank aggregate uses productName on step points).
+     */
+    function legendSliceLabelHtml(line, stepPoints, ymd, ctxMax) {
+        var dt = ymd || ctxMax;
+        var pn = stepPoints && stepPoints.length ? stepFieldAtDate(stepPoints, dt, 'productName') : null;
+        if (pn != null && String(pn) !== '') {
+            var sh = line.short != null ? line.short : '';
+            return escHtml(sh + ' \u00b7 ' + shortProductName(String(pn)));
+        }
+        return escHtml(line.legendLabel || '');
+    }
+
+    /**
+     * View mode bar: Best per bank | All products | horizontal bank logo tray (focus).
+     */
+    function createReportViewModeBar(opts) {
+        var section = opts.section;
+        var vm = opts.vm;
+        var bankList = opts.bankList || [];
+        var onReRender = opts.onReRender;
+
+        var bar = document.createElement('div');
+        bar.className = 'lwc-report-viewmode';
+        bar.setAttribute('role', 'toolbar');
+        bar.setAttribute('aria-label', 'Chart series view');
+
+        function mkTab(label, isActive, tabClass) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'lwc-report-viewmode-tab' + (isActive ? ' is-active' : '') + (tabClass ? ' ' + tabClass : '');
+            b.textContent = label;
+            return b;
+        }
+
+        var btnBank = mkTab('Best per bank', vm.mode === 'bank', 'lwc-report-viewmode-tab--first');
+        btnBank.addEventListener('click', function () {
+            setViewMode(section, 'bank');
+            onReRender();
+        });
+
+        var btnAll = mkTab('All products', vm.mode === 'products', '');
+        btnAll.addEventListener('click', function () {
+            setViewMode(section, 'products');
+            onReRender();
+        });
+
+        var trayWrap = document.createElement('div');
+        trayWrap.className = 'lwc-focus-bank-tray-wrap';
+
+        var tray = document.createElement('div');
+        tray.className = 'lwc-focus-bank-tray';
+        tray.setAttribute('role', 'radiogroup');
+        tray.setAttribute('aria-label', 'Focus bank');
+
+        var clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'lwc-focus-bank-clear';
+        clearBtn.textContent = '\u00d7';
+        clearBtn.title = 'Clear bank focus';
+        clearBtn.setAttribute('aria-label', 'Clear bank focus');
+        clearBtn.disabled = vm.mode !== 'focus';
+        clearBtn.addEventListener('click', function () {
+            if (vm.mode !== 'focus') return;
+            setViewMode(section, 'bank');
+            onReRender();
+        });
+
+        tray.appendChild(clearBtn);
+
+        var BB = window.AR.bankBrand;
+        bankList.forEach(function (bn) {
+            var chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'lwc-focus-bank-chip';
+            chip.setAttribute('role', 'radio');
+            chip.setAttribute('aria-checked', vm.mode === 'focus' && bn.full === vm.focusBank ? 'true' : 'false');
+            chip.title = bn.full;
+            chip.setAttribute('aria-label', 'Focus ' + bn.full);
+            if (vm.mode === 'focus' && bn.full === vm.focusBank) chip.classList.add('is-selected');
+
+            var meta = BB && typeof BB.getMeta === 'function' ? BB.getMeta(bn.full) : { icon: '', short: bn.short };
+            if (meta.icon) {
+                var img = document.createElement('img');
+                img.src = meta.icon;
+                img.alt = '';
+                img.className = 'lwc-focus-bank-chip-logo';
+                img.width = 20;
+                img.height = 20;
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.draggable = false;
+                chip.appendChild(img);
+            } else {
+                var fb = document.createElement('span');
+                fb.className = 'lwc-focus-bank-chip-fallback';
+                fb.textContent = (meta.short || bn.short || '?').charAt(0);
+                chip.appendChild(fb);
+            }
+
+            chip.addEventListener('click', function () {
+                setViewMode(section, 'focus', bn.full);
+                onReRender();
+            });
+            tray.appendChild(chip);
+        });
+
+        trayWrap.appendChild(tray);
+        bar.appendChild(btnBank);
+        bar.appendChild(btnAll);
+        bar.appendChild(trayWrap);
+        return bar;
+    }
+
+    /**
      * Tiny arrow after "%" for legend: deposit = green up / red down; mortgage = red up / green down.
      */
     function rateLegendArrowHtml(current, previous, semantics, goodColor, badColor) {
@@ -208,6 +361,11 @@
         cpiAtDate: cpiAtDate,
         prepareRbaCpiForReport: prepareRbaCpiForReport,
         prevStepValue: prevStepValue,
+        stepFieldAtDate: stepFieldAtDate,
+        mergeWinningDeposit: mergeWinningDeposit,
+        mergeWinningMortgage: mergeWinningMortgage,
+        legendSliceLabelHtml: legendSliceLabelHtml,
+        createReportViewModeBar: createReportViewModeBar,
         rateLegendArrowHtml: rateLegendArrowHtml,
         getViewMode: getViewMode,
         setViewMode: setViewMode,

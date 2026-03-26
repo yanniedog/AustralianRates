@@ -128,25 +128,30 @@
         return { series: filtered, applied: true };
     }
 
-    // ── Data: best-per-bank ─────────────────────────────────────────────────
+    // ── Data: best-per-bank (max rate + winning product per date) ───────────
     function buildBankSeries(sourceSeries) {
+        var M = window.AR.chartMacroLwcShared;
         var byBank = {};
         (sourceSeries || []).forEach(function (s) {
             var bn = String(s.bankName || '').trim();
             if (!bn) return;
             var k = bn.toLowerCase();
+            var pn = String(s.productName || 'Unknown');
             if (!byBank[k]) byBank[k] = { bankName: bn, byDate: {} };
             (s.points || []).forEach(function (p) {
                 var d = String(p.date || '');
                 var v = Number(p.value);
                 if (!d || !Number.isFinite(v) || v < 0.5) return;
-                if (byBank[k].byDate[d] == null || v > byBank[k].byDate[d]) byBank[k].byDate[d] = v;
+                byBank[k].byDate[d] = M.mergeWinningDeposit(byBank[k].byDate[d], v, pn);
             });
         });
         return Object.keys(byBank)
             .map(function (k) {
                 var e = byBank[k];
-                var pts = Object.keys(e.byDate).sort().map(function (d) { return { date: d, value: e.byDate[d] }; });
+                var pts = Object.keys(e.byDate).sort().map(function (d) {
+                    var cell = e.byDate[d];
+                    return { date: d, value: cell.value, productName: cell.productName };
+                });
                 return { bankName: e.bankName, points: pts, latest: pts.length ? pts[pts.length - 1].value : 0 };
             })
             .sort(function (a, b) { return b.latest - a.latest; })
@@ -218,35 +223,6 @@
         });
         list.sort(function (a, b) { return a.short.localeCompare(b.short); });
         return list;
-    }
-
-    // ── Toggle bar ──────────────────────────────────────────────────────────
-    function createToggleBar(vm, bankList, section, onReRender, t) {
-        var M = window.AR.chartMacroLwcShared;
-        var bar = document.createElement('div');
-        bar.style.cssText = 'display:flex;align-items:center;gap:0;padding:2px 0 4px;flex-shrink:0;';
-        var base = 'padding:3px 9px;border:1px solid ' + t.ttBorder + ';background:transparent;color:' + t.ttText + ';cursor:pointer;font:500 9px/1.3 "Space Grotesk",system-ui,sans-serif;transition:opacity .15s;outline:none;';
-        var act = 'opacity:1;background:' + t.ttBg + ';font-weight:600;';
-        var inact = 'opacity:0.5;';
-        function mkBtn(label, isActive, radius) {
-            var b = document.createElement('button'); b.type = 'button'; b.textContent = label;
-            b.style.cssText = base + radius + (isActive ? act : inact); return b;
-        }
-        var btnBank = mkBtn('Best per bank', vm.mode === 'bank', 'border-radius:3px 0 0 3px;');
-        btnBank.addEventListener('click', function () { M.setViewMode(section, 'bank'); onReRender(); });
-        var btnAll = mkBtn('All products', vm.mode === 'products', 'border-radius:0;border-left:none;');
-        btnAll.addEventListener('click', function () { M.setViewMode(section, 'products'); onReRender(); });
-        var sel = document.createElement('select');
-        sel.style.cssText = base + 'border-radius:0 3px 3px 0;border-left:none;appearance:none;-webkit-appearance:none;padding-right:16px;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'5\'%3E%3Cpath d=\'M0 0l4 5 4-5z\' fill=\'%2394a3b8\'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 4px center;' + (vm.mode === 'focus' ? act : inact);
-        var defOpt = document.createElement('option'); defOpt.value = ''; defOpt.textContent = 'Focus bank\u2026'; sel.appendChild(defOpt);
-        bankList.forEach(function (bn) { var o = document.createElement('option'); o.value = bn.full; o.textContent = bn.short; sel.appendChild(o); });
-        if (vm.mode === 'focus' && vm.focusBank) sel.value = vm.focusBank;
-        sel.addEventListener('change', function () {
-            if (sel.value) { M.setViewMode(section, 'focus', sel.value); } else { M.setViewMode(section, 'bank'); }
-            onReRender();
-        });
-        bar.appendChild(btnBank); bar.appendChild(btnAll); bar.appendChild(sel);
-        return bar;
     }
 
     // ── Info box ─────────────────────────────────────────────────────────────
@@ -334,9 +310,14 @@
 
         var t = th();
         var bankList = extractBankNames(allSeries);
-        var toggleBar = createToggleBar(vm, bankList, section, function () {
-            render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
-        }, t);
+        var toggleBar = M.createReportViewModeBar({
+            section: section,
+            vm: vm,
+            bankList: bankList,
+            onReRender: function () {
+                render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+            },
+        });
         wrapper.appendChild(toggleBar);
 
         var mount = document.createElement('div');
@@ -389,8 +370,15 @@
             var carryPt = null;
             for (var j = 0; j < allPts.length; j++) { if (allPts[j].date <= ctxMin) carryPt = allPts[j]; else break; }
             var rawPts = allPts.filter(function (p) { return p.date >= ctxMin && p.date <= ctxMax; });
-            if (carryPt) rawPts = [{ date: ctxMin, value: carryPt.value }].concat(rawPts);
-            if (rawPts.length) { var lp = rawPts[rawPts.length - 1]; if (lp.date < ctxMax) rawPts = rawPts.concat([{ date: ctxMax, value: lp.value }]); }
+            if (carryPt) {
+                rawPts = [{ date: ctxMin, value: carryPt.value, productName: carryPt.productName }].concat(rawPts);
+            }
+            if (rawPts.length) {
+                var lp = rawPts[rawPts.length - 1];
+                if (lp.date < ctxMax) {
+                    rawPts = rawPts.concat([{ date: ctxMax, value: lp.value, productName: lp.productName }]);
+                }
+            }
             var data = rawPts.map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; });
             var ser = chart.addSeries(L.LineSeries, { color: line.color, lineWidth: lineWidth, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });
             ser.setData(data);
@@ -431,7 +419,8 @@
                 if (e.value == null || shown >= LEGEND_CAP) return; shown++;
                 var prev = M.prevStepValue(e.stepPoints, ymd || ctxMax, 'value');
                 var arr = M.rateLegendArrowHtml(e.value, prev, 'deposit', t.good, t.bad);
-                items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:2px;background:' + e.line.color + ';flex-shrink:0;border-radius:1px;"></span><span style="opacity:0.7;">' + M.escHtml(e.line.legendLabel) + '</span><span style="font-variant-numeric:tabular-nums;font-weight:600;">' + e.value.toFixed(2) + '%' + arr + '</span></span>');
+                var lblHtml = M.legendSliceLabelHtml(e.line, e.stepPoints, ymd, ctxMax);
+                items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:2px;background:' + e.line.color + ';flex-shrink:0;border-radius:1px;"></span><span style="opacity:0.7;">' + lblHtml + '</span><span style="font-variant-numeric:tabular-nums;font-weight:600;">' + e.value.toFixed(2) + '%' + arr + '</span></span>');
             });
             if (sorted.length > LEGEND_CAP) items.push('<span style="opacity:0.35;font-size:8px;">+' + (sorted.length - LEGEND_CAP) + ' more</span>');
             return items;
@@ -500,7 +489,20 @@
             if (!param || !param.point || param.time == null) return;
             var clickY = param.point.y; var bestDist = Infinity; var bestEntry = null;
             seriesApis.forEach(function (si) { var sd = param.seriesData && param.seriesData.get(si.api); if (!sd || !Number.isFinite(sd.value)) return; var coord = si.api.priceToCoordinate(sd.value); if (coord == null) return; var dist = Math.abs(coord - clickY); if (dist < bestDist) { bestDist = dist; bestEntry = si; } });
-            if (bestEntry && bestDist < 30) { var ln = bestEntry.line; infoBox.show({ bankName: ln.bankName || ln.short, productName: ln.productName || null, rate: bestEntry.lastValue, subtitle: ln.subtitle || '', color: ln.color }); }
+            if (bestEntry && bestDist < 30) {
+                var ln = bestEntry.line;
+                var clickYmd = M.utcToYmd(param.time);
+                var sd = param.seriesData && param.seriesData.get(bestEntry.api);
+                var rateAt = (sd && Number.isFinite(sd.value)) ? sd.value : bestEntry.lastValue;
+                var prodAt = M.stepFieldAtDate(bestEntry.stepPoints, clickYmd, 'productName');
+                infoBox.show({
+                    bankName: ln.bankName || ln.short,
+                    productName: prodAt != null && String(prodAt) !== '' ? String(prodAt) : (ln.productName || null),
+                    rate: rateAt,
+                    subtitle: ln.subtitle || '',
+                    color: ln.color,
+                });
+            }
             else { infoBox.hide(); }
         });
 

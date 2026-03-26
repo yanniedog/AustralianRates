@@ -1200,3 +1200,159 @@
         -webkit-overflow-scrolling: touch;
     }
 }
+
+/* LWC macro report: view mode tabs + horizontal focus-bank logo tray */
+body.ar-public .lwc-report-viewmode {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+    padding: 2px 0 4px;
+    min-height: 26px;
+}
+
+body.ar-public .lwc-report-viewmode-tab {
+    margin: 0;
+    padding: 5px 11px;
+    min-height: 0;
+    height: auto;
+    border: 1px solid var(--ar-line-strong);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ar-text);
+    font: 600 0.78rem/1.25 "Space Grotesk", system-ui, sans-serif;
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+        opacity var(--ar-motion-fast, 150ms) var(--ar-ease, ease),
+        background var(--ar-motion-fast, 150ms) var(--ar-ease, ease),
+        border-color var(--ar-motion-fast, 150ms) var(--ar-ease, ease);
+}
+
+body.ar-public .lwc-report-viewmode-tab--first {
+    border-radius: 4px 0 0 4px;
+}
+
+body.ar-public .lwc-report-viewmode-tab + .lwc-report-viewmode-tab {
+    border-left: none;
+}
+
+body.ar-public .lwc-report-viewmode-tab:hover {
+    opacity: 0.88;
+}
+
+body.ar-public .lwc-report-viewmode-tab.is-active {
+    opacity: 1;
+    background: var(--ar-surface-2);
+    font-weight: 600;
+}
+
+body.ar-public .lwc-report-viewmode-tab:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 1px;
+    z-index: 1;
+}
+
+body.ar-public .lwc-focus-bank-tray-wrap {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0 0 0 4px;
+    scrollbar-gutter: stable;
+}
+
+body.ar-public .lwc-focus-bank-tray {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-height: 24px;
+    max-height: 26px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 1px 0;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.ar-public .lwc-focus-bank-tray::-webkit-scrollbar {
+    height: 4px;
+}
+
+body.ar-public .lwc-focus-bank-tray::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--ar-text-muted) 45%, transparent);
+    border-radius: 3px;
+}
+
+body.ar-public .lwc-focus-bank-clear {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--ar-line-strong);
+    border-radius: 4px;
+    background: var(--ar-surface-2);
+    color: var(--ar-text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+body.ar-public .lwc-focus-bank-clear:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+body.ar-public .lwc-focus-bank-clear:not(:disabled):hover {
+    color: var(--ar-text);
+}
+
+body.ar-public .lwc-focus-bank-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    padding: 2px;
+    margin: 0;
+    border: 1px solid var(--ar-line-strong);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+        opacity var(--ar-motion-fast, 150ms) var(--ar-ease, ease),
+        border-color var(--ar-motion-fast, 150ms) var(--ar-ease, ease),
+        background var(--ar-motion-fast, 150ms) var(--ar-ease, ease);
+}
+
+body.ar-public .lwc-focus-bank-chip:hover {
+    opacity: 0.95;
+}
+
+body.ar-public .lwc-focus-bank-chip.is-selected {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--ar-accent) 50%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-accent-soft) 40%, var(--ar-surface-2));
+}
+
+body.ar-public .lwc-focus-bank-chip:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 1px;
+}
+
+body.ar-public .lwc-focus-bank-chip-logo {
+    display: block;
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    border-radius: 2px;
+}
+
+body.ar-public .lwc-focus-bank-chip-fallback {
+    font: 700 0.62rem/1 "Space Grotesk", system-ui, sans-serif;
+    color: var(--ar-text);
+}
