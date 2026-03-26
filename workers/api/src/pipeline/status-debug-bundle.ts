@@ -122,6 +122,67 @@ function logCodes(entries: Array<Record<string, unknown>>): string[] {
   return codes
 }
 
+function parseIsoDateMs(value: string | null | undefined): number | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+  const ms = Date.parse(text)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function parseCollectionDateMs(value: string | null | undefined): number | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+  const ms = Date.parse(`${text}T00:00:00.000Z`)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function filterReplayRowsForRemediation(
+  rows: Awaited<ReturnType<typeof listReplayQueueRows>>,
+  latestHealth: ParsedHealthRun | null,
+): Awaited<ReturnType<typeof listReplayQueueRows>> {
+  if (!rows.length) return rows
+  const targetCollectionDate = String((latestHealth?.e2e as Record<string, unknown> | null)?.targetCollectionDate || '').trim()
+  if (!targetCollectionDate) return rows
+  const targetMs = parseCollectionDateMs(targetCollectionDate)
+  if (targetMs == null) return rows
+
+  const oneDayMs = 24 * 60 * 60 * 1000
+  const successByScope = new Map<string, number>()
+  for (const row of rows) {
+    if (String(row.status || '').toLowerCase() !== 'succeeded') continue
+    const lender = String(row.lender_code || '').trim().toLowerCase()
+    const dataset = String(row.dataset_kind || '').trim().toLowerCase()
+    const cdate = String(row.collection_date || '').trim()
+    if (!lender || !dataset || !cdate) continue
+    const updated = parseIsoDateMs(row.updated_at)
+    if (updated == null) continue
+    const key = `${lender}|${dataset}|${cdate}`
+    const prev = successByScope.get(key)
+    if (prev == null || updated > prev) successByScope.set(key, updated)
+  }
+
+  return rows.filter((row) => {
+    const status = String(row.status || '').toLowerCase()
+    if (status !== 'failed' && status !== 'queued') return true
+    const cdate = String(row.collection_date || '').trim()
+    const collectionMs = parseCollectionDateMs(cdate)
+    if (collectionMs == null) return true
+    const isOlderThanRecentWindow = collectionMs < targetMs - oneDayMs
+    if (!isOlderThanRecentWindow) return true
+
+    const lender = String(row.lender_code || '').trim().toLowerCase()
+    const dataset = String(row.dataset_kind || '').trim().toLowerCase()
+    if (!lender || !dataset) return false
+
+    const scopeKey = `${lender}|${dataset}|${cdate}`
+    const resolvedScope = successByScope.has(scopeKey)
+    if (resolvedScope) return false
+
+    const hasRecentHealthyE2e = latestHealth?.e2e?.aligned === true
+    return !hasRecentHealthyE2e
+  })
+}
+
 export type BuildStatusDebugBundleQuery = {
   sections?: string
   healthHistoryLimit?: string
@@ -345,7 +406,7 @@ export async function buildStatusDebugBundle(
     ])
     const merged = mergeRemediationHints([
       remediationFromCoverageGapRows(coverageRowsSnapshot),
-      remediationFromReplayQueueRows(replayRows),
+      remediationFromReplayQueueRows(filterReplayRowsForRemediation(replayRows, latestHealth)),
       remediationFromActionableCodes(codes),
     ])
     out.remediation = { hints: merged, note: 'Suggestions only; call each path with admin auth.' }
