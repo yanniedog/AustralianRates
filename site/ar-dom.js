@@ -37,7 +37,7 @@
         filterEndDate: document.getElementById('filter-end-date'),
         filterDateStatus: document.getElementById('filter-date-status'),
         filterMode: document.getElementById('filter-mode'),
-        filterBar: document.getElementById('filter-bar'),
+        filterBar: document.getElementById('scenario'),
         applyFilters: document.getElementById('apply-filters'),
         resetFilters: document.getElementById('reset-filters'),
         activeFilterChips: document.getElementById('active-filter-chips'),

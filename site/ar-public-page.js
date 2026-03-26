@@ -485,7 +485,7 @@
         });
 
         return '' +
-            '<details class="filters-drawer" id="filter-bar">' +
+            '<details class="filters-drawer" id="scenario">' +
                 '<summary class="filters-drawer-summary">' +
                     iconText('filter', 'Filters', 'control-chip-label') +
                     '<span id="filter-dirty-indicator" class="filter-dirty-dot" hidden></span>' +

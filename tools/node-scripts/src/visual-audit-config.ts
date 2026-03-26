@@ -119,7 +119,7 @@ export const GEOMETRY_SELECTORS = [
   '.workspace',
   '.workspace-rail',
   '#workspace-summary-panel',
-  '#filter-bar',
+  '#scenario',
   '#rate-table-details',
   '#rate-table',
   '#panel-pivot .panel',

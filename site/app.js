@@ -287,7 +287,7 @@
         else setFilterLiveStatus('Live sync on', 'is-live');
 
         clientLog('info', 'App init complete', {
-            activeTab: tabState.activeTab || 'explorer',
+            activeTab: tabState.activeTab || 'chart',
             source: source || 'unknown',
         });
     }

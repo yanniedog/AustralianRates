@@ -5,7 +5,7 @@
     var config = window.AR.config;
     var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var params = config && config.params ? config.params : new URLSearchParams(window.location.search);
-    var VALID_TABS = ['explorer', 'pivot', 'history', 'changes'];
+    var VALID_TABS = ['chart', 'explorer', 'pivot', 'history', 'changes'];
     var MOBILE_BREAKPOINT = 760;
 
     function normalizeUiMode(value) {
@@ -20,6 +20,7 @@
     function hashTab() {
         var hash = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
         if (hash === 'table') return 'explorer';
+        if (hash === 'chart') return 'chart';
         if (hash === 'pivot') return 'pivot';
         if (hash === 'history') return 'history';
         if (hash === 'changes') return 'changes';
@@ -40,7 +41,7 @@
             if (stored && stored !== 'explorer') return stored;
             return 'history';
         }
-        return stored || 'explorer';
+        return stored || 'chart';
     }
 
     function currentUiMode() {

@@ -68,7 +68,7 @@ async function prepareRoute(page, route) {
     await openIfPresent(page, '#market-notes');
     await openIfPresent(page, '#footer-technical');
     if (route.kind !== 'public') return;
-    await openIfPresent(page, '#filter-bar');
+    await openIfPresent(page, '#scenario');
     await page.locator('#tab-history').click().catch(() => undefined);
     await page.waitForTimeout(250);
     await page.locator('#tab-changes').click().catch(() => undefined);

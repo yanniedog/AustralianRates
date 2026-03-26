@@ -60,7 +60,7 @@
     }
 
     function applyUiMode() {
-        activateTab(tabState.activeTab || 'explorer', { skipHash: true });
+        activateTab(tabState.activeTab || 'chart', { skipHash: true });
     }
 
     function bindTabListeners() {

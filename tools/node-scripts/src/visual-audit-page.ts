@@ -210,7 +210,7 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
 
   if (state.key === 'analyst-advanced-full') {
     await switchAnalyst(page)
-    await openDetails(page, '#filter-bar')
+    await openDetails(page, '#scenario')
     return [...interactiveSelectors, ...EXPLORER_CLICK_TARGETS, ...ANALYST_CLICK_TARGETS]
   }
   if (state.key === 'table-settings-open') {
