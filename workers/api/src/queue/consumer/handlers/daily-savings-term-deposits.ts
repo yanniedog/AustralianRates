@@ -430,8 +430,12 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         })
       : { enqueued: 0 }
   const finalizeDatasets: DatasetKind[] = []
-  if (shouldFetchSavings && savingsIndexSucceeded) finalizeDatasets.push('savings')
-  if (shouldFetchTd && tdIndexSucceeded) finalizeDatasets.push('term_deposits')
+  if (shouldFetchSavings && savingsIndexSucceeded && uniqueSavingsProductIds.length === 0) {
+    finalizeDatasets.push('savings')
+  }
+  if (shouldFetchTd && tdIndexSucceeded && uniqueTdProductIds.length === 0) {
+    finalizeDatasets.push('term_deposits')
+  }
   const softFailNoSignals = shouldSoftFailNoSignals({
     lenderCode: job.lenderCode,
     successfulIndexFetch: finalizeDatasets.length > 0,

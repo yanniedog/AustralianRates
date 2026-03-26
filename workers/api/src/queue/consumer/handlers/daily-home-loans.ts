@@ -303,13 +303,16 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
             fallbackFetchEventIdByProductId,
           })
         : { enqueued: 0 }
-    const finalizerEnqueue = await enqueueLenderFinalizeJobs(env, {
-      runId: job.runId,
-      runSource: job.runSource,
-      lenderCode: job.lenderCode,
-      collectionDate: job.collectionDate,
-      datasets: ['home_loans'],
-    })
+    const finalizerEnqueue =
+      productIds.length === 0
+        ? await enqueueLenderFinalizeJobs(env, {
+            runId: job.runId,
+            runSource: job.runSource,
+            lenderCode: job.lenderCode,
+            collectionDate: job.collectionDate,
+            datasets: ['home_loans'],
+          })
+        : { enqueued: 0 }
     detailJobsEnqueued = detailEnqueue.enqueued
     await addRunEnqueuedCounts(env.DB, job.runId, {
       [job.lenderCode]: detailEnqueue.enqueued + finalizerEnqueue.enqueued,
