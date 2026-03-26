@@ -56,7 +56,7 @@
       "code": "bendigo_adelaide",
       "name": "Bendigo & Adelaide",
       "canonical_bank_name": "Bendigo and Adelaide Bank",
-      "register_brand_name": "Bendigo and Adelaide Bank",
+      "register_brand_name": "Bendigo Bank",
       "products_endpoint": "https://api.cdr.bendigobank.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
         "https://www.bendigobank.com.au/personal/home-loans/interest-rates/"

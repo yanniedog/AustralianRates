@@ -76,6 +76,23 @@ describe('CDR discovery brand matching', () => {
     expect(brandMatchScore(cba, commbizOnly)).toBe(0)
   })
 
+  it('matches Bendigo to ACCC register brandName Bendigo Bank (not longer legal-style name)', () => {
+    const bendigo = lender({
+      code: 'bendigo_adelaide',
+      name: 'Bendigo & Adelaide',
+      canonical_bank_name: 'Bendigo and Adelaide Bank',
+      register_brand_name: 'Bendigo Bank',
+      products_endpoint: 'https://api.cdr.bendigobank.com.au/cds-au/v1/banking/products',
+    })
+    const registerRow: RegisterBrand = {
+      brandName: 'Bendigo Bank',
+      legalEntityName: '',
+      endpointUrl: 'https://api.cdr.bendigobank.com.au/cds-au/v1/banking/products',
+    }
+    expect(brandMatchScore(bendigo, registerRow)).toBeGreaterThan(0)
+    expect(selectBestMatchingBrand(bendigo, [registerRow])?.brandName).toBe('Bendigo Bank')
+  })
+
   it('prefers Great Southern retail over Business+ when retail is the configured primary endpoint', () => {
     const greatSouthern = lender({
       code: 'great_southern',
