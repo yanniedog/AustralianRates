@@ -79,11 +79,13 @@ function findUbankSavingsError(rows) {
 async function main() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(collectionDate || '')) {
     console.error('Usage: node verify-ubank-savings-gap.mjs YYYY-MM-DD')
-    process.exit(1)
+    process.exitCode = 1
+    return
   }
   if (!token) {
     console.error('Missing ADMIN_API_TOKEN (set in .env or environment).')
-    process.exit(1)
+    process.exitCode = 1
+    return
   }
 
   const skipReconcile = ['1', 'true', 'yes'].includes(String(process.env.VERIFY_SKIP_RECONCILE || '').toLowerCase())
@@ -111,7 +113,8 @@ async function main() {
 
     if (!reconcile.res.ok) {
       console.error('reconcile HTTP', reconcile.res.status, JSON.stringify(reconcile.json).slice(0, 500))
-      process.exit(1)
+      process.exitCode = 1
+      return
     }
 
     console.log('reconcile queued:', JSON.stringify(reconcile.json?.result || {}, null, 0).slice(0, 300))
@@ -147,7 +150,7 @@ async function main() {
         message: 'verify_pass',
         data: { collectionDate, attempts: attempt },
       })
-      process.exit(0)
+      return
     }
 
     console.log(
@@ -159,10 +162,10 @@ async function main() {
   }
 
   console.error('TIMEOUT: ubank savings still shows coverage error after', maxAttempts, 'polls')
-  process.exit(1)
+  process.exitCode = 1
 }
 
 main().catch((e) => {
   console.error(e)
-  process.exit(1)
+  process.exitCode = 1
 })
