@@ -1,16 +1,21 @@
 /**
  * Production triage prelude (elite-debugger workflow): public API diagnostics, admin log stats/actionable,
- * optional slim status-debug-bundle (meta + remediation counts). Does not write local log copies.
+ * optional full status-debug-bundle written to repo-root status-debug-bundle-latest.json (gitignored) plus
+ * a short console summary. Does not write production log streams to disk (use fetch-production-logs for that).
  *
  * Usage: node doctor.js [--skip-bundle] [--tolerate-actionable]
  * Requires ADMIN_API_TOKEN in repo root .env for log/actionable/bundle slices.
  */
 
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 
 /** Repo root; `npm run doctor` runs with cwd = package root. */
 const root = process.cwd()
+
+/** Ephemeral full bundle for triage; gitignored — delete after analysis if desired. */
+const STATUS_DEBUG_BUNDLE_FILE = 'status-debug-bundle-latest.json'
 
 function runNode(scriptRelative: string, args: string[]): void {
   const scriptPath = path.join(root, scriptRelative)
@@ -28,55 +33,65 @@ function runNode(scriptRelative: string, args: string[]): void {
   }
 }
 
-async function fetchSlimBundle(): Promise<void> {
-  const token = (
+function hasAdminToken(): boolean {
+  const t = (
     process.env.ADMIN_API_TOKEN ||
     process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() ||
     process.env.ADMIN_TEST_TOKEN ||
     process.env.LOCAL_ADMIN_API_TOKEN ||
     ''
   ).trim()
-  if (!token) {
-    console.log('\n[doctor] Skip status-debug-bundle slice: no ADMIN_API_TOKEN in env.')
-    return
+  return Boolean(t)
+}
+
+/** Full bundle via fetch-status-debug-bundle.js (same auth and origin as manual npm script). */
+function fetchFullStatusBundleToFile(): boolean {
+  if (!hasAdminToken()) {
+    console.log('\n[doctor] Skip status-debug-bundle file: no ADMIN_API_TOKEN in env.')
+    return false
   }
 
-  const origin = process.env.API_BASE
-    ? new URL(process.env.API_BASE).origin
-    : 'https://www.australianrates.com'
-  const url = `${origin}/api/home-loan-rates/admin/diagnostics/status-debug-bundle?sections=meta%2Cremediation`
+  const outAbs = path.join(root, STATUS_DEBUG_BUNDLE_FILE)
+  if (existsSync(outAbs)) {
+    try {
+      unlinkSync(outAbs)
+    } catch {
+      /* ignore — fetch script may still overwrite */
+    }
+  }
 
-  const controller = new AbortController()
-  const to = setTimeout(() => controller.abort(), 90_000)
+  console.log(`\n[doctor] Fetching full status-debug-bundle to ./${STATUS_DEBUG_BUNDLE_FILE} ...\n`)
+  const scriptPath = path.join(root, 'fetch-status-debug-bundle.js')
+  const r = spawnSync(process.execPath, [scriptPath, `--out=${outAbs}`], {
+    stdio: 'inherit',
+    cwd: root,
+    env: process.env,
+    shell: false,
+  })
+
+  if (r.error) {
+    console.warn('[doctor] status-debug-bundle:', r.error.message)
+    return false
+  }
+  if (r.status !== 0) {
+    console.warn(
+      `[doctor] status-debug-bundle not written (fetch-status-debug-bundle exited ${r.status}). Check token and API.`,
+    )
+    return false
+  }
+
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    clearTimeout(to)
-    if (res.status === 401) {
-      console.warn('[doctor] status-debug-bundle: 401 (check ADMIN_API_TOKEN matches worker secret).')
-      return
-    }
-    if (res.status === 404) {
-      console.warn(
-        '[doctor] status-debug-bundle: 404 (deploy API worker with /admin/diagnostics/status-debug-bundle).',
-      )
-      return
-    }
-    if (!res.ok) {
-      console.warn(`[doctor] status-debug-bundle: HTTP ${res.status}`)
-      return
-    }
-    const j = (await res.json()) as {
+    const raw = readFileSync(outAbs, 'utf8')
+    const j = JSON.parse(raw) as {
       meta?: { health_run_id?: string | null; health_checked_at?: string | null }
       remediation?: { hints?: unknown[] }
     }
     const hints = Array.isArray(j.remediation?.hints) ? j.remediation.hints.length : 0
-    console.log('\n[doctor] status-debug-bundle (sections=meta,remediation only):')
+    console.log('\n[doctor] status-debug-bundle summary (full JSON in file above):')
     console.log(
       JSON.stringify(
         {
+          bundle_file: STATUS_DEBUG_BUNDLE_FILE,
           health_run_id: j.meta?.health_run_id ?? null,
           health_checked_at: j.meta?.health_checked_at ?? null,
           remediation_hint_count: hints,
@@ -85,13 +100,14 @@ async function fetchSlimBundle(): Promise<void> {
         2,
       ),
     )
+    return true
   } catch (e) {
-    clearTimeout(to)
-    console.warn('[doctor] status-debug-bundle fetch failed:', (e as Error).message)
+    console.warn('[doctor] Bundle file written but summary parse failed:', (e as Error).message)
+    return true
   }
 }
 
-async function main(): Promise<void> {
+function main(): void {
   const skipBundle = process.argv.includes('--skip-bundle')
   const tolerateActionable = process.argv.includes('--tolerate-actionable')
 
@@ -107,19 +123,24 @@ async function main(): Promise<void> {
   if (!tolerateActionable) logArgs.push('--fail-on-actionable')
   runNode('fetch-production-logs.js', logArgs)
 
+  let bundleWritten = false
   if (!skipBundle) {
-    console.log('\n--- Step 3: slim status-debug-bundle ---\n')
-    await fetchSlimBundle()
+    console.log('\n--- Step 3: full status-debug-bundle (file + summary) ---\n')
+    bundleWritten = fetchFullStatusBundleToFile()
   }
 
   console.log('\n========================================')
   console.log('Doctor prelude finished.')
-  console.log('Full E2E JSON: npm run fetch-status-debug-bundle')
+  if (bundleWritten) {
+    console.log(`Triage: read ./${STATUS_DEBUG_BUNDLE_FILE} for full E2E JSON (gitignored; delete after analysis).`)
+  }
   console.log('After fixes + deploy: npm run doctor:verify')
   console.log('========================================')
 }
 
-void main().catch((e) => {
+try {
+  main()
+} catch (e) {
   console.error(e)
   process.exit(1)
-})
+}

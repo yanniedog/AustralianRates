@@ -10,6 +10,8 @@ description: >-
 
 Fetches **`GET /api/home-loan-rates/admin/diagnostics/status-debug-bundle`** against production with the **real** Bearer token from **repo root `.env`**. Never use a placeholder like `YOUR_ADMIN_TOKEN` in a real command.
 
+**`npm run doctor`** also writes **`./status-debug-bundle-latest.json`** (see `.cursor/skills/doctor/SKILL.md`).
+
 ## Canonical command (agent runs from repo root)
 
 ```bash
@@ -26,7 +28,7 @@ Default origin: **`https://www.australianrates.com`** (override with **`API_BASE
 
 ## Hygiene
 
-Per **AGENTS.md** / **debug-use-logfiles**: treat downloaded bundles as **ephemeral** — **delete** `bundle.json` (or similar) after analysis; do not commit them.
+Per **AGENTS.md** / **debug-use-logfiles**: treat downloaded bundles as **ephemeral** — **delete** `status-debug-bundle-latest.json`, `bundle.json`, or similar after analysis; do not commit them.
 
 ## Why not raw `curl` (especially on Windows)
 

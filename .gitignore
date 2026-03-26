@@ -31,6 +31,7 @@ tmp-*.js
 errors.jsonl
 warn.jsonl
 actionable.json
+status-debug-bundle-latest.json
 *-production-logs*.jsonl
 
 # Local DB exports / audit artefacts (do not commit)

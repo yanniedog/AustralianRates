@@ -2,7 +2,8 @@
 name: doctor
 description: >-
   Runs Australian Rates production triage via npm run doctor (diagnose-api, admin log stats/actionable,
-  slim status-debug-bundle), then guides elite-debugger-style root-cause fixes and doctor:verify. Use when
+  full status-debug-bundle to status-debug-bundle-latest.json plus console summary), then guides elite-debugger-style
+  root-cause fixes using that file and doctor:verify. Use when
   the user invokes /doctor, asks for production health triage, status-page or admin failures, or a prelude
   before full E2E verification on https://www.australianrates.com.
 ---
@@ -14,7 +15,7 @@ Orchestrates a **fresh production signal** pass, then **elite-debugger** follow-
 ## Preconditions
 
 - Work from **repo root** (`c:\code\australianrates` or equivalent).
-- Repo root **`.env`** must include **`ADMIN_API_TOKEN`** (same value as production API worker secret) for admin log stats, actionable issues, and the slim debug-bundle slice. Without it, `doctor` still runs public `diagnose-api` but admin steps exit non-zero or skip bundle per script behavior.
+- Repo root **`.env`** must include **`ADMIN_API_TOKEN`** (same value as production API worker secret) for admin log stats, actionable issues, and the full debug-bundle file. Without it, `doctor` still runs public `diagnose-api` but admin steps exit non-zero or skip the bundle file per script behavior.
 
 ## Step 1 — Run doctor (automated prelude)
 
@@ -28,7 +29,7 @@ This runs in order:
 
 1. **`node diagnose-api.js`** — public production API checks and benchmarks against `https://www.australianrates.com` (or `TEST_URL` / `API_BASE` if set).
 2. **`node fetch-production-logs.js --stats --actionable --fail-on-actionable`** — **fresh** stats and actionable JSON from production (no full log file written by default). **`--fail-on-actionable`** is added by doctor so the run **exits non-zero** if the actionable endpoint returns any issue groups (so “API benchmarks pass” is not mistaken for “nothing to fix”).
-3. **`GET .../admin/diagnostics/status-debug-bundle?sections=meta,remediation`** — prints `health_run_id`, `health_checked_at`, and `remediation_hint_count` only. Bundle HTTP errors are warnings only; they do not change the exit code once steps 1–2 succeeded.
+3. **Full status-debug-bundle** — runs **`fetch-status-debug-bundle.js`** with **`--out=status-debug-bundle-latest.json`** at repo root (file is **gitignored**). Any previous file is removed first so a failed fetch does not leave a stale bundle. The console prints a short summary (`health_run_id`, `health_checked_at`, `remediation_hint_count`, `bundle_file`). Bundle step failures are **warnings only**; they do not change the exit code once steps 1–2 succeeded.
 
 **Reading the output**
 
@@ -37,24 +38,30 @@ This runs in order:
 
 Variants:
 
-- **`node doctor.js --skip-bundle`** — omit the bundle HTTP call (faster or if the route is not yet deployed).
+- **`node doctor.js --skip-bundle`** — omit the bundle fetch and file (faster or if the route is not yet deployed).
 - **`node doctor.js --tolerate-actionable`** — do not pass `--fail-on-actionable` to the log fetch (exit 0 even when actionable lists issues).
 
-## Step 2 — Deepen signal (when triage needs more)
+## Step 2 — Use the bundle during triage
 
-- **Full E2E JSON bundle (one file):** `npm run fetch-status-debug-bundle` or `node fetch-status-debug-bundle.js --out=path.json` — **delete** the file after analysis per project rules; do not commit captured bundles.
+After Step 1, **read `./status-debug-bundle-latest.json`** (repo root) when a token was present and the bundle step ran. Use it for **health**, **logs**, **remediation.hints**, **CDR audit**, **coverage**, **replay queue**, and other sections the API returns — not only the printed summary. **Do not paste** secrets or whole files into chat if they are huge; pull **targeted sections** or keys into the conversation.
+
+**Delete** this file after triage or fixes are done (same hygiene as other ephemeral production exports); it must not be committed.
+
+## Step 3 — Deepen signal (optional)
+
+- **Alternate bundle path or options:** `npm run fetch-status-debug-bundle` or `node fetch-status-debug-bundle.js --out=path.json` with `--sections`, `--since`, etc.
 - **Full warn/error log stream:** `node fetch-production-logs.js` with `--errors` / `--warn` as needed; do not keep stale `errors.jsonl` / `warn.jsonl` in the repo.
 - **Admin UI:** Status dashboard — **Download debug bundle (JSON)** / **Copy debug bundle curl** on `site/admin/status.html` (after deploy).
 
-## Step 3 — Elite-debugger loop (agent accountability)
+## Step 4 — Elite-debugger loop (agent accountability)
 
-1. **Triage** every failure from Step 1–2: API benchmarks, actionable codes, remediation hints, bundle sections.
+1. **Triage** using Step 1 console output, **`./status-debug-bundle-latest.json`** (when present), and optional Step 3 log exports: API benchmarks, actionable codes, remediation hints, and bundle sections.
 2. **Root cause** in code or config (`workers/api`, `workers/archive`, `site/`, Cloudflare).
 3. **Fix** with correct logging (see **logging-expert** and `workers/api/src/utils/log-actionable.ts`).
 4. **Commit and push** (per `.cursor/rules/auto-commit-sync-after-changes.mdc` and fix-commit-verify when production-affected).
 5. **Wait for deploy** (Pages + Workers as applicable).
 
-## Step 4 — Verify
+## Step 5 — Verify
 
 ```bash
 npm run doctor:verify
@@ -67,6 +74,7 @@ Runs **`npm run doctor`** then **`npm run test:api`**, **`npm run test:archive`*
 | Item | Location |
 |------|----------|
 | Doctor script | `tools/node-scripts/src/doctor.ts`, `doctor.js`, `package.json` scripts `doctor` / `doctor:verify` |
+| Doctor bundle file | `./status-debug-bundle-latest.json` (gitignored; written by `npm run doctor` when token set) |
 | Debug bundle | `fetch-status-debug-bundle.js`, `workers/api` route `/admin/diagnostics/status-debug-bundle` |
 | Debugging index | AGENTS.md (Debugging and production logfiles; status debug bundle; doctor) |
 | Production URL | `https://www.australianrates.com` |
