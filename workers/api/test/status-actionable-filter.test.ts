@@ -104,6 +104,44 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores FRED upstream 520 for economic series warns (CDN edge)', () => {
+    const inner = JSON.stringify({
+      series_id: 'china_gdp_proxy',
+      message: 'upstream_not_ok:520:https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPNQD',
+    })
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'economic',
+          level: 'warn',
+          message: 'Economic series collection failed',
+          code: 'economic_series_fetch_failed',
+          context: JSON.stringify({ context: inner, traceback: 'Error' }),
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores RBNZ OCR empty-parse drift while upstream fetch path succeeded', () => {
+    const inner = JSON.stringify({
+      series_id: 'rbnz_ocr',
+      message: 'No parseable observations for rbnz_ocr',
+    })
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'economic',
+          level: 'warn',
+          message: 'Economic series parsing failed',
+          code: 'economic_series_parse_failed',
+          context: JSON.stringify({ context: inner, traceback: 'Error' }),
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores economic RBA 403 when D1 returns context as parsed object', () => {
     const inner = JSON.stringify({
       series_id: 'bank_bill_90d',

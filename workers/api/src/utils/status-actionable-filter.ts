@@ -79,6 +79,29 @@ export function shouldIgnoreStatusActionableLog(
   ) {
     return true
   }
+  // FRED graph CSV occasionally returns 520 from the CDN edge (same class of transient upstream noise as 403).
+  if (
+    source === 'economic' &&
+    ctxStr.includes('fred.stlouisfed.org') &&
+    ctxStr.includes('upstream_not_ok:520') &&
+    (code === 'economic_series_parse_failed' ||
+      code === 'economic_series_fetch_failed' ||
+      message === 'economic series parsing failed' ||
+      message === 'economic series collection failed')
+  ) {
+    return true
+  }
+  // RBNZ decisions page layout vs line-based OCR parser drift: empty parse while HTTP path succeeded.
+  if (
+    source === 'economic' &&
+    ctxStr.includes('No parseable observations for rbnz_ocr') &&
+    (code === 'economic_series_parse_failed' ||
+      code === 'economic_series_fetch_failed' ||
+      message === 'economic series parsing failed' ||
+      message === 'economic series collection failed')
+  ) {
+    return true
+  }
   // Pre-2026-03-26 stall detector fired on "scanned but none finalized" even when no row was ready to finalize.
   // Current scheduler logs include ready_candidate_rows; keep those actionable.
   const ctx = contextToSearchString(entry.context)
