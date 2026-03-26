@@ -20,6 +20,35 @@ const token = (
 ).trim();
 
 const FETCH_TIMEOUT_MS = 60_000;
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be';
+const DEBUG_SESSION_ID = '7e559c';
+
+function emitDebugLog(
+  location: string,
+  message: string,
+  hypothesisId: string,
+  runId: string,
+  data: Record<string, unknown>,
+): void {
+  // #region agent log
+  fetch(DEBUG_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': DEBUG_SESSION_ID,
+    },
+    body: JSON.stringify({
+      sessionId: DEBUG_SESSION_ID,
+      location,
+      message,
+      data,
+      runId,
+      hypothesisId,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
   const controller = new AbortController();
@@ -79,6 +108,16 @@ async function main(): Promise<void> {
   const failOnActionable = args.includes('--fail-on-actionable');
   const sinceArg = args.find((a) => a.startsWith('--since='));
   const since = sinceArg ? sinceArg.slice('--since='.length).trim() : '';
+  const runId = `doctor-${Date.now()}`;
+  emitDebugLog('tools/node-scripts/src/fetch-production-logs.ts:main', 'fetch-production-logs started', 'H1', runId, {
+    doStats,
+    doActionable,
+    failOnActionable,
+    doErrors,
+    doWarn,
+    limit,
+    since: since || null,
+  });
 
   const queryParams = (base: string, extra: Record<string, string> = {}): string => {
     const params = new URLSearchParams(extra);
@@ -100,7 +139,38 @@ async function main(): Promise<void> {
       );
       console.log(JSON.stringify(actionable, null, 2));
       const issues = Array.isArray(actionable.issues) ? actionable.issues : [];
+      emitDebugLog(
+        'tools/node-scripts/src/fetch-production-logs.ts:actionable',
+        'actionable payload received',
+        'H2',
+        runId,
+        {
+          ok: actionable.ok === true,
+          issueCount: issues.length,
+          topIssues: issues.slice(0, 8).map((issue) => {
+            const row = issue as Record<string, unknown>;
+            return {
+              code: String(row.code ?? ''),
+              title: String(row.title ?? ''),
+              latest_source: String(row.latest_source ?? ''),
+              latest_message: String(row.latest_message ?? ''),
+              count: Number(row.count ?? 0),
+            };
+          }),
+        },
+      );
       if (failOnActionable) {
+        emitDebugLog(
+          'tools/node-scripts/src/fetch-production-logs.ts:fail-gate',
+          'evaluating fail-on-actionable gate',
+          'H3',
+          runId,
+          {
+            actionableOk: actionable.ok === true,
+            issueCount: issues.length,
+            shouldExitNonZero: !actionable.ok || issues.length > 0,
+          },
+        );
         if (!actionable.ok) {
           console.error('[fetch-production-logs] --fail-on-actionable: actionable response ok=false.');
           process.exit(1);
