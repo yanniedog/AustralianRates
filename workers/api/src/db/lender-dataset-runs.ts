@@ -199,6 +199,20 @@ export async function tryMarkLenderDatasetFinalized(
   db: D1Database,
   input: { runId: string; lenderCode: string; dataset: DatasetKind },
 ): Promise<boolean> {
+  const before = await db
+    .prepare(
+      `SELECT finalized_at
+       FROM lender_dataset_runs
+       WHERE run_id = ?1
+         AND lender_code = ?2
+         AND dataset_kind = ?3`,
+    )
+    .bind(input.runId, input.lenderCode, input.dataset)
+    .first<{ finalized_at: string | null }>()
+  if (before?.finalized_at) {
+    return false
+  }
+
   const result = await db
     .prepare(
       `UPDATE lender_dataset_runs
@@ -211,5 +225,20 @@ export async function tryMarkLenderDatasetFinalized(
     )
     .bind(nowIso(), input.runId, input.lenderCode, input.dataset)
     .run()
-  return Number(result.meta?.changes ?? 0) > 0
+  if (Number(result.meta?.changes ?? 0) > 0) {
+    return true
+  }
+
+  // Defensive fallback for runtimes where D1 update metadata can be omitted.
+  const after = await db
+    .prepare(
+      `SELECT finalized_at
+       FROM lender_dataset_runs
+       WHERE run_id = ?1
+         AND lender_code = ?2
+         AND dataset_kind = ?3`,
+    )
+    .bind(input.runId, input.lenderCode, input.dataset)
+    .first<{ finalized_at: string | null }>()
+  return Boolean(after?.finalized_at)
 }

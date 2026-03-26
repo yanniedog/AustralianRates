@@ -89,6 +89,11 @@
     display: block;
 }
 
+.admin-status .admin-payload-copy-btn.is-copied {
+    color: var(--ar-text-muted);
+    opacity: 0.9;
+}
+
 .admin-status .payload-viewer-toolbar .admin-status-line {
     flex: 1;
     min-width: 0;

@@ -110,6 +110,23 @@ describe('CDR discovery brand matching', () => {
     expect(selectBestMatchingBrand(bendigo, [registerRow])?.brandName).toBe('Bendigo Bank')
   })
 
+  it('falls back to strong host affinity when register branding text drifts', () => {
+    const bendigo = lender({
+      code: 'bendigo_adelaide',
+      name: 'Bendigo & Adelaide',
+      canonical_bank_name: 'Bendigo and Adelaide Bank',
+      register_brand_name: 'Bendigo and Adelaide Bank',
+      products_endpoint: 'https://api.cdr.bendigobank.com.au/cds-au/v1/banking/products',
+    })
+    const registerRow: RegisterBrand = {
+      brandName: 'BEN',
+      legalEntityName: '',
+      endpointUrl: 'https://api.cdr.bendigobank.com.au/cds-au/v1/banking/products',
+    }
+    expect(brandMatchScore(bendigo, registerRow)).toBe(0)
+    expect(selectBestMatchingBrand(bendigo, [registerRow])?.endpointUrl).toBe(registerRow.endpointUrl)
+  })
+
   it('prefers Great Southern retail over Business+ when retail is the configured primary endpoint', () => {
     const greatSouthern = lender({
       code: 'great_southern',

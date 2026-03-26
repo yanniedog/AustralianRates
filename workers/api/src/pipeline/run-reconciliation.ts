@@ -7,8 +7,8 @@ import { log } from '../utils/logger'
 
 export { deriveTerminalRunStatus } from '../db/run-terminal-state'
 
-/** After this many minutes unfinalized, lender_dataset_runs are force-closed so they stop causing reconciliation stall. */
-const STALE_UNFINALIZED_MINUTES = 6 * 60
+/** Keep this aligned with diagnostics stale query window (-2 hour) so stale rows are closed before they breach health metrics. */
+const STALE_UNFINALIZED_MINUTES = 2 * 60
 
 type ReconciliationOptions = {
   dryRun?: boolean
@@ -546,7 +546,8 @@ export async function cancelAllRunningRuns(
 /**
  * Force-close lender_dataset_runs that have been unfinalized longer than staleUnfinalizedMinutes.
  * Prevents reconciliation stall when rows never become "ready" (e.g. index_fetch_not_succeeded, failed_detail_fetches).
- * Rows that are still not {@link isLenderDatasetReadyForFinalization} are skipped so we do not mark incomplete datasets finalized.
+ * For stale rows, finalization is terminal: we still mark finalized_at even when readiness is false.
+ * Presence finalization is only attempted when readiness is true and expected_detail_count > 0.
  */
 export async function forceCloseStaleUnfinalizedLenderDatasets(
   db: D1Database,
@@ -578,33 +579,26 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
 
   for (const row of rows.results ?? []) {
     const readiness = isLenderDatasetReadyForFinalization(snapshotForReadiness(row))
+    const expected = Number(row.expected_detail_count ?? 0)
     if (dryRun) {
-      if (readiness.ready) {
-        forceClosedRows += 1
+      forceClosedRows += 1
+      continue
+    }
+    if (readiness.ready && expected > 0) {
+      try {
+        await finalizePresenceForRun(db, {
+          runId: row.run_id,
+          lenderCode: row.lender_code,
+          dataset: row.dataset_kind,
+          bankName: row.bank_name,
+          collectionDate: row.collection_date,
+        })
+      } catch (presenceError) {
+        pushError(
+          errors,
+          `${row.run_id}:${row.lender_code}:${row.dataset_kind}:presence:${(presenceError as Error)?.message || String(presenceError)}`,
+        )
       }
-      continue
-    }
-    if (!readiness.ready) {
-      log.info('run_reconciliation', 'stale_unfinalized_force_close_skipped_not_ready', {
-        runId: row.run_id,
-        lenderCode: row.lender_code,
-        context: { dataset: row.dataset_kind, reason: readiness.reason ?? 'unknown', updated_at_cutoff: cutoff },
-      })
-      continue
-    }
-    try {
-      await finalizePresenceForRun(db, {
-        runId: row.run_id,
-        lenderCode: row.lender_code,
-        dataset: row.dataset_kind,
-        bankName: row.bank_name,
-        collectionDate: row.collection_date,
-      })
-    } catch (presenceError) {
-      pushError(
-        errors,
-        `${row.run_id}:${row.lender_code}:${row.dataset_kind}:presence:${(presenceError as Error)?.message || String(presenceError)}`,
-      )
     }
     try {
       const updated = await tryMarkLenderDatasetFinalized(db, {
@@ -617,7 +611,13 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
         log.info('run_reconciliation', 'Stale unfinalized lender_dataset force-closed', {
           runId: row.run_id,
           lenderCode: row.lender_code,
-          context: { dataset: row.dataset_kind, updated_at_cutoff: cutoff },
+          context: {
+            dataset: row.dataset_kind,
+            updated_at_cutoff: cutoff,
+            stale_reason: readiness.reason ?? 'stale_unfinalized',
+            expected_detail_count: expected,
+            presence_finalized: readiness.ready && expected > 0 ? 1 : 0,
+          },
         })
       }
     } catch (markError) {

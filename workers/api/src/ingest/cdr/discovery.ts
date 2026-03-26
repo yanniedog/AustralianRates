@@ -119,8 +119,10 @@ export function selectBestMatchingBrand(lender: LenderConfig, brands: RegisterBr
   let best: { brand: RegisterBrand; score: number } | null = null
   for (const brand of brands) {
     const matchScore = brandMatchScore(lender, brand)
-    if (matchScore <= 0) continue
-    const score = matchScore + hostAffinityScore(brand.endpointUrl, lender)
+    const hostScore = hostAffinityScore(brand.endpointUrl, lender)
+    // Allow exact/suffix host affinity to recover from register brand-name drift.
+    if (matchScore <= 0 && hostScore < 400) continue
+    const score = matchScore + hostScore
     if (!best || score > best.score) {
       best = { brand, score }
     }
