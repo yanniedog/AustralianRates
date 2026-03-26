@@ -1,6 +1,6 @@
 import { getEconomicStatusMap, upsertEconomicObservations, upsertEconomicStatus } from '../db/economic-series'
 import type { EnvBindings } from '../types'
-import { fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import { RBA_GOV_AU_FETCH_INIT, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
 import {
   ECONOMIC_SERIES_DEFINITIONS,
@@ -56,8 +56,20 @@ function shouldUpsertRows(
   return rows.filter((row) => row.observationDate >= cutoff)
 }
 
+function requestInitForUrl(url: string): RequestInit | undefined {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    if (host === 'www.rba.gov.au' || host.endsWith('.rba.gov.au')) {
+      return RBA_GOV_AU_FETCH_INIT
+    }
+  } catch {
+    /* invalid url */
+  }
+  return undefined
+}
+
 async function fetchText(url: string, env: EnvBindings, sourceCode: string): Promise<string> {
-  const fetched = await fetchWithTimeout(url, undefined, { env })
+  const fetched = await fetchWithTimeout(url, requestInitForUrl(url), { env })
   log.info('economic', 'upstream_fetch', {
     context:
       `source=${sourceCode} host=${hostFromUrl(url)}` +

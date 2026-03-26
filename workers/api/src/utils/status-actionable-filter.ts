@@ -54,6 +54,14 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'pipeline' && message === 'cpi_collection_unavailable' && ctxLower.includes('403')) {
     return true
   }
+  // Economic RBA CSV/HTML fetches hit the same 403 bot wall without browser-like headers.
+  if (
+    source === 'economic' &&
+    (message === 'economic series parsing failed' || code === 'economic_series_parse_failed') &&
+    String(entry.context ?? '').includes('upstream_not_ok:403')
+  ) {
+    return true
+  }
   // Pre-2026-03-26 stall detector fired on "scanned but none finalized" even when no row was ready to finalize.
   // Current scheduler logs include ready_candidate_rows; keep those actionable.
   const ctx = String(entry.context ?? '')

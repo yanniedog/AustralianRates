@@ -68,6 +68,21 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores economic series parse failures when RBA upstream returned HTTP 403', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'economic',
+          level: 'warn',
+          message: 'Economic series parsing failed',
+          code: 'economic_series_parse_failed',
+          context: '{"series_id":"bank_bill_90d","message":"upstream_not_ok:403:https://www.rba.gov.au/x"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores legacy CPI collection warns when both RBA paths hit HTTP 403 (bot wall)', () => {
     expect(
       shouldIgnoreStatusActionableLog(
