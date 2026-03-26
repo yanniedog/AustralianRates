@@ -9,7 +9,7 @@
  * Requires ADMIN_API_TOKEN in environment or .env (same as production API worker).
  * API base: API_BASE or https://www.australianrates.com
  */
-import { existsSync, readFileSync, appendFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 function loadDotEnv() {
@@ -37,11 +37,6 @@ const token = process.env.ADMIN_API_TOKEN || ''
 const collectionDate = process.argv[2] || process.env.COLLECTION_DATE
 const pollMs = Math.max(5000, Number(process.env.VERIFY_POLL_MS || 20000))
 const maxAttempts = Math.max(1, Number(process.env.VERIFY_MAX_ATTEMPTS || 45))
-const logPath = resolve(process.cwd(), 'debug-cfdd1c.log')
-
-function ndlog(payload) {
-  appendFileSync(logPath, `${JSON.stringify({ ...payload, timestamp: Date.now() })}\n`)
-}
 
 async function adminFetch(path, init) {
   const url = `${base}/api/home-loan-rates/admin${path}`
@@ -103,14 +98,6 @@ async function main() {
       }),
     })
 
-    ndlog({
-      sessionId: 'cfdd1c',
-      hypothesisId: 'E2E',
-      location: 'verify-ubank-savings-gap.mjs',
-      message: 'reconcile_response',
-      data: { status: reconcile.res.status, ok: reconcile.json?.ok, result: reconcile.json?.result },
-    })
-
     if (!reconcile.res.ok) {
       console.error('reconcile HTTP', reconcile.res.status, JSON.stringify(reconcile.json).slice(0, 500))
       process.exitCode = 1
@@ -127,29 +114,9 @@ async function main() {
     )
     const rows = gaps.json?.report?.rows
     const bad = findUbankSavingsError(rows)
-    ndlog({
-      sessionId: 'cfdd1c',
-      hypothesisId: 'E2E',
-      location: 'verify-ubank-savings-gap.mjs',
-      message: 'poll_coverage_gaps',
-      data: {
-        attempt,
-        httpStatus: gaps.res.status,
-        gapCount: Array.isArray(rows) ? rows.length : null,
-        ubankSavingsError: bad
-          ? { severity: bad.severity, reasons: bad.reasons, index_fetch_succeeded: bad.index_fetch_succeeded }
-          : null,
-      },
-    })
 
     if (!bad) {
       console.log(`OK: no ubank/savings error row for ${collectionDate} (attempt ${attempt}).`)
-      ndlog({
-        sessionId: 'cfdd1c',
-        hypothesisId: 'E2E',
-        message: 'verify_pass',
-        data: { collectionDate, attempts: attempt },
-      })
       return
     }
 
