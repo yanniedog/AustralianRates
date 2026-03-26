@@ -252,7 +252,7 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
-  it('keeps the same warning actionable for other lenders', () => {
+  it('ignores daily savings empty_result noise for non-UBank lenders too', () => {
     expect(
       shouldIgnoreStatusActionableLog(
         {
@@ -262,6 +262,6 @@ describe('shouldIgnoreStatusActionableLog', () => {
         },
         'active',
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 })
