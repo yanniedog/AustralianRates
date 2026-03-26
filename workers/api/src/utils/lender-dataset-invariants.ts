@@ -71,10 +71,11 @@ export function assessLenderDatasetCoverage(
     const oneShortWithData = missing === 1 && writtenRows > 0
     if (!oneShortWithData) reasons.push('detail_processing_incomplete')
   }
-  if (expectedDetails > 0 && writtenRows <= 0) {
+  const terminalNoAcceptedRows = isCompletedWithNoAcceptedRows(snapshot)
+  if (expectedDetails > 0 && writtenRows <= 0 && !terminalNoAcceptedRows) {
     reasons.push('zero_written_rows_for_nonzero_expected_details')
   }
-  if (expectedDetails > 0 && acceptedRows <= 0) {
+  if (expectedDetails > 0 && acceptedRows <= 0 && !terminalNoAcceptedRows) {
     reasons.push('zero_accepted_rows_for_nonzero_expected_details')
   }
   if (expectedDetails > 0 && detailFetchEvents <= 0) {
@@ -208,7 +209,11 @@ export function isLenderDatasetCollectionComplete(
   const readiness = isLenderDatasetReadyForFinalization(snapshot)
   if (!readiness.ready) return false
   if (!snapshot.finalized_at) return false
-  if (asCount(snapshot.expected_detail_count) > 0 && asCount(snapshot.written_row_count) <= 0) {
+  if (
+    asCount(snapshot.expected_detail_count) > 0 &&
+    asCount(snapshot.written_row_count) <= 0 &&
+    !isCompletedWithNoAcceptedRows(snapshot)
+  ) {
     return false
   }
   return true

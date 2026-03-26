@@ -65,6 +65,21 @@ describe('lender dataset invariants', () => {
     ).toEqual({ ready: true, reason: null })
   })
 
+  it('treats terminal no-row completion as complete once finalized', () => {
+    const terminalNoRow = {
+      expected_detail_count: 1,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 0,
+      written_row_count: 0,
+      detail_fetch_event_count: 1,
+      lineage_error_count: 0,
+      completed_detail_count: 1,
+      failed_detail_count: 0,
+      finalized_at: '2026-03-26T00:00:00.000Z',
+    }
+    expect(isLenderDatasetCollectionComplete(terminalNoRow)).toBe(true)
+  })
+
   it('treats successful zero-expected rows as ready and complete only after finalization', () => {
     const base = {
       expected_detail_count: 0,
@@ -117,6 +132,24 @@ describe('lender dataset invariants', () => {
     expect(assessment.reasons).toContain('failed_detail_fetches_present')
     expect(assessment.reasons).toContain('zero_written_rows_for_nonzero_expected_details')
     expect(assessment.reasons).toContain('dataset_not_finalized')
+  })
+
+  it('does not flag terminal no-row completion as zero-accepted coverage error', () => {
+    const assessment = assessLenderDatasetCoverage({
+      expected_detail_count: 1,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 0,
+      written_row_count: 0,
+      detail_fetch_event_count: 1,
+      lineage_error_count: 0,
+      completed_detail_count: 1,
+      failed_detail_count: 0,
+      finalized_at: '2026-03-26T00:00:00.000Z',
+    })
+
+    expect(assessment.severity).toBe('ok')
+    expect(assessment.reasons).not.toContain('zero_accepted_rows_for_nonzero_expected_details')
+    expect(assessment.reasons).not.toContain('zero_written_rows_for_nonzero_expected_details')
   })
 
   it('allows finalization when majority of detail fetches completed (partial success)', () => {
