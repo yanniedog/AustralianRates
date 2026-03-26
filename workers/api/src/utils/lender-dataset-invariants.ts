@@ -108,6 +108,31 @@ export function assessLenderDatasetCoverage(
 /** Minimum share of expected detail fetches that must complete to allow finalization when some failed (e.g. bank returns 400 for a few product IDs). */
 const MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION = 0.75
 
+function isCompletedWithNoAcceptedRows(
+  snapshot: Pick<
+    LenderDatasetInvariantSnapshot,
+    | 'expected_detail_count'
+    | 'accepted_row_count'
+    | 'written_row_count'
+    | 'detail_fetch_event_count'
+    | 'completed_detail_count'
+    | 'failed_detail_count'
+  >,
+): boolean {
+  const expectedDetails = asCount(snapshot.expected_detail_count)
+  const acceptedRows = asCount(snapshot.accepted_row_count)
+  const writtenRows = asCount(snapshot.written_row_count)
+  const detailFetchEvents = asCount(snapshot.detail_fetch_event_count)
+  const completedDetails = asCount(snapshot.completed_detail_count)
+  const failedDetails = asCount(snapshot.failed_detail_count)
+  const processedDetails = completedDetails + failedDetails
+  if (expectedDetails !== 1) return false
+  if (processedDetails < expectedDetails) return false
+  if (failedDetails > 0) return false
+  if (detailFetchEvents <= 0) return false
+  return acceptedRows <= 0 && writtenRows <= 0
+}
+
 export function isLenderDatasetReadyForFinalization(
   snapshot: Pick<
     LenderDatasetInvariantSnapshot,
@@ -146,6 +171,11 @@ export function isLenderDatasetReadyForFinalization(
     if (!oneShortWithData) {
       return { ready: false, reason: 'detail_processing_incomplete' }
     }
+  }
+  // Some CDR product details legitimately contain no ingestible rate rows (e.g. business-only shells).
+  // If all expected detail jobs completed and none failed, allow finalization as a terminal no-row outcome.
+  if (isCompletedWithNoAcceptedRows(snapshot)) {
+    return { ready: true, reason: null }
   }
   if (asCount(snapshot.accepted_row_count) <= 0) {
     return { ready: false, reason: 'zero_accepted_rows_for_nonzero_expected_details' }

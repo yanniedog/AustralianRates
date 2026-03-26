@@ -628,6 +628,36 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
     }
   }
 
+  // Safety net: if rows were scanned but none were marked in per-row flow, run one
+  // cutoff-based bulk close so stale rows cannot stay unfinalized indefinitely.
+  if (!dryRun && (rows.results ?? []).length > 0 && forceClosedRows === 0) {
+    try {
+      const now = nowIso()
+      const bulk = await db
+        .prepare(
+          `UPDATE lender_dataset_runs
+           SET finalized_at = ?1,
+               updated_at = ?1
+           WHERE finalized_at IS NULL
+             AND updated_at < ?2`,
+        )
+        .bind(now, cutoff)
+        .run()
+      const bulkClosed = Number(bulk.meta?.changes ?? 0)
+      if (bulkClosed > 0) {
+        forceClosedRows += bulkClosed
+        log.warn('run_reconciliation', 'Applied stale-unfinalized bulk close safety net', {
+          context: {
+            cutoff_iso: cutoff,
+            bulk_closed_rows: bulkClosed,
+          },
+        })
+      }
+    } catch (bulkError) {
+      pushError(errors, `bulk_close:${(bulkError as Error)?.message || String(bulkError)}`)
+    }
+  }
+
   return {
     cutoff_iso: cutoff,
     stale_minutes: staleMinutes,

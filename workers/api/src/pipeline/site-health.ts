@@ -47,6 +47,14 @@ export type SiteHealthRunResult = {
   actionableIssues: ReturnType<typeof toActionableIssueSummaries>
 }
 
+function hasEconomicFailureSignal(report: EconomicCoverageReport): boolean {
+  if (report.summary.public_probe_failures > 0) return true
+  if (report.findings.some((finding) => finding.severity === 'error')) return true
+  // Guard against empty/legacy placeholder reports that should not fail overall health.
+  if (report.summary.defined_series <= 0 && report.summary.status_rows <= 0 && report.findings.length === 0) return false
+  return report.summary.severity === 'red'
+}
+
 function normalizeOrigin(origin: string): string {
   return String(origin || '').replace(/\/+$/, '')
 }
@@ -455,33 +463,39 @@ export async function runSiteHealthChecks(
         },
       ],
     }))
-  const economicPromise = runEconomicCoverageAudit(env.DB, { checkedAt }).catch(() => ({
-    checked_at: checkedAt,
-    summary: {
-      defined_series: ECONOMIC_SERIES_DEFINITIONS.length,
-      status_rows: 0,
-      observed_series: 0,
-      ok_series: 0,
-      stale_series: 0,
-      error_series: 0,
-      missing_series: ECONOMIC_SERIES_DEFINITIONS.length,
-      invalid_rows: 0,
-      orphan_rows: 0,
-      public_probe_failures: 0,
-      severity: 'red' as const,
-    },
-    probes: [],
-    findings: [
-      {
-        code: 'economic_coverage_runtime_error',
-        severity: 'error' as const,
-        message: 'Economic coverage audit failed to execute.',
-        count: 1,
-        sample: [],
+  const economicPromise = runEconomicCoverageAudit(env.DB, { checkedAt }).catch((error) => {
+    log.error('pipeline', 'site_health_economic_audit_failed', {
+      error,
+      context: `run_id=${runId}`,
+    })
+    return {
+      checked_at: checkedAt,
+      summary: {
+        defined_series: ECONOMIC_SERIES_DEFINITIONS.length,
+        status_rows: 0,
+        observed_series: 0,
+        ok_series: 0,
+        stale_series: 0,
+        error_series: 0,
+        missing_series: ECONOMIC_SERIES_DEFINITIONS.length,
+        invalid_rows: 0,
+        orphan_rows: 0,
+        public_probe_failures: 0,
+        severity: 'red' as const,
       },
-    ],
-    per_series: [],
-  }))
+      probes: [],
+      findings: [
+        {
+          code: 'economic_coverage_runtime_error',
+          severity: 'error' as const,
+          message: 'Economic coverage audit failed to execute.',
+          count: 1,
+          sample: [],
+        },
+      ],
+      per_series: [],
+    }
+  })
 
   const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig, economicCheck, economicCoverage] = await Promise.all([
     Promise.all(
@@ -523,7 +537,7 @@ export async function runSiteHealthChecks(
     .map((c) => `${c.key}: status=${c.status}${c.detail ? ` detail=${c.detail}` : ''}`)
 
   if (!integrity.ok) failures.push('integrity_checks_failed')
-  if (economic.summary.severity === 'red') failures.push('economic_coverage_failed')
+  if (hasEconomicFailureSignal(economic)) failures.push('economic_coverage_failed')
   if (!e2e.aligned) failures.push(`e2e_not_aligned:${e2e.reasonCode}`)
 
   const actionableIssues = toActionableIssueSummaries(

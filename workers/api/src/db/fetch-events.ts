@@ -116,9 +116,11 @@ export async function persistFetchEvent(env: RawEnv, input: PersistFetchInput): 
 
     rawObjectCreated = Number(insertedRawObject.meta?.changes || 0) > 0
     if (rawObjectCreated) {
-      rawObject = {
-        content_hash: contentHash,
-        r2_key: generatedR2Key,
+      // Re-read after insert instead of trusting D1 "changes" metadata alone.
+      // This prevents recording fetch_events.raw_object_created=1 when the row is not queryable.
+      rawObject = await getRawObjectByHash(env.DB, contentHash)
+      if (!rawObject) {
+        throw new Error(`raw_object_insert_reported_but_missing:${contentHash}`)
       }
     } else {
       rawObject = await getRawObjectByHash(env.DB, contentHash)

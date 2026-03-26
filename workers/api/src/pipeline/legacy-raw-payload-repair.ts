@@ -1,4 +1,5 @@
 import type { EnvBindings } from '../types'
+import { buildRawR2Key } from '../utils/idempotency'
 
 type LegacyRawPayloadCandidate = {
   content_hash: string
@@ -20,7 +21,8 @@ function inferContentType(sourceType: string): string {
 }
 
 async function loadCandidates(db: D1Database, limit: number): Promise<LegacyRawPayloadCandidate[]> {
-  const result = await db
+  const safeLimit = Math.max(1, Math.min(5000, Math.floor(limit || 500)))
+  const rawPayloadResult = await db
     .prepare(
       `SELECT
          rp.content_hash,
@@ -36,10 +38,50 @@ async function loadCandidates(db: D1Database, limit: number): Promise<LegacyRawP
        ORDER BY MIN(rp.fetched_at) ASC
        LIMIT ?1`,
     )
-    .bind(Math.max(1, Math.min(5000, Math.floor(limit || 500))))
+    .bind(safeLimit)
     .all<LegacyRawPayloadCandidate>()
 
-  return result.results ?? []
+  const fetchEventResult = await db
+    .prepare(
+      `SELECT
+         fe.content_hash,
+         MAX(fe.source_type) AS source_type,
+         MAX(fe.source_url) AS source_url,
+         MIN(fe.fetched_at) AS fetched_at
+       FROM fetch_events fe
+       LEFT JOIN raw_objects ro
+         ON ro.content_hash = fe.content_hash
+       WHERE fe.raw_object_created = 1
+         AND fe.content_hash IS NOT NULL
+         AND TRIM(fe.content_hash) != ''
+         AND ro.content_hash IS NULL
+       GROUP BY fe.content_hash
+       ORDER BY MIN(fe.fetched_at) ASC
+       LIMIT ?1`,
+    )
+    .bind(safeLimit)
+    .all<{ content_hash: string; source_type: string; source_url: string; fetched_at: string }>()
+
+  const merged = new Map<string, LegacyRawPayloadCandidate>()
+  for (const candidate of rawPayloadResult.results ?? []) {
+    merged.set(candidate.content_hash, candidate)
+  }
+  for (const row of fetchEventResult.results ?? []) {
+    const contentHash = String(row.content_hash || '').trim()
+    if (!contentHash || merged.has(contentHash)) continue
+    const sourceType = String(row.source_type || '').trim() || 'wayback_html'
+    const sourceUrl = String(row.source_url || '').trim() || `rehydrate://${contentHash}`
+    const fetchedAt = String(row.fetched_at || '').trim() || new Date().toISOString()
+    merged.set(contentHash, {
+      content_hash: contentHash,
+      source_type: sourceType,
+      source_url: sourceUrl,
+      r2_key: buildRawR2Key(sourceType, fetchedAt, contentHash),
+      fetched_at: fetchedAt,
+    })
+  }
+
+  return Array.from(merged.values()).slice(0, safeLimit)
 }
 
 export async function repairLegacyRawPayloadLinkage(
