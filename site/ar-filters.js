@@ -175,20 +175,71 @@
         }));
     }
 
+    function getFieldOptions(field) {
+        var el = field ? getFilterEl(field.id) : null;
+        if (!el || el.options.length < 2) return null;
+        var options = [];
+        for (var i = 0; i < el.options.length; i++) {
+            var opt = el.options[i];
+            options.push({ value: opt.value, label: opt.text });
+        }
+        return options;
+    }
+
     function renderActiveFilterChips() {
         if (!els.activeFilterChips) return;
-        var chips = getChipEntries(getDisplayParams()).map(function (entry) {
-            return '' +
-                '<button class="filter-chip" type="button" data-remove-param="' + esc(entry.key) + '" data-remove-value="' + esc(entry.rawValue) + '">' +
-                    '<strong>' + esc(entry.label) + ':</strong> ' + esc(entry.displayValue) +
-                    '<span class="filter-chip-remove" aria-hidden="true">&times;</span>' +
-                '</button>';
-        });
+        var entries = getChipEntries(getDisplayParams());
 
-        if (!chips.length) {
-            els.activeFilterChips.innerHTML = '<span class="filter-chip filter-chip-empty">0</span>';
+        if (!entries.length) {
+            els.activeFilterChips.hidden = true;
             return;
         }
+        els.activeFilterChips.hidden = false;
+
+        var chips = entries.map(function (entry) {
+            var field = findFieldByParam(entry.key);
+            var removeBtn = '<button class="chip-remove" type="button"' +
+                ' data-remove-param="' + esc(entry.key) + '"' +
+                ' data-remove-value="' + esc(entry.rawValue) + '"' +
+                ' aria-label="Remove ' + esc(entry.label) + ' filter">&times;</button>';
+
+            // Multi-select, date, text, or unknown: simple tag chip
+            if (!field || isMultiField(field) ||
+                entry.key === 'start_date' || entry.key === 'end_date' ||
+                entry.key === 'min_rate' || entry.key === 'max_rate' ||
+                entry.key === 'min_comparison_rate' || entry.key === 'max_comparison_rate' ||
+                entry.key === 'include_manual') {
+                return '<span class="filter-chip">' +
+                    '<span class="chip-key">' + esc(entry.label) + ':</span>' +
+                    '<span class="chip-val">' + esc(entry.displayValue) + '</span>' +
+                    removeBtn +
+                '</span>';
+            }
+
+            // Single-select field: editable select chip
+            var options = getFieldOptions(field);
+            if (!options) {
+                return '<span class="filter-chip">' +
+                    '<span class="chip-key">' + esc(entry.label) + ':</span>' +
+                    '<span class="chip-val">' + esc(entry.displayValue) + '</span>' +
+                    removeBtn +
+                '</span>';
+            }
+
+            var optionHtml = options.map(function (opt) {
+                var sel = opt.value === entry.rawValue ? ' selected' : '';
+                return '<option value="' + esc(opt.value) + '"' + sel + '>' + esc(opt.label) + '</option>';
+            }).join('');
+
+            return '<span class="filter-chip filter-chip--select">' +
+                '<span class="chip-key">' + esc(entry.label) + ':</span>' +
+                '<select class="chip-select" data-chip-param="' + esc(entry.key) + '" aria-label="' + esc(entry.label) + '">' +
+                    optionHtml +
+                '</select>' +
+                removeBtn +
+            '</span>';
+        });
+
         els.activeFilterChips.innerHTML = chips.join('');
     }
 
@@ -239,7 +290,22 @@
                     String(button.getAttribute('data-remove-value') || '')
                 );
             });
+            els.activeFilterChips.addEventListener('change', function (event) {
+                var select = event.target;
+                if (!select || !select.classList.contains('chip-select')) return;
+                var param = String(select.getAttribute('data-chip-param') || '');
+                var value = String(select.value || '');
+                setChipFilterValue(param, value);
+            });
         }
+    }
+
+    function setChipFilterValue(param, rawValue) {
+        var field = findFieldByParam(param);
+        var el = field ? getFilterEl(field.id) : null;
+        if (!el) return;
+        el.value = rawValue;
+        refreshFilterUiState();
     }
 
     function clearFilterValue(param, rawValue) {

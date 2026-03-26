@@ -1003,11 +1003,12 @@ body.ar-public .filters-more-grid .terminal-field {
     min-width: 100px;
 }
 
-/* ── Compact bank picker inside filter drawer ─────────────────────── */
+/* ── Compact bank picker — slim chips (logo + code inline) ────────── */
 body.ar-public .bank-picker-compact {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 5px;
-    max-height: 220px;
+    max-height: 120px;
     overflow-y: auto;
     padding: 0;
     border: 0;
@@ -1017,19 +1018,56 @@ body.ar-public .bank-picker-compact {
 }
 
 body.ar-public .bank-picker-compact button.bank-option-card {
-    min-height: 64px;
-    padding: 8px 8px 6px;
-    padding-top: 14px;
-    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    height: 30px;
+    padding: 0 10px 0 6px;
+    border-radius: 6px;
+    aspect-ratio: unset;
+    background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent) !important;
+    transform: none !important;
+}
+
+body.ar-public .bank-picker-compact button.bank-option-card:hover {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 40%, var(--ar-line-strong));
+    transform: none !important;
+}
+
+body.ar-public .bank-picker-compact button.bank-option-card.is-selected {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 80%, transparent);
+    background: color-mix(in srgb, var(--ar-showcase-spark) 16%, var(--ar-surface-2)) !important;
+}
+
+/* Remove the decorative accent bar pseudo-element */
+body.ar-public .bank-picker-compact button.bank-option-card::before {
+    display: none;
+}
+
+body.ar-public .bank-picker-compact .bank-badge {
+    display: contents;
 }
 
 body.ar-public .bank-picker-compact .bank-badge-logo-wrap {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex: 0 0 auto;
+}
+
+body.ar-public .bank-picker-compact .bank-badge-copy {
+    display: contents;
 }
 
 body.ar-public .bank-picker-compact .bank-badge-label {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--ar-text);
 }
 
 body.ar-public .bank-picker-compact .bank-badge-sub {
@@ -1061,6 +1099,90 @@ body.ar-public .chart-detail-area {
 
 body.ar-public .chart-detail-area[hidden] { display: none; }
 
+/* ── Active filter chip strip ───────────────────────────────────── */
+body.ar-public .chip-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--ar-line);
+}
+
+body.ar-public .chip-strip[hidden] { display: none; }
+
+/* Chip pill — wraps label + (select or value) + remove btn */
+body.ar-public .chip-strip .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border: 1px solid var(--ar-line);
+    border-radius: 999px;
+    background: var(--ar-surface-2);
+    color: var(--ar-text-soft);
+    height: 26px;
+    padding: 0 4px 0 9px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: default;
+    min-height: unset;
+}
+
+body.ar-public .chip-strip .chip-key {
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--ar-text);
+}
+
+body.ar-public .chip-strip .chip-val {
+    white-space: nowrap;
+}
+
+/* Inline select inside editable chip */
+body.ar-public .chip-strip .chip-select {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--ar-text);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    max-width: 140px;
+    appearance: auto;
+    -webkit-appearance: auto;
+}
+
+body.ar-public .chip-strip .chip-select:focus {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+/* × remove button inside chip */
+body.ar-public .chip-strip .chip-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ar-text-muted);
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    border-radius: 50%;
+    margin-left: 1px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+body.ar-public .chip-strip .chip-remove:hover {
+    background: var(--ar-surface-3, var(--ar-surface-2));
+    color: var(--ar-text);
+}
+
 /* ── Mobile adjustments ─────────────────────────────────────────── */
 @media (max-width: 760px) {
     body.ar-public .workspace-nav-row {
@@ -1081,7 +1203,6 @@ body.ar-public .chart-detail-area[hidden] { display: none; }
     }
 
     body.ar-public .bank-picker-compact {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        max-height: 180px;
+        max-height: 100px;
     }
 }

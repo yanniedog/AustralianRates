@@ -488,7 +488,6 @@
             '<details class="filters-drawer" id="filter-bar">' +
                 '<summary class="filters-drawer-summary">' +
                     iconText('filter', 'Filters', 'control-chip-label') +
-                    '<span id="active-filter-chips" class="filters-active-count"></span>' +
                     '<span id="filter-dirty-indicator" class="filter-dirty-dot" hidden></span>' +
                 '</summary>' +
                 '<div class="filters-drawer-body">' +
@@ -651,6 +650,9 @@
                         '</div>',
                         '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>',
                         '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
+
+                        // Active filter chips — always-visible editable strip
+                        '<div id="active-filter-chips" class="chip-strip" hidden></div>',
 
                         // Filter drawer (collapsed by default)
                         filterDrawerMarkup(ui),
