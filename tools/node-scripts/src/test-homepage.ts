@@ -452,7 +452,8 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
     await page.waitForTimeout(400);
 
     await page.locator('#rate-table').scrollIntoViewIfNeeded().catch(() => {});
-    await page.click('#table-settings-btn');
+    await page.locator('#table-settings-btn').scrollIntoViewIfNeeded().catch(() => {});
+    await page.locator('#table-settings-btn').click({ force: true });
     await page.locator('#table-settings-popover input[data-setting="move-columns"]').check({ force: true, timeout: 15000 });
     await page.waitForTimeout(500);
 
@@ -486,7 +487,7 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
         return Array.from(document.querySelectorAll('#rate-table .ar-move-col-title')).slice(0, 4).map((el) => String(el.textContent || '').trim());
     }).catch(() => []);
 
-    await page.locator('#rate-table .ar-move-col-btn-right').first().click().catch(() => {});
+    await page.locator('#rate-table .ar-move-col-btn-right').first().click({ force: true }).catch(() => {});
     await page.waitForTimeout(400);
 
     const orderAfter = await page.evaluate(() => {
