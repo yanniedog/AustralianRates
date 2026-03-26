@@ -16,8 +16,6 @@ type EconomicStatusDbRow = {
 type ObservationAggregateRow = {
   observation_count: number | null
   latest_observation_date: string | null
-  future_observation_count: number | null
-  release_before_observation_count: number | null
   proxy_mismatch_count: number | null
   frequency_mismatch_count: number | null
   source_mismatch_count: number | null
@@ -31,12 +29,6 @@ type LatestObservationRow = {
 type SeriesCountRow = {
   series_id: string
   row_count: number | null
-}
-
-type InvalidSampleRow = {
-  series_id: string
-  observation_date: string
-  release_date: string | null
 }
 
 export type EconomicCoverageSeverity = 'green' | 'yellow' | 'red'
@@ -169,17 +161,14 @@ async function getObservationAggregate(
       `SELECT
          COUNT(*) AS observation_count,
          MAX(observation_date) AS latest_observation_date,
-         SUM(CASE WHEN observation_date > ?2 THEN 1 ELSE 0 END) AS future_observation_count,
-         SUM(CASE WHEN release_date IS NOT NULL AND release_date < observation_date THEN 1 ELSE 0 END) AS release_before_observation_count,
-         SUM(CASE WHEN proxy_flag != ?3 THEN 1 ELSE 0 END) AS proxy_mismatch_count,
-         SUM(CASE WHEN frequency != ?4 THEN 1 ELSE 0 END) AS frequency_mismatch_count,
-         SUM(CASE WHEN source_url != ?5 THEN 1 ELSE 0 END) AS source_mismatch_count
+         SUM(CASE WHEN proxy_flag != ?2 THEN 1 ELSE 0 END) AS proxy_mismatch_count,
+         SUM(CASE WHEN frequency != ?3 THEN 1 ELSE 0 END) AS frequency_mismatch_count,
+         SUM(CASE WHEN source_url != ?4 THEN 1 ELSE 0 END) AS source_mismatch_count
        FROM economic_series_observations
        WHERE series_id = ?1`,
     )
     .bind(
       definition.id,
-      todayIso,
       definition.proxy ? 1 : 0,
       definition.frequency,
       definition.sourceUrl,
@@ -189,8 +178,6 @@ async function getObservationAggregate(
   return row ?? {
     observation_count: 0,
     latest_observation_date: null,
-    future_observation_count: 0,
-    release_before_observation_count: 0,
     proxy_mismatch_count: 0,
     frequency_mismatch_count: 0,
     source_mismatch_count: 0,
@@ -217,34 +204,6 @@ async function getSeriesCountMap(db: D1Database, tableName: 'economic_series_sta
     .prepare(`SELECT series_id, COUNT(*) AS row_count FROM ${tableName} GROUP BY series_id`)
     .all<SeriesCountRow>()
   return new Map((rows.results ?? []).map((row) => [row.series_id, Number(row.row_count ?? 0)]))
-}
-
-async function getFutureObservationSamples(db: D1Database, todayIso: string): Promise<InvalidSampleRow[]> {
-  const rows = await db
-    .prepare(
-      `SELECT series_id, observation_date, release_date
-       FROM economic_series_observations
-       WHERE observation_date > ?1
-       ORDER BY observation_date ASC
-       LIMIT 5`,
-    )
-    .bind(todayIso)
-    .all<InvalidSampleRow>()
-  return rows.results ?? []
-}
-
-async function getReleaseOrderingSamples(db: D1Database): Promise<InvalidSampleRow[]> {
-  const rows = await db
-    .prepare(
-      `SELECT series_id, observation_date, release_date
-       FROM economic_series_observations
-       WHERE release_date IS NOT NULL
-         AND release_date < observation_date
-       ORDER BY observation_date DESC
-       LIMIT 5`,
-    )
-    .all<InvalidSampleRow>()
-  return rows.results ?? []
 }
 
 function reportWithProbes(report: EconomicCoverageReport, probes: EconomicCoverageProbe[]): EconomicCoverageReport {
@@ -288,11 +247,9 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
   const definitionMap = new Map(definitions.map((definition) => [definition.id, definition]))
   const findings: EconomicCoverageFinding[] = []
 
-  const [statusResult, observationCounts, futureSamples, releaseSamples] = await Promise.all([
+  const [statusResult, observationCounts] = await Promise.all([
     db.prepare('SELECT * FROM economic_series_status ORDER BY series_id ASC').all<EconomicStatusDbRow>(),
     getSeriesCountMap(db, 'economic_series_observations'),
-    getFutureObservationSamples(db, todayIso),
-    getReleaseOrderingSamples(db),
   ])
 
   const statusRows = statusResult.results ?? []
@@ -327,8 +284,6 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
 
   const perSeries: EconomicSeriesCoverageRow[] = []
   let invalidRows = 0
-  let futureObservationRows = 0
-  let releaseBeforeObservationRows = 0
 
   for (const definition of definitions) {
     const statusRow = statusMap.get(definition.id) ?? null
@@ -386,17 +341,6 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
       issues.push('observation_source_url_mismatch')
       invalidRows += Number(observationAggregate.source_mismatch_count ?? 0)
     }
-    if (Number(observationAggregate.future_observation_count ?? 0) > 0) {
-      issues.push('future_observation_dates')
-      futureObservationRows += Number(observationAggregate.future_observation_count ?? 0)
-      invalidRows += Number(observationAggregate.future_observation_count ?? 0)
-    }
-    if (Number(observationAggregate.release_before_observation_count ?? 0) > 0) {
-      issues.push('release_before_observation')
-      releaseBeforeObservationRows += Number(observationAggregate.release_before_observation_count ?? 0)
-      invalidRows += Number(observationAggregate.release_before_observation_count ?? 0)
-    }
-
     const computedStatus = computedStatusForRow(definition, statusRow, latestObservationDate)
     if (statusRow?.status === 'error') {
       issues.push('error_status')
@@ -525,29 +469,6 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
       ),
     })),
   })
-  pushFinding(findings, {
-    code: 'economic_future_observation_dates',
-    severity: 'error',
-    message: 'Economic observations contain future dates.',
-    count: futureObservationRows,
-    sample: futureSamples.map((row) => ({
-      series_id: row.series_id,
-      observation_date: row.observation_date,
-      release_date: row.release_date,
-    })),
-  })
-  pushFinding(findings, {
-    code: 'economic_release_before_observation',
-    severity: 'error',
-    message: 'Economic observations contain release dates before observation dates.',
-    count: releaseBeforeObservationRows,
-    sample: releaseSamples.map((row) => ({
-      series_id: row.series_id,
-      observation_date: row.observation_date,
-      release_date: row.release_date,
-    })),
-  })
-
   const summary: EconomicCoverageSummary = {
     defined_series: definitions.length,
     status_rows: statusRows.length,

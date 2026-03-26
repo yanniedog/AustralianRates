@@ -311,19 +311,21 @@ body.ar-legal .legal-hero { animation: none; }
     }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px) and (orientation: portrait) {
     /* 2-row mobile header (brand row + segment nav row) is ~108px tall */
     body.ar-public {
         --ar-header-height: 108px;
     }
+}
 
+@media (max-width: 760px) {
     body.ar-public .market-terminal {
         grid-template-columns: minmax(0, 1fr);
     }
 
     body.ar-public .site-header,
     body.ar-legal .site-header {
-        width: calc(100vw - 24px);
+        width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
     }
 
     body.ar-public .site-header-actions,
@@ -333,7 +335,7 @@ body.ar-legal .legal-hero { animation: none; }
 
     body.ar-public .shell-public,
     body.ar-legal .shell {
-        width: calc(100vw - 24px);
+        width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
         padding-top: 16px;
     }
 
@@ -352,7 +354,7 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .terminal-panel,
     body.ar-public .terminal-subpanel,
     body.ar-public .terminal-notes {
-        padding: 16px;
+        padding: var(--ar-space-4);
         border-radius: 20px;
     }
 
@@ -370,14 +372,14 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .chart-preset {
         flex: 0 0 auto;
         scroll-snap-align: start;
-        min-height: 44px;
+        min-height: var(--ar-touch-min);
         padding-inline: 14px;
     }
 
 
     body.ar-public .terminal-mobile-fold,
     body.ar-public .terminal-context-panel {
-        padding: 16px;
+        padding: var(--ar-space-4);
         border: 1px solid var(--ar-line);
         border-radius: 20px;
         background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
@@ -481,6 +483,7 @@ body.ar-legal .legal-hero { animation: none; }
         flex-wrap: nowrap;
         overflow-x: auto;
         padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
     }
 
     body.ar-public .market-intro-nav-link {
@@ -489,7 +492,7 @@ body.ar-legal .legal-hero { animation: none; }
 
     body.ar-public .site-footer,
     body.ar-legal .site-footer {
-        width: calc(100vw - 24px);
+        width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
     }
 }
 
@@ -525,19 +528,19 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .footer-technical-summary,
     body.ar-legal .footer-technical-summary {
         padding: 4px 8px;
-        font-size: 0.62rem;
+        font-size: 0.68rem;
     }
 
     body.ar-public .footer-note,
     body.ar-legal .footer-note {
-        font-size: 0.62rem;
-        line-height: 1.4;
+        font-size: 0.68rem;
+        line-height: 1.45;
         margin-top: 6px;
         max-width: 100%;
         overflow-wrap: anywhere;
     }
 
     .footer-technical-body {
-        font-size: 0.62rem;
+        font-size: 0.68rem;
     }
 }

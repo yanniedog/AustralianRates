@@ -141,7 +141,7 @@ body.ar-public .market-intro-step p {
 
 @media (max-width: 760px) {
     body.ar-public .market-intro {
-        padding: 12px;
+        padding: var(--ar-shell-gutter);
     }
 
     body.ar-public .market-intro-head {
@@ -155,10 +155,47 @@ body.ar-public .market-intro-step p {
 
     body.ar-public .market-intro-actions .buttonish {
         flex: 1 1 auto;
-        min-height: 40px;
+        min-height: var(--ar-touch-min);
     }
 
     body.ar-public .market-intro-steps {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Landscape: compact hero, hide steps, keep it minimal */
+@media (max-height: 760px) and (orientation: landscape) {
+    body.ar-public .market-intro {
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        gap: 8px;
+    }
+
+    body.ar-public .market-intro-head {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+
+    body.ar-public .market-intro-title {
+        font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+        max-width: none;
+    }
+
+    body.ar-public .market-intro-summary {
+        display: none;
+    }
+
+    body.ar-public .market-intro-steps {
+        display: none;
+    }
+
+    body.ar-public .market-intro-body {
+        display: none;
+    }
+
+    body.ar-public .market-intro-nav-link {
+        min-height: 32px;
+        padding-inline: 10px;
+        font-size: 0.76rem;
     }
 }

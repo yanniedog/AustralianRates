@@ -1159,13 +1159,43 @@
     .chart-preset {
         flex: 0 0 auto;
         scroll-snap-align: start;
-        min-height: 44px;
+        min-height: var(--ar-touch-min);
     }
 
     .chart-series-card,
     .chart-spotlight-card {
-        min-height: 44px;
+        min-height: var(--ar-touch-min);
         padding: 14px;
+    }
+}
+
+/* Landscape mobile: maximise chart height, minimise chrome */
+@media (max-height: 760px) and (orientation: landscape) {
+    .terminal-chart-surface,
+    .terminal-chart-output,
+    #chart-output,
+    #chart-detail-output {
+        min-height: max(200px, calc(100dvh - var(--ar-header-height) - 80px));
+    }
+
+    .chart-toolbar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 8px 12px;
+        gap: 8px;
+    }
+
+    .chart-footer {
+        padding: 8px 12px;
+        gap: 8px 12px;
+    }
+
+    .chart-filter-grid-primary {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .chart-selection-rail {
+        max-height: min(160px, 30dvh);
     }
 }
 

@@ -12,7 +12,8 @@
     var refreshFrame = 0;
 
     function isMobileViewport() {
-        return window.innerWidth <= MOBILE_BREAKPOINT;
+        return window.innerWidth <= MOBILE_BREAKPOINT ||
+            (window.innerHeight <= MOBILE_BREAKPOINT && window.matchMedia('(orientation: landscape)').matches);
     }
 
     function prefersReducedMotion() {

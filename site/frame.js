@@ -692,7 +692,10 @@
     function shouldShowMenuButton(context) {
         if (context.legal) return true;
         if (context.admin || context.notFound) return false;
-        return !!(window.matchMedia && window.matchMedia('(max-width: 760px)').matches);
+        return !!(window.matchMedia && (
+            window.matchMedia('(max-width: 760px)').matches ||
+            window.matchMedia('(max-height: 760px) and (orientation: landscape)').matches
+        ));
     }
 
     function syncMenuButtonState(context) {

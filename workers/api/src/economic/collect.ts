@@ -89,9 +89,11 @@ async function fetchTextWithFallback(
   env: EnvBindings,
   sourceCode: string,
 ): Promise<string> {
+  let primaryError: unknown = null
   try {
     return await fetchText(primaryUrl, env, sourceCode)
   } catch (error) {
+    primaryError = error
     if (!fallbackUrl || fallbackUrl === primaryUrl) throw error
     log.warn('economic', 'Primary upstream fetch failed; retrying fallback transport', {
       code: 'economic_series_fetch_failed',
@@ -102,7 +104,26 @@ async function fetchTextWithFallback(
         message: (error as Error)?.message ?? String(error),
       }),
     })
-    return fetchText(fallbackUrl, env, sourceCode)
+    try {
+      return await fetchText(fallbackUrl, env, sourceCode)
+    } catch (fallbackError) {
+      // Some transport mirrors intermittently return 429/52x. Retry primary once.
+      const fallbackMessage = String((fallbackError as Error)?.message ?? fallbackError)
+      if (fallbackMessage.includes('upstream_not_ok:429:') || fallbackMessage.includes('upstream_not_ok:52')) {
+        log.warn('economic', 'Fallback transport unavailable; retrying primary once', {
+          code: 'economic_series_fetch_failed',
+          context: JSON.stringify({
+            source: sourceCode,
+            primary_url: primaryUrl,
+            fallback_url: fallbackUrl,
+            primary_error: (primaryError as Error)?.message ?? String(primaryError),
+            fallback_error: fallbackMessage,
+          }),
+        })
+        return fetchText(primaryUrl, env, sourceCode)
+      }
+      throw fallbackError
+    }
   }
 }
 
@@ -265,13 +286,11 @@ async function collectLendingProxy(
 
 async function collectRbnzSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
   if (definition.collector.kind !== 'rbnz_ocr_history') return []
-  const text = await fetchTextWithFallback(
-    definition.collector.url,
-    definition.collector.transportUrl,
-    env,
-    'economic_rbnz_ocr',
-  )
-  return parseRbnzOcrText(text, definition.id, definition.sourceUrl, definition.proxy)
+  const primaryText = await fetchText(definition.collector.url, env, 'economic_rbnz_ocr')
+  const primaryRows = parseRbnzOcrText(primaryText, definition.id, definition.sourceUrl, definition.proxy)
+  if (primaryRows.length > 0) return primaryRows
+  const transportText = await fetchText(definition.collector.transportUrl, env, 'economic_rbnz_ocr')
+  return parseRbnzOcrText(transportText, definition.id, definition.sourceUrl, definition.proxy)
 }
 
 async function collectFedSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
@@ -287,7 +306,12 @@ async function collectFedSeries(env: EnvBindings, definition: EconomicSeriesDefi
 
 async function collectFredSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
   if (definition.collector.kind !== 'fred_csv') return []
-  const csv = await fetchText(definition.collector.url, env, 'economic_fred_proxy')
+  const csv = await fetchTextWithFallback(
+    definition.collector.url,
+    definition.collector.transportUrl,
+    env,
+    'economic_fred_proxy',
+  )
   if (definition.collector.valueMode === 'china_yoy_from_level') {
     return parseFredChinaGdpProxyCsv(csv, definition.id, definition.sourceUrl, definition.proxy)
   }

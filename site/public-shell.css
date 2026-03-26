@@ -181,13 +181,13 @@ body.ar-not-found .site-header-context {
 }
 
 .shell {
-    width: min(var(--ar-shell-max), calc(100vw - 32px));
+    width: min(var(--ar-shell-max), calc(100vw - calc(var(--ar-shell-gutter) * 2)));
     margin: 0 auto;
     padding: 18px 0 36px;
 }
 
 .shell-public {
-    width: min(var(--ar-shell-max), calc(100vw - 24px));
+    width: min(var(--ar-shell-max), calc(100vw - calc(var(--ar-shell-gutter) * 2)));
 }
 
 body.ar-public .disclaimer {
@@ -218,7 +218,7 @@ body.ar-public .disclaimer {
 .terminal-column-left {
     position: sticky;
     top: calc(var(--ar-header-height) + 18px);
-    max-height: calc(100vh - var(--ar-header-height) - 36px);
+    max-height: calc(100dvh - var(--ar-header-height) - 36px);
     overflow: auto;
     padding-right: 4px;
 }
@@ -233,8 +233,8 @@ body.ar-public .disclaimer {
     top: calc(var(--ar-header-height) + 18px);
     align-self: start;
     min-width: 0;
-    min-height: calc(100vh - var(--ar-header-height) - 36px);
-    height: calc(100vh - var(--ar-header-height) - 36px);
+    min-height: calc(100dvh - var(--ar-header-height) - 36px);
+    height: calc(100dvh - var(--ar-header-height) - 36px);
     cursor: col-resize;
     touch-action: none;
     user-select: none;
@@ -442,7 +442,7 @@ body.is-resizing-panels * {
 
 .site-footer {
     margin: 18px auto 0;
-    width: min(var(--ar-shell-max), calc(100vw - 32px));
+    width: min(var(--ar-shell-max), calc(100vw - calc(var(--ar-shell-gutter) * 2)));
     padding-bottom: 28px;
 }
 
@@ -784,7 +784,7 @@ body.ar-not-found .market-intro-actions {
     .shell,
     .shell-public,
     .site-footer {
-        width: calc(100vw - 24px);
+        width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
     }
 
     .market-terminal {
@@ -794,10 +794,10 @@ body.ar-not-found .market-intro-actions {
     .terminal-column-left {
         position: fixed;
         top: calc(var(--ar-header-height) + 10px);
-        left: 12px;
-        bottom: 12px;
+        left: var(--ar-shell-gutter);
+        bottom: var(--ar-shell-gutter);
         z-index: 100;
-        width: min(320px, calc(100vw - 24px));
+        width: min(320px, calc(100vw - calc(var(--ar-shell-gutter) * 2)));
         max-height: none;
         padding-right: 0;
         transform: translateX(calc(-100% - 18px));
@@ -811,8 +811,8 @@ body.ar-not-found .market-intro-actions {
 
     .terminal-panel-close-mobile {
         display: inline-flex;
-        min-width: 44px;
-        min-height: 44px;
+        min-width: var(--ar-touch-min);
+        min-height: var(--ar-touch-min);
     }
 
     .site-footer-inner {
@@ -822,8 +822,9 @@ body.ar-not-found .market-intro-actions {
 
     .site-help-panel,
     .site-menu-panel {
-        inset: auto 12px 12px 12px;
+        inset: auto var(--ar-shell-gutter) var(--ar-shell-gutter) var(--ar-shell-gutter);
         width: auto;
+        max-height: calc(100dvh - calc(var(--ar-shell-gutter) * 2));
     }
 
     body.ar-not-found .shell-public {

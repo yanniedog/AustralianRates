@@ -37,6 +37,7 @@ type FedCollector = {
 type FredCollector = {
   kind: 'fred_csv'
   url: string
+  transportUrl?: string
   valueMode: 'identity' | 'china_yoy_from_level'
 }
 
@@ -78,10 +79,11 @@ const RBA_F11 = 'https://www.rba.gov.au/statistics/tables/csv/f11-data.csv'
 const RBA_I2 = 'https://www.rba.gov.au/statistics/tables/csv/i2-data.csv'
 const RBA_J1 = 'https://www.rba.gov.au/statistics/tables/csv/j1-star-variables.csv'
 const RBNZ_DECISIONS = 'https://www.rbnz.govt.nz/monetary-policy/monetary-policy-decisions'
-const RBNZ_DECISIONS_TRANSPORT = 'https://r.jina.ai/http://https://www.rbnz.govt.nz/monetary-policy/monetary-policy-decisions'
+const RBNZ_DECISIONS_TRANSPORT = 'https://r.jina.ai/http://www.rbnz.govt.nz/monetary-policy/monetary-policy-decisions'
 const FED_OPEN_MARKET = 'https://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
-const FED_OPEN_MARKET_TRANSPORT = 'https://r.jina.ai/http://https://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
+const FED_OPEN_MARKET_TRANSPORT = 'https://r.jina.ai/http://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
 const FRED_CHINA_GDP = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPNQDSMEI'
+const FRED_CHINA_GDP_TRANSPORT = 'https://r.jina.ai/http://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPNQDSMEI'
 
 export const ECONOMIC_PRESETS: Array<{
   id: EconomicPresetId
@@ -328,7 +330,12 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     staleAfterDays: 140,
     description: 'Quarterly year-over-year China GDP proxy derived from the OECD GDP level series delivered via FRED.',
     presets: ['global_pulse'],
-    collector: { kind: 'fred_csv', url: FRED_CHINA_GDP, valueMode: 'china_yoy_from_level' },
+    collector: {
+      kind: 'fred_csv',
+      url: FRED_CHINA_GDP,
+      transportUrl: FRED_CHINA_GDP_TRANSPORT,
+      valueMode: 'china_yoy_from_level',
+    },
   },
   {
     id: 'capacity_utilisation_proxy',

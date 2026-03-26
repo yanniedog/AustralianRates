@@ -97,6 +97,12 @@ async function main(): Promise<void> {
       failures: Array.isArray(payload?.health?.latest?.failures) ? payload.health.latest.failures : null,
       economicSummary: payload?.health?.latest?.economic?.summary ?? null,
     });
+    const findings = ((payload?.health?.latest?.economic as { findings?: Array<{ code?: unknown; sample?: unknown }> } | undefined)?.findings) ?? [];
+    const errorStatusFinding = findings.find((f) => String(f?.code ?? '') === 'economic_error_status_rows');
+    debugLog('H9', 'fetch-status-debug-bundle.ts:main:error_status_rows', 'economic_error_status_rows_snapshot', {
+      sample: Array.isArray(errorStatusFinding?.sample) ? errorStatusFinding?.sample : [],
+      findingCodes: findings.map((f) => String(f?.code ?? '')),
+    });
     const text = `${JSON.stringify(data, null, 2)}\n`;
     if (outPath) {
       const fs = await import('node:fs/promises');

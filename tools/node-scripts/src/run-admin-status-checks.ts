@@ -60,6 +60,7 @@ async function main(): Promise<void> {
 
   const out: {
     reconcileClosedStaleRuns?: number
+    economicCollectRun?: { status: number; ok: boolean; failed_series?: number }
     healthRun?: { status: number; ok: boolean; duration_ms?: number }
     cdrAuditRun?: { status: number; ok: boolean }
     health?: unknown
@@ -82,6 +83,24 @@ async function main(): Promise<void> {
         if (stale && Number((stale as { closed_runs?: number }).closed_runs) > 0) {
           out.reconcileClosedStaleRuns = (stale as { closed_runs: number }).closed_runs
         }
+      }
+    }
+
+    if (!noRun && !cdrOnly) {
+      const economicRes = await fetchAdmin('/economic/collect', { method: 'POST' })
+      const economicJson = economicRes.ok
+        ? ((await economicRes.json().catch(() => ({}))) as { result?: { failed_series?: unknown[] } })
+        : null
+      const failedSeries = Array.isArray(economicJson?.result?.failed_series)
+        ? economicJson?.result?.failed_series.length
+        : undefined
+      out.economicCollectRun = {
+        status: economicRes.status,
+        ok: economicRes.ok,
+        failed_series: failedSeries,
+      }
+      if (!economicRes.ok) {
+        out.errors.push(`economic/collect: HTTP ${economicRes.status}`)
       }
     }
 

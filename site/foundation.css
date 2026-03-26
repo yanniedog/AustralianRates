@@ -5,14 +5,15 @@ body {
 }
 
 :root {
+    /* ── Spacing scale (fluid: tightens on small viewports) ──────── */
     --ar-space-1: 4px;
-    --ar-space-2: 8px;
-    --ar-space-3: 12px;
-    --ar-space-4: 16px;
-    --ar-space-5: 24px;
-    --ar-space-6: 32px;
-    --ar-space-7: 48px;
-    --ar-space-8: 64px;
+    --ar-space-2: clamp(6px, 1vw, 8px);
+    --ar-space-3: clamp(8px, 1.5vw, 12px);
+    --ar-space-4: clamp(12px, 2vw, 16px);
+    --ar-space-5: clamp(16px, 3vw, 24px);
+    --ar-space-6: clamp(20px, 4vw, 32px);
+    --ar-space-7: clamp(28px, 5vw, 48px);
+    --ar-space-8: clamp(36px, 6vw, 64px);
     --ar-radius-1: 10px;
     --ar-radius-2: 16px;
     --ar-radius-3: 22px;
@@ -27,6 +28,12 @@ body {
     --ar-shell-max: 1760px;
     --ar-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
     --ar-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.14);
+    /* ── Responsive shell gutter (viewport-aware) ────────────────── */
+    --ar-shell-gutter: clamp(12px, 2vw, 16px);
+    /* ── Touch-target floor ──────────────────────────────────────── */
+    --ar-touch-min: 44px;
+    /* ── Responsive font sizes ───────────────────────────────────── */
+    --ar-font-base: clamp(0.875rem, 0.82rem + 0.25vw, 1rem);
 }
 
 :root[data-theme="dark"] {
@@ -78,13 +85,16 @@ body {
 }
 
 body {
-    min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
     background: var(--ar-bg);
     color: var(--ar-text);
     font-family: var(--ar-font-ui);
+    font-size: var(--ar-font-base);
     line-height: 1.45;
     text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 *,

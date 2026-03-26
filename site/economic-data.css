@@ -47,7 +47,7 @@ body.ar-section-economic-data .terminal-column-right {
     position: sticky;
     top: calc(var(--ar-header-height) + 18px);
     align-self: start;
-    max-height: calc(100vh - var(--ar-header-height) - 36px);
+    max-height: calc(100dvh - var(--ar-header-height) - 36px);
     overflow-x: hidden;
     overflow-y: auto;
     padding-right: 4px;
@@ -307,7 +307,7 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
     }
 
     body.ar-section-economic-data .economic-chart {
-        min-height: min(52vh, 380px);
+        min-height: min(52dvh, 380px);
     }
 
     body.ar-section-economic-data .economic-toolbar {
@@ -344,10 +344,44 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
 
 @media (max-width: 420px) {
     body.ar-section-economic-data .economic-chart {
-        min-height: min(48vh, 320px);
+        min-height: min(48dvh, 320px);
     }
 
     body.ar-section-economic-data .market-intro-title {
         font-size: clamp(1.25rem, 5.5vw, 1.65rem);
+    }
+}
+
+/* Landscape: maximise chart, compact controls */
+@media (max-height: 760px) and (orientation: landscape) {
+    body.ar-section-economic-data .market-terminal.economic-terminal {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    body.ar-section-economic-data .terminal-column-right {
+        position: static;
+        max-height: none;
+        overflow: visible;
+    }
+
+    body.ar-section-economic-data .economic-chart {
+        min-height: max(250px, calc(100dvh - var(--ar-header-height) - 80px));
+    }
+
+    body.ar-section-economic-data .economic-hero {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    body.ar-section-economic-data .economic-toolbar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    body.ar-section-economic-data .economic-chip-row .chip-btn {
+        min-height: 36px;
     }
 }

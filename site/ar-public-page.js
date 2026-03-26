@@ -46,7 +46,10 @@
     var iconText = typeof uiIcons.text === 'function' ? uiIcons.text : fallbackText;
     var panelIcon = typeof uiIcons.panel === 'function' ? uiIcons.panel : fallbackPanel;
     var iconOnly = typeof uiIcons.icon === 'function' ? uiIcons.icon : fallbackIcon;
-    var compactViewport = !!(window.matchMedia && window.matchMedia('(max-width: 760px)').matches);
+    var compactViewport = !!(window.matchMedia && (
+        window.matchMedia('(max-width: 760px)').matches ||
+        window.matchMedia('(max-height: 760px) and (orientation: landscape)').matches
+    ));
 
     function setMeta(selector, attr, value) {
         var el = document.querySelector(selector);

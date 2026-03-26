@@ -1,0 +1,718 @@
+/*
+ * responsive.css
+ * Centralised responsive layer for AustralianRates.
+ *
+ * Loaded AFTER all component CSS, BEFORE mobile-host.css.
+ * Handles: landscape orientation, compact mobile, container queries,
+ * safe-area insets, enhanced touch targets, scroll behaviour,
+ * and future-proof viewport-unit usage.
+ *
+ * Breakpoints (standardised across the project):
+ *   --  Desktop:        > 1280px
+ *   --  Compact desktop: 981px – 1280px
+ *   --  Tablet:         761px – 980px
+ *   --  Mobile:         <= 760px   (portrait)
+ *   --  Mobile landscape: <= 760px height AND orientation: landscape
+ *   --  Small phone:    <= 420px
+ *   --  Tiny phone:     <= 360px
+ */
+
+/* ================================================================
+   1.  ROOT RESPONSIVE TOKENS
+   ================================================================ */
+
+/* Mobile portrait: shorter header, tighter gutter */
+@media (max-width: 760px) and (orientation: portrait) {
+    :root {
+        --ar-header-height: 52px;
+        --ar-shell-gutter: 12px;
+        --ar-touch-min: 44px;
+    }
+}
+
+/* Mobile landscape: ultra-compact header so content gets maximum vertical space */
+@media (max-height: 760px) and (orientation: landscape) {
+    :root {
+        --ar-header-height: 44px;
+        --ar-shell-gutter: 12px;
+        --ar-touch-min: 40px;
+    }
+}
+
+/* Small phones: even tighter gutter */
+@media (max-width: 420px) {
+    :root {
+        --ar-shell-gutter: 10px;
+    }
+}
+
+/* ================================================================
+   2.  LANDSCAPE HEADER — ultra-compact single-row
+   ================================================================ */
+
+@media (max-height: 760px) and (orientation: landscape) {
+    .site-header {
+        min-height: 0;
+    }
+
+    .site-header-inner {
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: auto;
+        gap: 8px;
+        padding: 6px 14px;
+        min-height: var(--ar-header-height);
+    }
+
+    /* Brand stays compact */
+    .site-brand-tagline {
+        display: none;
+    }
+
+    .site-brand-mark {
+        width: 32px;
+        height: 32px;
+    }
+
+    .site-brand {
+        font-size: 0.84rem;
+    }
+
+    /* Nav segment: single horizontal scroll row inline with brand */
+    .site-header-segment {
+        grid-column: 2;
+        grid-row: 1;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        gap: 4px;
+        padding-bottom: 0;
+        scrollbar-width: none;
+    }
+
+    .site-header-segment::-webkit-scrollbar {
+        display: none;
+    }
+
+    .site-header-segment-link {
+        min-height: 32px;
+        padding: 0 10px;
+        font-size: 0.76rem;
+        flex-shrink: 0;
+    }
+
+    /* Actions: compact row */
+    .site-header-actions {
+        grid-column: 3;
+        grid-row: 1;
+        gap: 4px;
+        padding: 3px;
+    }
+
+    .site-action-btn,
+    .site-action-btn.icon-link,
+    .site-action-btn.icon-btn {
+        min-width: 34px;
+        min-height: 34px;
+        padding-inline: 8px;
+    }
+
+    .site-action-text {
+        display: none;
+    }
+}
+
+/* ================================================================
+   3.  LANDSCAPE LAYOUT — maximise horizontal space
+   ================================================================ */
+
+@media (max-height: 760px) and (orientation: landscape) {
+    /* Shell: narrower gutter for more content room */
+    .shell,
+    .shell-public,
+    .site-footer {
+        width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
+    }
+
+    /* Terminal grid: single column on small-height landscape */
+    .market-terminal {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* Left column: off-screen drawer (same as mobile portrait) */
+    .terminal-column-left {
+        position: fixed;
+        top: calc(var(--ar-header-height) + 8px);
+        left: 10px;
+        bottom: 10px;
+        z-index: 100;
+        width: min(300px, calc(100vw - 20px));
+        max-height: none;
+        padding-right: 0;
+        transform: translateX(calc(-100% - 18px));
+        transition: transform var(--ar-motion-base) var(--ar-ease);
+        background: var(--ar-bg);
+    }
+
+    body.is-nav-open .terminal-column-left {
+        transform: translateX(0);
+    }
+
+    .terminal-panel-close-mobile {
+        display: inline-flex;
+        min-width: var(--ar-touch-min);
+        min-height: var(--ar-touch-min);
+    }
+
+    /* Hide resizers */
+    .terminal-resizer {
+        display: none;
+    }
+
+    /* Footer: compact */
+    .site-footer-inner {
+        flex-direction: row;
+        gap: 8px 16px;
+        padding-top: 8px;
+    }
+
+    .footer-note {
+        font-size: 0.72rem;
+    }
+}
+
+/* ================================================================
+   4.  LANDSCAPE CHART — fill available viewport height
+   ================================================================ */
+
+@media (max-height: 760px) and (orientation: landscape) {
+    .terminal-chart-surface,
+    .terminal-chart-output,
+    #chart-output,
+    #chart-detail-output {
+        min-height: max(200px, calc(100dvh - var(--ar-header-height) - 80px));
+    }
+
+    .chart-toolbar {
+        padding: 8px 12px;
+        gap: 8px;
+    }
+
+    .chart-footer {
+        padding: 8px 12px;
+        gap: 8px 12px;
+    }
+
+    .chart-filter-bar {
+        padding: 10px 12px;
+    }
+
+    /* Chart question row: horizontal scroll */
+    .chart-question-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .chart-preset {
+        flex: 0 0 auto;
+        min-height: 36px;
+    }
+
+    /* Economic chart */
+    .economic-chart {
+        min-height: max(280px, calc(100dvh - var(--ar-header-height) - 100px));
+    }
+}
+
+/* ================================================================
+   5.  SHOWCASE / PUBLIC PAGES — landscape overrides
+   ================================================================ */
+
+@media (max-height: 760px) and (orientation: landscape) {
+    /* Public header: keep 1-row, no 2-row expansion */
+    body.ar-public {
+        --ar-header-height: 44px;
+    }
+
+    body.ar-public .site-header,
+    body.ar-legal .site-header {
+        top: 6px;
+        margin-top: 4px;
+    }
+
+    body.ar-public .site-header-inner,
+    body.ar-legal .site-header-inner {
+        min-height: 40px;
+        padding: 6px 12px;
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: auto;
+    }
+
+    body.ar-public .shell-public,
+    body.ar-legal .shell {
+        padding-top: 12px;
+        width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
+    }
+
+    /* Market intro: compact in landscape */
+    body.ar-public .market-intro {
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+
+    body.ar-public .market-intro-title {
+        font-size: clamp(1.2rem, 3vw, 1.8rem);
+        max-width: none;
+    }
+
+    body.ar-public .market-intro-steps {
+        display: none;
+    }
+
+    /* Chart: use full viewport minus compact header */
+    body.ar-public .chart-block {
+        height: calc(100dvh - var(--ar-header-height) - 8px);
+        max-height: calc(100dvh - var(--ar-header-height) - 8px);
+    }
+
+    body.ar-public .chart-figure .terminal-chart-surface {
+        min-height: 0;
+    }
+
+    body.ar-public .terminal-chart-output,
+    body.ar-public #chart-output {
+        min-height: max(180px, calc(100dvh - var(--ar-header-height) - 120px));
+    }
+
+    /* Hide chart footer in landscape for max chart space */
+    body.ar-public footer.chart-footer,
+    body.ar-public .chart-overview-in-footer {
+        display: none;
+    }
+
+    /* Footer: ultra-compact */
+    body.ar-public .site-footer,
+    body.ar-legal .site-footer {
+        padding-bottom: 8px;
+    }
+}
+
+/* ================================================================
+   6.  CONTAINER QUERIES — panels respond to their own width
+   ================================================================ */
+
+/* Establish container contexts on major layout panels */
+.terminal-column-center,
+.terminal-column-left,
+.terminal-column-right {
+    container-type: inline-size;
+    container-name: column;
+}
+
+.terminal-panel,
+.terminal-subpanel {
+    container-type: inline-size;
+    container-name: panel;
+}
+
+.chart-block {
+    container-type: inline-size;
+    container-name: chart;
+}
+
+.market-intro {
+    container-type: inline-size;
+    container-name: intro;
+}
+
+/* Panel-level responsive: when a panel is narrow, stack its grids */
+@container panel (max-width: 400px) {
+    .terminal-filter-grid-primary,
+    .terminal-filter-grid-advanced,
+    .terminal-filter-grid-secondary {
+        grid-template-columns: 1fr;
+    }
+
+    .terminal-action-row {
+        grid-template-columns: 1fr;
+    }
+
+    .terminal-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .exec-metric-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Chart-level: when chart block is narrow, stack filters */
+@container chart (max-width: 500px) {
+    .chart-filter-grid-primary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .chart-filter-grid-secondary {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .chart-overlay-picker {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@container chart (max-width: 360px) {
+    .chart-filter-grid-primary {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Intro-level: when intro is narrow, stack */
+@container intro (max-width: 480px) {
+    .market-intro-head {
+        grid-template-columns: 1fr;
+    }
+
+    .market-intro-actions {
+        justify-content: stretch;
+    }
+
+    .market-intro-steps {
+        grid-template-columns: 1fr;
+    }
+
+    .market-intro-live-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ================================================================
+   7.  ENHANCED TOUCH TARGETS — universal
+   ================================================================ */
+
+@media (pointer: coarse) {
+    /* Ensure all interactive elements meet minimum touch size */
+    button,
+    .buttonish,
+    select,
+    .chip-btn,
+    .tab-btn,
+    .chart-preset,
+    .site-header-segment-link,
+    .filter-pad-btn,
+    a.site-tree-leaf,
+    .site-tree-root a,
+    .admin-sidebar-link {
+        min-height: var(--ar-touch-min);
+    }
+
+    /* Larger checkboxes on touch */
+    input[type="checkbox"],
+    input[type="radio"] {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+    }
+
+    /* Footer links: comfortable tap area */
+    .site-footer-meta a {
+        min-height: var(--ar-touch-min);
+        padding: 8px 4px;
+        margin: -8px -4px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /* Scrollbar styling for touch: thin, unobtrusive */
+    * {
+        scrollbar-width: thin;
+    }
+
+    ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--ar-text-muted) 30%, transparent);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}
+
+/* ================================================================
+   8.  SAFE AREA INSETS — comprehensive (notch, Dynamic Island,
+       home indicator, landscape ears)
+   ================================================================ */
+
+@supports (padding: env(safe-area-inset-top)) {
+    body {
+        padding-left: env(safe-area-inset-left, 0);
+        padding-right: env(safe-area-inset-right, 0);
+    }
+
+    .site-header-inner {
+        padding-left: max(14px, env(safe-area-inset-left, 0));
+        padding-right: max(14px, env(safe-area-inset-right, 0));
+    }
+
+    .site-footer {
+        padding-bottom: max(28px, env(safe-area-inset-bottom, 0));
+    }
+
+    /* Landscape: left/right notch ears need more padding */
+    @media (orientation: landscape) {
+        .site-header-inner {
+            padding-left: max(14px, calc(env(safe-area-inset-left, 0) + 4px));
+            padding-right: max(14px, calc(env(safe-area-inset-right, 0) + 4px));
+        }
+
+        .shell,
+        .shell-public {
+            padding-left: env(safe-area-inset-left, 0);
+            padding-right: env(safe-area-inset-right, 0);
+        }
+    }
+
+    /* Fixed elements need bottom safe-area */
+    .terminal-column-left {
+        padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+
+    .site-help-panel,
+    .site-menu-panel {
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 0));
+    }
+}
+
+/* ================================================================
+   9.  SCROLL & INTERACTION — modern scroll behaviour
+   ================================================================ */
+
+/* Smooth scroll with reduced-motion respect (already in foundation.css
+   via prefers-reduced-motion; this adds scroll-snap for horizontal navs) */
+
+@media (max-width: 760px) {
+    .site-header-segment {
+        scroll-snap-type: x proximity;
+        overscroll-behavior-x: contain;
+    }
+
+    .site-header-segment-link {
+        scroll-snap-align: start;
+    }
+
+    /* Prevent pull-to-refresh interfering with vertical scroll areas */
+    .terminal-column-left,
+    .bank-picker-grid,
+    .chart-overlay-picker-options {
+        overscroll-behavior: contain;
+    }
+}
+
+/* Horizontal scrollers: hide scrollbar but keep functionality */
+.site-header-segment,
+.chart-question-row,
+.terminal-bottom-tabs {
+    scrollbar-width: none;
+}
+
+.site-header-segment::-webkit-scrollbar,
+.chart-question-row::-webkit-scrollbar,
+.terminal-bottom-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+/* ================================================================
+   10. SMALL PHONE ENHANCEMENTS (<=420px)
+   ================================================================ */
+
+@media (max-width: 420px) {
+    .site-brand-mark {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+    }
+
+    .site-brand {
+        font-size: 0.82rem;
+    }
+
+    .terminal-panel,
+    .terminal-subpanel,
+    .terminal-notes {
+        padding: 12px;
+    }
+
+    .bank-picker-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    button.bank-option-card {
+        min-height: 72px;
+        padding: 12px 8px 8px;
+    }
+
+    .terminal-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-compare-cards,
+    .executive-summary-sections {
+        gap: 8px;
+    }
+
+    /* Tighter chip spacing */
+    .chip-strip {
+        padding: 4px 10px;
+        gap: 4px;
+    }
+}
+
+/* ================================================================
+   11. TINY PHONE (<=360px) — e.g. iPhone SE, Galaxy Fold closed
+   ================================================================ */
+
+@media (max-width: 360px) {
+    :root {
+        --ar-shell-gutter: 8px;
+    }
+
+    .site-header-inner {
+        padding: 8px 10px;
+        gap: 6px;
+    }
+
+    .site-brand-copy {
+        display: none;
+    }
+
+    .terminal-panel,
+    .terminal-subpanel {
+        padding: 10px;
+        border-radius: 14px;
+    }
+
+    .chart-filter-bar {
+        padding: 10px;
+    }
+
+    .chart-toolbar {
+        padding: 10px;
+    }
+}
+
+/* ================================================================
+   12. TABLET LANDSCAPE (761px–1100px, landscape)
+   ================================================================ */
+
+@media (min-width: 761px) and (max-width: 1100px) and (orientation: landscape) {
+    /* 2-column grid works well here */
+    .market-terminal {
+        grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+        gap: 16px;
+    }
+
+    .terminal-resizer {
+        display: none;
+    }
+
+    .terminal-column-left {
+        position: sticky;
+        top: calc(var(--ar-header-height) + 14px);
+        max-height: calc(100dvh - var(--ar-header-height) - 28px);
+        overflow: auto;
+    }
+}
+
+/* ================================================================
+   13. HIGH-DPI & ACCESSIBILITY
+   ================================================================ */
+
+/* Respect user font-size preferences via rem-based sizing */
+@media (min-resolution: 2dppx) {
+    .chart-status-line {
+        font-size: 11px;
+    }
+}
+
+/* Ensure focus indicators are visible on all devices */
+@media (pointer: coarse) {
+    :focus-visible {
+        outline-width: 3px;
+        outline-offset: 3px;
+    }
+}
+
+/* ================================================================
+   14. ORIENTATION CHANGE — smooth transition
+   ================================================================ */
+
+@media (max-width: 1100px) {
+    .site-header,
+    .site-header-inner,
+    .market-terminal,
+    .terminal-column-left,
+    .shell,
+    .shell-public {
+        transition:
+            height var(--ar-motion-base) var(--ar-ease),
+            padding var(--ar-motion-base) var(--ar-ease),
+            grid-template-columns var(--ar-motion-base) var(--ar-ease),
+            width var(--ar-motion-base) var(--ar-ease);
+    }
+}
+
+/* ================================================================
+   15. PRINT — clean output when printing from mobile
+   ================================================================ */
+
+@media print {
+    .site-header,
+    .site-footer,
+    .terminal-column-left,
+    .terminal-resizer,
+    .bg-layer,
+    .skip-link,
+    .site-nav-scrim,
+    .site-help-sheet,
+    .site-menu-drawer,
+    #mobile-table-rail {
+        display: none !important;
+    }
+
+    body {
+        background: white;
+        color: black;
+        font-size: 12pt;
+    }
+
+    .shell,
+    .shell-public {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .market-terminal {
+        grid-template-columns: 1fr;
+    }
+
+    .terminal-chart-surface,
+    .terminal-chart-output,
+    #chart-output {
+        min-height: 300px;
+        break-inside: avoid;
+    }
+}
