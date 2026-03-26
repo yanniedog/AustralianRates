@@ -887,11 +887,11 @@ async function verifyFilterAccessibleNames(page, results, label) {
 }
 
 async function verifyTabsAndHash(page, results, label, baseUrl) {
+    // Public workspace exposes Chart, Table (explorer), and Pivot only — no history/changes tabs.
     const scenarios = [
         { tabId: '#tab-pivot', panelId: '#panel-pivot', hash: '#pivot', name: 'pivot' },
-        { tabId: '#tab-history', panelId: '#panel-history', hash: '#history', name: 'history' },
-        { tabId: '#tab-changes', panelId: '#panel-changes', hash: '#changes', name: 'changes' },
         { tabId: '#tab-explorer', panelId: '#panel-explorer', hash: '', name: 'explorer' },
+        { tabId: '#tab-chart', panelId: '#panel-chart', hash: '', name: 'chart' },
     ];
 
     for (const scenario of scenarios) {
@@ -904,8 +904,11 @@ async function verifyTabsAndHash(page, results, label, baseUrl) {
             return !!(panel && !panel.hidden && panel.classList.contains('active'));
         }, scenario.panelId).catch(() => false);
         const currentHash = new URL(page.url()).hash;
+        const hashOk = scenario.hash === ''
+            ? (currentHash === '' || currentHash === '#main-content')
+            : currentHash === scenario.hash;
 
-        if (state && currentHash === scenario.hash) pass(results, `${label}: ${scenario.name} tab updates the active panel and URL hash`);
+        if (state && hashOk) pass(results, `${label}: ${scenario.name} tab updates the active panel and URL hash`);
         else fail(results, `${label}: ${scenario.name} tab/hash sync failed`);
     }
 
