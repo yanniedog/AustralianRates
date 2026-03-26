@@ -103,7 +103,7 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     code: 'lender_finalize_not_ready',
     title: 'Lender finalize not ready (detail processing incomplete or failed)',
     action:
-      'Upstream detail fetches failed or still in progress. Resolve detail_fetch_failed for the lender; then re-run or wait for next daily run. Check logs for lender_code and run_id.',
+      'Read the sub-reason after the third colon (e.g. zero_accepted_rows_for_nonzero_expected_details = detail jobs finished but no row passed validation / parse produced no rows). Error suffix exp_acc_w_c_f_dfe is expected/accepted/written/completed/failed/detail_fetch_events. For zero_accepted, check dropped anomalies and live CDR detail shape. Otherwise resolve detail_fetch_failed or wait for detail jobs; check logs for lender_code and run_id.',
     links: ['/admin/logs.html', '/admin/runs.html'],
   },
   run_lifecycle_reconciliation_stalled: {
