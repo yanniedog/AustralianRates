@@ -28,6 +28,7 @@
     "test:table-errors": "node test-table-error-detect.js",
     "test:site": "node test-homepage.js && node diagnose-api.js",
     "verify:macquarie-td-e2e": "node verify-macquarie-td-e2e.js",
+    "verify:macquarie-td-pipeline": "npm run typecheck:api && npm run test:api && npm run verify:macquarie-td-e2e && npm run test:archive",
     "audit:visual": "node visual-audit.js",
     "capture:mobile-admin": "node capture-mobile-admin.js",
     "diagnose:api": "node diagnose-api.js",
