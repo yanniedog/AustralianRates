@@ -282,7 +282,7 @@ describe('finalization ordering', () => {
     expect(result).toBe(false)
   })
 
-  it('does not finalize when expected detail work wrote zero rows', async () => {
+  it('finalizes terminal no-row runs when all expected detail work completed', async () => {
     const deps = {
       getLenderDatasetRun: async () =>
         makeRunRow({
@@ -313,6 +313,6 @@ describe('finalization ordering', () => {
       deps,
     )
 
-    expect(result).toBe(false)
+    expect(result).toBe(true)
   })
 })

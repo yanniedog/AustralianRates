@@ -48,14 +48,19 @@ export type SiteHealthRunResult = {
 }
 
 function hasEconomicFailureSignal(report: EconomicCoverageReport): boolean {
-  const hasEmptyPlaceholderSummary =
-    report.summary.defined_series === 0 &&
-    report.summary.status_rows === 0 &&
-    report.findings.length === 0 &&
-    report.summary.public_probe_failures === 0
+  const definedSeries = Number(report.summary?.defined_series ?? 0)
+  const statusRows = Number(report.summary?.status_rows ?? 0)
+  const observedSeries = Number(report.summary?.observed_series ?? 0)
+  const probeFailures = Number(report.summary?.public_probe_failures ?? 0)
+  const findingsCount = Array.isArray(report.findings) ? report.findings.length : 0
+  const perSeriesCount = Array.isArray(report.per_series) ? report.per_series.length : 0
 
-  if (hasEmptyPlaceholderSummary) return false
-  if (report.summary.public_probe_failures > 0) return true
+  // Older/placeholder payloads can have a red default severity with no actual coverage evidence.
+  const hasCoverageEvidence =
+    definedSeries > 0 || statusRows > 0 || observedSeries > 0 || perSeriesCount > 0
+  if (!hasCoverageEvidence && findingsCount === 0 && probeFailures === 0) return false
+
+  if (probeFailures > 0) return true
   if (report.findings.some((finding) => finding.severity === 'error')) return true
   return report.summary.severity === 'red'
 }

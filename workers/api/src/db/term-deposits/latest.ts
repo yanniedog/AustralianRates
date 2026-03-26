@@ -2,6 +2,7 @@ import { applyTdCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import { withD1TransientRetry } from '../d1-retry'
 import type { LatestQueryTiming } from '../latest-query-timing'
 import { addBankWhere, rows, safeLimit } from '../query-common'
 import {
@@ -126,7 +127,7 @@ export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilter
     LIMIT ?`
 
   const dbStartedAt = Date.now()
-  const result = await db.prepare(sql).bind(...binds, limit).all<Record<string, unknown>>()
+  const result = await withD1TransientRetry(() => db.prepare(sql).bind(...binds, limit).all<Record<string, unknown>>())
   if (timing) timing.dbMainMs = Date.now() - dbStartedAt
   const hydrateStartedAt = Date.now()
   const hydrated = await hydrateCdrDetailJson(db, rows(result))
@@ -136,14 +137,16 @@ export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilter
 
 export async function queryLatestTdRatesCount(db: D1Database, filters: LatestTdFilters): Promise<number> {
   const { clause, binds } = buildLatestWhere(filters)
-  const result = await db
-    .prepare(
-      `SELECT COUNT(*) AS n
-       FROM latest_td_series l
-       ${clause}`,
-    )
-    .bind(...binds)
-    .first<{ n: number }>()
+  const result = await withD1TransientRetry(() =>
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM latest_td_series l
+         ${clause}`,
+      )
+      .bind(...binds)
+      .first<{ n: number }>(),
+  )
   return Number(result?.n ?? 0)
 }
 

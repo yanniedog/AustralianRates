@@ -65,6 +65,21 @@ describe('lender dataset invariants', () => {
     ).toEqual({ ready: true, reason: null })
   })
 
+  it('allows terminal finalization for multi-detail runs when all details completed but no rows were accepted', () => {
+    expect(
+      isLenderDatasetReadyForFinalization({
+        expected_detail_count: 3,
+        index_fetch_succeeded: 1,
+        accepted_row_count: 0,
+        written_row_count: 0,
+        detail_fetch_event_count: 3,
+        lineage_error_count: 0,
+        completed_detail_count: 3,
+        failed_detail_count: 0,
+      }),
+    ).toEqual({ ready: true, reason: null })
+  })
+
   it('treats terminal no-row completion as complete once finalized', () => {
     const terminalNoRow = {
       expected_detail_count: 1,
@@ -143,6 +158,24 @@ describe('lender dataset invariants', () => {
       detail_fetch_event_count: 1,
       lineage_error_count: 0,
       completed_detail_count: 1,
+      failed_detail_count: 0,
+      finalized_at: '2026-03-26T00:00:00.000Z',
+    })
+
+    expect(assessment.severity).toBe('ok')
+    expect(assessment.reasons).not.toContain('zero_accepted_rows_for_nonzero_expected_details')
+    expect(assessment.reasons).not.toContain('zero_written_rows_for_nonzero_expected_details')
+  })
+
+  it('does not flag multi-detail terminal no-row completion as a coverage error', () => {
+    const assessment = assessLenderDatasetCoverage({
+      expected_detail_count: 3,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 0,
+      written_row_count: 0,
+      detail_fetch_event_count: 3,
+      lineage_error_count: 0,
+      completed_detail_count: 3,
       failed_detail_count: 0,
       finalized_at: '2026-03-26T00:00:00.000Z',
     })

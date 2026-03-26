@@ -204,28 +204,40 @@ publicRoutes.get('/export', async (c) => {
   const includeRemoved = parseIncludeRemoved(query.include_removed)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
-  const { data, total, source_mix } = await queryRatesForExport(c.env.DB, {
-    startDate: query.start_date,
-    endDate: query.end_date,
-    bank: query.bank,
-    securityPurpose: query.security_purpose,
-    repaymentType: query.repayment_type,
-    rateStructure: query.rate_structure,
-    lvrTier: query.lvr_tier,
-    featureSet: query.feature_set,
-    banks,
-    minRate: parseOptionalNumber(query.min_rate),
-    maxRate: parseOptionalNumber(query.max_rate),
-    minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
-    maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
-    includeRemoved,
-    excludeCompareEdgeCases,
-    sort: query.sort,
-    dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
-    mode,
-    sourceMode,
-    ...(exportLimit != null ? { limit: exportLimit } : {}),
-  })
+  let data: Array<Record<string, unknown>> = []
+  let total = 0
+  let source_mix = { scheduled: 0, manual: 0 }
+  try {
+    const result = await queryRatesForExport(c.env.DB, {
+      startDate: query.start_date,
+      endDate: query.end_date,
+      bank: query.bank,
+      securityPurpose: query.security_purpose,
+      repaymentType: query.repayment_type,
+      rateStructure: query.rate_structure,
+      lvrTier: query.lvr_tier,
+      featureSet: query.feature_set,
+      banks,
+      minRate: parseOptionalNumber(query.min_rate),
+      maxRate: parseOptionalNumber(query.max_rate),
+      minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
+      maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
+      includeRemoved,
+      excludeCompareEdgeCases,
+      sort: query.sort,
+      dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+      mode,
+      sourceMode,
+      ...(exportLimit != null ? { limit: exportLimit } : {}),
+    })
+    data = result.data
+    total = result.total
+    source_mix = result.source_mix
+  } catch (err) {
+    log.error('public', 'rates export failed, returning empty', {
+      context: (err as Error)?.message ?? String(err),
+    })
+  }
   const meta = buildListMeta({
     sourceMode,
     totalRows: total,

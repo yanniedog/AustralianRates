@@ -127,10 +127,10 @@ function isCompletedWithNoAcceptedRows(
   const completedDetails = asCount(snapshot.completed_detail_count)
   const failedDetails = asCount(snapshot.failed_detail_count)
   const processedDetails = completedDetails + failedDetails
-  if (expectedDetails !== 1) return false
+  if (expectedDetails <= 0) return false
   if (processedDetails < expectedDetails) return false
   if (failedDetails > 0) return false
-  if (detailFetchEvents <= 0) return false
+  if (detailFetchEvents < expectedDetails) return false
   return acceptedRows <= 0 && writtenRows <= 0
 }
 

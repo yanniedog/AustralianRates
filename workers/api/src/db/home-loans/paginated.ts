@@ -2,6 +2,7 @@ import { applyHomeLoanCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentCoreRowFields, presentHomeLoanRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import { withD1TransientRetry } from '../d1-retry'
 import { addBankWhere, addRateBoundsWhere, rows } from '../query-common'
 import { PUBLIC_EXPORT_FETCH_CHUNK_SIZE } from '../../constants'
 import {
@@ -237,9 +238,9 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     dataResult: D1Result<Record<string, unknown>>
   }> {
     const [countResult, sourceResult, dataResult] = await Promise.all([
-      db.prepare(countSql).bind(...binds).first<{ total: number }>(),
-      db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
-      db.prepare(dataSql).bind(...dataBinds).all<Record<string, unknown>>(),
+      withD1TransientRetry(() => db.prepare(countSql).bind(...binds).first<{ total: number }>()),
+      withD1TransientRetry(() => db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>()),
+      withD1TransientRetry(() => db.prepare(dataSql).bind(...dataBinds).all<Record<string, unknown>>()),
     ])
     return { countResult: countResult ?? null, sourceResult, dataResult }
   }
@@ -250,9 +251,9 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
     dataResult: D1Result<Record<string, unknown>>
   }> {
     const [countResult, sourceResult, dataResult] = await Promise.all([
-      db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>(),
-      db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>(),
-      db.prepare(dataSqlNoPps).bind(...dataBinds).all<Record<string, unknown>>(),
+      withD1TransientRetry(() => db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>()),
+      withD1TransientRetry(() => db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>()),
+      withD1TransientRetry(() => db.prepare(dataSqlNoPps).bind(...dataBinds).all<Record<string, unknown>>()),
     ])
     return { countResult: countResult ?? null, sourceResult, dataResult }
   }
@@ -502,15 +503,15 @@ export async function queryRatesForExport(
   let sourceResult: D1Result<{ run_source: string; n: number }>
   try {
     const [c, s] = await Promise.all([
-      db.prepare(countSql).bind(...binds).first<{ total: number }>(),
-      db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>(),
+      withD1TransientRetry(() => db.prepare(countSql).bind(...binds).first<{ total: number }>()),
+      withD1TransientRetry(() => db.prepare(sourceSql).bind(...binds).all<{ run_source: string; n: number }>()),
     ])
     countResult = c ?? null
     sourceResult = s
   } catch {
     const [c, s] = await Promise.all([
-      db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>(),
-      db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>(),
+      withD1TransientRetry(() => db.prepare(countSqlNoPps).bind(...binds).first<{ total: number }>()),
+      withD1TransientRetry(() => db.prepare(sourceSqlNoPps).bind(...binds).all<{ run_source: string; n: number }>()),
     ])
     countResult = c ?? null
     sourceResult = s
@@ -536,10 +537,14 @@ export async function queryRatesForExport(
     if (take <= 0) break
     let dataResult: D1Result<Record<string, unknown>>
     try {
-      dataResult = await db.prepare(dataQuery).bind(...binds, take, offset).all<Record<string, unknown>>()
+      dataResult = await withD1TransientRetry(() =>
+        db.prepare(dataQuery).bind(...binds, take, offset).all<Record<string, unknown>>(),
+      )
     } catch {
       dataQuery = dataSqlNoPps
-      dataResult = await db.prepare(dataQuery).bind(...binds, take, offset).all<Record<string, unknown>>()
+      dataResult = await withD1TransientRetry(() =>
+        db.prepare(dataQuery).bind(...binds, take, offset).all<Record<string, unknown>>(),
+      )
     }
     const chunk = rows(dataResult)
     if (chunk.length === 0) break
@@ -618,9 +623,7 @@ export async function queryHomeLoanCollectionDateRange(
 ): Promise<{ startDate: string; endDate: string } | null> {
   const { whereClause, binds } = buildHomeLoanWhereNoDates(filters as RatesPaginatedFilters)
   const row = await db
-    .prepare(
-      `SELECT MIN(h.collection_date) AS min_date, MAX(h.collection_date) AS max_date ${HL_JOIN} ${whereClause}`,
-    )
+    .prepare(`SELECT MIN(h.collection_date) AS min_date, MAX(h.collection_date) AS max_date ${HL_JOIN} ${whereClause}`)
     .bind(...binds)
     .first<{ min_date: string | null; max_date: string | null }>()
   if (!row?.min_date || !row?.max_date) return null

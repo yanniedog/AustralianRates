@@ -1,6 +1,7 @@
 import { PUBLIC_EXPORT_FETCH_CHUNK_SIZE } from '../../constants'
 import { presentCoreRowFields, presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import { withD1TransientRetry } from '../d1-retry'
 import { rows } from '../query-common'
 import { tdProductKeySql, tdSeriesKeySql } from './identity'
 import { buildWhere, SORT_COLUMNS, type TdPaginatedFilters } from './shared'
@@ -60,8 +61,8 @@ export async function queryTdRatesPaginated(db: D1Database, filters: TdPaginated
   `
 
   const [countResult, dataResult] = await Promise.all([
-    db.prepare(countSql).bind(...binds).first<{ total: number }>(),
-    db.prepare(dataSql).bind(...binds, size, offset).all<Record<string, unknown>>(),
+    withD1TransientRetry(() => db.prepare(countSql).bind(...binds).first<{ total: number }>()),
+    withD1TransientRetry(() => db.prepare(dataSql).bind(...binds, size, offset).all<Record<string, unknown>>()),
   ])
 
   const total = Number(countResult?.total ?? 0)
@@ -96,12 +97,14 @@ export async function queryTdCollectionDateRange(
 ): Promise<{ startDate: string; endDate: string } | null> {
   const rangeFilters = { ...filters, startDate: undefined, endDate: undefined }
   const { clause: whereClause, binds } = buildWhere(rangeFilters)
-  const row = await db
-    .prepare(
-      `SELECT MIN(h.collection_date) AS min_date, MAX(h.collection_date) AS max_date ${TD_JOIN} ${whereClause}`,
-    )
-    .bind(...binds)
-    .first<{ min_date: string | null; max_date: string | null }>()
+  const row = await withD1TransientRetry(() =>
+    db
+      .prepare(
+        `SELECT MIN(h.collection_date) AS min_date, MAX(h.collection_date) AS max_date ${TD_JOIN} ${whereClause}`,
+      )
+      .bind(...binds)
+      .first<{ min_date: string | null; max_date: string | null }>(),
+  )
   if (!row?.min_date || !row?.max_date) return null
   return { startDate: row.min_date, endDate: row.max_date }
 }
@@ -157,7 +160,7 @@ FROM historical_term_deposit_rates h
     LIMIT ? OFFSET ?
   `
 
-  const countResult = await db.prepare(countSql).bind(...binds).first<{ total: number }>()
+  const countResult = await withD1TransientRetry(() => db.prepare(countSql).bind(...binds).first<{ total: number }>())
   const total = Number(countResult?.total ?? 0)
   const cap =
     filters.limit != null && Number.isFinite(Number(filters.limit))
@@ -168,7 +171,9 @@ FROM historical_term_deposit_rates h
   while (offset < cap) {
     const take = Math.min(chunkSize, cap - offset)
     if (take <= 0) break
-    const dataResult = await db.prepare(dataSql).bind(...binds, take, offset).all<Record<string, unknown>>()
+    const dataResult = await withD1TransientRetry(() =>
+      db.prepare(dataSql).bind(...binds, take, offset).all<Record<string, unknown>>(),
+    )
     const chunk = rows(dataResult)
     if (chunk.length === 0) break
     rawRows.push(...chunk)
