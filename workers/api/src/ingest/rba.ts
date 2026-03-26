@@ -197,7 +197,7 @@ export async function collectRbaCashRateForDate(
 
   const stored = await getNearestRbaCashRateSnapshot(db, collectionDate)
   if (stored) {
-    log.warn('pipeline', 'rba_collection_used_stored_rate', {
+    log.info('pipeline', 'rba_collection_used_stored_rate', {
       context: `collectionDate=${collectionDate} ${htmlFailure || 'html=unknown'} ${csvFailure || 'csv=unknown'} effectiveDate=${stored.effectiveDate} sourceUrl=${stored.sourceUrl}`,
     })
     return {

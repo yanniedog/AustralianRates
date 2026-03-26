@@ -45,6 +45,20 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'admin' && (message === 'auth_check_failed' || code === 'admin_auth_check_failed')) {
     return true
   }
+  // Successful RBA path: fresh fetch failed but a stored snapshot exists (still returns ok from collector).
+  if (source === 'pipeline' && message === 'rba_collection_used_stored_rate') {
+    return true
+  }
+  // Pre-2026-03-26 stall detector fired on "scanned but none finalized" even when no row was ready to finalize.
+  // Current scheduler logs include ready_candidate_rows; keep those actionable.
+  const ctx = String(entry.context ?? '')
+  if (
+    source === 'scheduler' &&
+    message === 'run lifecycle reconciliation stalled' &&
+    !ctx.includes('ready_candidate_rows')
+  ) {
+    return true
+  }
   if (isHistoricalNoSignalNoise(entry, source, message)) {
     return true
   }

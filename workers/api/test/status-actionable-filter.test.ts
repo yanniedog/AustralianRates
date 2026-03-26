@@ -68,6 +68,47 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores RBA collection fallback to stored rate (operational, not a failure)', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'pipeline',
+          level: 'warn',
+          message: 'rba_collection_used_stored_rate',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores legacy reconciliation stall logs before ready_candidate_rows context was added', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'scheduler',
+          level: 'error',
+          message: 'Run lifecycle reconciliation stalled',
+          context: '{"scanned_rows":3,"finalized_rows":0}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps reconciliation stall actionable when context includes ready_candidate_rows', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'scheduler',
+          level: 'error',
+          message: 'Run lifecycle reconciliation stalled',
+          context: '{"ready_candidate_rows":2,"finalized_rows":0}',
+        },
+        'active',
+      ),
+    ).toBe(false)
+  })
+
   it('ignores admin auth-check failures (expired sessions / unauthenticated probes)', () => {
     expect(
       shouldIgnoreStatusActionableLog(
