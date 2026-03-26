@@ -55,10 +55,16 @@ export function shouldIgnoreStatusActionableLog(
     return true
   }
   // Economic RBA CSV/HTML fetches hit the same 403 bot wall without browser-like headers.
+  // Each failed series emits markSeriesFailure ("collection failed") then a second warn ("parsing failed");
+  // both must be ignored when the underlying error is upstream 403.
+  const ctxStr = String(entry.context ?? '')
   if (
     source === 'economic' &&
-    (message === 'economic series parsing failed' || code === 'economic_series_parse_failed') &&
-    String(entry.context ?? '').includes('upstream_not_ok:403')
+    ctxStr.includes('upstream_not_ok:403') &&
+    (code === 'economic_series_parse_failed' ||
+      code === 'economic_series_fetch_failed' ||
+      message === 'economic series parsing failed' ||
+      message === 'economic series collection failed')
   ) {
     return true
   }

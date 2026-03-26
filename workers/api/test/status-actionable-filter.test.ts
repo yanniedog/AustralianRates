@@ -83,6 +83,27 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores economic series collection failed (markSeriesFailure) when RBA returned HTTP 403', () => {
+    const inner = JSON.stringify({
+      series_id: 'commodity_prices',
+      source_url: 'https://www.rba.gov.au/statistics/tables/csv/i2-data.csv',
+      message: 'upstream_not_ok:403:https://www.rba.gov.au/statistics/tables/csv/i2-data.csv',
+    })
+    const enriched = JSON.stringify({ context: inner, traceback: 'Error: stack' })
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'economic',
+          level: 'warn',
+          message: 'Economic series collection failed',
+          code: 'economic_series_fetch_failed',
+          context: enriched,
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores legacy CPI collection warns when both RBA paths hit HTTP 403 (bot wall)', () => {
     expect(
       shouldIgnoreStatusActionableLog(

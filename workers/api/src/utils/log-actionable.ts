@@ -130,6 +130,19 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Review CDR pipeline audit results: missing raw objects, fetch_event links, series_key, or presence tracking. Use admin CDR repair and coverage-gap report.',
     links: ['/admin/logs.html', '/admin/status.html', '/admin/runs.html'],
   },
+  economic_series_fetch_failed: {
+    code: 'economic_series_fetch_failed',
+    title: 'Economic series upstream fetch failed',
+    action:
+      'Check RBA (or other) source URL reachability from Workers; transient 403/5xx may be bot-blocking—verify fetch headers and fallbacks. Review admin logs for series_id and message.',
+    links: ['/admin/logs.html', '/admin/status.html'],
+  },
+  economic_series_parse_failed: {
+    code: 'economic_series_parse_failed',
+    title: 'Economic series parse failed after fetch',
+    action: 'Inspect parser assumptions vs current CSV/HTML shape for the series_id in log context; fix parser or source URL in economic registry.',
+    links: ['/admin/logs.html', '/admin/status.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
