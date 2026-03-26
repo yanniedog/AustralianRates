@@ -15,7 +15,11 @@
     var uiBound = false;
 
     function defaultViewFallback() {
-        return chartConfig.defaultView ? chartConfig.defaultView() : 'lenders';
+        if (chartConfig.defaultView) return chartConfig.defaultView();
+        var sec = (window.AR && window.AR.section) || (document.body && document.body.getAttribute('data-ar-section')) || 'home-loans';
+        if (sec === 'savings') return 'economicReport';
+        if (sec === 'term-deposits') return 'termDepositReport';
+        return 'homeLoanReport';
     }
 
     function activeViewButton() {

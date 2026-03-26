@@ -7,14 +7,18 @@ const baseOrigin = testUrlObj.origin;
 const sharedParams = new URLSearchParams(testUrlObj.search || '');
 const DESKTOP_VIEWPORT = { width: 1440, height: 1200 };
 const MOBILE_VIEWPORT = { width: 390, height: 1100 };
+
 const SECTIONS = [
-    { name: 'Home loans', path: '/', apiBasePath: '/api/home-loan-rates' },
-    { name: 'Savings', path: '/savings/', apiBasePath: '/api/savings-rates' },
-    { name: 'Term deposits', path: '/term-deposits/', apiBasePath: '/api/term-deposit-rates' },
+    { name: 'Home loans', path: '/', apiBasePath: '/api/home-loan-rates', defaultView: 'homeLoanReport', extraViews: [] },
+    { name: 'Savings', path: '/savings/', apiBasePath: '/api/savings-rates', defaultView: 'economicReport', extraViews: [] },
+    {
+        name: 'Term deposits',
+        path: '/term-deposits/',
+        apiBasePath: '/api/term-deposit-rates',
+        defaultView: 'termDepositReport',
+        extraViews: ['timeRibbon', 'tdTermTime'],
+    },
 ];
-/** Default chart view is Curve (market); cycle other views without re-selecting market first. */
-const DEFAULT_CHART_VIEW = 'market';
-const VIEWS_AFTER_DRAW = ['surface', 'compare', 'distribution', 'lenders'];
 
 function withSharedQuery(path, apiBasePath) {
     const params = new URLSearchParams(sharedParams.toString());
@@ -187,6 +191,9 @@ function verifyChartState(metrics, failures, label, expectedView) {
 }
 
 async function verifyHistoryPane(page, failures, label) {
+    const hasHistory = await page.locator('#tab-history').count().catch(() => 0);
+    if (!hasHistory) return;
+
     await page.click('#tab-history');
     await page.waitForTimeout(500);
 
@@ -206,9 +213,9 @@ async function verifyDesktopSection(page, section, failures) {
     await drawChart(page);
 
     let metrics = await collectChartMetrics(page);
-    verifyChartState(metrics, failures, `${section.name} default curve`, DEFAULT_CHART_VIEW);
+    verifyChartState(metrics, failures, `${section.name} default report`, section.defaultView);
 
-    for (const view of VIEWS_AFTER_DRAW) {
+    for (const view of section.extraViews) {
         const requestCount = await switchViewWithoutRatesFetch(page, view);
         if (requestCount !== 0) failures.push(`${section.name} ${view}: switching views triggered ${requestCount} unexpected /rates requests`);
         metrics = await collectChartMetrics(page);
@@ -226,13 +233,16 @@ async function verifyMobileSection(browser, section, failures) {
 
         const metrics = await collectChartMetrics(page);
         if (!metrics.pageFits) failures.push(`${section.name} mobile: page has horizontal overflow`);
-        verifyChartState(metrics, failures, `${section.name} mobile default curve`, DEFAULT_CHART_VIEW);
+        verifyChartState(metrics, failures, `${section.name} mobile default report`, section.defaultView);
 
-        const surfaceRequests = await switchViewWithoutRatesFetch(page, 'surface');
-        if (surfaceRequests !== 0) failures.push(`${section.name} mobile surface: switching views triggered ${surfaceRequests} unexpected /rates requests`);
-        const surfaceMetrics = await collectChartMetrics(page);
-        if (!surfaceMetrics.pageFits) failures.push(`${section.name} mobile surface: page has horizontal overflow`);
-        verifyChartState(surfaceMetrics, failures, `${section.name} mobile surface`, 'surface');
+        const firstExtra = section.extraViews[0];
+        if (!firstExtra) return;
+
+        const surfaceRequests = await switchViewWithoutRatesFetch(page, firstExtra);
+        if (surfaceRequests !== 0) failures.push(`${section.name} mobile ${firstExtra}: switching views triggered ${surfaceRequests} unexpected /rates requests`);
+        const extraMetrics = await collectChartMetrics(page);
+        if (!extraMetrics.pageFits) failures.push(`${section.name} mobile ${firstExtra}: page has horizontal overflow`);
+        verifyChartState(extraMetrics, failures, `${section.name} mobile ${firstExtra}`, firstExtra);
     } finally {
         await page.close();
     }

@@ -9,6 +9,12 @@ import {
 } from './visual-audit-config'
 import type { AuditRoute, AuditState, CaptureCheck, CaptureIssue, GeometryEvidence, ViewportKey } from './visual-audit-types'
 
+function defaultReportViewForRoute(route: AuditRoute): string {
+  if (route.key === 'savings') return 'economicReport'
+  if (route.key === 'term-deposits') return 'termDepositReport'
+  return 'homeLoanReport'
+}
+
 function pushCheck(checks: CaptureCheck[], label: string, passed: boolean, details?: string): void {
   checks.push({ details, label, passed })
 }
@@ -47,7 +53,7 @@ async function openDetails(page: Page, selector: string): Promise<void> {
 }
 
 async function waitForChartView(page: Page, view: string): Promise<void> {
-  await page.locator('#tab-charts').click().catch(() => undefined)
+  await page.locator('#tab-chart').click().catch(() => page.locator('#tab-charts').click().catch(() => undefined))
   await page.waitForTimeout(300)
   await page.locator('#draw-chart').click().catch(() => undefined)
   await page.waitForFunction(
@@ -57,10 +63,20 @@ async function waitForChartView(page: Page, view: string): Promise<void> {
     },
     { timeout: 45_000 },
   )
-  if (view !== 'lenders') {
-    await page.locator(`[data-chart-view="${view}"]`).click().catch(() => undefined)
+  const picker = page.locator(`[data-chart-view="${view}"]`)
+  if ((await picker.count().catch(() => 0)) > 0) {
+    await picker.click().catch(() => undefined)
     await page.waitForTimeout(900)
   }
+  await page.waitForFunction(
+    (expected) => {
+      const el = document.getElementById('chart-output')
+      const rv = el?.getAttribute('data-chart-render-view') || ''
+      return !!el && String(rv) === String(expected)
+    },
+    view,
+    { timeout: 45_000 },
+  )
 }
 
 async function waitForPivot(page: Page): Promise<void> {
@@ -228,9 +244,16 @@ export async function prepareState(page: Page, route: AuditRoute, state: AuditSt
     await evaluatePivotLayout(page, state.viewportKey, checks, issues)
     return [...interactiveSelectors, ...ANALYST_CLICK_TARGETS, ...PIVOT_CLICK_TARGETS]
   }
-  if (state.key.startsWith('chart-')) {
+  if (state.key === 'chart-default-report') {
     await switchAnalyst(page)
-    const view = state.key.replace('chart-', '')
+    const view = defaultReportViewForRoute(route)
+    await waitForChartView(page, view)
+    await evaluateChartState(page, view, state.viewportKey, checks, issues)
+    return [...interactiveSelectors, ...ANALYST_CLICK_TARGETS, '#draw-chart']
+  }
+  if (state.key === 'chart-term-extra') {
+    await switchAnalyst(page)
+    const view = route.key === 'term-deposits' ? 'timeRibbon' : defaultReportViewForRoute(route)
     await waitForChartView(page, view)
     await evaluateChartState(page, view, state.viewportKey, checks, issues)
     return [...interactiveSelectors, ...ANALYST_CLICK_TARGETS, ...CHART_CLICK_TARGETS]

@@ -160,7 +160,10 @@ async function verifyHeader(page, results, label, expectedTitle) {
     }
 }
 
-async function verifyWorkspaceShell(page, results, label) {
+const REMOVED_CLASSIC_CHART_LABELS = ['Leaders', 'Ladder', 'Curve', 'Slope', 'Movement', 'Compare', 'Distribution'];
+
+async function verifyWorkspaceShell(page, results, label, sectionPath) {
+    const pathKey = String(sectionPath || '/');
     const shell = await page.evaluate(() => ({
         marketTerminal: !!document.querySelector('.market-terminal'),
         introSteps: Array.from(document.querySelectorAll('.market-intro-step-index')).map((el) => String(el.textContent || '').trim()),
@@ -194,12 +197,26 @@ async function verifyWorkspaceShell(page, results, label) {
         fail(results, `${label}: intro steps are malformed (${shell.introSteps.join(', ') || 'missing'})`);
     }
 
-    const expectedChartViews = ['Leaders', 'Ladder', 'Curve', 'Slope', 'Movement', 'Compare', 'Distribution'];
     const actualChartViews = shell.chartViews.map((view) => view.label);
-    if (expectedChartViews.every((view) => actualChartViews.includes(view)) && shell.chartViews.every((view) => view.hasIcon)) {
-        pass(results, `${label}: chart view controls render with icon labels`);
+    const hasRemoved = REMOVED_CLASSIC_CHART_LABELS.some((name) => actualChartViews.includes(name));
+    if (pathKey === '/term-deposits/' || pathKey === '/term-deposits/index.html') {
+        const need = ['Rate Report', 'Ribbon (time)', 'Term vs time'];
+        const ok =
+            need.every((name) => actualChartViews.includes(name)) &&
+            shell.chartViews.length === 3 &&
+            shell.chartViews.every((view) => view.hasIcon) &&
+            !hasRemoved;
+        if (ok) pass(results, `${label}: term deposit chart view controls (report + extras) render with icon labels`);
+        else fail(results, `${label}: term deposit chart view controls mismatch (${actualChartViews.join(', ')})`);
     } else {
-        fail(results, `${label}: chart view controls mismatch (${actualChartViews.join(', ')})`);
+        if (shell.chartViews.length === 0 && !hasRemoved) {
+            pass(results, `${label}: classic chart view chips omitted (single default report view)`);
+        } else {
+            fail(
+                results,
+                `${label}: expected no [data-chart-view] buttons for this section (${actualChartViews.join(', ') || 'empty'})`,
+            );
+        }
     }
 
     const expectedTabs = ['Chart', 'Table', 'Pivot'];
@@ -1214,7 +1231,7 @@ async function verifySectionSmoke(page, results, section) {
     await verifyHeader(page, results, section.name, section.name);
     await verifyNoPrimaryMobileHostArtifacts(page, results, section.name);
     await verifyPublicHeaderRefresh(page, results, section.name);
-    await verifyWorkspaceShell(page, results, section.name);
+    await verifyWorkspaceShell(page, results, section.name, section.path);
     await verifyExplorerHeading(page, results, section.name);
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
     await verifyHeroStats(page, results, section.name);
@@ -1278,7 +1295,7 @@ async function runTests() {
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
         await verifyNoPrimaryMobileHostArtifacts(page, results, 'Homepage');
         await verifyPublicHeaderRefresh(page, results, 'Homepage');
-        await verifyWorkspaceShell(page, results, 'Homepage');
+        await verifyWorkspaceShell(page, results, 'Homepage', '/');
         await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
         await verifyHeroStats(page, results, 'Homepage');

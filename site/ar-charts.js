@@ -71,7 +71,16 @@
     var resizeObserver = null;
     var chartLoadPromise = null;
     function fields() {
-        var defaultView = (window.AR.chartConfig && window.AR.chartConfig.defaultView) ? window.AR.chartConfig.defaultView() : 'lenders';
+        var defaultView;
+        if (window.AR.chartConfig && window.AR.chartConfig.defaultView) {
+            defaultView = window.AR.chartConfig.defaultView();
+        } else if (section === 'savings') {
+            defaultView = 'economicReport';
+        } else if (section === 'term-deposits') {
+            defaultView = 'termDepositReport';
+        } else {
+            defaultView = 'homeLoanReport';
+        }
         return chartUi.getChartFields ? chartUi.getChartFields() : { view: defaultView, yField: 'interest_rate', density: 'standard' };
     }
 

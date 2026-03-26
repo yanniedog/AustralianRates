@@ -72,7 +72,7 @@
                 source_url: 'Source URL', data_quality_flag: 'Quality',
                 retrieval_type: 'Retrieval'
             },
-            chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank.'
+            chartHint: 'Open Rate Report for variable rates vs the RBA over time. Use filters and Draw to refresh; term-style exploration uses the Table and Pivot tabs.'
         },
         'savings': {
             apiPath: '/api/savings-rates',
@@ -102,7 +102,7 @@
                 run_source: 'Source', parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed', source_url: 'Source URL',
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
-            chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank. Distribution: spread and median by lender for this slice.'
+            chartHint: 'Open Economic Report for savings rates vs RBA cash rate and CPI. Use filters and Draw to refresh; dig into slices from the Table and Pivot tabs.'
         },
         'term-deposits': {
             apiPath: '/api/term-deposit-rates',
@@ -132,7 +132,7 @@
                 run_source: 'Source', parsed_at: 'Checked At', found_at: 'Found', rate_confirmed_at: 'Rate Confirmed', source_url: 'Source URL',
                 data_quality_flag: 'Quality', retrieval_type: 'Retrieval'
             },
-            chartHint: 'For market shape in one snapshot: use the Curve view. For rate over time per product: X = Date, Group by = Product, filter by one bank. For over-time comparison, filter by one term (e.g. 12m) so lines are like-for-like.'
+            chartHint: 'Open Rate Report for headline term deposit rates vs RBA and CPI, or switch to Ribbon (time) / Term vs time when you need those lenses. Filter by term for like-for-like comparisons over time.'
         },
         'economic-data': {
             apiPath: '/api/economic-data',
