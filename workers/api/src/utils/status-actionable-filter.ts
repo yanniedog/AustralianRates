@@ -162,7 +162,7 @@ export function shouldIgnoreStatusActionableLog(
   if (
     source === 'consumer' &&
     KNOWN_UBANK_NOISE_MESSAGES.has(message) &&
-    (lenderCode === 'ubank' || lenderCode.length === 0 || message === 'daily_savings_lender_fetch empty_result')
+    (lenderCode === 'ubank' || lenderCode.length === 0)
   ) {
     return true
   }
