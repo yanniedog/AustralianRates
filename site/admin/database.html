@@ -83,6 +83,7 @@
             var offset = 0;
             var tabulator = null;
             var tableRefreshIntervalId = null;
+            var currentTableReadOnly = false;
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
@@ -97,7 +98,9 @@
                     d.tables.forEach(function (t) {
                         var opt = document.createElement('option');
                         opt.value = t.name;
-                        opt.textContent = t.name + (t.count !== undefined ? ' (' + t.count + ')' : '');
+                        opt.textContent = t.name
+                            + (t.count !== undefined ? ' (' + t.count + ')' : '')
+                            + (t.read_only ? ' [read-only]' : '');
                         tableSelect.appendChild(opt);
                     });
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load tables', true); });
@@ -108,6 +111,7 @@
                     if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Schema failed');
                     schema = d;
                     keyColumns = d.key_columns || [];
+                    currentTableReadOnly = !!d.read_only;
                     return d;
                 });
             }
@@ -133,8 +137,9 @@
                 if (tabulator && typeof tabulator.getSelectedRows === 'function') {
                     selectedCount = tabulator.getSelectedRows().length;
                 }
-                editBtn.disabled = selectedCount === 0;
-                deleteBtn.disabled = selectedCount === 0;
+                addBtn.disabled = !currentTable || currentTableReadOnly;
+                editBtn.disabled = currentTableReadOnly || selectedCount === 0;
+                deleteBtn.disabled = currentTableReadOnly || selectedCount === 0;
             }
 
             function renderPagination() {
@@ -176,6 +181,7 @@
             function selectTable(tableName) {
                 currentTable = tableName;
                 if (!tableName) {
+                    currentTableReadOnly = false;
                     addBtn.disabled = editBtn.disabled = deleteBtn.disabled = refreshBtn.disabled = true;
                     if (tabulator) { tabulator.destroy(); tabulator = null; }
                     paginationEl.style.display = 'none';
@@ -187,10 +193,7 @@
                 loadSchema(tableName).then(function () {
                     return loadRows(tableName, 0, limit);
                 }).then(function (rows) {
-                    addBtn.disabled = false;
                     refreshBtn.disabled = false;
-                    editBtn.disabled = true;
-                    deleteBtn.disabled = true;
                     if (tabulator) tabulator.destroy();
                     tabulator = new Tabulator('#db-grid', {
                         data: rows,
@@ -203,6 +206,9 @@
                         },
                     });
                     syncSelectionButtons();
+                    if (currentTableReadOnly) {
+                        showMsg('This table is read-only in the admin database explorer.', false);
+                    }
                     renderPagination();
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Load failed', true); });
             }

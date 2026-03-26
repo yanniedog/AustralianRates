@@ -118,4 +118,11 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS economic_series_status')
     expect(sql).toContain("status IN ('ok', 'stale', 'error')")
   })
+
+  it('includes health-check economic JSON migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0040_health_check_economic_json.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain('ALTER TABLE health_check_runs')
+    expect(sql).toContain('ADD COLUMN economic_json TEXT NOT NULL DEFAULT')
+  })
 })

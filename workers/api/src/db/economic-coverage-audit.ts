@@ -45,6 +45,7 @@ export type EconomicCoverageProbe = {
   key: string
   ok: boolean
   status: number
+  duration_ms?: number
   requested_ids?: string[]
   returned_ids?: string[]
   detail?: string
@@ -287,9 +288,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
   const definitionMap = new Map(definitions.map((definition) => [definition.id, definition]))
   const findings: EconomicCoverageFinding[] = []
 
-  const [statusResult, statusCounts, observationCounts, futureSamples, releaseSamples] = await Promise.all([
+  const [statusResult, observationCounts, futureSamples, releaseSamples] = await Promise.all([
     db.prepare('SELECT * FROM economic_series_status ORDER BY series_id ASC').all<EconomicStatusDbRow>(),
-    getSeriesCountMap(db, 'economic_series_status'),
     getSeriesCountMap(db, 'economic_series_observations'),
     getFutureObservationSamples(db, todayIso),
     getReleaseOrderingSamples(db),
@@ -327,6 +327,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
 
   const perSeries: EconomicSeriesCoverageRow[] = []
   let invalidRows = 0
+  let futureObservationRows = 0
+  let releaseBeforeObservationRows = 0
 
   for (const definition of definitions) {
     const statusRow = statusMap.get(definition.id) ?? null
@@ -386,10 +388,12 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     }
     if (Number(observationAggregate.future_observation_count ?? 0) > 0) {
       issues.push('future_observation_dates')
+      futureObservationRows += Number(observationAggregate.future_observation_count ?? 0)
       invalidRows += Number(observationAggregate.future_observation_count ?? 0)
     }
     if (Number(observationAggregate.release_before_observation_count ?? 0) > 0) {
       issues.push('release_before_observation')
+      releaseBeforeObservationRows += Number(observationAggregate.release_before_observation_count ?? 0)
       invalidRows += Number(observationAggregate.release_before_observation_count ?? 0)
     }
 
@@ -525,9 +529,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     code: 'economic_future_observation_dates',
     severity: 'error',
     message: 'Economic observations contain future dates.',
-    count: futureSamples.length > 0
-      ? perSeries.reduce((sum, row) => sum + (row.issues.includes('future_observation_dates') ? 1 : 0), 0)
-      : 0,
+    count: futureObservationRows,
     sample: futureSamples.map((row) => ({
       series_id: row.series_id,
       observation_date: row.observation_date,
@@ -538,9 +540,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     code: 'economic_release_before_observation',
     severity: 'error',
     message: 'Economic observations contain release dates before observation dates.',
-    count: releaseSamples.length > 0
-      ? perSeries.reduce((sum, row) => sum + (row.issues.includes('release_before_observation') ? 1 : 0), 0)
-      : 0,
+    count: releaseBeforeObservationRows,
     sample: releaseSamples.map((row) => ({
       series_id: row.series_id,
       observation_date: row.observation_date,

@@ -8,6 +8,8 @@
     var e2eEl = document.getElementById('e2e-grid');
     var e2eDatasetsEl = document.getElementById('e2e-datasets-wrap');
     var componentsEl = document.getElementById('components-wrap');
+    var economicOverviewEl = document.getElementById('economic-overview');
+    var economicSeriesEl = document.getElementById('economic-series-wrap');
     var integrityEl = document.getElementById('integrity-wrap');
     var issuesEl = document.getElementById('issues-wrap');
     var probePayloadsEl = document.getElementById('probe-payloads-wrap');
@@ -238,6 +240,12 @@
         return 'green';
     }
 
+    function severityFromEconomic(report) {
+        var sev = report && report.summary && report.summary.severity;
+        if (sev === 'red' || sev === 'yellow' || sev === 'green') return sev;
+        return 'green';
+    }
+
     function applyCardSeverity(cardEl, severity) {
         if (!cardEl || !cardEl.classList) return;
         cardEl.classList.remove('severity-green', 'severity-yellow', 'severity-red');
@@ -371,6 +379,60 @@
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
+    }
+
+    function renderEconomic(latest) {
+        var report = latest && latest.economic ? latest.economic : null;
+        var card = economicOverviewEl && economicOverviewEl.closest ? economicOverviewEl.closest('.card') : null;
+        if (!report || !report.summary) {
+            if (economicOverviewEl) economicOverviewEl.innerHTML = '<div>No Economic Data coverage result available.</div>';
+            if (economicSeriesEl) economicSeriesEl.innerHTML = '<div>No Economic Data series status available.</div>';
+            applyCardSeverity(card, 'green');
+            return;
+        }
+
+        var summary = report.summary || {};
+        var probes = Array.isArray(report.probes) ? report.probes : [];
+        var failedProbes = probes.filter(function (probe) { return !probe.ok; }).length;
+        if (economicOverviewEl) {
+            economicOverviewEl.innerHTML = [
+                cardCell('Defined series', esc(String(summary.defined_series || 0))),
+                cardCell('Status rows', esc(String(summary.status_rows || 0))),
+                cardCell('Observed series', esc(String(summary.observed_series || 0))),
+                cardCell('OK series', esc(String(summary.ok_series || 0))),
+                cardCell('Stale series', esc(String(summary.stale_series || 0))),
+                cardCell('Error series', esc(String(summary.error_series || 0))),
+                cardCell('Missing series', esc(String(summary.missing_series || 0))),
+                cardCell('Invalid rows', esc(String(summary.invalid_rows || 0))),
+                cardCell('Orphan rows', esc(String(summary.orphan_rows || 0))),
+                cardCell('Probe failures', esc(String(failedProbes))),
+                cardCell('Coverage severity', statusPillHtml(severityFromEconomic(report)))
+            ].join('');
+        }
+
+        var rows = Array.isArray(report.per_series) ? report.per_series : [];
+        if (!rows.length) {
+            if (economicSeriesEl) economicSeriesEl.innerHTML = '<div>No per-series Economic Data rows returned.</div>';
+            applyCardSeverity(card, severityFromEconomic(report));
+            return;
+        }
+
+        if (economicSeriesEl) {
+            economicSeriesEl.innerHTML = '<table><thead><tr><th>Series</th><th>Status</th><th>Stored</th><th>Observed rows</th><th>Last observation</th><th>Last checked</th><th>Issues</th></tr></thead><tbody>'
+                + rows.map(function (row) {
+                    return '<tr class="severity-' + esc(row.severity || 'green') + '">'
+                        + '<td><span class="mono">' + esc(row.series_id) + '</span><br>' + esc(row.label || '') + '</td>'
+                        + '<td>' + statusPillHtml(row.severity || 'green') + '</td>'
+                        + '<td class="mono">' + esc(row.stored_status || row.computed_status || '') + '</td>'
+                        + '<td>' + esc(String(row.observation_row_count || 0)) + '</td>'
+                        + '<td class="mono">' + esc(row.latest_observation_date || row.last_observation_date || '--') + '</td>'
+                        + '<td class="mono">' + esc(row.last_checked_at || '--') + '</td>'
+                        + '<td class="mono">' + esc((row.issues || []).join(', ') || '--') + '</td>'
+                        + '</tr>';
+                }).join('')
+                + '</tbody></table>';
+        }
+        applyCardSeverity(card, severityFromEconomic(report));
     }
 
     function renderIntegrity(latest) {
@@ -691,6 +753,7 @@
             renderOverall(data.latest);
             renderE2E(data.latest);
             renderComponents(data.latest);
+            renderEconomic(data.latest);
             renderIntegrity(data.latest);
             renderIssues(data.latest);
             renderHistory(data.history || []);
@@ -700,10 +763,11 @@
             if (data.nextCronExpression) line += ' | Next: ' + data.nextCronExpression;
             var overallSev = severityFromOverall(data.latest);
             var e2eSev = severityFromE2E(data.latest);
+            var economicSev = severityFromEconomic(data.latest && data.latest.economic ? data.latest.economic : null);
             var issueCount = (data.latest && Array.isArray(data.latest.actionable) ? data.latest.actionable : []).length;
             var issuesSev = issueCount >= 5 ? 'red' : issueCount >= 1 ? 'yellow' : 'green';
-            var worst = (overallSev === 'red' || e2eSev === 'red' || issuesSev === 'red') ? 'red'
-                : (overallSev === 'yellow' || e2eSev === 'yellow' || issuesSev === 'yellow') ? 'yellow' : 'green';
+            var worst = (overallSev === 'red' || e2eSev === 'red' || economicSev === 'red' || issuesSev === 'red') ? 'red'
+                : (overallSev === 'yellow' || e2eSev === 'yellow' || economicSev === 'yellow' || issuesSev === 'yellow') ? 'yellow' : 'green';
             setStatusLineSeverity(statusEl, line, worst);
         } catch (err) {
             setStatusLineSeverity(statusEl, 'Failed to load status.', 'red');

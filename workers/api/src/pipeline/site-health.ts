@@ -393,6 +393,7 @@ async function checkEconomicData(
       key: 'economic_health',
       ok: healthProbe.ok,
       status: healthProbe.status,
+      duration_ms: healthProbe.durationMs,
       detail: healthProbe.detail,
       fetch_event_id: healthProbe.fetchEventId,
     },
@@ -400,6 +401,7 @@ async function checkEconomicData(
       key: 'economic_catalog',
       ok: catalogProbe.ok,
       status: catalogProbe.status,
+      duration_ms: catalogProbe.durationMs,
       detail: catalogProbe.detail,
       fetch_event_id: catalogProbe.fetchEventId,
     },
@@ -407,6 +409,7 @@ async function checkEconomicData(
       key: `economic_series_batch_${index + 1}`,
       ok: probe.ok,
       status: probe.status,
+      duration_ms: probe.durationMs,
       detail: probe.detail,
       requested_ids: probe.requestedIds,
       returned_ids: probe.returnedIds,
@@ -418,12 +421,7 @@ async function checkEconomicData(
     key: probe.key,
     ok: probe.ok,
     status: probe.status,
-    duration_ms:
-      probe.key === 'economic_health'
-        ? healthProbe.durationMs
-        : probe.key === 'economic_catalog'
-          ? catalogProbe.durationMs
-          : seriesProbes[Number(probe.key.slice(-1)) - 1]?.durationMs ?? 0,
+    duration_ms: probe.duration_ms || 0,
     detail: probe.detail,
     fetch_event_id: probe.fetch_event_id ?? null,
   }))

@@ -45,6 +45,7 @@ async function checkNoAuthApi401(results: { passed: string[]; failed: string[] }
     '/runs?limit=1',
     '/runs/realtime?limit=1',
     '/health?limit=1',
+    '/economic/collect',
     '/config',
     '/env',
     '/db/tables?counts=true',
@@ -216,10 +217,11 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
 
     await runStep('status page refresh loads summary', async () => {
       await page.goto(`${ADMIN_BASE}/status`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.click('#refresh-btn');
+      await page.click('#run-check-btn');
       await page.waitForFunction(() => {
         const txt = (document.getElementById('status-line')?.textContent || '').trim();
-        return txt.length > 0 && !/^loading/i.test(txt) && !/^failed/i.test(txt);
+        const economic = (document.getElementById('economic-overview')?.textContent || '').trim();
+        return txt.length > 0 && !/^loading/i.test(txt) && !/^failed/i.test(txt) && economic.length > 0;
       }, null, { timeout: 25000 });
     });
 
@@ -299,11 +301,29 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
 
     await runStep('data integrity page loads without error', async () => {
       await page.goto(`${ADMIN_BASE}/integrity`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.click('#run-audit-btn');
       await page.waitForFunction(() => {
         const status = (document.getElementById('status-line')?.textContent || '').trim();
         const traffic = (document.getElementById('traffic-status')?.textContent || '').trim();
-        return (status.length >= 0 || traffic.length > 0) && !/^error:/i.test(status);
+        const findings = (document.getElementById('findings-wrap')?.textContent || '').trim();
+        return (status.length >= 0 || traffic.length > 0) && !/^error:/i.test(status) && /economic_/i.test(findings);
       }, null, { timeout: 25000 });
+    });
+
+    await runStep('database page treats economic tables as read-only', async () => {
+      await page.goto(`${ADMIN_BASE}/database`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForFunction(() => {
+        const sel = document.getElementById('table-select') as HTMLSelectElement | null;
+        return !!sel && Array.from(sel.options).some((opt) => opt.value === 'economic_series_status');
+      }, null, { timeout: 25000 });
+      await page.selectOption('#table-select', 'economic_series_status');
+      await page.waitForFunction(() => document.querySelectorAll('#db-grid .tabulator-row').length >= 0, null, { timeout: 25000 });
+      await page.waitForFunction(() => {
+        const add = (document.getElementById('add-btn') as HTMLButtonElement | null)?.disabled;
+        const edit = (document.getElementById('edit-btn') as HTMLButtonElement | null)?.disabled;
+        const del = (document.getElementById('delete-btn') as HTMLButtonElement | null)?.disabled;
+        return add === true && edit === true && del === true;
+      }, null, { timeout: 12000 });
     });
 
     await runStep('logs page system/client download actions work', async () => {

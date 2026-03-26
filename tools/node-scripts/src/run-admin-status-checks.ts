@@ -63,6 +63,7 @@ async function main(): Promise<void> {
     healthRun?: { status: number; ok: boolean; duration_ms?: number }
     cdrAuditRun?: { status: number; ok: boolean }
     health?: unknown
+    economic?: unknown
     cdrAudit?: unknown
     coverageGaps?: unknown
     actionable?: unknown
@@ -111,6 +112,16 @@ async function main(): Promise<void> {
       const healthRes = await fetchAdmin('/health?limit=48')
       if (healthRes.ok) {
         out.health = await healthRes.json()
+        const latest = (out.health as { latest?: { economic?: unknown } } | undefined)?.latest
+        out.economic = latest && typeof latest === 'object' && 'economic' in latest
+          ? (latest as { economic?: unknown }).economic
+          : null
+        const severity = (
+          out.economic as { summary?: { severity?: string } } | null | undefined
+        )?.summary?.severity
+        if (severity === 'red') {
+          out.errors.push('economic: red coverage severity')
+        }
       } else {
         out.errors.push(`health: HTTP ${healthRes.status}`)
       }
@@ -141,6 +152,9 @@ async function main(): Promise<void> {
   }
 
   console.log(JSON.stringify(out, null, 2))
+  if (out.errors.length > 0) {
+    process.exit(1)
+  }
 }
 
 main().catch((err) => {
