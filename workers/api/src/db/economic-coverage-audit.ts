@@ -569,7 +569,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     summary,
     probes: [],
     findings,
-    per_series,
+    per_series: perSeries,
   }
 }
 

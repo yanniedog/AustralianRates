@@ -7,9 +7,11 @@ import { parseRbaTableCsv, extractRbaSeriesObservations } from '../../src/econom
 import { ECONOMIC_SERIES_DEFINITIONS } from '../../src/economic/registry'
 import h3Fixture from '../fixtures/economic/rba-h3.csv?raw'
 
-const ADMIN_HEADERS = {
-  Authorization: 'Bearer test-admin-token',
-  'Content-Type': 'application/json',
+function adminHeaders() {
+  return {
+    Authorization: `Bearer ${String(env.ADMIN_API_TOKEN || '').trim()}`,
+    'Content-Type': 'application/json',
+  }
 }
 
 async function clearEconomicTables() {
@@ -81,7 +83,7 @@ describe('economic admin coverage', () => {
     })
 
     const response = await SELF.fetch('https://example.com/api/home-loan-rates/admin/health?limit=5', {
-      headers: ADMIN_HEADERS,
+      headers: adminHeaders(),
     })
     expect(response.status).toBe(200)
     const json = await response.json() as {
@@ -93,7 +95,7 @@ describe('economic admin coverage', () => {
   it('includes economic findings in integrity audit responses', async () => {
     const response = await SELF.fetch('https://example.com/api/home-loan-rates/admin/integrity-audit/run', {
       method: 'POST',
-      headers: ADMIN_HEADERS,
+      headers: adminHeaders(),
     })
     expect(response.status).toBe(200)
     const json = await response.json() as {
@@ -104,7 +106,7 @@ describe('economic admin coverage', () => {
 
   it('lists economic tables and blocks mutation through admin db routes', async () => {
     const tablesResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/db/tables?counts=true', {
-      headers: ADMIN_HEADERS,
+      headers: adminHeaders(),
     })
     expect(tablesResponse.status).toBe(200)
     const tablesJson = await tablesResponse.json() as {
@@ -114,7 +116,7 @@ describe('economic admin coverage', () => {
     expect(tablesJson.tables?.some((table) => table.name === 'economic_series_status' && table.read_only)).toBe(true)
 
     const schemaResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/db/tables/economic_series_status/schema', {
-      headers: ADMIN_HEADERS,
+      headers: adminHeaders(),
     })
     expect(schemaResponse.status).toBe(200)
     const schemaJson = await schemaResponse.json() as { read_only?: boolean }
@@ -122,7 +124,7 @@ describe('economic admin coverage', () => {
 
     const insertResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/db/tables/economic_series_status/rows', {
       method: 'POST',
-      headers: ADMIN_HEADERS,
+      headers: adminHeaders(),
       body: JSON.stringify({
         series_id: 'consumer_sentiment',
         last_checked_at: '2026-03-26T00:00:00.000Z',

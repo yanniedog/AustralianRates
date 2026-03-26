@@ -7,16 +7,62 @@
 const { chromium } = require('playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
-const ADMIN_TEST_TOKEN = String(
-  process.env.ADMIN_TEST_TOKEN || process.env.ADMIN_API_TOKEN || process.env.LOCAL_ADMIN_API_TOKEN || '',
-).trim();
 const ADMIN_TOKEN_ENV_NAMES = ['ADMIN_TEST_TOKEN', 'ADMIN_API_TOKEN', 'LOCAL_ADMIN_API_TOKEN'];
 const ORIGIN = new URL(TEST_URL).origin;
 const ADMIN_BASE = `${ORIGIN}/admin`;
-const ADMIN_API_BASE = `${ORIGIN}/api/home-loan-rates/admin`;
+
+function trimTrailingSlash(value: string): string {
+  return String(value || '').replace(/\/+$/, '');
+}
+
+function isLocalOrigin(value: string): boolean {
+  try {
+    const { hostname } = new URL(value);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
+function pickAdminToken(): string {
+  const explicitTestToken = String(process.env.ADMIN_TEST_TOKEN || '').trim();
+  const sharedAdminToken = String(process.env.ADMIN_API_TOKEN || '').trim();
+  const localAdminToken = String(process.env.LOCAL_ADMIN_API_TOKEN || '').trim();
+  const targetIsLocal =
+    isLocalOrigin(ORIGIN) ||
+    isLocalOrigin(process.env.ADMIN_API_BASE || `${ORIGIN}/api/home-loan-rates`);
+
+  if (targetIsLocal) {
+    return localAdminToken || explicitTestToken || sharedAdminToken;
+  }
+  return explicitTestToken || sharedAdminToken || localAdminToken;
+}
+
+const ADMIN_TEST_TOKEN = pickAdminToken();
+const ADMIN_API_ROOT = trimTrailingSlash(process.env.ADMIN_API_BASE || `${ORIGIN}/api/home-loan-rates`);
+const ADMIN_API_BASE = `${ADMIN_API_ROOT}/admin`;
 const CLOUDFLARE_INSIGHTS_BEACON = 'https://static.cloudflareinsights.com/beacon.min.js';
 
 const PAGE_PATHS = ['dashboard', 'prototypes', 'status', 'integrity', 'database', 'exports', 'clear', 'config', 'runs', 'logs'];
+
+function adminPageUrl(path = ''): string {
+  const cleanPath = String(path || '').replace(/^\/+/, '');
+  const url = new URL(cleanPath ? `${ADMIN_BASE}/${cleanPath}` : `${ADMIN_BASE}/`);
+  if (ADMIN_API_ROOT !== `${ORIGIN}/api/home-loan-rates`) {
+    url.searchParams.set('adminApiBase', ADMIN_API_ROOT);
+  }
+  return url.toString();
+}
+
+async function createAdminContext(browser: typeof chromium) {
+  const context = await browser.newContext({ acceptDownloads: true });
+  if (ADMIN_API_ROOT !== `${ORIGIN}/api/home-loan-rates`) {
+    await context.addInitScript((apiBase: string) => {
+      (window as Window & { AR_ADMIN_API_BASE?: string }).AR_ADMIN_API_BASE = apiBase;
+    }, ADMIN_API_ROOT);
+  }
+  return context;
+}
 
 function asPathname(value: string): string {
   return new URL(value).pathname;
@@ -42,50 +88,53 @@ function summaryAndExit(results: { passed: string[]; failed: string[] }): never 
 
 async function checkNoAuthApi401(results: { passed: string[]; failed: string[] }) {
   const endpoints = [
-    '/runs?limit=1',
-    '/runs/realtime?limit=1',
-    '/health?limit=1',
-    '/economic/collect',
-    '/config',
-    '/env',
-    '/db/tables?counts=true',
-    '/db/clear/options',
-    '/logs/system/stats',
-    '/logs/system/actionable?limit=5',
+    { path: '/runs?limit=1', method: 'GET' },
+    { path: '/runs/realtime?limit=1', method: 'GET' },
+    { path: '/health?limit=1', method: 'GET' },
+    { path: '/economic/collect', method: 'POST' },
+    { path: '/config', method: 'GET' },
+    { path: '/env', method: 'GET' },
+    { path: '/db/tables?counts=true', method: 'GET' },
+    { path: '/db/clear/options', method: 'GET' },
+    { path: '/logs/system/stats', method: 'GET' },
+    { path: '/logs/system/actionable?limit=5', method: 'GET' },
   ];
 
   const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
-  const page = await browser.newPage();
+  const context = await createAdminContext(browser);
+  const page = await context.newPage();
   try {
-    await page.goto(`${ADMIN_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(adminPageUrl(), { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     for (const endpoint of endpoints) {
-      const payload = await page.evaluate(async (url: string) => {
-        const res = await fetch(url, { credentials: 'omit' });
+      const payload = await page.evaluate(async (input: { url: string; method: string }) => {
+        const res = await fetch(input.url, { credentials: 'omit', method: input.method });
         const json = await res.json().catch(() => null);
         return { status: res.status, json };
-      }, ADMIN_API_BASE + endpoint);
+      }, { url: ADMIN_API_BASE + endpoint.path, method: endpoint.method });
       const code = payload.json && payload.json.error ? payload.json.error.code : null;
       const reason = payload.json && payload.json.error && payload.json.error.details ? payload.json.error.details.reason : null;
       const ok = payload.status === 401 && code === 'UNAUTHORIZED' && reason === 'admin_token_or_access_jwt_required';
       if (ok) {
-        results.passed.push(`unauth API ${endpoint} returns 401 UNAUTHORIZED`);
+        results.passed.push(`unauth API ${endpoint.method} ${endpoint.path} returns 401 UNAUTHORIZED`);
       } else {
         results.failed.push(
-          `unauth API ${endpoint} expected 401/UNAUTHORIZED/admin_token_or_access_jwt_required but got status=${payload.status} code=${code} reason=${reason}`,
+          `unauth API ${endpoint.method} ${endpoint.path} expected 401/UNAUTHORIZED/admin_token_or_access_jwt_required but got status=${payload.status} code=${code} reason=${reason}`,
         );
       }
     }
   } finally {
+    await context.close();
     await browser.close();
   }
 }
 
 async function checkInvalidTokenMessage(results: { passed: string[]; failed: string[] }) {
   const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
-  const page = await browser.newPage();
+  const context = await createAdminContext(browser);
+  const page = await context.newPage();
   try {
-    await page.goto(`${ADMIN_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(adminPageUrl(), { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.fill('#admin-token', 'invalid-token-for-audit');
     await page.click('#login-btn');
     await page.waitForSelector('#login-error.visible', { timeout: 15000 });
@@ -96,16 +145,18 @@ async function checkInvalidTokenMessage(results: { passed: string[]; failed: str
       results.failed.push(`invalid token message unexpected: "${errorText}"`);
     }
   } finally {
+    await context.close();
     await browser.close();
   }
 }
 
 async function checkGuardRedirects(results: { passed: string[]; failed: string[] }) {
   const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
-  const page = await browser.newPage();
+  const context = await createAdminContext(browser);
+  const page = await context.newPage();
   try {
     for (const p of PAGE_PATHS) {
-      await page.goto(`${ADMIN_BASE}/${p}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl(p), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForTimeout(600);
       const pathname = asPathname(page.url());
       if (isLoginPath(pathname)) {
@@ -115,6 +166,7 @@ async function checkGuardRedirects(results: { passed: string[]; failed: string[]
       }
     }
   } finally {
+    await context.close();
     await browser.close();
   }
 }
@@ -128,7 +180,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
   }
 
   const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
-  const context = await browser.newContext({ acceptDownloads: true });
+  const context = await createAdminContext(browser);
   const page = await context.newPage();
 
   const consoleErrors: string[] = [];
@@ -154,7 +206,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
   });
   page.on('response', (res: { url: () => string; status: () => number }) => {
     const url = res.url();
-    if (url.includes('/api/home-loan-rates/admin') && res.status() >= 400) {
+    if (url.startsWith(ADMIN_API_BASE) && res.status() >= 400) {
       adminNetworkFailures.push({ status: res.status(), url });
     }
   });
@@ -172,7 +224,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     let authReady = false;
 
     await runStep('valid token login redirects to dashboard', async () => {
-      await page.goto(`${ADMIN_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl(), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.fill('#admin-token', ADMIN_TEST_TOKEN);
       await page.click('#login-btn');
       try {
@@ -189,7 +241,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     if (!authReady) return;
 
     await runStep('dashboard navigation cards render', async () => {
-      await page.goto(`${ADMIN_BASE}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('dashboard'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       const navTexts = await page.$$eval('main.admin-dash .admin-nav-card-title', (nodes: HTMLElement[]) =>
         nodes.map((n) => (n.textContent || '').trim()),
       );
@@ -199,7 +251,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('prototype catalogue renders registry entry and preview link', async () => {
-      await page.goto(`${ADMIN_BASE}/prototypes`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('prototypes'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => {
         return document.querySelectorAll('#prototype-grid .admin-nav-card').length > 0;
       }, null, { timeout: 25000 });
@@ -216,7 +268,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('status page refresh loads summary', async () => {
-      await page.goto(`${ADMIN_BASE}/status`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('status'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.click('#run-check-btn');
       await page.waitForFunction(() => {
         const txt = (document.getElementById('status-line')?.textContent || '').trim();
@@ -226,7 +278,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('database row selection enables edit/delete controls', async () => {
-      await page.goto(`${ADMIN_BASE}/database`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('database'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => {
         const sel = document.getElementById('table-select') as HTMLSelectElement | null;
         return !!sel && sel.options.length > 1;
@@ -247,7 +299,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('clear page product-type scope toggles work', async () => {
-      await page.goto(`${ADMIN_BASE}/clear`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('clear'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => document.querySelectorAll('#key-fields input').length > 0, null, { timeout: 25000 });
       await page.selectOption('#product-type', 'all');
       const allScopeState = await page.$eval('#scope', (sel: HTMLSelectElement) => {
@@ -274,7 +326,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('config/env render rows', async () => {
-      await page.goto(`${ADMIN_BASE}/config`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('config'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => document.querySelectorAll('#env-tbody tr').length > 0, null, { timeout: 25000 });
       const configRows = await page.$$eval('#config-tbody tr', (rows: Element[]) => rows.length);
       const envRows = await page.$$eval('#env-tbody tr', (rows: Element[]) => rows.length);
@@ -282,7 +334,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('runs realtime refresh works', async () => {
-      await page.goto(`${ADMIN_BASE}/runs`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('runs'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.click('#refresh-now');
       await page.waitForFunction(() => {
         const txt = (document.getElementById('live-meta')?.textContent || '').trim();
@@ -291,7 +343,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('exports page loads without error', async () => {
-      await page.goto(`${ADMIN_BASE}/exports`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('exports'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => {
         const summary = (document.getElementById('database-dump-summary')?.textContent || '').trim();
         const msg = (document.getElementById('exports-msg-copy')?.textContent || '').trim();
@@ -300,7 +352,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('data integrity page loads without error', async () => {
-      await page.goto(`${ADMIN_BASE}/integrity`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('integrity'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.click('#run-audit-btn');
       await page.waitForFunction(() => {
         const status = (document.getElementById('status-line')?.textContent || '').trim();
@@ -311,7 +363,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('database page treats economic tables as read-only', async () => {
-      await page.goto(`${ADMIN_BASE}/database`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('database'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => {
         const sel = document.getElementById('table-select') as HTMLSelectElement | null;
         return !!sel && Array.from(sel.options).some((opt) => opt.value === 'economic_series_status');
@@ -327,7 +379,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('logs page system/client download actions work', async () => {
-      await page.goto(`${ADMIN_BASE}/logs`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('logs'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction(() => {
         const txt = (document.getElementById('system-stats')?.textContent || '').trim();
         return txt.length > 0 && !/^loading/i.test(txt);
@@ -354,7 +406,7 @@ async function checkAuthedPortal(results: { passed: string[]; failed: string[] }
     });
 
     await runStep('logout returns to login page', async () => {
-      await page.goto(`${ADMIN_BASE}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(adminPageUrl('dashboard'), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.click('#logout-btn');
       await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
     });
