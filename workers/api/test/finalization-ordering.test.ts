@@ -175,6 +175,41 @@ describe('finalization ordering', () => {
     expect(result).toBe(false)
   })
 
+  it('does not throw when throwIfNotReady and details still in queue (finalize races product_detail)', async () => {
+    const deps = {
+      getLenderDatasetRun: async () =>
+        makeRunRow({
+          run_id: 'run:race',
+          expected_detail_count: 1,
+          completed_detail_count: 0,
+          failed_detail_count: 0,
+          accepted_row_count: 0,
+          written_row_count: 0,
+          detail_fetch_event_count: 0,
+        }),
+      finalizePresenceForRun: async () => ({
+        seenProducts: 0,
+        removedProducts: 0,
+        removedSeries: 0,
+      }),
+      tryMarkLenderDatasetFinalized: async () => true,
+      markLenderDatasetDetailProcessed: async () => {},
+    } as Parameters<typeof finalizeLenderDataset>[3]
+
+    const result = await finalizeLenderDataset(
+      makeEnv(),
+      {
+        runId: 'run:race',
+        lenderCode: 'macquarie',
+        dataset: 'term_deposits',
+      },
+      { throwIfNotReady: true },
+      deps,
+    )
+
+    expect(result).toBe(false)
+  })
+
   it('finalizes zero-expected runs without index success (no detail work to wait on)', async () => {
     const order: string[] = []
     const deps = {

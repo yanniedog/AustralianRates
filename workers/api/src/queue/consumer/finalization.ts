@@ -1,4 +1,9 @@
-import { getLenderDatasetRun, markLenderDatasetDetailProcessed, tryMarkLenderDatasetFinalized } from '../../db/lender-dataset-runs'
+import {
+  getLenderDatasetRun,
+  markLenderDatasetDetailProcessed,
+  tryMarkLenderDatasetFinalized,
+  type LenderDatasetRunRow,
+} from '../../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../../db/presence-finalize'
 import type { EnvBindings } from '../../types'
 import { isLenderDatasetReadyForFinalization } from '../../utils/lender-dataset-invariants'
@@ -36,6 +41,18 @@ function isTransientDbError(error: unknown): boolean {
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Compact counts for lender_finalize_not_ready errors (ops triage without D1 query). */
+function formatLenderDatasetRunSnapshot(run: LenderDatasetRunRow): string {
+  return (
+    `exp${Number(run.expected_detail_count || 0)}` +
+    `_acc${Number(run.accepted_row_count || 0)}` +
+    `_w${Number(run.written_row_count || 0)}` +
+    `_c${Number(run.completed_detail_count || 0)}` +
+    `_f${Number(run.failed_detail_count || 0)}` +
+    `_dfe${Number(run.detail_fetch_event_count || 0)}`
+  )
 }
 
 async function runWithTransientRetry<T>(
@@ -90,7 +107,17 @@ export async function finalizeLenderDataset(
   const readiness = isLenderDatasetReadyForFinalization(run)
   if (!readiness.ready) {
     if (options?.throwIfNotReady) {
-      throw new Error(`lender_finalize_not_ready:${input.lenderCode}:${input.dataset}:${readiness.reason || 'unknown'}`)
+      if (readiness.reason === 'detail_processing_incomplete') {
+        log.info('consumer', 'lender_finalize deferred', {
+          runId: input.runId,
+          lenderCode: input.lenderCode,
+          context: `dataset=${input.dataset} awaiting_detail_jobs`,
+        })
+        return false
+      }
+      throw new Error(
+        `lender_finalize_not_ready:${input.lenderCode}:${input.dataset}:${readiness.reason || 'unknown'}:${formatLenderDatasetRunSnapshot(run)}`,
+      )
     }
     return false
   }
