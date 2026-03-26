@@ -36,6 +36,11 @@ export type InsertHealthCheckRunInput = {
 
 const HEALTH_RUN_RETENTION_DAYS = 1
 
+function isLegacySchemaError(error: unknown): boolean {
+  const text = String((error as { message?: unknown })?.message ?? error ?? '').toLowerCase()
+  return text.includes('no such column') || text.includes('has no column named') || text.includes('no such table')
+}
+
 function legacyE2EDetailPayload(input: InsertHealthCheckRunInput): string | null {
   try {
     return JSON.stringify({
@@ -95,7 +100,8 @@ export async function insertHealthCheckRun(db: D1Database, input: InsertHealthCh
           input.failuresJson,
         )
         .run()
-    } catch {
+    } catch (error) {
+      if (!isLegacySchemaError(error)) throw error
       await db
         .prepare(
           `INSERT INTO health_check_runs (
@@ -144,7 +150,8 @@ export async function getLatestHealthCheckRun(db: D1Database): Promise<HealthChe
         )
         .first<HealthCheckRunRow>()
       return row ?? null
-    } catch {
+    } catch (error) {
+      if (!isLegacySchemaError(error)) throw error
       const row = await db
         .prepare(
           `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
@@ -179,7 +186,8 @@ export async function listHealthCheckRuns(db: D1Database, limit = 48): Promise<H
         .bind(safeLimit)
         .all<HealthCheckRunRow>()
       return rows.results ?? []
-    } catch {
+    } catch (error) {
+      if (!isLegacySchemaError(error)) throw error
       const rows = await db
         .prepare(
           `SELECT run_id, checked_at, trigger_source, overall_ok, duration_ms, components_json, integrity_json,
