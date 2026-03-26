@@ -91,7 +91,14 @@
 
 .admin-status .admin-payload-copy-btn.is-copied {
     color: var(--ar-text-muted);
-    opacity: 0.9;
+    opacity: 0.45;
+}
+
+.admin-status .admin-payload-copy-btn.is-copied:hover,
+.admin-status .admin-payload-copy-btn.is-copied:focus-visible {
+    color: var(--ar-text-muted);
+    opacity: 0.45;
+    background: transparent;
 }
 
 .admin-status .payload-viewer-toolbar .admin-status-line {

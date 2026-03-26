@@ -43,15 +43,23 @@
     }
 
     var copiedPayloadFingerprints = new Set();
-    var payloadViewerCopiedInSession = false;
+
+    function payloadFingerprintFromText(text) {
+        if (!text) return '';
+        return String(text.length) + ':' + String(text.slice(0, 240));
+    }
 
     function payloadFingerprintFromButton(btn) {
         if (!btn || !btn.closest) return '';
         var details = btn.closest('details');
         var pre = details && details.querySelector('pre.mono');
         var text = pre ? pre.textContent : '';
-        if (!text) return '';
-        return String(text.length) + ':' + String(text.slice(0, 240));
+        return payloadFingerprintFromText(text);
+    }
+
+    function payloadViewerFingerprint() {
+        if (!payloadViewerEl) return '';
+        return payloadFingerprintFromText(payloadViewerEl.textContent || '');
     }
 
     function setCopiedIconState(btn, copied) {
@@ -103,7 +111,8 @@
         var ok = clip && isPayloadViewerCopyable();
         btn.disabled = !ok;
         btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
-        setCopiedIconState(btn, payloadViewerCopiedInSession);
+        var fp = payloadViewerFingerprint();
+        setCopiedIconState(btn, !!(fp && copiedPayloadFingerprints.has(fp)));
     }
 
     function copyPayloadViewerToClipboard() {
@@ -114,7 +123,8 @@
         var origTitle = btn.getAttribute('title') || '';
         var origLabel = btn.getAttribute('aria-label') || '';
         navigator.clipboard.writeText(text).then(function () {
-            payloadViewerCopiedInSession = true;
+            var fp = payloadViewerFingerprint();
+            if (fp) copiedPayloadFingerprints.add(fp);
             setCopiedIconState(btn, true);
             btn.setAttribute('title', 'Copied');
             btn.setAttribute('aria-label', 'Copied to clipboard');
