@@ -1,4 +1,10 @@
-import { API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from '../constants'
+import {
+  API_BASE_PATH,
+  ECONOMIC_API_BASE_PATH,
+  SAVINGS_API_BASE_PATH,
+  TD_API_BASE_PATH,
+} from '../constants'
+import { economicPublicRoutes } from '../routes/economic-public'
 import { publicRoutes } from '../routes/public'
 import { savingsPublicRoutes } from '../routes/savings-public'
 import { tdPublicRoutes } from '../routes/td-public'
@@ -22,6 +28,7 @@ const INTERNAL_PUBLIC_API_ROUTES: InternalPublicApiRoute[] = [
   { basePath: API_BASE_PATH, app: publicRoutes },
   { basePath: SAVINGS_API_BASE_PATH, app: savingsPublicRoutes },
   { basePath: TD_API_BASE_PATH, app: tdPublicRoutes },
+  { basePath: ECONOMIC_API_BASE_PATH, app: economicPublicRoutes },
 ]
 
 function matchInternalRoute(url: URL): InternalPublicApiRoute | null {
