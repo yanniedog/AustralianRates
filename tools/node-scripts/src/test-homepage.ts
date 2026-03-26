@@ -457,7 +457,13 @@ async function verifyDesktopWorkspaceControls(page, results, label, baseUrl) {
         const btn = document.getElementById('table-settings-btn');
         if (btn) btn.click();
     });
-    await page.locator('#table-settings-popover input[data-setting="move-columns"]').check({ force: true, timeout: 15000 });
+    await page.evaluate(() => {
+        const inp = document.querySelector('#table-settings-popover input[data-setting="move-columns"]');
+        if (!inp) return;
+        inp.checked = true;
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await page.waitForTimeout(500);
 
     const moveModeState = await page.evaluate(() => {
