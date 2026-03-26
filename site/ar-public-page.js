@@ -465,7 +465,8 @@
         else return '';
         return ids.map(function (id) {
             var f = findUiField(ui, id);
-            return f ? fieldMarkup(Object.assign({}, f, { padGrid: false })) : '';
+            // Use pad grids (filter-*-pads) so filters stay keyboard/touch friendly and E2E can assert on pad buttons.
+            return f ? fieldMarkup(f) : '';
         }).join('');
     }
 
