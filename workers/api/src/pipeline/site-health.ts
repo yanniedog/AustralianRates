@@ -48,10 +48,15 @@ export type SiteHealthRunResult = {
 }
 
 function hasEconomicFailureSignal(report: EconomicCoverageReport): boolean {
+  const hasEmptyPlaceholderSummary =
+    report.summary.defined_series === 0 &&
+    report.summary.status_rows === 0 &&
+    report.findings.length === 0 &&
+    report.summary.public_probe_failures === 0
+
+  if (hasEmptyPlaceholderSummary) return false
   if (report.summary.public_probe_failures > 0) return true
   if (report.findings.some((finding) => finding.severity === 'error')) return true
-  // Guard against empty/legacy placeholder reports that should not fail overall health.
-  if (report.summary.defined_series <= 0 && report.summary.status_rows <= 0 && report.findings.length === 0) return false
   return report.summary.severity === 'red'
 }
 
