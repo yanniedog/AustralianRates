@@ -674,6 +674,12 @@ async function verifyPublicTriggerRemoval(page, results, label) {
 }
 
 async function verifyChartSmoke(page, results, label) {
+    // Prior steps may leave the Table tab active; chart panel hidden can confuse hit-testing for workspace actions.
+    const tabChart = page.locator('#tab-chart');
+    await tabChart.scrollIntoViewIfNeeded().catch(() => {});
+    await tabChart.click({ timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(250);
+
     const button = page.locator('#draw-chart');
     await button.scrollIntoViewIfNeeded().catch(() => {});
     if (!(await button.isVisible().catch(() => false))) {
@@ -681,7 +687,7 @@ async function verifyChartSmoke(page, results, label) {
         return;
     }
 
-    await button.click();
+    await button.click({ force: true });
     await waitForChartReady(page);
 
     const chart = await page.evaluate(() => ({
