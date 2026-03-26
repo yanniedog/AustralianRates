@@ -1,6 +1,11 @@
 import { upsertCpiData } from '../db/cpi-data'
 import type { EnvBindings } from '../types'
-import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import {
+  FetchWithTimeoutError,
+  RBA_GOV_AU_FETCH_INIT,
+  fetchWithTimeout,
+  hostFromUrl,
+} from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
 
 const RBA_G1_DATA_URL = 'https://www.rba.gov.au/statistics/tables/csv/g1-data.csv'
@@ -147,7 +152,7 @@ export async function collectCpiFromRbaG1(
 
   // Attempt 1: HTML measures page — authoritative, updates immediately after ABS releases.
   try {
-    const fetched = await fetchWithTimeout(RBA_MEASURES_CPI_URL, undefined, { env })
+    const fetched = await fetchWithTimeout(RBA_MEASURES_CPI_URL, RBA_GOV_AU_FETCH_INIT, { env })
     const response = fetched.response
     log.info('pipeline', 'upstream_fetch', {
       context:
@@ -172,7 +177,7 @@ export async function collectCpiFromRbaG1(
   // Attempt 2: G1 CSV fallback.
   let csvFailure: string | null = null
   try {
-    const fetched = await fetchWithTimeout(RBA_G1_DATA_URL, undefined, { env })
+    const fetched = await fetchWithTimeout(RBA_G1_DATA_URL, RBA_GOV_AU_FETCH_INIT, { env })
     const response = fetched.response
     log.info('pipeline', 'upstream_fetch', {
       context:
@@ -202,9 +207,20 @@ export async function collectCpiFromRbaG1(
     csvFailure = `g1 reason=fetch_error elapsed_ms=${meta?.elapsed_ms ?? 0} status=${meta?.status ?? 0}`
   }
 
-  log.warn('pipeline', 'cpi_collection_unavailable', {
-    context: `${htmlFailure || 'html=unknown'} ${csvFailure || 'g1=unknown'}`,
-  })
+  const summary = `${htmlFailure || 'html=unknown'} ${csvFailure || 'g1=unknown'}`
+  const htmlSaw403 = String(htmlFailure ?? '').includes('403')
+  const csvSaw403 = String(csvFailure ?? '').includes('403')
+  if (htmlSaw403 && csvSaw403) {
+    log.info('pipeline', 'cpi_collection_rba_blocked', {
+      code: 'cpi_rba_fetch_blocked',
+      context: summary,
+    })
+  } else {
+    log.warn('pipeline', 'cpi_collection_unavailable', {
+      code: 'cpi_collection_unavailable',
+      context: summary,
+    })
+  }
   return {
     ok: false,
     upserted: 0,

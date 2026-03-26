@@ -1,6 +1,11 @@
 import { getNearestRbaCashRateSnapshot, upsertRbaCashRate } from '../db/rba-cash-rate'
 import type { EnvBindings } from '../types'
-import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
+import {
+  FetchWithTimeoutError,
+  RBA_GOV_AU_FETCH_INIT,
+  fetchWithTimeout,
+  hostFromUrl,
+} from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
 
 const RBA_F1_DATA_URL = 'https://www.rba.gov.au/statistics/tables/csv/f1-data.csv'
@@ -118,7 +123,7 @@ export async function collectRbaCashRateForDate(
 
   // Attempt 1: HTML decisions page — authoritative, updates immediately after each announcement.
   try {
-    const fetched = await fetchWithTimeout(RBA_DECISIONS_URL, undefined, { env })
+    const fetched = await fetchWithTimeout(RBA_DECISIONS_URL, RBA_GOV_AU_FETCH_INIT, { env })
     const response = fetched.response
     log.info('pipeline', 'upstream_fetch', {
       context:
@@ -153,7 +158,7 @@ export async function collectRbaCashRateForDate(
   // Attempt 2: F1 CSV fallback.
   let csvFailure: string | null = null
   try {
-    const fetched = await fetchWithTimeout(RBA_F1_DATA_URL, undefined, { env })
+    const fetched = await fetchWithTimeout(RBA_F1_DATA_URL, RBA_GOV_AU_FETCH_INIT, { env })
     const response = fetched.response
     log.info('pipeline', 'upstream_fetch', {
       context:
@@ -250,7 +255,7 @@ export async function backfillRbaCashRatesForDateRange(
   let points: RbaPoint[] = []
   let sourceUrl = RBA_DECISIONS_URL
   try {
-    const fetched = await fetchWithTimeout(RBA_DECISIONS_URL, undefined, { env })
+    const fetched = await fetchWithTimeout(RBA_DECISIONS_URL, RBA_GOV_AU_FETCH_INIT, { env })
     const response = fetched.response
     log.info('pipeline', 'upstream_fetch', {
       context:
@@ -268,7 +273,7 @@ export async function backfillRbaCashRatesForDateRange(
   if (points.length === 0) {
     sourceUrl = RBA_F1_DATA_URL
     try {
-      const fetched = await fetchWithTimeout(RBA_F1_DATA_URL, undefined, { env })
+      const fetched = await fetchWithTimeout(RBA_F1_DATA_URL, RBA_GOV_AU_FETCH_INIT, { env })
       const response = fetched.response
       log.info('pipeline', 'upstream_fetch', {
         context:

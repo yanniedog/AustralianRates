@@ -68,6 +68,20 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores legacy CPI collection warns when both RBA paths hit HTTP 403 (bot wall)', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'pipeline',
+          level: 'warn',
+          message: 'cpi_collection_unavailable',
+          context: '{"context":"html status=403 reason=no_points_or_non_ok g1 status=403 reason=non_ok"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores RBA collection fallback to stored rate (operational, not a failure)', () => {
     expect(
       shouldIgnoreStatusActionableLog(

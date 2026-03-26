@@ -49,6 +49,11 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'pipeline' && message === 'rba_collection_used_stored_rate') {
     return true
   }
+  // Legacy CPI warns when both RBA HTML and G1 returned 403 to non-browser fetches (pre–browser-like UA).
+  const ctxLower = String(entry.context ?? '').toLowerCase()
+  if (source === 'pipeline' && message === 'cpi_collection_unavailable' && ctxLower.includes('403')) {
+    return true
+  }
   // Pre-2026-03-26 stall detector fired on "scanned but none finalized" even when no row was ready to finalize.
   // Current scheduler logs include ready_candidate_rows; keep those actionable.
   const ctx = String(entry.context ?? '')
