@@ -133,6 +133,15 @@ export function shouldIgnoreStatusActionableLog(
   ) {
     return true
   }
+  // Product-detail rows from CDR could carry a long correlation id in runId; validation ran before the
+  // queue job overwrote runId with the canonical short id (fixed 2026-03-27). Historical rows only.
+  if (
+    source === 'db' &&
+    code === 'upsert_failed' &&
+    ctxLower.includes('invalid_normalized_rate_row:invalid_run_id')
+  ) {
+    return true
+  }
   // Temporary D1 overload spikes can emit one-off failed queue/upsert logs that self-heal on retry.
   if (
     (source === 'consumer' || source === 'db' || source === 'api') &&

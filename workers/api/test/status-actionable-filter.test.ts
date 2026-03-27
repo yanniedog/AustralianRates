@@ -264,4 +264,31 @@ describe('shouldIgnoreStatusActionableLog', () => {
       ),
     ).toBe(true)
   })
+
+  it('ignores db upsert_failed when context is invalid_run_id from pre-validation runId (historical)', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'db',
+          level: 'error',
+          code: 'upsert_failed',
+          message: 'upsert_failed product=x bank=ING date=2026-03-27',
+          context: { context: 'invalid_normalized_rate_row:invalid_run_id' },
+        },
+        'active',
+      ),
+    ).toBe(true)
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'db',
+          level: 'error',
+          code: 'upsert_failed',
+          message: 'upsert_failed product=x bank=ING date=2026-03-27',
+          context: { context: 'D1_ERROR: constraint failed' },
+        },
+        'active',
+      ),
+    ).toBe(false)
+  })
 })
