@@ -159,6 +159,9 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           fallbackFetchEventId,
           rowFetchEventId: row.fetchEventId ?? null,
         })
+        // CDR parsers may attach a long correlation id; validateNormalizedRow enforces MAX_RUN_ID_LENGTH.
+        row.runId = job.runId
+        row.runSource = job.runSource ?? 'scheduled'
       }
       fetchedRows = details.rows.length
       await markProductsSeenForRun(env.DB, {
@@ -187,10 +190,6 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         fetchEventId,
         dropped,
       })
-      for (const row of accepted) {
-        row.runId = job.runId
-        row.runSource = job.runSource ?? 'scheduled'
-      }
       acceptedRows = accepted.length
       const acceptedMissingLineage = countRowsMissingFetchEventId(accepted)
       if (acceptedMissingLineage > 0) {
@@ -283,6 +282,8 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           fallbackFetchEventId,
           rowFetchEventId: row.fetchEventId ?? null,
         })
+        row.runId = job.runId
+        row.runSource = job.runSource ?? 'scheduled'
       }
       fetchedRows = details.savingsRows.length
       await markProductsSeenForRun(env.DB, {
@@ -311,10 +312,6 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         fetchEventId,
         dropped,
       })
-      for (const row of accepted) {
-        row.runId = job.runId
-        row.runSource = job.runSource ?? 'scheduled'
-      }
       acceptedRows = accepted.length
       const acceptedMissingLineage = countRowsMissingFetchEventId(accepted)
       if (acceptedMissingLineage > 0) {
@@ -407,6 +404,8 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
           fallbackFetchEventId,
           rowFetchEventId: row.fetchEventId ?? null,
         })
+        row.runId = job.runId
+        row.runSource = job.runSource ?? 'scheduled'
       }
       fetchedRows = details.tdRows.length
       await markProductsSeenForRun(env.DB, {
@@ -435,10 +434,6 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         fetchEventId,
         dropped,
       })
-      for (const row of accepted) {
-        row.runId = job.runId
-        row.runSource = job.runSource ?? 'scheduled'
-      }
       acceptedRows = accepted.length
       const acceptedMissingLineage = countRowsMissingFetchEventId(accepted)
       if (acceptedMissingLineage > 0) {
