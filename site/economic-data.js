@@ -206,6 +206,60 @@
         });
     }
 
+    function normalizedExtent(seriesList) {
+        var min = Infinity;
+        var max = -Infinity;
+        (seriesList || []).forEach(function (series) {
+            (series.points || []).forEach(function (point) {
+                var v = Number(point && point.normalized_value);
+                if (!Number.isFinite(v)) return;
+                if (v < min) min = v;
+                if (v > max) max = v;
+            });
+        });
+        if (min === Infinity || max === -Infinity) return null;
+        return { min: min, max: max };
+    }
+
+    function buildAutoFitYAxis(type, extent, minPositive) {
+        if (!extent) return null;
+        var min = Number(extent.min);
+        var max = Number(extent.max);
+        if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+
+        if (type === 'log') {
+            var safeMin = Number.isFinite(minPositive) && minPositive > 0 ? minPositive : min;
+            var safeMax = max > 0 ? max : safeMin;
+            if (!Number.isFinite(safeMin) || !Number.isFinite(safeMax) || safeMin <= 0 || safeMax <= 0) return null;
+            if (safeMax < safeMin) safeMax = safeMin;
+            if (safeMax === safeMin) {
+                return {
+                    min: safeMin / 1.35,
+                    max: safeMax * 1.35,
+                };
+            }
+            return {
+                min: safeMin / 1.12,
+                max: safeMax * 1.12,
+            };
+        }
+
+        var span = max - min;
+        if (!(span > 0)) {
+            var center = min;
+            var delta = Math.max(Math.abs(center) * 0.04, 1);
+            return {
+                min: center - delta,
+                max: center + delta,
+            };
+        }
+        var pad = span * 0.08;
+        return {
+            min: min - pad,
+            max: max + pad,
+        };
+    }
+
     /**
      * @param {object} [opt]
      * @param {'log'|'value'} [opt.effectiveYAxis] y-axis type actually used by ECharts (after log fallback).
@@ -529,6 +583,7 @@
         var wantLog = state.yScale === 'log';
         var canLog = wantLog && !normalizedSeriesHasNonPositive(state.series);
         var minPos = canLog ? minPositiveNormalized(state.series) : null;
+        var extent = normalizedExtent(state.series);
         if (wantLog && !canLog) {
             logEvent('warn', 'Economic chart: log y-axis disabled (non-positive index values); using linear', {
                 range: state.range,
@@ -536,8 +591,10 @@
             });
         }
         var yAxisType = canLog && minPos != null ? 'log' : 'value';
+        var yAxisFit = buildAutoFitYAxis(yAxisType, extent, minPos);
         var yAxis = {
             type: yAxisType,
+            scale: true,
             name: 'Index (start = 100)',
             nameTextStyle: { color: theme.softText, fontSize: 11 },
             axisLine: styles.axisLine,
@@ -546,9 +603,10 @@
         };
         if (yAxisType === 'log') {
             yAxis.logBase = 10;
-            if (minPos != null && minPos > 0) {
-                yAxis.min = minPos * 0.65;
-            }
+        }
+        if (yAxisFit) {
+            yAxis.min = yAxisFit.min;
+            yAxis.max = yAxisFit.max;
         }
         state.chart.setOption({
             animation: false,

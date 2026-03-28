@@ -252,6 +252,19 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores client-side economic log-scale fallback warnings', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'client',
+          level: 'warn',
+          message: 'Economic chart: log y-axis disabled (non-positive index values); using linear',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores daily savings empty_result noise for non-UBank lenders too', () => {
     expect(
       shouldIgnoreStatusActionableLog(

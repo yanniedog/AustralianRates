@@ -177,6 +177,14 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'chart_cache_refresh' && message.startsWith(CHART_CACHE_REFRESH_NOISE_PREFIX)) {
     return true
   }
+  // Economic dashboard falls back to linear scale when rebased series include zero or negative values.
+  // This is an intentional UX safeguard, not an operational incident.
+  if (
+    source === 'client' &&
+    message === 'economic chart: log y-axis disabled (non-positive index values); using linear'
+  ) {
+    return true
+  }
   if (
     source === 'consumer' &&
     KNOWN_UBANK_NOISE_MESSAGES.has(message) &&
