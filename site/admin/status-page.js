@@ -9,6 +9,7 @@
     var e2eDatasetsEl = document.getElementById('e2e-datasets-wrap');
     var componentsEl = document.getElementById('components-wrap');
     var economicOverviewEl = document.getElementById('economic-overview');
+    var economicFindingsEl = document.getElementById('economic-findings-wrap');
     var economicSeriesEl = document.getElementById('economic-series-wrap');
     var integrityEl = document.getElementById('integrity-wrap');
     var issuesEl = document.getElementById('issues-wrap');
@@ -241,6 +242,7 @@
         var wrapSelectors = [
             '#e2e-datasets-wrap',
             '#components-wrap',
+            '#economic-findings-wrap',
             '#economic-series-wrap',
             '#integrity-wrap',
             '#coverage-gap-wrap',
@@ -487,13 +489,20 @@
             applyCardSeverity(card, null);
             return;
         }
+        var failures = Array.isArray(latest.failures) ? latest.failures : [];
+        var failuresHtml = failures.length
+            ? '<details class="admin-status-details"><summary><span class="mono">' + esc(String(failures.length))
+                + '</span> signal(s)</summary><ul class="admin-failures-list">'
+                + failures.map(function (f) { return '<li class="mono">' + esc(String(f)) + '</li>'; }).join('')
+                + '</ul></details>'
+            : '<span class="pill ok">None</span>';
         overallEl.innerHTML = [
             cardCell('Latest run', '<span class="mono">' + esc(latest.run_id) + '</span>'),
             cardCell('Checked at', esc(latest.checked_at)),
             cardCell('Trigger', esc(latest.trigger_source)),
             cardCell('Overall status', boolPill(!!latest.overall_ok)),
             cardCell('Duration', esc(String(latest.duration_ms || 0)) + ' ms'),
-            cardCell('Failures', esc(String((latest.failures || []).length || 0)))
+            cardCell('Failure signals', failuresHtml)
         ].join('');
         applyCardSeverity(card, severityFromOverall(latest));
     }
@@ -597,6 +606,26 @@
             ].join('');
         }
 
+        var findings = Array.isArray(report.findings) ? report.findings : [];
+        if (economicFindingsEl) {
+            if (!findings.length) {
+                economicFindingsEl.innerHTML = '<p class="hint">No economic coverage findings for this health run.</p>';
+            } else {
+                economicFindingsEl.innerHTML = '<h3 class="admin-subheading">Coverage findings</h3>'
+                    + '<table><thead><tr><th>Code</th><th>Severity</th><th>Message</th><th>Count</th></tr></thead><tbody>'
+                    + findings.map(function (f) {
+                        var sev = String(f.severity || '').toLowerCase() === 'error' ? 'red' : 'yellow';
+                        return '<tr data-ar-status="' + severityToRowFilterAttr(sev) + '">'
+                            + '<td class="mono">' + esc(f.code || '') + '</td>'
+                            + '<td>' + statusPillHtml(sev) + '</td>'
+                            + '<td>' + esc(f.message || '') + '</td>'
+                            + '<td>' + esc(String(f.count != null ? f.count : '')) + '</td>'
+                            + '</tr>';
+                    }).join('')
+                    + '</tbody></table>';
+            }
+        }
+
         var rows = Array.isArray(report.per_series) ? report.per_series : [];
         if (!rows.length) {
             if (economicSeriesEl) economicSeriesEl.innerHTML = '<div>No per-series Economic Data rows returned.</div>';
@@ -605,7 +634,7 @@
         }
 
         if (economicSeriesEl) {
-            economicSeriesEl.innerHTML = '<table><thead><tr><th>Series</th><th>Status</th><th>Stored</th><th>Observed rows</th><th>Last observation</th><th>Last checked</th><th>Issues</th></tr></thead><tbody>'
+            economicSeriesEl.innerHTML = '<table><thead><tr><th>Series</th><th>Status</th><th>Stored</th><th>Observed rows</th><th>Last observation</th><th>Last checked</th><th>Status message</th><th>Issues</th></tr></thead><tbody>'
                 + rows.map(function (row) {
                     var sev = row.severity || 'green';
                     var sevNorm = (sev === 'red' || sev === 'yellow') ? sev : 'green';
@@ -616,6 +645,7 @@
                         + '<td>' + esc(String(row.observation_row_count || 0)) + '</td>'
                         + '<td class="mono">' + esc(row.latest_observation_date || row.last_observation_date || '--') + '</td>'
                         + '<td class="mono">' + esc(row.last_checked_at || '--') + '</td>'
+                        + '<td class="mono">' + esc(row.status_message || '--') + '</td>'
                         + '<td class="mono">' + esc((row.issues || []).join(', ') || '--') + '</td>'
                         + '</tr>';
                 }).join('')

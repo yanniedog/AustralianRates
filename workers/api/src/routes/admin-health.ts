@@ -60,7 +60,11 @@ adminHealthRoutes.post('/health/run', async (c) => {
       run_id: result.runId,
       overall_ok: result.overallOk,
       duration_ms: result.durationMs,
-      failures: result.failures?.length ?? 0,
+      failures: result.failures,
+      economic_severity: result.economic?.summary?.severity,
+      economic_error_series: result.economic?.summary?.error_series,
+      e2e_aligned: result.e2e?.aligned,
+      e2e_reason_code: result.e2e?.reasonCode,
     },
   })
   return c.json({

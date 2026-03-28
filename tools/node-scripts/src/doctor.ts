@@ -186,6 +186,21 @@ function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
   }
 }
 
+function printBundleEconomicE2eDiagnostics(bundleAbsPath: string): void {
+  try {
+    const raw = readFileSync(bundleAbsPath, 'utf8')
+    const j = JSON.parse(raw) as { diagnostics?: unknown }
+    if (j.diagnostics != null && typeof j.diagnostics === 'object') {
+      console.log('\n--- Economic + E2E diagnostics (status-debug-bundle) ---\n')
+      console.log(JSON.stringify(j.diagnostics, null, 2))
+    } else {
+      console.log('\n[doctor] Bundle has no diagnostics block (health snapshot missing).')
+    }
+  } catch (e) {
+    console.warn('[doctor] Could not print economic/E2E diagnostics:', (e as Error).message)
+  }
+}
+
 function main(): void {
   const skipBundle = process.argv.includes('--skip-bundle')
   const strictActionable = !process.argv.includes('--tolerate-actionable')
@@ -207,6 +222,10 @@ function main(): void {
   if (!skipBundle) {
     console.log('\n--- Step 3: full status-debug-bundle (file + summary) ---\n')
     bundleWritten = fetchFullStatusBundleToFile()
+  }
+
+  if (bundleWritten) {
+    printBundleEconomicE2eDiagnostics(path.join(root, STATUS_DEBUG_BUNDLE_FILE))
   }
 
   if (bundleWritten && !tolerateBundleDb) {

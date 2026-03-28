@@ -47,6 +47,73 @@ export type SiteHealthRunResult = {
   actionableIssues: ReturnType<typeof toActionableIssueSummaries>
 }
 
+export function logSiteHealthOutcome(result: SiteHealthRunResult): void {
+  const s = result.economic.summary
+  const findingCodes = result.economic.findings.slice(0, 20).map((f) => f.code)
+  const failedProbes = result.economic.probes
+    .filter((p) => !p.ok)
+    .map((p) => ({
+      key: p.key,
+      status: p.status,
+      detail: String(p.detail || '').slice(0, 240),
+      fetch_event_id: p.fetch_event_id ?? null,
+    }))
+  const failedDatasets = result.e2e.datasets
+    .filter((d) => !d.ok)
+    .map((d) => ({
+      dataset: d.dataset,
+      failure_code: d.failureCode,
+      detail: String(d.detail || '').slice(0, 320),
+      fetch_event_ids: d.fetchEventIds,
+    }))
+  const attention =
+    !result.overallOk || hasEconomicFailureSignal(result.economic) || !result.e2e.aligned
+  const payload = {
+    code: 'site_health_diagnostics' as const,
+    runId: result.runId,
+    context: {
+      checked_at: result.checkedAt,
+      overall_ok: result.overallOk,
+      failures: result.failures,
+      economic: {
+        severity: s.severity,
+        defined_series: s.defined_series,
+        ok_series: s.ok_series,
+        error_series: s.error_series,
+        stale_series: s.stale_series,
+        missing_series: s.missing_series,
+        public_probe_failures: s.public_probe_failures,
+        finding_codes: findingCodes,
+        failed_probes: failedProbes,
+      },
+      e2e: {
+        aligned: result.e2e.aligned,
+        reason_code: result.e2e.reasonCode,
+        reason_detail: String(result.e2e.reasonDetail || '').slice(0, 600),
+        target_collection_date: result.e2e.targetCollectionDate,
+        source_mode: result.e2e.sourceMode,
+        criteria: result.e2e.criteria,
+        failed_datasets: failedDatasets,
+      },
+    },
+  }
+  if (attention) {
+    log.warn('pipeline', 'site_health_attention', payload)
+  } else {
+    log.info('pipeline', 'site_health_ok', {
+      code: 'site_health_diagnostics',
+      runId: result.runId,
+      context: {
+        checked_at: result.checkedAt,
+        overall_ok: true,
+        economic_severity: s.severity,
+        e2e_aligned: result.e2e.aligned,
+        e2e_reason_code: result.e2e.reasonCode,
+      },
+    })
+  }
+}
+
 function hasEconomicFailureSignal(report: EconomicCoverageReport): boolean {
   const definedSeries = Number(report.summary?.defined_series ?? 0)
   const statusRows = Number(report.summary?.status_rows ?? 0)
@@ -569,7 +636,7 @@ export async function runSiteHealthChecks(
     }),
   )
 
-  return {
+  const runResult: SiteHealthRunResult = {
     runId,
     checkedAt,
     overallOk: failures.length === 0,
@@ -582,4 +649,6 @@ export async function runSiteHealthChecks(
     failures,
     actionableIssues,
   }
+  logSiteHealthOutcome(runResult)
+  return runResult
 }

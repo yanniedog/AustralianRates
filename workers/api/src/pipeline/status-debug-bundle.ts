@@ -1,4 +1,9 @@
 import { SITE_HEALTH_CRON_EXPRESSION } from '../constants'
+import type {
+  EconomicCoverageFinding,
+  EconomicCoverageProbe,
+  EconomicCoverageReport,
+} from '../db/economic-coverage-audit'
 import { getDiagnosticsBacklog } from '../db/diagnostics-backlog'
 import { readFetchEventPayloadTruncated, getRecentFetchEvents } from '../db/fetch-events'
 import { getLatestHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
@@ -183,6 +188,71 @@ function filterReplayRowsForRemediation(
   })
 }
 
+/** Compact economic + E2E diagnostics for debug bundle, doctor, and operators (mirrors persisted health run). */
+function diagnosticsFromLatestHealth(h: ParsedHealthRun): Record<string, unknown> {
+  const economic = h.economic as EconomicCoverageReport
+  const summary = economic?.summary
+  const findings = Array.isArray(economic?.findings) ? economic.findings : []
+  const probes = Array.isArray(economic?.probes) ? economic.probes : []
+  const perSeries = Array.isArray(economic?.per_series) ? economic.per_series : []
+  const errorLikeSeries = perSeries
+    .filter((r) => r.severity === 'red' || r.computed_status === 'error')
+    .slice(0, 16)
+    .map((r) => ({
+      series_id: r.series_id,
+      computed_status: r.computed_status,
+      stored_status: r.stored_status,
+      status_message: r.status_message ? String(r.status_message).slice(0, 240) : null,
+    }))
+
+  return {
+    health_run_id: h.run_id,
+    checked_at: h.checked_at,
+    overall_ok: h.overall_ok,
+    failures: h.failures,
+    economic: {
+      severity: summary?.severity,
+      defined_series: summary?.defined_series,
+      ok_series: summary?.ok_series,
+      stale_series: summary?.stale_series,
+      error_series: summary?.error_series,
+      missing_series: summary?.missing_series,
+      public_probe_failures: summary?.public_probe_failures,
+      findings: findings.slice(0, 24).map((f: EconomicCoverageFinding) => ({
+        code: f.code,
+        severity: f.severity,
+        message: f.message.slice(0, 280),
+        count: f.count,
+      })),
+      failed_probes: probes
+        .filter((p: EconomicCoverageProbe) => !p.ok)
+        .map((p) => ({
+          key: p.key,
+          status: p.status,
+          detail: String(p.detail || '').slice(0, 200),
+          fetch_event_id: p.fetch_event_id ?? null,
+        })),
+      error_like_series_sample: errorLikeSeries,
+    },
+    e2e: {
+      aligned: h.e2e.aligned,
+      reason_code: h.e2e.reasonCode,
+      reason_detail: String(h.e2e.reasonDetail || '').slice(0, 600),
+      target_collection_date: h.e2e.targetCollectionDate,
+      source_mode: h.e2e.sourceMode,
+      criteria: h.e2e.criteria,
+      failed_datasets: h.e2e.datasets
+        .filter((d) => !d.ok)
+        .map((d) => ({
+          dataset: d.dataset,
+          failure_code: d.failureCode,
+          detail: String(d.detail || '').slice(0, 320),
+          fetch_event_ids: d.fetchEventIds,
+        })),
+    },
+  }
+}
+
 export type BuildStatusDebugBundleQuery = {
   sections?: string
   healthHistoryLimit?: string
@@ -243,6 +313,9 @@ export async function buildStatusDebugBundle(
     latestHealth = mapHealthCheckRunRow(latest)
     ;(out.meta as Record<string, unknown>).health_run_id = latestHealth?.run_id ?? null
     ;(out.meta as Record<string, unknown>).health_checked_at = latestHealth?.checked_at ?? null
+    if (latestHealth) {
+      out.diagnostics = diagnosticsFromLatestHealth(latestHealth)
+    }
   }
 
   if (sections.has('health')) {

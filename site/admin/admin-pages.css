@@ -128,6 +128,8 @@
 }
 
 .admin-status #e2e-datasets-wrap,
+.admin-status #economic-findings-wrap,
+.admin-status #economic-series-wrap,
 .admin-status #components-wrap,
 .admin-status #integrity-wrap,
 .admin-status #issues-wrap,
@@ -141,6 +143,26 @@
 .admin-runs #backlog-tables {
     max-width: 100%;
     overflow: auto;
+}
+
+.admin-status .admin-subheading {
+    margin: 1rem 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.admin-status .admin-status-details {
+    margin: 0;
+}
+
+.admin-status .admin-status-details summary {
+    cursor: pointer;
+    color: var(--ar-accent);
+}
+
+.admin-status .admin-failures-list {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
 }
 
 .admin-status .integrity-empty {
