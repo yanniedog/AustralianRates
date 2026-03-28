@@ -1241,6 +1241,23 @@ body.ar-public .lwc-report-viewmode {
     min-height: 26px;
 }
 
+body.ar-public .lwc-report-range {
+    display: grid;
+    gap: 6px;
+    padding: 0 0 8px;
+}
+
+body.ar-public .lwc-report-range-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+body.ar-public .lwc-report-range-note {
+    margin: 0;
+}
+
 body.ar-public .lwc-report-viewmode-tab {
     margin: 0;
     padding: 5px 11px;

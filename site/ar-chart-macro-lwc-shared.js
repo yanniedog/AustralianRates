@@ -11,6 +11,25 @@
         return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 1000;
     }
 
+    function shiftUtcDate(ymd, adjuster) {
+        var date = new Date(String(ymd).slice(0, 10) + 'T12:00:00Z');
+        if (!Number.isFinite(date.getTime())) return String(ymd || '').slice(0, 10);
+        adjuster(date);
+        return date.toISOString().slice(0, 10);
+    }
+
+    function shiftDays(ymd, days) {
+        return shiftUtcDate(ymd, function (date) {
+            date.setUTCDate(date.getUTCDate() + Number(days || 0));
+        });
+    }
+
+    function shiftYears(ymd, years) {
+        return shiftUtcDate(ymd, function (date) {
+            date.setUTCFullYear(date.getUTCFullYear() + Number(years || 0));
+        });
+    }
+
     function utcToYmd(ts) {
         return new Date(Number(ts) * 1000).toISOString().slice(0, 10);
     }
@@ -281,6 +300,168 @@
         return bar;
     }
 
+    var REPORT_RANGE_OPTIONS = [
+        { value: '30D', label: '30D', unit: 'days', amount: 30 },
+        { value: '90D', label: '90D', unit: 'days', amount: 90 },
+        { value: '180D', label: '180D', unit: 'days', amount: 180 },
+        { value: '1Y', label: '1Y', unit: 'years', amount: 1 },
+        { value: 'All', label: 'All' },
+    ];
+    var _reportRangeBySection = {};
+
+    function getReportRange(section) {
+        return _reportRangeBySection[section] || '90D';
+    }
+
+    function setReportRange(section, range) {
+        var next = String(range || '90D');
+        var known = false;
+        REPORT_RANGE_OPTIONS.forEach(function (option) {
+            if (option.value === next) known = true;
+        });
+        _reportRangeBySection[section] = known ? next : '90D';
+    }
+
+    function formatRangeAnchor(ymd) {
+        var value = String(ymd || '').slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+        return new Intl.DateTimeFormat('en-AU', {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit',
+            timeZone: 'UTC',
+        }).format(new Date(value + 'T00:00:00Z'));
+    }
+
+    function minDate(a, b) {
+        if (!a) return String(b || '');
+        if (!b) return String(a || '');
+        return String(a) < String(b) ? String(a) : String(b);
+    }
+
+    function maxDate(a, b) {
+        if (!a) return String(b || '');
+        if (!b) return String(a || '');
+        return String(a) > String(b) ? String(a) : String(b);
+    }
+
+    function resolveReportRangeStart(minYmd, maxYmd, range) {
+        var floor = String(minYmd || '').slice(0, 10);
+        var ceiling = String(maxYmd || '').slice(0, 10);
+        if (!floor || !ceiling) return ceiling || floor || '';
+        if (String(range || '') === 'All') return floor;
+        var option = null;
+        REPORT_RANGE_OPTIONS.forEach(function (entry) {
+            if (entry.value === range) option = entry;
+        });
+        if (!option) return maxDate(floor, shiftDays(ceiling, -90));
+        var next = ceiling;
+        if (option.unit === 'days') next = shiftDays(ceiling, -option.amount);
+        if (option.unit === 'years') next = shiftYears(ceiling, -option.amount);
+        return maxDate(floor, next);
+    }
+
+    function buildReportRangeNote(range, minYmd, maxYmd) {
+        var latest = formatRangeAnchor(maxYmd);
+        if (String(range || '') === 'All') {
+            return 'Visible window: full available history through ' + latest + '.';
+        }
+        return 'Visible window: last ' + String(range || '90D') + ' through ' + latest + '.';
+    }
+
+    function createReportRangeBar(opts) {
+        var section = opts.section;
+        var range = opts.range;
+        var minDateValue = opts.minDate;
+        var maxDateValue = opts.maxDate;
+        var onChange = opts.onChange;
+
+        var wrap = document.createElement('div');
+        wrap.className = 'lwc-report-range';
+
+        var row = document.createElement('div');
+        row.className = 'lwc-report-range-row';
+        row.setAttribute('role', 'group');
+        row.setAttribute('aria-label', 'Chart timeframe');
+
+        REPORT_RANGE_OPTIONS.forEach(function (option) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'chip-btn secondary' + (option.value === range ? ' active' : '');
+            button.textContent = option.label;
+            button.setAttribute('data-report-range', option.value);
+            button.setAttribute('aria-pressed', option.value === range ? 'true' : 'false');
+            button.addEventListener('click', function () {
+                setReportRange(section, option.value);
+                if (typeof onChange === 'function') onChange(option.value);
+            });
+            row.appendChild(button);
+        });
+
+        var note = document.createElement('p');
+        note.className = 'lwc-report-range-note hint';
+        note.textContent = buildReportRangeNote(range, minDateValue, maxDateValue);
+
+        wrap.appendChild(row);
+        wrap.appendChild(note);
+        return wrap;
+    }
+
+    function reportChartOptions(L, theme, hasLeftScale) {
+        var lineStyle = (L && L.LineStyle) || { Dashed: 2 };
+        return {
+            layout: {
+                background: { type: L.ColorType.Solid, color: 'transparent' },
+                textColor: theme.muted,
+                fontFamily: "'Space Grotesk', system-ui, sans-serif",
+            },
+            grid: { vertLines: { color: theme.grid }, horzLines: { color: theme.grid } },
+            rightPriceScale: {
+                borderColor: theme.axis,
+                scaleMargins: { top: 0.06, bottom: 0.12 },
+                lastValueVisible: false,
+            },
+            leftPriceScale: {
+                visible: !!hasLeftScale,
+                borderColor: theme.axis,
+                scaleMargins: { top: 0.06, bottom: 0.12 },
+                lastValueVisible: false,
+            },
+            timeScale: {
+                borderColor: theme.axis,
+                timeVisible: false,
+                secondsVisible: false,
+                rightOffset: 5,
+            },
+            crosshair: {
+                mode: L.CrosshairMode.Normal,
+                vertLine: {
+                    color: theme.crosshairLine,
+                    width: 1,
+                    style: lineStyle.Dashed,
+                    labelBackgroundColor: theme.crosshairLabelBg,
+                },
+                horzLine: {
+                    color: theme.crosshairLine,
+                    width: 1,
+                    style: lineStyle.Dashed,
+                    labelBackgroundColor: theme.crosshairLabelBg,
+                },
+            },
+            handleScroll: {
+                mouseWheel: false,
+                pressedMouseMove: false,
+                horzTouchDrag: false,
+                vertTouchDrag: false,
+            },
+            handleScale: {
+                axisPressedMouseMove: false,
+                mouseWheel: false,
+                pinch: false,
+            },
+        };
+    }
+
     /**
      * Tiny arrow after "%" for legend: deposit = green up / red down; mortgage = red up / green down.
      */
@@ -366,6 +547,11 @@
         mergeWinningMortgage: mergeWinningMortgage,
         legendSliceLabelHtml: legendSliceLabelHtml,
         createReportViewModeBar: createReportViewModeBar,
+        createReportRangeBar: createReportRangeBar,
+        getReportRange: getReportRange,
+        setReportRange: setReportRange,
+        resolveReportRangeStart: resolveReportRangeStart,
+        reportChartOptions: reportChartOptions,
         rateLegendArrowHtml: rateLegendArrowHtml,
         getViewMode: getViewMode,
         setViewMode: setViewMode,

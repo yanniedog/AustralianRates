@@ -74,6 +74,8 @@
             muted: dark ? '#94a3b8' : '#64748b',
             grid: dark ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.16)',
             axis: dark ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.35)',
+            crosshairLine: dark ? 'rgba(99,179,237,0.60)' : 'rgba(37,99,235,0.55)',
+            crosshairLabelBg: dark ? 'rgba(15,20,25,0.96)' : 'rgba(255,255,255,0.98)',
             rba: '#f59e0b',
             cpi: dark ? '#f87171' : '#dc2626',
             ttBg: dark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.97)',
@@ -281,6 +283,7 @@
 
         var section = window.AR.section || 'home-loans';
         var vm = M.getViewMode(section);
+        var reportRange = M.getReportRange(section);
         var isProductMode = vm.mode === 'products' || vm.mode === 'focus';
 
         // Build lines based on mode
@@ -293,13 +296,20 @@
             lines = buildBankSeries(model);
         }
 
+        var bankMin = null;
         var bankMax = null;
-        lines.forEach(function (bank) { bank.points.forEach(function (point) { if (!bankMax || point.date > bankMax) bankMax = point.date; }); });
+        lines.forEach(function (bank) {
+            bank.points.forEach(function (point) {
+                if (!bankMin || point.date < bankMin) bankMin = point.date;
+                if (!bankMax || point.date > bankMax) bankMax = point.date;
+            });
+        });
         if (!bankMax) bankMax = todayYmd();
+        if (!bankMin) bankMin = bankMax;
 
-        var ctxMin = subtractMonths(bankMax, 18);
+        var ctxMin = bankMin;
         var ctxMax = bankMax;
-        var viewStart = subtractMonths(ctxMax, 3);
+        var viewStart = M.resolveReportRangeStart(ctxMin, ctxMax, reportRange);
 
         var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMax);
         var rbaData = prep.rbaData;
@@ -328,6 +338,15 @@
             },
         });
         wrapper.appendChild(toggleBar);
+        wrapper.appendChild(M.createReportRangeBar({
+            section: section,
+            range: reportRange,
+            minDate: ctxMin,
+            maxDate: ctxMax,
+            onChange: function () {
+                render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+            },
+        }));
 
         var mount = document.createElement('div');
         mount.className = 'lwc-chart-mount lwc-chart-mount--hl-report';
@@ -346,21 +365,12 @@
         // ── LWC chart ───────────────────────────────────────────────────────
         var LineStyle = L.LineStyle || { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3, SparseDotted: 4 };
         var LineType = L.LineType || { Simple: 0, WithSteps: 1, Curved: 2 };
-        var chart = L.createChart(mount, {
-            layout: { background: { type: L.ColorType.Solid, color: 'transparent' }, textColor: t.muted, fontFamily: "'Space Grotesk', system-ui, sans-serif" },
-            grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
-            rightPriceScale: { borderColor: t.axis, scaleMargins: { top: 0.06, bottom: 0.12 }, lastValueVisible: false },
-            leftPriceScale: { visible: overlayDefs.length > 0, borderColor: t.axis, scaleMargins: { top: 0.06, bottom: 0.12 }, lastValueVisible: false },
-            timeScale: { borderColor: t.axis, timeVisible: false, secondsVisible: false, rightOffset: 5 },
-            crosshair: {
-                mode: L.CrosshairMode.Normal,
-                vertLine: { color: 'rgba(148,163,184,0.45)', width: 1, style: LineStyle.Dashed, labelBackgroundColor: 'rgba(100,116,139,0.80)' },
-                horzLine: { color: 'rgba(148,163,184,0.45)', width: 1, labelBackgroundColor: 'rgba(100,116,139,0.80)' },
-            },
-            localization: { priceFormatter: function (price) { return Number(price).toFixed(2) + '%'; }, timeFormatter: function (time) { return fmtFull(M.utcToYmd(time)); } },
-            handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true },
-            handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
-        });
+        var chartOptions = M.reportChartOptions(L, t, overlayDefs.length > 0);
+        chartOptions.localization = {
+            priceFormatter: function (price) { return Number(price).toFixed(2) + '%'; },
+            timeFormatter: function (time) { return fmtFull(M.utcToYmd(time)); },
+        };
+        var chart = L.createChart(mount, chartOptions);
 
         // CPI
         var cpiSeriesApi = null;
@@ -465,7 +475,6 @@
         mount.appendChild(legendEl);
 
         mount.addEventListener('mouseleave', function () { legendEl.innerHTML = defaultLegendHTML; });
-        mount.addEventListener('dblclick', function () { chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) }); });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) { legendEl.innerHTML = defaultLegendHTML; return; }
