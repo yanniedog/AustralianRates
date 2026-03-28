@@ -30,16 +30,18 @@ This runs in order:
 1. **`node diagnose-api.js`** — public production API checks and benchmarks against `https://www.australianrates.com` (or `TEST_URL` / `API_BASE` if set).
 2. **`node fetch-production-logs.js --stats --actionable --fail-on-actionable`** — **fresh** stats and actionable JSON from production (no full log file written by default). **`--fail-on-actionable`** is added by doctor so the run **exits non-zero** if the actionable endpoint returns any issue groups (so “API benchmarks pass” is not mistaken for “nothing to fix”).
 3. **Full status-debug-bundle** — runs **`fetch-status-debug-bundle.js`** with **`--out=status-debug-bundle-latest.json`** at repo root (file is **gitignored**). Any previous file is removed first so a failed fetch does not leave a stale bundle. The console prints a short summary (`health_run_id`, `health_checked_at`, `remediation_hint_count`, `bundle_file`). Bundle step failures are **warnings only**; they do not change the exit code once steps 1–2 succeeded.
+4. **Bundle database gate** — when the bundle file was written, doctor parses it and exits **1** if **`health.latest.integrity.ok`** is **false** (failed D1 / invariant checks) or **`cdr_audit.report.ok`** is **false** (CDR lineage audit). This catches issues the actionable log aggregator may not surface. **`economic`** upstream or probe noise does not use these flags. Escape hatch: **`node doctor.js --tolerate-bundle-db`** skips this step.
 
 **Reading the output**
 
 - **`stats.count`** is the **total number of rows** in the production error log store (historical volume), not “new failures in this run.” It does not by itself fail doctor.
-- **Exit code:** `npm run doctor` exits **1** if step 1 fails **or** step 2 reports actionable issue groups. Use **`node doctor.js --tolerate-actionable`** only when you intentionally want the old behaviour (signal-only, always exit 0 after successful API + token checks).
+- **Exit code:** `npm run doctor` exits **1** if step 1 fails **or** step 2 reports actionable issue groups **or** step 4 fails (integrity or CDR audit). Use **`node doctor.js --tolerate-actionable`** only when you intentionally want the old behaviour (signal-only, always exit 0 after successful API + token checks). Use **`--tolerate-bundle-db`** only when you accept a red integrity/CDR audit for a given run.
 
 Variants:
 
-- **`node doctor.js --skip-bundle`** — omit the bundle fetch and file (faster or if the route is not yet deployed).
+- **`node doctor.js --skip-bundle`** — omit the bundle fetch and file (faster or if the route is not yet deployed). Also skips step 4 (no bundle); a warning is printed when a token is present.
 - **`node doctor.js --tolerate-actionable`** — do not pass `--fail-on-actionable` to the log fetch (exit 0 even when actionable lists issues).
+- **`node doctor.js --tolerate-bundle-db`** — do not fail on integrity or CDR audit failures in the bundle.
 
 ## Step 2 — Use the bundle during triage
 
@@ -73,7 +75,7 @@ Runs **`npm run doctor`** then **`npm run test:api`**, **`npm run test:archive`*
 
 | Item | Location |
 |------|----------|
-| Doctor script | `tools/node-scripts/src/doctor.ts`, `doctor.js`, `package.json` scripts `doctor` / `doctor:verify` |
+| Doctor script | `tools/node-scripts/src/doctor.ts`, `doctor.js`, `package.json` scripts `doctor` / `doctor:verify` (flags: `--tolerate-actionable`, `--tolerate-bundle-db`, `--skip-bundle`) |
 | Doctor bundle file | `./status-debug-bundle-latest.json` (gitignored; written by `npm run doctor` when token set) |
 | Debug bundle | `fetch-status-debug-bundle.js`, `workers/api` route `/admin/diagnostics/status-debug-bundle` |
 | Debugging index | AGENTS.md (Debugging and production logfiles; status debug bundle; doctor) |

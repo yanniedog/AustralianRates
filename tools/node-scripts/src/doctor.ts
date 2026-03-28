@@ -3,7 +3,7 @@
  * optional full status-debug-bundle written to repo-root status-debug-bundle-latest.json (gitignored) plus
  * a short console summary. Does not write production log streams to disk (use fetch-production-logs for that).
  *
- * Usage: node doctor.js [--skip-bundle] [--tolerate-actionable]
+ * Usage: node doctor.js [--skip-bundle] [--tolerate-actionable] [--tolerate-bundle-db]
  * Requires ADMIN_API_TOKEN in repo root .env for log/actionable/bundle slices.
  */
 
@@ -107,9 +107,61 @@ function fetchFullStatusBundleToFile(): boolean {
   }
 }
 
+/**
+ * Fail the run when the bundle reports D1/consistency failures that actionable logs may not list.
+ * Economic/upstream probe noise does not set integrity or CDR audit ok=false.
+ */
+function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
+  let raw: string
+  try {
+    raw = readFileSync(bundleAbsPath, 'utf8')
+  } catch (e) {
+    console.error('[doctor] Cannot read bundle for DB validation:', (e as Error).message)
+    process.exit(1)
+  }
+  let j: Record<string, unknown>
+  try {
+    j = JSON.parse(raw) as Record<string, unknown>
+  } catch (e) {
+    console.error('[doctor] Bundle JSON parse failed:', (e as Error).message)
+    process.exit(1)
+  }
+
+  if (j.ok === false) {
+    console.error('[doctor] status-debug-bundle returned ok=false (refusing to ignore).')
+    process.exit(1)
+  }
+
+  const health = j.health as Record<string, unknown> | undefined
+  const latest = health?.latest as Record<string, unknown> | undefined
+  const integrity = latest?.integrity as
+    | { ok?: boolean; checks?: Array<{ name?: string; passed?: boolean }> }
+    | undefined
+
+  if (integrity && integrity.ok === false) {
+    console.error('[doctor] Health integrity failed (database / invariants). Fix D1 data or pipeline, then redeploy.')
+    const checks = Array.isArray(integrity.checks) ? integrity.checks : []
+    for (const c of checks) {
+      if (c && c.passed === false) {
+        console.error(`  - ${String(c.name || '(unnamed check)')}: FAILED`)
+      }
+    }
+    process.exit(1)
+  }
+
+  const cdrBlock = j.cdr_audit as { report?: { ok?: boolean } } | undefined
+  if (cdrBlock?.report && cdrBlock.report.ok === false) {
+    console.error(
+      '[doctor] CDR pipeline audit ok=false (database / lineage consistency). Inspect bundle cdr_audit.report.failures.',
+    )
+    process.exit(1)
+  }
+}
+
 function main(): void {
   const skipBundle = process.argv.includes('--skip-bundle')
   const strictActionable = !process.argv.includes('--tolerate-actionable')
+  const tolerateBundleDb = process.argv.includes('--tolerate-bundle-db')
 
   console.log('========================================')
   console.log('AustralianRates doctor (production triage)')
@@ -127,6 +179,20 @@ function main(): void {
   if (!skipBundle) {
     console.log('\n--- Step 3: full status-debug-bundle (file + summary) ---\n')
     bundleWritten = fetchFullStatusBundleToFile()
+  }
+
+  if (bundleWritten && !tolerateBundleDb) {
+    console.log('\n--- Step 4: bundle database / integrity gate ---\n')
+    assertStatusBundleNoDbFailures(path.join(root, STATUS_DEBUG_BUNDLE_FILE))
+    console.log('[doctor] Bundle integrity + CDR audit gates passed.')
+  } else if (!skipBundle && !bundleWritten && hasAdminToken()) {
+    console.warn(
+      '[doctor] No bundle file: skipped database/integrity gate (fetch failed). Use a working token or fix API.',
+    )
+  } else if (skipBundle && hasAdminToken()) {
+    console.warn(
+      '[doctor] --skip-bundle: database/integrity gate not run (no bundle). Remove --skip-bundle for full DB checks.',
+    )
   }
 
   console.log('\n========================================')

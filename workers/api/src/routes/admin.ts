@@ -95,7 +95,8 @@ adminRoutes.post('/retention/run', async (c) => {
     return c.json({
       ok: true,
       auth_mode: c.get('adminAuthState')?.mode ?? null,
-      message: 'Retention prunes completed. Backend tables trimmed to 1 day.',
+      message:
+        'Retention prunes completed. global_log: 48h + row cap; backend lineage tables trimmed to 1 day.',
     })
   } catch (error) {
     log.error('admin', 'retention_run_failed', { error, context: '/admin/retention/run' })

@@ -1,11 +1,13 @@
 /**
  * Retention pruning for high-churn tables. Reduces storage and keeps queries fast.
  * Called after health check runs (scheduled and manual) so no separate cron is needed.
- * Log policy: error/warn 14 days; debug/info 48 hours (see logging-expert skill and retention-and-api.md).
+ * Log policy: all `global_log` levels older than 48 hours are removed (bounded table size).
+ * A row cap deletes the oldest rows if the table still exceeds GLOBAL_LOG_MAX_ROWS after the time cut.
  */
 
-const GLOBAL_LOG_ERROR_WARN_RETENTION_DAYS = 14
-const GLOBAL_LOG_INFO_DEBUG_RETENTION_HOURS = 48
+const GLOBAL_LOG_RETENTION_HOURS = 48
+/** After time-based prune, drop oldest rows so bursts cannot grow the table without bound. */
+const GLOBAL_LOG_MAX_ROWS = 200_000
 /** Backend lineage/run data: keep only 1 day for compact DB; admin diagnostics see last 24h. */
 const BACKEND_RETENTION_DAYS = 1
 const INGEST_ANOMALIES_RETENTION_DAYS = BACKEND_RETENTION_DAYS
@@ -21,16 +23,14 @@ const DOWNLOAD_CHANGE_FEED_RETENTION_DAYS = BACKEND_RETENTION_DAYS
 const CLIENT_HISTORICAL_RETENTION_DAYS = BACKEND_RETENTION_DAYS
 
 /**
- * Delete global_log rows by level: debug/info older than 48h; warn/error older than 14d.
- * No-op on error (e.g. table missing). Keeps error stream long-lived and info stream compact.
+ * Delete global_log rows older than GLOBAL_LOG_RETENTION_HOURS (all levels).
+ * Then cap total row count at GLOBAL_LOG_MAX_ROWS (oldest first). No-op on error.
  */
 export async function pruneGlobalLog(db: D1Database): Promise<void> {
   try {
     await db
-      .prepare(
-        `DELETE FROM global_log WHERE level IN ('debug','info') AND ts < datetime('now', ?1)`,
-      )
-      .bind(`-${GLOBAL_LOG_INFO_DEBUG_RETENTION_HOURS} hours`)
+      .prepare(`DELETE FROM global_log WHERE ts < datetime('now', ?1)`)
+      .bind(`-${GLOBAL_LOG_RETENTION_HOURS} hours`)
       .run()
   } catch {
     // Table may not exist (pre-0004) or schema may differ; ignore.
@@ -38,12 +38,17 @@ export async function pruneGlobalLog(db: D1Database): Promise<void> {
   try {
     await db
       .prepare(
-        `DELETE FROM global_log WHERE level IN ('warn','error') AND ts < datetime('now', ?1)`,
+        `WITH ranked AS (
+           SELECT id, ROW_NUMBER() OVER (ORDER BY ts DESC, id DESC) AS rn
+           FROM global_log
+         )
+         DELETE FROM global_log
+         WHERE id IN (SELECT id FROM ranked WHERE rn > ?1)`,
       )
-      .bind(`-${GLOBAL_LOG_ERROR_WARN_RETENTION_DAYS} days`)
+      .bind(GLOBAL_LOG_MAX_ROWS)
       .run()
   } catch {
-    // Table may not exist or schema may differ; ignore.
+    // D1/SQLite without window support, or empty table; ignore.
   }
 }
 

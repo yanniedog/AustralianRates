@@ -4,15 +4,10 @@
 
 | Stream | Levels | Retention | Implementation options |
 |--------|--------|-----------|------------------------|
-| Error/warn | warn, error | 14 days | Prune `global_log` where `level IN ('warn','error')` and `ts < now - 14d`; or separate `error_log` table with 14d prune. |
-| Info | debug, info | 48 hours | Prune `global_log` where `level IN ('debug','info')` and `ts < now - 48h`; or separate `info_log` table with 48h prune. |
+| All levels | debug, info, warn, error | 48 hours | Prune `global_log` where `ts < now - 48h` (see `workers/api/src/db/retention-prune.ts`). |
+| Row cap | (same table) | max ~200k rows | After the time cut, oldest rows removed if count still exceeds cap. |
 
-Current: `workers/api/src/db/retention-prune.ts` has `GLOBAL_LOG_RETENTION_DAYS = 30` and a single `DELETE FROM global_log WHERE ts < ...`. To meet policy:
-
-1. **Option A (one table):** Two prune steps: (1) delete `level IN ('debug','info')` older than 48h; (2) delete `level IN ('warn','error')` older than 14d. Constants: `GLOBAL_LOG_INFO_RETENTION_DAYS = 2`, `GLOBAL_LOG_ERROR_RETENTION_DAYS = 14`.
-2. **Option B (two tables):** e.g. `global_log` for warn/error only (14d) and `info_log` for debug/info (48h). Logger writes to both or routes by level. Requires migration and logger changes.
-
-Indexes: keep `idx_global_log_ts` and `idx_global_log_level` (or equivalent) so level+ts deletes are efficient.
+Current: `workers/api/src/db/retention-prune.ts` deletes all `global_log` rows older than 48 hours, then applies a row cap (`GLOBAL_LOG_MAX_ROWS`) using `ROW_NUMBER()` so bursts cannot grow the table without bound. Keep `idx_global_log_ts` for efficient time-range deletes.
 
 ## Where retention runs
 
@@ -31,7 +26,7 @@ Indexes: keep `idx_global_log_ts` and `idx_global_log_level` (or equivalent) so 
 
 - **Current:** `site/admin/logs.html` – download system log (text/JSONL), wipe, stats; client log download/wipe.
 - **Centralised control additions:**  
-  - Display or edit retention constants (14d / 48h) if they become configurable (e.g. stored in `app_config` or env).  
+  - Display or edit retention constants (48h / row cap) if they become configurable (e.g. stored in `app_config` or env).  
   - Optional: toggle “verbose pipeline logging” so that on failure, pipeline steps emit extra debug.  
   - Single entry point: all log-related actions (download, wipe, stats, actionable, retention settings) remain under `/admin` and require admin auth.
 

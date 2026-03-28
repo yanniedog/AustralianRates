@@ -8,7 +8,7 @@ High-churn tables are pruned so they stay bounded. Pruning runs after every heal
 
 | Table | Retention | Implemented in |
 |-------|-----------|----------------|
-| `global_log` | 14 days (warn/error), 48 hours (info/debug) | `workers/api/src/db/retention-prune.ts` |
+| `global_log` | 48 hours (all levels), then cap at 200k rows (oldest first) | `workers/api/src/db/retention-prune.ts` |
 | `ingest_anomalies` | 1 day | `workers/api/src/db/retention-prune.ts` |
 | `health_check_runs` | 1 day | `workers/api/src/db/health-check-runs.ts` |
 | `integrity_audit_runs` | 1 day | `workers/api/src/db/integrity-audit-runs.ts` |
@@ -51,7 +51,7 @@ Use sparingly; retention pruning alone keeps growth in check.
   - **fetch_events** – one row per HTTP fetch; 3-day retention keeps it bounded.
   - **raw_objects** – pruned to content_hashes still in fetch_events (3-day window).
   - **run_reports**, **run_seen_***, **lender_dataset_runs** – 3-day retention.
-  - **global_log**, **ingest_anomalies** – 14d/48h and 3-day retention.
+  - **global_log**, **ingest_anomalies** – 48h + row cap, and 3-day retention for anomalies.
 - **Live breakdown:** After deploying the API, run from repo root (with `ADMIN_API_TOKEN` in `.env`):
   ```bash
   node fetch-db-stats.js

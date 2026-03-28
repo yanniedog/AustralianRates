@@ -8,17 +8,16 @@ Ensure errors, warnings, and failures from every part of the site (front end, AP
 
 ---
 
-## Policy: Two log streams
+## Policy: Single `global_log` table, bounded size
 
 | Stream | Contents | Retention / turnover | Format |
 |--------|----------|----------------------|--------|
-| **Errors/warnings/failures** | `level IN ('warn','error')` plus failure context | **14 days** continuous rollover | Full context, tracebacks, codes; one canonical store (e.g. `global_log` or dedicated error log). |
-| **Informational** | `level IN ('debug','info')` | **48 hours** turnover | Compact, non-verbose; separate store or table so high volume does not dilute error retention. |
+| **All levels** | `debug`, `info`, `warn`, `error` | **48 hours** by `ts`, then **~200k row cap** (oldest first) | One canonical `global_log`; prune in `workers/api/src/db/retention-prune.ts` after each health check. |
 
-- **14d rollover:** Prune or rotate so that error/warn entries older than 14 days are removed (or archived). No indefinite growth.
-- **48h turnover:** Prune info/debug so that entries older than 48 hours are removed. Keeps info log small and fast.
+- **48h turnover:** All rows older than 48 hours are removed so the log does not grow without a time bound.
+- **Row cap:** After the time cut, excess rows are deleted so bursts cannot exceed ~200k rows.
 
-Current codebase: single `global_log` with 30d prune in `workers/api/src/db/retention-prune.ts`. Align retention to 14d for warn/error and 48h for info; if using one table, implement level-aware prune (different cutoffs by level) or split into two tables. See [references/retention-and-api.md](references/retention-and-api.md).
+See [references/retention-and-api.md](references/retention-and-api.md).
 
 ---
 
@@ -27,7 +26,7 @@ Current codebase: single `global_log` with 30d prune in `workers/api/src/db/rete
 - **Single place** for logging configuration and log access: admin portal (`site/admin/`, `workers/api` admin routes).
 - Expose in admin UI:
   - View/download system log (existing: `site/admin/logs.html`, `/admin/logs/system`).
-  - Retention/rollover settings (e.g. 14d / 48h) if configurable.
+  - Retention/rollover settings (e.g. 48h / row cap) if configurable.
   - Optional: log level or verbosity for different components (e.g. more verbose in pipeline when enabled).
 - Wipe, stats, and actionable-issues endpoints remain under admin auth. All log read/write/wipe goes through admin or the dedicated logs API with proper auth.
 
