@@ -38,6 +38,9 @@ const INFORMATIONAL_CHECKS = new Set([
   'latest_vs_global_freshness_indicator',
   'latest_vs_global_freshness',
   'economic_stale_status_rows',
+  /** Warn-only economic coverage slices (upstream transport / proxy), not D1 schema or rates integrity. */
+  'economic_transient_upstream_transport',
+  'economic_proxy_error_status_rows',
 ])
 
 function num(value: unknown): number {
