@@ -15,6 +15,7 @@ import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
 import { dispatchReplayQueue } from './replay-queue'
 import { runDailyBackup } from './daily-backup'
+import { runLifecycleReconciliation } from './run-reconciliation'
 import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
 import { getMelbourneNowParts } from '../utils/time'
@@ -45,6 +46,33 @@ export function scheduledTasksForCron(cron: string): ScheduledTask[] {
 
 async function runSiteHealthCron(env: EnvBindings) {
   const origin = 'https://www.australianrates.com'
+  let reconciliation: Awaited<ReturnType<typeof runLifecycleReconciliation>> | null = null
+  try {
+    reconciliation = await runLifecycleReconciliation(env.DB, {
+      dryRun: false,
+      idleMinutes: 5,
+      staleRunMinutes: 90,
+    })
+    log.info('scheduler', 'Site health preflight reconciliation completed', {
+      context: JSON.stringify({
+        duration_ms: reconciliation.duration_ms,
+        stale_runs_closed: reconciliation.stale_runs.closed_runs,
+        stale_runs_scanned: reconciliation.stale_runs.scanned_runs,
+        stale_unfinalized_force_closed: reconciliation.stale_unfinalized.force_closed_rows,
+        stale_unfinalized_scanned: reconciliation.stale_unfinalized.scanned_rows,
+        ready_finalized_rows: reconciliation.ready_finalizations.finalized_rows,
+        ready_scanned_rows: reconciliation.ready_finalizations.scanned_rows,
+        ready_skipped_rows: reconciliation.ready_finalizations.skipped_rows,
+        ready_pass_count: reconciliation.ready_finalizations.pass_count ?? 1,
+      }),
+    })
+  } catch (error) {
+    log.error('scheduler', 'Site health preflight reconciliation failed', {
+      code: 'run_lifecycle_reconciliation_failed',
+      error,
+      context: 'site_health_cron_preflight',
+    })
+  }
   const result = await runSiteHealthChecks(env, {
     triggerSource: 'scheduled',
     origin,
@@ -72,6 +100,7 @@ async function runSiteHealthCron(env: EnvBindings) {
     run_id: result.runId,
     overall_ok: result.overallOk,
     failures: result.failures.length,
+    reconciliation,
   }
 }
 

@@ -2,7 +2,11 @@ import { attachEconomicCoverageProbes, runEconomicCoverageAudit, type EconomicCo
 import { runIntegrityChecks } from '../db/integrity-checks'
 import { ECONOMIC_SERIES_DEFINITIONS } from '../economic/registry'
 import { getIngestPauseConfig } from '../db/app-config'
-import { getLatestHealthCheckRun, shouldFilterSiteHealthAttentionForActionable } from '../db/health-check-runs'
+import {
+  getLatestHealthCheckRun,
+  shouldFilterSiteHealthAttentionForActionable,
+  type HealthCheckRunRow,
+} from '../db/health-check-runs'
 import { loadCoverageGapAuditReport, shouldFilterCoverageGapLogForActionable } from './coverage-gap-audit'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
@@ -649,13 +653,20 @@ export async function runSiteHealthChecks(
   const economicFailureSignal = hasEconomicFailureSignal(economic)
   if (economicFailureSignal) failures.push('economic_coverage_failed')
   if (!e2e.aligned) failures.push(`e2e_not_aligned:${e2e.reasonCode}`)
+  const actionableHealthContext: Pick<HealthCheckRunRow, 'checked_at' | 'overall_ok'> | null =
+    failures.length === 0
+      ? {
+          checked_at: checkedAt,
+          overall_ok: 1,
+        }
+      : latestHealthForActionable
 
   const actionableIssues = toActionableIssueSummaries(
     logs.entries.filter((entry) => {
       const level = String(entry.level || '').toLowerCase()
       if (level !== 'warn' && level !== 'error') return false
       if (shouldFilterCoverageGapLogForActionable(entry, gapReportForActionable)) return false
-      if (shouldFilterSiteHealthAttentionForActionable(entry, latestHealthForActionable)) return false
+      if (shouldFilterSiteHealthAttentionForActionable(entry, actionableHealthContext)) return false
       if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
       return true
     }),

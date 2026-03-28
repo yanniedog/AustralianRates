@@ -76,6 +76,29 @@ function warn(results, message) {
     results.warnings.push(`WARN ${message}`);
 }
 
+async function closeWithTimeout(label, action, timeoutMs = 10000) {
+    let timer;
+    try {
+        const outcome = await Promise.race([
+            Promise.resolve()
+                .then(() => action())
+                .then(() => 'closed')
+                .catch((error) => {
+                    console.warn(`${label} close failed:`, error && error.message ? error.message : String(error));
+                    return 'failed';
+                }),
+            new Promise((resolve) => {
+                timer = setTimeout(() => resolve('timed_out'), timeoutMs);
+            }),
+        ]);
+        if (outcome === 'timed_out') {
+            console.warn(`${label} close timed out after ${timeoutMs}ms; continuing to avoid hanging the test run.`);
+        }
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
 async function gotoPublic(page, url) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForSelector('#main-content', { timeout: 15000 });
@@ -1340,7 +1363,8 @@ async function runTests() {
             fullPage: true,
         }).catch(() => {});
     } finally {
-        await browser.close();
+        await closeWithTimeout('Playwright context', () => context.close());
+        await closeWithTimeout('Playwright browser', () => browser.close());
     }
 
     console.log('\n========================================');

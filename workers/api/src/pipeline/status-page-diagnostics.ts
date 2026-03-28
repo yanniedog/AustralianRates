@@ -13,6 +13,67 @@ function worstOf(a: Severity, b: Severity): Severity {
   return rank[a] >= rank[b] ? a : b
 }
 
+function parseIsoDateMs(value: string | null | undefined): number | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+  const ms = Date.parse(text)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function parseCollectionDateMs(value: string | null | undefined): number | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+  const ms = Date.parse(`${text}T00:00:00.000Z`)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function relevantReplayRows(
+  rows: Array<Record<string, unknown>>,
+  latest: ParsedHealthRun | null,
+  coverageIsClean: boolean,
+): Array<Record<string, unknown>> {
+  if (!rows.length) return rows
+
+  const targetCollectionDate = String(latest?.e2e?.targetCollectionDate || '').trim()
+  const targetMs = parseCollectionDateMs(targetCollectionDate)
+  const currentRunHealthy = latest?.e2e?.aligned === true && coverageIsClean
+  if (!currentRunHealthy || targetMs == null) return rows
+
+  const successByScope = new Map<string, number>()
+  for (const row of rows) {
+    if (String(row.status || '').toLowerCase() !== 'succeeded') continue
+    const lender = String(row.lender_code || '').trim().toLowerCase()
+    const dataset = String(row.dataset_kind || '').trim().toLowerCase()
+    const collectionDate = String(row.collection_date || '').trim()
+    const updatedAt = parseIsoDateMs(String(row.updated_at || ''))
+    if (!lender || !dataset || !collectionDate || updatedAt == null) continue
+    const key = `${lender}|${dataset}|${collectionDate}`
+    const previous = successByScope.get(key)
+    if (previous == null || updatedAt > previous) successByScope.set(key, updatedAt)
+  }
+
+  const oneDayMs = 24 * 60 * 60 * 1000
+  return rows.filter((row) => {
+    const status = String(row.status || '').toLowerCase()
+    if (status === 'queued' || status === 'dispatching') return true
+    if (status !== 'failed') return true
+
+    const collectionDate = String(row.collection_date || '').trim()
+    const collectionMs = parseCollectionDateMs(collectionDate)
+    if (collectionMs == null) return true
+    if (collectionMs >= targetMs - oneDayMs) return true
+
+    const lender = String(row.lender_code || '').trim().toLowerCase()
+    const dataset = String(row.dataset_kind || '').trim().toLowerCase()
+    const updatedAt = parseIsoDateMs(String(row.updated_at || ''))
+    const scopeKey = `${lender}|${dataset}|${collectionDate}`
+    const successAt = successByScope.get(scopeKey)
+    if (successAt != null && updatedAt != null && successAt >= updatedAt) return false
+
+    return false
+  })
+}
+
 /**
  * Produce a comprehensive backend diagnostics object from a fully built status-debug-bundle JSON.
  */
@@ -173,6 +234,7 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
   } | undefined
   const cov = covBlock?.report
   let coverageSnapshot: Record<string, unknown> | null = null
+  let coverageIsClean = false
   if (cov) {
     const rows = Array.isArray(cov.rows) ? cov.rows : []
     coverageSnapshot = {
@@ -189,6 +251,7 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     }
     const errs = Number(cov.totals?.errors ?? 0)
     const gaps = Number(cov.totals?.gaps ?? 0)
+    coverageIsClean = errs === 0 && gaps === 0
     if (errs > 0) {
       attention.push(`Coverage gaps: ${errs} error-class row(s)`)
       worst = worstOf(worst, 'red')
@@ -236,14 +299,18 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
 
   const rqBlock = bundle.replay_queue as { count?: number; rows?: Array<Record<string, unknown>> } | undefined
   const rrows = Array.isArray(rqBlock?.rows) ? rqBlock.rows : []
-  const failedReplay = rrows.filter((r) => String(r.status || '').toLowerCase() === 'failed').length
-  const queuedReplay = rrows.filter((r) => ['queued', 'dispatching'].includes(String(r.status || '').toLowerCase()))
-    .length
+  const relevantReplay = relevantReplayRows(rrows, latest, coverageIsClean)
+  const failedReplay = relevantReplay.filter((r) => String(r.status || '').toLowerCase() === 'failed').length
+  const queuedReplay = relevantReplay.filter((r) =>
+    ['queued', 'dispatching'].includes(String(r.status || '').toLowerCase()),
+  ).length
   const replaySnapshot = {
     row_count: rqBlock?.count ?? rrows.length,
     failed: failedReplay,
     queued_or_dispatching: queuedReplay,
-    sample: rrows.slice(0, 10).map((r) => ({
+    historical_failed_ignored:
+      rrows.filter((r) => String(r.status || '').toLowerCase() === 'failed').length - failedReplay,
+    sample: relevantReplay.slice(0, 10).map((r) => ({
       status: r.status,
       lender_code: r.lender_code,
       dataset_kind: r.dataset_kind,

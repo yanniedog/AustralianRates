@@ -17,13 +17,15 @@ export type HealthCheckRunRow = {
   failures_json: string
 }
 
+type HealthCheckActionableContext = Pick<HealthCheckRunRow, 'checked_at' | 'overall_ok'>
+
 /**
  * Stale `site_health_attention` rows stay in global_log; once a later persisted health run is overall_ok,
  * drop older attention rows from actionable triage (same idea as coverage gap supersede).
  */
 export function shouldFilterSiteHealthAttentionForActionable(
   entry: Record<string, unknown>,
-  latest: HealthCheckRunRow | null,
+  latest: HealthCheckActionableContext | null,
 ): boolean {
   const msg = String(entry.message || '')
     .trim()
