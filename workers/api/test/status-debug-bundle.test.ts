@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { parseStatusDebugSections } from '../src/pipeline/status-debug-bundle'
-import { mergeRemediationHints, remediationFromActionableCodes } from '../src/pipeline/status-debug-remediation'
+import {
+  mergeRemediationHints,
+  remediationFromActionableCodes,
+  remediationFromIntegrityFindings,
+} from '../src/pipeline/status-debug-remediation'
 
 describe('status-debug-bundle', () => {
   it('parseStatusDebugSections defaults to full set', () => {
@@ -25,5 +29,12 @@ describe('status-debug-remediation', () => {
     const m = mergeRemediationHints([a, b])
     expect(m.length).toBe(1)
     expect(m[0]?.path).toBe('/cdr-audit/run')
+  })
+
+  it('adds repair-lineage remediation for failed recent lineage findings', () => {
+    const hints = remediationFromIntegrityFindings([
+      { check: 'recent_stored_rows_missing_fetch_event_lineage', passed: false },
+    ])
+    expect(hints[0]?.path).toBe('/runs/repair-lineage')
   })
 })

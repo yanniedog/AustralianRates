@@ -40,6 +40,7 @@ import {
   mergeRemediationHints,
   remediationFromActionableCodes,
   remediationFromCoverageGapRows,
+  remediationFromIntegrityFindings,
   remediationFromReplayQueueRows,
 } from './status-debug-remediation'
 import type { CoverageGapAuditReport } from './coverage-gap-audit'
@@ -378,6 +379,7 @@ export async function buildStatusDebugBundle(
   let probeEvents: Awaited<ReturnType<typeof getRecentFetchEvents>> = []
   let logEntriesOut: Array<Record<string, unknown>> = []
   let actionableLogEntriesOut: Array<Record<string, unknown>> = []
+  let integrityFindingSnapshot: Array<{ check?: string; passed?: boolean }> = []
 
   const parallel: Promise<void>[] = []
 
@@ -392,6 +394,10 @@ export async function buildStatusDebugBundle(
           latest: parseIntegrityAuditRunRow(latestRow),
           history: historyRows.map((r) => parseIntegrityAuditRunRow(r)).filter(Boolean),
         }
+        const latestFindings = Array.isArray((out.integrity_audit as { latest?: { findings?: unknown[] } }).latest?.findings)
+          ? ((out.integrity_audit as { latest?: { findings?: Array<{ check?: string; passed?: boolean }> } }).latest?.findings ?? [])
+          : []
+        integrityFindingSnapshot = latestFindings
       })(),
     )
   }
@@ -561,6 +567,7 @@ export async function buildStatusDebugBundle(
     const merged = mergeRemediationHints([
       remediationFromCoverageGapRows(coverageRowsSnapshot),
       remediationFromReplayQueueRows(filterReplayRowsForRemediation(replayRows, latestHealth)),
+      remediationFromIntegrityFindings(integrityFindingSnapshot),
       remediationFromActionableCodes(codes),
     ])
     out.remediation = { hints: merged, note: 'Suggestions only; call each path with admin auth.' }

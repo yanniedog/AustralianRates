@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="../public-showcase-hero.css?v=2544dd6">
     <link rel="stylesheet" href="../responsive.css?v=2544dd6">
     <link rel="stylesheet" href="../mobile-host.css?v=2544dd6">
-    <link rel="stylesheet" href="../economic-data.css?v=2544dd6">
+    <link rel="stylesheet" href="../economic-data.css?v=2544dd7">
     <script src="../theme.js?v=2544dd6"></script>
 </head>
 <body class="ar-public ar-section-economic-data" data-ar-section="economic-data">
@@ -102,12 +102,15 @@
                             <p id="chart-meta" class="hint">Index = 100 at the start of the visible range for each selected series.</p>
                         </div>
                         <div class="economic-toolbar">
-                            <div id="range-row" class="economic-chip-row" role="group" aria-label="Date range shortcuts">
-                                <button type="button" class="chip-btn secondary" data-range="1Y">1Y</button>
-                                <button type="button" class="chip-btn secondary" data-range="3Y">3Y</button>
-                                <button type="button" class="chip-btn secondary active" data-range="5Y">5Y</button>
-                                <button type="button" class="chip-btn secondary" data-range="10Y">10Y</button>
-                                <button type="button" class="chip-btn secondary" data-range="All">All</button>
+                            <div class="economic-toolbar-row">
+                                <div id="range-row" class="economic-chip-row" role="group" aria-label="Date range shortcuts">
+                                    <button type="button" class="chip-btn secondary" data-range="1Y">1Y</button>
+                                    <button type="button" class="chip-btn secondary" data-range="3Y">3Y</button>
+                                    <button type="button" class="chip-btn secondary active" data-range="5Y">5Y</button>
+                                    <button type="button" class="chip-btn secondary" data-range="10Y">10Y</button>
+                                    <button type="button" class="chip-btn secondary" data-range="All">All</button>
+                                </div>
+                                <button type="button" id="economic-y-scale" class="economic-y-scale-btn" aria-pressed="true" aria-label="Y-axis scale: logarithmic. Click to use linear.">log</button>
                             </div>
                             <p id="economic-range-note" class="hint">Loading current range...</p>
                         </div>
@@ -130,7 +133,7 @@
     <script src="../ar-section-config.js?v=2544dd6"></script>
     <script src="../ar-config.js?v=2544dd6"></script>
     <script src="../ar-chart-echarts-helpers.js?v=2544dd6"></script>
-    <script src="../economic-data.js?v=2544dd6"></script>
+    <script src="../economic-data.js?v=2544dd7"></script>
     <script src="../frame.js?v=2544dd6"></script>
     <script src="../site-variant-ui.js?v=2544dd6"></script>
 </body>

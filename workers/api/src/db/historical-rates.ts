@@ -9,12 +9,18 @@ import { storeCdrDetailPayload } from './cdr-detail-payloads'
 import { upsertLatestHomeLoanSeries } from './latest-series'
 import { markSeriesSeen } from './series-status'
 import { nowIso } from '../utils/time'
+import {
+  assertHistoricalWriteAllowed,
+  isHistoricalWriteContractError,
+  recordHistoricalWriteContractViolation,
+} from './historical-write-guard'
 
 export async function upsertHistoricalRateRow(db: D1Database, row: NormalizedRateRow): Promise<void> {
   const verdict = validateNormalizedRow(row)
   if (!verdict.ok) {
     throw new Error(`invalid_normalized_rate_row:${verdict.reason}`)
   }
+  assertHistoricalWriteAllowed('home_loans', row)
 
   const parsedAt = nowIso()
   const seriesKey = homeLoanSeriesKey(row)
@@ -238,8 +244,18 @@ export async function upsertHistoricalRateRows(db: D1Database, rows: NormalizedR
       await upsertHistoricalRateRow(db, row)
       written += 1
     } catch (error) {
+      const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
+      if (isHistoricalWriteContractError(error)) {
+        await recordHistoricalWriteContractViolation(db, {
+          dataset: 'home_loans',
+          row,
+          lenderCode: error.lenderCode,
+          reason: error.reason,
+          seriesKey: homeLoanSeriesKey(row),
+        })
+      }
       log.error('db', `upsert_failed product=${row.productId} bank=${row.bankName} date=${row.collectionDate}`, {
-        code: 'upsert_failed',
+        code,
         context: (error as Error)?.message || String(error),
         lenderCode: row.bankName,
       })

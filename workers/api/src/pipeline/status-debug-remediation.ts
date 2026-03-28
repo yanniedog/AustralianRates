@@ -13,6 +13,11 @@ export type RemediationHint = {
   links?: string[]
 }
 
+type IntegrityFindingHint = {
+  check?: string
+  passed?: boolean
+}
+
 function isDatasetKind(v: string): v is DatasetKind {
   return v === 'home_loans' || v === 'savings' || v === 'term_deposits'
 }
@@ -103,6 +108,75 @@ export function remediationFromReplayQueueRows(rows: ReplayQueueRow[]): Remediat
   return out
 }
 
+export function remediationFromIntegrityFindings(findings: IntegrityFindingHint[]): RemediationHint[] {
+  const out: RemediationHint[] = []
+  for (const finding of findings) {
+    if (!finding || finding.passed !== false) continue
+    const check = String(finding.check || '').trim()
+    if (!check) continue
+    switch (check) {
+      case 'recent_stored_rows_missing_fetch_event_lineage':
+      case 'recent_stored_rows_unresolved_fetch_event_lineage':
+        out.push({
+          scope_key: `integrity|${check}|repair_lineage`,
+          reason: `Integrity finding ${check}: repair missing or broken fetch-event lineage`,
+          method: 'POST',
+          path: '/runs/repair-lineage',
+          body: {},
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/logs.html'],
+        })
+        break
+      case 'recent_lender_dataset_write_mismatches':
+        out.push({
+          scope_key: `integrity|${check}|health_run`,
+          reason: `Integrity finding ${check}: run fresh health/integrity after reconciling the failing run scope`,
+          method: 'POST',
+          path: '/health/run',
+          body: {},
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/runs.html'],
+        })
+        break
+      case 'orphan_product_presence_status':
+        out.push({
+          scope_key: `integrity|${check}|repair_catalog_presence`,
+          reason: 'Repair catalog and presence rows after orphan detection',
+          method: 'POST',
+          path: '/runs/repair-catalog-presence',
+          body: {},
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/database.html'],
+        })
+        break
+      case 'fetch_event_raw_object_linkage':
+      case 'legacy_raw_payload_backlog':
+        out.push({
+          scope_key: `integrity|${check}|repair_legacy_raw_linkage`,
+          reason: `Repair raw-object linkage for integrity finding ${check}`,
+          method: 'POST',
+          path: '/runs/repair-legacy-raw-linkage',
+          body: {},
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/database.html'],
+        })
+        break
+      default:
+        out.push({
+          scope_key: `integrity|${check}|integrity_audit_run`,
+          reason: `Re-run integrity audit after fixing ${check}`,
+          method: 'POST',
+          path: '/integrity-audit/run',
+          body: {},
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/database.html'],
+        })
+        break
+    }
+  }
+  return out
+}
+
 /** Suggested admin API calls for actionable issue codes (from health / logs). */
 export function remediationFromActionableCodes(codes: Iterable<string>): RemediationHint[] {
   const seen = new Set<string>()
@@ -177,6 +251,18 @@ function hintsForIssueCode(code: string): RemediationHint[] {
           body: {},
           issue_code: code,
           links: ['/admin/config.html', '/admin/database.html'],
+        },
+      ]
+    case 'write_contract_violation':
+      return [
+        {
+          scope_key: `actionable|${code}|integrity_audit_run`,
+          reason: 'Run integrity audit after inspecting blocked writes and quarantined anomalies',
+          method: 'POST',
+          path: '/integrity-audit/run',
+          body: {},
+          issue_code: code,
+          links: ['/admin/status.html', '/admin/logs.html', '/admin/database.html'],
         },
       ]
     default:

@@ -44,9 +44,9 @@ export type NormalizedRateRow = {
 }
 
 export const MIN_RATE_PERCENT = 0
-export const MAX_RATE_PERCENT = 100
+export const MAX_RATE_PERCENT = 25
 export const MIN_COMPARISON_RATE_PERCENT = 0
-export const MAX_COMPARISON_RATE_PERCENT = 100
+export const MAX_COMPARISON_RATE_PERCENT = 25
 export const MAX_ANNUAL_FEE = 1000000
 
 function asText(value: unknown): string {
@@ -288,6 +288,9 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   if (!productName || productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
+  if (!isProductNameLikelyRateProduct(productName)) {
+    return { ok: false, reason: 'invalid_product_name_semantics' }
+  }
   if (!isValidUrl(row.sourceUrl)) {
     return { ok: false, reason: 'invalid_source_url' }
   }
@@ -344,6 +347,15 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
     row.confidenceScore > 1
   ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
+  }
+  if (row.confidenceScore < minConfidenceForFlag(row.dataQualityFlag)) {
+    return { ok: false, reason: 'confidence_below_required_threshold' }
+  }
+  if (
+    row.comparisonRate != null &&
+    row.comparisonRate - row.interestRate > COMPARISON_RATE_MAX_ABOVE_INTEREST
+  ) {
+    return { ok: false, reason: 'comparison_rate_gap_out_of_bounds' }
   }
   if (row.runId != null && row.runId !== '' && row.runId.length > VALIDATE_COMMON.MAX_RUN_ID_LENGTH) {
     return { ok: false, reason: 'invalid_run_id' }

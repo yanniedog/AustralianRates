@@ -91,7 +91,7 @@ export async function runDataIntegrityAudit(
         ? 'invalid'
         : c.name.startsWith('orphan_') || c.name.includes('linkage') || c.name === 'legacy_raw_payload_backlog'
           ? 'dead'
-          : c.name === 'runs_with_no_outputs'
+          : c.name === 'runs_with_no_outputs' || c.name === 'recent_lender_dataset_write_mismatches'
             ? 'erroneous'
             : c.name.includes('freshness') || c.name === 'recent_anomaly_volume' || c.name === 'run_report_status_distribution' || c.name === 'dataset_staleness'
               ? 'indicator'
@@ -102,6 +102,12 @@ export async function runDataIntegrityAudit(
         ? detail.orphan_count
         : typeof detail.runs_with_no_outputs === 'number'
           ? detail.runs_with_no_outputs
+          : typeof detail.missing_row_count === 'number'
+            ? detail.missing_row_count
+            : typeof detail.unresolved_row_count === 'number'
+              ? detail.unresolved_row_count
+              : typeof detail.mismatched_run_count === 'number'
+                ? detail.mismatched_run_count
           : detail.missing_series_key_total != null || detail.mismatched_series_key_total != null
             ? num(detail.missing_series_key_total) + num(detail.mismatched_series_key_total)
             : undefined

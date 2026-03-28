@@ -28,6 +28,7 @@ body.ar-section-economic-data .market-terminal.economic-terminal {
 .economic-topline,
 .economic-hero-stats,
 .economic-toolbar,
+.economic-toolbar-row,
 .economic-chip-row,
 .economic-series-header,
 .economic-source-meta,
@@ -36,6 +37,42 @@ body.ar-section-economic-data .market-terminal.economic-terminal {
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
+}
+
+.economic-toolbar-row {
+    width: 100%;
+}
+
+.economic-y-scale-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 2px 7px;
+    min-height: 0;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+    border-radius: 6px;
+    border: 1px solid var(--ar-line);
+    background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
+    color: var(--ar-text-soft);
+    cursor: pointer;
+}
+
+.economic-y-scale-btn:hover {
+    border-color: var(--ar-spark, #66f6cf);
+    color: var(--ar-text, inherit);
+}
+
+.economic-y-scale-btn[aria-pressed="true"] {
+    border-color: color-mix(in srgb, var(--ar-spark, #66f6cf) 55%, var(--ar-line));
+    color: var(--ar-text, inherit);
+}
+
+body.ar-section-economic-data .economic-y-scale-btn:focus-visible {
+    outline: 2px solid var(--ar-spark, #66f6cf);
+    outline-offset: 2px;
 }
 
 .economic-hero-stats {
@@ -319,6 +356,13 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
         flex-direction: column;
         align-items: flex-start;
         gap: 8px;
+    }
+
+    body.ar-section-economic-data .economic-y-scale-btn {
+        min-height: 36px;
+        min-width: 40px;
+        padding: 4px 10px;
+        font-size: 0.68rem;
     }
 
     body.ar-section-economic-data .economic-option {

@@ -48,6 +48,34 @@ type RunsNoOutputsRow = {
   td_rows: number
   problematic_dataset_rows?: number
 }
+type RecentLineageSummaryRow = {
+  dataset: string
+  n: number | null
+}
+type RecentLineageSampleRow = {
+  dataset: string
+  bank_name: string
+  product_id: string
+  collection_date: string
+  fetch_event_id: number | null
+  run_id: string | null
+}
+type RecentBrokenLineageSampleRow = RecentLineageSampleRow & {
+  fetched_at?: string | null
+  raw_object_found?: number | null
+}
+type RecentWriteMismatchRow = {
+  run_id: string
+  lender_code: string
+  dataset_kind: string
+  collection_date: string
+  accepted_row_count: number
+  written_row_count: number
+  lineage_error_count: number
+  detail_fetch_event_count: number
+  updated_at: string
+  last_error: string | null
+}
 type IntegrityOptions = {
   includeAnomalyProbes?: boolean
 }
@@ -380,6 +408,250 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
   } catch (error) {
     checks.push({
       name: 'runs_with_no_outputs',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const requiredTables = await Promise.all([
+      tableExists(db, 'historical_loan_rates'),
+      tableExists(db, 'historical_savings_rates'),
+      tableExists(db, 'historical_term_deposit_rates'),
+    ])
+    if (requiredTables.some((exists) => !exists)) {
+      checks.push({
+        name: 'recent_stored_rows_missing_fetch_event_lineage',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          historical_loan_rates: requiredTables[0],
+          historical_savings_rates: requiredTables[1],
+          historical_term_deposit_rates: requiredTables[2],
+        },
+      })
+    } else {
+      const summaryRows = await db
+        .prepare(
+          `WITH recent AS (
+             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_loan_rates
+             WHERE collection_date >= date('now', '-30 days')
+             UNION ALL
+             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_savings_rates
+             WHERE collection_date >= date('now', '-30 days')
+             UNION ALL
+             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_term_deposit_rates
+             WHERE collection_date >= date('now', '-30 days')
+           )
+           SELECT dataset, COUNT(*) AS n
+           FROM recent
+           WHERE fetch_event_id IS NULL
+           GROUP BY dataset
+           ORDER BY dataset`,
+        )
+        .all<RecentLineageSummaryRow>()
+      const sampleRows = await db
+        .prepare(
+          `WITH recent AS (
+             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_loan_rates
+             WHERE collection_date >= date('now', '-30 days')
+             UNION ALL
+             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_savings_rates
+             WHERE collection_date >= date('now', '-30 days')
+             UNION ALL
+             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_term_deposit_rates
+             WHERE collection_date >= date('now', '-30 days')
+           )
+           SELECT dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+           FROM recent
+           WHERE fetch_event_id IS NULL
+           ORDER BY collection_date DESC, dataset, bank_name, product_id
+           LIMIT 20`,
+        )
+        .all<RecentLineageSampleRow>()
+      const byDataset = (summaryRows.results ?? []).reduce<Record<string, number>>((acc, row) => {
+        acc[String(row.dataset || 'unknown')] = Number(row.n ?? 0)
+        return acc
+      }, {})
+      const total = Object.values(byDataset).reduce((sum, value) => sum + value, 0)
+      checks.push({
+        name: 'recent_stored_rows_missing_fetch_event_lineage',
+        passed: total === 0,
+        detail: {
+          window: '30_days',
+          missing_row_count: total,
+          by_dataset: byDataset,
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'recent_stored_rows_missing_fetch_event_lineage',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const requiredTables = await Promise.all([
+      tableExists(db, 'historical_loan_rates'),
+      tableExists(db, 'historical_savings_rates'),
+      tableExists(db, 'historical_term_deposit_rates'),
+      tableExists(db, 'fetch_events'),
+      tableExists(db, 'raw_objects'),
+    ])
+    if (requiredTables.some((exists) => !exists)) {
+      checks.push({
+        name: 'recent_stored_rows_unresolved_fetch_event_lineage',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          historical_loan_rates: requiredTables[0],
+          historical_savings_rates: requiredTables[1],
+          historical_term_deposit_rates: requiredTables[2],
+          fetch_events: requiredTables[3],
+          raw_objects: requiredTables[4],
+        },
+      })
+    } else {
+      const summaryRows = await db
+        .prepare(
+          `WITH recent AS (
+             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_loan_rates
+             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             UNION ALL
+             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_savings_rates
+             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             UNION ALL
+             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_term_deposit_rates
+             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+           )
+           SELECT recent.dataset, COUNT(*) AS n
+           FROM recent
+           LEFT JOIN fetch_events fe
+             ON fe.id = recent.fetch_event_id
+           LEFT JOIN raw_objects ro
+             ON ro.content_hash = fe.content_hash
+           WHERE fe.id IS NULL
+              OR ro.content_hash IS NULL
+           GROUP BY recent.dataset
+           ORDER BY recent.dataset`,
+        )
+        .all<RecentLineageSummaryRow>()
+      const sampleRows = await db
+        .prepare(
+          `WITH recent AS (
+             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_loan_rates
+             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             UNION ALL
+             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_savings_rates
+             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             UNION ALL
+             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             FROM historical_term_deposit_rates
+             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+           )
+           SELECT recent.dataset, recent.bank_name, recent.product_id, recent.collection_date, recent.fetch_event_id, recent.run_id,
+                  fe.fetched_at,
+                  CASE WHEN ro.content_hash IS NULL THEN 0 ELSE 1 END AS raw_object_found
+           FROM recent
+           LEFT JOIN fetch_events fe
+             ON fe.id = recent.fetch_event_id
+           LEFT JOIN raw_objects ro
+             ON ro.content_hash = fe.content_hash
+           WHERE fe.id IS NULL
+              OR ro.content_hash IS NULL
+           ORDER BY recent.collection_date DESC, recent.dataset, recent.bank_name, recent.product_id
+           LIMIT 20`,
+        )
+        .all<RecentBrokenLineageSampleRow>()
+      const byDataset = (summaryRows.results ?? []).reduce<Record<string, number>>((acc, row) => {
+        acc[String(row.dataset || 'unknown')] = Number(row.n ?? 0)
+        return acc
+      }, {})
+      const total = Object.values(byDataset).reduce((sum, value) => sum + value, 0)
+      checks.push({
+        name: 'recent_stored_rows_unresolved_fetch_event_lineage',
+        passed: total === 0,
+        detail: {
+          window: '7_days',
+          unresolved_row_count: total,
+          by_dataset: byDataset,
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'recent_stored_rows_unresolved_fetch_event_lineage',
+      passed: false,
+      detail: errorDetail(error),
+    })
+  }
+
+  try {
+    const hasRuns = await tableExists(db, 'lender_dataset_runs')
+    if (!hasRuns) {
+      checks.push({
+        name: 'recent_lender_dataset_write_mismatches',
+        passed: false,
+        detail: {
+          error: 'required_tables_missing',
+          lender_dataset_runs: hasRuns,
+        },
+      })
+    } else {
+      const countRow = await db
+        .prepare(
+          `SELECT COUNT(*) AS n
+           FROM lender_dataset_runs
+           WHERE updated_at >= datetime('now', '-7 days')
+             AND (
+               COALESCE(lineage_error_count, 0) > 0
+               OR COALESCE(accepted_row_count, 0) > COALESCE(written_row_count, 0)
+             )`,
+        )
+        .first<NumberRow>()
+      const sampleRows = await db
+        .prepare(
+          `SELECT run_id, lender_code, dataset_kind, collection_date,
+                  accepted_row_count, written_row_count, lineage_error_count,
+                  detail_fetch_event_count, updated_at, last_error
+           FROM lender_dataset_runs
+           WHERE updated_at >= datetime('now', '-7 days')
+             AND (
+               COALESCE(lineage_error_count, 0) > 0
+               OR COALESCE(accepted_row_count, 0) > COALESCE(written_row_count, 0)
+             )
+           ORDER BY updated_at DESC
+           LIMIT 20`,
+        )
+        .all<RecentWriteMismatchRow>()
+      checks.push({
+        name: 'recent_lender_dataset_write_mismatches',
+        passed: Number(countRow?.n ?? 0) === 0,
+        detail: {
+          window: '7_days',
+          mismatched_run_count: Number(countRow?.n ?? 0),
+          sample: sampleRows.results ?? [],
+        },
+      })
+    }
+  } catch (error) {
+    checks.push({
+      name: 'recent_lender_dataset_write_mismatches',
       passed: false,
       detail: errorDetail(error),
     })

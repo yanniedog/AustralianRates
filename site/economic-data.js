@@ -9,11 +9,27 @@
     var apiBase = config.apiBase || (window.location.origin + '/api/economic-data');
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
     var sessionKey = 'ar-economic-data-debug-session';
+    var Y_SCALE_STORAGE_KEY = 'ar-economic-y-scale';
     var ECONOMIC_CHART_PALETTE = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
+
+    function readStoredYScale() {
+        try {
+            var v = window.sessionStorage.getItem(Y_SCALE_STORAGE_KEY);
+            if (v === 'log' || v === 'linear') return v;
+        } catch (_e) {}
+        return 'log';
+    }
+
+    function persistYScale(scale) {
+        try {
+            window.sessionStorage.setItem(Y_SCALE_STORAGE_KEY, scale);
+        } catch (_e) {}
+    }
 
     var state = {
         catalog: null,
         range: '5Y',
+        yScale: readStoredYScale(),
         selectedPreset: 'rba_watchlist',
         selectedIds: [],
         series: [],
@@ -39,7 +55,8 @@
         sourceList: document.getElementById('economic-source-list'),
         activePreset: document.getElementById('economic-active-preset'),
         selectedCount: document.getElementById('economic-selected-count'),
-        statusText: document.getElementById('economic-status-text')
+        statusText: document.getElementById('economic-status-text'),
+        yScaleBtn: document.getElementById('economic-y-scale')
     };
 
     function esc(value) {
@@ -168,6 +185,53 @@
         });
     }
 
+    /** Smallest strictly positive normalized_value across series (for log y-axis domain). */
+    function minPositiveNormalized(seriesList) {
+        var min = Infinity;
+        (seriesList || []).forEach(function (series) {
+            (series.points || []).forEach(function (point) {
+                var v = point && point.normalized_value;
+                if (v != null && isFinite(v) && v > 0 && v < min) min = v;
+            });
+        });
+        return min === Infinity ? null : min;
+    }
+
+    function normalizedSeriesHasNonPositive(seriesList) {
+        return (seriesList || []).some(function (series) {
+            return (series.points || []).some(function (point) {
+                var v = point && point.normalized_value;
+                return v != null && isFinite(v) && v <= 0;
+            });
+        });
+    }
+
+    /**
+     * @param {object} [opt]
+     * @param {'log'|'value'} [opt.effectiveYAxis] y-axis type actually used by ECharts (after log fallback).
+     */
+    function syncYScaleButton(opt) {
+        if (!refs.yScaleBtn) return;
+        var effective = opt && opt.effectiveYAxis;
+        var isLog = state.yScale === 'log';
+        refs.yScaleBtn.textContent = isLog ? 'log' : 'lin';
+        refs.yScaleBtn.setAttribute('aria-pressed', isLog ? 'true' : 'false');
+        var forcedLinear = isLog && effective === 'value';
+        if (forcedLinear) {
+            refs.yScaleBtn.title = 'Log scale is selected, but the chart uses linear because some series have zero or negative index values in this range.';
+        } else if (isLog) {
+            refs.yScaleBtn.title = 'Y-axis: logarithmic (base 10). Click for linear scale.';
+        } else {
+            refs.yScaleBtn.title = 'Y-axis: linear. Click for logarithmic scale.';
+        }
+        refs.yScaleBtn.setAttribute(
+            'aria-label',
+            forcedLinear
+                ? 'Chart uses a linear Y-axis; log scale is unavailable for the current data. Click to confirm linear preference.'
+                : (isLog ? 'Y-axis logarithmic. Click for linear.' : 'Y-axis linear. Click for logarithmic.')
+        );
+    }
+
     function syncDebugSurface() {
         ar.economicData = {
             reloadCatalog: loadCatalog,
@@ -175,6 +239,7 @@
             getState: function () {
                 return {
                     range: state.range,
+                    yScale: state.yScale,
                     selectedPreset: state.selectedPreset,
                     selectedIds: state.selectedIds.slice(),
                     seriesCount: state.series.length,
@@ -461,6 +526,30 @@
         var compact = chartW < 420;
         var gridLeft = compact ? 46 : (narrow ? 50 : 56);
         var gridBottom = compact ? 36 : (narrow ? 40 : 44);
+        var wantLog = state.yScale === 'log';
+        var canLog = wantLog && !normalizedSeriesHasNonPositive(state.series);
+        var minPos = canLog ? minPositiveNormalized(state.series) : null;
+        if (wantLog && !canLog) {
+            logEvent('warn', 'Economic chart: log y-axis disabled (non-positive index values); using linear', {
+                range: state.range,
+                seriesCount: state.series.length,
+            });
+        }
+        var yAxisType = canLog && minPos != null ? 'log' : 'value';
+        var yAxis = {
+            type: yAxisType,
+            name: 'Index (start = 100)',
+            nameTextStyle: { color: theme.softText, fontSize: 11 },
+            axisLine: styles.axisLine,
+            axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
+            splitLine: { show: true, lineStyle: styles.splitLine.lineStyle },
+        };
+        if (yAxisType === 'log') {
+            yAxis.logBase = 10;
+            if (minPos != null && minPos > 0) {
+                yAxis.min = minPos * 0.65;
+            }
+        }
         state.chart.setOption({
             animation: false,
             textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", system-ui, sans-serif' },
@@ -483,14 +572,7 @@
                 axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11, hideOverlap: true },
                 splitLine: { show: false },
             },
-            yAxis: {
-                type: 'value',
-                name: 'Index (start = 100)',
-                nameTextStyle: { color: theme.softText, fontSize: 11 },
-                axisLine: styles.axisLine,
-                axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
-                splitLine: { show: true, lineStyle: styles.splitLine.lineStyle },
-            },
+            yAxis: yAxis,
             series: state.series.map(function (series) {
                 return {
                     id: series.id,
@@ -521,10 +603,12 @@
         });
         state.chart.resize();
         syncEconomicLegendStack();
+        syncYScaleButton({ effectiveYAxis: yAxisType });
         logEvent('info', 'Economic chart render completed', {
             seriesCount: state.series.length,
             pointCount: pointCount(state.series),
             hoveredDate: state.hoveredDate,
+            yAxisType: yAxisType,
         });
     }
 
@@ -669,6 +753,19 @@
             });
             loadSeries('range-change');
         });
+        if (refs.yScaleBtn) {
+            syncYScaleButton();
+            refs.yScaleBtn.addEventListener('click', function () {
+                state.yScale = state.yScale === 'log' ? 'linear' : 'log';
+                persistYScale(state.yScale);
+                logEvent('info', 'Economic chart y-scale toggled', { yScale: state.yScale });
+                if (state.series.length && hasRenderablePoints(state.series)) {
+                    renderChart();
+                } else {
+                    syncYScaleButton();
+                }
+            });
+        }
         refs.categoryGroups.addEventListener('change', function (event) {
             var input = event.target.closest('input[data-series-id]');
             if (!input) return;

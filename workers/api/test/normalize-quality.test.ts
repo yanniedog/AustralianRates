@@ -23,9 +23,9 @@ describe('strict numeric parsing', () => {
     expect(parseComparisonRate(0.061)).toBe(6.1)
   })
 
-  it('rejects ambiguous parsing while allowing broad but finite rates', () => {
+  it('rejects ambiguous parsing and implausibly high rates', () => {
     expect(parseInterestRate('LVR 80 to 90%')).toBeNull()
-    expect(parseInterestRate('80%')).toBe(80)
+    expect(parseInterestRate('80%')).toBeNull()
     expect(parseComparisonRate('1.20% and 1.40%')).toBeNull()
   })
 })
@@ -37,10 +37,11 @@ describe('row validation', () => {
     expect(verdict.ok).toBe(true)
   })
 
-  it('accepts weak product names so they can be classified later instead of being dropped', () => {
+  it('rejects weak product names that look like page chrome instead of products', () => {
     const row = loadRealHomeLoanFixture()
     const verdict = validateNormalizedRow({ ...row, productName: 'Tooltip disclaimer text' })
-    expect(verdict.ok).toBe(true)
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
   })
 
   it('rejects invalid collection_date', () => {
@@ -95,16 +96,25 @@ describe('row validation', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_run_source')
   })
 
-  it('accepts unusually high but still finite rates for anomaly review', () => {
+  it('rejects implausibly high home-loan rates', () => {
     const row = loadRealHomeLoanFixture()
     const verdict = validateNormalizedRow({ ...row, interestRate: 100 })
-    expect(verdict.ok).toBe(true)
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('interest_rate_out_of_bounds')
   })
 
-  it('accepts anomalous comparison-rate gaps for later classification', () => {
+  it('rejects anomalous comparison-rate gaps', () => {
     const row = loadRealHomeLoanFixture()
     const verdict = validateNormalizedRow({ ...row, interestRate: 5, comparisonRate: 20 })
-    expect(verdict.ok).toBe(true)
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('comparison_rate_gap_out_of_bounds')
+  })
+
+  it('rejects confidence below the minimum for the quality flag', () => {
+    const row = loadRealHomeLoanFixture()
+    const verdict = validateNormalizedRow({ ...row, confidenceScore: 0.7 })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('confidence_below_required_threshold')
   })
 
   it('rejects empty bank_name', () => {

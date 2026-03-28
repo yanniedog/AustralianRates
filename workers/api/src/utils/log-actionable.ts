@@ -38,6 +38,12 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Validate schema constraints and row payload shape; confirm product identity fields are present.',
     links: ['/admin/database.html', '/admin/logs.html'],
   },
+  write_contract_violation: {
+    code: 'write_contract_violation',
+    title: 'Write contract blocked questionable data',
+    action: 'Inspect ingest anomalies, confirm fetch-event lineage and lender mapping, and repair the parser/source contract before allowing more writes.',
+    links: ['/admin/status.html', '/admin/logs.html', '/admin/database.html'],
+  },
   daily_run_failed: {
     code: 'daily_run_failed',
     title: 'Daily run failed',
@@ -165,6 +171,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('queue_message_failed')) return 'queue_message_failed'
   if (normalized.includes('detail_fetch_failed')) return 'detail_fetch_failed'
   if (normalized.includes('lender_finalize_not_ready')) return 'lender_finalize_not_ready'
+  if (normalized.includes('write_contract_violation')) return 'write_contract_violation'
   if (normalized.includes('upsert_failed')) return 'upsert_failed'
   if (normalized.includes('daily run') && normalized.includes('failed')) return 'daily_run_failed'
   if (normalized.includes('backfill run') && normalized.includes('failed')) return 'backfill_run_failed'

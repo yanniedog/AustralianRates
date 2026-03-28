@@ -42,10 +42,11 @@ describe('validateNormalizedSavingsRow', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_data_quality_flag')
   })
 
-  it('accepts unusually high savings rates for anomaly review', () => {
+  it('rejects implausibly high savings rates', () => {
     const row = loadRealSavingsFixture()
     const verdict = validateNormalizedSavingsRow({ ...row, interestRate: 20 })
-    expect(verdict.ok).toBe(true)
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('interest_rate_out_of_bounds')
   })
 
   it('rejects invalid account_type', () => {
@@ -77,6 +78,20 @@ describe('validateNormalizedSavingsRow', () => {
     const verdict = validateNormalizedSavingsRow({ ...row, productUrl: 'not-a-url' })
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('invalid_product_url')
+  })
+
+  it('rejects savings rows that do not look like savings products', () => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({ ...row, productName: 'Privacy disclaimer text' })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
+  })
+
+  it('rejects savings rows below the minimum confidence for the quality flag', () => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({ ...row, confidenceScore: 0.6 })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('confidence_below_required_threshold')
   })
 })
 
@@ -111,5 +126,19 @@ describe('validateNormalizedTdRow', () => {
     const verdict = validateNormalizedTdRow({ ...row, publishedAt: 'not-a-date' })
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('invalid_published_at')
+  })
+
+  it('rejects TD rows that do not look like term-deposit products', () => {
+    const row = loadRealTdFixture()
+    const verdict = validateNormalizedTdRow({ ...row, productName: 'Privacy disclaimer text' })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
+  })
+
+  it('rejects TD rows below the minimum confidence for the quality flag', () => {
+    const row = loadRealTdFixture()
+    const verdict = validateNormalizedTdRow({ ...row, confidenceScore: 0.6 })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('confidence_below_required_threshold')
   })
 })

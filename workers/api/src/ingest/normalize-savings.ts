@@ -64,7 +64,7 @@ export type NormalizedTdRow = {
 }
 
 export const MIN_SAVINGS_RATE = 0
-export const MAX_SAVINGS_RATE = 100
+export const MAX_SAVINGS_RATE = 15
 export const MAX_MONTHLY_FEE = 1000000
 const MAX_BALANCE_VALUE = 1000000000000
 const MAX_DEPOSIT_VALUE = 1000000000000
@@ -108,7 +108,7 @@ function isLikelyTdProductName(name: string): boolean {
   return tokens.some((x) => normalized.includes(x))
 }
 
-function minConfidenceForFlag(flag: string): number {
+export function minConfidenceForFlag(flag: string): number {
   const normalized = lower(flag)
   if (normalized.startsWith('cdr_')) return 0.7
   if (normalized.startsWith('scraped_fallback')) return 0.75
@@ -229,6 +229,9 @@ export function validateNormalizedSavingsRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
+  if (!isLikelySavingsProductName(row.productName)) {
+    return { ok: false, reason: 'invalid_product_name_semantics' }
+  }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
   if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
     return { ok: false, reason: 'invalid_product_url' }
@@ -274,6 +277,9 @@ export function validateNormalizedSavingsRow(
   ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
   }
+  if (row.confidenceScore < minConfidenceForFlag(row.dataQualityFlag)) {
+    return { ok: false, reason: 'confidence_below_required_threshold' }
+  }
   return { ok: true }
 }
 
@@ -291,6 +297,9 @@ export function validateNormalizedTdRow(
   }
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
+  }
+  if (!isLikelyTdProductName(row.productName)) {
+    return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
   if (row.productUrl != null && row.productUrl !== '' && !isValidUrl(row.productUrl)) {
@@ -339,6 +348,9 @@ export function validateNormalizedTdRow(
     row.confidenceScore > 1
   ) {
     return { ok: false, reason: 'confidence_out_of_bounds' }
+  }
+  if (row.confidenceScore < minConfidenceForFlag(row.dataQualityFlag)) {
+    return { ok: false, reason: 'confidence_below_required_threshold' }
   }
   return { ok: true }
 }
