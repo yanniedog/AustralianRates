@@ -1320,7 +1320,9 @@
             var res = await portal.fetchAdmin('/cdr-audit/run', { method: 'POST' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            snapshotState.cdrReport = data.report || null;
             renderCdrAudit(data.report || null);
+            renderBackendOverview();
         } catch (_err) {
             cdrAuditStatusEl.textContent = 'CDR audit run failed.';
         } finally {
