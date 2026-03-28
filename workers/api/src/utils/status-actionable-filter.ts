@@ -123,6 +123,15 @@ export function shouldIgnoreStatusActionableLog(
   ) {
     return true
   }
+  // lender_dataset_runs is WITHOUT ROWID (migration 0022). Reconciliation briefly selected/updated rowid,
+  // which D1 rejects; fixed 2026-03-29. Stale global_log rows would otherwise keep actionable red indefinitely.
+  if (
+    source === 'scheduler' &&
+    code === 'run_lifecycle_reconciliation_failed' &&
+    ctxLower.includes('no such column: rowid')
+  ) {
+    return true
+  }
   // Pre-2026-03-26 stall detector fired on "scanned but none finalized" even when no row was ready to finalize.
   // Current scheduler logs include ready_candidate_rows; keep those actionable.
   const ctx = contextToSearchString(entry.context)

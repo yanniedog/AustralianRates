@@ -112,6 +112,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Review run finalization and replay queue; ensure stale runs are closed or retried so reconciliation can progress.',
     links: ['/admin/runs.html', '/admin/logs.html'],
   },
+  run_lifecycle_reconciliation_failed: {
+    code: 'run_lifecycle_reconciliation_failed',
+    title: 'Run lifecycle reconciliation threw',
+    action:
+      'Inspect log context/traceback (D1 schema vs query, finalization SQL). Use POST /runs/reconcile with dry_run to reproduce; verify lender_dataset_runs is WITHOUT ROWID and queries use primary key (run_id, lender_code, dataset_kind).',
+    links: ['/admin/runs.html', '/admin/logs.html'],
+  },
   analytics_change_query_failed: {
     code: 'analytics_change_query_failed',
     title: 'Analytics change query failed',
@@ -162,6 +169,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('replay_queue_incident_opened')) return 'replay_queue_incident_opened'
   if (normalized.includes('replay_queue_dispatch_failed')) return 'replay_queue_dispatch_failed'
   if (normalized.includes('run_lifecycle_reconciliation_stalled')) return 'run_lifecycle_reconciliation_stalled'
+  if (normalized.includes('run_lifecycle_reconciliation_failed')) return 'run_lifecycle_reconciliation_failed'
   if (normalized.includes('analytics_change_query_failed')) return 'analytics_change_query_failed'
   if (normalized.includes('analytics_change_query_schema_mismatch')) return 'analytics_change_query_schema_mismatch'
   if (normalized.includes('cdr_audit_detected_gaps')) return 'cdr_audit_detected_gaps'

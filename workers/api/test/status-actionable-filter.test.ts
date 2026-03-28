@@ -291,4 +291,37 @@ describe('shouldIgnoreStatusActionableLog', () => {
       ),
     ).toBe(false)
   })
+
+  it('ignores historical run lifecycle reconciliation failures caused by rowid on WITHOUT ROWID lender_dataset_runs', () => {
+    const ctxFromProd = {
+      context: 'D1_ERROR: no such column: rowid at offset 7: SQLITE_ERROR',
+      error: { name: 'Error', message: 'D1_ERROR: no such column: rowid at offset 7: SQLITE_ERROR' },
+      traceback:
+        'Error: D1_ERROR: no such column: rowid at offset 7: SQLITE_ERROR\n    at async forceFinalizeAllUnfinalizedForRun (index.js:1:1)',
+    }
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'scheduler',
+          level: 'error',
+          code: 'run_lifecycle_reconciliation_failed',
+          message: 'Run lifecycle reconciliation failed',
+          context: ctxFromProd,
+        },
+        'active',
+      ),
+    ).toBe(true)
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'scheduler',
+          level: 'error',
+          code: 'run_lifecycle_reconciliation_failed',
+          message: 'Run lifecycle reconciliation failed',
+          context: { context: 'D1_ERROR: some other schema error' },
+        },
+        'active',
+      ),
+    ).toBe(false)
+  })
 })

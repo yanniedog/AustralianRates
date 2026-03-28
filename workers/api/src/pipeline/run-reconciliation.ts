@@ -126,7 +126,6 @@ function isPastEndOfStartDay(startedAtIso: string): boolean {
 }
 
 type LenderDatasetReadinessRow = {
-  rowid?: number
   run_id: string
   lender_code: string
   dataset_kind: 'home_loans' | 'savings' | 'term_deposits'
@@ -168,7 +167,7 @@ async function forceFinalizeAllUnfinalizedForRun(
   let finalized = 0
   const rows = await db
     .prepare(
-      `SELECT rowid, run_id, lender_code, dataset_kind, bank_name, collection_date,
+      `SELECT run_id, lender_code, dataset_kind, bank_name, collection_date,
               expected_detail_count, index_fetch_succeeded, accepted_row_count, written_row_count,
               detail_fetch_event_count, lineage_error_count, completed_detail_count, failed_detail_count
        FROM lender_dataset_runs
@@ -602,27 +601,11 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
       }
     }
     try {
-      const updated = await tryMarkLenderDatasetFinalized(db, {
+      const marked = await tryMarkLenderDatasetFinalized(db, {
         runId: row.run_id,
         lenderCode: row.lender_code,
         dataset: row.dataset_kind,
       })
-      let marked = updated
-      // Safety fallback: close by rowid when key-based update reports no-op.
-      if (!marked && Number.isFinite(Number(row.rowid))) {
-        const now = nowIso()
-        const fallback = await db
-          .prepare(
-            `UPDATE lender_dataset_runs
-             SET finalized_at = ?1,
-                 updated_at = ?1
-             WHERE rowid = ?2
-               AND finalized_at IS NULL`,
-          )
-          .bind(now, Number(row.rowid))
-          .run()
-        marked = Number(fallback.meta?.changes ?? 0) > 0
-      }
       if (marked) {
         forceClosedRows += 1
         log.info('run_reconciliation', 'Stale unfinalized lender_dataset force-closed', {
@@ -639,7 +622,7 @@ export async function forceCloseStaleUnfinalizedLenderDatasets(
       } else {
         pushError(
           errors,
-          `${row.run_id}:${row.lender_code}:${row.dataset_kind}:mark_no_change:rowid=${String(row.rowid ?? 'na')}`,
+          `${row.run_id}:${row.lender_code}:${row.dataset_kind}:mark_no_change:after_try_mark`,
         )
       }
     } catch (markError) {
