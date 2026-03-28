@@ -280,14 +280,14 @@
         if (!bankMax) bankMax = todayYmd();
         if (!bankMin) bankMin = bankMax;
 
-        var ctxMin = bankMin;
+        var ctxMin = M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin;
         var ctxMax = bankMax;
         var viewStart = M.resolveReportRangeStart(ctxMin, ctxMax, reportRange);
 
-        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMax);
+        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMin, ctxMax);
         var rbaData = prep.rbaData;
         var cpiPts = prep.cpiPoints;
-        var rbaStart = prep.rbaStart;
+        var chartStart = prep.chartStart || ctxMin;
         var overlayDefs = overlayModule.prepareWindowSeries
             ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], ctxMin, ctxMax)
             : [];
@@ -351,7 +351,7 @@
                 crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
             });
             cpiSeriesApi.setData(
-                M.fillForwardDaily(cpiPts, 'date', 'value', rbaStart, ctxMax)
+                M.fillForwardDaily(cpiPts, 'date', 'value', chartStart, ctxMax)
                     .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
             );
         }
@@ -403,7 +403,7 @@
                 crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
             });
             rbaSeriesApi.setData(
-                M.fillForwardDaily(rbaData.points, 'date', 'rate', rbaStart, ctxMax)
+                M.fillForwardDaily(rbaData.points, 'date', 'rate', chartStart, ctxMax)
                     .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
             );
         }

@@ -116,18 +116,12 @@
                     </div>
                 </section>
             </section>
-            <aside class="terminal-column terminal-column-right">
-                <section id="details" class="panel" aria-label="Series details">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">SER</span>
-                        <h2 class="terminal-panel-title">Series</h2>
-                    </div>
-                    <div id="economic-series-list" class="economic-series-list"></div>
-                    <div id="economic-point-details" class="economic-point-details"></div>
-                    <div id="economic-source-list" hidden></div>
-                </section>
-            </aside>
         </section>
+        <div hidden aria-hidden="true">
+            <div id="economic-series-list"></div>
+            <div id="economic-point-details"></div>
+            <div id="economic-source-list"></div>
+        </div>
     </main>
     <script src="../vendor/echarts/echarts.min.js?v=2544dd6"></script>
     <script src="../ar-utils.js?v=2544dd6"></script>

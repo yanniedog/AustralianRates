@@ -307,14 +307,14 @@
         if (!bankMax) bankMax = todayYmd();
         if (!bankMin) bankMin = bankMax;
 
-        var ctxMin = bankMin;
+        var ctxMin = M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin;
         var ctxMax = bankMax;
         var viewStart = M.resolveReportRangeStart(ctxMin, ctxMax, reportRange);
 
-        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMax);
+        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMin, ctxMax);
         var rbaData = prep.rbaData;
         var cpiPoints = prep.cpiPoints;
-        var rbaStart = prep.rbaStart;
+        var chartStart = prep.chartStart || ctxMin;
         var overlayDefs = overlayModule.prepareWindowSeries ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], ctxMin, ctxMax) : [];
 
         var compact = (container.clientWidth || 800) < 480;
@@ -376,7 +376,7 @@
         var cpiSeriesApi = null;
         if (cpiPoints.length) {
             cpiSeriesApi = chart.addSeries(L.LineSeries, { color: t.cpi, lineWidth: 2, lineStyle: LineStyle.Dashed, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });
-            cpiSeriesApi.setData(M.fillForwardDaily(cpiPoints, 'date', 'value', rbaStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
+            cpiSeriesApi.setData(M.fillForwardDaily(cpiPoints, 'date', 'value', chartStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
         }
 
         // Rate lines
@@ -395,7 +395,7 @@
         var rbaSeriesApi = null;
         if (rbaData.points.length) {
             rbaSeriesApi = chart.addSeries(L.LineSeries, { color: t.rba, lineWidth: 2, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });
-            rbaSeriesApi.setData(M.fillForwardDaily(rbaData.points, 'date', 'rate', rbaStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
+            rbaSeriesApi.setData(M.fillForwardDaily(rbaData.points, 'date', 'rate', chartStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
         }
 
         // Overlays (keep APIs for crosshair + left legend)

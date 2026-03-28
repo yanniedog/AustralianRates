@@ -94,39 +94,93 @@
         return value;
     }
 
-    /**
-     * Match home-loan report: anchor RBA at first CPI quarter, clip to ctxMax, extend both to ctxMax.
-     */
-    function prepareRbaCpiForReport(rbaHistory, cpiData, ctxMax) {
-        var rbaData = buildRbaSeries(rbaHistory || []);
-        var cpiPoints = buildCpiSeries(cpiData || []);
-
-        var rbaStart = cpiPoints.length ? cpiPoints[0].date : ctxMin;
+    function clipSteppedWindow(points, startYmd, endYmd, valueKey) {
+        var source = Array.isArray(points) ? points : [];
+        var start = String(startYmd || '').slice(0, 10);
+        var end = String(endYmd || '').slice(0, 10);
+        var key = valueKey || 'value';
+        if (!start || !end) return [];
 
         var carry = null;
-        var inWindow = [];
-        rbaData.points.forEach(function (point) {
-            if (point.date < rbaStart) carry = point;
-            else if (point.date <= ctxMax) inWindow.push(point);
+        var windowPoints = [];
+        source.forEach(function (point) {
+            var date = String(point && point.date || '').slice(0, 10);
+            if (!date) return;
+            if (date < start) carry = point;
+            else if (date <= end) windowPoints.push(point);
         });
-        var next = [];
-        var carryRate = carry ? carry.rate : (inWindow.length ? inWindow[0].rate : null);
-        if (carryRate != null) next.push({ date: rbaStart, rate: carryRate });
-        next = next.concat(inWindow);
-        if (next.length) {
-            var last = next[next.length - 1];
-            if (last.date < ctxMax) next.push({ date: ctxMax, rate: last.rate });
-        }
-        rbaData.points = next;
 
-        if (cpiPoints.length) {
-            var cpiLast = cpiPoints[cpiPoints.length - 1];
-            if (cpiLast.date < ctxMax) {
-                cpiPoints.push({ date: ctxMax, value: cpiLast.value });
-            }
+        var rows = [];
+        if (carry) {
+            var carryValue = Number(carry[key]);
+            if (Number.isFinite(carryValue)) rows.push({ date: start, value: carryValue });
         }
+        windowPoints.forEach(function (point) {
+            var pointValue = Number(point && point[key]);
+            if (!Number.isFinite(pointValue)) return;
+            rows.push({ date: String(point.date).slice(0, 10), value: pointValue });
+        });
 
-        return { rbaData: rbaData, cpiPoints: cpiPoints, rbaStart: rbaStart };
+        if (!rows.length) return rows;
+        var last = rows[rows.length - 1];
+        if (last.date < end) rows.push({ date: end, value: last.value });
+        return rows;
+    }
+
+    function minDateValue(current, candidate) {
+        var next = String(candidate || '').slice(0, 10);
+        if (!next) return current || '';
+        if (!current) return next;
+        return next < current ? next : current;
+    }
+
+    function earliestPointDate(rows, dateField) {
+        var next = '';
+        var field = dateField || 'date';
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            var date = String(row && row[field] || '').slice(0, 10);
+            if (!date) return;
+            next = minDateValue(next, date);
+        });
+        return next;
+    }
+
+    function earliestOverlayDate(seriesRows) {
+        var next = '';
+        (Array.isArray(seriesRows) ? seriesRows : []).forEach(function (series) {
+            next = minDateValue(next, earliestPointDate(series && series.points, 'date'));
+        });
+        return next;
+    }
+
+    /**
+     * Clip RBA/CPI to the chart context while preserving the active step at the window start.
+     */
+    function prepareRbaCpiForReport(rbaHistory, cpiData, ctxMin, ctxMax) {
+        var rawRba = buildRbaSeries(rbaHistory || []);
+        var rawCpi = buildCpiSeries(cpiData || []);
+        var start = String(ctxMin || '').slice(0, 10);
+        var end = String(ctxMax || '').slice(0, 10);
+        var rbaPoints = clipSteppedWindow(rawRba.points, start, end, 'rate').map(function (point) {
+            return { date: point.date, rate: point.value };
+        });
+        var cpiPoints = clipSteppedWindow(rawCpi, start, end, 'value').map(function (point) {
+            return { date: point.date, value: point.value };
+        });
+
+        return {
+            rbaData: { points: rbaPoints, decisions: rawRba.decisions.slice() },
+            cpiPoints: cpiPoints,
+            chartStart: start,
+        };
+    }
+
+    function resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) {
+        var next = String(bankMin || '').slice(0, 10);
+        next = minDateValue(next, earliestPointDate(buildRbaSeries(rbaHistory || []).points, 'date'));
+        next = minDateValue(next, earliestPointDate(buildCpiSeries(cpiData || []), 'date'));
+        next = minDateValue(next, earliestOverlayDate(economicOverlaySeries || []));
+        return next;
     }
 
     /**
@@ -550,6 +604,7 @@
         createReportRangeBar: createReportRangeBar,
         getReportRange: getReportRange,
         setReportRange: setReportRange,
+        resolveReportDataMin: resolveReportDataMin,
         resolveReportRangeStart: resolveReportRangeStart,
         reportChartOptions: reportChartOptions,
         rateLegendArrowHtml: rateLegendArrowHtml,

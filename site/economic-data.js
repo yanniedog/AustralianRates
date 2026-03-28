@@ -208,7 +208,7 @@
                     var checked = state.selectedIds.indexOf(series.id) >= 0;
                     return '<label class="economic-option">' +
                         '<input type="checkbox" data-series-id="' + esc(series.id) + '"' + (checked ? ' checked' : '') + '>' +
-                        '<span class="economic-option-label">' + esc(series.label) + '</span>' +
+                        '<span class="economic-option-label">' + esc(series.short_label || series.label) + '</span>' +
                         (series.proxy ? badge('Proxy', 'is-proxy') : '') +
                     '</label>';
                 }).join('') +
