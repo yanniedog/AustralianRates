@@ -17,6 +17,26 @@ export type HealthCheckRunRow = {
   failures_json: string
 }
 
+/**
+ * Stale `site_health_attention` rows stay in global_log; once a later persisted health run is overall_ok,
+ * drop older attention rows from actionable triage (same idea as coverage gap supersede).
+ */
+export function shouldFilterSiteHealthAttentionForActionable(
+  entry: Record<string, unknown>,
+  latest: HealthCheckRunRow | null,
+): boolean {
+  const msg = String(entry.message || '')
+    .trim()
+    .toLowerCase()
+  if (msg !== 'site_health_attention') return false
+  if (!latest) return false
+  if (Number(latest.overall_ok) !== 1) return false
+  const logTs = String(entry.ts || '')
+  const checkedAt = String(latest.checked_at || '')
+  if (!logTs || !checkedAt) return false
+  return logTs < checkedAt
+}
+
 export type InsertHealthCheckRunInput = {
   runId: string
   checkedAt: string

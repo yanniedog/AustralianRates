@@ -2,6 +2,7 @@ import { attachEconomicCoverageProbes, runEconomicCoverageAudit, type EconomicCo
 import { runIntegrityChecks } from '../db/integrity-checks'
 import { ECONOMIC_SERIES_DEFINITIONS } from '../economic/registry'
 import { getIngestPauseConfig } from '../db/app-config'
+import { getLatestHealthCheckRun, shouldFilterSiteHealthAttentionForActionable } from '../db/health-check-runs'
 import { loadCoverageGapAuditReport, shouldFilterCoverageGapLogForActionable } from './coverage-gap-audit'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
@@ -592,8 +593,18 @@ export async function runSiteHealthChecks(
     }
   })
 
-  const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig, economicCheck, economicCoverage, gapReportForActionable] =
-    await Promise.all([
+  const [
+    datasetComponents,
+    homepage,
+    integrity,
+    e2e,
+    logs,
+    pauseConfig,
+    economicCheck,
+    economicCoverage,
+    gapReportForActionable,
+    latestHealthForActionable,
+  ] = await Promise.all([
     Promise.all(
       LATEST_ALL_DATASETS.map((dataset) =>
         checkDataset(env, origin, dataset.dataset, dataset.basePath, capturePolicy),
@@ -613,6 +624,7 @@ export async function runSiteHealthChecks(
     checkEconomicData(env, origin, capturePolicy),
     economicPromise,
     loadCoverageGapAuditReport(env.DB).catch(() => null),
+    getLatestHealthCheckRun(env.DB).catch(() => null),
   ])
   const economic = attachEconomicCoverageProbes(economicCoverage, economicCheck.probes)
 
@@ -643,6 +655,7 @@ export async function runSiteHealthChecks(
       const level = String(entry.level || '').toLowerCase()
       if (level !== 'warn' && level !== 'error') return false
       if (shouldFilterCoverageGapLogForActionable(entry, gapReportForActionable)) return false
+      if (shouldFilterSiteHealthAttentionForActionable(entry, latestHealthForActionable)) return false
       if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
       return true
     }),
