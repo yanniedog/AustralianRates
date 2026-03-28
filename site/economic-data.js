@@ -442,19 +442,6 @@
             axisLine: { lineStyle: { color: theme.axisLine, width: 1 } },
             splitLine: { lineStyle: { color: theme.splitLine, width: 1, type: 'solid' } },
         };
-        var tStyles = h && typeof h.tooltipStyles === 'function' ? h.tooltipStyles() : {
-            backgroundColor: theme.tooltipBackground,
-            borderColor: theme.tooltipBorder,
-            borderWidth: 1,
-            textStyle: {
-                color: theme.tooltipText,
-                fontSize: 13,
-                lineHeight: 1.55,
-                fontFamily: theme.dataFont || undefined,
-            },
-            padding: [14, 18],
-            extraCssText: theme.tooltipShadow + '; font-variant-numeric: tabular-nums;',
-        };
         var axisPointer = h && typeof h.axisPointerConfig === 'function' ? h.axisPointerConfig(theme) : {
             type: 'cross',
             lineStyle: { color: theme.crosshairLine, width: 1.5, type: 'dashed' },
@@ -480,26 +467,7 @@
             backgroundColor: 'transparent',
             color: ECONOMIC_CHART_PALETTE,
             axisPointer: axisPointer,
-            tooltip: {
-                trigger: 'axis',
-                transitionDuration: 0,
-                confine: true,
-                hideDelay: 220,
-                backgroundColor: tStyles.backgroundColor,
-                borderColor: tStyles.borderColor,
-                borderWidth: tStyles.borderWidth,
-                textStyle: tStyles.textStyle,
-                extraCssText: tStyles.extraCssText,
-                formatter: function (items) {
-                    var rows = ['<strong>' + esc(formatDate(items[0] && items[0].axisValue)) + '</strong>'];
-                    items.forEach(function (item) {
-                        var series = state.series.find(function (candidate) { return candidate.id === item.seriesId; });
-                        var point = series && (series.points || []).find(function (candidate) { return candidate.date === item.axisValue; });
-                        rows.push(esc(series.short_label + ': index ' + formatNumber(item.data[1]) + ' | raw ' + (point && point.raw_value != null ? formatNumber(point.raw_value) + ' ' + series.unit : 'n/a') + ' | ' + series.source_label + (series.proxy ? ' | proxy' : '')));
-                    });
-                    return rows.join('<br>');
-                }
-            },
+            tooltip: { show: false },
             legend: { show: false },
             grid: { left: gridLeft, right: narrow ? 10 : 18, top: 20, bottom: gridBottom, containLabel: true },
             xAxis: {
