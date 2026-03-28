@@ -234,8 +234,7 @@
             return [
                 { href: baseHref + '#chart', label: 'Chart', icon: 'chart' },
                 { href: baseHref + '#scenario', label: 'Indicators', icon: 'filter' },
-                { href: baseHref + '#details', label: 'Details', icon: 'history' },
-                { href: baseHref + '#sources', label: 'Sources', icon: 'notes' }
+                { href: baseHref + '#details', label: 'Series', icon: 'history' }
             ];
         }
         return [

@@ -103,3 +103,64 @@ describe('status-page-diagnostics replay queue rollup', () => {
     expect(diagnostics.executive.attention_items).toContain('Replay queue: 1 failed row(s)')
   })
 })
+
+describe('status-page-diagnostics problem log rollup', () => {
+  it('does not treat raw log volume as executive attention when actionable count is zero', () => {
+    const bundle = {
+      ...baseBundle(),
+      logs: {
+        total: 209,
+        since_ts: '2026-03-28T00:00:00.000Z',
+        entries: Array.from({ length: 3 }, (_, index) => ({
+          code: `historical_noise_${index}`,
+        })),
+        actionable: {
+          count: 0,
+          scanned: 0,
+          issues: [],
+        },
+      },
+    }
+
+    const diagnostics = buildStatusPageDiagnosticsFromBundle(bundle) as {
+      executive: { attention_items: string[] }
+      problem_logs_window: { total: number; actionable_count: number }
+    }
+
+    expect(diagnostics.problem_logs_window.total).toBe(209)
+    expect(diagnostics.problem_logs_window.actionable_count).toBe(0)
+    expect(diagnostics.executive.attention_items).not.toContain('Problem logs (window): 209 entries')
+    expect(diagnostics.executive.attention_items).not.toContain('Actionable log issues: 0 group(s)')
+  })
+
+  it('surfaces filtered actionable log groups from the log window', () => {
+    const bundle = {
+      ...baseBundle(),
+      logs: {
+        total: 12,
+        since_ts: '2026-03-28T00:00:00.000Z',
+        entries: [{ code: 'site_health_diag_stale' }],
+        actionable: {
+          count: 2,
+          scanned: 4,
+          issues: [
+            { code: 'site_health_diag_stale', count: 3 },
+            { code: 'coverage_gap_open', count: 1 },
+          ],
+        },
+      },
+    }
+
+    const diagnostics = buildStatusPageDiagnosticsFromBundle(bundle) as {
+      executive: { attention_items: string[] }
+      problem_logs_window: { actionable_count: number; actionable_top_codes: Array<{ code: string; count: number }> }
+    }
+
+    expect(diagnostics.problem_logs_window.actionable_count).toBe(2)
+    expect(diagnostics.problem_logs_window.actionable_top_codes).toEqual([
+      { code: 'site_health_diag_stale', count: 3 },
+      { code: 'coverage_gap_open', count: 1 },
+    ])
+    expect(diagnostics.executive.attention_items).toContain('Actionable log issues: 2 group(s)')
+  })
+})

@@ -80,19 +80,11 @@
         </section>
         <section class="market-terminal economic-terminal" aria-label="Economic data workspace">
             <aside class="terminal-column terminal-column-left">
-                <section class="panel" aria-label="Navigation">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">NAV</span>
-                        <h2 class="terminal-panel-title">Sections</h2>
-                    </div>
-                    <div id="market-nav-tree"></div>
-                </section>
                 <section id="scenario" class="panel" aria-label="Indicator controls">
                     <div class="terminal-panel-head">
                         <span class="panel-code">SET</span>
                         <h2 class="terminal-panel-title">Indicator Set</h2>
                     </div>
-                    <p class="hint economic-panel-copy">Use preset chips for fast context, or build your own watchlist from grouped indicators.</p>
                     <div id="preset-row" class="economic-chip-row">
                         <button type="button" class="chip-btn secondary active" data-preset-id="rba_watchlist">RBA Watchlist</button>
                     </div>
@@ -127,19 +119,12 @@
             <aside class="terminal-column terminal-column-right">
                 <section id="details" class="panel" aria-label="Series details">
                     <div class="terminal-panel-head">
-                        <span class="panel-code">DET</span>
-                        <h2 class="terminal-panel-title">Series Details</h2>
+                        <span class="panel-code">SER</span>
+                        <h2 class="terminal-panel-title">Series</h2>
                     </div>
                     <div id="economic-series-list" class="economic-series-list"></div>
                     <div id="economic-point-details" class="economic-point-details"></div>
-                </section>
-                <section id="sources" class="panel" aria-label="Sources">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">SRC</span>
-                        <h2 class="terminal-panel-title">Sources</h2>
-                    </div>
-                    <p class="hint economic-panel-copy">Proxies are clearly marked where the public source is an accessible stand-in rather than the exact latent concept.</p>
-                    <div id="economic-source-list" class="economic-source-list"></div>
+                    <div id="economic-source-list" hidden></div>
                 </section>
             </aside>
         </section>

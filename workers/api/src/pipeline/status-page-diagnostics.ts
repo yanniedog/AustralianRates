@@ -157,6 +157,8 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     }
   }
 
+  const healthActionableCount = latest && Array.isArray(latest.actionable) ? latest.actionable.length : 0
+
   if (latest) {
     if (!latest.overall_ok) {
       attention.push(`Health run overall_ok=false (${latest.run_id})`)
@@ -183,14 +185,6 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     if (latest.e2e && !latest.e2e.aligned) {
       attention.push(`E2E not aligned: ${latest.e2e.reasonCode}`)
       worst = worstOf(worst, 'red')
-    }
-    const act = Array.isArray(latest.actionable) ? latest.actionable : []
-    if (act.length >= 5) {
-      attention.push(`Actionable log issues: ${act.length} groups`)
-      worst = worstOf(worst, 'red')
-    } else if (act.length >= 1) {
-      attention.push(`Actionable log issues: ${act.length} group(s)`)
-      worst = worstOf(worst, 'yellow')
     }
   } else {
     attention.push('No persisted health run in D1 (run a health check).')
@@ -376,7 +370,16 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     }
   }
 
-  const logsBlock = bundle.logs as { total?: number; since_ts?: string | null; entries?: Array<{ code?: string }> } | undefined
+  const logsBlock = bundle.logs as {
+    total?: number
+    since_ts?: string | null
+    entries?: Array<{ code?: string }>
+    actionable?: {
+      count?: number
+      scanned?: number
+      issues?: Array<{ code?: string; count?: number }>
+    }
+  } | undefined
   const entries = Array.isArray(logsBlock?.entries) ? logsBlock.entries : []
   const codeCounts = new Map<string, number>()
   for (const e of entries) {
@@ -387,13 +390,27 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     .sort((a, b) => b[1] - a[1])
     .slice(0, 12)
     .map(([code, n]) => ({ code, count: n }))
+  const actionableIssues = Array.isArray(logsBlock?.actionable?.issues)
+    ? logsBlock.actionable.issues
+    : []
+  const logsActionableCount = Number(logsBlock?.actionable?.count ?? 0)
+  const actionableGroupCount = Math.max(healthActionableCount, logsActionableCount)
   const logsSnapshot = {
     since_ts: logsBlock?.since_ts ?? null,
     total: logsBlock?.total ?? entries.length,
     top_codes: topCodes,
+    actionable_count: logsActionableCount,
+    actionable_scanned: Number(logsBlock?.actionable?.scanned ?? 0),
+    actionable_top_codes: actionableIssues.slice(0, 12).map((issue) => ({
+      code: issue.code,
+      count: issue.count,
+    })),
   }
-  if (Number(logsBlock?.total) > 50) {
-    attention.push(`Problem logs (window): ${logsBlock?.total} entries`)
+  if (actionableGroupCount >= 5) {
+    attention.push(`Actionable log issues: ${actionableGroupCount} groups`)
+    worst = worstOf(worst, 'red')
+  } else if (actionableGroupCount >= 1) {
+    attention.push(`Actionable log issues: ${actionableGroupCount} group(s)`)
     worst = worstOf(worst, 'yellow')
   }
 

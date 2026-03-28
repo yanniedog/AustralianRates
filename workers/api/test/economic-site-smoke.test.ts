@@ -21,7 +21,7 @@ describe('economic site smoke', () => {
     expect(html).toContain('id="chart"')
     expect(html).toContain('id="scenario"')
     expect(html).toContain('id="details"')
-    expect(html).toContain('id="sources"')
+    expect(html).toContain('id="economic-source-list"')
     expect(html).toContain('ar-chart-echarts-helpers.js')
   })
 

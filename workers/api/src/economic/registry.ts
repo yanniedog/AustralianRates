@@ -106,13 +106,13 @@ export const ECONOMIC_PRESETS: Array<{
   {
     id: 'housing_transmission',
     label: 'Housing Transmission',
-    description: 'Household demand and housing-finance channels most exposed to policy changes.',
+    description: 'Housing finance, credit, household demand, and wage channels most exposed to policy changes.',
     seriesIds: [
       'major_bank_lending_rates',
-      'household_consumption',
       'housing_credit_growth',
-      'dwelling_approvals',
+      'household_consumption',
       'consumer_sentiment',
+      'wage_growth',
     ],
   },
   {
@@ -125,7 +125,6 @@ export const ECONOMIC_PRESETS: Array<{
       'aud_twi',
       'commodity_prices',
       'major_trading_partner_growth_proxy',
-      'bank_bill_90d',
     ],
   },
 ]
@@ -218,7 +217,7 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     sourceUrl: RBA_F1,
     staleAfterDays: 7,
     description: 'RBA F1 end-of-day three-month BAB/NCD yield, a market proxy for expected policy moves.',
-    presets: ['rba_watchlist', 'global_pulse'],
+    presets: ['rba_watchlist'],
     collector: { kind: 'rba_csv', url: RBA_F1, seriesId: 'FIRMMBAB90D' },
   },
   {
@@ -248,7 +247,7 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     sourceUrl: RBA_H4,
     staleAfterDays: 140,
     description: 'Year-ended wage growth from the RBA H4 labour-costs table.',
-    presets: [],
+    presets: ['housing_transmission'],
     collector: { kind: 'rba_csv', url: RBA_H4, seriesId: 'GWPIYP' },
   },
   {
@@ -278,7 +277,7 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     sourceUrl: RBA_H3,
     staleAfterDays: 62,
     description: 'Private dwelling approvals from the RBA H3 monthly-activity table.',
-    presets: ['housing_transmission'],
+    presets: [],
     collector: { kind: 'rba_csv', url: RBA_H3, seriesId: 'GISPSDA' },
   },
   {

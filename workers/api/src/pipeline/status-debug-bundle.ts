@@ -1,4 +1,5 @@
 import { SITE_HEALTH_CRON_EXPRESSION } from '../constants'
+import { getIngestPauseConfig } from '../db/app-config'
 import type {
   EconomicCoverageFinding,
   EconomicCoverageProbe,
@@ -7,6 +8,7 @@ import type {
 import { getDiagnosticsBacklog } from '../db/diagnostics-backlog'
 import { readFetchEventPayloadTruncated, getRecentFetchEvents } from '../db/fetch-events'
 import { getLatestHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
+import { shouldFilterSiteHealthAttentionForActionable } from '../db/health-check-runs'
 import {
   getLatestIntegrityAuditRun,
   listIntegrityAuditRuns,
@@ -18,6 +20,7 @@ import {
   getCachedCoverageGapAuditReport,
   loadCoverageGapAuditReport,
   runCoverageGapAudit,
+  shouldFilterCoverageGapLogForActionable,
 } from './coverage-gap-audit'
 import {
   getCachedCoverageGapRemediationReport,
@@ -30,6 +33,7 @@ import {
 } from './lender-universe-audit'
 import type { EnvBindings } from '../types'
 import { extractTraceback, parseLogContext, queryProblemLogs } from '../utils/logger'
+import { toActionableIssueSummaries } from '../utils/log-actionable'
 import { mapHealthCheckRunRow, type ParsedHealthRun } from '../utils/map-health-run'
 import { buildStatusPageDiagnosticsFromBundle } from './status-page-diagnostics'
 import {
@@ -39,6 +43,7 @@ import {
   remediationFromReplayQueueRows,
 } from './status-debug-remediation'
 import type { CoverageGapAuditReport } from './coverage-gap-audit'
+import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
 
 const DEFAULT_SECTIONS = [
   'health',
@@ -361,10 +366,18 @@ export async function buildStatusDebugBundle(
     }
   }
 
+  const actionableHealthContext = latestHealth
+    ? {
+        checked_at: latestHealth.checked_at,
+        overall_ok: latestHealth.overall_ok ? 1 : 0,
+      }
+    : null
+
   let coverageRowsSnapshot: CoverageGapAuditReport['rows'] = []
   let replayRows: Awaited<ReturnType<typeof listReplayQueueRows>> = []
   let probeEvents: Awaited<ReturnType<typeof getRecentFetchEvents>> = []
   let logEntriesOut: Array<Record<string, unknown>> = []
+  let actionableLogEntriesOut: Array<Record<string, unknown>> = []
 
   const parallel: Promise<void>[] = []
 
@@ -387,7 +400,11 @@ export async function buildStatusDebugBundle(
     parallel.push(
       (async () => {
         const sinceTs = sinceExplicit ?? logSinceFromHealth(latestHealth?.checked_at, logHoursBeforeHealth)
-        const { entries, total } = await queryProblemLogs(env.DB, { sinceTs, limit: logLimit })
+        const [{ entries, total }, pauseConfig, gapReport] = await Promise.all([
+          queryProblemLogs(env.DB, { sinceTs, limit: logLimit }),
+          getIngestPauseConfig(env.DB).catch(() => ({ mode: 'active' as const, reason: null })),
+          loadCoverageGapAuditReport(env.DB).catch(() => null),
+        ])
         logEntriesOut = entries.map((e) => ({
           id: e.id,
           ts: e.ts,
@@ -400,10 +417,24 @@ export async function buildStatusDebugBundle(
           context: parseLogContext(e.context),
           traceback: extractTraceback(e.context),
         }))
+        actionableLogEntriesOut = logEntriesOut.filter((entry) => {
+          const level = String(entry.level || '').toLowerCase()
+          if (level !== 'warn' && level !== 'error') return false
+          if (shouldFilterCoverageGapLogForActionable(entry, gapReport)) return false
+          if (shouldFilterSiteHealthAttentionForActionable(entry, actionableHealthContext)) return false
+          if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
+          return true
+        })
+        const actionableIssues = toActionableIssueSummaries(actionableLogEntriesOut)
         out.logs = {
           total,
           since_ts: sinceTs ?? null,
           entries: logEntriesOut,
+          actionable: {
+            count: actionableIssues.length,
+            scanned: actionableLogEntriesOut.length,
+            issues: actionableIssues,
+          },
         }
       })(),
     )
@@ -518,10 +549,10 @@ export async function buildStatusDebugBundle(
 
   if (sections.has('remediation')) {
     const entriesForCodes =
-      logEntriesOut.length > 0
-        ? logEntriesOut
-        : out.logs && typeof out.logs === 'object' && 'entries' in out.logs
-          ? ((out.logs as { entries: Array<Record<string, unknown>> }).entries ?? [])
+      actionableLogEntriesOut.length > 0
+        ? actionableLogEntriesOut
+        : out.logs && typeof out.logs === 'object' && 'actionable' in out.logs
+          ? ((((out.logs as { actionable?: { issues?: Array<Record<string, unknown>> } }).actionable || {}).issues) ?? [])
           : []
     const codes = new Set<string>([
       ...actionableCodesFromHealth(latestHealth),

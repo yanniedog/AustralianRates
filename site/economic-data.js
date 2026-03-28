@@ -203,17 +203,13 @@
     function renderCategories() {
         refs.categoryGroups.innerHTML = state.catalog.categories.map(function (category) {
             return '<section class="economic-group">' +
-                '<div class="economic-group-header"><h3>' + esc(category.label) + '</h3><span class="economic-option-meta">' + esc(category.series.length + ' indicators') + '</span></div>' +
+                '<h3>' + esc(category.label) + '</h3>' +
                 category.series.map(function (series) {
                     var checked = state.selectedIds.indexOf(series.id) >= 0;
-                    var freshness = series.freshness && series.freshness.status ? badge(series.freshness.status, series.freshness.status === 'ok' ? 'is-fresh' : ('is-' + series.freshness.status)) : '';
                     return '<label class="economic-option">' +
                         '<input type="checkbox" data-series-id="' + esc(series.id) + '"' + (checked ? ' checked' : '') + '>' +
-                        '<span class="economic-option-copy">' +
-                            '<span class="economic-option-head"><span class="economic-option-label">' + esc(series.label) + '</span><span>' + (series.proxy ? badge('Proxy', 'is-proxy') : badge('Official')) + ' ' + freshness + '</span></span>' +
-                            '<span class="economic-option-meta">' + esc(series.unit + ' | ' + series.frequency + ' | ' + series.source_label) + '</span>' +
-                            '<span class="economic-group-copy">' + esc(series.description) + '</span>' +
-                        '</span>' +
+                        '<span class="economic-option-label">' + esc(series.label) + '</span>' +
+                        (series.proxy ? badge('Proxy', 'is-proxy') : '') +
                     '</label>';
                 }).join('') +
             '</section>';
@@ -227,11 +223,15 @@
     function renderSeriesCards() {
         refs.seriesList.innerHTML = state.series.map(function (series) {
             var lastPoint = (series.points || []).filter(function (point) { return point.raw_value != null; }).slice(-1)[0] || null;
+            var valueStr = lastPoint
+                ? esc(formatNumber(lastPoint.raw_value) + '\u00a0' + series.unit) + ' \u00b7 ' + esc(formatDate(lastPoint.observation_date))
+                : 'No data';
+            var sourceLink = series.source_url
+                ? ' \u00b7 <a class="economic-source-link" href="' + esc(series.source_url) + '" target="_blank" rel="noopener">Source\u00a0\u2197</a>'
+                : '';
             return '<article class="economic-series-card">' +
-                '<div class="economic-series-header"><h3>' + esc(series.label) + '</h3>' + (series.proxy ? badge('Proxy', 'is-proxy') : badge('Official')) + '</div>' +
-                '<div class="economic-series-meta">' + esc(series.unit + ' | ' + series.frequency + ' | baseline ' + formatNumber(series.baseline_value)) + '</div>' +
-                '<p class="economic-group-copy">' + esc(series.description) + '</p>' +
-                '<div class="economic-series-meta">Latest raw value: ' + esc(lastPoint ? formatNumber(lastPoint.raw_value) + ' on ' + formatDate(lastPoint.observation_date) : 'n/a') + '</div>' +
+                '<div class="economic-series-header"><h3>' + esc(series.label) + '</h3>' + (series.proxy ? badge('Proxy', 'is-proxy') : '') + '</div>' +
+                '<div class="economic-series-meta">' + valueStr + sourceLink + '</div>' +
             '</article>';
         }).join('');
     }
