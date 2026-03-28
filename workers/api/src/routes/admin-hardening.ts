@@ -253,6 +253,7 @@ adminHardeningRoutes.get('/diagnostics/status-debug-bundle', async (c) => {
       coverageLimit: q.coverage_limit,
       replayLimit: q.replay_limit,
       probeEventLimit: q.probe_event_limit,
+      integrityHistoryLimit: q.integrity_history_limit,
     },
     c.get('adminAuthState')?.mode ?? null,
   )
