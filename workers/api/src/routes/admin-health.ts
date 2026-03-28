@@ -74,6 +74,7 @@ adminHealthRoutes.post('/health/run', async (c) => {
       checked_at: result.checkedAt,
       overall_ok: result.overallOk,
       duration_ms: result.durationMs,
+      diagnostics_profile: result.diagnosticsProfile,
       components: result.components,
       integrity: result.integrity,
       economic: result.economic,

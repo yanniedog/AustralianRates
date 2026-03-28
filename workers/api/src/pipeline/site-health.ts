@@ -25,7 +25,12 @@ type ComponentStatus = {
 }
 
 type ProbeValidation = 'none' | 'json_object' | 'rows_payload' | 'economic_series_payload'
-const ACTIONABLE_LOG_LOOKBACK_MINUTES = 30
+/** Scheduled cron: tight window so the job stays fast. */
+const ACTIONABLE_LOG_LOOKBACK_SCHEDULED_MINUTES = 30
+/** Manual “Run check now”: wider window so actionable issues match operator expectations. */
+const ACTIONABLE_LOG_LOOKBACK_MANUAL_MINUTES = 24 * 60
+const ACTIONABLE_LOG_LIMIT_SCHEDULED = 500
+const ACTIONABLE_LOG_LIMIT_MANUAL = 2000
 const ECONOMIC_SERIES_PROBE_BATCH_SIZE = 12
 
 function isEnabled(value: string | undefined): boolean {
@@ -39,6 +44,8 @@ export type SiteHealthRunResult = {
   overallOk: boolean
   durationMs: number
   origin: string
+  /** `comprehensive_manual` when triggered from admin “Run check now” (wider logs + anomaly integrity probes). */
+  diagnosticsProfile: 'scheduled' | 'comprehensive_manual'
   components: ComponentStatus[]
   integrity: Awaited<ReturnType<typeof runIntegrityChecks>>
   economic: EconomicCoverageReport
@@ -72,6 +79,7 @@ export function logSiteHealthOutcome(result: SiteHealthRunResult): void {
     code: 'site_health_diagnostics' as const,
     runId: result.runId,
     context: {
+      diagnostics_profile: result.diagnosticsProfile,
       checked_at: result.checkedAt,
       overall_ok: result.overallOk,
       failures: result.failures,
@@ -104,6 +112,7 @@ export function logSiteHealthOutcome(result: SiteHealthRunResult): void {
       code: 'site_health_diagnostics',
       runId: result.runId,
       context: {
+        diagnostics_profile: result.diagnosticsProfile,
         checked_at: result.checkedAt,
         overall_ok: true,
         economic_severity: s.severity,
@@ -523,10 +532,18 @@ export async function runSiteHealthChecks(
   const startedAt = Date.now()
   const origin = normalizeOrigin(input.origin)
   const capturePolicy: ProbeCapturePolicy = await resolveProbeCapturePolicy(env, input.triggerSource)
-  const actionableSinceTs = new Date(Date.parse(checkedAt) - ACTIONABLE_LOG_LOOKBACK_MINUTES * 60 * 1000).toISOString()
+  const comprehensiveManual = input.triggerSource === 'manual'
+  const actionableLookbackMinutes = comprehensiveManual
+    ? ACTIONABLE_LOG_LOOKBACK_MANUAL_MINUTES
+    : ACTIONABLE_LOG_LOOKBACK_SCHEDULED_MINUTES
+  const actionableLogLimit = comprehensiveManual ? ACTIONABLE_LOG_LIMIT_MANUAL : ACTIONABLE_LOG_LIMIT_SCHEDULED
+  const actionableSinceTs = new Date(
+    Date.parse(checkedAt) - actionableLookbackMinutes * 60 * 1000,
+  ).toISOString()
   const pauseConfigPromise = getIngestPauseConfig(env.DB).catch(() => ({ mode: 'active' as const, reason: null }))
   const integrityPromise = runIntegrityChecks(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne', {
-    includeAnomalyProbes: isEnabled(env.FEATURE_INTEGRITY_PROBES_ENABLED),
+    includeAnomalyProbes:
+      comprehensiveManual || isEnabled(env.FEATURE_INTEGRITY_PROBES_ENABLED),
   }).catch((error) => ({
       ok: false,
       checked_at: new Date().toISOString(),
@@ -592,7 +609,7 @@ export async function runSiteHealthChecks(
     }),
     integrityPromise,
     runE2ECheck(env, { origin, capturePolicy }),
-    queryProblemLogs(env.DB, { sinceTs: actionableSinceTs, limit: 500 }),
+    queryProblemLogs(env.DB, { sinceTs: actionableSinceTs, limit: actionableLogLimit }),
     pauseConfigPromise,
     checkEconomicData(env, origin, capturePolicy),
     economicPromise,
@@ -642,6 +659,7 @@ export async function runSiteHealthChecks(
     overallOk: failures.length === 0,
     durationMs: Date.now() - startedAt,
     origin,
+    diagnosticsProfile: comprehensiveManual ? 'comprehensive_manual' : 'scheduled',
     components,
     integrity,
     economic,

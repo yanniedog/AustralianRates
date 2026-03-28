@@ -1316,15 +1316,15 @@
     }
 
     async function runNow() {
-        setStatusLineSeverity(statusEl, 'Running manual health check...', 'yellow');
+        setStatusLineSeverity(statusEl, 'Running full health diagnostic (all probes, 24h actionable logs, integrity anomaly probes)…', 'yellow');
         var btn = document.getElementById('run-check-btn');
         btn.disabled = true;
         try {
             var res = await portal.fetchAdmin('/health/run', { method: 'POST' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            await refreshAll();
+            await refreshAll(true);
         } catch (_err) {
-            setStatusLineSeverity(statusEl, 'Manual health check failed.', 'red');
+            setStatusLineSeverity(statusEl, 'Full health diagnostic failed.', 'red');
         } finally {
             btn.disabled = false;
         }
