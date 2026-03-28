@@ -2,6 +2,7 @@ import { attachEconomicCoverageProbes, runEconomicCoverageAudit, type EconomicCo
 import { runIntegrityChecks } from '../db/integrity-checks'
 import { ECONOMIC_SERIES_DEFINITIONS } from '../economic/registry'
 import { getIngestPauseConfig } from '../db/app-config'
+import { loadCoverageGapAuditReport, shouldFilterCoverageGapLogForActionable } from './coverage-gap-audit'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
 import { dispatchInternalPublicApiRequest } from './internal-public-api-request'
@@ -558,9 +559,6 @@ export async function runSiteHealthChecks(
       ],
     }))
   const economicPromise = runEconomicCoverageAudit(env.DB, { checkedAt }).catch((error) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a0a9c5'},body:JSON.stringify({sessionId:'a0a9c5',runId,hypothesisId:'H2',location:'site-health.ts:economicPromise.catch',message:'economic_audit_runtime_error',data:{error:(error as Error)?.message || String(error)},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     log.error('pipeline', 'site_health_economic_audit_failed', {
       error,
       context: `run_id=${runId}`,
@@ -594,7 +592,8 @@ export async function runSiteHealthChecks(
     }
   })
 
-  const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig, economicCheck, economicCoverage] = await Promise.all([
+  const [datasetComponents, homepage, integrity, e2e, logs, pauseConfig, economicCheck, economicCoverage, gapReportForActionable] =
+    await Promise.all([
     Promise.all(
       LATEST_ALL_DATASETS.map((dataset) =>
         checkDataset(env, origin, dataset.dataset, dataset.basePath, capturePolicy),
@@ -613,11 +612,9 @@ export async function runSiteHealthChecks(
     pauseConfigPromise,
     checkEconomicData(env, origin, capturePolicy),
     economicPromise,
+    loadCoverageGapAuditReport(env.DB).catch(() => null),
   ])
   const economic = attachEconomicCoverageProbes(economicCoverage, economicCheck.probes)
-  // #region agent log
-  fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a0a9c5'},body:JSON.stringify({sessionId:'a0a9c5',runId,hypothesisId:'H3',location:'site-health.ts:after_attachEconomicCoverageProbes',message:'economic_coverage_snapshot',data:{summary:economic.summary,findingsCount:Array.isArray(economic.findings)?economic.findings.length:-1,probeCount:Array.isArray(economic.probes)?economic.probes.length:-1,perSeriesCount:Array.isArray(economic.per_series)?economic.per_series.length:-1},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
 
   const components: ComponentStatus[] = [
     ...datasetComponents.flat(),
@@ -638,9 +635,6 @@ export async function runSiteHealthChecks(
 
   if (!integrity.ok) failures.push('integrity_checks_failed')
   const economicFailureSignal = hasEconomicFailureSignal(economic)
-  // #region agent log
-  fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a0a9c5'},body:JSON.stringify({sessionId:'a0a9c5',runId,hypothesisId:'H4',location:'site-health.ts:hasEconomicFailureSignal',message:'economic_failure_signal_evaluated',data:{economicFailureSignal,severity:economic.summary?.severity ?? null,definedSeries:Number(economic.summary?.defined_series ?? 0),statusRows:Number(economic.summary?.status_rows ?? 0),observedSeries:Number(economic.summary?.observed_series ?? 0),publicProbeFailures:Number(economic.summary?.public_probe_failures ?? 0),findingsCount:Array.isArray(economic.findings)?economic.findings.length:-1,perSeriesCount:Array.isArray(economic.per_series)?economic.per_series.length:-1},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   if (economicFailureSignal) failures.push('economic_coverage_failed')
   if (!e2e.aligned) failures.push(`e2e_not_aligned:${e2e.reasonCode}`)
 
@@ -648,6 +642,7 @@ export async function runSiteHealthChecks(
     logs.entries.filter((entry) => {
       const level = String(entry.level || '').toLowerCase()
       if (level !== 'warn' && level !== 'error') return false
+      if (shouldFilterCoverageGapLogForActionable(entry, gapReportForActionable)) return false
       if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
       return true
     }),

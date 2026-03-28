@@ -102,6 +102,18 @@ function issueSeverity(issues: string[], computedStatus: EconomicSeriesCoverageR
   return 'green'
 }
 
+/** Upstream bot-block / edge noise while we still have stored observations — warn in audit, not error. */
+function isTransientUpstreamTransportError(row: EconomicSeriesCoverageRow): boolean {
+  if (row.observation_row_count <= 0) return false
+  const msg = String(row.status_message || '')
+  const lower = msg.toLowerCase()
+  if (msg.includes('upstream_not_ok:403') && msg.includes('rba.gov.au')) return true
+  if (msg.includes('upstream_not_ok:520') && msg.includes('fred.stlouisfed.org')) return true
+  // Parser/layout drift while historical observations remain; same class as logging-expert noise filter.
+  if (row.series_id === 'rbnz_ocr' && lower.includes('no parseable observations for rbnz_ocr')) return true
+  return false
+}
+
 function storedProxyFlagMatches(definition: EconomicSeriesDefinition, row: EconomicStatusDbRow | null): boolean {
   if (!row) return true
   return Boolean(row.proxy_flag) === definition.proxy
@@ -379,6 +391,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
   const missingObservationRows = perSeries.filter((row) => row.issues.includes('missing_observations'))
   const errorStatusRows = perSeries.filter((row) => row.issues.includes('error_status'))
   const hardErrorStatusRows = errorStatusRows.filter((row) => row.proxy !== true)
+  const transientUpstreamErrorRows = hardErrorStatusRows.filter(isTransientUpstreamTransportError)
+  const actionableHardErrorRows = hardErrorStatusRows.filter((row) => !transientUpstreamErrorRows.includes(row))
   const proxyErrorStatusRows = errorStatusRows.filter((row) => row.proxy === true)
   const staleStatusRows = perSeries.filter((row) => row.issues.includes('stale_status') && !row.issues.includes('error_status'))
   const statusFieldMismatchRows = perSeries.filter((row) =>
@@ -418,8 +432,20 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     code: 'economic_error_status_rows',
     severity: 'error',
     message: 'Economic series currently report error status.',
-    count: hardErrorStatusRows.length,
-    sample: hardErrorStatusRows.map((row) => ({
+    count: actionableHardErrorRows.length,
+    sample: actionableHardErrorRows.map((row) => ({
+      series_id: row.series_id,
+      status_message: row.status_message,
+      last_checked_at: row.last_checked_at,
+    })),
+  })
+  pushFinding(findings, {
+    code: 'economic_transient_upstream_transport',
+    severity: 'warn',
+    message:
+      'Economic series refresh hit transient upstream transport errors (e.g. RBA 403, FRED 520) but stored observations exist.',
+    count: transientUpstreamErrorRows.length,
+    sample: transientUpstreamErrorRows.map((row) => ({
       series_id: row.series_id,
       status_message: row.status_message,
       last_checked_at: row.last_checked_at,
@@ -488,7 +514,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     observed_series: perSeries.filter((row) => row.observation_row_count > 0).length,
     ok_series: perSeries.filter((row) => row.computed_status === 'ok' && row.severity === 'green').length,
     stale_series: staleStatusRows.length,
-    error_series: hardErrorStatusRows.length,
+    error_series: actionableHardErrorRows.length,
     missing_series: missingStatusRows.length,
     invalid_rows: invalidRows,
     orphan_rows:

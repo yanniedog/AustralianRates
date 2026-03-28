@@ -19,10 +19,7 @@ export type ParsedHealthRun = {
 function parseJsonSafe(raw: string | null | undefined, fallback: unknown): unknown {
   try {
     return raw ? JSON.parse(raw) : fallback
-  } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a0a9c5'},body:JSON.stringify({sessionId:'a0a9c5',runId:'status_bundle_read',hypothesisId:'H1',location:'map-health-run.ts:parseJsonSafe',message:'health_row_json_parse_failed',data:{rawPrefix:String(raw ?? '').slice(0,160),rawLength:String(raw ?? '').length,error:(error as Error)?.message || String(error)},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
+  } catch {
     return fallback
   }
 }

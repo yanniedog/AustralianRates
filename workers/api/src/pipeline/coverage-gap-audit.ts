@@ -95,6 +95,22 @@ export function getCachedCoverageGapAuditReport(): CoverageGapAuditReport | null
   return cachedReport
 }
 
+/** When the latest persisted audit is clean, drop stale gap error rows from actionable triage (log rows are not deleted). */
+export function shouldFilterCoverageGapLogForActionable(
+  entry: Record<string, unknown>,
+  report: CoverageGapAuditReport | null,
+): boolean {
+  if (!report?.ok) return false
+  const msg = String(entry.message || '')
+    .trim()
+    .toLowerCase()
+  if (msg !== 'coverage_gap_audit_detected_gaps') return false
+  const ts = String(entry.ts || '')
+  const gen = report.generated_at
+  if (!ts || !gen) return false
+  return ts < gen
+}
+
 export async function runCoverageGapAudit(
   env: EnvBindings,
   input: {

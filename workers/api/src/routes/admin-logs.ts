@@ -5,6 +5,7 @@
 
 import { Hono } from 'hono'
 import { getIngestPauseConfig } from '../db/app-config'
+import { loadCoverageGapAuditReport, shouldFilterCoverageGapLogForActionable } from '../pipeline/coverage-gap-audit'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import type { LogLevel } from '../utils/logger'
@@ -173,10 +174,12 @@ adminLogRoutes.get('/logs/system/actionable', async (c) => {
   withNoStore(c)
   const limit = Math.max(1, Math.min(500, Number(c.req.query('limit') || 150)))
   const pauseConfig = await getIngestPauseConfig(c.env.DB).catch(() => ({ mode: 'active' as const, reason: null }))
+  const gapReport = await loadCoverageGapAuditReport(c.env.DB).catch(() => null)
   const { entries } = await queryProblemLogs(c.env.DB, { limit })
   const problemRows = entries.filter((entry) => {
     const level = String(entry.level || '').toLowerCase()
     if (level !== 'warn' && level !== 'error') return false
+    if (shouldFilterCoverageGapLogForActionable(entry, gapReport)) return false
     if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
     return true
   })

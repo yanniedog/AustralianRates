@@ -33,10 +33,16 @@ export type FetchWithTimeoutOptions = {
 export const RBA_GOV_AU_FETCH_INIT: RequestInit = {
   headers: {
     'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/csv,text/plain,*/*;q=0.8',
     'Accept-Language': 'en-AU,en;q=0.9',
-    Referer: 'https://www.rba.gov.au/',
+    Referer: 'https://www.rba.gov.au/statistics/tables/',
+    'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'cross-site',
   },
 }
 
@@ -76,9 +82,21 @@ function classifyStatus(status: number): RetryClass {
   return 'other'
 }
 
-function shouldRetryStatus(status: number): boolean {
+function isRbaGovAuUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase()
+    return h === 'www.rba.gov.au' || h.endsWith('.rba.gov.au')
+  } catch {
+    return false
+  }
+}
+
+/** RBA intermittently returns 403 from datacentre IPs; brief retries mirror 5xx handling. */
+function shouldRetryStatus(status: number, url: string): boolean {
   if (status === 408 || status === 429) return true
-  return status >= 500 && status <= 599
+  if (status >= 500 && status <= 599) return true
+  if (status === 403 && isRbaGovAuUrl(url)) return true
+  return false
 }
 
 function classifyError(error: unknown, timedOut: boolean): RetryClass {
@@ -158,7 +176,7 @@ export async function fetchWithTimeout(
       detach()
 
       status = response.status
-      if (shouldRetryStatus(response.status) && attempt < maxAttempts) {
+      if (shouldRetryStatus(response.status, url) && attempt < maxAttempts) {
         lastErrorClass = classifyStatus(response.status)
         retryReasons.push(`${lastErrorClass}:status=${response.status}`)
         const delayMs = computeRetryDelayMs(attempt, config.retryBaseMs, config.retryCapMs)
@@ -174,7 +192,7 @@ export async function fetchWithTimeout(
           timed_out: timedOut,
           status: response.status,
           retry_reasons: retryReasons,
-          last_error_class: shouldRetryStatus(response.status) ? classifyStatus(response.status) : lastErrorClass,
+          last_error_class: shouldRetryStatus(response.status, url) ? classifyStatus(response.status) : lastErrorClass,
         },
       }
     } catch (error) {

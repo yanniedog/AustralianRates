@@ -19,14 +19,6 @@ const token = (
 ).trim();
 
 const FETCH_TIMEOUT_MS = 120_000;
-const DEBUG_ENDPOINT = 'http://127.0.0.1:7387/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be';
-const DEBUG_SESSION_ID = 'a0a9c5';
-
-function debugLog(hypothesisId: string, location: string, message: string, data: Record<string, unknown>): void {
-  // #region agent log
-  fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a0a9c5'},body:JSON.stringify({sessionId:DEBUG_SESSION_ID,runId:'status_bundle_fetch',hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-}
 
 function argValue(flag: string): string | undefined {
   const a = process.argv.find((x) => x.startsWith(`${flag}=`));
@@ -34,11 +26,6 @@ function argValue(flag: string): string | undefined {
 }
 
 async function fetchBundle(url: string): Promise<unknown> {
-  debugLog('H5', 'fetch-status-debug-bundle.ts:fetchBundle:start', 'status_bundle_fetch_started', {
-    origin: ORIGIN,
-    hasToken: Boolean(token),
-    urlHasQuery: url.includes('?'),
-  });
   const controller = new AbortController();
   const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   const res = await fetch(url, {
@@ -49,11 +36,6 @@ async function fetchBundle(url: string): Promise<unknown> {
     },
   });
   clearTimeout(to);
-  debugLog('H6', 'fetch-status-debug-bundle.ts:fetchBundle:response', 'status_bundle_fetch_response', {
-    status: res.status,
-    ok: res.ok,
-    statusText: res.statusText,
-  });
   if (res.status === 401) {
     throw new Error('401 Unauthorized: ADMIN_API_TOKEN invalid or missing');
   }
@@ -87,30 +69,10 @@ async function main(): Promise<void> {
 
   try {
     const data = await fetchBundle(url);
-    const payload = data as {
-      ok?: unknown;
-      health?: { latest?: { overall_ok?: unknown; failures?: unknown; economic?: { summary?: Record<string, unknown> } } };
-    };
-    debugLog('H7', 'fetch-status-debug-bundle.ts:main:bundle_snapshot', 'status_bundle_runtime_snapshot', {
-      ok: payload?.ok ?? null,
-      overallOk: payload?.health?.latest?.overall_ok ?? null,
-      failures: Array.isArray(payload?.health?.latest?.failures) ? payload.health.latest.failures : null,
-      economicSummary: payload?.health?.latest?.economic?.summary ?? null,
-    });
-    const findings = ((payload?.health?.latest?.economic as { findings?: Array<{ code?: unknown; sample?: unknown }> } | undefined)?.findings) ?? [];
-    const errorStatusFinding = findings.find((f) => String(f?.code ?? '') === 'economic_error_status_rows');
-    debugLog('H9', 'fetch-status-debug-bundle.ts:main:error_status_rows', 'economic_error_status_rows_snapshot', {
-      sample: Array.isArray(errorStatusFinding?.sample) ? errorStatusFinding?.sample : [],
-      findingCodes: findings.map((f) => String(f?.code ?? '')),
-    });
     const text = `${JSON.stringify(data, null, 2)}\n`;
     if (outPath) {
       const fs = await import('node:fs/promises');
       await fs.writeFile(outPath, text, 'utf8');
-      debugLog('H8', 'fetch-status-debug-bundle.ts:main:write', 'status_bundle_written_to_file', {
-        outPath,
-        bytes: text.length,
-      });
       console.error(`Wrote ${outPath}`);
     } else {
       process.stdout.write(text);

@@ -150,6 +150,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
     action: 'Inspect parser assumptions vs current CSV/HTML shape for the series_id in log context; fix parser or source URL in economic registry.',
     links: ['/admin/logs.html', '/admin/status.html'],
   },
+  site_health_diagnostics: {
+    code: 'site_health_diagnostics',
+    title: 'Site health check reported attention needed',
+    action:
+      'Open admin Status, review economic coverage and E2E slices in the latest health run, and run POST /health/run if you need a fresh snapshot.',
+    links: ['/admin/status.html', '/admin/logs.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
@@ -173,6 +180,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('analytics_change_query_failed')) return 'analytics_change_query_failed'
   if (normalized.includes('analytics_change_query_schema_mismatch')) return 'analytics_change_query_schema_mismatch'
   if (normalized.includes('cdr_audit_detected_gaps')) return 'cdr_audit_detected_gaps'
+  if (normalized === 'site_health_attention' || normalized.includes('site_health_attention')) return 'site_health_diagnostics'
   return DEFAULT_ISSUE.code
 }
 
