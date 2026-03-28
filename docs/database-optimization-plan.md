@@ -19,7 +19,7 @@ This document defines how to keep the D1 database smaller and optimised while (a
 ### (b) Admin status and integrity remain pragmatic and useful
 
 - **Run history**: `run_reports` (and run_seen_*, lender_dataset_runs) drive run list, coverage gaps, and “runs with no outputs”. Keep **1 day** for a compact DB; admin diagnostics (lineage repair, CDR audit, coverage-gap) see last 24h only.
-- **Logs**: `global_log` 14d (warn/error) and 48h (info/debug) so actionable issues and recent context remain.
+- **Logs**: `global_log` 48h for all levels plus ~200k row cap (see `retention-prune.ts`).
 - Older historical rate rows may have `fetch_event_id` pointing to pruned fetch_events (lookup returns null); that is acceptable.
 
 ## Concrete actions

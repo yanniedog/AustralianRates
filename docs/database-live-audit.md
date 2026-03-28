@@ -91,7 +91,7 @@ So: **product_catalog**, **series_catalog**, **series_presence_status**, and **p
 | **admin_download_artifacts** | Per-job artifact metadata (file_name, r2_key, row_count, cursor). | Same as above. |
 | **export_jobs** | Term-deposit (and similar) export jobs. | Same. |
 | **download_change_feed** | Change feed for optimized/canonical/operational streams. | **Unbounded growth** unless pruned; each write can emit rows. |
-| **global_log** | Application log (level, source, message, code, context, run_id, lender_code). | **Retention applied**: 30-day prune. |
+| **global_log** | Application log (level, source, message, code, context, run_id, lender_code). | **Retention applied**: 48h + row cap (after each health check). |
 | **health_check_runs** | Site health runs (components_json, integrity_json, e2e, etc.). | **Retention applied**: 7-day prune. |
 | **integrity_audit_runs** | Data integrity audit runs (summary_json, findings_json). | **Retention applied**: 30-day prune. |
 | **app_config** | Key-value app config (e.g. ingest pause). | Tiny. |
@@ -147,7 +147,7 @@ So: **product_catalog**, **series_catalog**, **series_presence_status**, and **p
 
 ### 3.3 Already bounded (retention in place)
 
-- **global_log**: 30-day prune (after each health check).
+- **global_log**: 48-hour prune and row cap (after each health check).
 - **ingest_anomalies**: 90-day prune.
 - **health_check_runs**: 7-day prune.
 - **integrity_audit_runs**: 30-day prune.
