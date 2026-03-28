@@ -22,8 +22,11 @@ describe('RBA collection integration', () => {
       return new Response('blocked', { status: 403 })
     })
 
-    const result = await collectRbaCashRateForDate(env.DB, '2099-01-01')
+    const result = await collectRbaCashRateForDate(env.DB, '2099-01-01', {
+      FETCH_MAX_RETRIES: '0',
+    })
 
+    // One attempt each for HTML decisions page and F1 CSV (no fetch retries; retries are tested in unit tests).
     expect(calls).toBe(2)
     expect(result).toEqual({
       ok: true,
