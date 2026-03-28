@@ -107,9 +107,37 @@ function fetchFullStatusBundleToFile(): boolean {
   }
 }
 
+/** CDR audit checks that indicate broken linkage / schema-level invariants (not reconciliation lag). */
+const CDR_STRUCTURAL_CHECK_IDS = new Set([
+  'retrieved_fetch_raw_linkage',
+  'stored_missing_fetch_event_links',
+  'stored_missing_series_keys',
+  'archived_fetch_created_without_raw_object',
+  'tracked_presence_coverage',
+])
+
+function cdrAuditHasStructuralFailure(report: unknown): boolean {
+  const r = report as {
+    stages?: Record<string, Array<{ id?: string; passed?: boolean }>>
+  }
+  const stages = r.stages
+  if (!stages || typeof stages !== 'object') return false
+  for (const stage of Object.values(stages)) {
+    if (!Array.isArray(stage)) continue
+    for (const check of stage) {
+      if (!check || typeof check !== 'object') continue
+      const id = String(check.id || '')
+      if (!CDR_STRUCTURAL_CHECK_IDS.has(id)) continue
+      if (check.passed === false) return true
+    }
+  }
+  return false
+}
+
 /**
  * Fail the run when the bundle reports D1/consistency failures that actionable logs may not list.
- * Economic/upstream probe noise does not set integrity or CDR audit ok=false.
+ * Economic/upstream probe noise does not set integrity ok=false.
+ * CDR: only structural linkage/presence checks fail the gate (not stale run_reports / unfinalized lender rows).
  */
 function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
   let raw: string
@@ -149,10 +177,10 @@ function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
     process.exit(1)
   }
 
-  const cdrBlock = j.cdr_audit as { report?: { ok?: boolean } } | undefined
-  if (cdrBlock?.report && cdrBlock.report.ok === false) {
+  const cdrReport = (j.cdr_audit as { report?: unknown } | undefined)?.report
+  if (cdrReport && cdrAuditHasStructuralFailure(cdrReport)) {
     console.error(
-      '[doctor] CDR pipeline audit ok=false (database / lineage consistency). Inspect bundle cdr_audit.report.failures.',
+      '[doctor] CDR audit: structural / linkage check failed (fetch_event↔raw_object, series keys, presence). Inspect bundle cdr_audit.report.stages.',
     )
     process.exit(1)
   }
