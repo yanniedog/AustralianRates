@@ -467,7 +467,14 @@
             backgroundColor: 'transparent',
             color: ECONOMIC_CHART_PALETTE,
             axisPointer: axisPointer,
-            tooltip: { show: false },
+            // showContent:false hides the tooltip panel only; show:false would disable axis tracking and crosshairs.
+            tooltip: {
+                trigger: 'axis',
+                transitionDuration: 0,
+                confine: true,
+                showContent: false,
+                hideDelay: 220,
+            },
             legend: { show: false },
             grid: { left: gridLeft, right: narrow ? 10 : 18, top: 20, bottom: gridBottom, containLabel: true },
             xAxis: {
