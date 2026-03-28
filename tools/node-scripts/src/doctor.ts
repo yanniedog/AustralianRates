@@ -186,18 +186,22 @@ function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
   }
 }
 
-function printBundleEconomicE2eDiagnostics(bundleAbsPath: string): void {
+function printStatusPageDiagnostics(bundleAbsPath: string): void {
   try {
     const raw = readFileSync(bundleAbsPath, 'utf8')
-    const j = JSON.parse(raw) as { diagnostics?: unknown }
-    if (j.diagnostics != null && typeof j.diagnostics === 'object') {
-      console.log('\n--- Economic + E2E diagnostics (status-debug-bundle) ---\n')
-      console.log(JSON.stringify(j.diagnostics, null, 2))
+    const j = JSON.parse(raw) as { status_page_diagnostics?: unknown; diagnostics?: unknown }
+    if (j.status_page_diagnostics != null && typeof j.status_page_diagnostics === 'object') {
+      console.log('\n--- Status page / full backend diagnostics (status_page_diagnostics) ---\n')
+      console.log(JSON.stringify(j.status_page_diagnostics, null, 2))
     } else {
-      console.log('\n[doctor] Bundle has no diagnostics block (health snapshot missing).')
+      console.warn('\n[doctor] Bundle missing status_page_diagnostics (API may need deploy).')
+    }
+    if (j.diagnostics != null && typeof j.diagnostics === 'object') {
+      console.log('\n--- Economic + E2E detail (diagnostics) ---\n')
+      console.log(JSON.stringify(j.diagnostics, null, 2))
     }
   } catch (e) {
-    console.warn('[doctor] Could not print economic/E2E diagnostics:', (e as Error).message)
+    console.warn('[doctor] Could not print status diagnostics:', (e as Error).message)
   }
 }
 
@@ -225,7 +229,7 @@ function main(): void {
   }
 
   if (bundleWritten) {
-    printBundleEconomicE2eDiagnostics(path.join(root, STATUS_DEBUG_BUNDLE_FILE))
+    printStatusPageDiagnostics(path.join(root, STATUS_DEBUG_BUNDLE_FILE))
   }
 
   if (bundleWritten && !tolerateBundleDb) {

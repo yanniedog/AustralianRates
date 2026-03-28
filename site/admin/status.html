@@ -32,6 +32,12 @@
             <button type="button" class="secondary is-active" id="status-view-failures-only" aria-pressed="true">Show only failures</button>
             <button type="button" class="secondary" id="status-view-all" aria-pressed="false">Show all</button>
         </div>
+        <section class="card admin-card" id="backend-overview-card">
+            <h2>Backend overview</h2>
+            <p class="hint">Cross-section summary of health, economic, E2E, CDR, coverage gaps, lender register, replay queue, probes, backlog, and logs. Matches <code class="mono">status_page_diagnostics</code> in the downloaded debug bundle and in <code class="mono">npm run doctor</code> output.</p>
+            <div id="backend-overview-wrap">Loading…</div>
+        </section>
+
         <div class="admin-actions">
             <button type="button" class="primary" id="run-check-btn">Run check now</button>
             <button type="button" id="run-cdr-audit-btn" class="secondary">Run CDR audit</button>
@@ -137,8 +143,8 @@
     <script src="admin-sidebar.js?v=2544dd6"></script>
     <script src="../ui-icons.js?v=2544dd6"></script>
     <script src="../frame.js?v=2544dd6"></script>
-    <script src="status-coverage-gaps.js?v=statusdiag1"></script>
-    <script src="status-page.js?v=statusdiag1"></script>
+    <script src="status-coverage-gaps.js?v=statusdiag2"></script>
+    <script src="status-page.js?v=statusdiag2"></script>
 </body>
 </html>
 

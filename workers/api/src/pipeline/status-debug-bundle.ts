@@ -26,6 +26,7 @@ import {
 import type { EnvBindings } from '../types'
 import { extractTraceback, parseLogContext, queryProblemLogs } from '../utils/logger'
 import { mapHealthCheckRunRow, type ParsedHealthRun } from '../utils/map-health-run'
+import { buildStatusPageDiagnosticsFromBundle } from './status-page-diagnostics'
 import {
   mergeRemediationHints,
   remediationFromActionableCodes,
@@ -484,6 +485,8 @@ export async function buildStatusDebugBundle(
     ])
     out.remediation = { hints: merged, note: 'Suggestions only; call each path with admin auth.' }
   }
+
+  out.status_page_diagnostics = buildStatusPageDiagnosticsFromBundle(out)
 
   return out
 }

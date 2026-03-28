@@ -17,6 +17,8 @@
     var payloadViewerStatusEl = document.getElementById('payload-viewer-status');
     var payloadViewerEl = document.getElementById('payload-viewer-wrap');
     var historyEl = document.getElementById('history-wrap');
+    var backendOverviewWrapEl = document.getElementById('backend-overview-wrap');
+    var backendOverviewCardEl = document.getElementById('backend-overview-card');
     var cdrAuditStatusEl = document.getElementById('cdr-audit-status');
     var cdrAuditOverviewEl = document.getElementById('cdr-audit-overview');
     var cdrAuditWrapEl = document.getElementById('cdr-audit-wrap');
@@ -29,6 +31,180 @@
     var mainContentEl = document.getElementById('main-content');
     var showFailuresOnly = true;
     var syncFailuresFilterScheduled = false;
+
+    /** Latest payloads from each Status page source (mirrors status_page_diagnostics inputs). */
+    var snapshotState = {
+        latest: null,
+        cdrReport: null,
+        coverageReport: null,
+        lenderReport: null,
+        replayData: null,
+        probeEvents: null,
+        loadErrors: []
+    };
+
+    function pushSnapshotError(label, err) {
+        var msg = err && err.message ? err.message : String(err);
+        snapshotState.loadErrors.push(label + ': ' + msg);
+        if (snapshotState.loadErrors.length > 12) snapshotState.loadErrors.shift();
+    }
+
+    function renderBackendOverview() {
+        if (!backendOverviewWrapEl) return;
+        var latest = snapshotState.latest;
+        var attention = [];
+        var worst = 'green';
+
+        function bump(sev) {
+            if (sev === 'red') worst = 'red';
+            else if (sev === 'yellow' && worst !== 'red') worst = 'yellow';
+        }
+
+        if (snapshotState.loadErrors.length) {
+            snapshotState.loadErrors.forEach(function (e) {
+                attention.push('Load error: ' + e);
+            });
+            bump('red');
+        }
+
+        var integ = null;
+        if (!latest) {
+            attention.push('No health run loaded yet.');
+            bump('yellow');
+        } else {
+            integ = latest.integrity;
+            if (!latest.overall_ok) {
+                attention.push('Health: overall_ok=false');
+                bump('red');
+            }
+            var hf = Array.isArray(latest.failures) ? latest.failures : [];
+            if (hf.length) {
+                attention.push('Health failure signals (' + hf.length + '): ' + hf.slice(0, 6).map(function (x) { return String(x); }).join('; ') + (hf.length > 6 ? '…' : ''));
+                bump('red');
+            }
+            if (integ && integ.ok === false) {
+                var fc = (integ.checks || []).filter(function (c) { return !c.passed; }).map(function (c) { return c.name || ''; }).filter(Boolean);
+                attention.push('Integrity failed: ' + fc.slice(0, 6).join(', ') + (fc.length > 6 ? '…' : ''));
+                bump('red');
+            }
+            var econ = latest.economic && latest.economic.summary ? latest.economic.summary : null;
+            if (econ && econ.severity === 'red') {
+                attention.push('Economic coverage: severity red');
+                bump('red');
+            } else if (econ && econ.severity === 'yellow') {
+                attention.push('Economic coverage: severity yellow');
+                bump('yellow');
+            }
+            var e2e = latest.e2e;
+            if (e2e && !e2e.aligned) {
+                attention.push('E2E not aligned: ' + (e2e.reasonCode || ''));
+                bump('red');
+            }
+            var act = Array.isArray(latest.actionable) ? latest.actionable : [];
+            if (act.length >= 5) {
+                attention.push('Actionable log groups: ' + act.length);
+                bump('red');
+            } else if (act.length >= 1) {
+                attention.push('Actionable log groups: ' + act.length);
+                bump('yellow');
+            }
+        }
+
+        var cdr = snapshotState.cdrReport;
+        if (cdr && cdr.ok === false) {
+            attention.push('CDR audit: ' + (cdr.totals && cdr.totals.failed != null ? cdr.totals.failed : 0) + ' failed check(s)');
+            bump('red');
+        }
+
+        var cov = snapshotState.coverageReport;
+        if (cov && cov.totals) {
+            var ge = Number(cov.totals.errors || 0);
+            var gg = Number(cov.totals.gaps || 0);
+            if (ge > 0) {
+                attention.push('Coverage gaps: ' + ge + ' error-class row(s)');
+                bump('red');
+            } else if (gg > 0) {
+                attention.push('Coverage gaps: ' + gg + ' open gap(s)');
+                bump('yellow');
+            }
+        }
+
+        var lu = snapshotState.lenderReport;
+        if (lu && lu.totals) {
+            var miss = Number(lu.totals.missing_from_register || 0);
+            var drift = Number(lu.totals.endpoint_drift || 0);
+            if (miss > 0) {
+                attention.push('Lender universe: ' + miss + ' missing from register');
+                bump('red');
+            }
+            if (drift > 0) {
+                attention.push('Lender universe: ' + drift + ' endpoint drift');
+                bump('yellow');
+            }
+        }
+
+        var rq = snapshotState.replayData && snapshotState.replayData.rows ? snapshotState.replayData.rows : [];
+        var rf = 0;
+        var rqCount = 0;
+        for (var ri = 0; ri < rq.length; ri++) {
+            var st = String(rq[ri].status || '').toLowerCase();
+            if (st === 'failed') rf++;
+            if (st === 'queued' || st === 'dispatching') rqCount++;
+        }
+        if (rf > 0) {
+            attention.push('Replay queue: ' + rf + ' failed');
+            bump('red');
+        }
+        if (rqCount > 8) {
+            attention.push('Replay queue: ' + rqCount + ' queued/dispatching');
+            bump('yellow');
+        }
+
+        var pe = Array.isArray(snapshotState.probeEvents) ? snapshotState.probeEvents : [];
+        var badP = 0;
+        for (var pi = 0; pi < pe.length; pi++) {
+            var hs = pe[pi].httpStatus;
+            if (hs == null || hs < 200 || hs >= 300) badP++;
+        }
+        if (badP > 0) {
+            attention.push('Probe fetches: ' + badP + ' non-2xx');
+            bump('yellow');
+        }
+
+        var sevClass = worst === 'red' ? 'severity-red' : worst === 'yellow' ? 'severity-yellow' : 'severity-green';
+        if (backendOverviewCardEl) {
+            backendOverviewCardEl.className = 'card admin-card ' + sevClass;
+        }
+
+        var attBlock = attention.length
+            ? '<ul class="admin-backend-attention">' + attention.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>'
+            : '<p class="pill ok">No cross-section issues detected in loaded data.</p>';
+
+        var gridBits = [];
+        if (latest) {
+            gridBits.push(cardCell('Health run', '<span class="mono">' + esc(latest.run_id || '') + '</span>'));
+            gridBits.push(cardCell('Overall', boolPill(!!latest.overall_ok)));
+            gridBits.push(cardCell('E2E', boolPill(!!(latest.e2e && latest.e2e.aligned))));
+            gridBits.push(cardCell('Integrity', integ != null ? boolPill(!!integ.ok) : '—'));
+        }
+        if (cdr) {
+            gridBits.push(cardCell('CDR audit', boolPill(!!cdr.ok)));
+        }
+        if (cov && cov.totals) {
+            gridBits.push(cardCell('Coverage gaps', esc(String(cov.totals.gaps || 0))));
+            gridBits.push(cardCell('Coverage errors', esc(String(cov.totals.errors || 0))));
+        }
+        if (lu && lu.totals) {
+            gridBits.push(cardCell('Lender missing', esc(String(lu.totals.missing_from_register || 0))));
+            gridBits.push(cardCell('Lender drift', esc(String(lu.totals.endpoint_drift || 0))));
+        }
+        gridBits.push(cardCell('Replay rows', esc(String(rq.length))));
+        gridBits.push(cardCell('Probes loaded', esc(String(pe.length))));
+
+        backendOverviewWrapEl.innerHTML = '<div class="admin-backend-attention-wrap"><h3 class="admin-subheading">Attention</h3>' + attBlock + '</div>'
+            + '<div class="grid admin-backend-grid">' + gridBits.join('') + '</div>'
+            + '<p class="hint">Download <strong>debug bundle (JSON)</strong> above for <code class="mono">status_page_diagnostics</code> plus full raw sections (logs, remediation, backlog, payloads).</p>';
+    }
 
     function esc(v) {
         return String(v == null ? '' : v)
@@ -982,6 +1158,7 @@
             var res = await portal.fetchAdmin('/health?limit=48');
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            snapshotState.latest = data.latest || null;
             renderOverall(data.latest);
             renderE2E(data.latest);
             renderComponents(data.latest);
@@ -1002,6 +1179,8 @@
                 : (overallSev === 'yellow' || e2eSev === 'yellow' || economicSev === 'yellow' || issuesSev === 'yellow') ? 'yellow' : 'green';
             setStatusLineSeverity(statusEl, line, worst);
         } catch (err) {
+            snapshotState.latest = null;
+            pushSnapshotError('Health (/admin/health)', err);
             setStatusLineSeverity(statusEl, 'Failed to load status.', 'red');
             overallEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
         }
@@ -1029,8 +1208,11 @@
             var res = await portal.fetchAdmin('/diagnostics/fetch-events?probe_only=1&limit=40', { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            snapshotState.probeEvents = data.events || [];
             renderProbePayloads(data.events || []);
         } catch (err) {
+            snapshotState.probeEvents = [];
+            pushSnapshotError('Probe payloads', err);
             probePayloadsEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
             var probeCard = probePayloadsEl && probePayloadsEl.closest ? probePayloadsEl.closest('.card') : null;
             applyCardSeverity(probeCard, 'red');
@@ -1044,8 +1226,11 @@
             var res = await portal.fetchAdmin('/cdr-audit', { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            snapshotState.cdrReport = data.report || null;
             renderCdrAudit(data.report || null);
         } catch (err) {
+            snapshotState.cdrReport = null;
+            pushSnapshotError('CDR audit', err);
             cdrAuditStatusEl.textContent = 'Failed to load CDR audit.';
             cdrAuditOverviewEl.innerHTML = '';
             cdrAuditWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
@@ -1062,6 +1247,7 @@
             var data = await res.json();
             latestCoverageGapRemediation = data.last_remediation || null;
             var report = data.report || null;
+            snapshotState.coverageReport = report;
             if (coverageGapManager) {
                 coverageGapManager.render(report, latestCoverageGapRemediation);
             } else {
@@ -1076,6 +1262,8 @@
             var coverageGapCard = coverageGapOverviewEl && coverageGapOverviewEl.closest ? coverageGapOverviewEl.closest('.card') : null;
             applyCardSeverity(coverageGapCard, gapSev);
         } catch (err) {
+            snapshotState.coverageReport = null;
+            pushSnapshotError('Coverage gaps', err);
             latestCoverageGapRemediation = null;
             coverageGapOverviewEl.innerHTML = '';
             coverageGapWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
@@ -1094,8 +1282,11 @@
             var res = await portal.fetchAdmin('/diagnostics/lender-universe' + (forceRefresh ? '?refresh=1' : ''), { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            snapshotState.lenderReport = data.report || null;
             renderLenderUniverse(data.report || null);
         } catch (err) {
+            snapshotState.lenderReport = null;
+            pushSnapshotError('Lender universe', err);
             lenderUniverseOverviewEl.innerHTML = '';
             lenderUniverseWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
             var lenderCard = lenderUniverseOverviewEl && lenderUniverseOverviewEl.closest ? lenderUniverseOverviewEl.closest('.card') : null;
@@ -1109,8 +1300,11 @@
             var res = await portal.fetchAdmin('/diagnostics/replay-queue?limit=40', { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var data = await res.json();
+            snapshotState.replayData = data;
             renderReplayQueue(data);
         } catch (err) {
+            snapshotState.replayData = null;
+            pushSnapshotError('Replay queue', err);
             replayQueueWrapEl.innerHTML = '<div class="mono">' + esc(err && err.message ? err.message : String(err)) + '</div>';
             var replayCard = replayQueueWrapEl && replayQueueWrapEl.closest ? replayQueueWrapEl.closest('.card') : null;
             applyCardSeverity(replayCard, 'red');
@@ -1136,6 +1330,7 @@
     }
 
     async function refreshAll(forceRefresh) {
+        snapshotState.loadErrors = [];
         await Promise.all([
             loadStatus(),
             loadCdrAudit(),
@@ -1144,6 +1339,7 @@
             loadLenderUniverse(!!forceRefresh),
             loadReplayQueue()
         ]);
+        renderBackendOverview();
         scheduleSyncFailuresFilter();
     }
 

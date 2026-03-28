@@ -165,6 +165,19 @@
     padding-left: 1.25rem;
 }
 
+.admin-status .admin-backend-attention-wrap {
+    margin-bottom: 1rem;
+}
+
+.admin-status .admin-backend-attention {
+    margin: 0.35rem 0 0;
+    padding-left: 1.25rem;
+}
+
+.admin-status .admin-backend-grid {
+    margin-top: 0.5rem;
+}
+
 .admin-status .integrity-empty {
     color: var(--ar-text-muted);
 }
