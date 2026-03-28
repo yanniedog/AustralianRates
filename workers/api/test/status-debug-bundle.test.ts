@@ -6,6 +6,7 @@ describe('status-debug-bundle', () => {
   it('parseStatusDebugSections defaults to full set', () => {
     const s = parseStatusDebugSections(undefined)
     expect(s.has('health')).toBe(true)
+    expect(s.has('integrity_audit')).toBe(true)
     expect(s.has('remediation')).toBe(true)
   })
 

@@ -7,6 +7,11 @@ import type {
 import { getDiagnosticsBacklog } from '../db/diagnostics-backlog'
 import { readFetchEventPayloadTruncated, getRecentFetchEvents } from '../db/fetch-events'
 import { getLatestHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
+import {
+  getLatestIntegrityAuditRun,
+  listIntegrityAuditRuns,
+  type IntegrityAuditRunRow,
+} from '../db/integrity-audit-runs'
 import { listReplayQueueRows } from '../db/ingest-replay-queue'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from './cdr-audit'
 import {
@@ -37,6 +42,7 @@ import type { CoverageGapAuditReport } from './coverage-gap-audit'
 
 const DEFAULT_SECTIONS = [
   'health',
+  'integrity_audit',
   'logs',
   'cdr',
   'coverage',
@@ -133,6 +139,32 @@ function parseIsoDateMs(value: string | null | undefined): number | null {
   if (!text) return null
   const ms = Date.parse(text)
   return Number.isFinite(ms) ? ms : null
+}
+
+function parseIntegrityAuditRunRow(row: IntegrityAuditRunRow | null): Record<string, unknown> | null {
+  if (!row) return null
+  let summary: Record<string, unknown> = {}
+  let findings: unknown[] = []
+  try {
+    summary = JSON.parse(row.summary_json || '{}') as Record<string, unknown>
+  } catch {
+    summary = {}
+  }
+  try {
+    findings = JSON.parse(row.findings_json || '[]') as unknown[]
+  } catch {
+    findings = []
+  }
+  return {
+    run_id: row.run_id,
+    checked_at: row.checked_at,
+    trigger_source: row.trigger_source,
+    overall_ok: row.overall_ok === 1,
+    duration_ms: row.duration_ms,
+    status: row.status,
+    summary,
+    findings,
+  }
 }
 
 function parseCollectionDateMs(value: string | null | undefined): number | null {
@@ -269,6 +301,7 @@ export type BuildStatusDebugBundleQuery = {
   coverageLimit?: string
   replayLimit?: string
   probeEventLimit?: string
+  integrityHistoryLimit?: string
 }
 
 export async function buildStatusDebugBundle(
@@ -289,6 +322,7 @@ export async function buildStatusDebugBundle(
   const coverageLimit = clamp(Math.floor(Number(query.coverageLimit) || 100), 1, 500)
   const replayLimit = clamp(Math.floor(Number(query.replayLimit) || 50), 1, 200)
   const probeEventLimit = clamp(Math.floor(Number(query.probeEventLimit) || 40), 1, 100)
+  const integrityHistoryLimit = clamp(Math.floor(Number(query.integrityHistoryLimit) || 24), 1, 50)
 
   const sinceExplicit = String(query.since || '').trim() || undefined
 
@@ -333,6 +367,21 @@ export async function buildStatusDebugBundle(
   let logEntriesOut: Array<Record<string, unknown>> = []
 
   const parallel: Promise<void>[] = []
+
+  if (sections.has('integrity_audit')) {
+    parallel.push(
+      (async () => {
+        const [latestRow, historyRows] = await Promise.all([
+          getLatestIntegrityAuditRun(env.DB),
+          listIntegrityAuditRuns(env.DB, integrityHistoryLimit),
+        ])
+        out.integrity_audit = {
+          latest: parseIntegrityAuditRunRow(latestRow),
+          history: historyRows.map((r) => parseIntegrityAuditRunRow(r)).filter(Boolean),
+        }
+      })(),
+    )
+  }
 
   if (sections.has('logs')) {
     parallel.push(

@@ -132,6 +132,7 @@
 .admin-status #economic-series-wrap,
 .admin-status #components-wrap,
 .admin-status #integrity-wrap,
+.admin-status #integrity-audit-stored-wrap,
 .admin-status #issues-wrap,
 .admin-status #coverage-gap-wrap,
 .admin-status #lender-universe-wrap,
@@ -184,6 +185,42 @@
 .admin-status .integrity-empty a {
     color: var(--ar-accent);
 }
+
+.admin-status .integrity-audit-traffic {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+}
+.admin-status .integrity-audit-light {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 3px solid var(--ar-line-strong);
+    flex-shrink: 0;
+}
+.admin-status .integrity-audit-light.green { background: var(--ar-positive); box-shadow: 0 0 10px var(--ar-positive); }
+.admin-status .integrity-audit-light.amber { background: var(--ar-warning); box-shadow: 0 0 10px var(--ar-warning); }
+.admin-status .integrity-audit-light.red { background: var(--ar-danger); box-shadow: 0 0 10px var(--ar-danger); }
+.admin-status .integrity-audit-light.none { background: var(--ar-text-muted); }
+.admin-status .integrity-audit-status-text { font-weight: 600; }
+.admin-status .integrity-audit-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.65rem;
+    margin: 0.75rem 0;
+}
+.admin-status .integrity-audit-summary-cell {
+    padding: 0.45rem 0.55rem;
+    background: var(--ar-surface-2);
+    border-radius: 6px;
+}
+.admin-status .integrity-audit-summary-cell .label { font-size: 0.82rem; color: var(--ar-text-muted); }
+.admin-status .integrity-audit-summary-cell .value { font-weight: 600; }
+.admin-status .integrity-audit-history { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.9rem; }
+.admin-status .integrity-audit-findings .pass { color: var(--ar-positive); }
+.admin-status .integrity-audit-findings .fail { color: var(--ar-danger); }
 
 .admin-status table,
 .admin-runs table,

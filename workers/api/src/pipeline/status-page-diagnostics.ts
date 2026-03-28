@@ -34,6 +34,68 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     worst = worstOf(worst, 'red')
   }
 
+  const iaBlock = bundle.integrity_audit as {
+    latest?: {
+      run_id?: string
+      checked_at?: string
+      trigger_source?: string
+      status?: string
+      overall_ok?: boolean
+      duration_ms?: number
+      summary?: Record<string, unknown>
+      findings?: Array<{ check?: string; passed?: boolean; count?: unknown; category?: string }>
+    } | null
+    history?: unknown[]
+  } | undefined
+  const iaLatest = iaBlock?.latest ?? null
+  let dataIntegrityAuditSnapshot: Record<string, unknown> | null = null
+  if (iaBlock) {
+    if (!iaLatest) {
+      attention.push('No stored D1 integrity audit run (open Data integrity or wait for daily cron).')
+      worst = worstOf(worst, 'yellow')
+      dataIntegrityAuditSnapshot = {
+        latest: null,
+        history_runs_returned: Array.isArray(iaBlock.history) ? iaBlock.history.length : 0,
+      }
+    } else {
+      const st = String(iaLatest.status || '').toLowerCase()
+      const findings = Array.isArray(iaLatest.findings) ? iaLatest.findings : []
+      const failedFindings = findings.filter((f) => f && f.passed === false)
+      const summary = iaLatest.summary || {}
+      dataIntegrityAuditSnapshot = {
+        run_id: iaLatest.run_id,
+        checked_at: iaLatest.checked_at,
+        trigger_source: iaLatest.trigger_source,
+        status: iaLatest.status,
+        overall_ok: iaLatest.overall_ok,
+        duration_ms: iaLatest.duration_ms,
+        summary: {
+          total_checks: summary.total_checks,
+          passed: summary.passed,
+          failed: summary.failed,
+          dead_data_issues: summary.dead_data_issues,
+          invalid_data_issues: summary.invalid_data_issues,
+          duplicate_data_issues: summary.duplicate_data_issues,
+          other_issues: summary.other_issues,
+        },
+        failed_findings_sample: failedFindings.slice(0, 20).map((f) => ({
+          check: f.check,
+          count: f.count,
+          category: f.category,
+        })),
+        failed_finding_count: failedFindings.length,
+        history_runs_returned: Array.isArray(iaBlock.history) ? iaBlock.history.length : 0,
+      }
+      if (st === 'red' || iaLatest.overall_ok === false) {
+        attention.push(`D1 integrity audit: ${st === 'red' ? 'status red' : 'overall_ok false'} (${iaLatest.run_id})`)
+        worst = worstOf(worst, 'red')
+      } else if (st === 'amber') {
+        attention.push('D1 integrity audit: amber (minor / informational)')
+        worst = worstOf(worst, 'yellow')
+      }
+    }
+  }
+
   if (latest) {
     if (!latest.overall_ok) {
       attention.push(`Health run overall_ok=false (${latest.run_id})`)
@@ -311,6 +373,7 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
         }
       : null,
     economic_and_e2e: bundle.diagnostics ?? null,
+    data_integrity_audit: dataIntegrityAuditSnapshot,
     cdr_audit: cdrSnapshot,
     coverage_gaps: coverageSnapshot,
     lender_universe: lenderSnapshot,
@@ -320,6 +383,6 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     problem_logs_window: logsSnapshot,
     remediation: remediationSnapshot,
     note:
-      'Mirrors admin Status page data sources: health, economic, E2E, integrity, actionable, CDR audit, coverage gaps, lender universe, replay queue, probes, backlog, logs, remediation. Full detail remains in sibling bundle keys.',
+      'Mirrors admin Status page data sources: health, health integrity checks, stored D1 integrity audit, economic, E2E, actionable, CDR audit, coverage gaps, lender universe, replay queue, probes, backlog, logs, remediation. Raw audit rows: bundle.integrity_audit.',
   }
 }

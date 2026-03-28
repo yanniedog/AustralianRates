@@ -177,6 +177,20 @@ function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
     process.exit(1)
   }
 
+  const iaLatest = (j.integrity_audit as { latest?: Record<string, unknown> | null } | undefined)?.latest
+  if (iaLatest && typeof iaLatest === 'object') {
+    const st = String(iaLatest.status || '').toLowerCase()
+    const okRaw = iaLatest.overall_ok
+    const ok = okRaw === true || okRaw === 1
+    if (st === 'red' || !ok) {
+      console.error(
+        '[doctor] Stored D1 data integrity audit failed (admin Data integrity page). Open bundle integrity_audit or fix data and re-run audit.',
+      )
+      console.error(`  run_id: ${String(iaLatest.run_id || '')} status: ${String(iaLatest.status || '')} overall_ok: ${String(okRaw)}`)
+      process.exit(1)
+    }
+  }
+
   const cdrReport = (j.cdr_audit as { report?: unknown } | undefined)?.report
   if (cdrReport && cdrAuditHasStructuralFailure(cdrReport)) {
     console.error(
@@ -189,7 +203,11 @@ function assertStatusBundleNoDbFailures(bundleAbsPath: string): void {
 function printStatusPageDiagnostics(bundleAbsPath: string): void {
   try {
     const raw = readFileSync(bundleAbsPath, 'utf8')
-    const j = JSON.parse(raw) as { status_page_diagnostics?: unknown; diagnostics?: unknown }
+    const j = JSON.parse(raw) as {
+      status_page_diagnostics?: unknown
+      diagnostics?: unknown
+      integrity_audit?: unknown
+    }
     if (j.status_page_diagnostics != null && typeof j.status_page_diagnostics === 'object') {
       console.log('\n--- Status page / full backend diagnostics (status_page_diagnostics) ---\n')
       console.log(JSON.stringify(j.status_page_diagnostics, null, 2))
@@ -199,6 +217,12 @@ function printStatusPageDiagnostics(bundleAbsPath: string): void {
     if (j.diagnostics != null && typeof j.diagnostics === 'object') {
       console.log('\n--- Economic + E2E detail (diagnostics) ---\n')
       console.log(JSON.stringify(j.diagnostics, null, 2))
+    }
+    if (j.integrity_audit != null && typeof j.integrity_audit === 'object') {
+      console.log('\n--- D1 data integrity audit (integrity_audit; same as admin Data integrity page) ---\n')
+      console.log(JSON.stringify(j.integrity_audit, null, 2))
+    } else {
+      console.warn('\n[doctor] Bundle missing integrity_audit (API may need deploy or sections= omitted it).')
     }
   } catch (e) {
     console.warn('[doctor] Could not print status diagnostics:', (e as Error).message)

@@ -34,7 +34,7 @@
         </div>
         <section class="card admin-card" id="backend-overview-card">
             <h2>Backend overview</h2>
-            <p class="hint">Cross-section summary of health, economic, E2E, CDR, coverage gaps, lender register, replay queue, probes, backlog, and logs. Matches <code class="mono">status_page_diagnostics</code> in the downloaded debug bundle and in <code class="mono">npm run doctor</code> output.</p>
+            <p class="hint">Cross-section summary of health, economic, E2E, runtime integrity checks, stored D1 integrity audit, CDR, coverage gaps, lender register, replay queue, probes, backlog, and logs. Matches <code class="mono">status_page_diagnostics</code> and <code class="mono">integrity_audit</code> in the debug bundle and <code class="mono">npm run doctor</code> output.</p>
             <div id="backend-overview-wrap">Loading…</div>
         </section>
 
@@ -78,7 +78,14 @@
 
         <section class="card admin-card">
             <h2>Data integrity checks</h2>
+            <p class="hint">From the latest <strong>health</strong> run (<code class="mono">runIntegrityChecks</code>). For the full D1 audit (dead/invalid/duplicate data), see the section below.</p>
             <div id="integrity-wrap"></div>
+        </section>
+
+        <section class="card admin-card">
+            <h2>D1 data integrity audit</h2>
+            <p class="hint">Stored audit results (dead, invalid, duplicate, erroneous). Runs daily at 04:00 UTC; run manually on <a href="integrity.html">Data integrity</a>. Same payload as <code class="mono">GET /admin/integrity-audit</code> and <code class="mono">integrity_audit</code> in the debug bundle.</p>
+            <div id="integrity-audit-stored-wrap">Loading…</div>
         </section>
 
         <section class="card admin-card">

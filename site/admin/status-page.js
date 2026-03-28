@@ -12,6 +12,7 @@
     var economicFindingsEl = document.getElementById('economic-findings-wrap');
     var economicSeriesEl = document.getElementById('economic-series-wrap');
     var integrityEl = document.getElementById('integrity-wrap');
+    var integrityAuditStoredEl = document.getElementById('integrity-audit-stored-wrap');
     var issuesEl = document.getElementById('issues-wrap');
     var probePayloadsEl = document.getElementById('probe-payloads-wrap');
     var payloadViewerStatusEl = document.getElementById('payload-viewer-status');
@@ -40,6 +41,7 @@
         lenderReport: null,
         replayData: null,
         probeEvents: null,
+        integrityAudit: null,
         loadErrors: []
     };
 
@@ -171,6 +173,24 @@
             bump('yellow');
         }
 
+        var iaBody = snapshotState.integrityAudit;
+        if (iaBody && iaBody.ok) {
+            var d1 = iaBody.latest;
+            if (d1) {
+                var d1st = String(d1.status || '').toLowerCase();
+                if (d1st === 'red' || d1.overall_ok === false) {
+                    attention.push('D1 integrity audit: ' + (d1st === 'red' ? 'status red' : 'overall failed') + ' (' + (d1.run_id || '') + ')');
+                    bump('red');
+                } else if (d1st === 'amber') {
+                    attention.push('D1 integrity audit: amber (minor / informational)');
+                    bump('yellow');
+                }
+            } else {
+                attention.push('D1 integrity audit: no stored run yet');
+                bump('yellow');
+            }
+        }
+
         var sevClass = worst === 'red' ? 'severity-red' : worst === 'yellow' ? 'severity-yellow' : 'severity-green';
         if (backendOverviewCardEl) {
             backendOverviewCardEl.className = 'card admin-card ' + sevClass;
@@ -198,12 +218,21 @@
             gridBits.push(cardCell('Lender missing', esc(String(lu.totals.missing_from_register || 0))));
             gridBits.push(cardCell('Lender drift', esc(String(lu.totals.endpoint_drift || 0))));
         }
+        if (iaBody && iaBody.ok) {
+            var d1g = iaBody.latest;
+            if (d1g) {
+                gridBits.push(cardCell('D1 audit status', esc(String(d1g.status || '—'))));
+                gridBits.push(cardCell('D1 audit OK', boolPill(!!d1g.overall_ok)));
+            } else {
+                gridBits.push(cardCell('D1 audit', 'none'));
+            }
+        }
         gridBits.push(cardCell('Replay rows', esc(String(rq.length))));
         gridBits.push(cardCell('Probes loaded', esc(String(pe.length))));
 
         backendOverviewWrapEl.innerHTML = '<div class="admin-backend-attention-wrap"><h3 class="admin-subheading">Attention</h3>' + attBlock + '</div>'
             + '<div class="grid admin-backend-grid">' + gridBits.join('') + '</div>'
-            + '<p class="hint">Download <strong>debug bundle (JSON)</strong> above for <code class="mono">status_page_diagnostics</code> plus full raw sections (logs, remediation, backlog, payloads).</p>';
+            + '<p class="hint">Download <strong>debug bundle (JSON)</strong> above for <code class="mono">status_page_diagnostics</code>, <code class="mono">integrity_audit</code>, and full raw sections (logs, remediation, backlog, payloads).</p>';
     }
 
     function esc(v) {
@@ -421,6 +450,7 @@
             '#economic-findings-wrap',
             '#economic-series-wrap',
             '#integrity-wrap',
+            '#integrity-audit-stored-wrap',
             '#coverage-gap-wrap',
             '#lender-universe-wrap',
             '#replay-queue-wrap',
@@ -852,6 +882,104 @@
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
+    }
+
+    function severityFromStoredAuditLatest(latest) {
+        if (!latest) return 'yellow';
+        var st = String(latest.status || '').toLowerCase();
+        if (st === 'red' || latest.overall_ok === false) return 'red';
+        if (st === 'amber') return 'yellow';
+        return 'green';
+    }
+
+    function trafficClassStored(status) {
+        if (status === 'green') return 'green';
+        if (status === 'amber') return 'amber';
+        if (status === 'red') return 'red';
+        return 'none';
+    }
+
+    function trafficLabelStored(status) {
+        if (status === 'green') return 'All checks passed';
+        if (status === 'amber') return 'Minor issues (informational only)';
+        if (status === 'red') return 'Issues require attention';
+        return 'No audit run yet';
+    }
+
+    function renderIntegrityAuditStored(data) {
+        if (!integrityAuditStoredEl) return;
+        var wrap = integrityAuditStoredEl;
+        var card = wrap.closest ? wrap.closest('.card') : null;
+        if (!data || !data.ok) {
+            wrap.innerHTML = '<p class="integrity-empty">Could not load D1 integrity audit.</p>';
+            applyCardSeverity(card, 'red');
+            return;
+        }
+        var latest = data.latest;
+        if (!latest) {
+            wrap.innerHTML = '<div class="integrity-audit-traffic"><div class="integrity-audit-light none" aria-hidden="true"></div><div><div class="integrity-audit-status-text">No audit run yet</div><p class="admin-status-line">Wait for daily run (04:00 UTC) or run manually on <a href="integrity.html">Data integrity</a>.</p></div></div>';
+            applyCardSeverity(card, 'yellow');
+            scheduleSyncFailuresFilter();
+            return;
+        }
+        var status = String(latest.status || '').toLowerCase();
+        if (status !== 'green' && status !== 'amber' && status !== 'red') status = 'none';
+        var tClass = trafficClassStored(status === 'none' ? 'none' : status);
+        var summary = latest.summary && typeof latest.summary === 'object' ? latest.summary : {};
+        var findings = Array.isArray(latest.findings) ? latest.findings : [];
+        var summaryHtml = [
+            '<div class="integrity-audit-summary-cell"><div class="label">Total checks</div><div class="value">' + esc(summary.total_checks) + '</div></div>',
+            '<div class="integrity-audit-summary-cell"><div class="label">Passed</div><div class="value">' + esc(summary.passed) + '</div></div>',
+            '<div class="integrity-audit-summary-cell"><div class="label">Failed</div><div class="value">' + esc(summary.failed) + '</div></div>',
+            '<div class="integrity-audit-summary-cell"><div class="label">Dead data</div><div class="value">' + esc(summary.dead_data_issues) + '</div></div>',
+            '<div class="integrity-audit-summary-cell"><div class="label">Invalid</div><div class="value">' + esc(summary.invalid_data_issues) + '</div></div>',
+            '<div class="integrity-audit-summary-cell"><div class="label">Duplicate</div><div class="value">' + esc(summary.duplicate_data_issues) + '</div></div>',
+            '<div class="integrity-audit-summary-cell"><div class="label">Other</div><div class="value">' + esc(summary.other_issues) + '</div></div>'
+        ].join('');
+        var findingsRows = findings.map(function (f) {
+            var passClass = f.passed ? 'pass' : 'fail';
+            var count = f.count != null ? esc(String(f.count)) : '—';
+            var rowF = f.passed ? 'ok' : 'bad';
+            return '<tr data-ar-status="' + rowF + '"><td>' + esc(f.check) + '</td><td><span class="' + passClass + '">' + (f.passed ? 'Pass' : 'Fail') + '</span></td><td>' + count + '</td><td>' + esc(f.category) + '</td></tr>';
+        });
+        var findingsHtml = findingsRows.length
+            ? '<h3 class="admin-subheading">Findings</h3><div class="integrity-audit-findings"><table><thead><tr><th>Check</th><th>Result</th><th>Count</th><th>Category</th></tr></thead><tbody>' + findingsRows.join('') + '</tbody></table></div>'
+            : '<p class="admin-status-line">No findings rows in this run.</p>';
+        var hist = Array.isArray(data.history) ? data.history : [];
+        var histHtml = hist.length
+            ? '<h3 class="admin-subheading">Recent runs</h3><ul class="integrity-audit-history">' + hist.slice(0, 14).map(function (row) {
+                var st = String(row.status || '').toLowerCase();
+                var light = st === 'green' ? 'green' : st === 'amber' ? 'amber' : st === 'red' ? 'red' : 'none';
+                return '<li><span class="integrity-audit-light ' + light + '" style="width:10px;height:10px;display:inline-block;vertical-align:middle;margin-right:6px;"></span> ' + esc(row.checked_at) + ' | ' + esc(row.trigger_source) + ' | ' + esc(row.status) + '</li>';
+            }).join('') + '</ul>'
+            : '';
+        wrap.innerHTML = '<div class="integrity-audit-traffic">'
+            + '<div class="integrity-audit-light ' + tClass + '" aria-hidden="true"></div>'
+            + '<div><div class="integrity-audit-status-text">' + esc(trafficLabelStored(status === 'none' ? 'none' : status)) + '</div>'
+            + '<p class="admin-status-line">Run <span class="mono">' + esc(latest.run_id || '') + '</span> | ' + esc(latest.checked_at || '') + ' | ' + esc(latest.trigger_source || '') + ' | ' + (latest.duration_ms != null ? esc(String(latest.duration_ms)) + ' ms' : '') + ' | overall ' + boolPill(!!latest.overall_ok) + '</p>'
+            + '<p class="admin-status-line"><a href="integrity.html">Open Data integrity</a> for full history and <strong>Run audit now</strong>.</p></div></div>'
+            + '<div class="integrity-audit-summary-grid">' + summaryHtml + '</div>'
+            + findingsHtml
+            + histHtml;
+        applyCardSeverity(card, severityFromStoredAuditLatest(latest));
+        scheduleSyncFailuresFilter();
+    }
+
+    async function loadIntegrityAudit() {
+        if (!integrityAuditStoredEl) return;
+        try {
+            var res = await portal.fetchAdmin('/integrity-audit?limit=20', { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var body = await res.json();
+            snapshotState.integrityAudit = body;
+            renderIntegrityAuditStored(body);
+        } catch (err) {
+            pushSnapshotError('integrity-audit', err);
+            snapshotState.integrityAudit = null;
+            integrityAuditStoredEl.innerHTML = '<p class="integrity-empty">Failed to load D1 integrity audit.</p>';
+            var ic = integrityAuditStoredEl.closest ? integrityAuditStoredEl.closest('.card') : null;
+            applyCardSeverity(ic, 'red');
+        }
     }
 
     function renderIssues(latest) {
@@ -1335,6 +1463,7 @@
         snapshotState.loadErrors = [];
         await Promise.all([
             loadStatus(),
+            loadIntegrityAudit(),
             loadCdrAudit(),
             loadProbePayloads(),
             loadCoverageGapAudit(!!forceRefresh),
