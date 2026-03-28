@@ -64,17 +64,27 @@ describe('economic admin coverage', () => {
   })
 
   it('returns economic summary from admin health history', async () => {
-    const report = await runEconomicCoverageAudit(env.DB, { checkedAt: '2026-03-26T00:00:00.000Z' })
+    // Must be within pruneHealthCheckRuns retention (1 day) or the row is deleted before GET /admin/health runs.
+    const checkedAt = new Date().toISOString()
+    const report = await runEconomicCoverageAudit(env.DB, { checkedAt })
     await insertHealthCheckRun(env.DB, {
       runId: 'health:test:economic',
-      checkedAt: '2026-03-26T00:00:00.000Z',
+      checkedAt,
       triggerSource: 'manual',
       overallOk: false,
       durationMs: 25,
       componentsJson: '[]',
       integrityJson: '{"ok":true,"checks":[]}',
       economicJson: JSON.stringify(report),
-      e2eJson: '{"aligned":true,"reasonCode":"ok","checkedAt":"2026-03-26T00:00:00.000Z","targetCollectionDate":null,"sourceMode":"all","datasets":[],"criteria":{"scheduler":true,"runsProgress":true,"apiServesLatest":true}}',
+      e2eJson: JSON.stringify({
+        aligned: true,
+        reasonCode: 'ok',
+        checkedAt,
+        targetCollectionDate: null,
+        sourceMode: 'all',
+        datasets: [],
+        criteria: { scheduler: true, runsProgress: true, apiServesLatest: true },
+      }),
       e2eAligned: true,
       e2eReasonCode: 'ok',
       e2eReasonDetail: null,
