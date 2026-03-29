@@ -517,23 +517,29 @@
     }
 
     /**
-     * Tiny arrow after "%" for legend: deposit = green up / red down; mortgage = red up / green down.
+     * Arrow + absolute change after "%" for legend: deposit = green up / red down; mortgage = red up / green down.
+     * fractionDigits defaults to 2 (RBA / mortgage); use 1 for CPI-style values.
      */
-    function rateLegendArrowHtml(current, previous, semantics, goodColor, badColor) {
+    function rateLegendArrowHtml(current, previous, semantics, goodColor, badColor, fractionDigits) {
         var cur = Number(current);
         var prev = previous == null ? null : Number(previous);
+        var fd = fractionDigits == null ? 2 : Number(fractionDigits);
+        if (!Number.isFinite(fd) || fd < 0) fd = 2;
         if (prev == null || !Number.isFinite(cur) || !Number.isFinite(prev)) return '';
         if (Math.abs(cur - prev) < 1e-6) return '';
         var up = cur > prev;
-        var st = 'font-size:7px;line-height:1;margin-left:1px;display:inline-block;vertical-align:0.08em;';
+        var absChg = Math.abs(cur - prev);
+        var amt = absChg.toFixed(fd);
+        var stArrow = 'font-size:7px;line-height:1;margin-left:1px;display:inline-block;vertical-align:0.08em;';
+        var stAmt = 'font-size:7px;line-height:1;margin-left:2px;display:inline-block;vertical-align:0.08em;font-variant-numeric:tabular-nums;';
         var g = goodColor || '#059669';
         var b = badColor || '#dc2626';
-        if (semantics === 'mortgage') {
-            if (up) return '<span style="' + st + 'color:' + b + ';">\u25b2</span>';
-            return '<span style="' + st + 'color:' + g + ';">\u25bc</span>';
-        }
-        if (up) return '<span style="' + st + 'color:' + g + ';">\u25b2</span>';
-        return '<span style="' + st + 'color:' + b + ';">\u25bc</span>';
+        var c;
+        if (semantics === 'mortgage') c = up ? b : g;
+        else c = up ? g : b;
+        var arrow = up ? '\u25b2' : '\u25bc';
+        return '<span style="' + stArrow + 'color:' + c + ';">' + arrow + '</span>' +
+            '<span style="' + stAmt + 'color:' + c + ';">' + amt + '%</span>';
     }
 
     // ── View mode state for report charts ────────────────────────────────────

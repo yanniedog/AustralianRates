@@ -419,7 +419,7 @@
 
         // ── Legend ───────────────────────────────────────────────────────────
         var legendEl = document.createElement('div');
-        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;';
+        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;opacity:0.5;';
         var LEGEND_CAP = 15;
 
         function buildLegendItems(entries, ymd) {
@@ -438,7 +438,7 @@
         function buildMacroItems(rbaVal, cpiVal, ymd) {
             var items = [];
             if (rbaVal != null) { var p = M.prevStepValue(rbaData.points, ymd || ctxMax, 'rate'); var a = M.rateLegendArrowHtml(rbaVal, p, 'deposit', t.good, t.bad); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);"><span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span><span style="color:' + t.rba + ';opacity:0.8;">RBA</span><span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaVal.toFixed(2) + '%' + a + '</span></span>'); }
-            if (cpiVal != null) { var pc = M.prevStepValue(cpiPts, ymd || ctxMax, 'value'); var ac = M.rateLegendArrowHtml(Number(cpiVal), pc, 'deposit', t.good, t.bad); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span><span style="color:' + t.cpi + ';opacity:0.8;">CPI</span><span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiVal).toFixed(1) + '%' + ac + '</span></span>'); }
+            if (cpiVal != null) { var pc = M.prevStepValue(cpiPts, ymd || ctxMax, 'value'); var ac = M.rateLegendArrowHtml(Number(cpiVal), pc, 'deposit', t.good, t.bad, 1); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span><span style="color:' + t.cpi + ';opacity:0.8;">CPI</span><span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiVal).toFixed(1) + '%' + ac + '</span></span>'); }
             return items;
         }
         function buildEconomicOverlayLegendItems(param) {

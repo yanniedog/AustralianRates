@@ -430,7 +430,7 @@
 
         // ── Legend ──────────────────────────────────────────────────────────
         var legendEl = document.createElement('div');
-        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;';
+        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;opacity:0.5;';
 
         var LEGEND_CAP = 15;
 
@@ -473,7 +473,7 @@
             }
             if (cpiVal != null) {
                 var prevC = M.prevStepValue(cpiPts, crosshairYmd || ctxMax, 'value');
-                var arrC = M.rateLegendArrowHtml(Number(cpiVal), prevC, 'deposit', t.good, t.bad);
+                var arrC = M.rateLegendArrowHtml(Number(cpiVal), prevC, 'deposit', t.good, t.bad, 1);
                 items.push(
                     '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
                     '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
