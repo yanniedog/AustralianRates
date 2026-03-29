@@ -356,10 +356,10 @@
                     '<div class="deposit-balance-track-wrap">' +
                         '<div class="deposit-balance-ruler" aria-hidden="true">' +
                             '<span style="left:0%"><span>$0</span></span>' +
-                            '<span style="left:5%"><span>$50k</span></span>' +
-                            '<span style="left:25%"><span>$250k</span></span>' +
-                            '<span style="left:50%"><span>$1m</span></span>' +
-                            '<span style="left:75%"><span>$5m</span></span>' +
+                            '<span style="left:0.5%"><span>$50k</span></span>' +
+                            '<span style="left:2.5%"><span>$250k</span></span>' +
+                            '<span style="left:10%"><span>$1m</span></span>' +
+                            '<span style="left:50%"><span>$5m</span></span>' +
                             '<span style="left:100%"><span>$10m</span></span>' +
                         '</div>' +
                         '<div class="deposit-balance-dual">' +
