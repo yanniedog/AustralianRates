@@ -1,7 +1,7 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentSavingsRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
-import { addBankWhere, rows, safeLimit } from '../query-common'
+import { addBalanceBandOverlapWhere, addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
   MAX_PUBLIC_RATE,
@@ -36,6 +36,8 @@ export async function querySavingsTimeseries(db: D1Database, input: SavingsTimes
   if (productOrSeriesKey) { where.push('t.product_key = ?'); binds.push(productOrSeriesKey) }
   if (input.accountType) { where.push('t.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('t.rate_type = ?'); binds.push(input.rateType) }
+  if (input.depositTier) { where.push('t.deposit_tier = ?'); binds.push(input.depositTier) }
+  addBalanceBandOverlapWhere(where, binds, 't.min_balance', 't.max_balance', input.balanceMin, input.balanceMax)
   if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('t.collection_date >= ?'); binds.push(input.startDate) }

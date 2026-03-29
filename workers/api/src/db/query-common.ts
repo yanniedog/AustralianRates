@@ -34,6 +34,38 @@ export function addBankWhere(
   }
 }
 
+const BALANCE_BAND_MAX_DOLLARS = 100_000_000
+
+/**
+ * Rows whose tier interval [minCol, maxCol] overlaps the user band [balanceMin, balanceMax] (dollars).
+ * Open upper tier uses NULL max column (treated as no upper cap).
+ */
+export function addBalanceBandOverlapWhere(
+  where: string[],
+  binds: Array<string | number>,
+  minCol: string,
+  maxCol: string,
+  balanceMin?: number,
+  balanceMax?: number,
+): void {
+  if (balanceMin == null && balanceMax == null) return
+  let lo =
+    balanceMin != null && Number.isFinite(Number(balanceMin)) ? Math.max(0, Number(balanceMin)) : 0
+  let hi =
+    balanceMax != null && Number.isFinite(Number(balanceMax))
+      ? Math.min(BALANCE_BAND_MAX_DOLLARS, Number(balanceMax))
+      : BALANCE_BAND_MAX_DOLLARS
+  if (hi < lo) {
+    const t = lo
+    lo = hi
+    hi = t
+  }
+  where.push(`(COALESCE(${minCol}, 0) <= ?)`)
+  binds.push(hi)
+  where.push(`(${maxCol} IS NULL OR ${maxCol} >= ?)`)
+  binds.push(lo)
+}
+
 export function addRateBoundsWhere(
   where: string[],
   binds: Array<string | number>,

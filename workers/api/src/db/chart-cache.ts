@@ -137,13 +137,31 @@ export function isDefaultChartRequest(
     if (h.minRate != null || h.maxRate != null || h.minComparisonRate != null || h.maxComparisonRate != null) return false
   }
   if (section === 'savings') {
-    const s = params as DefaultCheckInput & { accountType?: string; rateType?: string; depositTier?: string; minRate?: number; maxRate?: number }
+    const s = params as DefaultCheckInput & {
+      accountType?: string
+      rateType?: string
+      depositTier?: string
+      balanceMin?: number
+      balanceMax?: number
+      minRate?: number
+      maxRate?: number
+    }
     if (s.accountType || s.rateType || s.depositTier) return false
+    if (s.balanceMin != null || s.balanceMax != null) return false
     if (s.minRate != null || s.maxRate != null) return false
   }
   if (section === 'term_deposits') {
-    const t = params as DefaultCheckInput & { termMonths?: string; depositTier?: string; interestPayment?: string; minRate?: number; maxRate?: number }
+    const t = params as DefaultCheckInput & {
+      termMonths?: string
+      depositTier?: string
+      balanceMin?: number
+      balanceMax?: number
+      interestPayment?: string
+      minRate?: number
+      maxRate?: number
+    }
     if (t.termMonths || t.depositTier || t.interestPayment) return false
+    if (t.balanceMin != null || t.balanceMax != null) return false
     if (t.minRate != null || t.maxRate != null) return false
   }
   return true

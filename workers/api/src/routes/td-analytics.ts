@@ -18,6 +18,8 @@ function buildFilters(query: Record<string, string | undefined>) {
     banks: parseCsvList(query.banks),
     termMonths: query.term_months,
     depositTier: query.deposit_tier,
+    balanceMin: parseOptionalNumber(query.balance_min),
+    balanceMax: parseOptionalNumber(query.balance_max),
     interestPayment: query.interest_payment,
     minRate: parseOptionalNumber(query.min_rate),
     maxRate: parseOptionalNumber(query.max_rate),

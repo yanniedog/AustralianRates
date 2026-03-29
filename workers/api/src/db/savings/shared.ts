@@ -1,6 +1,6 @@
 import { applySavingsCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
-import { addBankWhere } from '../query-common'
+import { addBalanceBandOverlapWhere, addBankWhere } from '../query-common'
 
 export const MIN_PUBLIC_RATE = 0
 export const MAX_PUBLIC_RATE = 15
@@ -19,6 +19,8 @@ export type SavingsPaginatedFilters = {
   accountType?: string
   rateType?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
@@ -36,6 +38,8 @@ export type LatestSavingsFilters = {
   accountType?: string
   rateType?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
@@ -53,6 +57,9 @@ export type SavingsTimeseriesFilters = {
   seriesKey?: string
   accountType?: string
   rateType?: string
+  depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
@@ -130,6 +137,7 @@ export function buildWhere(filters: SavingsPaginatedFilters): { clause: string; 
   if (filters.accountType) { where.push('h.account_type = ?'); binds.push(filters.accountType) }
   if (filters.rateType) { where.push('h.rate_type = ?'); binds.push(filters.rateType) }
   if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
+  addBalanceBandOverlapWhere(where, binds, 'h.min_balance', 'h.max_balance', filters.balanceMin, filters.balanceMax)
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')

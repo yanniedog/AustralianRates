@@ -4,7 +4,7 @@ import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { withD1TransientRetry } from '../d1-retry'
 import type { LatestQueryTiming } from '../latest-query-timing'
-import { addBankWhere, rows, safeLimit } from '../query-common'
+import { addBalanceBandOverlapWhere, addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
   type LatestTdFilters,
@@ -50,6 +50,7 @@ function buildLatestWhere(filters: LatestTdFilters): { clause: string; binds: Ar
     where.push('l.deposit_tier = ?')
     binds.push(filters.depositTier)
   }
+  addBalanceBandOverlapWhere(where, binds, 'l.min_deposit', 'l.max_deposit', filters.balanceMin, filters.balanceMax)
   if (filters.interestPayment) {
     where.push('l.interest_payment = ?')
     binds.push(filters.interestPayment)

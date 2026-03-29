@@ -4,7 +4,7 @@ import { presentSavingsRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { withD1TransientRetry } from '../d1-retry'
 import type { LatestQueryTiming } from '../latest-query-timing'
-import { addBankWhere, rows, safeLimit } from '../query-common'
+import { addBalanceBandOverlapWhere, addBankWhere, rows, safeLimit } from '../query-common'
 import {
   addRateBoundsWhere,
   type LatestSavingsFilters,
@@ -54,6 +54,7 @@ function buildLatestWhere(filters: LatestSavingsFilters): { clause: string; bind
     where.push('l.deposit_tier = ?')
     binds.push(filters.depositTier)
   }
+  addBalanceBandOverlapWhere(where, binds, 'l.min_balance', 'l.max_balance', filters.balanceMin, filters.balanceMax)
   if (!filters.includeRemoved) {
     where.push('COALESCE(l.is_removed, 0) = 0')
   }

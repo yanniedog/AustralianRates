@@ -347,8 +347,38 @@
         return '<' + tag + ' ' + attrs.join(' ') + '>' + fieldLabelMarkup(field) + '</' + tag + '>';
     }
 
+    function depositBalanceFilterMarkup(field, labelId) {
+        var groupAccName = (field.label || field.code || 'Filter') + ' options';
+        return '' +
+            '<div class="filter-pad-shell filter-deposit-balance-shell">' +
+                '<div id="filter-deposit-balance-range" class="deposit-balance-range" role="group" aria-labelledby="' + esc(labelId) + '" aria-label="' + esc(groupAccName) + '">' +
+                    '<p id="filter-deposit-balance-readout" class="deposit-balance-readout hint" aria-live="polite">All balances</p>' +
+                    '<div class="deposit-balance-track-wrap">' +
+                        '<div class="deposit-balance-ruler" aria-hidden="true">' +
+                            '<span style="left:0%"><span>$0</span></span>' +
+                            '<span style="left:5%"><span>$50k</span></span>' +
+                            '<span style="left:25%"><span>$250k</span></span>' +
+                            '<span style="left:50%"><span>$1m</span></span>' +
+                            '<span style="left:75%"><span>$5m</span></span>' +
+                            '<span style="left:100%"><span>$10m</span></span>' +
+                        '</div>' +
+                        '<div class="deposit-balance-dual">' +
+                            '<input type="range" id="filter-balance-range-min" class="deposit-balance-range-input deposit-balance-range-min" min="0" max="1000" value="0" step="1" aria-valuemin="0" aria-valuemax="10000000" aria-valuenow="0" aria-label="Minimum balance for deposit band">' +
+                            '<input type="range" id="filter-balance-range-max" class="deposit-balance-range-input deposit-balance-range-max" min="0" max="1000" value="1000" step="1" aria-valuemin="0" aria-valuemax="10000000" aria-valuenow="10000000" aria-label="Maximum balance for deposit band">' +
+                        '</div>' +
+                    '</div>' +
+                    '<input type="hidden" id="filter-balance-min" value="">' +
+                    '<input type="hidden" id="filter-balance-max" value="">' +
+                '</div>' +
+                '<select id="' + field.id + '" class="filter-native-select" aria-labelledby="' + esc(labelId) + '">' + optionsMarkup(field.options || [{ value: '', label: 'All', selected: true }]) + '</select>' +
+            '</div>';
+    }
+
     function filterPadMarkup(field, labelId) {
         var groupAccName = (field.label || field.code || 'Filter') + ' options';
+        if (field.id === 'filter-deposit-tier' && (section === 'savings' || section === 'term-deposits')) {
+            return depositBalanceFilterMarkup(field, labelId);
+        }
         return '' +
             '<div class="filter-pad-shell">' +
                 '<div id="' + field.id + '-pads" class="filter-pad-grid" data-filter-pads-for="' + field.id + '" role="group" aria-label="' + esc(groupAccName) + '"></div>' +

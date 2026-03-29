@@ -3,6 +3,7 @@ import { queryTdChartData } from '../../db/chart-data/term-deposits'
 import { ChartDataRequestError } from '../../db/chart-data/errors'
 import type { AppContext } from '../../types'
 import { jsonError } from '../../utils/http'
+import { parseOptionalNumber } from '../public-query'
 import {
   assertDateRange,
   parseNumberQuery,
@@ -24,6 +25,8 @@ export function registerTdChartDataRoute(routes: Hono<AppContext>): void {
         termMonths,
         interestPayment: String(c.req.query('interestPayment') || '').trim() || undefined,
         depositTier: String(c.req.query('depositTier') || '').trim() || undefined,
+        balanceMin: parseOptionalNumber(c.req.query('balance_min') ?? c.req.query('balanceMin')),
+        balanceMax: parseOptionalNumber(c.req.query('balance_max') ?? c.req.query('balanceMax')),
         startDate,
         endDate,
       })

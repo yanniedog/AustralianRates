@@ -3,6 +3,7 @@ import { querySavingsChartData } from '../../db/chart-data/savings'
 import { ChartDataRequestError } from '../../db/chart-data/errors'
 import type { AppContext } from '../../types'
 import { jsonError } from '../../utils/http'
+import { parseOptionalNumber } from '../public-query'
 import { assertDateRange, parseOptionalDateQuery, parseStringListQuery } from './common'
 
 export function registerSavingsChartDataRoute(routes: Hono<AppContext>): void {
@@ -18,6 +19,8 @@ export function registerSavingsChartDataRoute(routes: Hono<AppContext>): void {
         accountType: String(c.req.query('accountType') || '').trim() || undefined,
         rateType: String(c.req.query('rateType') || '').trim() || undefined,
         depositTier: String(c.req.query('depositTier') || '').trim() || undefined,
+        balanceMin: parseOptionalNumber(c.req.query('balance_min') ?? c.req.query('balanceMin')),
+        balanceMax: parseOptionalNumber(c.req.query('balance_max') ?? c.req.query('balanceMax')),
         startDate,
         endDate,
       })

@@ -118,6 +118,7 @@
         if (key === 'end_date') return 'To';
         if (key === 'mode') return 'Rate Mode';
         if (key === 'include_manual') return 'Manual Runs';
+        if (key === 'balance_band') return 'Balance band';
         return toTitleWords(key);
     }
 
@@ -162,7 +163,39 @@
                 });
             });
         });
-        return entries;
+        return mergeBalanceBandChips(entries);
+    }
+
+    function mergeBalanceBandChips(entries) {
+        var u = window.AR && window.AR.utils;
+        var fmt = u && typeof u.formatBalanceBand === 'function' ? u.formatBalanceBand : null;
+        var minRaw = '';
+        var maxRaw = '';
+        var out = [];
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            if (e.key === 'balance_min') {
+                minRaw = e.rawValue;
+                continue;
+            }
+            if (e.key === 'balance_max') {
+                maxRaw = e.rawValue;
+                continue;
+            }
+            out.push(e);
+        }
+        if (minRaw || maxRaw) {
+            var lo = minRaw !== '' ? Number(minRaw) : 0;
+            var hi = maxRaw !== '' ? Number(maxRaw) : 10000000;
+            var display = fmt ? fmt(lo, hi) : (String(lo) + ' – ' + String(hi));
+            out.push({
+                key: 'balance_band',
+                label: 'Balance band',
+                rawValue: '',
+                displayValue: display,
+            });
+        }
+        return out;
     }
 
     function getActiveFilterCount() {
@@ -208,7 +241,7 @@
                 entry.key === 'start_date' || entry.key === 'end_date' ||
                 entry.key === 'min_rate' || entry.key === 'max_rate' ||
                 entry.key === 'min_comparison_rate' || entry.key === 'max_comparison_rate' ||
-                entry.key === 'include_manual') {
+                entry.key === 'include_manual' || entry.key === 'balance_band') {
                 return '<span class="filter-chip">' +
                     '<span class="chip-key">' + esc(entry.label) + ':</span>' +
                     '<span class="chip-val">' + esc(entry.displayValue) + '</span>' +
@@ -313,6 +346,20 @@
         var value = String(rawValue || '').trim();
         if (!key) return;
 
+        if (key === 'balance_band' || key === 'balance_min' || key === 'balance_max') {
+            var hMin = document.getElementById('filter-balance-min');
+            var hMax = document.getElementById('filter-balance-max');
+            if (hMin) hMin.value = '';
+            if (hMax) hMax.value = '';
+            var dbr = window.AR.depositBalanceRange;
+            if (dbr && typeof dbr.reset === 'function') dbr.reset();
+            if (filterUi && filterUi.validateDateInputs) {
+                filterUi.validateDateInputs({ focusInvalid: false });
+            }
+            refreshFilterUiState();
+            return;
+        }
+
         if (key === 'start_date' && els.filterStartDate) {
             els.filterStartDate.value = '';
         } else if (key === 'end_date' && els.filterEndDate) {
@@ -373,6 +420,9 @@
         applyDefaultMinRateIfEmpty();
         applyDefaultHomeLoanScenarioIfEmpty();
         applyDefaultSavingsCompareIfEmpty();
+        if (window.AR.depositBalanceRange && typeof window.AR.depositBalanceRange.reset === 'function') {
+            window.AR.depositBalanceRange.reset();
+        }
         if (filterUi && filterUi.resetUi) filterUi.resetUi();
         refreshFilterUiState();
     }
@@ -559,6 +609,16 @@
         if (isAnalystMode()) {
             p.exclude_compare_edge_cases = '0';
         }
+
+        if ((section === 'savings' || section === 'term-deposits') && !String(p.deposit_tier || '').trim()) {
+            var bMinEl = document.getElementById('filter-balance-min');
+            var bMaxEl = document.getElementById('filter-balance-max');
+            var bm = bMinEl && String(bMinEl.value || '').trim();
+            var bx = bMaxEl && String(bMaxEl.value || '').trim();
+            if (bm !== '') p.balance_min = bm;
+            if (bx !== '') p.balance_max = bx;
+        }
+
         return p;
     }
 
@@ -578,6 +638,8 @@
         }
         if (fp.start_date) q.set('start_date', fp.start_date);
         if (fp.end_date) q.set('end_date', fp.end_date);
+        if (fp.balance_min) q.set('balance_min', String(fp.balance_min).trim());
+        if (fp.balance_max) q.set('balance_max', String(fp.balance_max).trim());
         if (fp.mode && fp.mode !== 'all') q.set('mode', fp.mode);
         if (fp.include_manual) q.set('include_manual', fp.include_manual);
         if (fp.include_removed) q.set('include_removed', fp.include_removed);
@@ -613,6 +675,21 @@
                 el.value = value;
             }
             restored[field.url || field.param] = value;
+        }
+
+        if ((section === 'savings' || section === 'term-deposits') && !p.get('deposit_tier')) {
+            var balMin = p.get('balance_min');
+            var balMax = p.get('balance_max');
+            var balHMin = document.getElementById('filter-balance-min');
+            var balHMax = document.getElementById('filter-balance-max');
+            if (balHMin && balMin) {
+                balHMin.value = balMin;
+                restored.balance_min = balMin;
+            }
+            if (balHMax && balMax) {
+                balHMax.value = balMax;
+                restored.balance_max = balMax;
+            }
         }
 
         if (p.get('start_date') && els.filterStartDate) {

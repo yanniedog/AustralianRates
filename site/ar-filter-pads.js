@@ -77,6 +77,7 @@
     }
 
     function renderPadGrid(fieldId) {
+        if (fieldId === 'filter-deposit-tier') return;
         var selectEl = getSelectEl(fieldId);
         var grid = getPadGrid(fieldId);
         if (!selectEl || !grid) return;

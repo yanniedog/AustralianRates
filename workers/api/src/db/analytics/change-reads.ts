@@ -3,7 +3,7 @@ import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
 import { presentHomeLoanRow, presentSavingsRow, presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { MIN_CONFIDENCE_ALL, MIN_CONFIDENCE_HISTORICAL, MAX_PUBLIC_RATE as HOME_MAX_RATE, MIN_PUBLIC_RATE as HOME_MIN_RATE } from '../home-loans/shared'
-import { addBankWhere, addRateBoundsWhere, rows, safeLimit } from '../query-common'
+import { addBalanceBandOverlapWhere, addBankWhere, addRateBoundsWhere, rows, safeLimit } from '../query-common'
 import { MAX_PUBLIC_RATE as SAVINGS_MAX_RATE, MIN_CONFIDENCE as SAVINGS_MIN_CONFIDENCE, MIN_CONFIDENCE_HISTORICAL as SAVINGS_MIN_CONFIDENCE_HISTORICAL, MIN_PUBLIC_RATE as SAVINGS_MIN_RATE } from '../savings/shared'
 import { MAX_PUBLIC_RATE as TD_MAX_RATE, MIN_CONFIDENCE as TD_MIN_CONFIDENCE, MIN_CONFIDENCE_HISTORICAL as TD_MIN_CONFIDENCE_HISTORICAL, MIN_PUBLIC_RATE as TD_MIN_RATE } from '../term-deposits/shared'
 import { getAnalyticsDatasetConfig } from './config'
@@ -42,11 +42,15 @@ export type SavingsAnalyticsInput = CommonInput & {
   accountType?: string
   rateType?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
 }
 
 export type TdAnalyticsInput = CommonInput & {
   termMonths?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   interestPayment?: string
 }
 
@@ -159,6 +163,7 @@ export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAn
   if (input.accountType) { where.push('e.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('e.rate_type = ?'); binds.push(input.rateType) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
+  addBalanceBandOverlapWhere(where, binds, 'e.min_balance', 'e.max_balance', input.balanceMin, input.balanceMax)
   const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
   return queryAnalyticsRows(
     db,
@@ -181,6 +186,7 @@ export async function queryTdAnalyticsRows(db: D1Database, input: TdAnalyticsInp
   addCommonEventWhere(where, binds, 'e', input)
   if (input.termMonths) { where.push('CAST(e.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
+  addBalanceBandOverlapWhere(where, binds, 'e.min_deposit', 'e.max_deposit', input.balanceMin, input.balanceMax)
   if (input.interestPayment) { where.push('e.interest_payment = ?'); binds.push(input.interestPayment) }
   const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
   return queryAnalyticsRows(

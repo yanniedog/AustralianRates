@@ -1,6 +1,6 @@
 import { applyTdCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
-import { addBankWhere } from '../query-common'
+import { addBalanceBandOverlapWhere, addBankWhere } from '../query-common'
 
 export const MIN_PUBLIC_RATE = 0
 export const MAX_PUBLIC_RATE = 15
@@ -18,6 +18,8 @@ export type TdPaginatedFilters = {
   banks?: string[]
   termMonths?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   interestPayment?: string
   minRate?: number
   maxRate?: number
@@ -34,6 +36,8 @@ export type LatestTdFilters = {
   banks?: string[]
   termMonths?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   interestPayment?: string
   minRate?: number
   maxRate?: number
@@ -52,6 +56,8 @@ export type TdTimeseriesFilters = {
   seriesKey?: string
   termMonths?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   interestPayment?: string
   minRate?: number
   maxRate?: number
@@ -128,6 +134,7 @@ export function buildWhere(filters: TdPaginatedFilters): { clause: string; binds
   addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)
   if (filters.termMonths) { where.push('CAST(h.term_months AS TEXT) = ?'); binds.push(filters.termMonths) }
   if (filters.depositTier) { where.push('h.deposit_tier = ?'); binds.push(filters.depositTier) }
+  addBalanceBandOverlapWhere(where, binds, 'h.min_deposit', 'h.max_deposit', filters.balanceMin, filters.balanceMax)
   if (filters.interestPayment) { where.push('h.interest_payment = ?'); binds.push(filters.interestPayment) }
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }

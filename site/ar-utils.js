@@ -133,6 +133,14 @@
         return normalizeAmountToken(raw);
     }
 
+    /** Compact label for a dollar band (used by balance filter chips). */
+    function formatBalanceBand(minDollars, maxDollars) {
+        var lo = Number(minDollars);
+        var hi = Number(maxDollars);
+        if (!Number.isFinite(lo) || !Number.isFinite(hi)) return '';
+        return compactAmount(lo) + ' – ' + compactAmount(hi);
+    }
+
     function formatEnum(field, value) {
         var v = asText(value).toLowerCase();
         if (!v) return '';
@@ -155,6 +163,7 @@
         }
         if (field === 'lvr_tier') {
             if (v === 'lvr_=60%') return '<=60%';
+            if (v === 'lvr_unspecified') return 'Not specified';
             var lvrRange = v.match(/^lvr_(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)%$/);
             if (lvrRange) return lvrRange[1] + '-' + lvrRange[2] + '%';
         }
@@ -270,6 +279,7 @@
         formatChangeWindow: formatChangeWindow,
         formatEnum: formatEnum,
         formatDepositTier: formatDepositTier,
+        formatBalanceBand: formatBalanceBand,
         cleanConditionsText: cleanConditionsText,
         truncateText: truncateText,
         formatFilterValue: formatFilterValue,

@@ -1,4 +1,5 @@
 import { legacyProductKey } from '../../utils/series-identity'
+import { addBalanceBandOverlapWhere } from '../query-common'
 import {
   assertChartDate,
   assertChartRate,
@@ -13,6 +14,8 @@ type SavingsChartInput = {
   accountType?: string
   rateType?: string
   depositTier?: string
+  balanceMin?: number
+  balanceMax?: number
   startDate?: string
   endDate?: string
 }
@@ -121,6 +124,7 @@ export async function querySavingsChartData(
     where.push(`deposit_tier = ?${binds.length + 1}`)
     binds.push(input.depositTier)
   }
+  addBalanceBandOverlapWhere(where, binds, 'min_balance', 'max_balance', input.balanceMin, input.balanceMax)
   if (input.startDate) {
     where.push(`collection_date >= ?${binds.length + 1}`)
     binds.push(input.startDate)

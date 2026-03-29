@@ -19,6 +19,8 @@ function buildFilters(query: Record<string, string | undefined>) {
     accountType: query.account_type,
     rateType: query.rate_type,
     depositTier: query.deposit_tier,
+    balanceMin: parseOptionalNumber(query.balance_min),
+    balanceMax: parseOptionalNumber(query.balance_max),
     minRate: parseOptionalNumber(query.min_rate),
     maxRate: parseOptionalNumber(query.max_rate),
     includeRemoved: parseIncludeRemoved(query.include_removed),
