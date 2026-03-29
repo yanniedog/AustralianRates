@@ -82,8 +82,7 @@ const RBNZ_DECISIONS = 'https://www.rbnz.govt.nz/monetary-policy/monetary-policy
 const RBNZ_DECISIONS_TRANSPORT = 'https://r.jina.ai/http://www.rbnz.govt.nz/monetary-policy/monetary-policy-decisions'
 const FED_OPEN_MARKET = 'https://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
 const FED_OPEN_MARKET_TRANSPORT = 'https://r.jina.ai/http://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
-const FRED_CHINA_GDP = 'https://fred.stlouisfed.org/series/CHNGDPNQDSMEI/downloaddata/CHNGDPNQDSMEI.csv'
-const FRED_CHINA_GDP_TRANSPORT = 'https://r.jina.ai/http://fred.stlouisfed.org/series/CHNGDPNQDSMEI/downloaddata/CHNGDPNQDSMEI.csv'
+const FRED_CHINA_GDP = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPNQDSMEI'
 
 export const ECONOMIC_PRESETS: Array<{
   id: EconomicPresetId
@@ -332,7 +331,6 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     collector: {
       kind: 'fred_csv',
       url: FRED_CHINA_GDP,
-      transportUrl: FRED_CHINA_GDP_TRANSPORT,
       valueMode: 'china_yoy_from_level',
     },
   },

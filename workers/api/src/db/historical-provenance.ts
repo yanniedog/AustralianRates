@@ -345,7 +345,7 @@ async function refreshDatasetStatus(
   const statusUpsert = await db
     .prepare(
       `${cteSql}
-       INSERT INTO historical_provenance_status (
+       INSERT OR REPLACE INTO historical_provenance_status (
          dataset_kind,
          series_key,
          collection_date,
@@ -366,32 +366,28 @@ async function refreshDatasetStatus(
           computed.dataset_kind,
           computed.series_key,
           computed.collection_date,
-         computed.bank_name,
-         computed.product_id,
-         computed.run_id,
-         computed.provenance_state,
-         computed.recovery_method,
-         computed.reason_code,
-         computed.verified_fetch_event_id,
-         computed.verified_content_hash,
+          computed.bank_name,
+          computed.product_id,
+          computed.run_id,
+          computed.provenance_state,
+          computed.recovery_method,
+          computed.reason_code,
+          computed.verified_fetch_event_id,
+          computed.verified_content_hash,
           computed.verified_source_url,
           computed.evidence_json,
-          ?${commonBinds.length + 1},
+          COALESCE(
+            (
+              SELECT existing.first_classified_at
+              FROM historical_provenance_status existing
+              WHERE existing.dataset_kind = computed.dataset_kind
+                AND existing.series_key = computed.series_key
+                AND existing.collection_date = computed.collection_date
+            ),
+            ?${commonBinds.length + 1}
+          ),
           ?${commonBinds.length + 2}
-        FROM computed
-        WHERE 1 = 1
-        ON CONFLICT(dataset_kind, series_key, collection_date) DO UPDATE SET
-          bank_name = excluded.bank_name,
-         product_id = excluded.product_id,
-         run_id = excluded.run_id,
-         provenance_state = excluded.provenance_state,
-         recovery_method = excluded.recovery_method,
-         reason_code = excluded.reason_code,
-         verified_fetch_event_id = excluded.verified_fetch_event_id,
-         verified_content_hash = excluded.verified_content_hash,
-         verified_source_url = excluded.verified_source_url,
-         evidence_json = excluded.evidence_json,
-         last_classified_at = excluded.last_classified_at`,
+        FROM computed`,
     )
     .bind(...commonBinds, input.checkedAt, input.checkedAt)
     .run()

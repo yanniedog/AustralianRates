@@ -1,4 +1,9 @@
-import { getEconomicStatusMap, upsertEconomicObservations, upsertEconomicStatus } from '../db/economic-series'
+import {
+  getEconomicStatusMap,
+  upsertEconomicObservations,
+  upsertEconomicStatus,
+  type EconomicStatusRow,
+} from '../db/economic-series'
 import type { EnvBindings } from '../types'
 import { RBA_GOV_AU_FETCH_INIT, fetchWithTimeout, hostFromUrl } from '../utils/fetch-with-timeout'
 import { log } from '../utils/logger'
@@ -36,7 +41,7 @@ function shouldMarkStale(definition: EconomicSeriesDefinition, lastObservationDa
 function shouldUpsertRows(
   definition: EconomicSeriesDefinition,
   rows: EconomicObservationInput[],
-  previousStatus: { last_observation_date: string | null; last_value: number | null } | undefined,
+  previousStatus: EconomicStatusRow | undefined,
 ): EconomicObservationInput[] {
   if (rows.length === 0) return []
   if (!previousStatus?.last_observation_date) return rows
@@ -132,7 +137,7 @@ async function persistSeries(
   definition: EconomicSeriesDefinition,
   rows: EconomicObservationInput[],
   checkedAt: string,
-  previousStatus: { last_observation_date: string | null; last_value: number | null } | undefined,
+  previousStatus: EconomicStatusRow | undefined,
 ): Promise<{ updated: boolean; stale: boolean }> {
   const sorted = sortObservations(rows)
   const latest = sorted[sorted.length - 1] ?? null
@@ -180,25 +185,73 @@ function economicFailureCode(error: unknown): 'economic_series_fetch_failed' | '
   return 'economic_series_parse_failed'
 }
 
-async function markSeriesFailure(env: EnvBindings, definition: EconomicSeriesDefinition, checkedAt: string, error: unknown) {
+function isTransientUpstreamFailureMessage(message: string): boolean {
+  const lower = message.toLowerCase()
+  if (message.includes('upstream_not_ok:403') && message.includes('rba.gov.au')) return true
+  if (message.includes('upstream_not_ok:429')) return true
+  if (message.includes('upstream_not_ok:422')) return true
+  if (message.includes('upstream_not_ok:520') && message.includes('fred.stlouisfed.org')) return true
+  if (lower.includes('no parseable observations for rbnz_ocr')) return true
+  return false
+}
+
+async function preservePriorEconomicStatus(
+  env: EnvBindings,
+  definition: EconomicSeriesDefinition,
+  checkedAt: string,
+  previousStatus: EconomicStatusRow | undefined,
+  message: string,
+): Promise<boolean> {
+  if (!previousStatus?.last_observation_date || !isTransientUpstreamFailureMessage(message)) {
+    return false
+  }
+
+  const checkedDate = checkedAt.slice(0, 10)
+  const stale = shouldMarkStale(definition, previousStatus.last_observation_date, checkedDate)
+  await upsertEconomicStatus(env.DB, {
+    seriesId: definition.id,
+    lastCheckedAt: checkedAt,
+    lastSuccessAt: previousStatus.last_success_at ?? null,
+    lastObservationDate: previousStatus.last_observation_date,
+    lastValue: previousStatus.last_value,
+    status: stale ? 'stale' : 'ok',
+    message: stale
+      ? `Transient upstream failure; retained observation ${previousStatus.last_observation_date} is now stale. Last error: ${message}`
+      : `Transient upstream failure; retained last successful observation from ${previousStatus.last_observation_date}. Last error: ${message}`,
+    sourceUrl: definition.sourceUrl,
+    proxy: definition.proxy,
+  })
+  return true
+}
+
+async function markSeriesFailure(
+  env: EnvBindings,
+  definition: EconomicSeriesDefinition,
+  checkedAt: string,
+  previousStatus: EconomicStatusRow | undefined,
+  error: unknown,
+) {
   const code = economicFailureCode(error)
+  const message = (error as Error)?.message ?? String(error)
   log.warn('economic', 'Economic series collection failed', {
     code,
     context: JSON.stringify({
       series_id: definition.id,
       source_url: definition.sourceUrl,
-      message: (error as Error)?.message ?? String(error),
+      message,
     }),
   })
-  const previous = (await getEconomicStatusMap(env.DB, [definition.id])).get(definition.id)
+  if (await preservePriorEconomicStatus(env, definition, checkedAt, previousStatus, message)) {
+    return
+  }
   await upsertEconomicStatus(env.DB, {
     seriesId: definition.id,
     lastCheckedAt: checkedAt,
-    lastSuccessAt: previous?.last_success_at ?? null,
-    lastObservationDate: previous?.last_observation_date ?? null,
-    lastValue: previous?.last_value ?? null,
+    lastSuccessAt: previousStatus?.last_success_at ?? null,
+    lastObservationDate: previousStatus?.last_observation_date ?? null,
+    lastValue: previousStatus?.last_value ?? null,
     status: 'error',
-    message: (error as Error)?.message ?? String(error),
+    message,
     sourceUrl: definition.sourceUrl,
     proxy: definition.proxy,
   })
@@ -361,7 +414,7 @@ export async function collectEconomicSeries(env: EnvBindings): Promise<Collectio
       if (persisted.stale) staleSeries.push(definition.id)
     } catch (error) {
       failedSeries.push(definition.id)
-      await markSeriesFailure(env, definition, checkedAt, error)
+      await markSeriesFailure(env, definition, checkedAt, statusMap.get(definition.id), error)
     }
   }
 

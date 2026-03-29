@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { parseCpiCsv, parseMeasuresCpiHtml } from '../src/ingest/cpi'
 
 describe('parseCpiCsv', () => {
-  it('extracts All groups CPI by Title row column detection', () => {
+  it('prefers the GCPIAGYP year-ended inflation series when series ids are present', () => {
     const csv = [
-      'Series ID,GCPIAG,GCPIAGSSTE',
-      'Title,All groups CPI,All groups CPI (seasonally adjusted)',
+      'Title,Consumer price index,Year-ended inflation,All groups CPI (seasonally adjusted)',
+      'Series ID,GCPIAG,GCPIAGYP,GCPIAGSSTE',
       'Description,,,',
       '',
-      'Mar-2025,2.40,2.30',
-      'Jun-2025,2.10,2.00',
+      '30/06/2025,140.8,2.40,2.30',
+      '30/09/2025,141.2,2.10,2.00',
     ].join('\n')
 
     const points = parseCpiCsv(csv)
     expect(points).toEqual([
-      { quarterDate: '2025-01-01', annualChange: 2.4 },
-      { quarterDate: '2025-04-01', annualChange: 2.1 },
+      { quarterDate: '2025-04-01', annualChange: 2.4 },
+      { quarterDate: '2025-07-01', annualChange: 2.1 },
     ])
   })
 
@@ -39,6 +39,16 @@ describe('parseCpiCsv', () => {
     const points = parseCpiCsv(csv)
     expect(points.map((p) => p.quarterDate)).toEqual([
       '2025-01-01',
+      '2025-04-01',
+      '2025-07-01',
+      '2025-10-01',
+    ])
+  })
+
+  it('accepts the current RBA G1 dd/mm/yyyy row format', () => {
+    const csv = ['30/06/2025,2.4', '30/09/2025,2.1', '31/12/2025,2.4'].join('\n')
+    const points = parseCpiCsv(csv)
+    expect(points.map((p) => p.quarterDate)).toEqual([
       '2025-04-01',
       '2025-07-01',
       '2025-10-01',

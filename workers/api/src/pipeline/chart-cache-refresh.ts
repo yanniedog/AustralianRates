@@ -10,6 +10,7 @@ import { log } from '../utils/logger'
 
 const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
 const REPRESENTATIONS = ['day', 'change'] as const
+const DEFAULT_CACHE_LOOKBACK_DAYS = 365
 
 const SECTION_TABLES: Record<ChartCacheSection, string> = {
   home_loans: 'historical_loan_rates',
@@ -22,29 +23,29 @@ function todayYmd(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-/** Resolve default date range for a section: earliest collection_date in DB to today. */
+function boundedLookbackStartDate(endDate: string): string {
+  const start = new Date(`${endDate}T00:00:00.000Z`)
+  start.setUTCDate(start.getUTCDate() - DEFAULT_CACHE_LOOKBACK_DAYS)
+  return start.toISOString().slice(0, 10)
+}
+
+/** Resolve default date range for a section: last 365 days, bounded by the dataset's earliest row. */
 async function getDefaultDateRangeForSection(
   db: D1Database,
   section: ChartCacheSection,
 ): Promise<{ startDate: string; endDate: string }> {
   const table = SECTION_TABLES[section]
   const row = await db
-    .prepare(`SELECT MIN(collection_date) AS min_date FROM ${table}`)
-    .first<{ min_date: string | null }>()
+      .prepare(`SELECT MIN(collection_date) AS min_date FROM ${table}`)
+      .first<{ min_date: string | null }>()
   const endDate = todayYmd()
+  const boundedStartDate = boundedLookbackStartDate(endDate)
   const minDate = row?.min_date && /^\d{4}-\d{2}-\d{2}$/.test(row.min_date) ? row.min_date : null
-  let startDate: string
-  if (minDate) {
-    startDate = minDate
-  } else {
-    const fallback = new Date()
-    fallback.setDate(fallback.getDate() - 365)
-    startDate = fallback.toISOString().slice(0, 10)
-  }
+  const startDate = minDate && minDate > boundedStartDate ? minDate : boundedStartDate
   return { startDate, endDate }
 }
 
-/** Build default filters for precomputed cache: data start to today, no selective filters. */
+/** Build default filters for precomputed cache: last 365 days to today, no selective filters. */
 async function defaultFilters(
   db: EnvBindings['DB'],
   section: ChartCacheSection,
