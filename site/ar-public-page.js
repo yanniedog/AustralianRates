@@ -354,18 +354,22 @@
                 '<div id="filter-deposit-balance-range" class="deposit-balance-range" role="group" aria-labelledby="' + esc(labelId) + '" aria-label="' + esc(groupAccName) + '">' +
                     '<p id="filter-deposit-balance-readout" class="deposit-balance-readout hint" aria-live="polite">All balances</p>' +
                     '<div class="deposit-balance-track-wrap">' +
-                        '<div class="deposit-balance-ruler" aria-hidden="true">' +
-                            '<span style="left:0%"><span>$0</span></span>' +
-                            '<span style="left:0.5%"><span>$50k</span></span>' +
-                            '<span style="left:2.5%"><span>$250k</span></span>' +
-                            '<span style="left:10%"><span>$1m</span></span>' +
-                            '<span style="left:50%"><span>$5m</span></span>' +
-                            '<span style="left:100%"><span>$10m</span></span>' +
+                        '<div class="deposit-balance-ruler" aria-hidden="true" title="Linear scale: zero to ten million dollars">' +
+                            '<span class="deposit-balance-ruler-tick deposit-balance-ruler-tick-start" style="left:0%">$0</span>' +
+                            '<span class="deposit-balance-ruler-tick" style="left:20%">$2m</span>' +
+                            '<span class="deposit-balance-ruler-tick" style="left:40%">$4m</span>' +
+                            '<span class="deposit-balance-ruler-tick" style="left:60%">$6m</span>' +
+                            '<span class="deposit-balance-ruler-tick" style="left:80%">$8m</span>' +
+                            '<span class="deposit-balance-ruler-tick deposit-balance-ruler-tick-end" style="left:100%">$10m</span>' +
                         '</div>' +
                         '<div class="deposit-balance-dual">' +
+                            '<div class="deposit-balance-track-bg" aria-hidden="true">' +
+                                '<div id="filter-deposit-balance-fill" class="deposit-balance-track-fill"></div>' +
+                            '</div>' +
                             '<input type="range" id="filter-balance-range-min" class="deposit-balance-range-input deposit-balance-range-min" min="0" max="1000" value="0" step="1" aria-valuemin="0" aria-valuemax="10000000" aria-valuenow="0" aria-label="Minimum balance for deposit band">' +
                             '<input type="range" id="filter-balance-range-max" class="deposit-balance-range-input deposit-balance-range-max" min="0" max="1000" value="1000" step="1" aria-valuemin="0" aria-valuemax="10000000" aria-valuenow="10000000" aria-label="Maximum balance for deposit band">' +
                         '</div>' +
+                        '<p class="deposit-balance-scale-note hint">Scale is linear; exact band is shown above.</p>' +
                     '</div>' +
                     '<input type="hidden" id="filter-balance-min" value="">' +
                     '<input type="hidden" id="filter-balance-max" value="">' +

@@ -32,7 +32,20 @@
             hMax: document.getElementById('filter-balance-max'),
             readout: document.getElementById('filter-deposit-balance-readout'),
             tierSelect: document.getElementById('filter-deposit-tier'),
+            fill: document.getElementById('filter-deposit-balance-fill'),
         };
+    }
+
+    function updateTrackFill(minIdx, maxIdx) {
+        var e = getEls();
+        if (!e.fill) return;
+        var a = Math.min(minIdx, maxIdx);
+        var b = Math.max(minIdx, maxIdx);
+        var pLo = (a / INDEX_MAX) * 100;
+        var pHi = (b / INDEX_MAX) * 100;
+        var w = Math.max(0, pHi - pLo);
+        e.fill.style.left = pLo + '%';
+        e.fill.style.width = w + '%';
     }
 
     function applyUiFromIndexes(minIdx, maxIdx) {
@@ -56,6 +69,7 @@
         }
         e.minR.setAttribute('aria-valuenow', String(indexToDollars(a)));
         e.maxR.setAttribute('aria-valuenow', String(indexToDollars(b)));
+        updateTrackFill(a, b);
     }
 
     function onRangeInput() {
