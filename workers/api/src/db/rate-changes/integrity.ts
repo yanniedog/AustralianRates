@@ -1,4 +1,5 @@
 import type { RateChangeDataset, RateChangeDatasetConfig } from './config'
+import { rows } from '../query-common'
 import { buildMissingKeyClause, buildRateChangeCte, buildRateChangeIncludedCte } from './sql'
 
 export type IntegritySeverity = 'info' | 'warn' | 'error'
@@ -28,10 +29,6 @@ export type RateChangeIntegrity = {
     out_of_range: number
   }
   checks: RateChangeIntegrityCheck[]
-}
-
-function rows<T>(result: D1Result<T>): T[] {
-  return result.results ?? []
 }
 
 function num(value: unknown): number {

@@ -1,4 +1,5 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
+import { rows, safeLimit } from './query-common'
 
 type CoverageRow = {
   lender_code: string
@@ -9,10 +10,6 @@ type CoverageRow = {
   failed_detail_count: number
   finalized_at: string | null
   updated_at: string
-}
-
-function rows<T>(result: D1Result<T>): T[] {
-  return result.results ?? []
 }
 
 export async function getLenderDatasetCoverage(
@@ -30,7 +27,7 @@ export async function getLenderDatasetCoverage(
     where.push('collection_date = ?')
     binds.push(input.collectionDate)
   }
-  const limit = Math.max(1, Math.min(1000, Math.floor(Number(input.limit) || 200)))
+  const limit = safeLimit(input.limit, 200, 1000)
   binds.push(limit)
 
   const sql = `

@@ -1,10 +1,7 @@
 import { getRateChangeDatasetConfig, type RateChangeDataset } from './rate-changes/config'
 import { queryRateChangeIntegrity, type RateChangeIntegrity } from './rate-changes/integrity'
 import { buildRateChangeCountSql, buildRateChangeDataSql, type RateChangeQueryInput } from './rate-changes/sql'
-
-function rows<T>(result: D1Result<T>): T[] {
-  return result.results ?? []
-}
+import { rows } from './query-common'
 
 async function queryRateChangesByDataset<T>(
   db: D1Database,

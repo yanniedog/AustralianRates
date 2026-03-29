@@ -46,7 +46,15 @@ import {
   storePublicReadCache,
 } from './latest-response'
 import { toCsv } from '../utils/csv'
-import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import {
+  parseCsvList,
+  parseExcludeCompareEdgeCases,
+  parseIncludeRemoved,
+  parseOptionalNumber,
+  parsePublicMode,
+  parseRateOrderBy,
+  parseSortDirection,
+} from './public-query'
 import { registerTdChartDataRoute } from './chart-data/term-deposits'
 import { registerSiteUiPublicRoute } from './site-ui-public'
 
@@ -182,9 +190,8 @@ tdPublicRoutes.get('/rates', async (c) => {
   }
 
   const q = c.req.query()
-  const dir = String(q.dir || 'desc').toLowerCase()
-  const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const dir = parseSortDirection(q.dir)
+  const mode = parsePublicMode(q.mode)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
@@ -207,7 +214,7 @@ tdPublicRoutes.get('/rates', async (c) => {
     includeRemoved,
     excludeCompareEdgeCases,
     sort: q.sort,
-    dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+    dir,
     mode,
     sourceMode,
   })
@@ -233,10 +240,8 @@ tdPublicRoutes.get('/latest', async (c) => {
 
   const totalStartedAt = Date.now()
   const q = c.req.query()
-  const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode: 'daily' | 'historical' | 'all' = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
-  const orderByRaw = String(q.order_by || q.orderBy || 'default').toLowerCase()
-  const orderBy: 'default' | 'rate_asc' | 'rate_desc' = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const mode = parsePublicMode(q.mode)
+  const orderBy = parseRateOrderBy(q.order_by, q.orderBy)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const limit = Number(q.limit || 1000)
   const banks = parseCsvList(q.banks)
@@ -304,10 +309,8 @@ tdPublicRoutes.get('/latest-all', async (c) => {
 
   const totalStartedAt = Date.now()
   const q = c.req.query()
-  const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
-  const orderByRaw = String(q.order_by || q.orderBy || 'default').toLowerCase()
-  const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const mode = parsePublicMode(q.mode)
+  const orderBy = parseRateOrderBy(q.order_by, q.orderBy)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const limit = Number(q.limit || 1000)
   const banks = parseCsvList(q.banks)
@@ -359,8 +362,7 @@ tdPublicRoutes.get('/timeseries', async (c) => {
   const q = c.req.query()
   const productKey = q.product_key || q.productKey
   const seriesKey = q.series_key
-  const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const mode = parsePublicMode(q.mode)
   const representation = parseAnalyticsRepresentation(q.representation)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const pageSize = parsePageSize(String(q.page_size || q.limit || ''), 1000, 1000)
@@ -437,9 +439,8 @@ tdPublicRoutes.get('/export', async (c) => {
     return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
   }
   const exportLimit = parseOptionalExportLimit(q.limit, PUBLIC_EXPORT_MAX_EXPLICIT_LIMIT)
-  const dir = String(q.dir || 'desc').toLowerCase()
-  const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const dir = parseSortDirection(q.dir)
+  const mode = parsePublicMode(q.mode)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const banks = parseCsvList(q.banks)
   const includeRemoved = parseIncludeRemoved(q.include_removed)
@@ -460,7 +461,7 @@ tdPublicRoutes.get('/export', async (c) => {
     includeRemoved,
     excludeCompareEdgeCases,
     sort: q.sort,
-    dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+    dir,
     mode,
     sourceMode,
     ...(exportLimit != null ? { limit: exportLimit } : {}),
@@ -492,8 +493,7 @@ tdPublicRoutes.get('/export', async (c) => {
 tdPublicRoutes.get('/export.csv', async (c) => {
   const q = c.req.query()
   const dataset = String(q.dataset || 'latest').toLowerCase()
-  const modeRaw = String(q.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const mode = parsePublicMode(q.mode)
   const sourceMode = parseSourceMode(q.source_mode, q.include_manual)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 

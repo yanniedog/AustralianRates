@@ -32,7 +32,15 @@ import {
 import { toCsv } from '../utils/csv'
 import { queryHomeLoanRepresentationTimeseriesResolved } from './analytics-data'
 import { parseAnalyticsRepresentation } from './analytics-route-utils'
-import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseOptionalNumber } from './public-query'
+import {
+  parseCsvList,
+  parseExcludeCompareEdgeCases,
+  parseIncludeRemoved,
+  parseOptionalNumber,
+  parsePublicMode,
+  parseRateOrderBy,
+  parseSortDirection,
+} from './public-query'
 import { registerPublicCoreRoutes } from './public-core-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerCpiRoutes } from './cpi-routes'
@@ -118,9 +126,8 @@ publicRoutes.get('/rates', async (c) => {
   }
 
   const query = c.req.query()
-  const dir = String(query.dir || 'desc').toLowerCase()
-  const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const dir = parseSortDirection(query.dir)
+  const mode = parsePublicMode(query.mode)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
@@ -142,13 +149,13 @@ publicRoutes.get('/rates', async (c) => {
     maxRate: parseOptionalNumber(query.max_rate),
     minComparisonRate: parseOptionalNumber(query.min_comparison_rate),
     maxComparisonRate: parseOptionalNumber(query.max_comparison_rate),
-    includeRemoved,
-    excludeCompareEdgeCases,
-    sort: query.sort,
-    dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
-    mode,
-    sourceMode,
-  }
+      includeRemoved,
+      excludeCompareEdgeCases,
+      sort: query.sort,
+      dir,
+      mode,
+      sourceMode,
+    }
 
   let queryFailed = false
   let result: Awaited<ReturnType<typeof queryRatesPaginated>>
@@ -196,9 +203,8 @@ publicRoutes.get('/export', async (c) => {
     return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
   }
   const exportLimit = parseOptionalExportLimit(query.limit, PUBLIC_EXPORT_MAX_EXPLICIT_LIMIT)
-  const dir = String(query.dir || 'desc').toLowerCase()
-  const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const dir = parseSortDirection(query.dir)
+  const mode = parsePublicMode(query.mode)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
@@ -225,7 +231,7 @@ publicRoutes.get('/export', async (c) => {
       includeRemoved,
       excludeCompareEdgeCases,
       sort: query.sort,
-      dir: dir === 'asc' || dir === 'desc' ? dir : 'desc',
+      dir,
       mode,
       sourceMode,
       ...(exportLimit != null ? { limit: exportLimit } : {}),
@@ -274,10 +280,8 @@ publicRoutes.get('/latest', async (c) => {
   const totalStartedAt = Date.now()
   const query = c.req.query()
   const limit = Number(query.limit || 1000)
-  const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode: 'daily' | 'historical' | 'all' = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
-  const orderByRaw = String(query.order_by || query.orderBy || 'default').toLowerCase()
-  const orderBy: 'default' | 'rate_asc' | 'rate_desc' = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const mode = parsePublicMode(query.mode)
+  const orderBy = parseRateOrderBy(query.order_by, query.orderBy)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
@@ -354,10 +358,8 @@ publicRoutes.get('/latest-all', async (c) => {
   const totalStartedAt = Date.now()
   const query = c.req.query()
   const limit = Number(query.limit || 1000)
-  const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
-  const orderByRaw = String(query.order_by || query.orderBy || 'default').toLowerCase()
-  const orderBy = orderByRaw === 'rate_asc' || orderByRaw === 'rate_desc' ? orderByRaw : 'default'
+  const mode = parsePublicMode(query.mode)
+  const orderBy = parseRateOrderBy(query.order_by, query.orderBy)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const banks = parseCsvList(query.banks)
   const includeRemoved = parseIncludeRemoved(query.include_removed)
@@ -415,8 +417,7 @@ publicRoutes.get('/latest-all', async (c) => {
 publicRoutes.get('/timeseries', async (c) => {
   const query = c.req.query()
   const productKey = query.product_key || query.productKey || query.series_key
-  const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const mode = parsePublicMode(query.mode)
   const representation = parseAnalyticsRepresentation(query.representation)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const pageSize = parsePageSize(String(query.page_size || query.limit || ''), 1000, 1000)
@@ -515,8 +516,7 @@ publicRoutes.get('/logs', async (c) => {
 publicRoutes.get('/export.csv', async (c) => {
   const query = c.req.query()
   const dataset = String(query.dataset || 'latest').toLowerCase()
-  const modeRaw = String(query.mode || 'all').toLowerCase()
-  const mode = modeRaw === 'daily' || modeRaw === 'historical' ? modeRaw : 'all'
+  const mode = parsePublicMode(query.mode)
   const sourceMode = parseSourceMode(query.source_mode, query.include_manual)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 

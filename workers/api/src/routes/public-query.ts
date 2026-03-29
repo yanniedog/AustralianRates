@@ -16,6 +16,33 @@ export function parseOptionalNumber(value: string | undefined): number | undefin
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+export type PublicDatasetMode = 'daily' | 'historical' | 'all'
+
+export type PublicRateOrderBy = 'default' | 'rate_asc' | 'rate_desc'
+
+export type PublicSortDirection = 'asc' | 'desc'
+
+export function parseSortDirection(
+  value: string | undefined,
+  fallback: PublicSortDirection = 'desc',
+): PublicSortDirection {
+  const normalized = String(value || fallback).trim().toLowerCase()
+  return normalized === 'asc' || normalized === 'desc' ? normalized : fallback
+}
+
+export function parsePublicMode(value: string | undefined): PublicDatasetMode {
+  const normalized = String(value || 'all').trim().toLowerCase()
+  return normalized === 'daily' || normalized === 'historical' ? normalized : 'all'
+}
+
+export function parseRateOrderBy(
+  primary: string | undefined,
+  secondary?: string | undefined,
+): PublicRateOrderBy {
+  const normalized = String(primary || secondary || 'default').trim().toLowerCase()
+  return normalized === 'rate_asc' || normalized === 'rate_desc' ? normalized : 'default'
+}
+
 export function parseIncludeRemoved(value: string | undefined): boolean {
   const normalized = String(value || '').trim().toLowerCase()
   return normalized === '1' || normalized === 'true' || normalized === 'yes'
