@@ -47,7 +47,9 @@
         if (net && typeof net.requestJson === 'function') {
             net
                 .requestJson(url, { requestLabel: 'site-ui', timeoutMs: 8000, retryCount: 0 })
-                .then(ingestPayload)
+                .then(function (result) {
+                    ingestPayload(result && result.data !== undefined ? result.data : result);
+                })
                 .catch(function () {});
         } else {
             fetch(url, { credentials: 'same-origin' })
