@@ -37,4 +37,25 @@ describe('status-debug-remediation', () => {
     ])
     expect(hints[0]?.path).toBe('/runs/repair-lineage')
   })
+
+  it('adds lineage diagnostics debug remediation when integrity findings include a sample run', () => {
+    const hints = remediationFromIntegrityFindings([
+      {
+        check: 'recent_stored_rows_unresolved_fetch_event_lineage',
+        passed: false,
+        detail: {
+          sample: [
+            {
+              dataset: 'savings',
+              run_id: 'daily:2026-03-28:2026-03-27T18:00:06.000Z',
+            },
+          ],
+        },
+      },
+    ])
+    expect(hints[0]?.path).toBe('/runs/repair-lineage')
+    expect(hints[1]?.path).toBe(
+      '/diagnostics/lineage?dataset=savings&run_id=daily%3A2026-03-28%3A2026-03-27T18%3A00%3A06.000Z',
+    )
+  })
 })

@@ -164,3 +164,104 @@ describe('status-page-diagnostics problem log rollup', () => {
     expect(diagnostics.executive.attention_items).toContain('Actionable log issues: 2 group(s)')
   })
 })
+
+describe('status-page-diagnostics provenance rollup', () => {
+  it('treats warning-only CDR findings as yellow historical debt', () => {
+    const bundle = {
+      ...baseBundle(),
+      cdr_audit: {
+        report: {
+          ok: false,
+          totals: {
+            failed: 1,
+            errors: 0,
+            warns: 1,
+          },
+          failures: [
+            {
+              id: 'stored_missing_fetch_event_links',
+              severity: 'warn',
+              summary: 'Historical stored rows older than the retained provenance window no longer have live fetch_event lineage.',
+            },
+          ],
+        },
+      },
+      diagnostics_backlog: {
+        ready_finalizations: { total: 0, cutoff_iso: '', idle_minutes: 5, rows: [] },
+        stale_running_runs: { total: 0, cutoff_iso: '', stale_run_minutes: 120, rows: [] },
+        missing_fetch_event_lineage: { total: 42, cutoff_date: '2026-03-28', lookback_days: 3650, rows: [] },
+      },
+    }
+
+    const diagnostics = buildStatusPageDiagnosticsFromBundle(bundle) as {
+      executive: { worst_severity: string; attention_items: string[] }
+    }
+
+    expect(diagnostics.executive.worst_severity).toBe('yellow')
+    expect(diagnostics.executive.attention_items).toContain('CDR pipeline audit: 1 historical / warning check(s)')
+    expect(diagnostics.executive.attention_items).toContain(
+      'Historical provenance backlog: 42 row(s) with missing fetch_event lineage',
+    )
+  })
+
+  it('uses diagnostics health snapshot when health section is omitted', () => {
+    const diagnostics = buildStatusPageDiagnosticsFromBundle({
+      meta: { sections: ['cdr'] },
+      diagnostics: {
+        health_run_id: 'health:manual:test',
+        checked_at: '2026-03-28T20:22:20.823Z',
+        overall_ok: true,
+        failures: [],
+        economic: { severity: 'green' },
+        e2e: {
+          aligned: true,
+          reason_code: 'e2e_ok',
+          target_collection_date: '2026-03-29',
+        },
+      },
+      cdr_audit: {
+        report: {
+          ok: true,
+          totals: { failed: 0, errors: 0, warns: 0 },
+          failures: [],
+        },
+      },
+    }) as {
+      executive: { attention_items: string[] }
+      health_run: { run_id: string } | null
+    }
+
+    expect(diagnostics.health_run?.run_id).toBe('health:manual:test')
+    expect(diagnostics.executive.attention_items).not.toContain('No persisted health run in D1 (run a health check).')
+  })
+
+  it('surfaces active blocked writes and persisted anomaly findings from the integrity audit snapshot', () => {
+    const diagnostics = buildStatusPageDiagnosticsFromBundle({
+      ...baseBundle(),
+      integrity_audit: {
+        latest: {
+          run_id: 'integrity:manual:test',
+          checked_at: '2026-03-29T01:00:00.000Z',
+          trigger_source: 'manual',
+          status: 'red',
+          overall_ok: false,
+          duration_ms: 250,
+          summary: { failed: 3 },
+          findings: [
+            { check: 'recent_blocked_write_contract_violations', passed: false, count: 2, category: 'erroneous' },
+            { check: 'recent_same_day_series_conflicts', passed: false, count: 1, category: 'invalid' },
+            { check: 'recent_abrupt_rate_movements', passed: false, count: 4, category: 'invalid' },
+          ],
+        },
+        history: [],
+      },
+    }) as {
+      executive: { worst_severity: string; attention_items: string[] }
+    }
+
+    expect(diagnostics.executive.worst_severity).toBe('red')
+    expect(diagnostics.executive.attention_items).toContain('Active blocked write-contract violations: 2 recent row(s) quarantined')
+    expect(diagnostics.executive.attention_items).toContain('Historical data conflicts: 1 same-day series conflict group(s)')
+    expect(diagnostics.executive.attention_items).toContain('Historical data anomalies: 4 abrupt rate movement(s) need review')
+  })
+})

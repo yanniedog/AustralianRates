@@ -118,7 +118,7 @@ const CDR_STRUCTURAL_CHECK_IDS = new Set([
 
 function cdrAuditHasStructuralFailure(report: unknown): boolean {
   const r = report as {
-    stages?: Record<string, Array<{ id?: string; passed?: boolean }>>
+    stages?: Record<string, Array<{ id?: string; passed?: boolean; severity?: string }>>
   }
   const stages = r.stages
   if (!stages || typeof stages !== 'object') return false
@@ -128,7 +128,7 @@ function cdrAuditHasStructuralFailure(report: unknown): boolean {
       if (!check || typeof check !== 'object') continue
       const id = String(check.id || '')
       if (!CDR_STRUCTURAL_CHECK_IDS.has(id)) continue
-      if (check.passed === false) return true
+      if (check.passed === false && String(check.severity || 'error').toLowerCase() === 'error') return true
     }
   }
   return false

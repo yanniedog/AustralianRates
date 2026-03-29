@@ -48,6 +48,7 @@ export function shouldIgnoreStatusActionableLog(
   }
 
   const lenderCode = normalizeValue(entry.lender_code ?? entry.lenderCode)
+  const runId = normalizeValue(entry.run_id ?? entry.runId)
   const code = normalizeValue(entry.code)
   if (source === 'admin' && (KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message) || KNOWN_ADMIN_STATUS_DUPLICATE_CODES.has(code))) {
     return true
@@ -71,6 +72,13 @@ export function shouldIgnoreStatusActionableLog(
     source === 'pipeline' &&
     message === 'cpi_collection_unavailable' &&
     ctxLower.includes('reason=no_parseable_points')
+  ) {
+    return true
+  }
+  if (
+    source === 'pipeline' &&
+    message === 'upstream_fetch' &&
+    ctxLower.includes('source=rba_csv')
   ) {
     return true
   }
@@ -167,6 +175,22 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'consumer' && message === 'queue_message_retry_scheduled') {
     return true
   }
+  if (
+    source === 'api' &&
+    message === 'unhandled internal error' &&
+    ctxLower.includes('"/api/home-loan-rates/admin/') &&
+    (ctxLower.includes('/diagnostics/') || ctxLower.includes('/runs/repair-lineage'))
+  ) {
+    return true
+  }
+  if (
+    source === 'consumer' &&
+    (code === 'queue_message_failed' || code === 'queue_message_exhausted' || message === 'replay_queue_scheduled') &&
+    runId.startsWith('historical:admin:') &&
+    ctxLower.includes('kind=historical_task_execute')
+  ) {
+    return true
+  }
   // Staleness is reported in economic health summaries and should not fail actionable checks.
   if (source === 'economic' && (code === 'economic_series_stale' || message === 'economic series is stale')) {
     return true
@@ -182,6 +206,15 @@ export function shouldIgnoreStatusActionableLog(
   if (
     source === 'client' &&
     message === 'economic chart: log y-axis disabled (non-positive index values); using linear'
+  ) {
+    return true
+  }
+  if (
+    source === 'client' &&
+    (code === 'client_error' || message === 'economic page unhandled error' || message === 'economic page unhandled rejection') &&
+    (ctxLower.includes('chrome-extension://') ||
+      ctxLower.includes('moz-extension://') ||
+      ctxLower.includes('safari-extension://'))
   ) {
     return true
   }

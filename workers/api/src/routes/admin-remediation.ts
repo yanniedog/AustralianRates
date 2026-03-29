@@ -1,4 +1,9 @@
 import { Hono } from 'hono'
+import {
+  missingFetchEventLineageClause,
+  repairableFetchEventLineageClause,
+} from '../db/fetch-event-lineage'
+import { FETCH_EVENTS_RETENTION_DAYS } from '../db/retention-prune'
 import { repairCatalogAndPresence } from '../pipeline/catalog-presence-repair'
 import { repairLegacyRawPayloadLinkage } from '../pipeline/legacy-raw-payload-repair'
 import type { AppContext } from '../types'
@@ -20,10 +25,10 @@ function parseDataset(value: string | undefined): DatasetKind | null {
 
 function buildRatesWhere(
   target: (typeof DATASET_TABLES)[number],
-  input: { runId?: string; lenderCode?: string },
+  input: { runId?: string; lenderCode?: string; cutoffDate: string },
 ): { clause: string; binds: string[] } {
-  const where: string[] = []
-  const binds: string[] = []
+  const where: string[] = [`rates.collection_date >= ?1`]
+  const binds: string[] = [input.cutoffDate]
 
   if (input.runId) {
     where.push(`rates.run_id = ?${binds.length + 1}`)
@@ -57,6 +62,11 @@ adminRemediationRoutes.get('/diagnostics/lineage', async (c) => {
   const runId = String(c.req.query('run_id') || '').trim() || undefined
   const lenderCode = String(c.req.query('lender_code') || '').trim() || undefined
   const datasetFilter = parseDataset(c.req.query('dataset'))
+  const lookbackDays = Math.max(
+    1,
+    Math.min(3650, Math.floor(Number(c.req.query('lookback_days') || FETCH_EVENTS_RETENTION_DAYS))),
+  )
+  const cutoffDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   if (c.req.query('dataset') && !datasetFilter) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'dataset must be one of home_loans, savings, term_deposits.')
   }
@@ -64,20 +74,24 @@ adminRemediationRoutes.get('/diagnostics/lineage', async (c) => {
   const targets = datasetFilter ? DATASET_TABLES.filter((item) => item.dataset === datasetFilter) : DATASET_TABLES
   const datasets = []
   for (const target of targets) {
-    const { clause, binds } = buildRatesWhere(target, { runId, lenderCode })
+    const { clause, binds } = buildRatesWhere(target, { runId, lenderCode, cutoffDate })
     const counts = await c.env.DB
       .prepare(
         `SELECT
            COUNT(*) AS total_rows,
-           SUM(CASE WHEN rates.fetch_event_id IS NULL THEN 1 ELSE 0 END) AS missing_fetch_event_rows,
+           SUM(CASE WHEN ${missingFetchEventLineageClause('rates')} THEN 1 ELSE 0 END) AS missing_fetch_event_rows,
+           SUM(CASE WHEN rates.fetch_event_id IS NOT NULL AND lineage.id IS NULL THEN 1 ELSE 0 END) AS unresolved_fetch_event_rows,
+           SUM(CASE WHEN ${repairableFetchEventLineageClause('rates', 'lineage')} THEN 1 ELSE 0 END) AS repairable_fetch_event_rows,
            SUM(
              CASE
-               WHEN rates.fetch_event_id IS NULL
+               WHEN ${repairableFetchEventLineageClause('rates', 'lineage')}
                 AND (rates.cdr_product_detail_hash IS NULL OR TRIM(rates.cdr_product_detail_hash) = '')
                THEN 1 ELSE 0
              END
            ) AS missing_hash_rows
          FROM ${target.table} rates
+         LEFT JOIN fetch_events lineage
+           ON lineage.id = rates.fetch_event_id
          ${clause}`,
       )
       .bind(...binds)
@@ -91,10 +105,17 @@ adminRemediationRoutes.get('/diagnostics/lineage', async (c) => {
            rates.collection_date,
            rates.run_id,
            rates.source_url,
-           rates.cdr_product_detail_hash
+           rates.fetch_event_id,
+           rates.cdr_product_detail_hash,
+           CASE
+             WHEN ${missingFetchEventLineageClause('rates')} THEN 'missing'
+             ELSE 'unresolved'
+           END AS lineage_state
          FROM ${target.table} rates
+         LEFT JOIN fetch_events repairable_sample_lineage
+           ON repairable_sample_lineage.id = rates.fetch_event_id
          ${clause ? `${clause} AND` : 'WHERE'}
-           rates.fetch_event_id IS NULL
+           ${repairableFetchEventLineageClause('rates', 'repairable_sample_lineage')}
          ORDER BY rates.collection_date DESC, rates.parsed_at DESC
          LIMIT 10`,
       )
@@ -105,6 +126,8 @@ adminRemediationRoutes.get('/diagnostics/lineage', async (c) => {
       dataset: target.dataset,
       total_rows: Number(counts?.total_rows ?? 0),
       missing_fetch_event_rows: Number(counts?.missing_fetch_event_rows ?? 0),
+      unresolved_fetch_event_rows: Number(counts?.unresolved_fetch_event_rows ?? 0),
+      repairable_fetch_event_rows: Number(counts?.repairable_fetch_event_rows ?? 0),
       missing_hash_rows: Number(counts?.missing_hash_rows ?? 0),
       sample: sample.results ?? [],
     })
@@ -143,6 +166,8 @@ adminRemediationRoutes.get('/diagnostics/lineage', async (c) => {
       run_id: runId ?? null,
       lender_code: lenderCode ?? null,
       dataset: datasetFilter ?? null,
+      lookback_days: lookbackDays,
+      cutoff_date: cutoffDate,
     },
     fetch_events: fetchEvents.results ?? [],
     datasets,

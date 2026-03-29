@@ -101,7 +101,7 @@ export async function dispatchReplayQueue(
       })),
     )
     claimedRows.forEach((row) => {
-      log.warn('consumer', 'replay_queue_dispatched', {
+      log.info('consumer', 'replay_queue_dispatched', {
         code: 'replay_queue_dispatched',
         runId: row.run_id ?? undefined,
         lenderCode: row.lender_code ?? undefined,

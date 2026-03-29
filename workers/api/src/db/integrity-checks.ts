@@ -1,4 +1,10 @@
 import { getMelbourneNowParts } from '../utils/time'
+import { runHistoricalAnomalyChecks } from './integrity-anomaly-checks'
+import {
+  FETCH_EVENTS_RETENTION_DAYS,
+  FETCH_EVENT_PROVENANCE_ENFORCEMENT_START,
+  RUN_REPORTS_RETENTION_DAYS,
+} from './retention-prune'
 
 export type IntegrityCheckResult = {
   name: string
@@ -52,6 +58,11 @@ type RecentLineageSummaryRow = {
   dataset: string
   n: number | null
 }
+type RecentLineageResolutionSummaryRow = {
+  dataset: string
+  current_n: number | null
+  legacy_n: number | null
+}
 type RecentLineageSampleRow = {
   dataset: string
   bank_name: string
@@ -63,6 +74,8 @@ type RecentLineageSampleRow = {
 type RecentBrokenLineageSampleRow = RecentLineageSampleRow & {
   fetched_at?: string | null
   raw_object_found?: number | null
+  parsed_at?: string | null
+  enforcement_bucket?: 'current' | 'legacy' | null
 }
 type RecentWriteMismatchRow = {
   run_id: string
@@ -171,6 +184,9 @@ async function runSeriesKeyCheck(
 }
 
 async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckResult[]): Promise<void> {
+  const retainedFetchEventWindow = `-${FETCH_EVENTS_RETENTION_DAYS} days`
+  const retainedRunWindow = `-${RUN_REPORTS_RETENTION_DAYS} days`
+
   try {
     const hasPresence = await tableExists(db, 'product_presence_status')
     const hasCatalog = await tableExists(db, 'product_catalog')
@@ -524,48 +540,67 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
       const summaryRows = await db
         .prepare(
           `WITH recent AS (
-             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id, parsed_at
              FROM historical_loan_rates
-             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             WHERE datetime(parsed_at) >= datetime('now', ?1) AND fetch_event_id IS NOT NULL
              UNION ALL
-             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id, parsed_at
              FROM historical_savings_rates
-             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             WHERE datetime(parsed_at) >= datetime('now', ?1) AND fetch_event_id IS NOT NULL
              UNION ALL
-             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id, parsed_at
              FROM historical_term_deposit_rates
-             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             WHERE datetime(parsed_at) >= datetime('now', ?1) AND fetch_event_id IS NOT NULL
            )
-           SELECT recent.dataset, COUNT(*) AS n
+           SELECT
+             recent.dataset,
+             SUM(
+               CASE
+                 WHEN (fe.id IS NULL OR ro.content_hash IS NULL)
+                  AND datetime(recent.parsed_at) >= datetime(?2)
+                 THEN 1 ELSE 0
+               END
+             ) AS current_n,
+             SUM(
+               CASE
+                 WHEN (fe.id IS NULL OR ro.content_hash IS NULL)
+                  AND datetime(recent.parsed_at) < datetime(?2)
+                 THEN 1 ELSE 0
+               END
+             ) AS legacy_n
            FROM recent
            LEFT JOIN fetch_events fe
              ON fe.id = recent.fetch_event_id
            LEFT JOIN raw_objects ro
              ON ro.content_hash = fe.content_hash
-           WHERE fe.id IS NULL
-              OR ro.content_hash IS NULL
            GROUP BY recent.dataset
            ORDER BY recent.dataset`,
         )
-        .all<RecentLineageSummaryRow>()
+        .bind(retainedFetchEventWindow, FETCH_EVENT_PROVENANCE_ENFORCEMENT_START)
+        .all<RecentLineageResolutionSummaryRow>()
       const sampleRows = await db
         .prepare(
           `WITH recent AS (
-             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             SELECT 'home_loans' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id, parsed_at
              FROM historical_loan_rates
-             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             WHERE datetime(parsed_at) >= datetime('now', ?1) AND fetch_event_id IS NOT NULL
              UNION ALL
-             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             SELECT 'savings' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id, parsed_at
              FROM historical_savings_rates
-             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             WHERE datetime(parsed_at) >= datetime('now', ?1) AND fetch_event_id IS NOT NULL
              UNION ALL
-             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id
+             SELECT 'term_deposits' AS dataset, bank_name, product_id, collection_date, fetch_event_id, run_id, parsed_at
              FROM historical_term_deposit_rates
-             WHERE collection_date >= date('now', '-7 days') AND fetch_event_id IS NOT NULL
+             WHERE datetime(parsed_at) >= datetime('now', ?1) AND fetch_event_id IS NOT NULL
            )
            SELECT recent.dataset, recent.bank_name, recent.product_id, recent.collection_date, recent.fetch_event_id, recent.run_id,
                   fe.fetched_at,
-                  CASE WHEN ro.content_hash IS NULL THEN 0 ELSE 1 END AS raw_object_found
+                  CASE WHEN ro.content_hash IS NULL THEN 0 ELSE 1 END AS raw_object_found,
+                  recent.parsed_at,
+                  CASE
+                    WHEN datetime(recent.parsed_at) >= datetime(?2) THEN 'current'
+                    ELSE 'legacy'
+                  END AS enforcement_bucket
            FROM recent
            LEFT JOIN fetch_events fe
              ON fe.id = recent.fetch_event_id
@@ -573,22 +608,39 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
              ON ro.content_hash = fe.content_hash
            WHERE fe.id IS NULL
               OR ro.content_hash IS NULL
-           ORDER BY recent.collection_date DESC, recent.dataset, recent.bank_name, recent.product_id
+           ORDER BY
+             CASE
+               WHEN datetime(recent.parsed_at) >= datetime(?2) THEN 0
+               ELSE 1
+             END ASC,
+             recent.collection_date DESC,
+             recent.dataset,
+             recent.bank_name,
+             recent.product_id
            LIMIT 20`,
         )
+        .bind(retainedFetchEventWindow, FETCH_EVENT_PROVENANCE_ENFORCEMENT_START)
         .all<RecentBrokenLineageSampleRow>()
-      const byDataset = (summaryRows.results ?? []).reduce<Record<string, number>>((acc, row) => {
-        acc[String(row.dataset || 'unknown')] = Number(row.n ?? 0)
+      const byDatasetCurrent = (summaryRows.results ?? []).reduce<Record<string, number>>((acc, row) => {
+        acc[String(row.dataset || 'unknown')] = Number(row.current_n ?? 0)
         return acc
       }, {})
-      const total = Object.values(byDataset).reduce((sum, value) => sum + value, 0)
+      const byDatasetLegacy = (summaryRows.results ?? []).reduce<Record<string, number>>((acc, row) => {
+        acc[String(row.dataset || 'unknown')] = Number(row.legacy_n ?? 0)
+        return acc
+      }, {})
+      const currentTotal = Object.values(byDatasetCurrent).reduce((sum, value) => sum + value, 0)
+      const legacyTotal = Object.values(byDatasetLegacy).reduce((sum, value) => sum + value, 0)
       checks.push({
         name: 'recent_stored_rows_unresolved_fetch_event_lineage',
-        passed: total === 0,
+        passed: currentTotal === 0,
         detail: {
-          window: '7_days',
-          unresolved_row_count: total,
-          by_dataset: byDataset,
+          window: `${FETCH_EVENTS_RETENTION_DAYS}_days`,
+          enforcement_start: FETCH_EVENT_PROVENANCE_ENFORCEMENT_START,
+          unresolved_row_count: currentTotal,
+          legacy_unresolved_row_count: legacyTotal,
+          by_dataset: byDatasetCurrent,
+          legacy_by_dataset: byDatasetLegacy,
           sample: sampleRows.results ?? [],
         },
       })
@@ -617,12 +669,13 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
         .prepare(
           `SELECT COUNT(*) AS n
            FROM lender_dataset_runs
-           WHERE updated_at >= datetime('now', '-7 days')
+           WHERE datetime(updated_at) >= datetime('now', ?1)
              AND (
                COALESCE(lineage_error_count, 0) > 0
                OR COALESCE(accepted_row_count, 0) > COALESCE(written_row_count, 0)
              )`,
         )
+        .bind(retainedRunWindow)
         .first<NumberRow>()
       const sampleRows = await db
         .prepare(
@@ -630,7 +683,7 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
                   accepted_row_count, written_row_count, lineage_error_count,
                   detail_fetch_event_count, updated_at, last_error
            FROM lender_dataset_runs
-           WHERE updated_at >= datetime('now', '-7 days')
+           WHERE datetime(updated_at) >= datetime('now', ?1)
              AND (
                COALESCE(lineage_error_count, 0) > 0
                OR COALESCE(accepted_row_count, 0) > COALESCE(written_row_count, 0)
@@ -638,12 +691,13 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
            ORDER BY updated_at DESC
            LIMIT 20`,
         )
+        .bind(retainedRunWindow)
         .all<RecentWriteMismatchRow>()
       checks.push({
         name: 'recent_lender_dataset_write_mismatches',
         passed: Number(countRow?.n ?? 0) === 0,
         detail: {
-          window: '7_days',
+          window: `${RUN_REPORTS_RETENTION_DAYS}_days`,
           mismatched_run_count: Number(countRow?.n ?? 0),
           sample: sampleRows.results ?? [],
         },
@@ -916,6 +970,8 @@ export async function runIntegrityChecks(
       detail: errorDetail(error),
     })
   }
+
+  checks.push(...await runHistoricalAnomalyChecks(db))
 
   if (options?.includeAnomalyProbes) {
     await runOptionalAnomalyProbes(db, checks)

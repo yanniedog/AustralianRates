@@ -22,6 +22,7 @@ import {
   runCoverageGapAudit,
   shouldFilterCoverageGapLogForActionable,
 } from './coverage-gap-audit'
+import { FETCH_EVENTS_RETENTION_DAYS } from '../db/retention-prune'
 import {
   getCachedCoverageGapRemediationReport,
   loadCoverageGapRemediationReport,
@@ -127,15 +128,6 @@ function actionableCodesFromHealth(health: ParsedHealthRun | null): string[] {
       const c = String((item as { code?: unknown }).code || '').trim()
       if (c) codes.push(c)
     }
-  }
-  return codes
-}
-
-function logCodes(entries: Array<Record<string, unknown>>): string[] {
-  const codes: string[] = []
-  for (const e of entries) {
-    const c = String(e.code ?? '').trim()
-    if (c) codes.push(c)
   }
   return codes
 }
@@ -379,6 +371,7 @@ export async function buildStatusDebugBundle(
   let probeEvents: Awaited<ReturnType<typeof getRecentFetchEvents>> = []
   let logEntriesOut: Array<Record<string, unknown>> = []
   let actionableLogEntriesOut: Array<Record<string, unknown>> = []
+  let actionableIssueCodesOut: string[] = []
   let integrityFindingSnapshot: Array<{ check?: string; passed?: boolean }> = []
 
   const parallel: Promise<void>[] = []
@@ -432,6 +425,9 @@ export async function buildStatusDebugBundle(
           return true
         })
         const actionableIssues = toActionableIssueSummaries(actionableLogEntriesOut)
+        actionableIssueCodesOut = actionableIssues
+          .map((issue) => String(issue.code || '').trim())
+          .filter(Boolean)
         out.logs = {
           total,
           since_ts: sinceTs ?? null,
@@ -450,7 +446,12 @@ export async function buildStatusDebugBundle(
     parallel.push(
       (async () => {
         let report = getCachedCdrAuditReport()
-        if (!report) {
+        const shouldRefreshCdr =
+          !report ||
+          (latestHealth?.overall_ok === true && report.ok === false && parseIsoDateMs(report.generated_at) != null &&
+            parseIsoDateMs(latestHealth.checked_at) != null &&
+            parseIsoDateMs(report.generated_at)! < parseIsoDateMs(latestHealth.checked_at)!)
+        if (shouldRefreshCdr) {
           report = await runCdrPipelineAudit(env)
         }
         out.cdr_audit = { report }
@@ -463,7 +464,14 @@ export async function buildStatusDebugBundle(
       (async () => {
         let report =
           getCachedCoverageGapAuditReport() || (await loadCoverageGapAuditReport(env.DB))
-        if (!report || refreshCoverage) {
+        const shouldRefreshCachedCoverage =
+          !report ||
+          refreshCoverage ||
+          (latestHealth?.overall_ok === true &&
+            parseIsoDateMs(report.generated_at) != null &&
+            parseIsoDateMs(latestHealth.checked_at) != null &&
+            parseIsoDateMs(report.generated_at)! < parseIsoDateMs(latestHealth.checked_at)!)
+        if (shouldRefreshCachedCoverage) {
           report = await runCoverageGapAudit(env, {
             runSource: 'scheduled',
             idleMinutes: 120,
@@ -471,7 +479,7 @@ export async function buildStatusDebugBundle(
             persist: true,
           })
         }
-        coverageRowsSnapshot = report.rows
+        coverageRowsSnapshot = report?.rows ?? []
         const lastRemediation =
           getCachedCoverageGapRemediationReport() || (await loadCoverageGapRemediationReport(env.DB))
         out.coverage_gaps = { report, last_remediation: lastRemediation }
@@ -518,7 +526,10 @@ export async function buildStatusDebugBundle(
   if (sections.has('backlog')) {
     parallel.push(
       (async () => {
-        const backlog = await getDiagnosticsBacklog(env.DB, { limit: backlogLimit })
+        const backlog = await getDiagnosticsBacklog(env.DB, {
+          limit: backlogLimit,
+          lookbackDays: FETCH_EVENTS_RETENTION_DAYS,
+        })
         out.diagnostics_backlog = backlog
       })(),
     )
@@ -554,15 +565,9 @@ export async function buildStatusDebugBundle(
   }
 
   if (sections.has('remediation')) {
-    const entriesForCodes =
-      actionableLogEntriesOut.length > 0
-        ? actionableLogEntriesOut
-        : out.logs && typeof out.logs === 'object' && 'actionable' in out.logs
-          ? ((((out.logs as { actionable?: { issues?: Array<Record<string, unknown>> } }).actionable || {}).issues) ?? [])
-          : []
     const codes = new Set<string>([
       ...actionableCodesFromHealth(latestHealth),
-      ...logCodes(entriesForCodes),
+      ...actionableIssueCodesOut,
     ])
     const merged = mergeRemediationHints([
       remediationFromCoverageGapRows(coverageRowsSnapshot),

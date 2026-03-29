@@ -181,6 +181,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('coverage_gap_audit_detected_gaps') || normalized.includes('coverage_slo_breach')) return 'coverage_slo_breach'
   if (normalized.includes('lender_universe') && normalized.includes('drift')) return 'lender_universe_drift'
   if (normalized.includes('replay_queue_incident_opened')) return 'replay_queue_incident_opened'
+  if (normalized.includes('replay_queue_dispatched')) return 'replay_queue_dispatched'
   if (normalized.includes('replay_queue_dispatch_failed')) return 'replay_queue_dispatch_failed'
   if (normalized.includes('run_lifecycle_reconciliation_stalled')) return 'run_lifecycle_reconciliation_stalled'
   if (normalized.includes('run_lifecycle_reconciliation_failed')) return 'run_lifecycle_reconciliation_failed'
@@ -195,15 +196,41 @@ function mapIssue(code: string): ActionableIssue {
   return ACTIONABLE_MAP[code] || DEFAULT_ISSUE
 }
 
+function normalizeCode(row: Record<string, unknown>): string {
+  const codeRaw = String(row.code ?? '').trim()
+  if (codeRaw) return codeRaw
+  return inferCodeFromMessage(String(row.message ?? ''))
+}
+
+function latestReplayQueueDispatchSuccessTs(rows: Array<Record<string, unknown>>): string | null {
+  let latest: string | null = null
+  for (const row of rows) {
+    if (normalizeCode(row) !== 'replay_queue_dispatched') continue
+    const ts = row.ts == null ? null : String(row.ts)
+    if (!ts) continue
+    if (!latest || ts > latest) latest = ts
+  }
+  return latest
+}
+
 export function toActionableIssueSummaries(rows: Array<Record<string, unknown>>): ActionableIssueSummary[] {
   const grouped = new Map<string, ActionableIssueSummary>()
+  const latestReplayDispatchSuccess = latestReplayQueueDispatchSuccessTs(rows)
 
   for (const row of rows) {
     const codeRaw = String(row.code ?? '').trim()
     const message = String(row.message ?? '')
     const code = codeRaw || inferCodeFromMessage(message)
-    const mapped = mapIssue(code)
     const ts = row.ts == null ? null : String(row.ts)
+
+    // Success dispatch rows are operational breadcrumbs, not incidents.
+    if (code === 'replay_queue_dispatched') continue
+    // If dispatch later succeeded, an earlier transient dispatch failure is not current status.
+    if (code === 'replay_queue_dispatch_failed' && latestReplayDispatchSuccess && ts && ts < latestReplayDispatchSuccess) {
+      continue
+    }
+
+    const mapped = mapIssue(code)
     const source = row.source == null ? null : String(row.source)
 
     const existing = grouped.get(mapped.code)

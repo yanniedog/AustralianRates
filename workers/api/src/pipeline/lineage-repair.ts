@@ -1,5 +1,7 @@
 import { loadCdrDetailPayloadMap } from '../db/cdr-detail-payloads'
+import { repairableFetchEventLineageClause } from '../db/fetch-event-lineage'
 import { persistRawPayload } from '../db/raw-payloads'
+import { resolveFetchEventIdByPayloadIdentity } from '../db/fetch-events'
 import { repairMissingFetchEventLineageByBaseUrl } from './lineage-repair-base-url'
 import type { EnvBindings } from '../types'
 
@@ -19,14 +21,31 @@ type SyntheticCandidate = {
   row_count: number
 }
 
+type DetailRawPayloadRow = {
+  source_url: string
+  fetched_at: string
+  http_status: number | null
+}
+
 type RepairEnv = Pick<EnvBindings, 'DB' | 'RAW_BUCKET'>
+
+type RepairScope = {
+  runId?: string
+  dataset?: DatasetKind
+}
 
 export type LineageRepairResult = {
   cutoff_date: string
   lookback_days: number
   dry_run: boolean
+  filters: {
+    run_id: string | null
+    dataset: DatasetKind | null
+  }
   missing_before: number
   missing_after: number
+  repairable_before: number
+  repairable_after: number
   repaired_rows: number
   strategy_counts: Array<{ dataset: DatasetKind; strategy: string; rows: number }>
   unresolved: Array<{ dataset: DatasetKind; run_source: string; unresolved_rows: number }>
@@ -37,6 +56,11 @@ const DATASET_TABLES: DatasetTable[] = [
   { dataset: 'savings', table: 'historical_savings_rates' },
   { dataset: 'term_deposits', table: 'historical_term_deposit_rates' },
 ]
+const DETAIL_HASH_BATCH_SIZE = 100
+
+function targetDatasetTables(dataset?: DatasetKind): DatasetTable[] {
+  return dataset ? DATASET_TABLES.filter((target) => target.dataset === dataset) : DATASET_TABLES
+}
 
 function clampLookbackDays(input: number | null | undefined): number {
   const value = Math.floor(Number(input))
@@ -49,55 +73,107 @@ function cutoffDateFromLookbackDays(lookbackDays: number): string {
 }
 
 async function countMissingFetchEventRows(db: D1Database, cutoffDate: string): Promise<number> {
-  const row = await db
-    .prepare(
-      `SELECT (
-         SELECT COUNT(*) FROM historical_loan_rates WHERE fetch_event_id IS NULL AND collection_date >= ?1
-       ) + (
-         SELECT COUNT(*) FROM historical_savings_rates WHERE fetch_event_id IS NULL AND collection_date >= ?1
-       ) + (
-         SELECT COUNT(*) FROM historical_term_deposit_rates WHERE fetch_event_id IS NULL AND collection_date >= ?1
-       ) AS n`,
-    )
-    .bind(cutoffDate)
-    .first<{ n: number }>()
-  return Number(row?.n ?? 0)
+  return countRepairableRows(db, DATASET_TABLES, cutoffDate)
+}
+
+async function countRepairableRows(
+  db: D1Database,
+  targets: DatasetTable[],
+  cutoffDate: string,
+  runId?: string,
+): Promise<number> {
+  let total = 0
+  for (const target of targets) {
+    const query = runId
+      ? `SELECT COUNT(*) AS n
+         FROM ${target.table} rates
+         WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
+           AND rates.collection_date >= ?1
+           AND rates.run_id = ?2`
+      : `SELECT COUNT(*) AS n
+         FROM ${target.table} rates
+         WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
+           AND rates.collection_date >= ?1`
+    const row = await db.prepare(query).bind(...(runId ? [cutoffDate, runId] : [cutoffDate])).first<{ n: number }>()
+    total += Number(row?.n ?? 0)
+  }
+  return total
 }
 
 async function updateByDetailHash(
   db: D1Database,
   table: DatasetTable['table'],
   cutoffDate: string,
+  runId?: string,
 ): Promise<number> {
-  const result = await db
-    .prepare(
-      `UPDATE ${table} AS rates
-       SET fetch_event_id = (
-         SELECT fe.id
-         FROM fetch_events fe
-         WHERE fe.content_hash = rates.cdr_product_detail_hash
-         ORDER BY fe.fetched_at DESC, fe.id DESC
-         LIMIT 1
-       )
-       WHERE rates.fetch_event_id IS NULL
-         AND rates.collection_date >= ?1
-         AND rates.cdr_product_detail_hash IS NOT NULL
-         AND TRIM(rates.cdr_product_detail_hash) != ''
-         AND EXISTS (
-           SELECT 1
-           FROM fetch_events fe
-           WHERE fe.content_hash = rates.cdr_product_detail_hash
-         )`,
-    )
-    .bind(cutoffDate)
-    .run()
-  return Number(result.meta?.changes ?? 0)
+  let changed = 0
+
+  while (true) {
+    const hashesResult = await db
+      .prepare(
+        `SELECT DISTINCT rates.cdr_product_detail_hash AS content_hash
+         FROM ${table} rates
+         LEFT JOIN fetch_events current_lineage
+           ON current_lineage.id = rates.fetch_event_id
+         WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
+           AND rates.collection_date >= ?1
+           ${runId ? 'AND rates.run_id = ?2' : ''}
+           AND rates.cdr_product_detail_hash IS NOT NULL
+           AND TRIM(rates.cdr_product_detail_hash) != ''
+           AND EXISTS (
+             SELECT 1
+             FROM fetch_events fe
+             WHERE fe.content_hash = rates.cdr_product_detail_hash
+           )
+         ORDER BY rates.cdr_product_detail_hash ASC
+         LIMIT ?${runId ? 3 : 2}`,
+      )
+      .bind(...(runId ? [cutoffDate, runId, DETAIL_HASH_BATCH_SIZE] : [cutoffDate, DETAIL_HASH_BATCH_SIZE]))
+      .all<{ content_hash: string }>()
+
+    const hashes = (hashesResult.results ?? [])
+      .map((row) => String(row.content_hash || '').trim())
+      .filter(Boolean)
+    if (hashes.length === 0) break
+
+    for (const contentHash of hashes) {
+      const event = await db
+        .prepare(
+          `SELECT id
+           FROM fetch_events
+           WHERE content_hash = ?1
+           ORDER BY fetched_at DESC, id DESC
+           LIMIT 1`,
+        )
+        .bind(contentHash)
+        .first<{ id: number }>()
+      const fetchEventId = Number(event?.id ?? 0)
+      if (!fetchEventId) continue
+
+      const update = await db
+        .prepare(
+          `UPDATE ${table}
+           SET fetch_event_id = ?1
+           WHERE cdr_product_detail_hash = ?2
+             AND collection_date >= ?3
+             ${runId ? 'AND run_id = ?4' : ''}
+             AND ${repairableFetchEventLineageClause(table, 'current_lineage').replaceAll(`${table}.`, '')}`,
+        )
+        .bind(...(runId ? [fetchEventId, contentHash, cutoffDate, runId] : [fetchEventId, contentHash, cutoffDate]))
+        .run()
+      changed += Number(update.meta?.changes ?? 0)
+    }
+  }
+
+  return changed
 }
 
 async function updateByRunSeenProductIndex(
   db: D1Database,
   input: { dataset: DatasetKind; table: DatasetTable['table']; cutoffDate: string },
+  runId?: string,
 ): Promise<number> {
+  const runFilter = runId ? 'AND rates.run_id = ?3' : ''
   const result = await db
     .prepare(
       `UPDATE ${input.table} AS rates
@@ -128,8 +204,9 @@ async function updateByRunSeenProductIndex(
            fe.id DESC
          LIMIT 1
        )
-       WHERE rates.fetch_event_id IS NULL
+       WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
          AND rates.collection_date >= ?1
+         ${runFilter}
          AND rates.run_id IS NOT NULL
          AND TRIM(rates.run_id) != ''
          AND EXISTS (
@@ -149,7 +226,7 @@ async function updateByRunSeenProductIndex(
              AND rsp.product_id = rates.product_id
          )`,
     )
-    .bind(input.cutoffDate, input.dataset)
+    .bind(...(runId ? [input.cutoffDate, input.dataset, runId] : [input.cutoffDate, input.dataset]))
     .run()
   return Number(result.meta?.changes ?? 0)
 }
@@ -158,7 +235,9 @@ async function updateByRunIdAndSourceUrl(
   db: D1Database,
   table: DatasetTable['table'],
   cutoffDate: string,
+  runId?: string,
 ): Promise<number> {
+  const runFilter = runId ? 'AND rates.run_id = ?2' : ''
   const result = await db
     .prepare(
       `UPDATE ${table} AS rates
@@ -170,8 +249,9 @@ async function updateByRunIdAndSourceUrl(
          ORDER BY fe.fetched_at DESC, fe.id DESC
          LIMIT 1
        )
-       WHERE rates.fetch_event_id IS NULL
+       WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
          AND rates.collection_date >= ?1
+         ${runFilter}
          AND rates.run_id IS NOT NULL
          AND TRIM(rates.run_id) != ''
          AND rates.source_url IS NOT NULL
@@ -183,7 +263,7 @@ async function updateByRunIdAndSourceUrl(
              AND fe.source_url = rates.source_url
          )`,
     )
-    .bind(cutoffDate)
+    .bind(...(runId ? [cutoffDate, runId] : [cutoffDate]))
     .run()
   return Number(result.meta?.changes ?? 0)
 }
@@ -191,7 +271,9 @@ async function updateByRunIdAndSourceUrl(
 async function updateBySourceIdentity(
   db: D1Database,
   input: { dataset: DatasetKind; table: DatasetTable['table']; cutoffDate: string },
+  runId?: string,
 ): Promise<number> {
+  const runFilter = runId ? 'AND rates.run_id = ?3' : ''
   const result = await db
     .prepare(
       `UPDATE ${input.table} AS rates
@@ -206,8 +288,9 @@ async function updateBySourceIdentity(
          ORDER BY fe.fetched_at DESC, fe.id DESC
          LIMIT 1
        )
-       WHERE rates.fetch_event_id IS NULL
+       WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
          AND rates.collection_date >= ?1
+         ${runFilter}
          AND rates.source_url IS NOT NULL
          AND TRIM(rates.source_url) != ''
          AND rates.product_id IS NOT NULL
@@ -222,15 +305,16 @@ async function updateBySourceIdentity(
              AND fe.collection_date = rates.collection_date
          )`,
     )
-    .bind(input.cutoffDate, input.dataset)
+    .bind(...(runId ? [input.cutoffDate, input.dataset, runId] : [input.cutoffDate, input.dataset]))
     .run()
   return Number(result.meta?.changes ?? 0)
 }
 
 async function loadSyntheticCandidates(
   db: D1Database,
-  input: { table: DatasetTable['table']; cutoffDate: string },
+  input: { table: DatasetTable['table']; cutoffDate: string; runId?: string },
 ): Promise<SyntheticCandidate[]> {
+  const runFilter = input.runId ? 'AND rates.run_id = ?2' : ''
   const rows = await db
     .prepare(
       `SELECT
@@ -241,8 +325,9 @@ async function loadSyntheticCandidates(
          MAX(rates.collection_date) AS collection_date,
          COUNT(*) AS row_count
        FROM ${input.table} rates
-       WHERE rates.fetch_event_id IS NULL
+       WHERE ${repairableFetchEventLineageClause('rates', 'current_lineage')}
          AND rates.collection_date >= ?1
+         ${runFilter}
          AND rates.cdr_product_detail_hash IS NOT NULL
          AND TRIM(rates.cdr_product_detail_hash) != ''
          AND NOT EXISTS (
@@ -253,7 +338,7 @@ async function loadSyntheticCandidates(
        GROUP BY rates.cdr_product_detail_hash
        ORDER BY row_count DESC, content_hash ASC`,
     )
-    .bind(input.cutoffDate)
+    .bind(...(input.runId ? [input.cutoffDate, input.runId] : [input.cutoffDate]))
     .all<SyntheticCandidate>()
   return rows.results ?? []
 }
@@ -263,10 +348,12 @@ async function createSyntheticDetailFetchEvents(
   target: DatasetTable,
   cutoffDate: string,
   dryRun: boolean,
+  runId?: string,
 ): Promise<number> {
   const candidates = await loadSyntheticCandidates(env.DB, {
     table: target.table,
     cutoffDate,
+    runId,
   })
   if (dryRun || candidates.length === 0) {
     return candidates.reduce((sum, candidate) => sum + Number(candidate.row_count || 0), 0)
@@ -280,6 +367,15 @@ async function createSyntheticDetailFetchEvents(
   let updatedRows = 0
   for (const candidate of candidates) {
     const contentHash = String(candidate.content_hash || '').trim()
+    const rawPayload = await loadDetailRawPayloadByHash(env.DB, contentHash)
+    if (rawPayload) {
+      const fetchEventId = await ensureSyntheticDetailFetchEventFromRawPayload(env.DB, target, candidate, rawPayload)
+      if (fetchEventId != null) {
+        updatedRows += await updateSyntheticCandidateRows(env.DB, target.table, cutoffDate, contentHash, fetchEventId, runId)
+        continue
+      }
+    }
+
     const payloadText = payloadMap.get(contentHash)
     if (!payloadText) continue
 
@@ -297,111 +393,216 @@ async function createSyntheticDetailFetchEvents(
     })
     if (persisted.fetchEventId == null) continue
 
-    const update = await env.DB
-      .prepare(
-        `UPDATE ${target.table}
-         SET fetch_event_id = ?1
-         WHERE fetch_event_id IS NULL
-           AND collection_date >= ?2
-           AND cdr_product_detail_hash = ?3`,
-      )
-      .bind(persisted.fetchEventId, cutoffDate, contentHash)
-      .run()
-    updatedRows += Number(update.meta?.changes ?? 0)
+    updatedRows += await updateSyntheticCandidateRows(env.DB, target.table, cutoffDate, contentHash, persisted.fetchEventId, runId)
   }
 
   return updatedRows
 }
 
+async function loadDetailRawPayloadByHash(
+  db: D1Database,
+  contentHash: string,
+): Promise<DetailRawPayloadRow | null> {
+  return db
+    .prepare(
+      `SELECT rp.source_url, rp.fetched_at, rp.http_status
+       FROM raw_payloads rp
+       JOIN raw_objects ro
+         ON ro.content_hash = rp.content_hash
+       WHERE rp.source_type = 'cdr_product_detail'
+         AND rp.content_hash = ?1
+       ORDER BY rp.fetched_at DESC, rp.id DESC
+       LIMIT 1`,
+    )
+    .bind(contentHash)
+    .first<DetailRawPayloadRow>()
+}
+
+async function ensureSyntheticDetailFetchEventFromRawPayload(
+  db: D1Database,
+  target: DatasetTable,
+  candidate: SyntheticCandidate,
+  rawPayload: DetailRawPayloadRow,
+): Promise<number | null> {
+  const sourceUrl = candidate.source_url || rawPayload.source_url
+  const existingId = await resolveFetchEventIdByPayloadIdentity(db, {
+    runId: candidate.run_id || null,
+    lenderCode: null,
+    dataset: target.dataset,
+    sourceType: 'cdr_product_detail',
+    sourceUrl,
+    contentHash: candidate.content_hash,
+    productId: candidate.product_id || null,
+    collectionDate: candidate.collection_date || null,
+  })
+  if (existingId != null) return existingId
+
+  const inserted = await db
+    .prepare(
+      `INSERT INTO fetch_events (
+         run_id,
+         lender_code,
+         dataset_kind,
+         source_type,
+         source_url,
+         collection_date,
+         fetched_at,
+         http_status,
+         content_hash,
+         product_id,
+         raw_object_created
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+    )
+    .bind(
+      candidate.run_id || null,
+      null,
+      target.dataset,
+      'cdr_product_detail',
+      sourceUrl,
+      candidate.collection_date || null,
+      rawPayload.fetched_at,
+      rawPayload.http_status == null ? null : Number(rawPayload.http_status),
+      candidate.content_hash,
+      candidate.product_id || null,
+      0,
+    )
+    .run()
+
+  return Number(inserted.meta?.last_row_id ?? 0) || null
+}
+
+async function updateSyntheticCandidateRows(
+  db: D1Database,
+  table: DatasetTable['table'],
+  cutoffDate: string,
+  contentHash: string,
+  fetchEventId: number,
+  runId?: string,
+): Promise<number> {
+  const runFilter = runId ? 'AND run_id = ?4' : ''
+  const update = await db
+    .prepare(
+      `UPDATE ${table}
+       SET fetch_event_id = ?1
+       WHERE ${repairableFetchEventLineageClause(table, 'current_lineage').replaceAll(`${table}.`, '')}
+         AND collection_date >= ?2
+         AND cdr_product_detail_hash = ?3
+         ${runFilter}`,
+    )
+    .bind(...(runId ? [fetchEventId, cutoffDate, contentHash, runId] : [fetchEventId, cutoffDate, contentHash]))
+    .run()
+  return Number(update.meta?.changes ?? 0)
+}
+
 async function unresolvedByDatasetAndRunSource(
   db: D1Database,
   cutoffDate: string,
+  targets: DatasetTable[],
+  runId?: string,
 ): Promise<Array<{ dataset: DatasetKind; run_source: string; unresolved_rows: number }>> {
-  const rows = await db
-    .prepare(
-      `SELECT dataset_kind, run_source, unresolved_rows
-       FROM (
-         SELECT 'home_loans' AS dataset_kind, run_source, COUNT(*) AS unresolved_rows
-         FROM historical_loan_rates
-         WHERE fetch_event_id IS NULL
+  const rows: Array<{ dataset: DatasetKind; run_source: string; unresolved_rows: number }> = []
+  for (const target of targets) {
+    const query = runId
+      ? `SELECT run_source, COUNT(*) AS unresolved_rows
+         FROM ${target.table}
+         WHERE ${repairableFetchEventLineageClause(target.table, 'current_lineage').replaceAll(`${target.table}.`, '')}
+           AND collection_date >= ?1
+           AND run_id = ?2
+         GROUP BY run_source
+         ORDER BY unresolved_rows DESC, run_source ASC`
+      : `SELECT run_source, COUNT(*) AS unresolved_rows
+         FROM ${target.table}
+         WHERE ${repairableFetchEventLineageClause(target.table, 'current_lineage').replaceAll(`${target.table}.`, '')}
            AND collection_date >= ?1
          GROUP BY run_source
-         UNION ALL
-         SELECT 'savings', run_source, COUNT(*)
-         FROM historical_savings_rates
-         WHERE fetch_event_id IS NULL
-           AND collection_date >= ?1
-         GROUP BY run_source
-         UNION ALL
-         SELECT 'term_deposits', run_source, COUNT(*)
-         FROM historical_term_deposit_rates
-         WHERE fetch_event_id IS NULL
-           AND collection_date >= ?1
-         GROUP BY run_source
-       )
-       ORDER BY unresolved_rows DESC, dataset_kind ASC, run_source ASC`,
-    )
-    .bind(cutoffDate)
-    .all<Record<string, unknown>>()
-
-  return (rows.results ?? []).map((row) => ({
-    dataset: String(row.dataset_kind) as DatasetKind,
-    run_source: String(row.run_source ?? 'unknown'),
-    unresolved_rows: Number(row.unresolved_rows ?? 0),
-  }))
+         ORDER BY unresolved_rows DESC, run_source ASC`
+    const result = await db.prepare(query).bind(...(runId ? [cutoffDate, runId] : [cutoffDate])).all<Record<string, unknown>>()
+    for (const row of result.results ?? []) {
+      rows.push({
+        dataset: target.dataset,
+        run_source: String(row.run_source ?? 'unknown'),
+        unresolved_rows: Number(row.unresolved_rows ?? 0),
+      })
+    }
+  }
+  return rows.sort((left, right) => right.unresolved_rows - left.unresolved_rows || left.dataset.localeCompare(right.dataset) || left.run_source.localeCompare(right.run_source))
 }
 
 export async function repairMissingFetchEventLineage(
   env: RepairEnv,
-  input?: { lookbackDays?: number; dryRun?: boolean },
+  input?: { lookbackDays?: number; dryRun?: boolean; runId?: string; dataset?: DatasetKind },
 ): Promise<LineageRepairResult> {
   const lookbackDays = clampLookbackDays(input?.lookbackDays)
   const cutoffDate = cutoffDateFromLookbackDays(lookbackDays)
   const dryRun = Boolean(input?.dryRun)
-  const missingBefore = await countMissingFetchEventRows(env.DB, cutoffDate)
+  const targets = targetDatasetTables(input?.dataset)
+  const missingBefore = await countRepairableRows(env.DB, targets, cutoffDate, input?.runId)
 
   const strategyCounts: Array<{ dataset: DatasetKind; strategy: string; rows: number }> = []
-  for (const target of DATASET_TABLES) {
-    const syntheticRows = await createSyntheticDetailFetchEvents(env, target, cutoffDate, dryRun)
-    strategyCounts.push({ dataset: target.dataset, strategy: 'synthetic_detail_payload', rows: syntheticRows })
-
+  for (const target of targets) {
     if (!dryRun) {
-      const byHashRows = await updateByDetailHash(env.DB, target.table, cutoffDate)
+      const byHashRows = await updateByDetailHash(env.DB, target.table, cutoffDate, input?.runId)
       strategyCounts.push({ dataset: target.dataset, strategy: 'detail_hash', rows: byHashRows })
 
-      const byRunSourceRows = await updateByRunIdAndSourceUrl(env.DB, target.table, cutoffDate)
-      strategyCounts.push({ dataset: target.dataset, strategy: 'run_id_source_url', rows: byRunSourceRows })
+      if (input?.runId) {
+        const byRunSourceRows = await updateByRunIdAndSourceUrl(env.DB, target.table, cutoffDate, input.runId)
+        strategyCounts.push({ dataset: target.dataset, strategy: 'run_id_source_url', rows: byRunSourceRows })
 
-      const bySourceIdentityRows = await updateBySourceIdentity(env.DB, {
-        dataset: target.dataset,
-        table: target.table,
-        cutoffDate,
-      })
-      strategyCounts.push({ dataset: target.dataset, strategy: 'source_identity', rows: bySourceIdentityRows })
+        const bySourceIdentityRows = await updateBySourceIdentity(
+          env.DB,
+          {
+            dataset: target.dataset,
+            table: target.table,
+            cutoffDate,
+          },
+          input.runId,
+        )
+        strategyCounts.push({ dataset: target.dataset, strategy: 'source_identity', rows: bySourceIdentityRows })
+      } else {
+        strategyCounts.push({ dataset: target.dataset, strategy: 'run_id_source_url', rows: 0 })
+        strategyCounts.push({ dataset: target.dataset, strategy: 'source_identity', rows: 0 })
+      }
     }
 
-    const byBaseUrlRows = await repairMissingFetchEventLineageByBaseUrl(env, target, cutoffDate, dryRun)
+    const byBaseUrlRows = await repairMissingFetchEventLineageByBaseUrl(env, target, cutoffDate, dryRun, input?.runId)
     strategyCounts.push({ dataset: target.dataset, strategy: 'base_url_cdr_products', rows: byBaseUrlRows })
 
     if (dryRun) continue
 
-    const byRunSeenRows = await updateByRunSeenProductIndex(env.DB, {
-      dataset: target.dataset,
-      table: target.table,
-      cutoffDate,
-    })
-    strategyCounts.push({ dataset: target.dataset, strategy: 'run_seen_products_index', rows: byRunSeenRows })
+    if (input?.runId) {
+      const byRunSeenRows = await updateByRunSeenProductIndex(
+        env.DB,
+        {
+          dataset: target.dataset,
+          table: target.table,
+          cutoffDate,
+        },
+        input.runId,
+      )
+      strategyCounts.push({ dataset: target.dataset, strategy: 'run_seen_products_index', rows: byRunSeenRows })
+    } else {
+      strategyCounts.push({ dataset: target.dataset, strategy: 'run_seen_products_index', rows: 0 })
+    }
+
+    const syntheticRows = await createSyntheticDetailFetchEvents(env, target, cutoffDate, false, input?.runId)
+    strategyCounts.push({ dataset: target.dataset, strategy: 'synthetic_detail_payload', rows: syntheticRows })
   }
 
-  const missingAfter = dryRun ? missingBefore : await countMissingFetchEventRows(env.DB, cutoffDate)
-  const unresolved = await unresolvedByDatasetAndRunSource(env.DB, cutoffDate)
+  const missingAfter = dryRun ? missingBefore : await countRepairableRows(env.DB, targets, cutoffDate, input?.runId)
+  const unresolved = await unresolvedByDatasetAndRunSource(env.DB, cutoffDate, targets, input?.runId)
 
   return {
     cutoff_date: cutoffDate,
     lookback_days: lookbackDays,
     dry_run: dryRun,
+    filters: {
+      run_id: input?.runId ?? null,
+      dataset: input?.dataset ?? null,
+    },
     missing_before: missingBefore,
     missing_after: missingAfter,
+    repairable_before: missingBefore,
+    repairable_after: missingAfter,
     repaired_rows: Math.max(0, missingBefore - missingAfter),
     strategy_counts: strategyCounts,
     unresolved,

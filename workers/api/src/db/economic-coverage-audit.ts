@@ -108,6 +108,8 @@ function isTransientUpstreamTransportError(row: EconomicSeriesCoverageRow): bool
   const msg = String(row.status_message || '')
   const lower = msg.toLowerCase()
   if (msg.includes('upstream_not_ok:403') && msg.includes('rba.gov.au')) return true
+  if (msg.includes('upstream_not_ok:429')) return true
+  if (msg.includes('upstream_not_ok:422')) return true
   if (msg.includes('upstream_not_ok:520') && msg.includes('fred.stlouisfed.org')) return true
   // Parser/layout drift while historical observations remain; same class as logging-expert noise filter.
   if (row.series_id === 'rbnz_ocr' && lower.includes('no parseable observations for rbnz_ocr')) return true

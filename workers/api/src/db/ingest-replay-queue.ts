@@ -347,6 +347,7 @@ export async function listReplayQueueRows(
   input: {
     status?: ReplayQueueStatus
     limit?: number
+    terminalLookbackDays?: number
   } = {},
 ): Promise<ReplayQueueRow[]> {
   const where: string[] = []
@@ -354,6 +355,13 @@ export async function listReplayQueueRows(
   if (input.status) {
     where.push(`status = ?${binds.length + 1}`)
     binds.push(input.status)
+    if ((input.status === 'succeeded' || input.status === 'failed') && Number(input.terminalLookbackDays ?? 14) > 0) {
+      where.push(`updated_at >= datetime('now', ?${binds.length + 1})`)
+      binds.push(`-${Math.max(1, Math.floor(Number(input.terminalLookbackDays ?? 14)))} days`)
+    }
+  } else if (Number(input.terminalLookbackDays ?? 14) > 0) {
+    where.push(`(status IN ('queued', 'dispatching') OR updated_at >= datetime('now', ?${binds.length + 1}))`)
+    binds.push(`-${Math.max(1, Math.floor(Number(input.terminalLookbackDays ?? 14)))} days`)
   }
   const limit = Math.max(1, Math.min(200, Math.floor(input.limit || 50)))
   binds.push(limit)

@@ -1,3 +1,6 @@
+import { repairableFetchEventLineageClause } from './fetch-event-lineage'
+import { FETCH_EVENTS_RETENTION_DAYS } from './retention-prune'
+
 export type DiagnosticsBacklogRow = {
   dataset_kind: string
   lender_code: string | null
@@ -55,7 +58,7 @@ export async function getDiagnosticsBacklog(
   const limit = Math.max(1, Math.min(1000, Math.floor(input.limit ?? 200)))
   const idleMinutes = Math.max(1, Math.min(1440, Math.floor(input.idleMinutes ?? 5)))
   const staleRunMinutes = Math.max(1, Math.min(10080, Math.floor(input.staleRunMinutes ?? 120)))
-  const lookbackDays = Math.max(1, Math.min(3650, Math.floor(input.lookbackDays ?? 365)))
+  const lookbackDays = Math.max(1, Math.min(3650, Math.floor(input.lookbackDays ?? FETCH_EVENTS_RETENTION_DAYS)))
   const readyCutoffIso = minutesAgoIso(idleMinutes)
   const staleCutoffIso = minutesAgoIso(staleRunMinutes)
   const lineageCutoffDate = daysAgoDate(lookbackDays)
@@ -122,7 +125,7 @@ export async function getDiagnosticsBacklog(
              MIN(collection_date) AS oldest_collection_date,
              MAX(collection_date) AS newest_collection_date
            FROM historical_loan_rates
-           WHERE fetch_event_id IS NULL
+           WHERE ${repairableFetchEventLineageClause('historical_loan_rates', 'loan_lineage')}
              AND collection_date >= ?1
            GROUP BY bank_name
            UNION ALL
@@ -134,7 +137,7 @@ export async function getDiagnosticsBacklog(
              MIN(collection_date),
              MAX(collection_date)
            FROM historical_savings_rates
-           WHERE fetch_event_id IS NULL
+           WHERE ${repairableFetchEventLineageClause('historical_savings_rates', 'savings_lineage')}
              AND collection_date >= ?1
            GROUP BY bank_name
            UNION ALL
@@ -146,7 +149,7 @@ export async function getDiagnosticsBacklog(
              MIN(collection_date),
              MAX(collection_date)
            FROM historical_term_deposit_rates
-           WHERE fetch_event_id IS NULL
+           WHERE ${repairableFetchEventLineageClause('historical_term_deposit_rates', 'td_lineage')}
              AND collection_date >= ?1
            GROUP BY bank_name
          )

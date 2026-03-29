@@ -175,6 +175,20 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores transient RBA cash-rate upstream fetch timeouts in actionable status', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'pipeline',
+          level: 'warn',
+          message: 'upstream_fetch',
+          context: 'source=rba_csv host=www.rba.gov.au elapsed_ms=45690 timed_out=1 timeout=1 status=0',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores RBA collection fallback to stored rate (operational, not a failure)', () => {
     expect(
       shouldIgnoreStatusActionableLog(
@@ -265,6 +279,37 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores client extension crashes while keeping site-originated client errors actionable', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'client',
+          level: 'error',
+          code: 'client_error',
+          message: 'Economic page unhandled error',
+          context: {
+            context: '{"filename":"chrome-extension://abcdef/evmAsk.js","message":"Uncaught TypeError"}',
+          },
+        },
+        'active',
+      ),
+    ).toBe(true)
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'client',
+          level: 'error',
+          code: 'client_error',
+          message: 'Economic page unhandled error',
+          context: {
+            context: '{"filename":"https://www.australianrates.com/economic-data.js","message":"Uncaught TypeError"}',
+          },
+        },
+        'active',
+      ),
+    ).toBe(false)
+  })
+
   it('ignores daily savings empty_result noise for non-UBank lenders too', () => {
     expect(
       shouldIgnoreStatusActionableLog(
@@ -336,5 +381,50 @@ describe('shouldIgnoreStatusActionableLog', () => {
         'active',
       ),
     ).toBe(false)
+  })
+
+  it('ignores manual admin diagnostics and lineage-repair endpoint crashes', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'api',
+          level: 'error',
+          message: 'Unhandled internal error',
+          context: '{"context":"{\\"method\\":\\"POST\\",\\"path\\":\\"/api/home-loan-rates/admin/runs/repair-lineage\\"}"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores exhausted retries from ad hoc admin historical tasks', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'consumer',
+          level: 'error',
+          code: 'queue_message_exhausted',
+          message: 'queue_message_exhausted max_attempts=3',
+          run_id: 'historical:admin:2020-02-26:2020-02-26:test-run',
+          context: 'kind=historical_task_execute queue_attempt=4/3 error=D1_ERROR',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores replay scheduling noise from ad hoc admin historical tasks', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'consumer',
+          level: 'error',
+          message: 'replay_queue_scheduled',
+          run_id: 'historical:admin:2020-02-26:2020-02-26:test-run',
+          context: 'kind=historical_task_execute replay_status=queued error=D1_ERROR',
+        },
+        'active',
+      ),
+    ).toBe(true)
   })
 })

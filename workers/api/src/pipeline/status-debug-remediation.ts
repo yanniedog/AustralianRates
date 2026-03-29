@@ -16,6 +16,7 @@ export type RemediationHint = {
 type IntegrityFindingHint = {
   check?: string
   passed?: boolean
+  detail?: Record<string, unknown> | null
 }
 
 function isDatasetKind(v: string): v is DatasetKind {
@@ -126,6 +127,21 @@ export function remediationFromIntegrityFindings(findings: IntegrityFindingHint[
           issue_code: check,
           links: ['/admin/status.html', '/admin/logs.html'],
         })
+        const sample = Array.isArray(finding.detail?.sample)
+          ? (finding.detail?.sample?.[0] as Record<string, unknown> | undefined)
+          : undefined
+        const runId = String(sample?.run_id ?? '').trim()
+        const dataset = String(sample?.dataset ?? '').trim()
+        if (runId && isDatasetKind(dataset)) {
+          out.push({
+            scope_key: `integrity|${check}|lineage_debug|${dataset}|${runId}`,
+            reason: `Integrity finding ${check}: inspect run-scoped lineage diagnostics before manual repair`,
+            method: 'GET',
+            path: `/diagnostics/lineage?dataset=${encodeURIComponent(dataset)}&run_id=${encodeURIComponent(runId)}`,
+            issue_code: check,
+            links: ['/admin/status.html', '/admin/logs.html', '/admin/database.html'],
+          })
+        }
         break
       case 'recent_lender_dataset_write_mismatches':
         out.push({

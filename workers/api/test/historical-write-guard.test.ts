@@ -19,6 +19,9 @@ function loadFixture<T>(name: string): T {
 function validHomeLoanRow(): NormalizedRateRow {
   return {
     ...loadFixture<NormalizedRateRow>('real-normalized-home-loan-row.json'),
+    bankName: 'ANZ',
+    sourceUrl: 'https://api.anz/cds-au/v1/banking/products/anz-1',
+    productUrl: 'https://www.anz.com.au/personal/home-loans/interest-rates/',
     runId: 'daily:test-run',
     runSource: 'scheduled',
     retrievalType: 'present_scrape_same_date',
@@ -29,6 +32,9 @@ function validHomeLoanRow(): NormalizedRateRow {
 function validSavingsRow(): NormalizedSavingsRow {
   return {
     ...loadFixture<NormalizedSavingsRow>('real-normalized-savings-row.json'),
+    bankName: 'ANZ',
+    sourceUrl: 'https://api.anz/cds-au/v1/banking/products/sav-1',
+    productUrl: 'https://www.anz.com.au/personal/bank-accounts/savings-accounts/',
     runId: 'daily:test-run',
     runSource: 'scheduled',
     retrievalType: 'present_scrape_same_date',
@@ -39,6 +45,9 @@ function validSavingsRow(): NormalizedSavingsRow {
 function validTdRow(): NormalizedTdRow {
   return {
     ...loadFixture<NormalizedTdRow>('real-normalized-td-row.json'),
+    bankName: 'ANZ',
+    sourceUrl: 'https://api.anz/cds-au/v1/banking/products/td-1',
+    productUrl: 'https://www.anz.com.au/personal/bank-accounts/term-deposits/',
     runId: 'daily:test-run',
     runSource: 'scheduled',
     retrievalType: 'present_scrape_same_date',
@@ -62,6 +71,11 @@ describe('assertHistoricalWriteAllowed', () => {
     expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:missing_fetch_event_lineage')
   })
 
+  it('blocks writes whose source host does not match the lender provenance contract', () => {
+    const row = { ...validHomeLoanRow(), sourceUrl: 'https://garbage.example.com/not-anz.json' }
+    expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:source_url_host_mismatch')
+  })
+
   it('blocks rows whose bank name does not map to a configured lender', () => {
     const row = { ...validHomeLoanRow(), bankName: 'Unknown Bank Name' }
     expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:unknown_lender_identity')
@@ -75,6 +89,18 @@ describe('assertHistoricalWriteAllowed', () => {
   it('blocks home-loan rows outside the lender playbook rate range', () => {
     const row = { ...validHomeLoanRow(), interestRate: 24 }
     expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:interest_rate_outside_lender_playbook')
+  })
+
+  it('blocks CDR payloads whose product id does not match the row identity', () => {
+    const row = {
+      ...validHomeLoanRow(),
+      bankName: 'Westpac',
+      sourceUrl: 'https://digital-api.westpac.com.au/cds-au/v1/banking/products/HLVariableOffsetOwnerOccupied',
+      productUrl: 'https://www.westpac.com.au/personal-banking/home-loans/variable/variable-loan-with-offset/',
+      productId: 'wrong-product-id',
+      cdrProductDetailJson: readFileSync(resolve(FIXTURES_DIR, 'real-westpac-mortgage-detail.json'), 'utf8'),
+    }
+    expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:cdr_detail_product_id_mismatch')
   })
 
   it('accepts valid savings and term-deposit rows with lineage', () => {

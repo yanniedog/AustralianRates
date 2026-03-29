@@ -17,7 +17,7 @@ import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-au
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
-import { runRetentionPrunes } from '../db/retention-prune'
+import { FETCH_EVENTS_RETENTION_DAYS, runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
 import { collectEconomicSeries } from '../economic/collect'
 import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
@@ -692,9 +692,30 @@ adminRoutes.post('/runs/repair-lineage', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const dryRun = Boolean(body.dry_run ?? body.dryRun)
   const lookbackDays = Number(body.lookback_days ?? body.lookbackDays ?? 365)
+  const runId = String(body.run_id ?? body.runId ?? '').trim() || undefined
+  const datasetValue = body.dataset == null ? undefined : String(body.dataset)
+  const dataset = datasetValue ? parseDatasetFilter(datasetValue) : undefined
+  if (dataset === null || dataset === 'all') {
+    return jsonError(c, 400, 'INVALID_REQUEST', 'dataset must be one of home_loans, savings, term_deposits.')
+  }
+  if (!runId && Number.isFinite(lookbackDays) && lookbackDays > FETCH_EVENTS_RETENTION_DAYS) {
+    return jsonError(
+      c,
+      400,
+      'LOOKBACK_TOO_BROAD',
+      `Broad lineage repair without run_id is limited to ${FETCH_EVENTS_RETENTION_DAYS} day(s) to stay within retained provenance and D1 CPU limits.`,
+      {
+        retained_window_days: FETCH_EVENTS_RETENTION_DAYS,
+        requested_lookback_days: lookbackDays,
+        advice: 'Pass run_id for targeted historical repair, or retry with a smaller lookback_days window.',
+      },
+    )
+  }
   const result = await repairMissingFetchEventLineage(c.env, {
     dryRun,
     lookbackDays,
+    runId,
+    dataset,
   })
   return c.json({
     ok: true,

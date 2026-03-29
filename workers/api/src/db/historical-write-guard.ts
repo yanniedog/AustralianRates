@@ -14,6 +14,8 @@ import type { RetrievalType, RunSource } from '../types.js'
 import { recordIngestAnomaly } from './ingest-anomalies.js'
 
 type HistoricalWritableRow = NormalizedRateRow | NormalizedSavingsRow | NormalizedTdRow
+type LenderIdentity = (typeof TARGET_LENDERS)[number]
+type JsonRecord = Record<string, unknown>
 
 function normalizeKey(value: string): string {
   return String(value || '')
@@ -37,6 +39,73 @@ function resolveLenderCode(bankName: string): string | null {
     }
   }
   return null
+}
+
+function lenderIdentityByCode(code: string): LenderIdentity | null {
+  return TARGET_LENDERS.find((lender) => lender.code === code) ?? null
+}
+
+function hostnameFromUrl(value: string | null | undefined): string | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+  try {
+    return new URL(text).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+function allowedLenderHosts(lender: LenderIdentity): Set<string> {
+  const hosts = new Set<string>()
+  const candidates = [lender.products_endpoint, ...(Array.isArray(lender.seed_rate_urls) ? lender.seed_rate_urls : [])]
+  for (const candidate of candidates) {
+    const host = hostnameFromUrl(candidate)
+    if (host) hosts.add(host)
+  }
+  return hosts
+}
+
+function hostMatchesAllowed(host: string | null, allowedHosts: Set<string>): boolean {
+  if (!host) return false
+  for (const allowed of allowedHosts) {
+    if (host === allowed || host.endsWith(`.${allowed}`) || allowed.endsWith(`.${host}`)) {
+      return true
+    }
+  }
+  return false
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function unwrapCdrDetailPayload(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null
+  if (isRecord(value.data)) return value.data
+  return value
+}
+
+function pickText(record: JsonRecord | null, keys: string[]): string {
+  if (!record) return ''
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function parseCdrDetailContract(json: string): { productId: string; productName: string } | null {
+  try {
+    const parsed = JSON.parse(json) as unknown
+    const detail = unwrapCdrDetailPayload(parsed)
+    if (!detail) return null
+    const productId = pickText(detail, ['productId', 'id'])
+    const productName = pickText(detail, ['name', 'productName'])
+    if (!productId) return null
+    return { productId, productName }
+  } catch {
+    return null
+  }
 }
 
 function resolveRetrievalType(row: HistoricalWritableRow): RetrievalType {
@@ -95,9 +164,31 @@ export function assertHistoricalWriteAllowed(
   if (!lenderCode) {
     throw new HistoricalWriteContractError(dataset, 'unknown_lender_identity', null)
   }
+  const lenderIdentity = lenderIdentityByCode(lenderCode)
+  if (!lenderIdentity) {
+    throw new HistoricalWriteContractError(dataset, 'unknown_lender_identity', lenderCode)
+  }
 
   if (requiresFetchEventLineage(row) && row.fetchEventId == null) {
     throw new HistoricalWriteContractError(dataset, 'missing_fetch_event_lineage', lenderCode)
+  }
+
+  const allowedHosts = allowedLenderHosts(lenderIdentity)
+  if (!hostMatchesAllowed(hostnameFromUrl(row.sourceUrl), allowedHosts)) {
+    throw new HistoricalWriteContractError(dataset, 'source_url_host_mismatch', lenderCode)
+  }
+  if (row.productUrl != null && row.productUrl !== '' && !hostMatchesAllowed(hostnameFromUrl(row.productUrl), allowedHosts)) {
+    throw new HistoricalWriteContractError(dataset, 'product_url_host_mismatch', lenderCode)
+  }
+
+  if (row.cdrProductDetailJson != null && row.cdrProductDetailJson.trim() !== '') {
+    const detailContract = parseCdrDetailContract(row.cdrProductDetailJson)
+    if (!detailContract) {
+      throw new HistoricalWriteContractError(dataset, 'invalid_cdr_product_detail_payload', lenderCode)
+    }
+    if (detailContract.productId !== row.productId) {
+      throw new HistoricalWriteContractError(dataset, 'cdr_detail_product_id_mismatch', lenderCode)
+    }
   }
 
   const requiredConfidence = minimumDatasetConfidence(dataset, row, lenderCode)

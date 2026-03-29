@@ -8,19 +8,38 @@
 const GLOBAL_LOG_RETENTION_HOURS = 48
 /** After time-based prune, drop oldest rows so bursts cannot grow the table without bound. */
 const GLOBAL_LOG_MAX_ROWS = 200_000
-/** Backend lineage/run data: keep only 1 day for compact DB; admin diagnostics see last 24h. */
+/** Backend run-state tables stay short-lived; product provenance tables must remain long-lived. */
 const BACKEND_RETENTION_DAYS = 1
 const INGEST_ANOMALIES_RETENTION_DAYS = BACKEND_RETENTION_DAYS
 const RUN_REPORTS_RETENTION_DAYS = BACKEND_RETENTION_DAYS
-const FETCH_EVENTS_RETENTION_DAYS = BACKEND_RETENTION_DAYS
+/**
+ * Historical provenance is a first-class requirement. fetch_events/raw_objects provide the
+ * chain from stored rows back to the captured payload, so pruning them aggressively creates
+ * artificial historical lineage failures and hides when old data became unverifiable.
+ */
+const FETCH_EVENTS_RETENTION_DAYS = 3650
+/**
+ * Enforce missing/unresolved fetch-event lineage as a hard current-health failure only for rows
+ * parsed after the long-retention provenance policy shipped on 2026-03-29.
+ * Older unresolved rows remain visible as inherited historical provenance debt.
+ */
+const FETCH_EVENT_PROVENANCE_ENFORCEMENT_START = '2026-03-29T00:00:00.000Z'
 /**
  * Grace window to prevent ingest/prune races:
  * fetch_events can be inserted shortly after raw_objects for the same payload.
  */
-const RAW_OBJECT_ORPHAN_GRACE_DAYS = 2
+const RAW_OBJECT_ORPHAN_GRACE_DAYS = FETCH_EVENTS_RETENTION_DAYS + 2
 /** Operational tables with no retention previously; keep 1 day for compact DB. */
 const DOWNLOAD_CHANGE_FEED_RETENTION_DAYS = BACKEND_RETENTION_DAYS
 const CLIENT_HISTORICAL_RETENTION_DAYS = BACKEND_RETENTION_DAYS
+const REPLAY_QUEUE_TERMINAL_RETENTION_DAYS = 14
+
+export {
+  BACKEND_RETENTION_DAYS,
+  FETCH_EVENTS_RETENTION_DAYS,
+  FETCH_EVENT_PROVENANCE_ENFORCEMENT_START,
+  RUN_REPORTS_RETENTION_DAYS,
+}
 
 /**
  * Delete global_log rows older than GLOBAL_LOG_RETENTION_HOURS (all levels).
@@ -206,6 +225,25 @@ export async function pruneClientHistoricalRuns(db: D1Database): Promise<void> {
 }
 
 /**
+ * Delete old replay queue terminal rows so current diagnostics and dispatch scans stay cheap.
+ * Keep active queued/dispatching rows regardless of age; only remove succeeded/failed history.
+ */
+export async function pruneReplayQueueTerminalRows(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `DELETE FROM ingest_replay_queue
+         WHERE status IN ('succeeded', 'failed')
+           AND updated_at < datetime('now', ?1)`,
+      )
+      .bind(`-${REPLAY_QUEUE_TERMINAL_RETENTION_DAYS} days`)
+      .run()
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Run all retention prunes. Safe to call from any context; failures are swallowed.
  */
 export async function runRetentionPrunes(db: D1Database): Promise<void> {
@@ -217,4 +255,5 @@ export async function runRetentionPrunes(db: D1Database): Promise<void> {
   await pruneRawObjectsOrphans(db)
   await pruneDownloadChangeFeed(db)
   await pruneClientHistoricalRuns(db)
+  await pruneReplayQueueTerminalRows(db)
 }

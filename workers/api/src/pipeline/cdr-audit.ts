@@ -1,3 +1,4 @@
+import { FETCH_EVENT_PROVENANCE_ENFORCEMENT_START } from '../db/retention-prune'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 
@@ -77,6 +78,7 @@ type MetricSampleCheckParams = {
   metricSql: string
   sampleSql: string
   failureMessage: string
+  binds?: Array<string | number | null>
 }
 
 /** Runs one metric query and one sample query; on success calls buildResult; on failure returns buildFailureResult. */
@@ -96,8 +98,8 @@ async function runMetricSampleCheck<T extends Record<string, unknown>>(
   const startedAt = Date.now()
   try {
     const [metricsRow, sampleRowsResult] = await Promise.all([
-      env.DB.prepare(params.metricSql).first<T>(),
-      env.DB.prepare(params.sampleSql).all<Record<string, unknown>>(),
+      env.DB.prepare(params.metricSql).bind(...(params.binds ?? [])).first<T>(),
+      env.DB.prepare(params.sampleSql).bind(...(params.binds ?? [])).all<Record<string, unknown>>(),
     ])
     const sampleRows = sampleRowsResult.results ?? []
     const durationMs = Date.now() - startedAt
@@ -289,40 +291,79 @@ async function runProcessedFinalizeGapCheck(env: EnvBindings): Promise<AuditChec
 }
 
 async function runStoredFetchEventGapCheck(env: EnvBindings): Promise<AuditCheckResult> {
-  const metricSql = `WITH recent_rows AS (
+  const metricSql = `WITH current_rows AS (
       SELECT 'home_loans' AS dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at
       FROM historical_loan_rates
-      WHERE collection_date >= date('now', '-30 day')
+      WHERE collection_date >= date(?1)
       UNION ALL
       SELECT 'savings' AS dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at
       FROM historical_savings_rates
-      WHERE collection_date >= date('now', '-30 day')
+      WHERE collection_date >= date(?1)
       UNION ALL
       SELECT 'term_deposits' AS dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at
       FROM historical_term_deposit_rates
-      WHERE collection_date >= date('now', '-30 day')
+      WHERE collection_date >= date(?1)
+    ),
+    current_with_lineage AS (
+      SELECT
+        current_rows.*,
+        fe.id AS resolved_fetch_event_id,
+        ro.content_hash AS resolved_raw_object_hash
+      FROM current_rows
+      LEFT JOIN fetch_events fe
+        ON fe.id = current_rows.fetch_event_id
+      LEFT JOIN raw_objects ro
+        ON ro.content_hash = fe.content_hash
     )
     SELECT
-      COUNT(*) AS total_recent_rows,
-      SUM(CASE WHEN fetch_event_id IS NULL THEN 1 ELSE 0 END) AS missing_fetch_event_rows
-    FROM recent_rows`
-  const sampleSql = `WITH recent_rows AS (
+      COUNT(*) AS total_current_rows,
+      SUM(CASE WHEN current_with_lineage.fetch_event_id IS NULL THEN 1 ELSE 0 END) AS missing_fetch_event_rows,
+      SUM(
+        CASE
+          WHEN current_with_lineage.fetch_event_id IS NOT NULL
+           AND (
+             current_with_lineage.resolved_fetch_event_id IS NULL
+             OR current_with_lineage.resolved_raw_object_hash IS NULL
+           )
+          THEN 1 ELSE 0
+        END
+      ) AS unresolved_fetch_event_rows
+    FROM current_with_lineage`
+  const sampleSql = `WITH current_rows AS (
       SELECT 'home_loans' AS dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at
       FROM historical_loan_rates
-      WHERE collection_date >= date('now', '-30 day')
+      WHERE collection_date >= date(?1)
       UNION ALL
       SELECT 'savings' AS dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at
       FROM historical_savings_rates
-      WHERE collection_date >= date('now', '-30 day')
+      WHERE collection_date >= date(?1)
       UNION ALL
       SELECT 'term_deposits' AS dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at
       FROM historical_term_deposit_rates
-      WHERE collection_date >= date('now', '-30 day')
+      WHERE collection_date >= date(?1)
+    ),
+    current_with_lineage AS (
+      SELECT
+        current_rows.*,
+        fe.id AS resolved_fetch_event_id,
+        CASE WHEN ro.content_hash IS NULL THEN 0 ELSE 1 END AS raw_object_found
+      FROM current_rows
+      LEFT JOIN fetch_events fe
+        ON fe.id = current_rows.fetch_event_id
+      LEFT JOIN raw_objects ro
+        ON ro.content_hash = fe.content_hash
     )
     SELECT
-      dataset_kind, collection_date, bank_name, product_id, parsed_at
-    FROM recent_rows
-    WHERE fetch_event_id IS NULL
+      dataset_kind, collection_date, bank_name, product_id, fetch_event_id, parsed_at,
+      CASE
+        WHEN current_with_lineage.fetch_event_id IS NULL THEN 'missing'
+        ELSE 'unresolved'
+      END AS lineage_state,
+      raw_object_found
+    FROM current_with_lineage
+    WHERE current_with_lineage.fetch_event_id IS NULL
+       OR current_with_lineage.resolved_fetch_event_id IS NULL
+       OR current_with_lineage.raw_object_found = 0
     ORDER BY parsed_at DESC
     LIMIT 12`
   return runMetricSampleCheck(
@@ -330,22 +371,32 @@ async function runStoredFetchEventGapCheck(env: EnvBindings): Promise<AuditCheck
     {
       id: 'stored_missing_fetch_event_links',
       stage: 'stored',
-      title: 'Recent stored rows missing fetch_event_id (30d)',
+      title: 'Post-enforcement stored rows with missing or broken fetch_event lineage',
       metricSql,
       sampleSql,
       failureMessage: 'Failed to query stored-row lineage gaps.',
+      binds: [FETCH_EVENT_PROVENANCE_ENFORCEMENT_START],
     },
     (row) => {
-      const totalRecentRows = toNumber(row?.total_recent_rows)
+      const totalCurrentRows = toNumber(row?.total_current_rows)
       const missingRows = toNumber(row?.missing_fetch_event_rows)
-      const passed = missingRows === 0
+      const unresolvedRows = toNumber(row?.unresolved_fetch_event_rows)
+      const totalBrokenRows = missingRows + unresolvedRows
+      const passed = totalBrokenRows === 0
       return {
         passed,
         severity: passed ? 'info' : 'error',
         summary: passed
-          ? 'All recent stored rows have fetch_event lineage identifiers.'
-          : 'Some recent stored rows are missing fetch_event lineage identifiers.',
-        metrics: { total_recent_rows: totalRecentRows, missing_fetch_event_rows: missingRows },
+          ? 'All post-enforcement stored rows have resolvable fetch_event lineage.'
+          : 'Recent stored rows written after the provenance-enforcement cutoff have missing or broken fetch_event lineage.',
+        metrics: {
+          total_current_rows: totalCurrentRows,
+          missing_fetch_event_rows: missingRows,
+          unresolved_fetch_event_rows: unresolvedRows,
+          broken_fetch_event_rows: totalBrokenRows,
+          enforcement_start: FETCH_EVENT_PROVENANCE_ENFORCEMENT_START,
+          historical_provenance_debt_reported_elsewhere: true,
+        },
       }
     },
   )

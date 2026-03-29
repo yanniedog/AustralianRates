@@ -7,6 +7,18 @@ import type { DiagnosticsBacklogBundle } from '../db/diagnostics-backlog'
 import type { ParsedHealthRun } from '../utils/map-health-run'
 
 type Severity = 'green' | 'yellow' | 'red'
+type MinimalHealthSnapshot = {
+  run_id?: string
+  checked_at?: string
+  overall_ok?: boolean
+  failures?: unknown[]
+  economic?: { severity?: string } | null
+  e2e?: {
+    aligned?: boolean
+    reason_code?: string
+    target_collection_date?: string
+  } | null
+}
 
 function worstOf(a: Severity, b: Severity): Severity {
   const rank = { green: 0, yellow: 1, red: 2 }
@@ -29,14 +41,21 @@ function parseCollectionDateMs(value: string | null | undefined): number | null 
 
 function relevantReplayRows(
   rows: Array<Record<string, unknown>>,
-  latest: ParsedHealthRun | null,
+  latest: ParsedHealthRun | MinimalHealthSnapshot | null,
   coverageIsClean: boolean,
 ): Array<Record<string, unknown>> {
   if (!rows.length) return rows
 
-  const targetCollectionDate = String(latest?.e2e?.targetCollectionDate || '').trim()
+  const targetCollectionDate = String(
+    (latest as ParsedHealthRun | null)?.e2e?.targetCollectionDate ||
+      (latest as MinimalHealthSnapshot | null)?.e2e?.target_collection_date ||
+      '',
+  ).trim()
   const targetMs = parseCollectionDateMs(targetCollectionDate)
-  const currentRunHealthy = latest?.e2e?.aligned === true && coverageIsClean
+  const aligned =
+    (latest as ParsedHealthRun | null)?.e2e?.aligned === true ||
+    (latest as MinimalHealthSnapshot | null)?.e2e?.aligned === true
+  const currentRunHealthy = aligned && (coverageIsClean || latest?.overall_ok === true)
   if (!currentRunHealthy || targetMs == null) return rows
 
   const successByScope = new Map<string, number>()
@@ -81,9 +100,29 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
   const attention: string[] = []
   let worst: Severity = 'green'
 
-  const latest = (bundle.health as { latest?: ParsedHealthRun | null } | undefined)?.latest ?? null
+  const latest =
+    (bundle.health as { latest?: ParsedHealthRun | null } | undefined)?.latest ??
+    ((bundle.diagnostics as Record<string, unknown> | undefined)
+      ? ({
+          run_id: (bundle.diagnostics as Record<string, unknown>).health_run_id,
+          checked_at: (bundle.diagnostics as Record<string, unknown>).checked_at,
+          overall_ok: (bundle.diagnostics as Record<string, unknown>).overall_ok === true,
+          failures: Array.isArray((bundle.diagnostics as Record<string, unknown>).failures)
+            ? ((bundle.diagnostics as Record<string, unknown>).failures as unknown[])
+            : [],
+          economic: {
+            severity: (bundle.diagnostics as { economic?: { severity?: string } }).economic?.severity,
+          },
+          e2e: {
+            aligned: (bundle.diagnostics as { e2e?: { aligned?: boolean } }).e2e?.aligned,
+            reason_code: (bundle.diagnostics as { e2e?: { reason_code?: string } }).e2e?.reason_code,
+            target_collection_date:
+              (bundle.diagnostics as { e2e?: { target_collection_date?: string } }).e2e?.target_collection_date,
+          },
+        } as MinimalHealthSnapshot)
+      : null)
 
-  const integ = latest?.integrity as
+  const integ = (latest as ParsedHealthRun | null)?.integrity as
     | { ok?: boolean; checks?: Array<{ name?: string; passed?: boolean }> }
     | undefined
   const integrityOk = integ?.ok !== false
@@ -154,10 +193,30 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
         attention.push('D1 integrity audit: amber (minor / informational)')
         worst = worstOf(worst, 'yellow')
       }
+      const blockedWrites = failedFindings.find((f) => String(f.check || '') === 'recent_blocked_write_contract_violations')
+      const blockedWriteCount = Number(blockedWrites?.count ?? 0)
+      if (blockedWriteCount > 0) {
+        attention.push(`Active blocked write-contract violations: ${blockedWriteCount} recent row(s) quarantined`)
+        worst = worstOf(worst, 'red')
+      }
+      const conflictFindings = failedFindings.find((f) => String(f.check || '') === 'recent_same_day_series_conflicts')
+      const conflictCount = Number(conflictFindings?.count ?? 0)
+      if (conflictCount > 0) {
+        attention.push(`Historical data conflicts: ${conflictCount} same-day series conflict group(s)`)
+        worst = worstOf(worst, 'red')
+      }
+      const abruptMovementFindings = failedFindings.find((f) => String(f.check || '') === 'recent_abrupt_rate_movements')
+      const abruptMovementCount = Number(abruptMovementFindings?.count ?? 0)
+      if (abruptMovementCount > 0) {
+        attention.push(`Historical data anomalies: ${abruptMovementCount} abrupt rate movement(s) need review`)
+        worst = worstOf(worst, 'red')
+      }
     }
   }
 
-  const healthActionableCount = latest && Array.isArray(latest.actionable) ? latest.actionable.length : 0
+  const parsedLatest = latest as ParsedHealthRun | null
+  const healthActionable = parsedLatest && Array.isArray(parsedLatest.actionable) ? parsedLatest.actionable : []
+  const healthActionableCount = healthActionable.length
 
   if (latest) {
     if (!latest.overall_ok) {
@@ -174,7 +233,11 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       )
       worst = worstOf(worst, 'red')
     }
-    const econSev = String((latest.economic as { summary?: { severity?: string } } | undefined)?.summary?.severity || '')
+    const econSev = String(
+      ((parsedLatest?.economic as { summary?: { severity?: string } } | undefined)?.summary?.severity ||
+        (latest as MinimalHealthSnapshot | null)?.economic?.severity ||
+        '') as string,
+    )
     if (econSev === 'red') {
       attention.push('Economic data coverage: severity red')
       worst = worstOf(worst, 'red')
@@ -182,8 +245,15 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       attention.push('Economic data coverage: severity yellow')
       worst = worstOf(worst, 'yellow')
     }
-    if (latest.e2e && !latest.e2e.aligned) {
-      attention.push(`E2E not aligned: ${latest.e2e.reasonCode}`)
+    const e2eAligned =
+      (latest as ParsedHealthRun | null)?.e2e?.aligned ??
+      (latest as MinimalHealthSnapshot | null)?.e2e?.aligned
+    if (e2eAligned === false) {
+      const reasonCode =
+        (latest as ParsedHealthRun | null)?.e2e?.reasonCode ||
+        (latest as MinimalHealthSnapshot | null)?.e2e?.reason_code ||
+        'unknown'
+      attention.push(`E2E not aligned: ${reasonCode}`)
       worst = worstOf(worst, 'red')
     }
   } else {
@@ -214,8 +284,15 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       })),
     }
     if (cdr.ok === false) {
-      attention.push(`CDR pipeline audit: ${cdr.totals?.failed ?? 0} failed check(s)`)
-      worst = worstOf(worst, 'red')
+      const cdrErrors = Number(cdr.totals?.errors ?? 0)
+      const cdrFailed = Number(cdr.totals?.failed ?? 0)
+      if (cdrErrors > 0) {
+        attention.push(`CDR pipeline audit: ${cdrFailed} failed check(s)`)
+        worst = worstOf(worst, 'red')
+      } else if (cdrFailed > 0) {
+        attention.push(`CDR pipeline audit: ${cdrFailed} historical / warning check(s)`)
+        worst = worstOf(worst, 'yellow')
+      }
     }
   }
 
@@ -363,10 +440,14 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
         count: r.count,
       })),
     }
-    const bt = rf + sr + ml
-    if (bt > 0) {
-      attention.push(`Diagnostics backlog: ${bt} row(s) (finalization ${rf}, stale runs ${sr}, lineage ${ml})`)
-      worst = worstOf(worst, sr > 0 || ml > 0 ? 'red' : 'yellow')
+    const operationalBacklog = rf + sr
+    if (operationalBacklog > 0) {
+      attention.push(`Diagnostics backlog: ${operationalBacklog} operational row(s) (finalization ${rf}, stale runs ${sr})`)
+      worst = worstOf(worst, sr > 0 ? 'red' : 'yellow')
+    }
+    if (ml > 0) {
+      attention.push(`Historical provenance backlog: ${ml} row(s) with missing fetch_event lineage`)
+      worst = worstOf(worst, 'yellow')
     }
   }
 
@@ -426,7 +507,9 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     })),
   }
 
-  const components = Array.isArray(latest?.components) ? latest.components : []
+  const components = Array.isArray(parsedLatest?.components)
+    ? (parsedLatest.components as Array<{ ok?: boolean; key?: string; status?: number; detail?: string }>)
+    : []
   const failedComponents = components
     .filter((c: { ok?: boolean }) => c && c.ok === false)
     .map((c: { key?: string; status?: number; detail?: string }) => ({
@@ -447,9 +530,9 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       ? {
           run_id: latest.run_id,
           checked_at: latest.checked_at,
-          trigger_source: latest.trigger_source,
+          trigger_source: parsedLatest?.trigger_source ?? null,
           overall_ok: latest.overall_ok,
-          duration_ms: latest.duration_ms,
+          duration_ms: parsedLatest?.duration_ms ?? null,
           failures: latest.failures,
           integrity_ok: integrityOk,
           integrity_failed_check_names: failedIntegrityChecks,

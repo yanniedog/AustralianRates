@@ -1,4 +1,5 @@
 import { TARGET_LENDERS } from '../constants'
+import { repairableFetchEventLineageClause } from '../db/fetch-event-lineage'
 import { resolveFetchEventIdByPayloadIdentity } from '../db/fetch-events'
 import type { EnvBindings } from '../types'
 import type { DatasetKind } from '../../../../packages/shared/src'
@@ -189,19 +190,22 @@ async function loadBaseUrlCandidates(
   db: D1Database,
   target: DatasetTable,
   cutoffDate: string,
+  runId?: string,
 ): Promise<BaseUrlCandidate[]> {
+  const runFilter = runId ? 'AND run_id = ?2' : ''
   const result = await db
     .prepare(
       `SELECT run_id, collection_date, bank_name, source_url, parsed_at
        FROM ${target.table}
-       WHERE fetch_event_id IS NULL
+       WHERE ${repairableFetchEventLineageClause(target.table, 'current_lineage').replaceAll(`${target.table}.`, '')}
          AND collection_date >= ?1
+         ${runFilter}
          AND run_id IS NOT NULL
          AND TRIM(run_id) != ''
          AND source_url IS NOT NULL
          AND TRIM(source_url) != ''`,
     )
-    .bind(cutoffDate)
+    .bind(...(runId ? [cutoffDate, runId] : [cutoffDate]))
     .all<Record<string, unknown>>()
 
   const grouped = new Map<string, BaseUrlCandidate & { sourceSet: Set<string> }>()
@@ -404,21 +408,26 @@ async function updateCandidateRows(
   table: DatasetTable['table'],
   candidate: BaseUrlCandidate,
   fetchEventId: number,
+  runId?: string,
 ): Promise<number> {
   let changed = 0
   for (const batch of chunkValues(candidate.sourceUrls, BATCH_SIZE)) {
     if (batch.length === 0) continue
-    const placeholders = batch.map((_, index) => `?${index + 4}`).join(', ')
+    const runFilter = runId ? 'AND run_id = ?4' : ''
+    const placeholders = batch.map((_, index) => `?${index + (runId ? 5 : 4)}`).join(', ')
     const result = await db
       .prepare(
         `UPDATE ${table}
          SET fetch_event_id = ?1
-         WHERE fetch_event_id IS NULL
+         WHERE ${repairableFetchEventLineageClause(table, 'current_lineage').replaceAll(`${table}.`, '')}
            AND collection_date = ?2
            AND run_id = ?3
+           ${runFilter}
            AND source_url IN (${placeholders})`,
       )
-      .bind(fetchEventId, candidate.collectionDate, candidate.runId, ...batch)
+      .bind(...(runId
+        ? [fetchEventId, candidate.collectionDate, candidate.runId, runId, ...batch]
+        : [fetchEventId, candidate.collectionDate, candidate.runId, ...batch]))
       .run()
     changed += Number(result.meta?.changes ?? 0)
   }
@@ -430,8 +439,9 @@ export async function repairMissingFetchEventLineageByBaseUrl(
   target: DatasetTable,
   cutoffDate: string,
   dryRun: boolean,
+  runId?: string,
 ): Promise<number> {
-  const candidates = await loadBaseUrlCandidates(env.DB, target, cutoffDate)
+  const candidates = await loadBaseUrlCandidates(env.DB, target, cutoffDate, runId)
   if (candidates.length === 0) return 0
 
   const runIds = Array.from(new Set(candidates.map((candidate) => candidate.runId)))
@@ -473,7 +483,7 @@ export async function repairMissingFetchEventLineageByBaseUrl(
       if (dryRun) {
         repairedRows += candidate.rowCount
       } else {
-        repairedRows += await updateCandidateRows(env.DB, target.table, candidate, Number(existingRow.id))
+        repairedRows += await updateCandidateRows(env.DB, target.table, candidate, Number(existingRow.id), runId)
       }
       continue
     }
@@ -488,7 +498,7 @@ export async function repairMissingFetchEventLineageByBaseUrl(
 
     const fetchEventId = await ensureSyntheticListFetchEvent(env, target, candidate, rawPayload)
     if (fetchEventId == null) continue
-    repairedRows += await updateCandidateRows(env.DB, target.table, candidate, fetchEventId)
+    repairedRows += await updateCandidateRows(env.DB, target.table, candidate, fetchEventId, runId)
   }
 
   return repairedRows

@@ -38,6 +38,7 @@ const INFORMATIONAL_CHECKS = new Set([
   'latest_vs_global_freshness_indicator',
   'latest_vs_global_freshness',
   'economic_stale_status_rows',
+  'recent_persisted_write_activity',
   /** Warn-only economic coverage slices (upstream transport / proxy), not D1 schema or rates integrity. */
   'economic_transient_upstream_transport',
   'economic_proxy_error_status_rows',
@@ -89,11 +90,19 @@ export async function runDataIntegrityAudit(
     const category =
       c.name === 'product_key_consistency'
         ? 'invalid'
+        : c.name === 'recent_same_day_series_conflicts' || c.name === 'recent_abrupt_rate_movements'
+          ? 'invalid'
         : c.name.startsWith('orphan_') || c.name.includes('linkage') || c.name === 'legacy_raw_payload_backlog'
           ? 'dead'
-          : c.name === 'runs_with_no_outputs' || c.name === 'recent_lender_dataset_write_mismatches'
+          : c.name === 'runs_with_no_outputs' ||
+              c.name === 'recent_lender_dataset_write_mismatches' ||
+              c.name === 'recent_blocked_write_contract_violations'
             ? 'erroneous'
-            : c.name.includes('freshness') || c.name === 'recent_anomaly_volume' || c.name === 'run_report_status_distribution' || c.name === 'dataset_staleness'
+            : c.name.includes('freshness') ||
+                c.name === 'recent_anomaly_volume' ||
+                c.name === 'run_report_status_distribution' ||
+                c.name === 'dataset_staleness' ||
+                c.name === 'recent_persisted_write_activity'
               ? 'indicator'
               : 'erroneous'
     const detail = (c.detail || {}) as Record<string, unknown>
@@ -108,6 +117,12 @@ export async function runDataIntegrityAudit(
               ? detail.unresolved_row_count
               : typeof detail.mismatched_run_count === 'number'
                 ? detail.mismatched_run_count
+                : typeof detail.blocked_violation_count === 'number'
+                  ? detail.blocked_violation_count
+                  : typeof detail.conflict_group_count === 'number'
+                    ? detail.conflict_group_count
+                    : typeof detail.movement_count === 'number'
+                      ? detail.movement_count
           : detail.missing_series_key_total != null || detail.mismatched_series_key_total != null
             ? num(detail.missing_series_key_total) + num(detail.mismatched_series_key_total)
             : undefined
