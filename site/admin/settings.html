@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Admin Settings | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=04d3578">
+    <link rel="stylesheet" href="../public-shell.css?v=04d3578">
+    <link rel="stylesheet" href="admin-layout.css?v=04d3578">
+    <link rel="stylesheet" href="admin-pages.css?v=04d3578">
+    <script src="../site-variant.js?v=04d3578"></script>
+    <script src="../theme.js?v=04d3578"></script>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide admin-settings" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Settings</p>
+            <h1>Settings</h1>
+            <p class="admin-subtitle">Public site presentation options stored in app configuration.</p>
+        </div>
+        <div class="admin-message" id="msg"></div>
+        <section class="admin-card" id="chart-legend-section">
+            <h2>Rate report chart legend</h2>
+            <p class="admin-hint">Opacity of the floating legend on Home Loans, Savings, and Term Deposits Rate Report charts (Lightweight Charts). Visitors see this after a short cache; default 75%.</p>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="chart-legend-opacity-pct">Opacity</label>
+                <input type="range" id="chart-legend-opacity-pct" min="5" max="100" step="1" value="75" style="min-width:180px;">
+                <output id="chart-legend-opacity-out" for="chart-legend-opacity-pct" style="min-width:3.5em;font-variant-numeric:tabular-nums;">75%</output>
+                <button type="button" id="chart-legend-save-btn" class="primary">Save</button>
+                <button type="button" id="chart-legend-reset-btn" class="secondary">Use default (75%)</button>
+            </div>
+            <p class="admin-hint" id="chart-legend-stored" style="margin-top:8px;opacity:0.75;"></p>
+        </section>
+    </main>
+    <script src="admin-portal.js?v=04d3578"></script>
+    <script src="admin-sidebar.js?v=04d3578"></script>
+    <script src="../ui-icons.js?v=04d3578"></script>
+    <script src="../frame.js?v=04d3578"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+
+            var portal = window.AR.AdminPortal;
+            var KEY = 'chart_legend_opacity';
+            var msgEl = document.getElementById('msg');
+            var rangeEl = document.getElementById('chart-legend-opacity-pct');
+            var outEl = document.getElementById('chart-legend-opacity-out');
+            var storedEl = document.getElementById('chart-legend-stored');
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.className = 'admin-message'; }, 4000);
+            }
+
+            function pctFromStored(valueStr) {
+                if (valueStr == null || String(valueStr).trim() === '') return 75;
+                var n = Number(String(valueStr).trim());
+                if (!Number.isFinite(n)) return 75;
+                var dec = n > 1 ? n / 100 : n;
+                if (dec < 0.05) dec = 0.05;
+                if (dec > 1) dec = 1;
+                return Math.round(dec * 100);
+            }
+
+            function syncOutput() {
+                if (!rangeEl || !outEl) return;
+                outEl.textContent = rangeEl.value + '%';
+            }
+
+            function loadFromConfig() {
+                portal.fetchAdmin('/config').then(function (r) { return r.json(); }).then(function (d) {
+                    if (!d.ok || !Array.isArray(d.config)) return;
+                    var row = null;
+                    d.config.forEach(function (r) { if (r.key === KEY) row = r; });
+                    if (rangeEl) {
+                        rangeEl.value = String(pctFromStored(row ? row.value : ''));
+                        syncOutput();
+                    }
+                    if (storedEl) {
+                        storedEl.textContent = row
+                            ? ('Stored: ' + String(row.value) + ' (updated ' + String(row.updated_at || '') + ').')
+                            : 'No custom value; public site uses default 0.75 until you save.';
+                    }
+                }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load config', true); });
+            }
+
+            function savePct(pct) {
+                var n = parseInt(String(pct), 10);
+                if (!Number.isFinite(n)) { showMsg('Invalid opacity.', true); return; }
+                portal.fetchAdmin('/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: KEY, value: String(n) }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.ok) { showMsg('Saved. Allow up to one minute for cached public responses to refresh.', false); loadFromConfig(); }
+                        else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); }
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            }
+
+            function resetToDefault() {
+                if (!confirm('Remove chart_legend_opacity from app config? The public site will use 75% opacity.')) return;
+                portal.fetchAdmin('/config', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: KEY }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.ok) { showMsg('Reset to default.', false); if (rangeEl) { rangeEl.value = '75'; syncOutput(); } loadFromConfig(); }
+                        else { showMsg(d.error && d.error.message ? d.error.message : 'Reset failed', true); }
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
+            }
+
+            if (rangeEl) {
+                rangeEl.addEventListener('input', syncOutput);
+            }
+            var saveBtn = document.getElementById('chart-legend-save-btn');
+            if (saveBtn) saveBtn.addEventListener('click', function () { savePct(rangeEl ? rangeEl.value : '75'); });
+            var resetBtn = document.getElementById('chart-legend-reset-btn');
+            if (resetBtn) resetBtn.addEventListener('click', resetToDefault);
+
+            loadFromConfig();
+        })();
+    </script>
+</body>
+</html>

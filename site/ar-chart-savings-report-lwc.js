@@ -430,7 +430,7 @@
 
         // ── Legend ──────────────────────────────────────────────────────────
         var legendEl = document.createElement('div');
-        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;opacity:0.5;';
+        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;';
 
         var LEGEND_CAP = 15;
 
@@ -520,6 +520,11 @@
         refreshLegend(defaultEntries, defaultRba, defaultCpi, null, null);
         var defaultLegendHTML = legendEl.innerHTML;
         mount.appendChild(legendEl);
+        if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.registerReportLegend === 'function') {
+            window.AR.chartSiteUi.registerReportLegend(legendEl);
+        } else {
+            legendEl.style.opacity = '0.75';
+        }
 
         // ── Crosshair ───────────────────────────────────────────────────────
         mount.addEventListener('mouseleave', function () { legendEl.innerHTML = defaultLegendHTML; });
@@ -598,6 +603,11 @@
                 if (disposed) return;
                 disposed = true;
                 ro.disconnect();
+                try {
+                    if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.unregisterReportLegend === 'function') {
+                        window.AR.chartSiteUi.unregisterReportLegend(legendEl);
+                    }
+                } catch (_) {}
                 try { chart.remove(); } catch (_) {}
                 container._reportDispose = null;
             },

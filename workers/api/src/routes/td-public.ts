@@ -48,6 +48,7 @@ import {
 import { toCsv } from '../utils/csv'
 import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseOptionalNumber } from './public-query'
 import { registerTdChartDataRoute } from './chart-data/term-deposits'
+import { registerSiteUiPublicRoute } from './site-ui-public'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -64,6 +65,7 @@ registerTdAnalyticsRoutes(tdPublicRoutes)
 registerRbaRoutes(tdPublicRoutes)
 registerCpiRoutes(tdPublicRoutes)
 registerTdChartDataRoute(tdPublicRoutes)
+registerSiteUiPublicRoute(tdPublicRoutes)
 
 tdPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

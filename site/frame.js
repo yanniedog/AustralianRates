@@ -209,6 +209,7 @@
             if (path.indexOf('/admin/database') >= 0) return 'Database';
             if (path.indexOf('/admin/clear') >= 0) return 'Clear';
             if (path.indexOf('/admin/config') >= 0) return 'Config';
+            if (path.indexOf('/admin/settings') >= 0) return 'Settings';
             if (path.indexOf('/admin/runs') >= 0) return 'Runs';
             if (path.indexOf('/admin/logs') >= 0) return 'Logs';
             if (path.indexOf('/admin/dashboard') >= 0) return 'Dashboard';
@@ -305,6 +306,7 @@
         var path = window.location.pathname.toLowerCase();
         var links = [
             { href: '/admin/dashboard.html', label: 'Dashboard' },
+            { href: '/admin/settings.html', label: 'Settings' },
             { href: '/admin/status.html', label: 'Status' },
             { href: '/admin/database.html', label: 'Database' },
             { href: '/admin/clear.html', label: 'Clear' },

@@ -31,6 +31,11 @@ export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 0
 export const MIN_RATE_CHECK_INTERVAL_MINUTES = 0
 export const RATE_CHECK_INTERVAL_MINUTES_KEY = 'rate_check_interval_minutes'
 export const RATE_CHECK_LAST_RUN_ISO_KEY = 'rate_check_last_run_iso'
+/** Public Rate Report (LWC) floating legend panel opacity; stored in app_config as decimal string (e.g. 0.75). */
+export const CHART_LEGEND_OPACITY_KEY = 'chart_legend_opacity'
+export const DEFAULT_CHART_LEGEND_OPACITY = 0.75
+export const CHART_LEGEND_OPACITY_MIN = 0.05
+export const CHART_LEGEND_OPACITY_MAX = 1
 export const INGEST_PAUSE_MODE_KEY = 'ingest_pause_mode'
 export const INGEST_PAUSE_REASON_KEY = 'ingest_pause_reason'
 export const INGEST_PAUSE_MODES = ['active', 'repair_pause'] as const

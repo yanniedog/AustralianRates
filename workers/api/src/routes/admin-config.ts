@@ -1,11 +1,13 @@
 import { Hono } from 'hono'
 import { ensureAppConfigTable } from '../db/app-config'
 import {
+  CHART_LEGEND_OPACITY_KEY,
   INGEST_PAUSE_MODE_KEY,
   INGEST_PAUSE_MODES,
   MIN_RATE_CHECK_INTERVAL_MINUTES,
   RATE_CHECK_INTERVAL_MINUTES_KEY,
 } from '../constants'
+import { normalizeChartLegendOpacityForPut } from '../utils/chart-site-ui'
 import type { AppContext, EnvBindings } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -91,6 +93,14 @@ adminConfigRoutes.put('/config', async (c) => {
 
   if (key === INGEST_PAUSE_MODE_KEY) {
     const normalized = normalizeIngestPauseMode(value)
+    if (!normalized.ok) {
+      return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
+    }
+    value = normalized.value
+  }
+
+  if (key === CHART_LEGEND_OPACITY_KEY) {
+    const normalized = normalizeChartLegendOpacityForPut(value)
     if (!normalized.ok) {
       return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
     }

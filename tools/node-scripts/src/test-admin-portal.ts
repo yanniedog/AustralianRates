@@ -46,7 +46,19 @@ const USE_CROSS_ORIGIN_ADMIN_API_PROXY = ADMIN_API_ORIGIN !== ORIGIN;
 const CLOUDFLARE_INSIGHTS_BEACON = 'https://static.cloudflareinsights.com/beacon.min.js';
 const CLARITY_HOST = 'https://www.clarity.ms/';
 
-const PAGE_PATHS = ['dashboard', 'prototypes', 'status', 'integrity', 'database', 'exports', 'clear', 'config', 'runs', 'logs'];
+const PAGE_PATHS = [
+  'dashboard',
+  'settings',
+  'prototypes',
+  'status',
+  'integrity',
+  'database',
+  'exports',
+  'clear',
+  'config',
+  'runs',
+  'logs',
+];
 
 function adminPageUrl(path = ''): string {
   const cleanPath = String(path || '').replace(/^\/+/, '');

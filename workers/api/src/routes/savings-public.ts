@@ -47,6 +47,7 @@ import { parseCsvList, parseExcludeCompareEdgeCases, parseIncludeRemoved, parseO
 import { registerCpiRoutes } from './cpi-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerSavingsChartDataRoute } from './chart-data/savings'
+import { registerSiteUiPublicRoute } from './site-ui-public'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -62,6 +63,7 @@ registerSavingsAnalyticsRoutes(savingsPublicRoutes)
 registerRbaRoutes(savingsPublicRoutes)
 registerCpiRoutes(savingsPublicRoutes)
 registerSavingsChartDataRoute(savingsPublicRoutes)
+registerSiteUiPublicRoute(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)
