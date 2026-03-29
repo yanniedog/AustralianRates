@@ -312,4 +312,48 @@ describe('status-page-diagnostics provenance rollup', () => {
     expect(diagnostics.executive.attention_items).toContain('Historical data conflicts: 1 same-day series conflict group(s)')
     expect(diagnostics.executive.attention_items).toContain('Historical data anomalies: 4 abrupt rate movement(s) need review')
   })
+
+  it('surfaces current-day provenance and roster failures from the integrity audit snapshot', () => {
+    const diagnostics = buildStatusPageDiagnosticsFromBundle({
+      ...baseBundle(),
+      integrity_audit: {
+        latest: {
+          run_id: 'integrity:manual:test',
+          checked_at: '2026-03-30T01:00:00.000Z',
+          trigger_source: 'manual',
+          status: 'red',
+          overall_ok: false,
+          duration_ms: 250,
+          summary: { failed: 2 },
+          findings: [
+            {
+              check: 'current_collection_exact_provenance',
+              passed: false,
+              count: 3,
+              category: 'dead',
+              detail: { unverified_row_count: 3 },
+            },
+            {
+              check: 'current_collection_expected_product_roster',
+              passed: false,
+              count: 2,
+              category: 'erroneous',
+              detail: { failing_scope_count: 2, missing_expected_product_count: 7 },
+            },
+          ],
+        },
+        history: [],
+      },
+    }) as {
+      executive: { worst_severity: string; attention_items: string[] }
+    }
+
+    expect(diagnostics.executive.worst_severity).toBe('red')
+    expect(diagnostics.executive.attention_items).toContain(
+      'Current collection provenance: 3 row(s) are not verified_exact',
+    )
+    expect(diagnostics.executive.attention_items).toContain(
+      'Current collection roster: 2 failing lender/dataset scope(s), 7 missing expected product(s)',
+    )
+  })
 })

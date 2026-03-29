@@ -27,6 +27,60 @@ export type LenderDatasetGapRow = DailyLenderDatasetStatusRow & {
   processed_detail_count: number
 }
 
+export function lenderDatasetStatusScopeKey(
+  row: Pick<DailyLenderDatasetStatusRow, 'collection_date' | 'lender_code' | 'dataset_kind'>,
+): string {
+  return `${row.collection_date}|${row.lender_code}|${row.dataset_kind}`
+}
+
+function compareStatusRecency(a: DailyLenderDatasetStatusRow, b: DailyLenderDatasetStatusRow): number {
+  return String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
+}
+
+export function pickBestDailyLenderDatasetStatusRows(
+  rows: DailyLenderDatasetStatusRow[],
+  limit = 500,
+): DailyLenderDatasetStatusRow[] {
+  const grouped = new Map<string, DailyLenderDatasetStatusRow[]>()
+  for (const row of rows) {
+    const key = lenderDatasetStatusScopeKey(row)
+    const bucket = grouped.get(key) ?? []
+    bucket.push(row)
+    grouped.set(key, bucket)
+  }
+
+  const selected = Array.from(grouped.values()).map((group) => {
+    const ordered = [...group].sort(compareStatusRecency)
+    const healthyComplete = ordered.find((row) => isHealthyDailyLenderDatasetStatusRow(row))
+    if (healthyComplete) return healthyComplete
+    const complete = ordered.find((row) => isLenderDatasetCollectionComplete(row))
+    if (complete) return complete
+    const finalized = ordered.find((row) => Boolean(row.finalized_at))
+    if (finalized) return finalized
+    return ordered[0]
+  })
+
+  return selected
+    .sort((a, b) => {
+      const collectionCmp = String(b.collection_date || '').localeCompare(String(a.collection_date || ''))
+      if (collectionCmp !== 0) return collectionCmp
+      const lenderCmp = String(a.lender_code || '').localeCompare(String(b.lender_code || ''))
+      if (lenderCmp !== 0) return lenderCmp
+      const datasetCmp = String(a.dataset_kind || '').localeCompare(String(b.dataset_kind || ''))
+      if (datasetCmp !== 0) return datasetCmp
+      return compareStatusRecency(a, b)
+    })
+    .slice(0, Math.max(1, Math.min(2000, Math.floor(Number(limit) || 500))))
+}
+
+export function isHealthyDailyLenderDatasetStatusRow(row: DailyLenderDatasetStatusRow): boolean {
+  return (
+    isLenderDatasetCollectionComplete(row) &&
+    Number(row.lineage_error_count ?? 0) === 0 &&
+    Number(row.accepted_row_count ?? 0) <= Number(row.written_row_count ?? 0)
+  )
+}
+
 function runSourceClause(runSource: RunSource): string {
   if (runSource === 'manual') return `rr.run_source = 'manual'`
   return `(rr.run_source IS NULL OR rr.run_source = 'scheduled')`
@@ -123,63 +177,38 @@ export async function listLatestDailyLenderDatasetStatusRows(
     where.push(`ldr.lender_code = ?`)
     binds.push(input.lenderCode)
   }
-  const limit = Math.max(1, Math.min(2000, Math.floor(Number(input.limit) || 500)))
-  binds.push(limit)
+  const fetchLimit = Math.max(1, Math.min(10000, Math.floor(Number(input.limit) || 500) * 10))
 
   const result = await db
     .prepare(
       `SELECT
-         run_id,
-         run_source,
-         lender_code,
-         dataset_kind,
-         bank_name,
-         collection_date,
-         expected_detail_count,
-         index_fetch_succeeded,
-         accepted_row_count,
-         written_row_count,
-         detail_fetch_event_count,
-         lineage_error_count,
-         completed_detail_count,
-         failed_detail_count,
-         finalized_at,
-         updated_at
-       FROM (
-         SELECT
-           ldr.run_id AS run_id,
-           rr.run_source AS run_source,
-           ldr.lender_code AS lender_code,
-           ldr.dataset_kind AS dataset_kind,
-           ldr.bank_name AS bank_name,
-           ldr.collection_date AS collection_date,
-           ldr.expected_detail_count AS expected_detail_count,
-           ldr.index_fetch_succeeded AS index_fetch_succeeded,
-           ldr.accepted_row_count AS accepted_row_count,
-           ldr.written_row_count AS written_row_count,
-           ldr.detail_fetch_event_count AS detail_fetch_event_count,
-           ldr.lineage_error_count AS lineage_error_count,
-           ldr.completed_detail_count AS completed_detail_count,
-           ldr.failed_detail_count AS failed_detail_count,
-           ldr.finalized_at AS finalized_at,
-           ldr.updated_at AS updated_at,
-           ROW_NUMBER() OVER (
-             PARTITION BY ldr.collection_date, ldr.lender_code, ldr.dataset_kind
-             ORDER BY ldr.updated_at DESC
-           ) AS rn
-         FROM lender_dataset_runs ldr
-         JOIN run_reports rr
-           ON rr.run_id = ldr.run_id
-         WHERE ${where.join(' AND ')}
-       ) ranked
-       WHERE rn = 1
-       ORDER BY collection_date DESC, lender_code ASC, dataset_kind ASC
+         ldr.run_id AS run_id,
+         rr.run_source AS run_source,
+         ldr.lender_code AS lender_code,
+         ldr.dataset_kind AS dataset_kind,
+         ldr.bank_name AS bank_name,
+         ldr.collection_date AS collection_date,
+         ldr.expected_detail_count AS expected_detail_count,
+         ldr.index_fetch_succeeded AS index_fetch_succeeded,
+         ldr.accepted_row_count AS accepted_row_count,
+         ldr.written_row_count AS written_row_count,
+         ldr.detail_fetch_event_count AS detail_fetch_event_count,
+         ldr.lineage_error_count AS lineage_error_count,
+         ldr.completed_detail_count AS completed_detail_count,
+         ldr.failed_detail_count AS failed_detail_count,
+         ldr.finalized_at AS finalized_at,
+         ldr.updated_at AS updated_at
+       FROM lender_dataset_runs ldr
+       JOIN run_reports rr
+         ON rr.run_id = ldr.run_id
+       WHERE ${where.join(' AND ')}
+       ORDER BY ldr.collection_date DESC, ldr.lender_code ASC, ldr.dataset_kind ASC, ldr.updated_at DESC
        LIMIT ?`,
     )
-    .bind(...binds)
+    .bind(...binds, fetchLimit)
     .all<DailyLenderDatasetStatusRow>()
 
-  return result.results ?? []
+  return pickBestDailyLenderDatasetStatusRows(result.results ?? [], input.limit)
 }
 
 export async function getCompletedLenderCodesForDailyCollection(

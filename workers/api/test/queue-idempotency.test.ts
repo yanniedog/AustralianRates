@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { claimIdempotency, completeIdempotencyClaim, releaseIdempotencyClaim } from '../src/queue/consumer/idempotency'
+import {
+  activeClaimRetryDelaySeconds,
+  claimIdempotency,
+  completeIdempotencyClaim,
+  releaseIdempotencyClaim,
+} from '../src/queue/consumer/idempotency'
 import type { EnvBindings, IngestMessage } from '../src/types'
 
 class MemoryKv {
@@ -128,5 +133,11 @@ describe('queue idempotency claim', () => {
     expect(claim.enforced).toBe(false)
     expect(claim.reason).toBe('feature_disabled')
     expect(kv.putCalls).toBe(0)
+  })
+
+  it('computes retry delay from the active lease window', () => {
+    expect(activeClaimRetryDelaySeconds('2026-03-29T17:57:00.000Z', 900, Date.parse('2026-03-29T17:50:00.000Z'))).toBe(300)
+    expect(activeClaimRetryDelaySeconds(null, 900, Date.parse('2026-03-29T17:50:00.000Z'))).toBe(300)
+    expect(activeClaimRetryDelaySeconds('2026-03-29T17:50:05.000Z', 900, Date.parse('2026-03-29T17:50:00.000Z'))).toBe(15)
   })
 })

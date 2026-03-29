@@ -1,5 +1,6 @@
 import { SITE_HEALTH_CRON_EXPRESSION } from '../constants'
 import { getIngestPauseConfig } from '../db/app-config'
+import { runDataIntegrityAudit } from '../db/data-integrity-audit'
 import type {
   EconomicCoverageFinding,
   EconomicCoverageProbe,
@@ -15,10 +16,13 @@ import {
 } from '../db/historical-provenance'
 import {
   getLatestIntegrityAuditRun,
+  insertIntegrityAuditRun,
   listIntegrityAuditRuns,
   type IntegrityAuditRunRow,
 } from '../db/integrity-audit-runs'
 import { listReplayQueueRows } from '../db/ingest-replay-queue'
+import { filterResolvedHistoricalTaskFailureLogEntries } from '../db/historical-task-log-resolution'
+import { filterResolvedScheduledDispatchFailureLogEntries } from '../db/scheduled-log-resolution'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from './cdr-audit'
 import {
   getCachedCoverageGapAuditReport,
@@ -41,6 +45,7 @@ import { extractTraceback, parseLogContext, queryProblemLogs } from '../utils/lo
 import { toActionableIssueSummaries } from '../utils/log-actionable'
 import { mapHealthCheckRunRow, type ParsedHealthRun } from '../utils/map-health-run'
 import { buildStatusPageDiagnosticsFromBundle } from './status-page-diagnostics'
+import { filterResolvedWriteContractViolationLogEntries } from '../db/write-contract-violation-resolution'
 import {
   mergeRemediationHints,
   remediationFromActionableCodes,
@@ -387,12 +392,52 @@ export async function buildStatusDebugBundle(
   if (sections.has('integrity_audit')) {
     parallel.push(
       (async () => {
-        const [latestRow, historyRows] = await Promise.all([
+        let [latestRow, historyRows] = await Promise.all([
           getLatestIntegrityAuditRun(env.DB),
           listIntegrityAuditRuns(env.DB, integrityHistoryLimit),
         ])
+        let latestParsed = parseIntegrityAuditRunRow(latestRow)
+        const shouldRefreshIntegrity =
+          !latestParsed ||
+          (latestHealth?.overall_ok === true &&
+            parseIsoDateMs(String(latestParsed?.checked_at ?? '')) != null &&
+            parseIsoDateMs(latestHealth.checked_at) != null &&
+            parseIsoDateMs(String(latestParsed?.checked_at ?? ''))! < parseIsoDateMs(latestHealth.checked_at)!)
+
+        if (shouldRefreshIntegrity) {
+          const refreshed = await runDataIntegrityAudit(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
+          latestParsed = {
+            run_id: `integrity:status-bundle:${refreshed.checked_at}:${crypto.randomUUID()}`,
+            checked_at: refreshed.checked_at,
+            trigger_source: 'manual',
+            overall_ok: refreshed.ok,
+            duration_ms: refreshed.duration_ms,
+            status: refreshed.status,
+            summary: refreshed.summary,
+            findings: refreshed.findings,
+          }
+          try {
+            await insertIntegrityAuditRun(env.DB, {
+              runId: String(latestParsed.run_id),
+              checkedAt: refreshed.checked_at,
+              triggerSource: 'manual',
+              overallOk: refreshed.ok,
+              durationMs: refreshed.duration_ms,
+              status: refreshed.status,
+              summaryJson: JSON.stringify(refreshed.summary),
+              findingsJson: JSON.stringify(refreshed.findings),
+            })
+            ;[latestRow, historyRows] = await Promise.all([
+              getLatestIntegrityAuditRun(env.DB),
+              listIntegrityAuditRuns(env.DB, integrityHistoryLimit),
+            ])
+            latestParsed = parseIntegrityAuditRunRow(latestRow)
+          } catch {
+            // If persistence fails, still surface the refreshed snapshot honestly in the bundle response.
+          }
+        }
         out.integrity_audit = {
-          latest: parseIntegrityAuditRunRow(latestRow),
+          latest: latestParsed,
           history: historyRows.map((r) => parseIntegrityAuditRunRow(r)).filter(Boolean),
         }
         const latestFindings = Array.isArray((out.integrity_audit as { latest?: { findings?: unknown[] } }).latest?.findings)
@@ -424,7 +469,7 @@ export async function buildStatusDebugBundle(
           context: parseLogContext(e.context),
           traceback: extractTraceback(e.context),
         }))
-        actionableLogEntriesOut = logEntriesOut.filter((entry) => {
+        const baseActionableLogEntries = logEntriesOut.filter((entry) => {
           const level = String(entry.level || '').toLowerCase()
           if (level !== 'warn' && level !== 'error') return false
           if (shouldFilterCoverageGapLogForActionable(entry, gapReport)) return false
@@ -432,6 +477,9 @@ export async function buildStatusDebugBundle(
           if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
           return true
         })
+        actionableLogEntriesOut = await filterResolvedScheduledDispatchFailureLogEntries(env.DB, baseActionableLogEntries)
+        actionableLogEntriesOut = await filterResolvedHistoricalTaskFailureLogEntries(env.DB, actionableLogEntriesOut)
+        actionableLogEntriesOut = await filterResolvedWriteContractViolationLogEntries(env.DB, actionableLogEntriesOut)
         const actionableIssues = toActionableIssueSummaries(actionableLogEntriesOut)
         actionableIssueCodesOut = actionableIssues
           .map((issue) => String(issue.code || '').trim())

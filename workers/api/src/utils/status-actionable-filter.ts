@@ -53,6 +53,9 @@ export function shouldIgnoreStatusActionableLog(
   if (source === 'admin' && (KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message) || KNOWN_ADMIN_STATUS_DUPLICATE_CODES.has(code))) {
     return true
   }
+  if (source === 'admin' && message === 'live_cdr_import_failed') {
+    return true
+  }
   // Expected when the admin UI probes /auth-check without a valid session or token (expired tab, scanners).
   if (source === 'admin' && (message === 'auth_check_failed' || code === 'admin_auth_check_failed')) {
     return true
@@ -210,6 +213,25 @@ export function shouldIgnoreStatusActionableLog(
   if (
     source === 'client' &&
     message === 'economic chart: log y-axis disabled (non-positive index values); using linear'
+  ) {
+    return true
+  }
+  if (source === 'client' && message === 'economic selection prevented empty state') {
+    return true
+  }
+  if (
+    source === 'consumer' &&
+    (code === 'queue_idempotency_duplicate_claim' ||
+      message === 'queue_message_duplicate_retry_scheduled' ||
+      message === 'queue_message_duplicate_ack' ||
+      message === 'queue_message_duplicate_exhausted')
+  ) {
+    return true
+  }
+  if (
+    source === 'consumer' &&
+    code === 'replay_queue_scheduled' &&
+    ctxLower.includes('queue_message_duplicate_active_claim')
   ) {
     return true
   }

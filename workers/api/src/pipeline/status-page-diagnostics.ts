@@ -143,7 +143,7 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       overall_ok?: boolean
       duration_ms?: number
       summary?: Record<string, unknown>
-      findings?: Array<{ check?: string; passed?: boolean; count?: unknown; category?: string }>
+      findings?: Array<{ check?: string; passed?: boolean; count?: unknown; category?: string; detail?: Record<string, unknown> }>
     } | null
     history?: unknown[]
   } | undefined
@@ -209,6 +209,31 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       const abruptMovementCount = Number(abruptMovementFindings?.count ?? 0)
       if (abruptMovementCount > 0) {
         attention.push(`Historical data anomalies: ${abruptMovementCount} abrupt rate movement(s) need review`)
+        worst = worstOf(worst, 'red')
+      }
+      const currentProvenanceFindings = failedFindings.find(
+        (f) => String(f.check || '') === 'current_collection_exact_provenance',
+      )
+      const currentProvenanceCount = Number(
+        currentProvenanceFindings?.detail?.unverified_row_count ?? currentProvenanceFindings?.count ?? 0,
+      )
+      if (currentProvenanceCount > 0) {
+        attention.push(`Current collection provenance: ${currentProvenanceCount} row(s) are not verified_exact`)
+        worst = worstOf(worst, 'red')
+      }
+      const currentRosterFindings = failedFindings.find(
+        (f) => String(f.check || '') === 'current_collection_expected_product_roster',
+      )
+      const currentRosterScopeCount = Number(
+        currentRosterFindings?.detail?.failing_scope_count ?? currentRosterFindings?.count ?? 0,
+      )
+      const currentRosterMissingProducts = Number(
+        currentRosterFindings?.detail?.missing_expected_product_count ?? 0,
+      )
+      if (currentRosterScopeCount > 0 || currentRosterMissingProducts > 0) {
+        attention.push(
+          `Current collection roster: ${currentRosterScopeCount} failing lender/dataset scope(s), ${currentRosterMissingProducts} missing expected product(s)`,
+        )
         worst = worstOf(worst, 'red')
       }
     }

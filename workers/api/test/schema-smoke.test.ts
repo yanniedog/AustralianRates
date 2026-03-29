@@ -125,4 +125,14 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('ALTER TABLE health_check_runs')
     expect(sql).toContain('ADD COLUMN economic_json TEXT NOT NULL DEFAULT')
   })
+
+  it('includes home-loan lvr_unspecified schema migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0041_home_loan_lvr_unspecified.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain("lvr_tier IN ('lvr_unspecified'")
+    expect(sql).toContain('CREATE TABLE historical_loan_rates_new')
+    expect(sql).toContain('INSERT INTO historical_loan_rates_new')
+    expect(sql).toContain('CREATE VIEW vw_latest_rates AS')
+    expect(sql).toContain('CREATE VIEW vw_rate_timeseries AS')
+  })
 })

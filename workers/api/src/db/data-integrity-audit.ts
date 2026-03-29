@@ -106,9 +106,12 @@ export async function runDataIntegrityAudit(
         ? 'invalid'
         : c.name === 'recent_same_day_series_conflicts' || c.name === 'recent_abrupt_rate_movements'
           ? 'invalid'
+        : c.name === 'current_collection_exact_provenance'
+          ? 'dead'
         : c.name.startsWith('orphan_') || c.name.includes('linkage') || c.name === 'legacy_raw_payload_backlog'
           ? 'dead'
-          : c.name === 'runs_with_no_outputs' ||
+        : c.name === 'runs_with_no_outputs' ||
+              c.name === 'current_collection_expected_product_roster' ||
               c.name === 'recent_lender_dataset_write_mismatches' ||
               c.name === 'recent_blocked_write_contract_violations'
             ? 'erroneous'
@@ -137,6 +140,10 @@ export async function runDataIntegrityAudit(
                     ? detail.conflict_group_count
                     : typeof detail.movement_count === 'number'
                       ? detail.movement_count
+                      : typeof detail.unverified_row_count === 'number'
+                        ? detail.unverified_row_count
+                        : typeof detail.failing_scope_count === 'number'
+                          ? detail.failing_scope_count
           : detail.missing_series_key_total != null || detail.mismatched_series_key_total != null
             ? num(detail.missing_series_key_total) + num(detail.mismatched_series_key_total)
             : undefined

@@ -266,6 +266,46 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(true)
   })
 
+  it('ignores benign economic empty-state selection guards from client logs', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'client',
+          level: 'warn',
+          code: 'client_warn',
+          message: 'Economic selection prevented empty state',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores queue idempotency duplicate-claim churn in status summaries', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'consumer',
+          level: 'warn',
+          code: 'queue_idempotency_duplicate_claim',
+          message: 'queue_message_duplicate_exhausted',
+        },
+        'active',
+      ),
+    ).toBe(true)
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'consumer',
+          level: 'error',
+          code: 'replay_queue_scheduled',
+          message: 'replay_queue_scheduled',
+          context: '{"context":"error=queue_message_duplicate_active_claim replay_id=abc"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores client-side economic log-scale fallback warnings', () => {
     expect(
       shouldIgnoreStatusActionableLog(
@@ -434,6 +474,20 @@ describe('shouldIgnoreStatusActionableLog', () => {
           message: 'replay_queue_scheduled',
           run_id: 'historical:admin:2020-02-26:2020-02-26:test-run',
           context: 'kind=historical_task_execute replay_status=queued error=D1_ERROR',
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores failed manual live CDR repair attempts', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'admin',
+          level: 'error',
+          message: 'live_cdr_import_failed',
+          context: 'CHECK constraint failed during operator repair attempt',
         },
         'active',
       ),

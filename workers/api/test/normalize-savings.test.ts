@@ -87,6 +87,12 @@ describe('validateNormalizedSavingsRow', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
   })
 
+  it('accepts legitimate saver product names from live CDR catalogs', () => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({ ...row, productName: 'Youth eSaver' })
+    expect(verdict.ok).toBe(true)
+  })
+
   it('rejects savings rows below the minimum confidence for the quality flag', () => {
     const row = loadRealSavingsFixture()
     const verdict = validateNormalizedSavingsRow({ ...row, confidenceScore: 0.6 })

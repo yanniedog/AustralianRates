@@ -57,7 +57,15 @@ export const RATE_STRUCTURES: RateStructure[] = [
   'fixed_4yr',
   'fixed_5yr',
 ]
-export const LVR_TIERS: LvrTier[] = ['lvr_=60%', 'lvr_60-70%', 'lvr_70-80%', 'lvr_80-85%', 'lvr_85-90%', 'lvr_90-95%']
+export const LVR_TIERS: LvrTier[] = [
+  'lvr_=60%',
+  'lvr_60-70%',
+  'lvr_70-80%',
+  'lvr_80-85%',
+  'lvr_85-90%',
+  'lvr_90-95%',
+  'lvr_unspecified',
+]
 export const FEATURE_SETS: FeatureSet[] = ['basic', 'premium']
 
 export const SAVINGS_ACCOUNT_TYPES: SavingsAccountType[] = ['savings', 'transaction', 'at_call']

@@ -60,9 +60,9 @@ describe('assertHistoricalWriteAllowed', () => {
     expect(assertHistoricalWriteAllowed('home_loans', validHomeLoanRow()).lenderCode).toBe('anz')
   })
 
-  it('allows manual historical rows without fetch-event lineage', () => {
+  it('blocks manual historical rows without fetch-event lineage', () => {
     const row = { ...validHomeLoanRow(), runSource: 'manual' as const, retrievalType: 'historical_scrape' as const, fetchEventId: null }
-    expect(assertHistoricalWriteAllowed('home_loans', row).lenderCode).toBe('anz')
+    expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:missing_fetch_event_lineage')
   })
 
   it('blocks scheduled writes without fetch-event lineage', () => {
@@ -74,6 +74,37 @@ describe('assertHistoricalWriteAllowed', () => {
   it('blocks writes whose source host does not match the lender provenance contract', () => {
     const row = { ...validHomeLoanRow(), sourceUrl: 'https://garbage.example.com/not-anz.json' }
     expect(() => assertHistoricalWriteAllowed('home_loans', row)).toThrow('write_contract_violation:source_url_host_mismatch')
+  })
+
+  it('accepts lender product pages on the registrable bank domain when the source endpoint is a subdomain', () => {
+    const row = {
+      ...validHomeLoanRow(),
+      bankName: 'Westpac Banking Corporation',
+      sourceUrl: 'https://digital-api.westpac.com.au/cds-au/v1/banking/products/HLVariableOffsetOwnerOccupied',
+      productUrl: 'https://www.ui.westpac.com.au/cassini/applicationprerequisites/landing',
+      productId: 'HLVariableOffsetOwnerOccupied',
+      cdrProductDetailJson: readFileSync(resolve(FIXTURES_DIR, 'real-westpac-mortgage-detail.json'), 'utf8'),
+    }
+    expect(assertHistoricalWriteAllowed('home_loans', row).lenderCode).toBe('westpac')
+  })
+
+  it('accepts CDR-derived product URLs when the detail payload points to a non-bank CDN host', () => {
+    const row = {
+      ...validSavingsRow(),
+      bankName: 'Great Southern Bank',
+      sourceUrl: 'https://od1.open-banking.business.greatsouthernbank.com.au/api/cds-au/v1/banking/products/956c0e95-5302-47cc-a084-d7970eafee85',
+      productUrl: 'https://cdn.gsb1.prod.cxnpl.io/files/products/956c0e95-5302-47cc-a084-d7970eafee85/v1/app_product_summary.md',
+      productId: '956c0e95-5302-47cc-a084-d7970eafee85',
+      cdrProductDetailJson: JSON.stringify({
+        data: {
+          productId: '956c0e95-5302-47cc-a084-d7970eafee85',
+          name: 'Business+ Account',
+          applicationUri:
+            'https://cdn.gsb1.prod.cxnpl.io/files/products/956c0e95-5302-47cc-a084-d7970eafee85/v1/app_product_summary.md',
+        },
+      }),
+    }
+    expect(assertHistoricalWriteAllowed('savings', row).lenderCode).toBe('great_southern')
   })
 
   it('blocks rows whose bank name does not map to a configured lender', () => {

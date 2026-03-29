@@ -1,4 +1,10 @@
 import { RUN_REPORTS_RETENTION_DAYS } from './retention-prune'
+import { TARGET_LENDERS } from '../constants'
+import {
+  isHealthyDailyLenderDatasetStatusRow,
+  lenderDatasetStatusScopeKey,
+  listLatestDailyLenderDatasetStatusRows,
+} from './lender-dataset-status'
 
 type IntegrityCheckResult = {
   name: string
@@ -16,6 +22,12 @@ type WriteContractViolationSampleRow = {
   run_id: string | null
   product_id: string | null
   created_at: string
+}
+type StoredResolvedProductRow = {
+  dataset_kind: string
+  bank_name: string
+  product_id: string
+  collection_date: string
 }
 type RecentWriteActivityRow = {
   dataset: string
@@ -62,6 +74,93 @@ async function tableExists(db: D1Database, table: string): Promise<boolean> {
   return Number(row?.n ?? 0) > 0
 }
 
+function canonicalBankNameForLenderCode(lenderCode: string | null | undefined): string | null {
+  const normalized = String(lenderCode || '').trim().toLowerCase()
+  if (!normalized) return null
+  const lender = TARGET_LENDERS.find((candidate) => String(candidate.code || '').trim().toLowerCase() === normalized)
+  if (!lender) return null
+  return String(lender.canonical_bank_name || lender.name || '').trim() || null
+}
+
+function storedProductResolutionKey(input: {
+  datasetKind: string | null | undefined
+  collectionDate: string | null | undefined
+  bankName: string | null | undefined
+  productId: string | null | undefined
+}): string | null {
+  const datasetKind = String(input.datasetKind || '').trim()
+  const collectionDate = String(input.collectionDate || '').trim()
+  const bankName = String(input.bankName || '').trim()
+  const productId = String(input.productId || '').trim()
+  if (!datasetKind || !collectionDate || !bankName || !productId) return null
+  return `${datasetKind}|${collectionDate}|${bankName}|${productId}`
+}
+
+async function loadStoredResolutionKeysForWriteContractViolations(
+  db: D1Database,
+  rows: WriteContractViolationSampleRow[],
+): Promise<Set<string>> {
+  const candidateTuples = rows
+    .map((row) => ({
+      datasetKind: String(row.dataset_kind || '').trim(),
+      collectionDate: String(row.collection_date || '').trim(),
+      bankName: canonicalBankNameForLenderCode(row.lender_code),
+      productId: String(row.product_id || '').trim(),
+    }))
+    .filter(
+      (row) =>
+        row.datasetKind &&
+        row.collectionDate &&
+        row.bankName &&
+        row.productId,
+    )
+  if (candidateTuples.length === 0) return new Set<string>()
+
+  const collectionDates = Array.from(new Set(candidateTuples.map((row) => row.collectionDate))).sort()
+  const productIds = Array.from(new Set(candidateTuples.map((row) => row.productId))).sort()
+  const bankNames = Array.from(new Set(candidateTuples.map((row) => row.bankName as string))).sort()
+  if (collectionDates.length === 0 || productIds.length === 0 || bankNames.length === 0) return new Set<string>()
+
+  const datePlaceholders = collectionDates.map((_, index) => `?${index + 1}`).join(', ')
+  const productOffset = collectionDates.length
+  const productPlaceholders = productIds.map((_, index) => `?${productOffset + index + 1}`).join(', ')
+  const bankOffset = productOffset + productIds.length
+  const bankPlaceholders = bankNames.map((_, index) => `?${bankOffset + index + 1}`).join(', ')
+
+  const rowsResult = await db
+    .prepare(
+      `SELECT dataset_kind, bank_name, product_id, collection_date
+       FROM (
+         SELECT 'home_loans' AS dataset_kind, bank_name, product_id, collection_date
+         FROM historical_loan_rates
+         UNION ALL
+         SELECT 'savings' AS dataset_kind, bank_name, product_id, collection_date
+         FROM historical_savings_rates
+         UNION ALL
+         SELECT 'term_deposits' AS dataset_kind, bank_name, product_id, collection_date
+         FROM historical_term_deposit_rates
+       ) stored_rows
+       WHERE collection_date IN (${datePlaceholders})
+         AND product_id IN (${productPlaceholders})
+         AND bank_name IN (${bankPlaceholders})`,
+    )
+    .bind(...collectionDates, ...productIds, ...bankNames)
+    .all<StoredResolvedProductRow>()
+
+  return new Set(
+    (rowsResult.results ?? [])
+      .map((row) =>
+        storedProductResolutionKey({
+          datasetKind: row.dataset_kind,
+          collectionDate: row.collection_date,
+          bankName: row.bank_name,
+          productId: row.product_id,
+        }),
+      )
+      .filter((value): value is string => Boolean(value)),
+  )
+}
+
 export async function runHistoricalAnomalyChecks(db: D1Database): Promise<IntegrityCheckResult[]> {
   const checks: IntegrityCheckResult[] = []
   const retainedRunWindow = `-${RUN_REPORTS_RETENTION_DAYS} days`
@@ -78,33 +177,59 @@ export async function runHistoricalAnomalyChecks(db: D1Database): Promise<Integr
         },
       })
     } else {
-      const summaryRows = await db
-        .prepare(
-          `SELECT dataset_kind AS dataset, COUNT(*) AS n
-           FROM ingest_anomalies
-           WHERE datetime(created_at) >= datetime('now', ?1)
-             AND reason LIKE 'write_contract_violation:%'
-           GROUP BY dataset_kind
-           ORDER BY dataset_kind`,
-        )
-        .bind(retainedRunWindow)
-        .all<CountByDatasetRow>()
-      const sampleRows = await db
+      const [recentRows, latestStatusRows, hasHomeLoanTable, hasSavingsTable, hasTermDepositTable] = await Promise.all([
+        db
         .prepare(
           `SELECT dataset_kind, lender_code, collection_date, reason, run_id, product_id, created_at
            FROM ingest_anomalies
            WHERE datetime(created_at) >= datetime('now', ?1)
              AND reason LIKE 'write_contract_violation:%'
-           ORDER BY created_at DESC
-           LIMIT 20`,
+           ORDER BY created_at DESC`,
         )
         .bind(retainedRunWindow)
-        .all<WriteContractViolationSampleRow>()
-      const byDataset = (summaryRows.results ?? []).reduce<Record<string, number>>((acc, row) => {
-        acc[String(row.dataset || 'unknown')] = Number(row.n ?? 0)
+        .all<WriteContractViolationSampleRow>(),
+        listLatestDailyLenderDatasetStatusRows(db, { limit: 2000 }),
+        tableExists(db, 'historical_loan_rates'),
+        tableExists(db, 'historical_savings_rates'),
+        tableExists(db, 'historical_term_deposit_rates'),
+      ])
+      const storedResolutionKeys =
+        hasHomeLoanTable && hasSavingsTable && hasTermDepositTable
+          ? await loadStoredResolutionKeysForWriteContractViolations(db, recentRows.results ?? [])
+          : new Set<string>()
+      const healthyScopes = new Set(
+        latestStatusRows
+          .filter((row) => isHealthyDailyLenderDatasetStatusRow(row))
+          .map((row) => lenderDatasetStatusScopeKey(row)),
+      )
+      const unresolvedRows = (recentRows.results ?? []).filter((row) => {
+        const lenderCode = String(row.lender_code || '').trim()
+        const datasetKind = String(row.dataset_kind || '').trim()
+        const collectionDate = String(row.collection_date || '').trim()
+        if (!lenderCode || !datasetKind || !collectionDate) return true
+        const storedResolution = storedProductResolutionKey({
+          datasetKind,
+          collectionDate,
+          bankName: canonicalBankNameForLenderCode(lenderCode),
+          productId: row.product_id,
+        })
+        if (storedResolution && storedResolutionKeys.has(storedResolution)) {
+          return false
+        }
+        return !healthyScopes.has(
+          lenderDatasetStatusScopeKey({
+            collection_date: collectionDate,
+            lender_code: lenderCode,
+            dataset_kind: datasetKind as 'home_loans' | 'savings' | 'term_deposits',
+          }),
+        )
+      })
+      const byDataset = unresolvedRows.reduce<Record<string, number>>((acc, row) => {
+        const dataset = String(row.dataset_kind || 'unknown').trim() || 'unknown'
+        acc[dataset] = (acc[dataset] ?? 0) + 1
         return acc
       }, {})
-      const total = Object.values(byDataset).reduce((sum, value) => sum + value, 0)
+      const total = unresolvedRows.length
       checks.push({
         name: 'recent_blocked_write_contract_violations',
         passed: total === 0,
@@ -112,7 +237,8 @@ export async function runHistoricalAnomalyChecks(db: D1Database): Promise<Integr
           window: `${RUN_REPORTS_RETENTION_DAYS}_days`,
           blocked_violation_count: total,
           by_dataset: byDataset,
-          sample: sampleRows.results ?? [],
+          resolved_scope_count: Math.max(0, (recentRows.results ?? []).length - unresolvedRows.length),
+          sample: unresolvedRows.slice(0, 20),
         },
       })
     }

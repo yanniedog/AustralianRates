@@ -6,6 +6,9 @@
 import { Hono } from 'hono'
 import { getIngestPauseConfig } from '../db/app-config'
 import { getLatestHealthCheckRun, shouldFilterSiteHealthAttentionForActionable } from '../db/health-check-runs'
+import { filterResolvedHistoricalTaskFailureLogEntries } from '../db/historical-task-log-resolution'
+import { filterResolvedScheduledDispatchFailureLogEntries } from '../db/scheduled-log-resolution'
+import { filterResolvedWriteContractViolationLogEntries } from '../db/write-contract-violation-resolution'
 import { loadCoverageGapAuditReport, shouldFilterCoverageGapLogForActionable } from '../pipeline/coverage-gap-audit'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
@@ -188,11 +191,14 @@ adminLogRoutes.get('/logs/system/actionable', async (c) => {
     if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
     return true
   })
-  const issues = toActionableIssueSummaries(problemRows)
+  const resolvedSchedulerRows = await filterResolvedScheduledDispatchFailureLogEntries(c.env.DB, problemRows)
+  const resolvedHistoricalTaskRows = await filterResolvedHistoricalTaskFailureLogEntries(c.env.DB, resolvedSchedulerRows)
+  const filteredProblemRows = await filterResolvedWriteContractViolationLogEntries(c.env.DB, resolvedHistoricalTaskRows)
+  const issues = toActionableIssueSummaries(filteredProblemRows)
   return c.json({
     ok: true,
     count: issues.length,
-    scanned: problemRows.length,
+    scanned: filteredProblemRows.length,
     issues,
   })
 })

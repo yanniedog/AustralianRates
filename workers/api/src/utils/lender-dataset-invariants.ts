@@ -63,13 +63,14 @@ export function assessLenderDatasetCoverage(
   if (asCount(snapshot.lineage_error_count) > 0) {
     reasons.push('lineage_errors_present')
   }
+  if (acceptedRows > writtenRows) {
+    reasons.push('accepted_written_mismatch')
+  }
   if (failedDetails > 0) {
     reasons.push('failed_detail_fetches_present')
   }
   if (processedDetails < expectedDetails) {
-    const missing = expectedDetails - processedDetails
-    const oneShortWithData = missing === 1 && writtenRows > 0
-    if (!oneShortWithData) reasons.push('detail_processing_incomplete')
+    reasons.push('detail_processing_incomplete')
   }
   const terminalNoAcceptedRows = isCompletedWithNoAcceptedRows(snapshot)
   if (expectedDetails > 0 && writtenRows <= 0 && !terminalNoAcceptedRows) {
@@ -166,17 +167,15 @@ export function isLenderDatasetReadyForFinalization(
   // The "one short" bypass is only for the known-stuck case where some rows already landed; if accepted is
   // still zero, one product may still be in flight — keep reporting incomplete, not zero_accepted.
   if (processedDetails < expectedDetails) {
-    const missing = expectedDetails - processedDetails
-    const oneShortWithData =
-      missing === 1 && completedDetails >= 1 && asCount(snapshot.accepted_row_count) > 0
-    if (!oneShortWithData) {
-      return { ready: false, reason: 'detail_processing_incomplete' }
-    }
+    return { ready: false, reason: 'detail_processing_incomplete' }
   }
   // Some CDR product details legitimately contain no ingestible rate rows (e.g. business-only shells).
   // If all expected detail jobs completed and none failed, allow finalization as a terminal no-row outcome.
   if (isCompletedWithNoAcceptedRows(snapshot)) {
     return { ready: true, reason: null }
+  }
+  if (asCount(snapshot.accepted_row_count) > asCount(snapshot.written_row_count)) {
+    return { ready: false, reason: 'accepted_written_mismatch' }
   }
   if (asCount(snapshot.accepted_row_count) <= 0) {
     return { ready: false, reason: 'zero_accepted_rows_for_nonzero_expected_details' }
@@ -187,13 +186,7 @@ export function isLenderDatasetReadyForFinalization(
   if (asCount(snapshot.detail_fetch_event_count) <= 0) {
     return { ready: false, reason: 'detail_fetch_events_missing' }
   }
-  if (processedDetails < expectedDetails) {
-    const missing = expectedDetails - processedDetails
-    if (missing === 1 && completedDetails >= 1) {
-      return { ready: true, reason: null }
-    }
-    return { ready: false, reason: 'detail_processing_incomplete' }
-  }
+  if (processedDetails < expectedDetails) return { ready: false, reason: 'detail_processing_incomplete' }
   if (failedDetails > 0) {
     const minCompleted = Math.ceil(expectedDetails * MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION)
     if (completedDetails < minCompleted) {

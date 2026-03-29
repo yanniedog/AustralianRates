@@ -173,6 +173,7 @@ export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: 
   }
 
   const t = lower(text)
+  const hasExplicitLvrSignal = t.includes('lvr') || t.includes('loan to value') || t.includes('ltv')
   const range = t.match(/(\d{1,2}(?:\.\d+)?)\s*(?:-|to)\s*(\d{1,2}(?:\.\d+)?)\s*%/)
   if (range) {
     const hi = Number(range[2])
@@ -195,6 +196,10 @@ export function normalizeLvrTier(text: string, minLvr?: number | null, maxLvr?: 
     if (Number.isFinite(hi)) {
       return { tier: tierForBoundary(hi), wasDefault: false }
     }
+  }
+
+  if (!hasExplicitLvrSignal) {
+    return { tier: 'lvr_unspecified', wasDefault: false }
   }
 
   return { tier: 'lvr_80-85%', wasDefault: true }
@@ -269,7 +274,17 @@ export function isProductNameLikelyRateProduct(name: string): boolean {
   if (blocked.some((x) => normalized.includes(x))) return false
 
   const helpfulTokens = ['home', 'loan', 'variable', 'fixed', 'owner', 'invest', 'rate', 'offset', 'package']
-  return helpfulTokens.some((x) => normalized.includes(x))
+  if (helpfulTokens.some((x) => normalized.includes(x))) return true
+
+  const knownMortgagePatterns = [
+    'mortgage',
+    'bridging',
+    'flexi first',
+    'premium options',
+    'orange advantage',
+    'mortgage simplifier',
+  ]
+  return knownMortgagePatterns.some((x) => normalized.includes(x))
 }
 
 const COMPARISON_RATE_MAX_ABOVE_INTEREST = 10

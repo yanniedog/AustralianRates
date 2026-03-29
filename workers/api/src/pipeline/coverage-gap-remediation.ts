@@ -129,6 +129,41 @@ function hasDetailGapReasons(reasons: string[]): boolean {
   )
 }
 
+export function resolveCoverageGapReconcileAction(
+  reasons: string[],
+  dailyRunResult?: DailyRunResult | null,
+): {
+  action: 'reconcile' | 'scheduled_retry_pending'
+  status: 'ok' | 'pending'
+  note: string
+} {
+  if (dailyRunWillRetry(dailyRunResult)) {
+    return {
+      action: 'scheduled_retry_pending',
+      status: 'pending',
+      note: 'Scheduled daily retry is already enqueuing incomplete lender/dataset work for the active date.',
+    }
+  }
+
+  if (
+    hasDetailGapReasons(reasons) ||
+    dailyRunReason(dailyRunResult) === 'already_fresh_for_date' ||
+    !dailyRunResult
+  ) {
+    return {
+      action: 'reconcile',
+      status: 'ok',
+      note: 'Forced lender/day reconciliation should be queued for this scope.',
+    }
+  }
+
+  return {
+    action: 'scheduled_retry_pending',
+    status: 'pending',
+    note: `Scheduled retry path remains active (${dailyRunReason(dailyRunResult) || 'pending'}).`,
+  }
+}
+
 export function groupCoverageGapRowsForRemediation(
   rows: CoverageGapAuditReport['rows'],
   maxScopes = DEFAULT_SCOPE_LIMIT,
@@ -240,44 +275,39 @@ export async function runCoverageGapRemediation(
           replayResult.failed > 0
             ? `Replay dispatch failed for ${replayResult.failed} queued item(s).`
             : `Dispatched ${replayResult.dispatched} replay item(s) for this scope.`
-      } else if (
-        hasDetailGapReasons(scope.reasons) ||
-        dailyRunReason(input.dailyRunResult) === 'already_fresh_for_date' ||
-        !input.dailyRunResult
-      ) {
-        const reconcileResult = await triggerDailyRun(env, {
-          source: 'manual',
-          force: true,
-          runIdOverride: `daily:${scope.collection_date}:coverage-gap-remediate:${crypto.randomUUID()}`,
-          collectionDateOverride: scope.collection_date,
-          lenderCodes: [scope.lender_code],
-          datasets: scope.datasets,
-        })
-        const summary = dailyRunSummary(reconcileResult)
-        reconcile = {
-          ok: Boolean(summary?.ok),
-          skipped: Boolean(summary?.skipped),
-          reason: summary?.reason ?? null,
-          run_id: summary?.run_id ?? null,
-          enqueued: summary?.enqueued ?? null,
-        }
-
-        action = 'reconcile'
-        if (reconcile.ok && !reconcile.skipped) {
-          status = 'ok'
-          note = `Queued forced lender/day reconciliation run ${reconcile.run_id || 'n/a'}.`
-        } else {
-          status = 'failed'
-          note = `Forced lender/day reconciliation did not queue work (${reconcile.reason || 'unknown'}).`
-        }
-      } else if (dailyRunWillRetry(input.dailyRunResult)) {
-        action = 'scheduled_retry_pending'
-        status = 'pending'
-        note = 'Scheduled daily retry is already enqueuing incomplete lender/dataset work for the active date.'
       } else {
-        action = 'scheduled_retry_pending'
-        status = 'pending'
-        note = `Scheduled retry path remains active (${dailyRunReason(input.dailyRunResult) || 'pending'}).`
+        const plannedAction = resolveCoverageGapReconcileAction(scope.reasons, input.dailyRunResult)
+        if (plannedAction.action !== 'reconcile') {
+          action = plannedAction.action
+          status = plannedAction.status
+          note = plannedAction.note
+        } else {
+          const reconcileResult = await triggerDailyRun(env, {
+            source: 'manual',
+            force: true,
+            runIdOverride: `daily:${scope.collection_date}:coverage-gap-remediate:${crypto.randomUUID()}`,
+            collectionDateOverride: scope.collection_date,
+            lenderCodes: [scope.lender_code],
+            datasets: scope.datasets,
+          })
+          const summary = dailyRunSummary(reconcileResult)
+          reconcile = {
+            ok: Boolean(summary?.ok),
+            skipped: Boolean(summary?.skipped),
+            reason: summary?.reason ?? null,
+            run_id: summary?.run_id ?? null,
+            enqueued: summary?.enqueued ?? null,
+          }
+
+          action = 'reconcile'
+          if (reconcile.ok && !reconcile.skipped) {
+            status = 'ok'
+            note = `Queued forced lender/day reconciliation run ${reconcile.run_id || 'n/a'}.`
+          } else {
+            status = 'failed'
+            note = `Forced lender/day reconciliation did not queue work (${reconcile.reason || 'unknown'}).`
+          }
+        }
       }
     } catch (error) {
       status = 'failed'

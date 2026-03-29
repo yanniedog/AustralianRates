@@ -75,14 +75,82 @@ function parseLvrFromText(text: string): { min: number | null; max: number | nul
   return null
 }
 
-function parseLvrBounds(rate: JsonRecord): { min: number | null; max: number | null } {
-  const constraints = asArray(rate.constraints).filter(isRecord)
+function parseNumericConstraintValue(value: unknown): number | null {
+  const raw = Number(value)
+  return Number.isFinite(raw) ? raw : null
+}
+
+function parseLvrBoundsFromConstraints(constraints: JsonRecord[]): { min: number | null; max: number | null } | null {
+  let min: number | null = null
+  let max: number | null = null
+
   for (const c of constraints) {
     const t = pickText(c, ['constraintType']).toLowerCase()
     if (!t.includes('lvr')) continue
-    const min = Number.isFinite(Number(c.minValue)) ? Number(c.minValue) : null
-    const max = Number.isFinite(Number(c.maxValue)) ? Number(c.maxValue) : null
-    if (min != null || max != null) return { min, max }
+    const additional = parseNumericConstraintValue(c.additionalValue)
+    const minValue = parseNumericConstraintValue(c.minValue)
+    const maxValue = parseNumericConstraintValue(c.maxValue)
+    if (t.includes('min')) {
+      min = additional ?? minValue ?? min
+    } else if (t.includes('max')) {
+      max = additional ?? maxValue ?? max
+    } else {
+      min = minValue ?? min
+      max = maxValue ?? additional ?? max
+    }
+  }
+
+  return min != null || max != null ? { min, max } : null
+}
+
+function rateVariantSignature(rate: JsonRecord): string {
+  return [
+    pickText(rate, ['lendingRateType']),
+    pickText(rate, ['loanPurpose']),
+    pickText(rate, ['repaymentType']),
+    pickText(rate, ['additionalValue']),
+    pickText(rate, ['applicationFrequency']),
+    pickText(rate, ['interestPaymentDue']),
+  ]
+    .map((value) => value.trim().toLowerCase())
+    .join('|')
+}
+
+function inferLvrBoundsFromSiblingRates(rate: JsonRecord, rates: JsonRecord[]): { min: number | null; max: number | null } | null {
+  const signature = rateVariantSignature(rate)
+  let inferredMax: number | null = null
+  for (const sibling of rates) {
+    if (sibling === rate || rateVariantSignature(sibling) !== signature) continue
+    const siblingBounds = parseLvrBoundsFromConstraints(asArray(sibling.constraints).filter(isRecord))
+    const siblingTierBounds = siblingBounds ?? (() => {
+      const tiers = asArray(sibling.tiers).filter(isRecord)
+      for (const tier of tiers) {
+        const minimumValue = parseNumericConstraintValue(tier.minimumValue)
+        const maximumValue = parseNumericConstraintValue(tier.maximumValue)
+        if (minimumValue != null || maximumValue != null) {
+          return { min: minimumValue, max: maximumValue }
+        }
+      }
+      return null
+    })()
+    if (!siblingTierBounds) continue
+    if (siblingTierBounds.min != null && siblingTierBounds.min > 0) {
+      const candidateMax =
+        siblingTierBounds.min <= 1
+          ? Math.max(0, Number((siblingTierBounds.min - 0.0001).toFixed(4)))
+          : Math.max(0, Number((siblingTierBounds.min - 0.01).toFixed(4)))
+      inferredMax = inferredMax == null ? candidateMax : Math.min(inferredMax, candidateMax)
+    }
+  }
+
+  return inferredMax == null ? null : { min: null, max: inferredMax }
+}
+
+function parseLvrBounds(rate: JsonRecord, detail: JsonRecord, allRates: JsonRecord[]): { min: number | null; max: number | null } {
+  const constraints = asArray(rate.constraints).filter(isRecord)
+  const fromRateConstraints = parseLvrBoundsFromConstraints(constraints)
+  if (fromRateConstraints) {
+    return fromRateConstraints
   }
 
   const tiers = asArray(rate.tiers).filter(isRecord)
@@ -92,6 +160,16 @@ function parseLvrBounds(rate: JsonRecord): { min: number | null; max: number | n
     const min = Number.isFinite(Number(tier.minimumValue)) ? Number(tier.minimumValue) : null
     const max = Number.isFinite(Number(tier.maximumValue)) ? Number(tier.maximumValue) : null
     if (min != null || max != null) return { min, max }
+  }
+
+  const detailConstraints = parseLvrBoundsFromConstraints(asArray(detail.constraints).filter(isRecord))
+  if (detailConstraints) {
+    return detailConstraints
+  }
+
+  const inferredFromSiblings = inferLvrBoundsFromSiblingRates(rate, allRates)
+  if (inferredFromSiblings) {
+    return inferredFromSiblings
   }
 
   const additionalValue = getText(rate.additionalValue)
@@ -107,6 +185,17 @@ function parseLvrBounds(rate: JsonRecord): { min: number | null; max: number | n
   }
 
   return { min: null, max: null }
+}
+
+function hasStrongStructuredRateFields(rate: JsonRecord): boolean {
+  const structuredFields = [
+    pickText(rate, ['lendingRateType']),
+    pickText(rate, ['loanPurpose']),
+    pickText(rate, ['repaymentType']),
+    pickText(rate, ['applicationFrequency']),
+    pickText(rate, ['calculationFrequency']),
+  ].filter(Boolean)
+  return structuredFields.length >= 4
 }
 
 function parseAnnualFeeFromDetail(detail: JsonRecord): number | null {
@@ -169,14 +258,16 @@ export function parseRatesFromDetail(input: {
     }
     const comparisonRate = parseComparisonRate(rate.comparisonRate ?? rate.comparison ?? rate.comparison_value)
     const contextText = collectConstraintText(rate, detail)
-    const lvr = parseLvrBounds(rate)
+    const lvr = parseLvrBounds(rate, detail, rates)
     const contextLower = contextText.toLowerCase()
 
     const lvrResult = normalizeLvrTier(contextText, lvr.min, lvr.max)
+    const hasSingleExplicitRate = rates.length === 1
+    const hasStrongStructuredFields = hasStrongStructuredRateFields(rate)
 
     let confidence = 0.95
-    if (!comparisonRate) confidence -= 0.04
-    if (lvrResult.wasDefault) confidence -= 0.05
+    if (!comparisonRate) confidence -= hasStrongStructuredFields ? 0.02 : 0.04
+    if (lvrResult.wasDefault) confidence -= hasSingleExplicitRate && comparisonRate != null ? 0.02 : 0.05
     if (!contextLower.includes('loan')) confidence -= 0.02
 
     const lendingRateType = pickText(rate, ['lendingRateType']).toUpperCase()

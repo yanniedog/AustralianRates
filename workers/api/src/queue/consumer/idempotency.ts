@@ -34,6 +34,8 @@ export type IdempotencyClaimResult = {
   ttlSeconds: number
   leaseSeconds: number
   reason: IdempotencyReason
+  claimedAt?: string | null
+  leaseUntil?: string | null
   error?: string
 }
 
@@ -69,6 +71,18 @@ function parseStoredClaim(raw: string | null): StoredIdempotencyClaim | null {
 function leaseActive(leaseUntil: string | undefined): boolean {
   const leaseMs = Date.parse(String(leaseUntil || ''))
   return Number.isFinite(leaseMs) && leaseMs > Date.now()
+}
+
+export function activeClaimRetryDelaySeconds(
+  leaseUntil: string | null | undefined,
+  leaseSeconds: number,
+  nowMs = Date.now(),
+): number {
+  const fallback = Math.max(15, Math.min(300, Math.floor(Number(leaseSeconds) || 0)))
+  const leaseMs = Date.parse(String(leaseUntil || ''))
+  if (!Number.isFinite(leaseMs) || leaseMs <= nowMs) return fallback
+  const remainingSeconds = Math.ceil((leaseMs - nowMs) / 1000)
+  return Math.max(15, Math.min(300, remainingSeconds + 5))
 }
 
 export async function claimIdempotency(
@@ -131,6 +145,8 @@ export async function claimIdempotency(
         ttlSeconds,
         leaseSeconds,
         reason: 'duplicate',
+        claimedAt: existing.claimed_at,
+        leaseUntil: existing.lease_until,
       }
     }
     if (existing?.state === 'in_progress' && leaseActive(existing.lease_until)) {
@@ -142,6 +158,8 @@ export async function claimIdempotency(
         ttlSeconds,
         leaseSeconds,
         reason: 'active_claim',
+        claimedAt: existing.claimed_at,
+        leaseUntil: existing.lease_until,
       }
     }
 
@@ -170,6 +188,8 @@ export async function claimIdempotency(
       ttlSeconds,
       leaseSeconds,
       reason: 'claimed',
+      claimedAt,
+      leaseUntil,
     }
   } catch (error) {
     return {

@@ -96,7 +96,7 @@ function isLikelySavingsProductName(name: string): boolean {
   const normalized = lower(name)
   if (!normalized || normalized.length < 4) return false
   if (hasBlockedProductText(normalized)) return false
-  const tokens = ['savings', 'account', 'bonus', 'intro', 'transaction', 'everyday', 'at call', 'deposit']
+  const tokens = ['savings', 'saver', 'account', 'bonus', 'intro', 'transaction', 'everyday', 'at call', 'deposit']
   return tokens.some((x) => normalized.includes(x))
 }
 

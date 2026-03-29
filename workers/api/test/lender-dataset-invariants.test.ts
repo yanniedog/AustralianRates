@@ -149,6 +149,23 @@ describe('lender dataset invariants', () => {
     expect(assessment.reasons).toContain('dataset_not_finalized')
   })
 
+  it('flags accepted-written mismatches as a coverage error', () => {
+    const assessment = assessLenderDatasetCoverage({
+      expected_detail_count: 2,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 4,
+      written_row_count: 2,
+      detail_fetch_event_count: 2,
+      lineage_error_count: 0,
+      completed_detail_count: 2,
+      failed_detail_count: 0,
+      finalized_at: '2026-03-30T00:00:00.000Z',
+    })
+
+    expect(assessment.severity).toBe('error')
+    expect(assessment.reasons).toContain('accepted_written_mismatch')
+  })
+
   it('does not flag terminal no-row completion as zero-accepted coverage error', () => {
     const assessment = assessLenderDatasetCoverage({
       expected_detail_count: 1,
@@ -199,7 +216,7 @@ describe('lender dataset invariants', () => {
     expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({ ready: true, reason: null })
   })
 
-  it('allows finalization when exactly one detail is missing but at least one completed (e.g. one stuck message)', () => {
+  it('blocks finalization when even one detail is still missing', () => {
     const snapshot = {
       expected_detail_count: 5,
       index_fetch_succeeded: 1,
@@ -210,7 +227,10 @@ describe('lender dataset invariants', () => {
       completed_detail_count: 4,
       failed_detail_count: 0,
     }
-    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({ ready: true, reason: null })
+    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({
+      ready: false,
+      reason: 'detail_processing_incomplete',
+    })
   })
 
   it('blocks finalization when completed share is below threshold despite some success', () => {
@@ -227,6 +247,23 @@ describe('lender dataset invariants', () => {
     expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({
       ready: false,
       reason: 'failed_detail_fetches_present',
+    })
+  })
+
+  it('blocks finalization when accepted rows do not all persist', () => {
+    const snapshot = {
+      expected_detail_count: 4,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 6,
+      written_row_count: 4,
+      detail_fetch_event_count: 4,
+      lineage_error_count: 0,
+      completed_detail_count: 4,
+      failed_detail_count: 0,
+    }
+    expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({
+      ready: false,
+      reason: 'accepted_written_mismatch',
     })
   })
 

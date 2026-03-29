@@ -1,5 +1,10 @@
 import { getMelbourneNowParts } from '../utils/time'
 import { runHistoricalAnomalyChecks } from './integrity-anomaly-checks'
+import { runCurrentCollectionIntegrityChecks } from './current-collection-integrity'
+import {
+  isHealthyDailyLenderDatasetStatusRow,
+  listLatestDailyLenderDatasetStatusRows,
+} from './lender-dataset-status'
 import {
   FETCH_EVENTS_RETENTION_DAYS,
   FETCH_EVENT_PROVENANCE_ENFORCEMENT_START,
@@ -665,41 +670,31 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
         },
       })
     } else {
-      const countRow = await db
-        .prepare(
-          `SELECT COUNT(*) AS n
-           FROM lender_dataset_runs
-           WHERE datetime(updated_at) >= datetime('now', ?1)
-             AND (
-               COALESCE(lineage_error_count, 0) > 0
-               OR COALESCE(accepted_row_count, 0) > COALESCE(written_row_count, 0)
-             )`,
-        )
-        .bind(retainedRunWindow)
-        .first<NumberRow>()
-      const sampleRows = await db
-        .prepare(
-          `SELECT run_id, lender_code, dataset_kind, collection_date,
-                  accepted_row_count, written_row_count, lineage_error_count,
-                  detail_fetch_event_count, updated_at, last_error
-           FROM lender_dataset_runs
-           WHERE datetime(updated_at) >= datetime('now', ?1)
-             AND (
-               COALESCE(lineage_error_count, 0) > 0
-               OR COALESCE(accepted_row_count, 0) > COALESCE(written_row_count, 0)
-             )
-           ORDER BY updated_at DESC
-           LIMIT 20`,
-        )
-        .bind(retainedRunWindow)
-        .all<RecentWriteMismatchRow>()
+      const cutoffMs = Date.now() - RUN_REPORTS_RETENTION_DAYS * 24 * 60 * 60 * 1000
+      const latestRows = await listLatestDailyLenderDatasetStatusRows(db, { limit: 2000 })
+      const unresolvedRows = latestRows.filter((row) => {
+        const updatedMs = Date.parse(String(row.updated_at || ''))
+        if (!Number.isFinite(updatedMs) || updatedMs < cutoffMs) return false
+        return !isHealthyDailyLenderDatasetStatusRow(row)
+      })
       checks.push({
         name: 'recent_lender_dataset_write_mismatches',
-        passed: Number(countRow?.n ?? 0) === 0,
+        passed: unresolvedRows.length === 0,
         detail: {
           window: `${RUN_REPORTS_RETENTION_DAYS}_days`,
-          mismatched_run_count: Number(countRow?.n ?? 0),
-          sample: sampleRows.results ?? [],
+          mismatched_run_count: unresolvedRows.length,
+          sample: unresolvedRows.slice(0, 20).map<RecentWriteMismatchRow>((row) => ({
+            run_id: row.run_id,
+            lender_code: row.lender_code,
+            dataset_kind: row.dataset_kind,
+            collection_date: row.collection_date,
+            accepted_row_count: Number(row.accepted_row_count ?? 0),
+            written_row_count: Number(row.written_row_count ?? 0),
+            lineage_error_count: Number(row.lineage_error_count ?? 0),
+            detail_fetch_event_count: Number(row.detail_fetch_event_count ?? 0),
+            updated_at: row.updated_at,
+            last_error: null,
+          })),
         },
       })
     }
@@ -972,6 +967,7 @@ export async function runIntegrityChecks(
   }
 
   checks.push(...await runHistoricalAnomalyChecks(db))
+  checks.push(...await runCurrentCollectionIntegrityChecks(db, nowMelbourneDate))
 
   if (options?.includeAnomalyProbes) {
     await runOptionalAnomalyProbes(db, checks)

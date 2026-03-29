@@ -59,6 +59,26 @@ describe('status-debug-remediation', () => {
     )
   })
 
+  it('adds reconcile remediation for current collection roster failures', () => {
+    const hints = remediationFromIntegrityFindings([
+      {
+        check: 'current_collection_expected_product_roster',
+        passed: false,
+        detail: {
+          sample: [
+            {
+              lender_code: 'cba',
+              dataset_kind: 'home_loans',
+              collection_date: '2026-03-30',
+            },
+          ],
+        },
+      },
+    ])
+    expect(hints[0]?.path).toBe('/diagnostics/coverage-gaps?refresh=1')
+    expect(hints[1]?.path).toBe('/runs/reconcile-lender-day')
+  })
+
   it('adds provenance diagnostics and recovery hints for historical unverifiable rows', () => {
     const hints = remediationFromActionableCodes(['historical_provenance_legacy_unverifiable_rows'])
     expect(hints[0]?.path).toBe('/diagnostics/provenance?refresh=1')

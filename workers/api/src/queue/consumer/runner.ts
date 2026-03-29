@@ -9,7 +9,12 @@ import {
 import { log } from '../../utils/logger'
 import { parseIntegerEnv } from '../../utils/time'
 import { processMessage } from './dispatch'
-import { claimIdempotency, completeIdempotencyClaim, releaseIdempotencyClaim } from './idempotency'
+import {
+  activeClaimRetryDelaySeconds,
+  claimIdempotency,
+  completeIdempotencyClaim,
+  releaseIdempotencyClaim,
+} from './idempotency'
 import { elapsedMs, serializeForLog } from './log-helpers'
 import { extractRunContext, isIngestMessage, isObject } from './message-shape'
 import { calculateRetryDelaySeconds, isNonRetryableErrorMessage } from './retry-config'
@@ -121,6 +126,54 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       }
       if (claim.duplicate) {
         metrics.duplicates += 1
+        if (claim.reason === 'active_claim') {
+          const retryDelaySeconds = activeClaimRetryDelaySeconds(claim.leaseUntil, claim.leaseSeconds)
+          if (attempts >= maxAttempts) {
+            if (isIngestMessage(body)) {
+              const replayRow = await scheduleReplayForExhaustedMessage(env, {
+                message: body,
+                errorMessage: 'queue_message_duplicate_active_claim',
+              })
+              log.error('consumer', 'replay_queue_scheduled', {
+                code: 'replay_queue_scheduled',
+                runId: context.runId ?? undefined,
+                lenderCode: context.lenderCode ?? undefined,
+                context:
+                  `${messageContext} replay_id=${replayRow.replay_id}` +
+                  ` replay_status=${replayRow.status}` +
+                  ` next_attempt_at=${replayRow.next_attempt_at}` +
+                  ` error=queue_message_duplicate_active_claim`,
+              })
+            }
+            msg.ack()
+            metrics.acked += 1
+            metrics.exhausted += 1
+            log.warn('consumer', 'queue_message_duplicate_exhausted', {
+              code: 'queue_idempotency_duplicate_claim',
+              runId: context.runId ?? undefined,
+              lenderCode: context.lenderCode ?? undefined,
+              context:
+                `${messageContext} reason=${claim.reason} key=${claim.key ?? 'none'}` +
+                ` retry_delay_seconds=${retryDelaySeconds}` +
+                ` ttl=${claim.ttlSeconds} lease_until=${claim.leaseUntil ?? 'unknown'}` +
+                ` elapsed_ms=${elapsedMs(messageStartedAt)}`,
+            })
+            continue
+          }
+          msg.retry({ delaySeconds: retryDelaySeconds })
+          metrics.retried += 1
+          log.warn('consumer', 'queue_message_duplicate_retry_scheduled', {
+            code: 'queue_idempotency_duplicate_claim',
+            runId: context.runId ?? undefined,
+            lenderCode: context.lenderCode ?? undefined,
+            context:
+              `${messageContext} reason=${claim.reason} key=${claim.key ?? 'none'}` +
+              ` retry_delay_seconds=${retryDelaySeconds}` +
+              ` ttl=${claim.ttlSeconds} lease_until=${claim.leaseUntil ?? 'unknown'}` +
+              ` elapsed_ms=${elapsedMs(messageStartedAt)}`,
+          })
+          continue
+        }
         msg.ack()
         metrics.acked += 1
         log.info('consumer', 'queue_message_duplicate_ack', {

@@ -3,7 +3,14 @@ import type { DatasetKind } from '../../../../packages/shared/src'
 import { markRunSeenProduct, markRunSeenSeries } from '../db/catalog'
 import { persistFetchEvent } from '../db/fetch-events'
 import { upsertHistoricalRateRow } from '../db/historical-rates'
-import { ensureLenderDatasetRun, markLenderDatasetDetailProcessed, recordLenderDatasetWriteStats, setLenderDatasetExpectedDetails, tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
+import {
+  ensureLenderDatasetRun,
+  markLenderDatasetDetailProcessed,
+  markLenderDatasetIndexFetchSucceeded,
+  recordLenderDatasetWriteStats,
+  setLenderDatasetExpectedDetails,
+  tryMarkLenderDatasetFinalized,
+} from '../db/lender-dataset-runs'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { createRunReport, recordRunQueueOutcome } from '../db/run-reports'
 import { upsertSavingsRateRow } from '../db/savings-rates'
@@ -138,6 +145,11 @@ async function processHomeDataset(
     collectionDate: input.collectionDate,
     expectedDetailCount: productIds.length,
   })
+  await markLenderDatasetIndexFetchSucceeded(env.DB, {
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    dataset: 'home_loans',
+  })
 
   let written = 0
   for (const rawRow of rows) {
@@ -229,6 +241,11 @@ async function processSavingsDataset(
     collectionDate: input.collectionDate,
     expectedDetailCount: productIds.length,
   })
+  await markLenderDatasetIndexFetchSucceeded(env.DB, {
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    dataset: 'savings',
+  })
 
   let written = 0
   for (const rawRow of rows) {
@@ -319,6 +336,11 @@ async function processTdDataset(
     bankName,
     collectionDate: input.collectionDate,
     expectedDetailCount: productIds.length,
+  })
+  await markLenderDatasetIndexFetchSucceeded(env.DB, {
+    runId: input.runId,
+    lenderCode: input.lenderCode,
+    dataset: 'term_deposits',
   })
 
   let written = 0

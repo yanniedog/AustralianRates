@@ -38,7 +38,7 @@ export function shouldShortCircuitAfterHomeLoanIndexFetch(input: {
   successfulIndexFetch: boolean
   discoveredProductCount: number
 }): boolean {
-  return input.successfulIndexFetch && input.discoveredProductCount > 0 && input.lenderCode !== 'great_southern'
+  return input.successfulIndexFetch && input.discoveredProductCount > 0
 }
 
 export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob): Promise<void> {
@@ -583,6 +583,14 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   const droppedReasons = summarizeDropReasons(dropped)
   const droppedProductsSample = summarizeProductSample(dropped.map((item) => item.productId))
   validationMs = elapsedMs(validationStartedAt)
+  await markProductsSeenForRun(env.DB, {
+    runId: job.runId,
+    lenderCode: job.lenderCode,
+    dataset: 'home_loans',
+    bankName,
+    collectionDate: job.collectionDate,
+    productIds: collectedRows.map((row) => row.productId),
+  })
   await markHomeLoanSeriesSeenForRun(env.DB, {
     runId: job.runId,
     lenderCode: job.lenderCode,

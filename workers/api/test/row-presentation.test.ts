@@ -47,6 +47,14 @@ describe('row presentation', () => {
     expect(row.feature_set_display).toBe('Premium')
   })
 
+  it('shows lvr_unspecified as not specified', () => {
+    const row = presentHomeLoanRow({
+      lvr_tier: 'lvr_unspecified',
+    })
+
+    expect(row.lvr_tier_display).toBe('Not specified')
+  })
+
   it('normalizes savings and td deposit tier display formatting', () => {
     const savings = presentSavingsRow({
       deposit_tier: '$50k-$100.0k',

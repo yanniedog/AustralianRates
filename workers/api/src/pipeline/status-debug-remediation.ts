@@ -154,6 +154,56 @@ export function remediationFromIntegrityFindings(findings: IntegrityFindingHint[
           links: ['/admin/status.html', '/admin/runs.html'],
         })
         break
+      case 'current_collection_exact_provenance':
+        out.push({
+          scope_key: `integrity|${check}|provenance_diagnostics`,
+          reason: 'Inspect current-day provenance and confirm every stored row still links to retained fetch evidence',
+          method: 'GET',
+          path: '/diagnostics/provenance?refresh=1',
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/database.html'],
+        })
+        out.push({
+          scope_key: `integrity|${check}|health_run`,
+          reason: 'Re-run health after fixing current-day exact provenance failures',
+          method: 'POST',
+          path: '/health/run',
+          body: {},
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/runs.html'],
+        })
+        break
+      case 'current_collection_expected_product_roster':
+        const rosterSample = Array.isArray(finding.detail?.sample)
+          ? (finding.detail?.sample?.[0] as Record<string, unknown> | undefined)
+          : undefined
+        const lenderCode = String(rosterSample?.lender_code ?? '').trim()
+        const collectionDate = String(rosterSample?.collection_date ?? '').trim()
+        const datasetKind = String(rosterSample?.dataset_kind ?? '').trim()
+        out.push({
+          scope_key: `integrity|${check}|coverage_gaps_refresh`,
+          reason: 'Refresh coverage diagnostics for current-day product roster mismatches',
+          method: 'GET',
+          path: '/diagnostics/coverage-gaps?refresh=1',
+          issue_code: check,
+          links: ['/admin/status.html', '/admin/runs.html'],
+        })
+        if (lenderCode && collectionDate && isDatasetKind(datasetKind)) {
+          out.push({
+            scope_key: `integrity|${check}|reconcile_lender_day|${lenderCode}|${datasetKind}|${collectionDate}`,
+            reason: 'Reconcile the failing lender/day/dataset scope and rebuild the stored product roster',
+            method: 'POST',
+            path: '/runs/reconcile-lender-day',
+            body: {
+              lender_code: lenderCode,
+              collection_date: collectionDate,
+              datasets: [datasetKind],
+            },
+            issue_code: check,
+            links: ['/admin/status.html', '/admin/runs.html'],
+          })
+        }
+        break
       case 'orphan_product_presence_status':
         out.push({
           scope_key: `integrity|${check}|repair_catalog_presence`,

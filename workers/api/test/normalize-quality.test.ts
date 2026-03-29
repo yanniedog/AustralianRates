@@ -130,4 +130,18 @@ describe('row validation', () => {
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('missing_product_id')
   })
+
+  it('accepts explicit lvr_unspecified when the source does not publish an lvr band', () => {
+    const row = loadRealHomeLoanFixture()
+    const verdict = validateNormalizedRow({ ...row, lvrTier: 'lvr_unspecified' })
+    expect(verdict.ok).toBe(true)
+  })
+
+  it('accepts real mortgage product names that do not contain the basic token list', () => {
+    const row = loadRealHomeLoanFixture()
+    expect(validateNormalizedRow({ ...row, productName: 'Mortgage Simplifier' }).ok).toBe(true)
+    expect(validateNormalizedRow({ ...row, productName: 'Orange Advantage' }).ok).toBe(true)
+    expect(validateNormalizedRow({ ...row, productName: 'Bridging Home Loan' }).ok).toBe(true)
+    expect(validateNormalizedRow({ ...row, productName: 'Premium Options Home Loan' }).ok).toBe(true)
+  })
 })

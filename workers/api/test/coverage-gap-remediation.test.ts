@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { CoverageGapAuditReport } from '../src/pipeline/coverage-gap-audit'
-import { groupCoverageGapRowsForRemediation } from '../src/pipeline/coverage-gap-remediation'
+import {
+  groupCoverageGapRowsForRemediation,
+  resolveCoverageGapReconcileAction,
+} from '../src/pipeline/coverage-gap-remediation'
 
 function gapRow(
   input: Partial<CoverageGapAuditReport['rows'][number]> & {
@@ -90,5 +93,35 @@ describe('coverage gap remediation grouping', () => {
 
     expect(scopes).toHaveLength(1)
     expect(scopes[0].lender_code).toBe('delta')
+  })
+})
+
+describe('coverage gap remediation action resolution', () => {
+  it('defers manual reconcile when a scheduled daily run is already active', () => {
+    const action = resolveCoverageGapReconcileAction(
+      ['detail_processing_incomplete'],
+      {
+        ok: true,
+        skipped: false,
+        reason: null,
+        runId: 'daily:2026-03-30:2026-03-29T18:00:26.000Z',
+        enqueued: 42,
+      } as never,
+    )
+
+    expect(action).toMatchObject({
+      action: 'scheduled_retry_pending',
+      status: 'pending',
+    })
+    expect(action.note).toContain('Scheduled daily retry is already enqueuing')
+  })
+
+  it('still allows reconcile when there is no active scheduled run', () => {
+    const action = resolveCoverageGapReconcileAction(['detail_processing_incomplete'], null)
+
+    expect(action).toMatchObject({
+      action: 'reconcile',
+      status: 'ok',
+    })
   })
 })

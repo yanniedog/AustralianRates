@@ -276,6 +276,7 @@ function rateStructureDisplay(value: unknown): string {
 function lvrTierDisplay(value: unknown): string {
   const v = asText(value).toLowerCase()
   if (v === 'lvr_=60%') return '<=60%'
+  if (v === 'lvr_unspecified') return 'Not specified'
   const range = v.match(/^lvr_(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)%$/)
   if (range) return `${range[1]}-${range[2]}%`
   return humanizeCode(v)

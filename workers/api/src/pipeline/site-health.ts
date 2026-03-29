@@ -7,6 +7,9 @@ import {
   shouldFilterSiteHealthAttentionForActionable,
   type HealthCheckRunRow,
 } from '../db/health-check-runs'
+import { filterResolvedHistoricalTaskFailureLogEntries } from '../db/historical-task-log-resolution'
+import { filterResolvedScheduledDispatchFailureLogEntries } from '../db/scheduled-log-resolution'
+import { filterResolvedWriteContractViolationLogEntries } from '../db/write-contract-violation-resolution'
 import { loadCoverageGapAuditReport, shouldFilterCoverageGapLogForActionable } from './coverage-gap-audit'
 import { buildLatestAllProbePath, LATEST_ALL_DATASETS } from './latest-all-probe'
 import { runE2ECheck } from './e2e-alignment'
@@ -661,16 +664,18 @@ export async function runSiteHealthChecks(
         }
       : latestHealthForActionable
 
-  const actionableIssues = toActionableIssueSummaries(
-    logs.entries.filter((entry) => {
+  const baseActionableLogs = logs.entries.filter((entry) => {
       const level = String(entry.level || '').toLowerCase()
       if (level !== 'warn' && level !== 'error') return false
       if (shouldFilterCoverageGapLogForActionable(entry, gapReportForActionable)) return false
       if (shouldFilterSiteHealthAttentionForActionable(entry, actionableHealthContext)) return false
       if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
       return true
-    }),
-  )
+    })
+  const resolvedSchedulerLogs = await filterResolvedScheduledDispatchFailureLogEntries(env.DB, baseActionableLogs)
+  const resolvedHistoricalTaskLogs = await filterResolvedHistoricalTaskFailureLogEntries(env.DB, resolvedSchedulerLogs)
+  const filteredProblemLogs = await filterResolvedWriteContractViolationLogEntries(env.DB, resolvedHistoricalTaskLogs)
+  const actionableIssues = toActionableIssueSummaries(filteredProblemLogs)
 
   const runResult: SiteHealthRunResult = {
     runId,

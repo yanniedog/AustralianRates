@@ -1,5 +1,6 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
 import { TARGET_LENDERS } from '../constants.js'
+import { productUrlFromDetail } from '../ingest/cdr/detail-metadata.js'
 import { getLenderPlaybook } from '../ingest/lender-playbooks.js'
 import {
   minConfidenceForFlag as minHomeLoanConfidenceForFlag,
@@ -55,12 +56,36 @@ function hostnameFromUrl(value: string | null | undefined): string | null {
   }
 }
 
+function registrableDomain(host: string): string | null {
+  const normalized = String(host || '').trim().toLowerCase()
+  if (!normalized) return null
+  const parts = normalized.split('.').filter(Boolean)
+  if (parts.length < 2) return null
+  const last = parts[parts.length - 1]
+  const secondLast = parts[parts.length - 2]
+  if (last.length === 2 && secondLast.length <= 3 && parts.length >= 3) {
+    return parts.slice(-3).join('.')
+  }
+  return parts.slice(-2).join('.')
+}
+
+function normalizeUrlText(value: string | null | undefined): string {
+  return String(value || '').trim().replace(/\/+$/, '')
+}
+
 function allowedLenderHosts(lender: LenderIdentity): Set<string> {
   const hosts = new Set<string>()
-  const candidates = [lender.products_endpoint, ...(Array.isArray(lender.seed_rate_urls) ? lender.seed_rate_urls : [])]
+  const candidates = [
+    lender.products_endpoint,
+    ...(Array.isArray(lender.additional_products_endpoints) ? lender.additional_products_endpoints : []),
+    ...(Array.isArray(lender.seed_rate_urls) ? lender.seed_rate_urls : []),
+  ]
   for (const candidate of candidates) {
     const host = hostnameFromUrl(candidate)
-    if (host) hosts.add(host)
+    if (!host) continue
+    hosts.add(host)
+    const baseDomain = registrableDomain(host)
+    if (baseDomain) hosts.add(baseDomain)
   }
   return hosts
 }
@@ -94,7 +119,10 @@ function pickText(record: JsonRecord | null, keys: string[]): string {
   return ''
 }
 
-function parseCdrDetailContract(json: string): { productId: string; productName: string } | null {
+function parseCdrDetailContract(
+  json: string,
+  sourceUrl: string,
+): { productId: string; productName: string; productUrl: string | null } | null {
   try {
     const parsed = JSON.parse(json) as unknown
     const detail = unwrapCdrDetailPayload(parsed)
@@ -102,7 +130,8 @@ function parseCdrDetailContract(json: string): { productId: string; productName:
     const productId = pickText(detail, ['productId', 'id'])
     const productName = pickText(detail, ['name', 'productName'])
     if (!productId) return null
-    return { productId, productName }
+    const productUrl = normalizeUrlText(productUrlFromDetail(detail, sourceUrl))
+    return { productId, productName, productUrl: productUrl || null }
   } catch {
     return null
   }
@@ -117,7 +146,8 @@ function resolveRunSource(row: HistoricalWritableRow): RunSource {
 }
 
 function requiresFetchEventLineage(row: HistoricalWritableRow): boolean {
-  return !(resolveRunSource(row) === 'manual' && resolveRetrievalType(row) === 'historical_scrape')
+  void row
+  return true
 }
 
 function minimumDatasetConfidence(
@@ -177,18 +207,29 @@ export function assertHistoricalWriteAllowed(
   if (!hostMatchesAllowed(hostnameFromUrl(row.sourceUrl), allowedHosts)) {
     throw new HistoricalWriteContractError(dataset, 'source_url_host_mismatch', lenderCode)
   }
-  if (row.productUrl != null && row.productUrl !== '' && !hostMatchesAllowed(hostnameFromUrl(row.productUrl), allowedHosts)) {
-    throw new HistoricalWriteContractError(dataset, 'product_url_host_mismatch', lenderCode)
-  }
-
+  const normalizedRowProductUrl = normalizeUrlText(row.productUrl)
+  let detailProductUrl: string | null = null
   if (row.cdrProductDetailJson != null && row.cdrProductDetailJson.trim() !== '') {
-    const detailContract = parseCdrDetailContract(row.cdrProductDetailJson)
+    const detailContract = parseCdrDetailContract(row.cdrProductDetailJson, row.sourceUrl)
     if (!detailContract) {
       throw new HistoricalWriteContractError(dataset, 'invalid_cdr_product_detail_payload', lenderCode)
     }
     if (detailContract.productId !== row.productId) {
       throw new HistoricalWriteContractError(dataset, 'cdr_detail_product_id_mismatch', lenderCode)
     }
+    detailProductUrl = detailContract.productUrl
+  }
+
+  const productUrlMatchesDetail =
+    normalizedRowProductUrl !== '' &&
+    detailProductUrl != null &&
+    normalizedRowProductUrl === detailProductUrl
+  if (
+    normalizedRowProductUrl !== '' &&
+    !productUrlMatchesDetail &&
+    !hostMatchesAllowed(hostnameFromUrl(normalizedRowProductUrl), allowedHosts)
+  ) {
+    throw new HistoricalWriteContractError(dataset, 'product_url_host_mismatch', lenderCode)
   }
 
   const requiredConfidence = minimumDatasetConfidence(dataset, row, lenderCode)
