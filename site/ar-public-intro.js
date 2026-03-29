@@ -19,12 +19,6 @@
         return config;
     }
 
-    var DATASET_LINKS = [
-        { href: '/', label: 'Home loans', key: 'home-loans' },
-        { href: '/savings/', label: 'Savings', key: 'savings' },
-        { href: '/term-deposits/', label: 'Term deposits', key: 'term-deposits' },
-        { href: '/economic-data/', label: 'Economic data', key: 'economic-data' }
-    ];
     var SECTION_COPY = {
         'home-loans': sectionCopy({
             sessionLabel: 'session::home-loans',
@@ -67,31 +61,12 @@
 
     function buttonLink(href, label, className) { return '<a class="buttonish ' + esc(className || 'secondary') + '" href="' + esc(href) + '">' + esc(label) + '</a>'; }
 
-    function navLink(link) {
-        var active = link.key === section;
-        return '<a class="buttonish secondary market-intro-nav-link' + (active ? ' is-active' : '') + '" href="' + esc(link.href) + '"' + (active ? ' aria-current="page"' : '') + '>' + esc(link.label) + '</a>';
-    }
-
-    function liveCard(card) {
-        return '<article class="market-intro-live-card" data-live-card="' + esc(card.id) + '"><span class="market-intro-live-label">' + esc(card.label) + '</span><strong id="market-intro-live-' + esc(card.id) + '">' + esc(card.value || '') + '</strong><p id="market-intro-live-' + esc(card.id) + '-note" class="market-intro-live-note">' + esc(card.note || '') + '</p></article>';
-    }
-
     function setLiveMetric(id, value, note) {
         var valueEl = document.getElementById('market-intro-live-' + id);
         var noteEl = document.getElementById('market-intro-live-' + id + '-note');
         if (valueEl && value != null) valueEl.textContent = String(value);
         if (noteEl && note != null) noteEl.textContent = String(note);
     }
-
-    function stepCard(step) {
-        return '<article class="market-intro-step"><span class="market-intro-step-index">' + esc(step.index) + '</span><p>' + esc(step.text) + '</p></article>';
-    }
-
-    var steps = [
-        { index: '01', text: 'Define your product slice.' },
-        { index: '02', text: 'Read leaders and chart movement.' },
-        { index: '03', text: 'Validate with table details.' }
-    ];
 
     var intro = document.createElement('section');
     intro.className = 'panel market-intro';
@@ -108,11 +83,6 @@
         + '    ' + buttonLink(compactViewport ? '#chart' : '#scenario', copy.primaryAction || 'Open filters', 'primary')
         + '    ' + buttonLink(compactViewport ? '#scenario' : '#chart', copy.secondaryAction || 'See chart', 'ghost')
         + '  </div>'
-        + '</div>'
-        + '<div class="market-intro-body">'
-        + '  <div class="market-intro-live-grid" aria-label="Live stats">' + copy.liveCards.map(liveCard).join('') + '</div>'
-        + '  <nav class="market-intro-nav" aria-label="Rate datasets">' + DATASET_LINKS.map(navLink).join('') + '</nav>'
-        + '  <div class="market-intro-steps" aria-label="How to use this view">' + steps.map(stepCard).join('') + '</div>'
         + '</div>';
 
     root.insertBefore(intro, terminal);

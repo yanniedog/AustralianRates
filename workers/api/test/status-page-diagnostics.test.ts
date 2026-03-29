@@ -204,6 +204,54 @@ describe('status-page-diagnostics provenance rollup', () => {
     )
   })
 
+  it('prefers explicit provenance summary over raw backlog counts', () => {
+    const bundle = {
+      ...baseBundle(),
+      historical_provenance: {
+        available: true,
+        legacy_unverifiable_rows: 42,
+        quarantined_rows: 0,
+        verified_reconstructed_rows: 9,
+      },
+      diagnostics_backlog: {
+        ready_finalizations: { total: 0, cutoff_iso: '', idle_minutes: 5, rows: [] },
+        stale_running_runs: { total: 0, cutoff_iso: '', stale_run_minutes: 120, rows: [] },
+        missing_fetch_event_lineage: { total: 42, cutoff_date: '2026-03-28', lookback_days: 3650, rows: [] },
+      },
+    }
+
+    const diagnostics = buildStatusPageDiagnosticsFromBundle(bundle) as {
+      executive: { worst_severity: string; attention_items: string[] }
+      historical_provenance: { legacy_unverifiable_rows: number } | null
+    }
+
+    expect(diagnostics.historical_provenance?.legacy_unverifiable_rows).toBe(42)
+    expect(diagnostics.executive.worst_severity).toBe('yellow')
+    expect(diagnostics.executive.attention_items).toContain('Historical provenance: 42 legacy unverifiable row(s) remain')
+    expect(diagnostics.executive.attention_items).not.toContain(
+      'Historical provenance backlog: 42 row(s) with missing fetch_event lineage',
+    )
+  })
+
+  it('raises red attention when provenance rows are quarantined', () => {
+    const diagnostics = buildStatusPageDiagnosticsFromBundle({
+      ...baseBundle(),
+      historical_provenance: {
+        available: true,
+        legacy_unverifiable_rows: 5,
+        quarantined_rows: 3,
+        verified_reconstructed_rows: 11,
+      },
+    }) as {
+      executive: { worst_severity: string; attention_items: string[] }
+    }
+
+    expect(diagnostics.executive.worst_severity).toBe('red')
+    expect(diagnostics.executive.attention_items).toContain(
+      'Historical provenance: 3 quarantined row(s) need forensic review',
+    )
+  })
+
   it('uses diagnostics health snapshot when health section is omitted', () => {
     const diagnostics = buildStatusPageDiagnosticsFromBundle({
       meta: { sections: ['cdr'] },

@@ -10,6 +10,10 @@ import { readFetchEventPayloadTruncated, getRecentFetchEvents } from '../db/fetc
 import { getLatestHealthCheckRun, listHealthCheckRuns } from '../db/health-check-runs'
 import { shouldFilterSiteHealthAttentionForActionable } from '../db/health-check-runs'
 import {
+  getHistoricalProvenanceSummary,
+  type HistoricalProvenanceSummary,
+} from '../db/historical-provenance'
+import {
   getLatestIntegrityAuditRun,
   listIntegrityAuditRuns,
   type IntegrityAuditRunRow,
@@ -57,6 +61,7 @@ const DEFAULT_SECTIONS = [
   'replay',
   'probes',
   'backlog',
+  'provenance',
   'remediation',
 ] as const
 
@@ -300,6 +305,7 @@ export type BuildStatusDebugBundleQuery = {
   replayLimit?: string
   probeEventLimit?: string
   integrityHistoryLimit?: string
+  provenanceLimit?: string
 }
 
 export async function buildStatusDebugBundle(
@@ -321,6 +327,7 @@ export async function buildStatusDebugBundle(
   const replayLimit = clamp(Math.floor(Number(query.replayLimit) || 50), 1, 200)
   const probeEventLimit = clamp(Math.floor(Number(query.probeEventLimit) || 40), 1, 100)
   const integrityHistoryLimit = clamp(Math.floor(Number(query.integrityHistoryLimit) || 24), 1, 50)
+  const provenanceLimit = clamp(Math.floor(Number(query.provenanceLimit) || 20), 1, 50)
 
   const sinceExplicit = String(query.since || '').trim() || undefined
 
@@ -373,6 +380,7 @@ export async function buildStatusDebugBundle(
   let actionableLogEntriesOut: Array<Record<string, unknown>> = []
   let actionableIssueCodesOut: string[] = []
   let integrityFindingSnapshot: Array<{ check?: string; passed?: boolean }> = []
+  let provenanceSummarySnapshot: HistoricalProvenanceSummary | null = null
 
   const parallel: Promise<void>[] = []
 
@@ -535,7 +543,20 @@ export async function buildStatusDebugBundle(
     )
   }
 
+  if (sections.has('provenance')) {
+    parallel.push(
+      (async () => {
+        provenanceSummarySnapshot = await getHistoricalProvenanceSummary(env.DB, {
+          lookbackDays: FETCH_EVENTS_RETENTION_DAYS,
+          limit: provenanceLimit,
+        })
+        out.historical_provenance = provenanceSummarySnapshot
+      })(),
+    )
+  }
+
   await Promise.all(parallel)
+  const provenanceSummary = provenanceSummarySnapshot as HistoricalProvenanceSummary | null
 
   if (includeProbePayloads) {
     const fromHealth = collectFailedComponentFetchEventIds(latestHealth)
@@ -569,10 +590,23 @@ export async function buildStatusDebugBundle(
       ...actionableCodesFromHealth(latestHealth),
       ...actionableIssueCodesOut,
     ])
+    const provenanceRemediationHints: ReturnType<typeof remediationFromActionableCodes> = []
+    if (provenanceSummary?.available) {
+      const provenanceCodes = [
+        provenanceSummary.quarantined_rows > 0
+          ? 'historical_provenance_quarantined_rows'
+          : '',
+        provenanceSummary.legacy_unverifiable_rows > 0
+          ? 'historical_provenance_legacy_unverifiable_rows'
+          : '',
+      ].filter(Boolean)
+      provenanceRemediationHints.push(...remediationFromActionableCodes(provenanceCodes))
+    }
     const merged = mergeRemediationHints([
       remediationFromCoverageGapRows(coverageRowsSnapshot),
       remediationFromReplayQueueRows(filterReplayRowsForRemediation(replayRows, latestHealth)),
       remediationFromIntegrityFindings(integrityFindingSnapshot),
+      provenanceRemediationHints,
       remediationFromActionableCodes(codes),
     ])
     out.remediation = { hints: merged, note: 'Suggestions only; call each path with admin auth.' }

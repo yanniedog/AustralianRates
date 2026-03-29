@@ -5,6 +5,7 @@
 
 import { runIntegrityChecks } from './integrity-checks'
 import { runEconomicCoverageAudit } from './economic-coverage-audit'
+import { getHistoricalProvenanceSummary } from './historical-provenance'
 
 export type IntegrityFinding = {
   category: 'dead' | 'invalid' | 'duplicate' | 'erroneous' | 'indicator'
@@ -42,6 +43,7 @@ const INFORMATIONAL_CHECKS = new Set([
   /** Warn-only economic coverage slices (upstream transport / proxy), not D1 schema or rates integrity. */
   'economic_transient_upstream_transport',
   'economic_proxy_error_status_rows',
+  'historical_provenance_legacy_unverifiable_rows',
 ])
 
 function num(value: unknown): number {
@@ -63,6 +65,7 @@ export async function runDataIntegrityAudit(
 
   let integrity: Awaited<ReturnType<typeof runIntegrityChecks>>
   let economicCoverage: Awaited<ReturnType<typeof runEconomicCoverageAudit>> | null = null
+  let provenanceSummary: Awaited<ReturnType<typeof getHistoricalProvenanceSummary>> | null = null
   try {
     integrity = await runIntegrityChecks(db, timezone, { includeAnomalyProbes: true })
   } catch (e) {
@@ -83,6 +86,17 @@ export async function runDataIntegrityAudit(
       check: 'economic_coverage_run',
       passed: false,
       detail: { error: errorMessage(e), hint: 'economic coverage audit failed; check economic tables and schema.' },
+    })
+  }
+
+  try {
+    provenanceSummary = await getHistoricalProvenanceSummary(db, { lookbackDays: 3650, limit: 20 })
+  } catch (e) {
+    findings.push({
+      category: 'indicator',
+      check: 'historical_provenance_summary_run',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'Historical provenance summary failed to execute.' },
     })
   }
 
@@ -214,6 +228,23 @@ export async function runDataIntegrityAudit(
         },
       })
     }
+  }
+
+  if (provenanceSummary?.available) {
+    findings.push({
+      category: 'dead',
+      check: 'historical_provenance_legacy_unverifiable_rows',
+      passed: provenanceSummary.legacy_unverifiable_rows === 0,
+      count: provenanceSummary.legacy_unverifiable_rows,
+      detail: provenanceSummary,
+    })
+    findings.push({
+      category: 'invalid',
+      check: 'historical_provenance_quarantined_rows',
+      passed: provenanceSummary.quarantined_rows === 0,
+      count: provenanceSummary.quarantined_rows,
+      detail: provenanceSummary,
+    })
   }
 
   try {

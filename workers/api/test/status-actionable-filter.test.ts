@@ -395,6 +395,18 @@ describe('shouldIgnoreStatusActionableLog', () => {
         'active',
       ),
     ).toBe(true)
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'api',
+          level: 'error',
+          message: 'Unhandled internal error',
+          context:
+            '{"context":"{\\"method\\":\\"POST\\",\\"path\\":\\"/api/home-loan-rates/admin/runs/provenance-recovery\\"}"}',
+        },
+        'active',
+      ),
+    ).toBe(true)
   })
 
   it('ignores exhausted retries from ad hoc admin historical tasks', () => {

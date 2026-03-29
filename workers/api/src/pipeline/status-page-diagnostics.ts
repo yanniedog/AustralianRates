@@ -421,7 +421,33 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
   }
 
   const backlog = bundle.diagnostics_backlog as DiagnosticsBacklogBundle | undefined
+  const provenance = bundle.historical_provenance as
+    | {
+        available?: boolean
+        legacy_unverifiable_rows?: number
+        quarantined_rows?: number
+        verified_reconstructed_rows?: number
+      }
+    | undefined
   let backlogSnapshot: Record<string, unknown> | null = null
+  let provenanceSnapshot: Record<string, unknown> | null = null
+  if (provenance?.available) {
+    const legacyUnverifiable = Number(provenance.legacy_unverifiable_rows ?? 0)
+    const quarantined = Number(provenance.quarantined_rows ?? 0)
+    const verifiedReconstructed = Number(provenance.verified_reconstructed_rows ?? 0)
+    provenanceSnapshot = {
+      legacy_unverifiable_rows: legacyUnverifiable,
+      quarantined_rows: quarantined,
+      verified_reconstructed_rows: verifiedReconstructed,
+    }
+    if (quarantined > 0) {
+      attention.push(`Historical provenance: ${quarantined} quarantined row(s) need forensic review`)
+      worst = worstOf(worst, 'red')
+    } else if (legacyUnverifiable > 0) {
+      attention.push(`Historical provenance: ${legacyUnverifiable} legacy unverifiable row(s) remain`)
+      worst = worstOf(worst, 'yellow')
+    }
+  }
   if (backlog) {
     const rf = Number(backlog.ready_finalizations?.total ?? 0)
     const sr = Number(backlog.stale_running_runs?.total ?? 0)
@@ -445,7 +471,7 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
       attention.push(`Diagnostics backlog: ${operationalBacklog} operational row(s) (finalization ${rf}, stale runs ${sr})`)
       worst = worstOf(worst, sr > 0 ? 'red' : 'yellow')
     }
-    if (ml > 0) {
+    if (ml > 0 && !provenance?.available) {
       attention.push(`Historical provenance backlog: ${ml} row(s) with missing fetch_event lineage`)
       worst = worstOf(worst, 'yellow')
     }
@@ -547,6 +573,7 @@ export function buildStatusPageDiagnosticsFromBundle(bundle: Record<string, unkn
     replay_queue: replaySnapshot,
     probe_fetch_events: probeSnapshot,
     diagnostics_backlog: backlogSnapshot,
+    historical_provenance: provenanceSnapshot,
     problem_logs_window: logsSnapshot,
     remediation: remediationSnapshot,
     note:

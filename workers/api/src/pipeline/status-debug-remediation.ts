@@ -281,6 +281,37 @@ function hintsForIssueCode(code: string): RemediationHint[] {
           links: ['/admin/status.html', '/admin/logs.html', '/admin/database.html'],
         },
       ]
+    case 'historical_provenance_legacy_unverifiable_rows':
+      return [
+        {
+          scope_key: `actionable|${code}|provenance_diagnostics`,
+          reason: 'Refresh provenance diagnostics and inspect legacy unverifiable historical rows',
+          method: 'GET',
+          path: '/diagnostics/provenance?refresh=1',
+          issue_code: code,
+          links: ['/admin/status.html', '/admin/database.html'],
+        },
+        {
+          scope_key: `actionable|${code}|provenance_recovery`,
+          reason: 'Run bounded historical provenance recovery to relink exact retained evidence',
+          method: 'POST',
+          path: '/runs/provenance-recovery',
+          body: { lookback_days: 3650, dry_run: false },
+          issue_code: code,
+          links: ['/admin/status.html', '/admin/database.html'],
+        },
+      ]
+    case 'historical_provenance_quarantined_rows':
+      return [
+        {
+          scope_key: `actionable|${code}|provenance_diagnostics`,
+          reason: 'Refresh provenance diagnostics and inspect quarantined historical rows',
+          method: 'GET',
+          path: '/diagnostics/provenance?refresh=1',
+          issue_code: code,
+          links: ['/admin/status.html', '/admin/database.html'],
+        },
+      ]
     default:
       return [
         {

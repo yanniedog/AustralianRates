@@ -4,6 +4,11 @@ import {
   repairableFetchEventLineageClause,
 } from '../db/fetch-event-lineage'
 import { FETCH_EVENTS_RETENTION_DAYS } from '../db/retention-prune'
+import {
+  getHistoricalProvenanceSummary,
+  refreshHistoricalProvenanceStatus,
+  runHistoricalProvenanceRecoveryProgram,
+} from '../db/historical-provenance'
 import { repairCatalogAndPresence } from '../pipeline/catalog-presence-repair'
 import { repairLegacyRawPayloadLinkage } from '../pipeline/legacy-raw-payload-repair'
 import type { AppContext } from '../types'
@@ -190,6 +195,66 @@ adminRemediationRoutes.post('/runs/repair-legacy-raw-linkage', async (c) => {
   const result = await repairLegacyRawPayloadLinkage(c.env, {
     dryRun,
     limit,
+  })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    result,
+  })
+})
+
+adminRemediationRoutes.get('/diagnostics/provenance', async (c) => {
+  const datasetValue = c.req.query('dataset')
+  const dataset = datasetValue ? parseDataset(datasetValue) : null
+  if (datasetValue && !dataset) {
+    return jsonError(c, 400, 'INVALID_REQUEST', 'dataset must be one of home_loans, savings, term_deposits.')
+  }
+  const lookbackDays = Math.max(1, Math.min(3650, Math.floor(Number(c.req.query('lookback_days') || 3650))))
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(c.req.query('limit') || 20))))
+  const runId = String(c.req.query('run_id') || '').trim() || undefined
+  const refresh =
+    String(c.req.query('refresh') || '').trim().toLowerCase() === '1' ||
+    String(c.req.query('refresh') || '').trim().toLowerCase() === 'true'
+
+  const refreshResult = refresh
+    ? await refreshHistoricalProvenanceStatus(c.env.DB, {
+        lookbackDays,
+        dataset: dataset ?? undefined,
+        runId,
+        actor: 'admin_provenance_refresh',
+      })
+    : null
+  const summary = await getHistoricalProvenanceSummary(c.env.DB, {
+    lookbackDays,
+    dataset: dataset ?? undefined,
+    runId,
+    limit,
+  })
+
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    refresh: refreshResult,
+    summary,
+  })
+})
+
+adminRemediationRoutes.post('/runs/provenance-recovery', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+  const dryRun = Boolean(body.dry_run ?? body.dryRun)
+  const lookbackDays = Number(body.lookback_days ?? body.lookbackDays ?? 3650)
+  const runId = String(body.run_id ?? body.runId ?? '').trim() || undefined
+  const datasetValue = body.dataset == null ? undefined : String(body.dataset)
+  const dataset = datasetValue ? parseDataset(datasetValue) : null
+  if (datasetValue && !dataset) {
+    return jsonError(c, 400, 'INVALID_REQUEST', 'dataset must be one of home_loans, savings, term_deposits.')
+  }
+  const result = await runHistoricalProvenanceRecoveryProgram(c.env, {
+    dryRun,
+    lookbackDays,
+    runId,
+    dataset: dataset ?? undefined,
+    actor: 'admin_provenance_recovery',
   })
   return c.json({
     ok: true,

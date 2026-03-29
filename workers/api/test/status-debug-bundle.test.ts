@@ -58,4 +58,10 @@ describe('status-debug-remediation', () => {
       '/diagnostics/lineage?dataset=savings&run_id=daily%3A2026-03-28%3A2026-03-27T18%3A00%3A06.000Z',
     )
   })
+
+  it('adds provenance diagnostics and recovery hints for historical unverifiable rows', () => {
+    const hints = remediationFromActionableCodes(['historical_provenance_legacy_unverifiable_rows'])
+    expect(hints[0]?.path).toBe('/diagnostics/provenance?refresh=1')
+    expect(hints[1]?.path).toBe('/runs/provenance-recovery')
+  })
 })

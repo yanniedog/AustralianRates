@@ -179,7 +179,11 @@ export function shouldIgnoreStatusActionableLog(
     source === 'api' &&
     message === 'unhandled internal error' &&
     ctxLower.includes('"/api/home-loan-rates/admin/') &&
-    (ctxLower.includes('/diagnostics/') || ctxLower.includes('/runs/repair-lineage'))
+    (
+      ctxLower.includes('/diagnostics/') ||
+      ctxLower.includes('/runs/repair-lineage') ||
+      ctxLower.includes('/runs/provenance-recovery')
+    )
   ) {
     return true
   }
