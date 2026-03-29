@@ -1,5 +1,6 @@
 /**
  * Fetches public /site-ui (per-section apiBase) and applies chart_legend_opacity to registered LWC report legends.
+ * Dispatches CustomEvent "ar:site-ui-settings" when opacity loads so pages that rebuild legend cssText (e.g. Economic Data) can refresh.
  */
 (function () {
     'use strict';
@@ -28,6 +29,11 @@
             if (o >= 0.05 && o <= 1) {
                 cached = o;
                 applyAll();
+                try {
+                    window.dispatchEvent(
+                        new CustomEvent('ar:site-ui-settings', { detail: { chart_legend_opacity: cached } }),
+                    );
+                } catch (e) {}
             }
         }
     }

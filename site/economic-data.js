@@ -416,6 +416,14 @@
         };
     }
 
+    /** Matches admin Settings chart_legend_opacity (see ar-chart-site-ui.js). */
+    function chartLegendOpacityForStack() {
+        if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.getChartLegendOpacity === 'function') {
+            return String(window.AR.chartSiteUi.getChartLegendOpacity());
+        }
+        return '0.75';
+    }
+
     function ensureLegendStackEl() {
         if (!refs.chartEl) return null;
         var el = refs.chartEl.querySelector('.economic-chart-legend-stack');
@@ -489,7 +497,8 @@
             '-webkit-overflow-scrolling:touch',
             'box-sizing:border-box',
             'pointer-events:auto',
-            'cursor:default'
+            'cursor:default',
+            'opacity:' + chartLegendOpacityForStack()
         ].join(';');
 
         var rows = [];
@@ -887,6 +896,12 @@
     }
 
     bindGlobalDebugHooks();
+    if (!window.__arEconomicSiteUiListener) {
+        window.__arEconomicSiteUiListener = true;
+        window.addEventListener('ar:site-ui-settings', function () {
+            syncEconomicLegendStack();
+        });
+    }
     syncDebugSurface();
     logEvent('info', 'Economic data init start', {
         apiBase: apiBase,
