@@ -22,6 +22,10 @@ export type ResolvedAnalyticsRows = {
 /** Max rows returned by /analytics/series to keep response time and size bounded for charts. */
 const CHART_SERIES_MAX_ROWS = 20_000
 
+/**
+ * Load up to maxRows from projection tables when rows are ordered newest-first (rowSort: desc).
+ * Reverses to ascending collection_date for charts.
+ */
 async function collectByOffset<T>(
   fetchChunk: (limit: number, offset: number) => Promise<T[]>,
   pageSize = 5000,
@@ -29,13 +33,16 @@ async function collectByOffset<T>(
 ): Promise<T[]> {
   const rows: T[] = []
   let offset = 0
-  while (true) {
-    const chunk = await fetchChunk(pageSize, offset)
+  while (rows.length < maxRows) {
+    const need = maxRows - rows.length
+    const lim = Math.min(pageSize, need)
+    const chunk = await fetchChunk(lim, offset)
+    if (chunk.length === 0) break
     rows.push(...chunk)
-    if (chunk.length < pageSize || rows.length >= maxRows) break
+    if (chunk.length < lim) break
     offset += chunk.length
   }
-  return rows.slice(0, maxRows)
+  return rows.reverse()
 }
 
 function normalizeSignatureValue(value: unknown): string {
@@ -59,8 +66,9 @@ function dedupeAnalyticsRows(
   return deduped
 }
 
+/** Keep the most recent rows when over the chart cap (canonical data is sorted ascending by date). */
 function capRows(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  return rows.length <= CHART_SERIES_MAX_ROWS ? rows : rows.slice(0, CHART_SERIES_MAX_ROWS)
+  return rows.length <= CHART_SERIES_MAX_ROWS ? rows : rows.slice(-CHART_SERIES_MAX_ROWS)
 }
 
 async function resolveRepresentationRows(
@@ -235,7 +243,10 @@ export async function collectHomeLoanAnalyticsRowsResolved(
     'home_loans',
     dbs,
     representation,
-    () => collectByOffset((limit, offset) => queryHomeLoanAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset })),
+    () =>
+      collectByOffset((limit, offset) =>
+        queryHomeLoanAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+      ),
     () => collectHomeLoanCanonicalRows(dbs, filters),
   )
 }
@@ -257,7 +268,10 @@ export async function collectSavingsAnalyticsRowsResolved(
     'savings',
     dbs,
     representation,
-    () => collectByOffset((limit, offset) => querySavingsAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset })),
+    () =>
+      collectByOffset((limit, offset) =>
+        querySavingsAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+      ),
     () => collectSavingsCanonicalRows(dbs, filters),
   )
 }
@@ -279,7 +293,10 @@ export async function collectTdAnalyticsRowsResolved(
     'term_deposits',
     dbs,
     representation,
-    () => collectByOffset((limit, offset) => queryTdAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset })),
+    () =>
+      collectByOffset((limit, offset) =>
+        queryTdAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+      ),
     () => collectTdCanonicalRows(dbs, filters),
   )
 }

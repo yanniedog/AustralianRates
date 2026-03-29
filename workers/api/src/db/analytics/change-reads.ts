@@ -24,6 +24,8 @@ type CommonInput = {
   endDate?: string
   limit?: number
   offset?: number
+  /** Newest-first SQL order for chunked reads; default asc for normal pagination. */
+  rowSort?: 'asc' | 'desc'
 }
 
 export type HomeLoanAnalyticsInput = CommonInput & {
@@ -109,12 +111,13 @@ async function queryAnalyticsRows<T extends Record<string, unknown>>(
   presenter: (row: T) => T & Record<string, unknown>,
   limit: number,
   offset: number,
+  sortOrder: 'ASC' | 'DESC' = 'ASC',
 ): Promise<Array<Record<string, unknown>>> {
   const sql = `
     SELECT *
     FROM ${tableName} e
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY e.collection_date ASC, e.parsed_at ASC
+    ORDER BY e.collection_date ${sortOrder}, e.parsed_at ${sortOrder}
     LIMIT ? OFFSET ?
   `
   const result = await db.prepare(sql).bind(...binds, limit, offset).all<T>()
@@ -133,7 +136,17 @@ export async function queryHomeLoanAnalyticsRows(db: D1Database, input: HomeLoan
   if (input.rateStructure) { where.push('e.rate_structure = ?'); binds.push(input.rateStructure) }
   if (input.lvrTier) { where.push('e.lvr_tier = ?'); binds.push(input.lvrTier) }
   if (input.featureSet) { where.push('e.feature_set = ?'); binds.push(input.featureSet) }
-  return queryAnalyticsRows(db, 'home_loan_rate_events', where, binds, presentHomeLoanRow, safeLimit(input.limit, 5000, 50000), Math.max(0, Number(input.offset) || 0))
+  const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
+  return queryAnalyticsRows(
+    db,
+    'home_loan_rate_events',
+    where,
+    binds,
+    presentHomeLoanRow,
+    safeLimit(input.limit, 5000, 50000),
+    Math.max(0, Number(input.offset) || 0),
+    sortOrder,
+  )
 }
 
 export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAnalyticsInput) {
@@ -146,7 +159,17 @@ export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAn
   if (input.accountType) { where.push('e.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('e.rate_type = ?'); binds.push(input.rateType) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
-  return queryAnalyticsRows(db, 'savings_rate_events', where, binds, presentSavingsRow, safeLimit(input.limit, 5000, 50000), Math.max(0, Number(input.offset) || 0))
+  const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
+  return queryAnalyticsRows(
+    db,
+    'savings_rate_events',
+    where,
+    binds,
+    presentSavingsRow,
+    safeLimit(input.limit, 5000, 50000),
+    Math.max(0, Number(input.offset) || 0),
+    sortOrder,
+  )
 }
 
 export async function queryTdAnalyticsRows(db: D1Database, input: TdAnalyticsInput) {
@@ -159,7 +182,17 @@ export async function queryTdAnalyticsRows(db: D1Database, input: TdAnalyticsInp
   if (input.termMonths) { where.push('CAST(e.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
   if (input.interestPayment) { where.push('e.interest_payment = ?'); binds.push(input.interestPayment) }
-  return queryAnalyticsRows(db, 'td_rate_events', where, binds, presentTdRow, safeLimit(input.limit, 5000, 50000), Math.max(0, Number(input.offset) || 0))
+  const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
+  return queryAnalyticsRows(
+    db,
+    'td_rate_events',
+    where,
+    binds,
+    presentTdRow,
+    safeLimit(input.limit, 5000, 50000),
+    Math.max(0, Number(input.offset) || 0),
+    sortOrder,
+  )
 }
 
 export async function queryAnalyticsRateChanges(
