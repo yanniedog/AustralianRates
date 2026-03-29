@@ -11,6 +11,8 @@ import { queryTdCollectionDateRange } from './term-deposits/paginated'
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
 
 const CACHE_TABLE = 'chart_pivot_cache'
+/** Bump when chart row selection semantics change so legacy D1 payloads are ignored. */
+const CHART_PIVOT_PAYLOAD_VERSION = 2
 /** D1 cache row considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 20
 /**
@@ -186,7 +188,18 @@ export async function readD1ChartCache(
     const payload = row.payload_json.startsWith(GZIP_PREFIX)
       ? await gunzipFromBase64(row.payload_json.slice(GZIP_PREFIX.length))
       : row.payload_json
-    rows = JSON.parse(payload) as Array<Record<string, unknown>>
+    const parsed = JSON.parse(payload) as unknown
+    if (Array.isArray(parsed)) return null
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      (parsed as { v?: unknown }).v === CHART_PIVOT_PAYLOAD_VERSION &&
+      Array.isArray((parsed as { rows?: unknown }).rows)
+    ) {
+      rows = (parsed as { rows: Array<Record<string, unknown>> }).rows
+    } else {
+      return null
+    }
   } catch {
     return null
   }
@@ -205,7 +218,7 @@ export async function writeD1ChartCache(
   representation: 'day' | 'change',
   result: { rows: Array<Record<string, unknown>> },
 ): Promise<void> {
-  const rawJson = JSON.stringify(result.rows)
+  const rawJson = JSON.stringify({ v: CHART_PIVOT_PAYLOAD_VERSION, rows: result.rows })
   const payloadJson =
     rawJson.length <= MAX_UNCOMPRESSED_CHARS ? rawJson : `${GZIP_PREFIX}${await gzipToBase64(rawJson)}`
   const builtAt = new Date().toISOString()
