@@ -3,12 +3,19 @@ import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
 import { presentHomeLoanRow, presentSavingsRow, presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { MIN_CONFIDENCE_ALL, MIN_CONFIDENCE_HISTORICAL, MAX_PUBLIC_RATE as HOME_MAX_RATE, MIN_PUBLIC_RATE as HOME_MIN_RATE } from '../home-loans/shared'
-import { addBalanceBandOverlapWhere, addBankWhere, addRateBoundsWhere, rows, safeLimit } from '../query-common'
+import {
+  addBalanceBandOverlapWhere,
+  addBankWhere,
+  addDatasetModeWhere,
+  addRateBoundsWhere,
+  addSingleColumnRateBoundsWhere,
+  rows,
+  safeLimit,
+  type DatasetMode,
+} from '../query-common'
 import { MAX_PUBLIC_RATE as SAVINGS_MAX_RATE, MIN_CONFIDENCE as SAVINGS_MIN_CONFIDENCE, MIN_CONFIDENCE_HISTORICAL as SAVINGS_MIN_CONFIDENCE_HISTORICAL, MIN_PUBLIC_RATE as SAVINGS_MIN_RATE } from '../savings/shared'
 import { MAX_PUBLIC_RATE as TD_MAX_RATE, MIN_CONFIDENCE as TD_MIN_CONFIDENCE, MIN_CONFIDENCE_HISTORICAL as TD_MIN_CONFIDENCE_HISTORICAL, MIN_PUBLIC_RATE as TD_MIN_RATE } from '../term-deposits/shared'
 import { getAnalyticsDatasetConfig } from './config'
-
-type Mode = 'all' | 'daily' | 'historical'
 
 type CommonInput = {
   bank?: string
@@ -18,7 +25,7 @@ type CommonInput = {
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
-  mode?: Mode
+  mode?: DatasetMode
   sourceMode?: SourceMode
   startDate?: string
   endDate?: string
@@ -52,31 +59,6 @@ export type TdAnalyticsInput = CommonInput & {
   balanceMin?: number
   balanceMax?: number
   interestPayment?: string
-}
-
-function addModeWhere(
-  where: string[],
-  binds: Array<string | number>,
-  retrievalColumn: string,
-  confidenceColumn: string,
-  mode: Mode,
-  minAll: number,
-  minHistorical: number,
-): void {
-  if (mode === 'daily') {
-    where.push(`${retrievalColumn} != 'historical_scrape'`)
-    where.push(`${confidenceColumn} >= ?`)
-    binds.push(minAll)
-    return
-  }
-  if (mode === 'historical') {
-    where.push(`${retrievalColumn} = 'historical_scrape'`)
-    where.push(`${confidenceColumn} >= ?`)
-    binds.push(minHistorical)
-    return
-  }
-  where.push(`${confidenceColumn} >= ?`)
-  binds.push(minAll)
 }
 
 function addCommonEventWhere(
@@ -133,7 +115,15 @@ export async function queryHomeLoanAnalyticsRows(db: D1Database, input: HomeLoan
   const where: string[] = ['e.interest_rate BETWEEN ? AND ?']
   const binds: Array<string | number> = [HOME_MIN_RATE, HOME_MAX_RATE]
   addRateBoundsWhere(where, binds, 'e.interest_rate', 'e.comparison_rate', input)
-  addModeWhere(where, binds, 'e.retrieval_type', 'e.confidence_score', input.mode ?? 'all', MIN_CONFIDENCE_ALL, MIN_CONFIDENCE_HISTORICAL)
+  addDatasetModeWhere(
+    where,
+    binds,
+    'e.retrieval_type',
+    'e.confidence_score',
+    input.mode,
+    MIN_CONFIDENCE_ALL,
+    MIN_CONFIDENCE_HISTORICAL,
+  )
   addCommonEventWhere(where, binds, 'e', input)
   if (input.securityPurpose) { where.push('e.security_purpose = ?'); binds.push(input.securityPurpose) }
   if (input.repaymentType) { where.push('e.repayment_type = ?'); binds.push(input.repaymentType) }
@@ -156,9 +146,16 @@ export async function queryHomeLoanAnalyticsRows(db: D1Database, input: HomeLoan
 export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAnalyticsInput) {
   const where: string[] = ['e.interest_rate BETWEEN ? AND ?']
   const binds: Array<string | number> = [SAVINGS_MIN_RATE, SAVINGS_MAX_RATE]
-  if (Number.isFinite(input.minRate)) { where.push('e.interest_rate >= ?'); binds.push(Number(input.minRate)) }
-  if (Number.isFinite(input.maxRate)) { where.push('e.interest_rate <= ?'); binds.push(Number(input.maxRate)) }
-  addModeWhere(where, binds, 'e.retrieval_type', 'e.confidence_score', input.mode ?? 'all', SAVINGS_MIN_CONFIDENCE, SAVINGS_MIN_CONFIDENCE_HISTORICAL)
+  addSingleColumnRateBoundsWhere(where, binds, 'e.interest_rate', input.minRate, input.maxRate)
+  addDatasetModeWhere(
+    where,
+    binds,
+    'e.retrieval_type',
+    'e.confidence_score',
+    input.mode,
+    SAVINGS_MIN_CONFIDENCE,
+    SAVINGS_MIN_CONFIDENCE_HISTORICAL,
+  )
   addCommonEventWhere(where, binds, 'e', input)
   if (input.accountType) { where.push('e.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('e.rate_type = ?'); binds.push(input.rateType) }
@@ -180,9 +177,16 @@ export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAn
 export async function queryTdAnalyticsRows(db: D1Database, input: TdAnalyticsInput) {
   const where: string[] = ['e.interest_rate BETWEEN ? AND ?']
   const binds: Array<string | number> = [TD_MIN_RATE, TD_MAX_RATE]
-  if (Number.isFinite(input.minRate)) { where.push('e.interest_rate >= ?'); binds.push(Number(input.minRate)) }
-  if (Number.isFinite(input.maxRate)) { where.push('e.interest_rate <= ?'); binds.push(Number(input.maxRate)) }
-  addModeWhere(where, binds, 'e.retrieval_type', 'e.confidence_score', input.mode ?? 'all', TD_MIN_CONFIDENCE, TD_MIN_CONFIDENCE_HISTORICAL)
+  addSingleColumnRateBoundsWhere(where, binds, 'e.interest_rate', input.minRate, input.maxRate)
+  addDatasetModeWhere(
+    where,
+    binds,
+    'e.retrieval_type',
+    'e.confidence_score',
+    input.mode,
+    TD_MIN_CONFIDENCE,
+    TD_MIN_CONFIDENCE_HISTORICAL,
+  )
   addCommonEventWhere(where, binds, 'e', input)
   if (input.termMonths) { where.push('CAST(e.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }

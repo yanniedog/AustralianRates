@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseExcludeCompareEdgeCases } from '../src/routes/public-query'
+import {
+  parseExcludeCompareEdgeCases,
+  parsePublicMode,
+  parseRateOrderBy,
+  parseSortDirection,
+} from '../src/routes/public-query'
 
 describe('public-query', () => {
   describe('parseExcludeCompareEdgeCases', () => {
@@ -15,6 +20,43 @@ describe('public-query', () => {
       expect(parseExcludeCompareEdgeCases('0')).toBe(false)
       expect(parseExcludeCompareEdgeCases('false')).toBe(false)
       expect(parseExcludeCompareEdgeCases('off')).toBe(false)
+    })
+  })
+
+  describe('parseSortDirection', () => {
+    it('accepts asc and desc', () => {
+      expect(parseSortDirection('asc')).toBe('asc')
+      expect(parseSortDirection('desc')).toBe('desc')
+    })
+
+    it('falls back on invalid input', () => {
+      expect(parseSortDirection(undefined)).toBe('desc')
+      expect(parseSortDirection(' sideways ', 'asc')).toBe('asc')
+    })
+  })
+
+  describe('parsePublicMode', () => {
+    it('accepts daily and historical modes', () => {
+      expect(parsePublicMode('daily')).toBe('daily')
+      expect(parsePublicMode(' historical ')).toBe('historical')
+    })
+
+    it('defaults to all for empty or invalid input', () => {
+      expect(parsePublicMode(undefined)).toBe('all')
+      expect(parsePublicMode('anything')).toBe('all')
+    })
+  })
+
+  describe('parseRateOrderBy', () => {
+    it('accepts supported values', () => {
+      expect(parseRateOrderBy('rate_asc')).toBe('rate_asc')
+      expect(parseRateOrderBy('rate_desc')).toBe('rate_desc')
+    })
+
+    it('supports the secondary alias and default fallback', () => {
+      expect(parseRateOrderBy(undefined, 'rate_desc')).toBe('rate_desc')
+      expect(parseRateOrderBy('default', 'rate_asc')).toBe('default')
+      expect(parseRateOrderBy('invalid')).toBe('default')
     })
   })
 })

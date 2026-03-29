@@ -1,11 +1,22 @@
 import { applySavingsCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
-import { addBalanceBandOverlapWhere, addBankWhere } from '../query-common'
+import {
+  addBalanceBandOverlapWhere,
+  addBankWhere,
+  addDatasetModeWhere,
+  addSingleColumnRateBoundsWhere,
+} from '../query-common'
+import {
+  MAX_PUBLIC_RATE as DEPOSIT_MAX_PUBLIC_RATE,
+  MIN_CONFIDENCE as DEPOSIT_MIN_CONFIDENCE,
+  MIN_CONFIDENCE_HISTORICAL as DEPOSIT_MIN_CONFIDENCE_HISTORICAL,
+  MIN_PUBLIC_RATE as DEPOSIT_MIN_PUBLIC_RATE,
+} from '../deposits-common'
 
-export const MIN_PUBLIC_RATE = 0
-export const MAX_PUBLIC_RATE = 15
-export const MIN_CONFIDENCE = 0.85
-export const MIN_CONFIDENCE_HISTORICAL = 0.65
+export const MIN_PUBLIC_RATE = DEPOSIT_MIN_PUBLIC_RATE
+export const MAX_PUBLIC_RATE = DEPOSIT_MAX_PUBLIC_RATE
+export const MIN_CONFIDENCE = DEPOSIT_MIN_CONFIDENCE
+export const MIN_CONFIDENCE_HISTORICAL = DEPOSIT_MIN_CONFIDENCE_HISTORICAL
 
 export type SavingsPaginatedFilters = {
   page?: number
@@ -102,14 +113,7 @@ export function addRateBoundsWhere(
   minRate?: number,
   maxRate?: number,
 ) {
-  if (Number.isFinite(minRate)) {
-    where.push(`${interestRateColumn} >= ?`)
-    binds.push(Number(minRate))
-  }
-  if (Number.isFinite(maxRate)) {
-    where.push(`${interestRateColumn} <= ?`)
-    binds.push(Number(maxRate))
-  }
+  addSingleColumnRateBoundsWhere(where, binds, interestRateColumn, minRate, maxRate)
 }
 
 export function buildWhere(filters: SavingsPaginatedFilters): { clause: string; binds: Array<string | number> } {
@@ -119,18 +123,15 @@ export function buildWhere(filters: SavingsPaginatedFilters): { clause: string; 
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
   addRateBoundsWhere(where, binds, 'h.interest_rate', filters.minRate, filters.maxRate)
-  if (filters.mode === 'daily') {
-    where.push("h.retrieval_type != 'historical_scrape'")
-    where.push('h.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE)
-  } else if (filters.mode === 'historical') {
-    where.push("h.retrieval_type = 'historical_scrape'")
-    where.push('h.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE_HISTORICAL)
-  } else {
-    where.push('h.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE)
-  }
+  addDatasetModeWhere(
+    where,
+    binds,
+    'h.retrieval_type',
+    'h.confidence_score',
+    filters.mode,
+    MIN_CONFIDENCE,
+    MIN_CONFIDENCE_HISTORICAL,
+  )
 
   where.push(runSourceWhereClause('h.run_source', filters.sourceMode ?? 'all'))
   addBankWhere(where, binds, 'h.bank_name', filters.bank, filters.banks)

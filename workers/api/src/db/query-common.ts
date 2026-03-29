@@ -5,6 +5,8 @@ export type RateBoundFilters = {
   maxComparisonRate?: number
 }
 
+export type DatasetMode = 'all' | 'daily' | 'historical'
+
 export function safeLimit(limit: number | undefined, fallback: number, max = 500): number {
   const n = Number(limit)
   if (!Number.isFinite(n)) return fallback
@@ -91,4 +93,46 @@ export function addRateBoundsWhere(
     where.push(`${comparisonColumn} <= ?`)
     binds.push(Number(filters.maxComparisonRate))
   }
+}
+
+export function addSingleColumnRateBoundsWhere(
+  where: string[],
+  binds: Array<string | number>,
+  rateColumn: string,
+  minRate?: number,
+  maxRate?: number,
+): void {
+  if (minRate != null && Number.isFinite(Number(minRate))) {
+    where.push(`${rateColumn} >= ?`)
+    binds.push(Number(minRate))
+  }
+  if (maxRate != null && Number.isFinite(Number(maxRate))) {
+    where.push(`${rateColumn} <= ?`)
+    binds.push(Number(maxRate))
+  }
+}
+
+export function addDatasetModeWhere(
+  where: string[],
+  binds: Array<string | number>,
+  retrievalColumn: string,
+  confidenceColumn: string,
+  mode: DatasetMode | undefined,
+  minConfidence: number,
+  minHistoricalConfidence: number,
+): void {
+  if (mode === 'daily') {
+    where.push(`${retrievalColumn} != 'historical_scrape'`)
+    where.push(`${confidenceColumn} >= ?`)
+    binds.push(minConfidence)
+    return
+  }
+  if (mode === 'historical') {
+    where.push(`${retrievalColumn} = 'historical_scrape'`)
+    where.push(`${confidenceColumn} >= ?`)
+    binds.push(minHistoricalConfidence)
+    return
+  }
+  where.push(`${confidenceColumn} >= ?`)
+  binds.push(minConfidence)
 }

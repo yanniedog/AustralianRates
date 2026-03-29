@@ -6,8 +6,27 @@
     var ar = window.AR;
     var config = ar.config || {};
     var utils = ar.utils || {};
+    var network = ar.network || {};
     var apiBase = config.apiBase || (window.location.origin + '/api/economic-data');
     var clientLog = typeof utils.clientLog === 'function' ? utils.clientLog : function () {};
+    var esc = typeof utils.esc === 'function'
+        ? utils.esc
+        : (window._arEsc || function (value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        });
+    var describeError = typeof network.describeError === 'function'
+        ? network.describeError
+        : function (error, fallback) {
+            if (error && typeof error === 'object') {
+                if (error.userMessage) return String(error.userMessage);
+                if (error.message) return String(error.message);
+            }
+            return String(fallback || 'Request failed.');
+        };
     var sessionKey = 'ar-economic-data-debug-session';
     var Y_SCALE_STORAGE_KEY = 'ar-economic-y-scale';
     var ECONOMIC_CHART_PALETTE = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
@@ -58,22 +77,6 @@
         statusText: document.getElementById('economic-status-text'),
         yScaleBtn: document.getElementById('economic-y-scale')
     };
-
-    function esc(value) {
-        return String(value == null ? '' : value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
-    function describeError(error, fallback) {
-        if (error && typeof error === 'object') {
-            if (error.userMessage) return String(error.userMessage);
-            if (error.message) return String(error.message);
-        }
-        return String(fallback || 'Request failed.');
-    }
 
     function todayIso() { return new Date().toISOString().slice(0, 10); }
 

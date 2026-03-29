@@ -4,7 +4,14 @@ import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
 import { withD1TransientRetry } from '../d1-retry'
 import type { LatestQueryTiming } from '../latest-query-timing'
-import { addBalanceBandOverlapWhere, addBankWhere, rows, safeLimit } from '../query-common'
+import { DEPOSIT_LATEST_ORDER_BY } from '../deposits-common'
+import {
+  addBalanceBandOverlapWhere,
+  addBankWhere,
+  addDatasetModeWhere,
+  rows,
+  safeLimit,
+} from '../query-common'
 import {
   addRateBoundsWhere,
   type LatestTdFilters,
@@ -14,12 +21,6 @@ import {
   MIN_PUBLIC_RATE,
 } from './shared'
 
-const LATEST_ORDER_BY: Record<NonNullable<LatestTdFilters['orderBy']>, string> = {
-  default: 'l.collection_date DESC, l.bank_name ASC, l.product_name ASC',
-  rate_asc: 'l.interest_rate ASC, l.bank_name ASC',
-  rate_desc: 'l.interest_rate DESC, l.bank_name ASC',
-}
-
 function buildLatestWhere(filters: LatestTdFilters): { clause: string; binds: Array<string | number> } {
   const where: string[] = []
   const binds: Array<string | number> = []
@@ -27,19 +28,15 @@ function buildLatestWhere(filters: LatestTdFilters): { clause: string; binds: Ar
   where.push('l.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
   addRateBoundsWhere(where, binds, 'l.interest_rate', filters.minRate, filters.maxRate)
-
-  if (filters.mode === 'daily') {
-    where.push("l.retrieval_type != 'historical_scrape'")
-    where.push('l.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE)
-  } else if (filters.mode === 'historical') {
-    where.push("l.retrieval_type = 'historical_scrape'")
-    where.push('l.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE_HISTORICAL)
-  } else {
-    where.push('l.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE)
-  }
+  addDatasetModeWhere(
+    where,
+    binds,
+    'l.retrieval_type',
+    'l.confidence_score',
+    filters.mode,
+    MIN_CONFIDENCE,
+    MIN_CONFIDENCE_HISTORICAL,
+  )
 
   addBankWhere(where, binds, 'l.bank_name', filters.bank, filters.banks)
   if (filters.termMonths) {
@@ -70,7 +67,7 @@ function buildLatestWhere(filters: LatestTdFilters): { clause: string; binds: Ar
 }
 
 function orderByClause(filters: LatestTdFilters): string {
-  return LATEST_ORDER_BY[filters.orderBy ?? 'default'] ?? LATEST_ORDER_BY.default
+  return DEPOSIT_LATEST_ORDER_BY[filters.orderBy ?? 'default'] ?? DEPOSIT_LATEST_ORDER_BY.default
 }
 
 export async function queryLatestTdRates(db: D1Database, filters: LatestTdFilters, timing?: LatestQueryTiming) {

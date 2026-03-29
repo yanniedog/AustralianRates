@@ -1,7 +1,13 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
-import { addBalanceBandOverlapWhere, addBankWhere, rows, safeLimit } from '../query-common'
+import {
+  addBalanceBandOverlapWhere,
+  addBankWhere,
+  addDatasetModeWhere,
+  rows,
+  safeLimit,
+} from '../query-common'
 import { tdProductKeySql, tdSeriesKeySql } from './identity'
 import {
   addRateBoundsWhere,
@@ -19,18 +25,15 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
   where.push('h.interest_rate BETWEEN ? AND ?')
   binds.push(MIN_PUBLIC_RATE, MAX_PUBLIC_RATE)
   addRateBoundsWhere(where, binds, 'h.interest_rate', input.minRate, input.maxRate)
-  if (input.mode === 'daily') {
-    where.push("h.retrieval_type != 'historical_scrape'")
-    where.push('h.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE)
-  } else if (input.mode === 'historical') {
-    where.push("h.retrieval_type = 'historical_scrape'")
-    where.push('h.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE_HISTORICAL)
-  } else {
-    where.push('h.confidence_score >= ?')
-    binds.push(MIN_CONFIDENCE)
-  }
+  addDatasetModeWhere(
+    where,
+    binds,
+    'h.retrieval_type',
+    'h.confidence_score',
+    input.mode,
+    MIN_CONFIDENCE,
+    MIN_CONFIDENCE_HISTORICAL,
+  )
 
   addBankWhere(where, binds, 'h.bank_name', input.bank, input.banks)
   if (input.seriesKey) {
