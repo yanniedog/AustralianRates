@@ -53,6 +53,34 @@ body.ar-public .filter-pad-btn-value {
     overflow-wrap: anywhere;
 }
 
+/* Dark mode: scenario chips are muted by default; selected state reads clearly (not full accent fill). */
+:root[data-theme="dark"] body.ar-public .filter-pad-btn {
+    border-color: color-mix(in srgb, var(--ar-line-strong) 85%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-3) 72%, var(--ar-surface-2));
+}
+
+:root[data-theme="dark"] body.ar-public .filter-pad-btn:hover {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 45%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-surface-3) 88%, var(--ar-surface-2));
+}
+
+:root[data-theme="dark"] body.ar-public .filter-pad-btn:not(.is-selected) .filter-pad-btn-value {
+    color: var(--ar-text-soft);
+}
+
+:root[data-theme="dark"] body.ar-public .filter-pad-btn.is-selected {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 82%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-showcase-spark) 22%, var(--ar-surface-2));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 24%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 6%, transparent);
+}
+
+:root[data-theme="dark"] body.ar-public .filter-pad-btn.is-selected .filter-pad-btn-value {
+    color: var(--ar-text);
+    font-weight: 700;
+}
+
 body.ar-public .filter-pad-empty {
     padding: 8px 10px;
     border: 1px dashed var(--ar-line);

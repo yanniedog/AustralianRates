@@ -155,13 +155,13 @@ body.ar-legal .site-brand-tagline {
 }
 
 body.ar-public button.primary,
-body.ar-public button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn),
+body.ar-public button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):not(.filter-pad-btn),
 body.ar-public .buttonish.primary {
     color: #04110f;
 }
 
 body.ar-public button.primary:hover,
-body.ar-public button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):hover,
+body.ar-public button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):not(.filter-pad-btn):hover,
 body.ar-public .buttonish.primary:hover {
     color: #04110f;
 }
