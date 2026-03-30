@@ -430,6 +430,21 @@ body.is-resizing-panels * {
     font-weight: 600;
 }
 
+.site-tree-root a:hover,
+.site-tree-leaf:hover,
+.admin-sidebar-link:hover {
+    background: color-mix(in srgb, var(--ar-accent-soft) 72%, var(--ar-surface));
+    color: var(--ar-text);
+}
+
+.site-tree-root a:focus-visible,
+.site-tree-leaf:focus-visible,
+.admin-sidebar-link:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 2px;
+    color: var(--ar-text);
+}
+
 .nav-link-label {
     width: 100%;
     justify-content: flex-start;
@@ -485,13 +500,48 @@ body.is-resizing-panels * {
     align-items: center;
     gap: 8px;
     list-style: none;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
     font-size: 0.76rem;
     font-weight: 700;
+    color: var(--ar-text-soft);
     cursor: pointer;
 }
 
 .footer-technical-summary::-webkit-details-marker {
     display: none;
+}
+
+.footer-technical-summary:hover,
+.footer-log-badge:hover,
+.footer-log-popup-item:hover {
+    background: color-mix(in srgb, var(--ar-accent-soft) 70%, var(--ar-surface));
+    color: var(--ar-text);
+}
+
+.footer-technical-summary:focus-visible,
+.footer-log-badge:focus-visible,
+.footer-log-popup-item:focus-visible,
+.site-footer-meta a:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 2px;
+}
+
+.footer-log-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--ar-text-soft);
+    text-decoration: none;
 }
 
 .icon-link {
@@ -512,6 +562,19 @@ body.is-resizing-panels * {
     border-radius: 12px;
     background: var(--ar-surface);
     box-shadow: var(--ar-shadow-soft);
+}
+
+.footer-log-popup-item {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 70%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent);
+    color: var(--ar-text-soft);
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
 }
 
 .site-tooltip {

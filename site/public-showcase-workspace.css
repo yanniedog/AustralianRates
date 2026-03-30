@@ -417,8 +417,8 @@ body.ar-legal .legal-hero { animation: none; }
         display: flex;
         flex-direction: column;
         min-height: 0;
-        height: calc(100dvh - var(--ar-header-height) - 4px);
-        max-height: calc(100dvh - var(--ar-header-height) - 4px);
+        height: auto;
+        max-height: none;
     }
 
     body.ar-public .chart-block .chart-block-head {

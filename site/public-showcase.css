@@ -226,11 +226,110 @@ body.ar-legal .legal-support-card {
     padding: 22px;
 }
 
+body.ar-legal .legal-shell {
+    width: min(1040px, calc(100vw - calc(var(--ar-shell-gutter) * 2)));
+}
+
+body.ar-legal .legal-hero-copy {
+    display: grid;
+    gap: 16px;
+    max-width: 64ch;
+}
+
 body.ar-legal .legal-hero h1 {
     font-family: var(--ar-font-display);
     font-size: clamp(2.4rem, 4.8vw, 4.2rem);
     line-height: 0.94;
     letter-spacing: -0.05em;
+}
+
+body.ar-legal .legal-hero .subtitle {
+    max-width: 58ch;
+    color: var(--ar-text-soft);
+    font-size: 0.98rem;
+    line-height: 1.65;
+}
+
+body.ar-legal .legal-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+}
+
+body.ar-legal .legal-panel:first-child {
+    grid-column: 1 / -1;
+}
+
+body.ar-legal .legal-panel,
+body.ar-legal .legal-support-card {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    min-height: 100%;
+}
+
+body.ar-legal .legal-panel h2,
+body.ar-legal .legal-support-card h2 {
+    margin: 0;
+    font-size: 1.02rem;
+}
+
+body.ar-legal .legal-panel p,
+body.ar-legal .legal-support-card p,
+body.ar-legal .legal-list {
+    margin: 0;
+    color: var(--ar-text-soft);
+    line-height: 1.65;
+}
+
+body.ar-legal .legal-panel p + p,
+body.ar-legal .legal-support-card p + p {
+    margin-top: 12px;
+}
+
+body.ar-legal .legal-list {
+    display: grid;
+    gap: 8px;
+    padding-left: 1.2rem;
+}
+
+body.ar-legal .legal-callout {
+    display: grid;
+    gap: 6px;
+    align-items: start;
+}
+
+body.ar-legal .legal-callout-title {
+    margin: 0;
+    color: var(--ar-text-soft);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+body.ar-legal a {
+    color: var(--ar-text);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.16em;
+}
+
+body.ar-legal a:hover {
+    color: var(--ar-accent);
+}
+
+body.ar-legal a:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 3px;
+    border-radius: 8px;
+}
+
+body.ar-legal code {
+    padding: 0.18em 0.46em;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 70%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+    font-family: var(--ar-font-mono);
+    font-size: 0.85em;
 }
 
 @media (max-width: 760px) {
@@ -248,5 +347,13 @@ body.ar-legal .legal-hero h1 {
     body.ar-legal .shell {
         width: calc(100vw - 24px);
         padding-top: 22px;
+    }
+
+    body.ar-legal .legal-stack {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-legal .legal-panel:first-child {
+        grid-column: auto;
     }
 }
