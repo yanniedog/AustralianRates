@@ -893,8 +893,8 @@ body.ar-public .filters-drawer > summary {
     gap: 8px;
     list-style: none;
     cursor: pointer;
-    padding: 10px 18px;
-    font-size: 0.8rem;
+    padding: 12px 18px;
+    font-size: 0.82rem;
     font-weight: 650;
     color: var(--ar-text-soft);
     transition: color var(--ar-motion-fast) var(--ar-ease), background-color var(--ar-motion-fast) var(--ar-ease);
@@ -937,19 +937,40 @@ body.ar-public .filters-active-count {
 body.ar-public .filters-active-count:empty { display: none; }
 
 body.ar-public .filter-dirty-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ar-warn, #e8a820);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    margin-left: auto;
+    padding: 0 7px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 80%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
+    color: var(--ar-text-muted);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     flex: 0 0 auto;
+}
+
+body.ar-public .filter-dirty-dot.has-count {
+    color: var(--ar-text);
+}
+
+body.ar-public .filter-dirty-dot.is-dirty {
+    border-color: color-mix(in srgb, var(--ar-warn, #e8a820) 42%, transparent);
+    background: color-mix(in srgb, var(--ar-warn, #e8a820) 16%, var(--ar-surface));
+    color: color-mix(in srgb, var(--ar-warn, #e8a820) 78%, var(--ar-text));
 }
 
 body.ar-public .filters-drawer-body {
     display: flex;
     flex-direction: column;
-    gap: 0;
-    padding: 14px 18px 16px;
-    background: color-mix(in srgb, var(--ar-surface-2) 68%, transparent);
+    gap: 10px;
+    padding: 16px 18px 18px;
+    background: color-mix(in srgb, var(--ar-surface-2) 74%, transparent);
     max-width: 100%;
     min-width: 0;
     overflow-x: auto;
@@ -957,24 +978,46 @@ body.ar-public .filters-drawer-body {
 }
 
 body.ar-public .filters-drawer-section {
-    padding: 12px 0;
+    display: grid;
+    gap: 12px;
+    padding: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--ar-line) 60%, transparent);
 }
 
 body.ar-public .filters-drawer-section:last-child { border-bottom: none; }
 
+body.ar-public .filters-drawer-section .terminal-field,
+body.ar-public .filters-drawer-section .terminal-field-bank {
+    align-content: start;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 70%, transparent);
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 94%, transparent), color-mix(in srgb, var(--ar-surface-2) 92%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+}
+
+body.ar-public .terminal-inline-inputs-bank {
+    gap: 8px;
+}
+
+body.ar-public .filter-bank-count {
+    min-width: 72px;
+    border-color: color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    background: color-mix(in srgb, var(--ar-surface) 94%, transparent);
+    color: var(--ar-text);
+}
+
 /* Compact scenario selects in a responsive flex row */
 body.ar-public .filters-scenarios-grid {
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: 16px;
-    row-gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
     margin-top: 4px;
 }
 
 body.ar-public .filters-scenarios-grid .terminal-field {
-    flex: 0 1 auto;
-    min-width: 80px;
+    min-width: 0;
 }
 
 /* ── Filters "More" nested collapsible ────────────────────────────── */
@@ -1000,38 +1043,42 @@ body.ar-public .filters-more > summary {
 
 body.ar-public .filters-more > summary::-webkit-details-marker { display: none; }
 
+body.ar-public .filters-more[open] > summary {
+    color: var(--ar-text);
+    border-color: color-mix(in srgb, var(--ar-accent) 28%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-accent-soft) 68%, var(--ar-surface));
+}
+
 body.ar-public .filters-more > summary:hover {
     color: var(--ar-text);
     border-color: var(--ar-line-strong);
 }
 
 body.ar-public .filters-more-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    margin-top: 8px;
+    display: grid;
+    gap: 12px;
+    margin-top: 10px;
 }
 
 body.ar-public .filters-more-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 6px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-top: 4px;
 }
 
 body.ar-public .filters-more-grid .terminal-field {
-    flex: 1 1 120px;
-    min-width: 100px;
+    min-width: 0;
 }
 
 /* ── Compact bank picker — slim chips (logo + code inline) ────────── */
 body.ar-public .bank-picker-compact {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    max-height: 136px;
+    gap: 8px;
+    max-height: 168px;
     overflow-y: auto;
-    padding: 0;
+    padding: 2px 0 0;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -1046,22 +1093,27 @@ body.ar-public .bank-picker-compact button.bank-option-card {
     width: auto;
     min-width: 0;
     min-height: 0;
-    height: 34px;
-    padding: 0 11px 0 8px;
-    border-radius: 10px;
+    height: 38px;
+    padding: 0 13px 0 10px;
+    border-radius: 12px;
     aspect-ratio: unset;
-    background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent) !important;
+    border-color: color-mix(in srgb, var(--ar-line-strong) 76%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent) !important;
     transform: none !important;
 }
 
 body.ar-public .bank-picker-compact button.bank-option-card:hover {
-    border-color: color-mix(in srgb, var(--ar-showcase-spark) 40%, var(--ar-line-strong));
+    border-color: color-mix(in srgb, var(--ar-accent) 34%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-surface) 92%, var(--ar-surface-2)) !important;
     transform: none !important;
 }
 
 body.ar-public .bank-picker-compact button.bank-option-card.is-selected {
-    border-color: color-mix(in srgb, var(--ar-showcase-spark) 80%, transparent);
-    background: color-mix(in srgb, var(--ar-showcase-spark) 16%, var(--ar-surface-2)) !important;
+    border-color: color-mix(in srgb, var(--ar-accent) 46%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-accent-soft) 78%, var(--ar-surface)) !important;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--ar-accent) 12%, transparent);
 }
 
 /* Remove the decorative accent bar pseudo-element */
@@ -1074,9 +1126,9 @@ body.ar-public .bank-picker-compact .bank-badge {
 }
 
 body.ar-public .bank-picker-compact .bank-badge-logo-wrap {
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
     flex: 0 0 auto;
 }
 
@@ -1085,8 +1137,8 @@ body.ar-public .bank-picker-compact .bank-badge-copy {
 }
 
 body.ar-public .bank-picker-compact .bank-badge-label {
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: 0.74rem;
+    font-weight: 650;
     white-space: nowrap;
     color: var(--ar-text);
 }
@@ -1125,10 +1177,10 @@ body.ar-public .chip-strip {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    padding: 8px 18px 10px;
+    gap: 8px;
+    padding: 10px 18px 12px;
     border-bottom: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
-    background: color-mix(in srgb, var(--ar-surface-2) 32%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 42%, transparent);
 }
 
 body.ar-public .chip-strip[hidden] { display: none; }
@@ -1137,17 +1189,17 @@ body.ar-public .chip-strip[hidden] { display: none; }
 body.ar-public .chip-strip .filter-chip {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
     border-radius: var(--ar-radius-pill);
-    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
+    background: color-mix(in srgb, var(--ar-surface) 94%, transparent);
     color: var(--ar-text-soft);
-    height: 30px;
-    padding: 0 5px 0 10px;
-    font-size: 0.72rem;
+    min-height: 32px;
+    padding: 0 8px 0 10px;
+    font-size: 0.74rem;
     font-weight: 600;
     cursor: default;
-    min-height: unset;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
 }
 
 body.ar-public .chip-strip .chip-key {
@@ -1166,11 +1218,11 @@ body.ar-public .chip-strip .chip-select {
     border: none;
     outline: none;
     color: var(--ar-text);
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     font-weight: 600;
     cursor: pointer;
     padding: 0;
-    max-width: 140px;
+    max-width: 156px;
     appearance: auto;
     -webkit-appearance: auto;
 }
@@ -1220,11 +1272,16 @@ body.ar-public .chip-strip .chip-remove:hover {
         padding: 12px;
     }
 
+    body.ar-public .filters-scenarios-grid,
+    body.ar-public .filters-more-grid {
+        grid-template-columns: 1fr;
+    }
+
     body.ar-public .tab-panel {
         padding: 12px;
     }
 
     body.ar-public .bank-picker-compact {
-        max-height: 112px;
+        max-height: 156px;
     }
 }

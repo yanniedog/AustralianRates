@@ -45,24 +45,24 @@
         if (explorerState.status === 'error') {
             titleEl.textContent = 'Rate table unavailable';
             textEl.textContent = explorerState.message || 'The live table could not load right now.';
-            statusEl.textContent = 'ERR';
+            statusEl.textContent = 'Issue';
             statusEl.className = 'pill danger';
         } else if (explorerState.status === 'ready' && Number(explorerState.total) === 0) {
             titleEl.textContent = 'No rates match this slice';
             textEl.textContent = 'Broaden the filters to see more rates.';
-            statusEl.textContent = '0';
+            statusEl.textContent = 'No match';
             statusEl.className = 'pill warning';
         } else if (explorerState.status === 'ready') {
-            titleEl.textContent = 'Current rate table';
+            titleEl.textContent = 'Live rate table';
             textEl.textContent = explorerState.total > explorerState.rows
-                ? ('Showing ' + explorerState.rows.toLocaleString() + ' of ' + explorerState.total.toLocaleString() + ' rows in the live slice.')
-                : ('Showing ' + explorerState.total.toLocaleString() + ' rows in the live slice.');
-            statusEl.textContent = 'OK';
+                ? ('Showing ' + explorerState.rows.toLocaleString() + ' rows from ' + explorerState.total.toLocaleString() + ' live matches in the current slice.')
+                : ('Showing ' + explorerState.total.toLocaleString() + ' live rows in the current slice.');
+            statusEl.textContent = 'Live';
             statusEl.className = 'pill positive';
         } else {
-            titleEl.textContent = 'Current rate table';
-            textEl.textContent = 'Loading the latest rates for the active slice.';
-            statusEl.textContent = 'WAIT';
+            titleEl.textContent = 'Live rate table';
+            textEl.textContent = 'Refreshing the latest rates for the active slice.';
+            statusEl.textContent = 'Refreshing';
             statusEl.className = 'pill';
         }
 

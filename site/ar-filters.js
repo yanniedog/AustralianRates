@@ -225,9 +225,11 @@
 
         if (!entries.length) {
             els.activeFilterChips.hidden = true;
+            els.activeFilterChips.innerHTML = '';
             return;
         }
         els.activeFilterChips.hidden = false;
+        els.activeFilterChips.setAttribute('aria-label', entries.length + ' active filters');
 
         var chips = entries.map(function (entry) {
             var field = findFieldByParam(entry.key);
@@ -280,10 +282,14 @@
         if (!els.filterDirtyIndicator) return;
         var dirty = isFilterDirty();
         var activeCount = getActiveFilterCount();
+        var hasState = dirty || activeCount > 0;
         els.filterDirtyIndicator.classList.toggle('is-dirty', dirty);
-        els.filterDirtyIndicator.textContent = dirty
-            ? 'DIRTY'
-            : (activeCount ? String(activeCount) : '0');
+        els.filterDirtyIndicator.classList.toggle('has-count', !dirty && activeCount > 0);
+        els.filterDirtyIndicator.hidden = !hasState;
+        els.filterDirtyIndicator.textContent = dirty ? 'DIRTY' : String(activeCount);
+        els.filterDirtyIndicator.setAttribute('title', dirty
+            ? 'Filters changed but not yet applied'
+            : (activeCount + ' active filters'));
     }
 
     function refreshFilterUiState() {
