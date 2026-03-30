@@ -3,13 +3,12 @@
  * Run via node test-logs-api.js (loads .env from repo root).
  */
 
-const ORIGIN = process.env.API_BASE
-  ? new URL(process.env.API_BASE).origin
-  : 'https://www.australianrates.com';
+import { buildAdminHeaders, resolveAdminToken, resolveEnvOrigin } from './lib/admin-api';
+
+const ORIGIN = resolveEnvOrigin(['API_BASE']);
 const BASE = `${ORIGIN}/api/home-loan-rates/admin/logs/system`;
 
-const token =
-  (process.env.ADMIN_API_TOKEN || process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() || '').trim();
+const token = resolveAdminToken(['ADMIN_API_TOKEN', 'ADMIN_API_TOKENS']);
 
 async function main(): Promise<void> {
   if (!token) {
@@ -17,10 +16,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/json, application/x-ndjson, text/plain',
-  };
+  const headers = buildAdminHeaders(token, 'application/json, application/x-ndjson, text/plain');
 
   let passed = 0;
   let failed = 0;

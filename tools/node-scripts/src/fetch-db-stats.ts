@@ -7,23 +7,16 @@
  *   node fetch-db-stats.js <path-to.json>     # print full table from saved API response
  */
 
+import { buildAdminHeaders, fetchWithTimeout, resolveAdminToken, resolveEnvOrigin } from './lib/admin-api';
+
 const fs = require('fs');
 const path = require('path');
 
 /** Use production by default so DB stats always reflect live D1. Override with ADMIN_DB_STATS_ORIGIN if needed. */
-const ORIGIN: string =
-  process.env.ADMIN_DB_STATS_ORIGIN && process.env.ADMIN_DB_STATS_ORIGIN.trim()
-    ? new URL(process.env.ADMIN_DB_STATS_ORIGIN.trim()).origin
-    : 'https://www.australianrates.com';
+const ORIGIN: string = resolveEnvOrigin(['ADMIN_DB_STATS_ORIGIN']);
 const STATS_URL = `${ORIGIN}/api/home-loan-rates/admin/db/stats`;
 
-const token = (
-  process.env.ADMIN_API_TOKEN ||
-  process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() ||
-  process.env.ADMIN_TEST_TOKEN ||
-  process.env.LOCAL_ADMIN_API_TOKEN ||
-  ''
-).trim();
+const token = resolveAdminToken(['ADMIN_API_TOKEN', 'ADMIN_API_TOKENS', 'ADMIN_TEST_TOKEN', 'LOCAL_ADMIN_API_TOKEN']);
 
 interface TableRow {
   name: string;
@@ -126,15 +119,15 @@ async function main(): Promise<void> {
       console.error('Missing ADMIN_API_TOKEN (or ADMIN_API_TOKENS) in environment. Set it in repo root .env.');
       process.exit(1);
     }
-    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' as const };
-    let res = await fetch(STATS_URL, { headers });
+    const headers = buildAdminHeaders(token, 'application/json');
+    let res = await fetchWithTimeout(STATS_URL, { headers }, 120_000);
     if (res.status === 401) {
       console.error('401 Unauthorized: token invalid or missing.');
       process.exit(1);
     }
     if (res.status === 404) {
       const auditUrl = `${ORIGIN}/api/home-loan-rates/admin/db/audit`;
-      const auditRes = await fetch(auditUrl, { headers });
+      const auditRes = await fetchWithTimeout(auditUrl, { headers }, 120_000);
       if (auditRes.ok) {
         const audit = (await auditRes.json()) as { tables?: { name: string; row_count: number }[] };
         const tables = audit.tables ?? [];

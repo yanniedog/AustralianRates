@@ -2,14 +2,11 @@
  * Trigger retention run on production (POST /admin/retention/run).
  * Requires ADMIN_API_TOKEN in repo root .env when run via runner.
  */
-const ORIGIN =
-  process.env.ADMIN_DB_STATS_ORIGIN?.trim() || 'https://www.australianrates.com'
+import { buildAdminHeaders, resolveAdminToken, resolveEnvOrigin } from './lib/admin-api'
+
+const ORIGIN = resolveEnvOrigin(['ADMIN_DB_STATS_ORIGIN'])
 const url = `${ORIGIN}/api/home-loan-rates/admin/retention/run`
-const token = (
-  process.env.ADMIN_API_TOKEN ||
-  process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() ||
-  ''
-).trim()
+const token = resolveAdminToken(['ADMIN_API_TOKEN', 'ADMIN_API_TOKENS'])
 
 async function main(): Promise<void> {
   if (!token) {
@@ -18,7 +15,7 @@ async function main(): Promise<void> {
   }
   const res = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: buildAdminHeaders(token, '*/*', { 'Content-Type': 'application/json' }),
   })
   const data = (await res.json().catch(() => ({}))) as { message?: string }
   if (!res.ok) {

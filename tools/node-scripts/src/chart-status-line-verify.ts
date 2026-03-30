@@ -13,6 +13,47 @@ const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const SCREENSHOT_DIR = path.join(process.cwd(), 'test-screenshots');
 const VIEWPORT = { width: 1280, height: 900 };
 
+function readHoverFeedback() {
+    const output = document.getElementById('chart-output');
+    const legacyEl = output ? output.querySelector('.chart-status-line') : null;
+    const legacyVisible = !!legacyEl && legacyEl.classList.contains('visible');
+    const legacyText = legacyEl ? String(legacyEl.textContent || '').trim() : '';
+    var legendText = '';
+    if (output) {
+        var legendCandidates = Array.from(output.querySelectorAll('div'))
+            .filter(function (node) {
+                var style = window.getComputedStyle(node);
+                var rect = node.getBoundingClientRect();
+                var top = parseFloat(style.top || '');
+                var left = parseFloat(style.left || '');
+                return (
+                    style.position === 'absolute' &&
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    Number.isFinite(top) &&
+                    Number.isFinite(left) &&
+                    top <= 12 &&
+                    left <= 12
+                );
+            })
+            .map(function (node) {
+                return String(node.textContent || '').trim();
+            })
+            .filter(Boolean)
+            .sort(function (a, b) {
+                return b.length - a.length;
+            });
+        legendText = legendCandidates[0] || '';
+    }
+    return {
+        engine: output ? String(output.getAttribute('data-chart-engine') || '') : '',
+        legendText: legendText,
+        legacyHasEl: !!legacyEl,
+        legacyText: legacyText,
+        legacyVisible: legacyVisible,
+    };
+}
+
 async function main() {
     let exitCode = 1;
     const browser = await chromium.launch({ headless: true });
@@ -24,6 +65,7 @@ async function main() {
         await page.waitForTimeout(2000);
 
         await ensureChartReady(page, 90000);
+        const before = await page.evaluate(readHoverFeedback);
 
         const chartEl = await page.$('#chart-output');
         if (!chartEl) {
@@ -44,23 +86,32 @@ async function main() {
         await page.mouse.move(centerX, centerY);
         await page.waitForTimeout(400);
 
-        const result = await page.evaluate(() => {
-            const el = document.querySelector('#chart-output .chart-status-line');
-            const visible = el && el.classList.contains('visible');
-            const text = el ? String(el.textContent || '').trim() : '';
-            return { visible: !!visible, text: text, hasEl: !!el };
-        });
+        const result = await page.evaluate(readHoverFeedback);
 
         if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
         const screenshotPath = path.join(SCREENSHOT_DIR, 'chart-status-line-verify.png');
         await page.screenshot({ path: screenshotPath, fullPage: false });
         console.log('Screenshot:', screenshotPath);
 
-        if (result.hasEl && result.visible && result.text.length > 0) {
-            console.log('PASS: Chart status line visible with text:', result.text.slice(0, 60) + (result.text.length > 60 ? '...' : ''));
+        const legacyPass = result.legacyHasEl && result.legacyVisible && result.legacyText.length > 0;
+        const legendChanged = result.legendText.length > 0 && result.legendText !== before.legendText;
+        if (legacyPass) {
+            console.log('PASS: Chart status line visible with text:', result.legacyText.slice(0, 60) + (result.legacyText.length > 60 ? '...' : ''));
+            exitCode = 0;
+        } else if (legendChanged) {
+            console.log('PASS: Chart hover legend updated with text:', result.legendText.slice(0, 80) + (result.legendText.length > 80 ? '...' : ''));
             exitCode = 0;
         } else {
-            console.error('FAIL: Status line not visible or empty. hasEl=', result.hasEl, 'visible=', result.visible, 'textLength=', result.text.length);
+            console.error(
+                'FAIL: Hover feedback not detected.',
+                'engine=', result.engine,
+                'legacyHasEl=', result.legacyHasEl,
+                'legacyVisible=', result.legacyVisible,
+                'legacyTextLength=', result.legacyText.length,
+                'legendBeforeLength=', before.legendText.length,
+                'legendAfterLength=', result.legendText.length,
+                'legendChanged=', legendChanged,
+            );
         }
     } finally {
         await browser.close();

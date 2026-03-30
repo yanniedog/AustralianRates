@@ -5,18 +5,12 @@
  *   [--refresh-coverage] [--refresh-lender-universe] [--since=ISO] [--log-limit=N]
  */
 
-const ORIGIN = process.env.API_BASE
-  ? new URL(process.env.API_BASE).origin
-  : 'https://www.australianrates.com';
+import { buildAdminHeaders, fetchWithTimeout, resolveAdminToken, resolveEnvOrigin } from './lib/admin-api';
+
+const ORIGIN = resolveEnvOrigin(['API_BASE']);
 const BASE = `${ORIGIN}/api/home-loan-rates/admin/diagnostics/status-debug-bundle`;
 
-const token = (
-  process.env.ADMIN_API_TOKEN ||
-  process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() ||
-  process.env.ADMIN_TEST_TOKEN ||
-  process.env.LOCAL_ADMIN_API_TOKEN ||
-  ''
-).trim();
+const token = resolveAdminToken(['ADMIN_API_TOKEN', 'ADMIN_API_TOKENS', 'ADMIN_TEST_TOKEN', 'LOCAL_ADMIN_API_TOKEN']);
 
 const FETCH_TIMEOUT_MS = 120_000;
 
@@ -26,16 +20,9 @@ function argValue(flag: string): string | undefined {
 }
 
 async function fetchBundle(url: string): Promise<unknown> {
-  const controller = new AbortController();
-  const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  const res = await fetch(url, {
-    signal: controller.signal,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    },
-  });
-  clearTimeout(to);
+  const res = await fetchWithTimeout(url, {
+    headers: buildAdminHeaders(token, 'application/json'),
+  }, FETCH_TIMEOUT_MS);
   if (res.status === 401) {
     throw new Error('401 Unauthorized: ADMIN_API_TOKEN invalid or missing');
   }

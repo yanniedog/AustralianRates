@@ -7,16 +7,12 @@
  *   --cdr-only     Only run CDR audit and fetch report
  */
 
-const ORIGIN = process.env.API_BASE
-  ? new URL(process.env.API_BASE).origin
-  : 'https://www.australianrates.com'
+import { buildAdminHeaders, fetchWithTimeout, resolveAdminToken, resolveEnvOrigin } from './lib/admin-api'
+
+const ORIGIN = resolveEnvOrigin(['API_BASE'])
 const BASE = `${ORIGIN}/api/home-loan-rates/admin`
 
-const token = (
-  process.env.ADMIN_API_TOKEN ||
-  process.env.ADMIN_API_TOKENS?.split(',')[0]?.trim() ||
-  ''
-).trim()
+const token = resolveAdminToken(['ADMIN_API_TOKEN', 'ADMIN_API_TOKENS'])
 
 const FETCH_TIMEOUT_MS = 120_000
 
@@ -31,20 +27,11 @@ async function fetchAdmin(
   options: { method?: string; body?: string } = {}
 ): Promise<Response> {
   const url = BASE + path
-  const controller = new AbortController()
-  const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-  const res = await fetch(url, {
-    signal: controller.signal,
+  return await fetchWithTimeout(url, {
     method: options.method || 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    },
+    headers: buildAdminHeaders(token, 'application/json', options.body ? { 'Content-Type': 'application/json' } : {}),
     body: options.body,
-  })
-  clearTimeout(to)
-  return res
+  }, FETCH_TIMEOUT_MS)
 }
 
 async function main(): Promise<void> {
