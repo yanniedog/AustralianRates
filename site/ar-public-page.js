@@ -705,7 +705,7 @@
                                         '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>...</strong></div>',
                                     '</div>',
                                 '</footer>',
-                                '<div class="chart-hidden-aux" hidden aria-hidden="true">',
+                                '<div class="chart-hidden-aux">',
                                     '<span id="chart-guidance" class="chart-footer-guidance hint">On demand</span>',
                                     '<div id="chart-summary" class="chart-summary chart-footer-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
                                     '<div class="chart-selection-rail" aria-label="Series and selection">',
