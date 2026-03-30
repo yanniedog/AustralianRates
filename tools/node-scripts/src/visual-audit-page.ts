@@ -1,4 +1,5 @@
 import type { Page } from 'playwright'
+import { ensureChartReady } from './lib/chart-playwright'
 import {
   ANALYST_CLICK_TARGETS,
   BASE_CLICK_TARGETS,
@@ -55,14 +56,7 @@ async function openDetails(page: Page, selector: string): Promise<void> {
 async function waitForChartView(page: Page, view: string): Promise<void> {
   await page.locator('#tab-chart').click().catch(() => page.locator('#tab-charts').click().catch(() => undefined))
   await page.waitForTimeout(300)
-  await page.locator('#draw-chart').click().catch(() => undefined)
-  await page.waitForFunction(
-    () => {
-      const el = document.getElementById('chart-output')
-      return !!el && (el.getAttribute('data-chart-engine') === 'echarts' || !!el.querySelector('canvas') || !!el.querySelector('svg'))
-    },
-    { timeout: 45_000 },
-  )
+  await ensureChartReady(page, 45_000)
   const picker = page.locator(`[data-chart-view="${view}"]`)
   if ((await picker.count().catch(() => 0)) > 0) {
     await picker.click().catch(() => undefined)

@@ -1,5 +1,6 @@
 // @ts-nocheck
 const { chromium } = require('playwright');
+const { ensureChartReady } = require('./lib/chart-playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const testUrlObj = new URL(TEST_URL);
@@ -58,22 +59,8 @@ async function gotoSection(page, section) {
 
 async function drawChart(page) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
-        const drawButton = page.locator('#draw-chart');
-        if (await drawButton.count()) {
-            await drawButton.click();
-        }
         try {
-            await page.waitForFunction(() => {
-                const output = document.getElementById('chart-output');
-                if (!output) return false;
-                const err = String((document.getElementById('chart-error') || {}).textContent || '').trim();
-                if (err) return false;
-                const rendered = output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
-                if (!rendered) return false;
-                const status = String((document.getElementById('chart-status') || {}).textContent || '').trim().toLowerCase();
-                return !/^error\b|^err\b/.test(status);
-            }, undefined, { timeout: 120000 });
-            await page.waitForTimeout(1200);
+            await ensureChartReady(page, 120000);
             return;
         } catch (error) {
             if (attempt === 2) {

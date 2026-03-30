@@ -1,6 +1,7 @@
 // @ts-nocheck
 const fs = require('fs');
 const { chromium } = require('playwright');
+const { ensureChartReady } = require('./lib/chart-playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const SCREENSHOT_DIR = './test-screenshots';
@@ -120,18 +121,6 @@ async function waitForExplorerTableReady(page, timeout = 25000) {
         const placeholder = table.querySelector('.tabulator-placeholder');
         return !!(placeholder && String(placeholder.textContent || '').trim().length > 0);
     }, null, { timeout });
-}
-
-async function waitForChartReady(page, timeout = 90000) {
-    await page.waitForFunction(() => {
-        const output = document.getElementById('chart-output');
-        if (!output) return false;
-        const rendered = output.getAttribute('data-chart-engine') === 'echarts' || !!output.querySelector('canvas') || !!output.querySelector('svg');
-        if (!rendered) return false;
-        const status = String((document.getElementById('chart-status') || {}).textContent || '').trim().toLowerCase();
-        return status.indexOf('err') === -1;
-    }, null, { timeout });
-    await page.waitForTimeout(1200);
 }
 
 async function waitForMobileRailVisible(page, timeout = 15000) {
@@ -733,13 +722,7 @@ async function verifyChartSmoke(page, results, label) {
     await tabChart.click({ timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(250);
 
-    const button = page.locator('#draw-chart');
-    const drawVisible = await button.isVisible().catch(() => false);
-    if (drawVisible) {
-        await button.scrollIntoViewIfNeeded().catch(() => {});
-        await button.click({ force: true });
-    }
-    await waitForChartReady(page);
+    await ensureChartReady(page);
 
     const chart = await page.evaluate(() => ({
         engine: String(document.getElementById('chart-output')?.getAttribute('data-chart-engine') || ''),

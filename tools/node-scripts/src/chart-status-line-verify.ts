@@ -7,6 +7,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { ensureChartReady } = require('./lib/chart-playwright');
 
 const TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const SCREENSHOT_DIR = path.join(process.cwd(), 'test-screenshots');
@@ -22,22 +23,7 @@ async function main() {
         await page.waitForSelector('#main-content', { timeout: 15000 });
         await page.waitForTimeout(2000);
 
-        const drawBtn = await page.$('#draw-chart');
-        if (!drawBtn) {
-            console.error('chart-status-line-verify: #draw-chart not found');
-            await browser.close();
-            process.exit(1);
-        }
-        await drawBtn.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(400);
-        await drawBtn.click({ force: true });
-
-        await page.waitForFunction(() => {
-            const output = document.getElementById('chart-output');
-            if (!output) return false;
-            return output.getAttribute('data-chart-rendered') === 'true' && output.querySelector('canvas');
-        }, null, { timeout: 90000 });
-        await page.waitForTimeout(1500);
+        await ensureChartReady(page, 90000);
 
         const chartEl = await page.$('#chart-output');
         if (!chartEl) {

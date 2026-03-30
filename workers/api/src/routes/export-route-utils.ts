@@ -1,8 +1,15 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
 import type { ExportFormat, ExportJobRow, ExportScope } from '../db/export-jobs'
+import { csvEscape } from '../utils/csv'
 import { parseSourceMode, type SourceMode } from '../utils/source-mode'
 
 type RequestPayload = Record<string, unknown>
+type ExportRow = Record<string, unknown>
+type ExportPagePayload<T> = {
+  data: T[]
+  last_page?: number
+  lastPage?: number
+}
 
 export function readRequestPayload(value: unknown): RequestPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -99,6 +106,59 @@ export function exportStatusBody(job: ExportJobRow, pathPrefix: string) {
     status_path: `${pathPrefix}/exports/${job.job_id}`,
     download_path: job.status === 'completed' ? `${pathPrefix}/exports/${job.job_id}/download` : null,
   }
+}
+
+export function appendCsvChunk(
+  lines: string[],
+  state: { headers: string[] | null },
+  rows: ExportRow[],
+): void {
+  if (rows.length === 0) return
+  if (!state.headers) {
+    state.headers = Object.keys(rows[0])
+    lines.push(state.headers.join(','))
+  }
+  for (const row of rows) {
+    lines.push(state.headers.map((header) => csvEscape(row[header])).join(','))
+  }
+}
+
+export function appendJsonChunk(
+  parts: string[],
+  state: { firstRow: boolean },
+  rows: ExportRow[],
+): void {
+  for (const row of rows) {
+    if (!state.firstRow) parts.push(',\n')
+    parts.push(JSON.stringify(row))
+    state.firstRow = false
+  }
+}
+
+export function buildJsonExportBody(
+  dataset: DatasetKind,
+  scope: ExportScope,
+  representation: 'day' | 'change',
+  rowCount: number,
+  rowParts: string[],
+): string {
+  return `{"ok":true,"dataset":"${dataset}","export_scope":"${scope}","representation":"${representation}","count":${rowCount},"rows":[${rowParts.join('')}]}`
+}
+
+export async function collectPaginatedExportRows<T extends ExportRow>(
+  fetchPage: (page: number, size: number) => Promise<ExportPagePayload<T>>,
+  pageSize = 1000,
+): Promise<T[]> {
+  const rows: T[] = []
+  let page = 1
+  let lastPage = 1
+  do {
+    const result = await fetchPage(page, pageSize)
+    rows.push(...(result.data || []))
+    lastPage = Number(result.last_page ?? result.lastPage ?? page)
+    page += 1
+  } while (page <= lastPage)
+  return rows
 }
 
 export function scheduleBackgroundTask(context: unknown, task: Promise<unknown>): boolean {

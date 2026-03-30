@@ -1,29 +1,23 @@
 import type { Hono } from 'hono'
-import { createExportJob, getExportJob, markExportJobProcessing, completeExportJob, failExportJob, type ExportFormat, type ExportScope } from '../db/export-jobs'
+import { type ExportFormat, type ExportScope } from '../db/export-jobs'
 import { queryRatesPaginated } from '../db/queries'
 import { getReadDb } from '../db/read-db'
-import { guardPublicExportJob } from './public-write-gates'
 import type { AppContext } from '../types'
-import { jsonError } from '../utils/http'
-import { csvEscape } from '../utils/csv'
 import { collectHomeLoanAnalyticsRowsResolved, queryHomeLoanRepresentationTimeseriesResolved } from './analytics-data'
+import { registerExportRoutes, runDatasetExportJob } from './export-route-registration'
 import {
-  exportContentType,
-  exportFileExtension,
-  exportR2Key,
-  exportStatusBody,
-  readRequestPayload,
+  appendCsvChunk,
+  appendJsonChunk,
+  buildJsonExportBody,
+  collectPaginatedExportRows,
   requestBoolean,
   requestDir,
-  requestExportFormat,
-  requestExportScope,
   requestMode,
   requestNumber,
   requestRepresentation,
   requestSource,
   requestString,
   requestStringArray,
-  scheduleBackgroundTask,
 } from './export-route-utils'
 
 type HomeLoanExportFilters = {
@@ -73,25 +67,6 @@ function buildHomeLoanFilters(payload: Record<string, unknown>): HomeLoanExportF
     productKey: requestString(payload, 'product_key') ?? requestString(payload, 'productKey') ?? requestString(payload, 'series_key'),
     seriesKey: requestString(payload, 'series_key'),
     representation: requestRepresentation(payload),
-  }
-}
-
-function appendCsvChunk(lines: string[], state: { headers: string[] | null }, rows: Array<Record<string, unknown>>) {
-  if (rows.length === 0) return
-  if (!state.headers) {
-    state.headers = Object.keys(rows[0])
-    lines.push(state.headers.join(','))
-  }
-  for (const row of rows) {
-    lines.push(state.headers.map((header) => csvEscape(row[header])).join(','))
-  }
-}
-
-function appendJsonChunk(parts: string[], state: { firstRow: boolean }, rows: Array<Record<string, unknown>>) {
-  for (const row of rows) {
-    if (!state.firstRow) parts.push(',\n')
-    parts.push(JSON.stringify(row))
-    state.firstRow = false
   }
 }
 
@@ -172,39 +147,30 @@ async function buildHomeLoanArtifact(
             requestedRepresentation: representation,
             representation: 'day' as const,
             fallbackReason: null,
-            rows: await (async () => {
-              const pages: Array<Record<string, unknown>> = []
-              let page = 1
-              let lastPage = 1
-              do {
-                const result = await queryRatesPaginated(env.DB, {
-                  page,
-                  size: 1000,
-                  startDate: filters.startDate,
-                  endDate: filters.endDate,
-                  bank: filters.bank,
-                  banks: filters.banks,
-                  securityPurpose: filters.securityPurpose,
-                  repaymentType: filters.repaymentType,
-                  rateStructure: filters.rateStructure,
-                  lvrTier: filters.lvrTier,
-                  featureSet: filters.featureSet,
-                  minRate: filters.minRate,
-                  maxRate: filters.maxRate,
-                  minComparisonRate: filters.minComparisonRate,
-                  maxComparisonRate: filters.maxComparisonRate,
-                  includeRemoved: filters.includeRemoved,
-                  sort: filters.sort,
-                  dir: filters.dir,
-                  mode: filters.mode,
-                  sourceMode: filters.sourceMode,
-                })
-                lastPage = result.last_page
-                pages.push(...(result.data as Array<Record<string, unknown>>))
-                page += 1
-              } while (page <= lastPage)
-              return pages
-            })(),
+            rows: await collectPaginatedExportRows((page, size) =>
+              queryRatesPaginated(env.DB, {
+                page,
+                size,
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+                bank: filters.bank,
+                banks: filters.banks,
+                securityPurpose: filters.securityPurpose,
+                repaymentType: filters.repaymentType,
+                rateStructure: filters.rateStructure,
+                lvrTier: filters.lvrTier,
+                featureSet: filters.featureSet,
+                minRate: filters.minRate,
+                maxRate: filters.maxRate,
+                minComparisonRate: filters.minComparisonRate,
+                maxComparisonRate: filters.maxComparisonRate,
+                includeRemoved: filters.includeRemoved,
+                sort: filters.sort,
+                dir: filters.dir,
+                mode: filters.mode,
+                sourceMode: filters.sourceMode,
+              }),
+            ),
           }
     const rows = result.rows
     effectiveRepresentation = result.representation
@@ -218,7 +184,7 @@ async function buildHomeLoanArtifact(
   }
 
   return {
-    body: `{"ok":true,"dataset":"home_loans","export_scope":"${scope}","representation":"${effectiveRepresentation}","count":${rowCount},"rows":[${jsonRows.join('')}]}`,
+    body: buildJsonExportBody('home_loans', scope, effectiveRepresentation, rowCount, jsonRows),
     rowCount,
   }
 }
@@ -232,89 +198,25 @@ async function runHomeLoanExportJob(
     filters: HomeLoanExportFilters
   },
 ): Promise<void> {
-  await markExportJobProcessing(env.DB, input.jobId)
-  try {
-    const artifact = await buildHomeLoanArtifact(env, input.scope, input.format, input.filters)
-    const fileName = `home-loan-rates-${input.scope}-${input.jobId}.${exportFileExtension(input.format)}`
-    const contentType = exportContentType(input.format)
-    const r2Key = exportR2Key('home_loans', input.jobId, input.format)
-    await env.RAW_BUCKET.put(r2Key, artifact.body, {
-      httpMetadata: { contentType },
-    })
-    await completeExportJob(env.DB, {
-      jobId: input.jobId,
-      rowCount: artifact.rowCount,
-      fileName,
-      contentType,
-      r2Key,
-    })
-  } catch (error) {
-    await failExportJob(env.DB, input.jobId, (error as Error)?.message || String(error))
-  }
+  await runDatasetExportJob(env, {
+    ...input,
+    dataset: 'home_loans',
+    fileNamePrefix: 'home-loan-rates',
+    buildArtifact: buildHomeLoanArtifact,
+  })
 }
 
 export function registerHomeLoanExportRoutes(publicRoutes: Hono<AppContext>): void {
-  publicRoutes.post('/exports', async (c) => {
-    const guard = guardPublicExportJob(c)
-    if (guard) return guard
-
-    const payload = {
-      ...c.req.query(),
-      ...readRequestPayload(await c.req.json<Record<string, unknown>>().catch(() => ({}))),
-    }
-    const format = requestExportFormat(payload)
-    if (!format) {
-      return jsonError(c, 400, 'INVALID_FORMAT', 'format must be csv or json')
-    }
-    const scope = requestExportScope(payload)
-    const filters = buildHomeLoanFilters(payload)
-    if (scope === 'timeseries' && !filters.productKey && !filters.seriesKey) {
-      return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries exports.')
-    }
-
-    const jobId = crypto.randomUUID()
-    await createExportJob(c.env.DB, {
-      jobId,
-      dataset: 'home_loans',
-      exportScope: scope,
-      format,
-      filterJson: JSON.stringify(filters),
-    })
-
-    const task = runHomeLoanExportJob(c.env, { jobId, scope, format, filters })
-    if (!scheduleBackgroundTask(c, task)) {
-      await task
-    }
-
-    const job = await getExportJob(c.env.DB, jobId)
-    if (!job) {
-      return jsonError(c, 500, 'EXPORT_JOB_MISSING', 'Export job was not persisted.')
-    }
-    return c.json(exportStatusBody(job, ''), 202)
-  })
-
-  publicRoutes.get('/exports/:jobId', async (c) => {
-    const job = await getExportJob(c.env.DB, c.req.param('jobId'))
-    if (!job || job.dataset_kind !== 'home_loans') {
-      return jsonError(c, 404, 'NOT_FOUND', 'Export job not found.')
-    }
-    return c.json(exportStatusBody(job, ''))
-  })
-
-  publicRoutes.get('/exports/:jobId/download', async (c) => {
-    const job = await getExportJob(c.env.DB, c.req.param('jobId'))
-    if (!job || job.dataset_kind !== 'home_loans') {
-      return jsonError(c, 404, 'NOT_FOUND', 'Export job not found.')
-    }
-    if (job.status !== 'completed' || !job.r2_key) {
-      return jsonError(c, 409, 'EXPORT_NOT_READY', 'Export artifact is not ready yet.')
-    }
-    const object = await c.env.RAW_BUCKET.get(job.r2_key)
-    if (!object) {
-      return jsonError(c, 404, 'EXPORT_ARTIFACT_MISSING', 'Export artifact is missing from storage.')
-    }
-    if (job.content_type) c.header('Content-Type', job.content_type)
-    if (job.file_name) c.header('Content-Disposition', `attachment; filename="${job.file_name}"`)
-    return c.body(await object.text())
+  registerExportRoutes(publicRoutes, {
+    dataset: 'home_loans',
+    buildFilters: buildHomeLoanFilters,
+    runExportJob: runHomeLoanExportJob,
+    validate: (scope, filters) =>
+      scope === 'timeseries' && !filters.productKey && !filters.seriesKey
+        ? {
+            code: 'INVALID_REQUEST',
+            message: 'product_key or series_key is required for timeseries exports.',
+          }
+        : null,
   })
 }
