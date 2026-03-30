@@ -14,26 +14,31 @@ body {
     --ar-space-6: clamp(20px, 4vw, 32px);
     --ar-space-7: clamp(28px, 5vw, 48px);
     --ar-space-8: clamp(36px, 6vw, 64px);
-    --ar-radius-1: 10px;
-    --ar-radius-2: 16px;
-    --ar-radius-3: 22px;
+    --ar-radius-1: 12px;
+    --ar-radius-2: 18px;
+    --ar-radius-3: 24px;
+    --ar-radius-control: 12px;
+    --ar-radius-panel: 20px;
+    --ar-radius-pill: 999px;
     --ar-motion-fast: 180ms;
     --ar-motion-base: 240ms;
     --ar-motion-slow: 300ms;
     --ar-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --ar-font-ui: "Public Sans", "Segoe UI Variable", "Segoe UI", sans-serif;
-    --ar-header-height: 60px;
+    --ar-header-height: 64px;
     --ar-sidebar-width: 268px;
     --ar-admin-sidebar-width: 232px;
-    --ar-shell-max: 1760px;
-    --ar-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
-    --ar-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.14);
+    --ar-shell-max: 1440px;
+    --ar-content-max: 1280px;
+    --ar-shadow: 0 28px 70px rgba(0, 0, 0, 0.22);
+    --ar-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.14);
+    --ar-shadow-lift: 0 10px 26px rgba(0, 0, 0, 0.1);
     /* ── Responsive shell gutter (viewport-aware) ────────────────── */
     --ar-shell-gutter: clamp(12px, 2vw, 16px);
     /* ── Touch-target floor ──────────────────────────────────────── */
     --ar-touch-min: 44px;
     /* ── Responsive font sizes ───────────────────────────────────── */
-    --ar-font-base: clamp(0.875rem, 0.82rem + 0.25vw, 1rem);
+    --ar-font-base: clamp(0.9375rem, 0.89rem + 0.18vw, 1rem);
 }
 
 :root[data-theme="dark"] {
@@ -56,6 +61,10 @@ body {
     --ar-positive: #1fb978;
     --ar-warning: #f59e0b;
     --ar-danger: #ef4444;
+    --ar-ok-strong: #36c48b;
+    --ar-warn-strong: #ffb547;
+    --ar-danger-strong: #ff7a6b;
+    --ar-muted: #98a6b5;
     --ar-focus: #6ea8ff;
     --ar-overlay: rgba(5, 8, 12, 0.72);
 }
@@ -80,6 +89,10 @@ body {
     --ar-positive: #0a6d49;
     --ar-warning: #8a4b00;
     --ar-danger: #c2410c;
+    --ar-ok-strong: #0b7e55;
+    --ar-warn-strong: #9a6100;
+    --ar-danger-strong: #c74a2d;
+    --ar-muted: #4f6276;
     --ar-focus: #2563eb;
     --ar-overlay: rgba(18, 32, 51, 0.28);
 }
@@ -91,7 +104,7 @@ body {
     color: var(--ar-text);
     font-family: var(--ar-font-ui);
     font-size: var(--ar-font-base);
-    line-height: 1.45;
+    line-height: 1.55;
     text-rendering: optimizeLegibility;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -135,8 +148,32 @@ h2,
 h3,
 h4 {
     color: var(--ar-text);
-    font-weight: 600;
-    letter-spacing: -0.04em;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+}
+
+h1 {
+    font-size: clamp(2.2rem, 4vw, 3.85rem);
+}
+
+h2 {
+    font-size: clamp(1.45rem, 2vw, 2rem);
+}
+
+h3 {
+    font-size: clamp(1.08rem, 1.2vw, 1.32rem);
+}
+
+h4 {
+    font-size: 1rem;
+}
+
+p,
+li,
+dt,
+dd {
+    line-height: 1.65;
 }
 
 p,
@@ -176,34 +213,41 @@ button,
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 40px;
-    padding: 0 14px;
-    border: 1px solid var(--ar-line);
-    border-radius: var(--ar-radius-1);
-    background: var(--ar-surface-2);
+    min-height: 42px;
+    padding: 0 15px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: var(--ar-radius-control);
+    background: color-mix(in srgb, var(--ar-surface-2) 90%, var(--ar-surface));
     color: var(--ar-text);
-    font-size: 0.86rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
+    font-size: 0.84rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
     cursor: pointer;
     transition:
         transform var(--ar-motion-fast) var(--ar-ease),
         border-color var(--ar-motion-fast) var(--ar-ease),
         background-color var(--ar-motion-fast) var(--ar-ease),
+        box-shadow var(--ar-motion-fast) var(--ar-ease),
         color var(--ar-motion-fast) var(--ar-ease),
         opacity var(--ar-motion-fast) var(--ar-ease);
 }
 
 button:hover,
 .buttonish:hover {
-    border-color: var(--ar-line-strong);
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--ar-line-strong) 92%, transparent);
     background: var(--ar-surface-3);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 5%, transparent),
+        var(--ar-shadow-lift);
 }
 
 button:disabled,
 .buttonish:disabled {
     opacity: 0.42;
     cursor: not-allowed;
+    transform: none;
 }
 
 button.primary,
@@ -212,6 +256,9 @@ button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):no
     border-color: rgba(37, 99, 235, 0.28);
     background: var(--ar-accent);
     color: #ffffff;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+        0 10px 24px color-mix(in srgb, var(--ar-accent) 18%, transparent);
 }
 
 button.primary:hover,
@@ -222,10 +269,14 @@ button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):no
 }
 
 button.secondary,
-.buttonish.secondary,
+.buttonish.secondary {
+    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
+}
+
 button.ghost,
 .buttonish.ghost {
     background: transparent;
+    box-shadow: none;
 }
 
 button.danger,
@@ -237,38 +288,39 @@ button.danger,
 
 button.icon-btn,
 .icon-btn {
-    width: 36px;
-    min-width: 36px;
+    width: 40px;
+    min-width: 40px;
     padding: 0;
-    border-radius: 10px;
+    border-radius: var(--ar-radius-control);
     font-size: 0.92rem;
 }
 
 button.small,
 select.small {
-    min-height: 36px;
+    min-height: 38px;
     padding-inline: 12px;
     font-size: 0.82rem;
 }
 
 button.chip-btn,
 .chip-btn {
-    min-height: 34px;
-    padding-inline: 10px;
-    border-radius: 999px;
-    background: transparent;
+    min-height: 36px;
+    padding-inline: 12px;
+    border-radius: var(--ar-radius-pill);
+    background: color-mix(in srgb, var(--ar-surface) 88%, transparent);
 }
 
 input,
 select,
 textarea {
     width: 100%;
-    min-height: 40px;
-    padding: 0 12px;
-    border: 1px solid var(--ar-line);
-    border-radius: var(--ar-radius-1);
-    background: var(--ar-surface-2);
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: var(--ar-radius-control);
+    background: color-mix(in srgb, var(--ar-surface-2) 90%, var(--ar-surface));
     color: var(--ar-text);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
     transition:
         border-color var(--ar-motion-fast) var(--ar-ease),
         background-color var(--ar-motion-fast) var(--ar-ease),
@@ -299,6 +351,22 @@ select optgroup {
 input::placeholder,
 textarea::placeholder {
     color: var(--ar-text-muted);
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+    border-color: color-mix(in srgb, var(--ar-line-strong) 92%, transparent);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: color-mix(in srgb, var(--ar-focus) 58%, var(--ar-line-strong));
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--ar-focus) 16%, transparent);
+    outline: none;
 }
 
 summary {
@@ -350,10 +418,13 @@ summary {
 }
 
 .panel {
-    border: 1px solid var(--ar-line);
-    border-radius: var(--ar-radius-2);
-    background: var(--ar-surface);
-    box-shadow: var(--ar-shadow-soft);
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 76%, transparent);
+    border-radius: var(--ar-radius-panel);
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 92%, transparent));
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent),
+        var(--ar-shadow-soft);
 }
 
 .hint,
@@ -363,7 +434,8 @@ summary {
 .field-help,
 .status-note {
     color: var(--ar-text-muted);
-    font-size: 0.8rem;
+    font-size: 0.79rem;
+    line-height: 1.55;
 }
 
 .mono,
@@ -374,9 +446,9 @@ pre {
 
 .eyebrow {
     color: var(--ar-text-muted);
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
 }
 

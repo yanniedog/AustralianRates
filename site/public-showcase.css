@@ -14,46 +14,46 @@ body.ar-legal {
 
 :root[data-theme="dark"] body.ar-public,
 :root[data-theme="dark"] body.ar-legal {
-    --ar-bg: #060b12;
-    --ar-bg-elevated: #0b131d;
-    --ar-surface: rgba(10, 18, 28, 0.94);
-    --ar-surface-2: rgba(13, 22, 33, 0.96);
-    --ar-surface-3: rgba(16, 27, 40, 0.98);
-    --ar-surface-soft: rgba(5, 10, 16, 0.9);
-    --ar-text: #e9f4ff;
-    --ar-text-soft: #b3c8dc;
-    --ar-text-muted: #70859a;
-    --ar-line: rgba(202, 221, 240, 0.12);
-    --ar-line-strong: rgba(202, 221, 240, 0.21);
-    --ar-accent: #66f6cf;
-    --ar-accent-hover: #3fddb6;
-    --ar-accent-2: #f1b55d;
-    --ar-accent-soft: rgba(102, 246, 207, 0.12);
+    --ar-bg: #071019;
+    --ar-bg-elevated: #0c1721;
+    --ar-surface: rgba(10, 19, 29, 0.92);
+    --ar-surface-2: rgba(14, 24, 36, 0.95);
+    --ar-surface-3: rgba(19, 31, 45, 0.97);
+    --ar-surface-soft: rgba(7, 13, 20, 0.88);
+    --ar-text: #ecf4fb;
+    --ar-text-soft: #b9cad9;
+    --ar-text-muted: #78899b;
+    --ar-line: rgba(209, 223, 237, 0.11);
+    --ar-line-strong: rgba(209, 223, 237, 0.2);
+    --ar-accent: #69d5bb;
+    --ar-accent-hover: #51c2a7;
+    --ar-accent-2: #d5a24e;
+    --ar-accent-soft: rgba(105, 213, 187, 0.12);
     --ar-overlay: rgba(2, 5, 9, 0.76);
-    --ar-shadow: 0 24px 56px rgba(0, 0, 0, 0.32);
-    --ar-shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.18);
+    --ar-shadow: 0 28px 60px rgba(0, 0, 0, 0.34);
+    --ar-shadow-soft: 0 14px 28px rgba(0, 0, 0, 0.18);
 }
 
 :root[data-theme="light"] body.ar-public,
 :root[data-theme="light"] body.ar-legal {
-    --ar-bg: #eef3f6;
-    --ar-bg-elevated: #f8fbfd;
-    --ar-surface: rgba(255, 255, 255, 0.92);
-    --ar-surface-2: rgba(247, 251, 253, 0.96);
-    --ar-surface-3: rgba(238, 245, 249, 0.98);
+    --ar-bg: #eff4f6;
+    --ar-bg-elevated: #f8fbfc;
+    --ar-surface: rgba(255, 255, 255, 0.9);
+    --ar-surface-2: rgba(245, 250, 252, 0.95);
+    --ar-surface-3: rgba(237, 244, 247, 0.97);
     --ar-surface-soft: rgba(250, 253, 255, 0.94);
-    --ar-text: #102131;
-    --ar-text-soft: #314454;
-    --ar-text-muted: #4b5f70;
-    --ar-line: rgba(16, 33, 49, 0.1);
-    --ar-line-strong: rgba(16, 33, 49, 0.17);
-    --ar-accent: #168f72;
-    --ar-accent-hover: #0f775f;
-    --ar-accent-2: #a46516;
-    --ar-accent-soft: rgba(22, 143, 114, 0.11);
+    --ar-text: #122334;
+    --ar-text-soft: #304455;
+    --ar-text-muted: #5c6f80;
+    --ar-line: rgba(18, 35, 52, 0.1);
+    --ar-line-strong: rgba(18, 35, 52, 0.18);
+    --ar-accent: #0f7c66;
+    --ar-accent-hover: #0c6856;
+    --ar-accent-2: #a56c1d;
+    --ar-accent-soft: rgba(15, 124, 102, 0.1);
     --ar-overlay: rgba(16, 33, 49, 0.18);
-    --ar-shadow: 0 18px 42px rgba(25, 47, 66, 0.1);
-    --ar-shadow-soft: 0 8px 20px rgba(25, 47, 66, 0.08);
+    --ar-shadow: 0 20px 42px rgba(25, 47, 66, 0.1);
+    --ar-shadow-soft: 0 10px 24px rgba(25, 47, 66, 0.08);
 }
 
 body.ar-section-home-loans {
@@ -87,71 +87,75 @@ body.ar-legal::before {
     inset: 0;
     pointer-events: none;
     background:
-        radial-gradient(ellipse 62% 36% at 14% 0, color-mix(in srgb, var(--ar-accent) 12%, transparent), transparent 62%),
-        radial-gradient(ellipse 52% 30% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 52%, transparent), transparent 62%),
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-text) 3%, transparent), transparent 18%);
-    opacity: 0.58;
+        radial-gradient(ellipse 52% 30% at 14% 0, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 64%),
+        radial-gradient(ellipse 42% 24% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 42%, transparent), transparent 64%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-text) 2%, transparent), transparent 22%);
+    opacity: 0.36;
     z-index: 0;
 }
 
 body.ar-public .bg-layer,
 body.ar-legal .bg-layer {
     background:
-        radial-gradient(ellipse 62% 38% at 16% 0, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 60%),
-        radial-gradient(ellipse 50% 32% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 62%, transparent), transparent 58%),
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 58%, #0a121b) 0%, #0a121b 54%, #060b12 100%);
+        radial-gradient(ellipse 54% 32% at 18% 0, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 62%),
+        radial-gradient(ellipse 44% 26% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 48%, transparent), transparent 62%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 42%, #0b131c) 0%, #0b131c 54%, #071019 100%);
 }
 
 :root[data-theme="light"] body.ar-public .bg-layer,
 :root[data-theme="light"] body.ar-legal .bg-layer {
     background:
-        radial-gradient(ellipse 62% 40% at 16% 0, color-mix(in srgb, var(--ar-accent) 12%, transparent), transparent 58%),
-        radial-gradient(ellipse 50% 36% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 80%, transparent), transparent 56%),
-        radial-gradient(ellipse 42% 22% at 50% 100%, color-mix(in srgb, var(--ar-showcase-spark) 10%, transparent), transparent 72%),
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-bg) 98%, var(--ar-surface-soft)) 0%, var(--ar-bg-elevated) 54%, var(--ar-bg) 100%);
+        radial-gradient(ellipse 58% 36% at 16% 0, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 60%),
+        radial-gradient(ellipse 46% 30% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 56%, transparent), transparent 60%),
+        radial-gradient(ellipse 38% 18% at 50% 100%, color-mix(in srgb, var(--ar-showcase-spark) 8%, transparent), transparent 74%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-bg) 98%, var(--ar-surface-soft)) 0%, var(--ar-bg-elevated) 56%, var(--ar-bg) 100%);
 }
 
 body.ar-public .site-header,
 body.ar-legal .site-header {
-    top: 12px;
+    top: 10px;
     z-index: 120;
-    width: min(var(--ar-shell-max), calc(100vw - 28px));
-    margin: 8px auto 0;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
-    border-radius: 18px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 94%, transparent));
+    width: min(var(--ar-shell-max), calc(100vw - 32px));
+    margin: 10px auto 0;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 82%, transparent);
+    border-radius: 20px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 95%, transparent), color-mix(in srgb, var(--ar-surface-2) 92%, transparent));
     will-change: transform;
-    box-shadow: var(--ar-shadow-soft);
+    box-shadow: 0 18px 44px color-mix(in srgb, var(--ar-bg) 16%, transparent);
 }
 
 body.ar-public .site-header-inner,
 body.ar-legal .site-header-inner {
-    min-height: 64px;
-    padding: 12px 16px;
-    gap: 16px;
+    min-height: 68px;
+    padding: 12px 18px;
+    gap: 18px;
     grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 body.ar-public .site-brand-mark,
 body.ar-legal .site-brand-mark {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface) 88%, transparent));
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 98%, transparent), color-mix(in srgb, var(--ar-surface-2) 92%, transparent));
     box-shadow:
         inset 0 0 0 1px color-mix(in srgb, var(--ar-line) 72%, transparent),
-        0 0 24px color-mix(in srgb, var(--ar-accent) 10%, transparent),
-        0 0 44px color-mix(in srgb, var(--ar-showcase-spark) 12%, transparent);
+        0 10px 22px color-mix(in srgb, var(--ar-bg) 12%, transparent);
 }
 
 body.ar-public .site-brand-tagline,
 body.ar-legal .site-brand-tagline {
     color: var(--ar-text-muted);
     font-family: var(--ar-font-mono);
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     font-weight: 700;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
+}
+
+body.ar-public .site-brand,
+body.ar-legal .site-brand {
+    font-size: 1.02rem;
 }
 
 body.ar-public button.primary,
@@ -170,9 +174,9 @@ body.ar-public .site-header-context,
 body.ar-legal .site-header-context,
 body.ar-public .site-header-actions,
 body.ar-legal .site-header-actions {
-    border: 1px solid var(--ar-line);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--ar-surface) 84%, transparent);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
 }
 
@@ -183,7 +187,7 @@ body.ar-legal .site-header-context {
 
 body.ar-public .site-header-actions,
 body.ar-legal .site-header-actions {
-    padding: 5px;
+    padding: 4px;
 }
 
 body.ar-public .site-header-actions > *,
@@ -195,23 +199,25 @@ body.ar-public .shell-public,
 body.ar-legal .shell {
     position: relative;
     z-index: 1;
-    padding-top: 40px;
-    padding-bottom: 60px;
+    padding-top: 44px;
+    padding-bottom: 68px;
 }
 
 body.ar-public .panel,
 body.ar-legal .panel {
-    border-radius: 22px;
-    border-color: color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 98%, transparent), color-mix(in srgb, var(--ar-surface-2) 96%, transparent));
-    box-shadow: var(--ar-shadow-soft);
+    border-radius: var(--ar-radius-panel);
+    border-color: color-mix(in srgb, var(--ar-line-strong) 84%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 97%, transparent), color-mix(in srgb, var(--ar-surface-2) 94%, transparent));
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent),
+        var(--ar-shadow-soft);
 }
 
 body.ar-public .site-footer,
 body.ar-legal .site-footer {
     position: relative;
     z-index: 1;
-    padding-bottom: 40px;
+    padding-bottom: 28px;
 }
 
 body.ar-legal .legal-hero,

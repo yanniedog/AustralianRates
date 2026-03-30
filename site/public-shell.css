@@ -8,58 +8,68 @@ body.ar-admin {
     position: sticky;
     top: 0;
     z-index: 90;
-    backdrop-filter: blur(16px);
-    background: color-mix(in srgb, var(--ar-bg) 82%, transparent);
-    border-bottom: 1px solid var(--ar-line);
+    backdrop-filter: blur(18px);
+    background: color-mix(in srgb, var(--ar-bg) 88%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--ar-line-strong) 78%, transparent);
 }
 
 .site-header-inner {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
     min-height: var(--ar-header-height);
     max-width: var(--ar-shell-max);
     margin: 0 auto;
-    padding: 10px 18px;
+    padding: 12px 20px;
 }
 
 .site-header-segment {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 6px;
 }
 
 .site-header-segment-link {
     display: inline-flex;
     align-items: center;
-    min-height: 36px;
-    padding: 0 12px;
-    border-radius: 10px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 999px;
     color: var(--ar-text-soft);
     font-size: 0.82rem;
-    font-weight: 600;
+    font-weight: 650;
+    letter-spacing: 0.01em;
     text-decoration: none;
-    transition: color var(--ar-motion-base) var(--ar-ease), background-color var(--ar-motion-base) var(--ar-ease);
+    transition:
+        color var(--ar-motion-base) var(--ar-ease),
+        background-color var(--ar-motion-base) var(--ar-ease),
+        border-color var(--ar-motion-base) var(--ar-ease),
+        box-shadow var(--ar-motion-base) var(--ar-ease);
 }
 
 .site-header-segment-link:hover {
     color: var(--ar-text);
-    background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
+    background: color-mix(in srgb, var(--ar-surface) 90%, transparent);
+    border-color: color-mix(in srgb, var(--ar-line-strong) 76%, transparent);
 }
 
 .site-header-segment-link.is-active {
     color: var(--ar-text) !important;
-    background: var(--ar-surface) !important;
-    border: 1px solid var(--ar-line-strong);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-text) 4%, transparent);
+    background: color-mix(in srgb, var(--ar-surface) 94%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--ar-accent) 22%, var(--ar-line-strong));
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 6%, transparent),
+        0 8px 20px color-mix(in srgb, var(--ar-bg) 10%, transparent);
 }
 
 .site-header-segment-link.is-active:hover {
     color: var(--ar-text) !important;
-    background: var(--ar-surface-2) !important;
-    border-color: var(--ar-line-strong);
+    background: color-mix(in srgb, var(--ar-surface) 96%, transparent) !important;
+    border-color: color-mix(in srgb, var(--ar-accent) 26%, var(--ar-line-strong));
 }
 
 .site-brand-lockup,
@@ -73,6 +83,7 @@ body.ar-admin {
 
 .site-brand-lockup {
     min-width: 0;
+    gap: 12px;
 }
 
 .site-brand-copy,
@@ -80,7 +91,7 @@ body.ar-admin {
     min-width: 0;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: 3px;
 }
 
 .site-brand-mark {
@@ -118,20 +129,21 @@ body.ar-admin {
 
 .site-brand {
     color: var(--ar-text);
-    font-size: 0.92rem;
+    font-size: 1rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
 }
 
 .site-brand-tagline,
 .site-header-title {
     color: var(--ar-text-soft);
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 600;
 }
 
 .site-header-actions {
     justify-self: end;
+    gap: 8px;
 }
 
 /* Apply 3-column grid only to public market pages that render the navigation segment */
@@ -162,9 +174,9 @@ body.ar-not-found .site-header-context {
 
 .site-action-text {
     display: none;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
     white-space: nowrap;
 }
 
@@ -183,7 +195,7 @@ body.ar-not-found .site-header-context {
 .shell {
     width: min(var(--ar-shell-max), calc(100vw - calc(var(--ar-shell-gutter) * 2)));
     margin: 0 auto;
-    padding: 18px 0 36px;
+    padding: 24px 0 44px;
 }
 
 .shell-public {
@@ -345,7 +357,7 @@ body.is-resizing-panels * {
 .terminal-panel,
 .terminal-subpanel,
 .terminal-notes {
-    padding: 16px;
+    padding: 18px;
 }
 
 .terminal-panel-head,
@@ -371,9 +383,9 @@ body.is-resizing-panels * {
 .terminal-data-head h2,
 .terminal-filter-group-head .terminal-panel-title {
     margin: 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    font-size: 0.98rem;
+    font-weight: 650;
+    letter-spacing: -0.03em;
 }
 
 .terminal-panel-close-mobile {
@@ -441,7 +453,7 @@ body.is-resizing-panels * {
 }
 
 .site-footer {
-    margin: 18px auto 0;
+    margin: 28px auto 0;
     width: min(var(--ar-shell-max), calc(100vw - calc(var(--ar-shell-gutter) * 2)));
     padding-bottom: 28px;
 }
@@ -450,9 +462,9 @@ body.is-resizing-panels * {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: 12px 24px;
-    padding: 14px 0 0;
-    border-top: 1px solid var(--ar-line);
+    gap: 16px 28px;
+    padding: 18px 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--ar-line-strong) 76%, transparent);
 }
 
 .site-footer-meta,
@@ -688,8 +700,8 @@ body.ar-not-found .market-intro-actions {
     .site-header-inner {
         grid-template-columns: 1fr auto;
         grid-template-rows: auto auto;
-        gap: 8px 12px;
-        padding: 10px 14px;
+        gap: 10px 12px;
+        padding: 12px 14px;
         min-height: 0;
         overflow: hidden;
     }
@@ -728,13 +740,13 @@ body.ar-not-found .market-intro-actions {
         overflow-x: auto;
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
-        gap: 6px;
-        padding-bottom: 2px;
+        gap: 8px;
+        padding-bottom: 4px;
     }
 
     .site-header-segment-link {
         min-height: 40px;
-        padding: 0 12px;
+        padding: 0 13px;
         font-size: 0.8rem;
         flex-shrink: 0;
     }
@@ -847,29 +859,30 @@ body.ar-public .workspace-nav-row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 10px 16px 8px;
-    border-bottom: 1px solid var(--ar-line);
+    gap: 8px;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 46%, transparent);
 }
 
 body.ar-public .workspace-tab-nav {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex: 0 0 auto;
 }
 
 body.ar-public .workspace-nav-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
     margin-left: auto;
 }
 
 /* ── Filters drawer ────────────────────────────────────────────────── */
 body.ar-public .filters-drawer {
-    border-bottom: 1px solid var(--ar-line);
+    border-bottom: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
     max-width: 100%;
     box-sizing: border-box;
 }
@@ -877,12 +890,12 @@ body.ar-public .filters-drawer {
 body.ar-public .filters-drawer > summary {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     list-style: none;
     cursor: pointer;
-    padding: 7px 16px;
-    font-size: 0.78rem;
-    font-weight: 600;
+    padding: 10px 18px;
+    font-size: 0.8rem;
+    font-weight: 650;
     color: var(--ar-text-soft);
     transition: color var(--ar-motion-fast) var(--ar-ease), background-color var(--ar-motion-fast) var(--ar-ease);
     user-select: none;
@@ -904,7 +917,7 @@ body.ar-public .filters-drawer[open] > summary::after {
 
 body.ar-public .filters-drawer > summary:hover {
     color: var(--ar-text);
-    background: color-mix(in srgb, var(--ar-surface-2) 80%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 82%, transparent);
 }
 
 body.ar-public .filters-active-count {
@@ -935,8 +948,8 @@ body.ar-public .filters-drawer-body {
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: 12px 16px 14px;
-    background: color-mix(in srgb, var(--ar-surface-2) 60%, transparent);
+    padding: 14px 18px 16px;
+    background: color-mix(in srgb, var(--ar-surface-2) 68%, transparent);
     max-width: 100%;
     min-width: 0;
     overflow-x: auto;
@@ -944,7 +957,7 @@ body.ar-public .filters-drawer-body {
 }
 
 body.ar-public .filters-drawer-section {
-    padding: 8px 0;
+    padding: 12px 0;
     border-bottom: 1px solid color-mix(in srgb, var(--ar-line) 60%, transparent);
 }
 
@@ -972,15 +985,15 @@ body.ar-public .filters-more {
 body.ar-public .filters-more > summary {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     list-style: none;
     cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: var(--ar-radius-pill);
     font-size: 0.74rem;
-    font-weight: 600;
+    font-weight: 650;
     color: var(--ar-text-muted);
-    border: 1px solid var(--ar-line);
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
     background: transparent;
     transition: color var(--ar-motion-fast) var(--ar-ease), border-color var(--ar-motion-fast) var(--ar-ease);
 }
@@ -1015,8 +1028,8 @@ body.ar-public .filters-more-grid .terminal-field {
 body.ar-public .bank-picker-compact {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    max-height: 120px;
+    gap: 6px;
+    max-height: 136px;
     overflow-y: auto;
     padding: 0;
     border: 0;
@@ -1033,9 +1046,9 @@ body.ar-public .bank-picker-compact button.bank-option-card {
     width: auto;
     min-width: 0;
     min-height: 0;
-    height: 30px;
-    padding: 0 10px 0 6px;
-    border-radius: 6px;
+    height: 34px;
+    padding: 0 11px 0 8px;
+    border-radius: 10px;
     aspect-ratio: unset;
     background: color-mix(in srgb, var(--ar-surface-2) 90%, transparent) !important;
     transform: none !important;
@@ -1084,7 +1097,7 @@ body.ar-public .bank-picker-compact .bank-badge-sub {
 
 /* ── Tab panels ──────────────────────────────────────────────────── */
 body.ar-public .tab-panel {
-    padding: 16px;
+    padding: 18px;
 }
 
 body.ar-public .terminal-workspace-panel > .tab-panel:not([hidden]) {
@@ -1112,9 +1125,10 @@ body.ar-public .chip-strip {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 5px;
-    padding: 5px 12px;
-    border-bottom: 1px solid var(--ar-line);
+    gap: 6px;
+    padding: 8px 18px 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 32%, transparent);
 }
 
 body.ar-public .chip-strip[hidden] { display: none; }
@@ -1123,15 +1137,15 @@ body.ar-public .chip-strip[hidden] { display: none; }
 body.ar-public .chip-strip .filter-chip {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    border: 1px solid var(--ar-line);
-    border-radius: 999px;
-    background: var(--ar-surface-2);
+    gap: 4px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: var(--ar-radius-pill);
+    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
     color: var(--ar-text-soft);
-    height: 26px;
-    padding: 0 4px 0 9px;
+    height: 30px;
+    padding: 0 5px 0 10px;
     font-size: 0.72rem;
-    font-weight: 500;
+    font-weight: 600;
     cursor: default;
     min-height: unset;
 }
@@ -1194,16 +1208,16 @@ body.ar-public .chip-strip .chip-remove:hover {
 /* ── Mobile adjustments ─────────────────────────────────────────── */
 @media (max-width: 760px) {
     body.ar-public .workspace-nav-row {
-        padding: 8px 12px 6px;
-        gap: 4px;
+        padding: 10px 12px 8px;
+        gap: 6px;
     }
 
     body.ar-public .workspace-nav-actions {
-        gap: 4px;
+        gap: 6px;
     }
 
     body.ar-public .filters-drawer-body {
-        padding: 10px 12px 12px;
+        padding: 12px;
     }
 
     body.ar-public .tab-panel {
@@ -1211,6 +1225,6 @@ body.ar-public .chip-strip .chip-remove:hover {
     }
 
     body.ar-public .bank-picker-compact {
-        max-height: 100px;
+        max-height: 112px;
     }
 }

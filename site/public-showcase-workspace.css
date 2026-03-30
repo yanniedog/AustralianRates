@@ -10,7 +10,7 @@ body.ar-public {
 }
 
 body.ar-public .market-terminal {
-    gap: 18px;
+    gap: 22px;
     grid-template-columns: minmax(0, 1fr);
     max-width: 100%;
     min-width: 0;
@@ -56,8 +56,8 @@ body.ar-public .terminal-panel,
 body.ar-public .terminal-subpanel,
 body.ar-public .terminal-notes,
 body.ar-public .rate-change-details {
-    padding: 16px;
-    border-radius: 24px;
+    padding: 18px;
+    border-radius: var(--ar-radius-panel);
 }
 
 body.ar-public .terminal-stage-panel,
@@ -106,18 +106,18 @@ body.ar-public .terminal-bottom-tabs {
 body.ar-public .tab-btn,
 body.ar-public .chart-preset,
 body.ar-public .terminal-more-summary {
-    min-height: 40px;
-    padding-inline: 14px;
+    min-height: 42px;
+    padding-inline: 16px;
 }
 
 body.ar-public .chart-figure {
-    border-radius: 20px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    border-radius: 22px;
+    box-shadow: 0 14px 32px color-mix(in srgb, var(--ar-bg) 12%, transparent);
 }
 
 body.ar-public .chart-figure .terminal-chart-surface {
     min-height: 480px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 94%, transparent), color-mix(in srgb, var(--ar-surface-2) 90%, transparent));
 }
 
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
@@ -127,31 +127,35 @@ body.ar-public .chart-figure .terminal-chart-surface {
     }
 }
 
-body.ar-public .chart-figure:has(#chart-output[data-chart-rendered="true"]) { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); }
+body.ar-public .chart-figure:has(#chart-output[data-chart-rendered="true"]) { box-shadow: 0 18px 38px color-mix(in srgb, var(--ar-bg) 14%, transparent); }
 
 body.ar-public .terminal-stat,
 body.ar-public .ladder-card,
 body.ar-public .exec-card,
 body.ar-public .chart-series-card,
 body.ar-public .chart-spotlight-card {
-    border-radius: 20px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface) 92%, transparent));
-    box-shadow: none;
+    border-radius: 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 92%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
 }
 
 body.ar-public .chart-series-card:hover,
 body.ar-public .chart-spotlight-card:hover {
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent),
+        0 10px 26px color-mix(in srgb, var(--ar-bg) 10%, transparent);
 }
 
 body.ar-public .chart-preset.is-active {
     border-color: color-mix(in srgb, var(--ar-showcase-spark) 36%, var(--ar-line));
-    background: color-mix(in srgb, var(--ar-showcase-spark) 14%, var(--ar-accent-soft));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 28%, transparent);
+    background: color-mix(in srgb, var(--ar-showcase-spark) 12%, var(--ar-surface));
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 22%, transparent);
 }
 
 body.ar-public .terminal-stat strong {
-    font-size: 1.28rem;
+    font-size: 1.34rem;
 }
 
 body.ar-public .ladder-rate {
@@ -166,7 +170,9 @@ body.ar-public .terminal-column-center > .panel {
 
 body.ar-public .terminal-column-center > .panel:hover {
     border-color: var(--ar-line-strong);
-    box-shadow: var(--ar-shadow-soft);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent),
+        0 16px 34px color-mix(in srgb, var(--ar-bg) 10%, transparent);
 }
 
 body.ar-public .site-footer,
