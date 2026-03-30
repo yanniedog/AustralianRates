@@ -58,7 +58,10 @@ async function gotoSection(page, section) {
 
 async function drawChart(page) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
-        await page.click('#draw-chart');
+        const drawButton = page.locator('#draw-chart');
+        if (await drawButton.count()) {
+            await drawButton.click();
+        }
         try {
             await page.waitForFunction(() => {
                 const output = document.getElementById('chart-output');
