@@ -207,7 +207,7 @@ button:disabled,
 }
 
 button.primary,
-button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):not(.filter-pad-btn),
+button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):not(.filter-pad-btn):not(.chip-remove),
 .buttonish.primary {
     border-color: rgba(37, 99, 235, 0.28);
     background: var(--ar-accent);
@@ -215,7 +215,7 @@ button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):no
 }
 
 button.primary:hover,
-button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):not(.filter-pad-btn):hover,
+button:not(.secondary):not(.ghost):not(.danger):not(.icon-btn):not(.chip-btn):not(.filter-pad-btn):not(.chip-remove):hover,
 .buttonish.primary:hover {
     background: var(--ar-accent-hover);
     color: #ffffff;
