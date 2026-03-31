@@ -1,4 +1,4 @@
-import type { Hono } from 'hono'
+import type { Context, Hono } from 'hono'
 import { type ExportFormat, type ExportScope } from '../db/export-jobs'
 import { queryTdRatesPaginated } from '../db/td-queries'
 import { getReadDb } from '../db/read-db'
@@ -186,11 +186,21 @@ async function runTdExportJob(
   })
 }
 
-export function registerTdExportRoutes(routes: Hono<AppContext>): void {
+export function registerTdExportRoutes(
+  routes: Hono<AppContext>,
+  options?: {
+    routeBase?: string
+    pathPrefix?: string
+    guardCreateJob?: (c: Context<AppContext>) => Response | null
+  },
+): void {
   registerExportRoutes(routes, {
     dataset: 'term_deposits',
     buildFilters: buildTdFilters,
     runExportJob: runTdExportJob,
+    routeBase: options?.routeBase,
+    pathPrefix: options?.pathPrefix,
+    guardCreateJob: options?.guardCreateJob,
     validate: (scope, filters) =>
       scope === 'timeseries' && !filters.productKey && !filters.seriesKey
         ? {

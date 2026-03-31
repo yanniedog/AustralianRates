@@ -1,5 +1,5 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
-import type { Hono } from 'hono'
+import type { Context, Hono } from 'hono'
 import {
   completeExportJob,
   createExportJob,
@@ -47,6 +47,9 @@ type RegisterExportRouteOptions<TFilters> = {
   buildFilters: (payload: RequestPayload) => TFilters
   runExportJob: (env: AppContext['Bindings'], input: ExportJobInput<TFilters>) => Promise<void>
   validate?: (scope: ExportScope, filters: TFilters) => ExportValidationError | null
+  routeBase?: string
+  pathPrefix?: string
+  guardCreateJob?: (c: Context<AppContext>) => Response | null
 }
 
 type RunDatasetExportJobOptions<TFilters> = ExportJobInput<TFilters> & {
@@ -98,8 +101,10 @@ export function registerExportRoutes<TFilters>(
   routes: Hono<AppContext>,
   options: RegisterExportRouteOptions<TFilters>,
 ): void {
-  routes.post('/exports', async (c) => {
-    const guard = guardPublicExportJob(c)
+  const base = options.routeBase ? `/${String(options.routeBase).replace(/^\/+/, '').replace(/\/+$/, '')}` : ''
+
+  routes.post(`${base}/exports`, async (c) => {
+    const guard = options.guardCreateJob ? options.guardCreateJob(c) : guardPublicExportJob(c)
     if (guard) return guard
 
     const payload = {
@@ -135,18 +140,18 @@ export function registerExportRoutes<TFilters>(
     if (!job) {
       return jsonError(c, 500, 'EXPORT_JOB_MISSING', 'Export job was not persisted.')
     }
-    return c.json(exportStatusBody(job, ''), 202)
+    return c.json(exportStatusBody(job, options.pathPrefix ?? ''), 202)
   })
 
-  routes.get('/exports/:jobId', async (c) => {
+  routes.get(`${base}/exports/:jobId`, async (c) => {
     const job = await getExportJob(c.env.DB, c.req.param('jobId'))
     if (!job || job.dataset_kind !== options.dataset) {
       return jsonError(c, 404, 'NOT_FOUND', 'Export job not found.')
     }
-    return c.json(exportStatusBody(job, ''))
+    return c.json(exportStatusBody(job, options.pathPrefix ?? ''))
   })
 
-  routes.get('/exports/:jobId/download', async (c) => {
+  routes.get(`${base}/exports/:jobId/download`, async (c) => {
     const job = await getExportJob(c.env.DB, c.req.param('jobId'))
     if (!job || job.dataset_kind !== options.dataset) {
       return jsonError(c, 404, 'NOT_FOUND', 'Export job not found.')

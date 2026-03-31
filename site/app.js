@@ -9,7 +9,6 @@
     var pivot = window.AR.pivot;
     var charts = window.AR.charts;
     var refresh = window.AR.refresh;
-    var exportModule = window.AR.export;
     var rateChanges = window.AR.rateChanges;
     var executiveSummary = window.AR.executiveSummary;
     var hero = window.AR.hero;
@@ -327,20 +326,6 @@
         els.resetFilters.addEventListener('click', function (event) {
             if (event) event.preventDefault();
             if (filters && filters.resetFilters) filters.resetFilters();
-        });
-    }
-    if (els.downloadFormat) {
-        els.downloadFormat.addEventListener('change', function () {
-            var format = String(els.downloadFormat.value || '').trim();
-            if (!format) return;
-            if (exportModule && exportModule.downloadSelectedFormat) exportModule.downloadSelectedFormat(format);
-            else if (exportModule && exportModule.downloadCsv) exportModule.downloadCsv();
-        });
-    }
-    if (els.downloadCsv) {
-        els.downloadCsv.addEventListener('click', function () {
-            if (exportModule && exportModule.downloadSelectedFormat) exportModule.downloadSelectedFormat('csv');
-            else if (exportModule && exportModule.downloadCsv) exportModule.downloadCsv();
         });
     }
     if (els.loadPivot) {

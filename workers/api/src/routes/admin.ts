@@ -40,6 +40,9 @@ import { log } from '../utils/logger'
 import type { DatasetKind } from '../../../../packages/shared/src'
 import { backfillHomeLoanOffsetAccounts } from '../db/home-loans/offset-backfill'
 import { getDiagnosticsBacklog } from '../db/diagnostics-backlog'
+import { registerHomeLoanExportRoutes } from './home-loan-exports'
+import { registerSavingsExportRoutes } from './savings-exports'
+import { registerTdExportRoutes } from './td-exports'
 
 export const adminRoutes = new Hono<AppContext>()
 
@@ -87,6 +90,23 @@ adminRoutes.route('/', adminKnownCdrRepairRoutes)
 adminRoutes.route('/', adminLenderDatasetRepairRoutes)
 adminRoutes.route('/', adminLiveCdrRepairRoutes)
 adminRoutes.route('/', adminRemediationRoutes)
+
+// Admin-only dataset exports (UI is in /admin/exports.html).
+registerHomeLoanExportRoutes(adminRoutes, {
+  routeBase: '/rate-exports/home-loans',
+  pathPrefix: '/admin/rate-exports/home-loans',
+  guardCreateJob: () => null,
+})
+registerSavingsExportRoutes(adminRoutes, {
+  routeBase: '/rate-exports/savings',
+  pathPrefix: '/admin/rate-exports/savings',
+  guardCreateJob: () => null,
+})
+registerTdExportRoutes(adminRoutes, {
+  routeBase: '/rate-exports/term-deposits',
+  pathPrefix: '/admin/rate-exports/term-deposits',
+  guardCreateJob: () => null,
+})
 
 /** Run retention prunes now (1-day backend, log turnover). Use after deploy to compact DB without waiting for next health check. */
 adminRoutes.post('/retention/run', async (c) => {

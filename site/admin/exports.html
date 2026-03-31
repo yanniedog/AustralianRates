@@ -34,6 +34,31 @@
         </div>
         <div class="export-grid">
             <section class="admin-card">
+                <h2>Rate board exports (admin)</h2>
+                <p class="hint">Download the current rates dataset as CSV, JSON, or Excel. These exports are available in the admin portal (not on public dashboards).</p>
+                <div class="export-actions">
+                    <label for="rate-export-dataset">Dataset</label>
+                    <select id="rate-export-dataset">
+                        <option value="home-loans" selected>Home loans</option>
+                        <option value="savings">Savings</option>
+                        <option value="term-deposits">Term deposits</option>
+                    </select>
+                    <label for="rate-export-scope">Scope</label>
+                    <select id="rate-export-scope">
+                        <option value="rates" selected>Rates</option>
+                        <option value="timeseries">Timeseries</option>
+                    </select>
+                    <label for="rate-export-format">Format</label>
+                    <select id="rate-export-format">
+                        <option value="csv" selected>CSV</option>
+                        <option value="xls">Excel</option>
+                        <option value="json">JSON</option>
+                    </select>
+                    <button type="button" class="primary" id="rate-export-run">Create export</button>
+                </div>
+                <div class="export-summary" id="rate-export-summary"></div>
+            </section>
+            <section class="admin-card">
                 <h2>Restorable D1 dump</h2>
                 <p class="hint">New jobs now build a single `.sql.gz` restore artifact with schema and data. The public download is one file even when the worker assembles it from multiple stored parts behind the scenes.</p>
                 <div class="export-actions">
@@ -76,9 +101,11 @@
     <script src="admin-sidebar.js?v=2544dd7"></script>
     <script src="../ui-icons.js?v=2544dd7"></script>
     <script src="../frame.js?v=2544dd7"></script>
+    <script src="../vendor/sheetjs/xlsx.full.min.js?v=2544dd7"></script>
     <script src="admin-exports-view.js?v=2544dd7"></script>
     <script src="admin-exports-runtime.js?v=2544dd7"></script>
     <script src="admin-exports.js?v=2544dd7"></script>
+    <script src="admin-rate-exports.js?v=2544dd7"></script>
 </body>
 </html>
 

@@ -651,13 +651,6 @@
                                 tabButtonMarkup(WORKSPACE_TABS[2], false),
                             '</nav>',
                             '<div class="workspace-nav-actions" role="toolbar" aria-label="Workspace actions">',
-                                '<label class="sr-only" id="download-format-label" for="download-format">Export format</label>',
-                                '<select id="download-format" class="small" aria-labelledby="download-format-label">',
-                                    '<option value="">Export…</option>',
-                                    '<option value="csv">CSV</option>',
-                                    '<option value="xls">Excel</option>',
-                                    '<option value="json">JSON</option>',
-                                '</select>',
                                 '<button type="button" id="refresh-page-btn" class="secondary small" aria-label="Refresh page and data">Refresh</button>',
                                 '<span id="last-refreshed" class="hint"></span>',
                             '</div>',
@@ -674,7 +667,6 @@
                             '</div>',
                         '</div>',
                         '<p id="workspace-copy-status" class="terminal-inline-feedback terminal-copy-status" role="status" aria-live="polite" hidden></p>',
-                        '<p id="download-status" class="terminal-inline-feedback terminal-export-status" role="status" aria-live="polite" hidden></p>',
 
                         // Active filter chips — always-visible editable strip
                         '<div id="active-filter-chips" class="chip-strip" hidden></div>',

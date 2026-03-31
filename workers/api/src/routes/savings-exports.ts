@@ -1,4 +1,4 @@
-import type { Hono } from 'hono'
+import type { Context, Hono } from 'hono'
 import { type ExportFormat, type ExportScope } from '../db/export-jobs'
 import { querySavingsRatesPaginated } from '../db/savings-queries'
 import { getReadDb } from '../db/read-db'
@@ -195,11 +195,21 @@ async function runSavingsExportJob(
   })
 }
 
-export function registerSavingsExportRoutes(routes: Hono<AppContext>): void {
+export function registerSavingsExportRoutes(
+  routes: Hono<AppContext>,
+  options?: {
+    routeBase?: string
+    pathPrefix?: string
+    guardCreateJob?: (c: Context<AppContext>) => Response | null
+  },
+): void {
   registerExportRoutes(routes, {
     dataset: 'savings',
     buildFilters: buildSavingsFilters,
     runExportJob: runSavingsExportJob,
+    routeBase: options?.routeBase,
+    pathPrefix: options?.pathPrefix,
+    guardCreateJob: options?.guardCreateJob,
     validate: (scope, filters) =>
       scope === 'timeseries' && !filters.productKey && !filters.seriesKey
         ? {
