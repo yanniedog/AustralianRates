@@ -867,6 +867,12 @@ body.ar-public .workspace-nav-actions {
     margin-left: auto;
 }
 
+/* Hide the legacy manual refresh affordance (auto-refresh continues). */
+body.ar-public #refresh-page-btn,
+body.ar-public #last-refreshed {
+    display: none !important;
+}
+
 /* ── Filters drawer ────────────────────────────────────────────────── */
 body.ar-public .filters-drawer {
     border-bottom: 1px solid var(--ar-line);
