@@ -762,6 +762,7 @@
                     spotlightField('Bank', chartConfig.formatFieldValue('bank_name', row.bank_name || '-', row)) +
                     spotlightField('Product', row.product_name || '-') +
                     spotlightField('Delta', Number.isFinite(Number(spotlight.series.delta)) ? chartConfig.formatMetricValue(fields.yField, spotlight.series.delta) : '-') +
+                    spotlightField('product_key', String(row.product_key || spotlight.series.key || '-')) +
                 '</div>' +
                 '<div class="chart-spotlight-link-row">' + productLink(row) + '</div>' +
             '</div>';

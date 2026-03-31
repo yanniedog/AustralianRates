@@ -56,8 +56,8 @@
         <section class="panel economic-hero" aria-label="Economic dashboard introduction">
             <div class="economic-hero-copy">
                 <div class="economic-topline">
-                    <span class="market-intro-session-label">Economic monitor</span>
-                    <span class="market-intro-session-status">Official sources</span>
+                    <span class="market-intro-session-label">session::economic-data</span>
+                    <span class="market-intro-session-status">live</span>
                 </div>
                 <p class="eyebrow">Australian Economic Data Dashboard</p>
                 <h1 class="market-intro-title">Track macro indicators that shape the RBA path.</h1>
@@ -70,11 +70,11 @@
                 </article>
                 <article class="terminal-stat">
                     <span class="metric-code">Series</span>
-                    <strong id="economic-selected-count">5 active</strong>
+                    <strong id="economic-selected-count">5 selected</strong>
                 </article>
                 <article class="terminal-stat">
                     <span class="metric-code">Status</span>
-                    <strong id="economic-status-text" data-state="loading">Loading live data</strong>
+                    <strong id="economic-status-text">Loading...</strong>
                 </article>
             </div>
         </section>
@@ -114,55 +114,17 @@
                             </div>
                             <p id="economic-range-note" class="hint">Loading current range...</p>
                         </div>
-                        <div class="economic-chart-shell">
-                            <div id="economic-chart" class="economic-chart" role="img" aria-label="Economic data chart"></div>
-                        </div>
+                        <div id="economic-chart" class="economic-chart" role="img" aria-label="Economic data chart"></div>
                         <p id="economic-empty" class="terminal-inline-feedback" hidden></p>
                     </div>
                 </section>
             </section>
-            <aside class="terminal-column terminal-column-right">
-                <section id="details" class="panel" aria-label="Selected series">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">SEL</span>
-                        <h2 class="terminal-panel-title">Selected series</h2>
-                    </div>
-                    <p class="economic-panel-note">Latest raw observations for the visible watchlist.</p>
-                    <div id="economic-series-list" class="economic-series-list" aria-live="polite">
-                        <div class="economic-point-empty">
-                            <strong>Loading series</strong>
-                            <span class="economic-point-meta">The latest visible series populate after the initial data fetch.</span>
-                        </div>
-                    </div>
-                </section>
-                <section class="panel" aria-label="Point details">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">PNT</span>
-                        <h2 class="terminal-panel-title">Point details</h2>
-                    </div>
-                    <p class="economic-panel-note">Move across the chart to inspect raw values for the same date.</p>
-                    <div id="economic-point-details" class="economic-point-details" aria-live="polite">
-                        <div class="economic-point-empty">
-                            <strong>Hover the chart</strong>
-                            <span class="economic-point-meta">Inspect raw values for every visible series on the same date.</span>
-                        </div>
-                    </div>
-                </section>
-                <section class="panel" aria-label="Sources">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">SRC</span>
-                        <h2 class="terminal-panel-title">Sources</h2>
-                    </div>
-                    <p class="economic-panel-note">Official source, update frequency, and freshness for each visible series.</p>
-                    <div id="economic-source-list" class="economic-source-list" aria-live="polite">
-                        <div class="economic-point-empty">
-                            <strong>Loading sources</strong>
-                            <span class="economic-point-meta">Source metadata and freshness appear after the series load.</span>
-                        </div>
-                    </div>
-                </section>
-            </aside>
         </section>
+        <div hidden aria-hidden="true">
+            <div id="economic-series-list"></div>
+            <div id="economic-point-details"></div>
+            <div id="economic-source-list"></div>
+        </div>
     </main>
     <script src="../vendor/echarts/echarts.min.js?v=2544dd7"></script>
     <script src="../ar-utils.js?v=2544dd7"></script>

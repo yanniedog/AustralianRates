@@ -156,25 +156,6 @@
     z-index: 1;
 }
 
-.terminal-data-head {
-    align-items: flex-start;
-}
-
-.terminal-data-head h2 {
-    font-size: 1.04rem;
-}
-
-#explorer-overview-status {
-    min-width: 72px;
-    justify-content: center;
-}
-
-#explorer-overview-text {
-    margin-top: -2px;
-    font-size: 0.78rem;
-    line-height: 1.6;
-}
-
 .terminal-filter-grid-primary {
     grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
 }
@@ -490,12 +471,11 @@ button.bank-option-card.is-selected .bank-badge-sub {
 
 .terminal-stat {
     display: grid;
-    gap: 10px;
-    padding: 14px;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--ar-surface) 94%, var(--ar-surface-2));
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: var(--ar-surface-2);
     align-content: start;
     min-width: 0;
 }
@@ -509,7 +489,7 @@ button.bank-option-card.is-selected .bank-badge-sub {
 }
 
 .terminal-stat-small {
-    padding: 10px 12px;
+    padding: 8px 10px;
 }
 
 .terminal-stat-small .metric-code,
@@ -531,11 +511,10 @@ button.bank-option-card.is-selected .bank-badge-sub {
 .exec-card {
     display: grid;
     gap: 8px;
-    padding: 14px;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--ar-surface) 94%, var(--ar-surface-2));
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent);
+    padding: 12px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: var(--ar-surface-2);
 }
 
 .ladder-card-top,
@@ -566,13 +545,10 @@ button.bank-option-card.is-selected .bank-badge-sub {
 
 .terminal-rate-table {
     min-height: 360px;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
-    border-radius: 18px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
     overflow: hidden;
-    background: color-mix(in srgb, var(--ar-surface) 96%, var(--ar-surface-2));
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 4%, transparent),
-        0 10px 24px color-mix(in srgb, var(--ar-bg) 8%, transparent);
+    background: var(--ar-surface-2);
 }
 
 .table-settings-popover {
@@ -582,92 +558,11 @@ button.bank-option-card.is-selected .bank-badge-sub {
     z-index: 9999;
     min-width: 240px;
     max-width: min(340px, calc(100vw - 40px));
-    padding: 14px;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--ar-surface) 98%, transparent);
+    padding: 12px;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: var(--ar-surface);
     box-shadow: var(--ar-shadow-soft);
-}
-
-.table-settings-section {
-    display: grid;
-    gap: 10px;
-}
-
-.table-settings-section + .table-settings-section {
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid color-mix(in srgb, var(--ar-line) 72%, transparent);
-}
-
-.table-settings-kicker,
-.table-settings-title {
-    margin: 0;
-}
-
-.table-settings-kicker {
-    color: var(--ar-text-muted);
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-}
-
-.table-settings-caption,
-.table-settings-empty {
-    margin: 0;
-    color: var(--ar-text-soft);
-    font-size: 0.78rem;
-    line-height: 1.5;
-}
-
-.table-settings-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-.table-settings-title {
-    color: var(--ar-text);
-    font-size: 0.82rem;
-    font-weight: 700;
-}
-
-.table-settings-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 8px;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
-    color: var(--ar-text);
-    font-size: 0.72rem;
-    font-weight: 700;
-}
-
-.table-settings-item {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: 10px;
-    min-width: 0;
-    padding: 6px 0;
-    color: var(--ar-text-soft);
-    font-size: 0.8rem;
-    line-height: 1.45;
-}
-
-.table-settings-item input {
-    margin-top: 2px;
-    accent-color: var(--ar-accent);
-}
-
-.table-settings-item span {
-    min-width: 0;
 }
 
 .tabulator {
@@ -702,14 +597,13 @@ button.bank-option-card.is-selected .bank-badge-sub {
 .tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
     background: transparent !important;
     color: inherit !important;
-    min-height: 52px;
 }
 
 .tabulator .tabulator-col-title {
     color: var(--ar-text-muted) !important;
-    font-size: 0.68rem !important;
+    font-size: 0.72rem !important;
     font-weight: 700 !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: 0.12em !important;
     text-transform: uppercase !important;
 }
 
@@ -734,7 +628,7 @@ button.bank-option-card.is-selected .bank-badge-sub {
     color: var(--ar-text-muted);
     font-size: 0.68rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
@@ -823,7 +717,6 @@ button.bank-option-card.is-selected .bank-badge-sub {
 
 .tabulator .tabulator-row {
     background: var(--ar-surface-2) !important;
-    transition: background-color var(--ar-motion-fast) var(--ar-ease);
 }
 
 .tabulator .tabulator-row:nth-child(even) {
@@ -831,61 +724,12 @@ button.bank-option-card.is-selected .bank-badge-sub {
 }
 
 .tabulator .tabulator-row:hover {
-    background: color-mix(in srgb, var(--ar-accent-soft) 42%, var(--ar-surface-3)) !important;
-}
-
-.tabulator .tabulator-row.ar-row-removed {
-    opacity: 0.62;
+    background: color-mix(in srgb, var(--ar-accent-soft) 36%, var(--ar-surface-3)) !important;
 }
 
 .tabulator .tabulator-cell {
     color: var(--ar-text) !important;
-    font-size: 0.81rem;
-    line-height: 1.45;
-    padding: 12px 14px !important;
-}
-
-.tabulator .tabulator-cell[tabulator-field="found_at"],
-.tabulator .tabulator-cell[tabulator-field="collection_date"],
-.tabulator .tabulator-cell[tabulator-field="rate_confirmed_at"],
-.tabulator .tabulator-cell[tabulator-field="published_at"],
-.tabulator .tabulator-cell[tabulator-field="removed_at"] {
-    color: var(--ar-text-muted) !important;
-    font-size: 0.76rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.tabulator .tabulator-cell[tabulator-field="interest_rate"],
-.tabulator .tabulator-cell[tabulator-field="comparison_rate"],
-.tabulator .tabulator-cell[tabulator-field="annual_fee"],
-.tabulator .tabulator-cell[tabulator-field="monthly_fee"],
-.tabulator .tabulator-cell[tabulator-field="rba_cash_rate"],
-.tabulator .tabulator-cell[tabulator-field="min_deposit"],
-.tabulator .tabulator-cell[tabulator-field="max_deposit"] {
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-}
-
-.tabulator .tabulator-cell[tabulator-field="interest_rate"] {
-    color: var(--ar-text) !important;
-    font-size: 0.92rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
-
-.tabulator .tabulator-row.ar-row-has-comparison .tabulator-cell[tabulator-field="comparison_rate"] {
-    color: color-mix(in srgb, var(--ar-accent) 76%, var(--ar-text)) !important;
-    font-weight: 700;
-}
-
-.tabulator .tabulator-cell[tabulator-field="bank_name"] {
-    font-weight: 650;
-}
-
-.tabulator .tabulator-cell[tabulator-field="product_name"] {
-    color: var(--ar-text) !important;
-    font-weight: 600;
-    line-height: 1.4;
+    font-size: 0.78rem;
 }
 
 .tabulator .tabulator-tableholder .tabulator-table,
@@ -969,18 +813,5 @@ button.bank-option-card.is-selected .bank-badge-sub {
     .bank-picker-grid {
         grid-template-columns: 1fr;
         gap: 12px;
-    }
-
-    .terminal-rate-table {
-        min-height: 320px;
-    }
-
-    .tabulator .tabulator-cell {
-        padding: 10px 12px !important;
-        font-size: 0.79rem;
-    }
-
-    .tabulator .tabulator-cell[tabulator-field="interest_rate"] {
-        font-size: 0.88rem;
     }
 }

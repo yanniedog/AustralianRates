@@ -271,10 +271,10 @@
         display: none;
     }
 
-    /* Chart: allow the in-panel summary/context stack to size naturally */
+    /* Chart: use full viewport minus compact header */
     body.ar-public .chart-block {
-        height: auto;
-        max-height: none;
+        height: calc(100dvh - var(--ar-header-height) - 8px);
+        max-height: calc(100dvh - var(--ar-header-height) - 8px);
     }
 
     body.ar-public .chart-figure .terminal-chart-surface {

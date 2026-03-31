@@ -693,7 +693,6 @@
         var element = row && row.getElement ? row.getElement() : null;
         if (!element) return;
         element.classList.toggle('ar-row-removed', isRowRemoved(data));
-        element.classList.toggle('ar-row-has-comparison', hasComparisonValue(data && data.comparison_rate));
     }
 
     var moveColumnHeadersTimer = null;
@@ -818,14 +817,12 @@
         var columns = getBaseColumns();
         var seen = {};
         var items = [];
-        var visibleCount = 0;
 
         columns.forEach(function (column) {
             if (!column || !column.field || seen[column.field]) return;
             seen[column.field] = true;
             var disabled = column.field === 'comparison_rate' && !comparisonAvailable;
             var checked = !disabled && isColumnVisible(column.field);
-            if (checked) visibleCount += 1;
             items.push(
                 '<label class=\"table-settings-item\">' +
                     '<input type=\"checkbox\" data-field=\"' + safeEsc(column.field) + '\"' +
@@ -837,8 +834,6 @@
 
         els.tableSettingsPopover.innerHTML = '' +
             '<div class=\"table-settings-section\">' +
-                '<p class=\"table-settings-kicker\">Table view</p>' +
-                '<p class=\"table-settings-caption\">Choose how much detail to show in this board.</p>' +
                 '<label class=\"table-settings-item\">' +
                     '<input type=\"checkbox\" data-setting=\"show-removed\"' + (columnPrefs.showRemoved ? ' checked' : '') + '>' +
                     '<span>Show removed rates</span>' +
@@ -853,10 +848,7 @@
                 '</label>' +
             '</div>' +
             '<div class=\"table-settings-section\">' +
-                '<div class=\"table-settings-head\">' +
-                    '<p class=\"table-settings-title\">Visible columns</p>' +
-                    '<span class=\"table-settings-count\">' + visibleCount + '</span>' +
-                '</div>' +
+                '<p class=\"table-settings-title\">Visible columns</p>' +
                 (items.length ? items.join('') : '<p class=\"table-settings-empty\">No configurable columns.</p>') +
             '</div>';
 

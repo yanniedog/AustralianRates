@@ -170,69 +170,8 @@
         return '<span class="economic-badge' + (className ? (' ' + className) : '') + '">' + esc(label) + '</span>';
     }
 
-    function freshnessStatus(freshness) {
-        return String(freshness && freshness.status || '').toLowerCase();
-    }
-
-    function freshnessBadge(freshness) {
-        var status = freshnessStatus(freshness);
-        if (status === 'fresh') return badge('Fresh', 'is-fresh');
-        if (status === 'stale') return badge('Stale', 'is-stale');
-        if (status === 'error') return badge('Issue', 'is-error');
-        return '';
-    }
-
-    function seriesMetaLine(series) {
-        var freshness = series && series.freshness ? series.freshness : null;
-        var parts = [];
-        if (series && series.source_label) parts.push(series.source_label);
-        if (series && series.frequency) parts.push(series.frequency);
-        if (freshness && freshness.last_observation_date) {
-            parts.push('Last obs ' + formatDate(freshness.last_observation_date));
-        }
-        return parts.join(' | ') || 'Source details unavailable';
-    }
-
-    function latestObservedPoint(series) {
-        return (series && series.points || []).filter(function (point) {
-            return point && point.raw_value != null;
-        }).slice(-1)[0] || null;
-    }
-
-    function pointValueText(point, series) {
-        if (!point || point.raw_value == null) return 'n/a';
-        return formatNumber(point.raw_value) + (series && series.unit ? (' ' + series.unit) : '');
-    }
-
-    function pointDetailsEmptyMarkup() {
-        return '' +
-            '<div class="economic-point-empty">' +
-                '<strong>Hover the chart</strong>' +
-                '<span class="economic-point-meta">Inspect raw values for every visible series on the same date.</span>' +
-            '</div>';
-    }
-
-    function railEmptyMarkup(title, text) {
-        return '' +
-            '<div class="economic-point-empty">' +
-                '<strong>' + esc(title) + '</strong>' +
-                '<span class="economic-point-meta">' + esc(text) + '</span>' +
-            '</div>';
-    }
-
-    function statusState(text) {
-        var normalized = String(text || '').toLowerCase();
-        if (!normalized) return 'idle';
-        if (normalized.indexOf('error') >= 0 || normalized.indexOf('issue') >= 0) return 'error';
-        if (normalized.indexOf('live') >= 0 || normalized.indexOf('ready') >= 0) return 'ready';
-        if (normalized.indexOf('refresh') >= 0 || normalized.indexOf('load') >= 0 || normalized.indexOf('sync') >= 0) return 'loading';
-        return 'idle';
-    }
-
     function setStatus(text) {
-        if (!refs.statusText) return;
-        refs.statusText.textContent = text;
-        refs.statusText.setAttribute('data-state', statusState(text));
+        if (refs.statusText) refs.statusText.textContent = text;
     }
 
     function pointCount(seriesList) {
@@ -389,19 +328,10 @@
                 '<h3>' + esc(category.label) + '</h3>' +
                 category.series.map(function (series) {
                     var checked = state.selectedIds.indexOf(series.id) >= 0;
-                    var freshness = series.freshness || {};
                     return '<label class="economic-option">' +
                         '<input type="checkbox" data-series-id="' + esc(series.id) + '"' + (checked ? ' checked' : '') + '>' +
-                        '<span class="economic-option-body">' +
-                            '<span class="economic-option-main">' +
-                                '<span class="economic-option-label">' + esc(series.short_label || series.label) + '</span>' +
-                                '<span class="economic-option-badges">' +
-                                    freshnessBadge(freshness) +
-                                    (series.proxy ? badge('Proxy', 'is-proxy') : '') +
-                                '</span>' +
-                            '</span>' +
-                            '<span class="economic-option-meta">' + esc(seriesMetaLine(series)) + '</span>' +
-                        '</span>' +
+                        '<span class="economic-option-label">' + esc(series.short_label || series.label) + '</span>' +
+                        (series.proxy ? badge('Proxy', 'is-proxy') : '') +
                     '</label>';
                 }).join('') +
             '</section>';
@@ -414,27 +344,16 @@
 
     function renderSeriesCards() {
         refs.seriesList.innerHTML = state.series.map(function (series) {
-            var freshness = series.freshness || {};
-            var lastPoint = latestObservedPoint(series);
-            var valueText = lastPoint ? pointValueText(lastPoint, series) : 'No data';
-            var observationText = lastPoint && lastPoint.observation_date
-                ? ('Latest raw value | ' + formatDate(lastPoint.observation_date))
-                : 'No recent observation';
+            var lastPoint = (series.points || []).filter(function (point) { return point.raw_value != null; }).slice(-1)[0] || null;
+            var valueStr = lastPoint
+                ? esc(formatNumber(lastPoint.raw_value) + '\u00a0' + series.unit) + ' \u00b7 ' + esc(formatDate(lastPoint.observation_date))
+                : 'No data';
+            var sourceLink = series.source_url
+                ? ' \u00b7 <a class="economic-source-link" href="' + esc(series.source_url) + '" target="_blank" rel="noopener">Source\u00a0\u2197</a>'
+                : '';
             return '<article class="economic-series-card">' +
-                '<div class="economic-series-header">' +
-                    '<div class="economic-series-copy">' +
-                        '<h3>' + esc(series.label) + '</h3>' +
-                        '<p class="economic-series-caption">' + esc(seriesMetaLine(series)) + '</p>' +
-                    '</div>' +
-                    '<div class="economic-series-badges">' +
-                        freshnessBadge(freshness) +
-                        (series.proxy ? badge('Proxy', 'is-proxy') : badge('Official')) +
-                    '</div>' +
-                '</div>' +
-                '<div class="economic-series-value-row">' +
-                    '<strong class="economic-series-value">' + esc(valueText) + '</strong>' +
-                    '<span class="economic-series-meta">' + esc(observationText) + '</span>' +
-                '</div>' +
+                '<div class="economic-series-header"><h3>' + esc(series.label) + '</h3>' + (series.proxy ? badge('Proxy', 'is-proxy') : '') + '</div>' +
+                '<div class="economic-series-meta">' + valueStr + sourceLink + '</div>' +
             '</article>';
         }).join('');
     }
@@ -448,26 +367,18 @@
         }
         state.hoveredDate = date || null;
         if (!date) {
-            refs.pointDetails.innerHTML = pointDetailsEmptyMarkup();
+            refs.pointDetails.innerHTML = '<p class="hint">Hover the chart to inspect raw values for a specific day.</p>';
             return;
         }
-        refs.pointDetails.innerHTML = '' +
-            '<div class="economic-point-date">' +
-                '<strong>' + esc(formatDate(date)) + '</strong>' +
-                '<span class="economic-point-meta">Raw values at the hovered date. The chart itself remains normalized to 100 at the start of the visible window.</span>' +
-            '</div>' +
-            '<div class="economic-point-stack">' +
-                state.series.map(function (series) {
-                    var point = (series.points || []).find(function (candidate) { return candidate.date === date; }) || null;
-                    return '<article class="economic-point-card">' +
-                        '<div class="economic-point-head">' +
-                            '<strong>' + esc(series.short_label || series.label) + '</strong>' +
-                            (series.proxy ? badge('Proxy', 'is-proxy') : '') +
-                        '</div>' +
-                        '<span class="economic-point-meta">' + esc(pointValueText(point, series) + ' | obs ' + formatDate(point && point.observation_date)) + '</span>' +
-                    '</article>';
-                }).join('') +
-            '</div>';
+        refs.pointDetails.innerHTML = '<div class="economic-point-row"><strong>' + esc(formatDate(date)) + '</strong>' +
+            '<span class="economic-point-meta">Raw values at the hovered date; normalized chart lines stay rebased to 100.</span></div>' +
+            state.series.map(function (series) {
+                var point = (series.points || []).find(function (candidate) { return candidate.date === date; }) || null;
+                return '<div class="economic-point-row">' +
+                    '<strong>' + esc(series.short_label) + '</strong>' +
+                    '<span class="economic-point-meta">' + esc((point && point.raw_value != null ? formatNumber(point.raw_value) + ' ' + series.unit : 'n/a') + ' | obs ' + formatDate(point && point.observation_date)) + '</span>' +
+                '</div>';
+            }).join('');
     }
 
     function chartHelpers() {
@@ -636,16 +547,8 @@
         refs.sourceList.innerHTML = state.series.map(function (series) {
             var freshness = series.freshness || {};
             return '<article class="economic-source-card">' +
-                '<div class="economic-source-head">' +
-                    '<div class="economic-source-copy">' +
-                        '<h3>' + esc(series.label) + '</h3>' +
-                        '<div class="economic-source-meta">' + esc(seriesMetaLine(series)) + '</div>' +
-                    '</div>' +
-                    '<div class="economic-source-badges">' +
-                        freshnessBadge(freshness) +
-                        (series.proxy ? badge('Proxy', 'is-proxy') : badge('Official')) +
-                    '</div>' +
-                '</div>' +
+                '<div class="economic-source-head"><h3>' + esc(series.label) + '</h3>' + (series.proxy ? badge('Proxy', 'is-proxy') : badge('Official')) + '</div>' +
+                '<div class="economic-source-meta">' + esc(series.source_label + ' | ' + series.frequency + ' | last obs ' + formatDate(freshness.last_observation_date)) + '</div>' +
                 '<p class="economic-group-copy">' + esc(freshness.message || series.description) + '</p>' +
                 '<a class="economic-source-link" href="' + esc(series.source_url) + '" target="_blank" rel="noopener">Open source</a>' +
             '</article>';
@@ -781,8 +684,8 @@
 
     function updateSummary() {
         var preset = findPreset(state.selectedPreset);
-        refs.activePreset.textContent = preset ? preset.label : 'Custom selection';
-        refs.selectedCount.textContent = state.selectedIds.length + ' active';
+        refs.activePreset.textContent = preset ? preset.label : 'Custom';
+        refs.selectedCount.textContent = state.selectedIds.length + ' selected';
         refs.rangeNote.textContent = state.range === 'All' ? 'Visible window: full available history.' : ('Visible window: last ' + state.range + ' to ' + todayIso() + '.');
     }
 
@@ -790,8 +693,7 @@
         state.lastLoadReason = reason || state.lastLoadReason || 'manual';
         state.requestCount += 1;
         updateSummary();
-        setStatus(state.series.length ? 'Refreshing' : 'Loading live data');
-        refs.emptyEl.classList.remove('is-error');
+        setStatus('Loading...');
         refs.emptyEl.hidden = true;
         var range = currentRange();
         logEvent('info', 'Economic series load started', {
@@ -826,12 +728,12 @@
                 }, { remote: true });
                 throw new Error('Economic data has not been populated yet for the selected indicators.');
             }
-            refs.chartMeta.textContent = 'Index base date: ' + formatDate(payload.start_date) + '. Each visible series rebases to 100 within the selected window.';
+            refs.chartMeta.textContent = 'Index = 100 at ' + formatDate(payload.start_date) + ' for each visible series.';
             renderSeriesCards();
             renderSources();
             renderChart();
             renderPointDetails(null);
-            setStatus('Live');
+            setStatus('Ready');
             logEvent('info', 'Economic series load completed', {
                 count: state.series.length,
                 pointCount: pointCount(state.series),
@@ -841,13 +743,12 @@
         }).catch(function (error) {
             state.series = [];
             syncDebugSurface();
-            refs.seriesList.innerHTML = railEmptyMarkup('No series loaded', 'Adjust the active indicator set or try again.');
-            refs.sourceList.innerHTML = railEmptyMarkup('Source details unavailable', 'Source metadata returns after a successful series load.');
-            refs.pointDetails.innerHTML = pointDetailsEmptyMarkup();
+            refs.seriesList.innerHTML = '';
+            refs.sourceList.innerHTML = '';
+            refs.pointDetails.innerHTML = '<p class="hint">No point details available.</p>';
             refs.emptyEl.hidden = false;
-            refs.emptyEl.classList.add('is-error');
             refs.emptyEl.textContent = describeError(error, 'Failed to load economic data.');
-            setStatus('Issue');
+            setStatus('Error');
             logEvent('error', 'Economic series load failed', {
                 reason: state.lastLoadReason,
                 range: state.range,
@@ -861,8 +762,7 @@
 
     function loadCatalog() {
         state.requestCount += 1;
-        setStatus('Loading live data');
-        refs.emptyEl.classList.remove('is-error');
+        setStatus('Loading...');
         logEvent('info', 'Economic catalog load started', {
             requestCount: state.requestCount,
             apiBase: apiBase,
@@ -882,13 +782,9 @@
             bindControls();
             return loadSeries('catalog-loaded');
         }).catch(function (error) {
-            refs.seriesList.innerHTML = railEmptyMarkup('Catalog unavailable', 'Preset and indicator metadata could not be loaded.');
-            refs.sourceList.innerHTML = railEmptyMarkup('Source details unavailable', 'Series source details appear after the catalog and series load.');
-            refs.pointDetails.innerHTML = pointDetailsEmptyMarkup();
             refs.emptyEl.hidden = false;
-            refs.emptyEl.classList.add('is-error');
             refs.emptyEl.textContent = describeError(error, 'Failed to load economic catalog.');
-            setStatus('Issue');
+            setStatus('Error');
             logEvent('error', 'Economic catalog load failed', {
                 message: describeError(error, 'Failed to load economic catalog.'),
                 status: error && error.status,
