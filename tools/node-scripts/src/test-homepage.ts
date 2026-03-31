@@ -192,7 +192,6 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         })),
         controls: {
             bank: !!document.getElementById('filter-bank'),
-            download: !!document.getElementById('download-format'),
             summary: !!document.getElementById('chart-summary'),
             ladder: !!document.getElementById('quick-compare-cards'),
             refresh: !!document.getElementById('refresh-page-btn'),
@@ -783,54 +782,11 @@ async function verifyPivotLoad(page, results, label) {
 }
 
 async function verifyExportDownload(page, results, label) {
-    const requests = [];
-    const handler = (request) => {
-        const url = String(request.url() || '');
-        if (url.indexOf('/exports') >= 0 || url.indexOf('/export?') >= 0) {
-            requests.push({
-                method: request.method(),
-                url: url,
-            });
-        }
-    };
-
-    page.context().on('request', handler);
-    try {
-        await page.selectOption('#download-format', 'csv');
-        await page.waitForFunction(() => String(document.getElementById('download-format')?.value || '') === '', null, { timeout: 30000 }).catch(() => null);
-        await page.waitForFunction(() => {
-            if (typeof window.getSessionLogEntries !== 'function') return false;
-            const messages = window.getSessionLogEntries().map((entry) => String(entry.message || ''));
-            return messages.includes('Export download completed') || messages.includes('Export download failed');
-        }, null, { timeout: 30000 }).catch(() => null);
-        await page.waitForTimeout(800);
-    } finally {
-        page.context().off('request', handler);
-    }
-
-    const payload = await page.evaluate(() => {
-        const entries = typeof window.getSessionLogEntries === 'function' ? window.getSessionLogEntries() : [];
-        const messages = entries
-            .map((entry) => String(entry.message || ''))
-            .filter((message) => message.indexOf('Export download') === 0 || message.indexOf('Async export route unavailable') === 0);
-        return {
-            messages,
-            status: String(document.getElementById('download-status')?.textContent || '').trim(),
-        };
-    }).catch(() => ({ messages: [], status: '' }));
-
-    const startedAsync = requests.some((request) => request.method === 'POST' && /\/exports$/.test(new URL(request.url).pathname));
-    const usedLegacy = requests.some((request) => request.method === 'GET' && /\/export$/.test(new URL(request.url).pathname));
-    const completed = payload.messages.includes('Export download completed');
-    const failed = payload.messages.includes('Export download failed');
-
-    if ((startedAsync || usedLegacy) && completed && !failed) {
-        const transport = startedAsync && usedLegacy
-            ? 'async export with legacy fallback'
-            : (startedAsync ? 'async export' : 'legacy direct export');
-        pass(results, `${label}: CSV export completes via ${transport}`);
+    const hasDropdown = await page.locator('#download-format').count().then((n) => n > 0).catch(() => false);
+    if (!hasDropdown) {
+        pass(results, `${label}: public export controls are removed (admin-only)`);
     } else {
-        fail(results, `${label}: CSV export did not complete cleanly (messages="${payload.messages.join(' | ')}", status="${payload.status}")`);
+        fail(results, `${label}: public export controls should be removed`);
     }
 }
 
