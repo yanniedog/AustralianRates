@@ -514,14 +514,32 @@
 
 .control-chip-label {
     justify-content: center;
-    overflow-wrap: normal;
-    word-break: normal;
-    hyphens: none;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+    text-align: center;
+    line-height: 1.15;
 }
 
 .control-chip-label .ar-icon {
     width: 1rem;
     height: 1rem;
+}
+
+/* Ensure longer labels wrap within pill buttons instead of overflowing. */
+.chip-btn .ar-icon-label-text,
+.tab-btn .ar-icon-label-text,
+.chart-preset .ar-icon-label-text,
+.terminal-more-summary .ar-icon-label-text {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+    text-align: center;
+    line-height: 1.15;
 }
 
 .chart-preset.is-active,
