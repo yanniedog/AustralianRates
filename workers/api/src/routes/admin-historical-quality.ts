@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono'
+import { getHistoricalQualityDayDetail, listLatestHistoricalQualityDays } from '../db/historical-quality-day-reports'
 import { runRetentionSizeAudit } from '../db/retention-size-audit'
 import { jsonError } from '../utils/http'
 import type { AppContext } from '../types'
@@ -34,6 +35,64 @@ adminHistoricalQualityRoutes.get('/audits/historical-quality', async (c) => {
       summary: JSON.parse(run.summary_json || '{}'),
       artifacts: JSON.parse(run.artifacts_json || '{}'),
     })),
+  })
+})
+
+adminHistoricalQualityRoutes.get('/audits/historical-quality/days', async (c) => {
+  const limit = Math.max(1, Math.min(365, Math.floor(Number(c.req.query('limit') || 90))))
+  const days = await listLatestHistoricalQualityDays(c.env.DB, limit)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    days: days.map((day) => ({
+      ...day,
+      metrics: JSON.parse(day.overall.metrics_json || '{}'),
+      evidence: JSON.parse(day.overall.evidence_json || '{}'),
+    })),
+  })
+})
+
+adminHistoricalQualityRoutes.get('/audits/historical-quality/days/:collectionDate', async (c) => {
+  const collectionDate = String(c.req.param('collectionDate') || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(collectionDate)) {
+    return jsonError(c, 400, 'INVALID_REQUEST', 'collectionDate must be YYYY-MM-DD.')
+  }
+  const detail = await getHistoricalQualityDayDetail(c.env.DB, collectionDate)
+  if (!detail.run) {
+    return jsonError(c, 404, 'NOT_FOUND', 'Historical quality day not found.')
+  }
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    run: detail.run,
+    rows: detail.rows.map((row) => ({
+      ...row,
+      metrics: JSON.parse(row.metrics_json || '{}'),
+      evidence: JSON.parse(row.evidence_json || '{}'),
+    })),
+    findings: detail.findings.map((finding) => ({
+      ...finding,
+      sample_identifiers: JSON.parse(finding.sample_identifiers_json || '{}'),
+      metrics: JSON.parse(finding.metrics_json || '{}'),
+      evidence: JSON.parse(finding.evidence_json || '{}'),
+      drilldown_sql: JSON.parse(finding.drilldown_sql_json || '{}'),
+    })),
+    plain_text: detail.plain_text,
+    parameters: detail.parameters,
+  })
+})
+
+adminHistoricalQualityRoutes.get('/audits/historical-quality/days/:collectionDate/plain-text', async (c) => {
+  const collectionDate = String(c.req.param('collectionDate') || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(collectionDate)) {
+    return c.text('collectionDate must be YYYY-MM-DD.', 400)
+  }
+  const detail = await getHistoricalQualityDayDetail(c.env.DB, collectionDate)
+  if (!detail.run) {
+    return c.text('Historical quality day not found.', 404)
+  }
+  return c.text(detail.plain_text, 200, {
+    'content-type': 'text/plain; charset=utf-8',
   })
 })
 

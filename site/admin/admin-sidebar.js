@@ -19,6 +19,7 @@
         { href: 'prototypes.html', label: 'Prototype' },
         { href: 'status.html', label: 'Status' },
         { href: 'integrity.html', label: 'Data integrity' },
+        { href: 'historical-quality.html', label: 'Historical quality' },
         { href: 'database.html', label: 'Database' },
         { href: 'db-stats.html', label: 'Database size' },
         { href: 'exports.html', label: 'Exports' },

@@ -25,6 +25,8 @@ export const MONTHLY_EXPORT_CRON_EXPRESSION = '59 23 * * *'
 export const INTEGRITY_AUDIT_CRON_EXPRESSION = '0 4 * * *'
 /** 09:00 UTC daily; daily DB backup (one day of data) for instant download and reconstruction. */
 export const DAILY_BACKUP_CRON_EXPRESSION = '0 9 * * *'
+/** 23:59 Melbourne/Hobart local time daily; dual UTC hours cover DST and handler gates on local wall clock. */
+export const HISTORICAL_QUALITY_DAILY_CRON_EXPRESSION = '59 12,13 * * *'
 export const SCHEDULE_CRON_EXPRESSION = DAILY_SCHEDULE_CRON_EXPRESSION
 // Hourly cron should keep attempting the active Melbourne collection date until coverage is complete.
 export const DEFAULT_RATE_CHECK_INTERVAL_MINUTES = 0
@@ -33,6 +35,8 @@ export const RATE_CHECK_INTERVAL_MINUTES_KEY = 'rate_check_interval_minutes'
 export const RATE_CHECK_LAST_RUN_ISO_KEY = 'rate_check_last_run_iso'
 /** Public Rate Report (LWC) floating legend panel opacity; stored in app_config as decimal string (e.g. 0.75). */
 export const CHART_LEGEND_OPACITY_KEY = 'chart_legend_opacity'
+export const CHART_LEGEND_OPACITY_DESKTOP_KEY = 'chart_legend_opacity_desktop'
+export const CHART_LEGEND_OPACITY_MOBILE_KEY = 'chart_legend_opacity_mobile'
 export const DEFAULT_CHART_LEGEND_OPACITY = 0.75
 export const CHART_LEGEND_OPACITY_MIN = 0.05
 export const CHART_LEGEND_OPACITY_MAX = 1

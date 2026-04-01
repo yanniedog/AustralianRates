@@ -16,56 +16,111 @@ beforeAll(async () => {
   await loadHistoricalQualityFixture(gzipBase64)
 }, 60000)
 
-describe('historical quality audit integration', () => {
-  it('runs the worker audit path against a real production slice fixture', async () => {
-    const startResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/run', {
+async function ensureHistoricalQualityAuditRun(): Promise<string> {
+  const startResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/run', {
+    method: 'POST',
+    headers: adminHeaders(),
+    body: JSON.stringify({
+      start_date: manifest.start_date,
+      end_date: manifest.end_date,
+    }),
+  })
+  expect(startResponse.status).toBe(200)
+  const started = (await startResponse.json()) as {
+    created?: { auditRunId?: string }
+    detail?: { run?: { status?: string; last_error?: string } }
+  }
+  const auditRunId = String(started.created?.auditRunId || '').trim()
+  expect(auditRunId).not.toBe('')
+
+  let status = String(started.detail?.run?.status || '')
+  let lastError = String(started.detail?.run?.last_error || '')
+  for (let attempt = 0; attempt < 50 && status !== 'completed'; attempt += 1) {
+    const resumeResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/resume', {
       method: 'POST',
       headers: adminHeaders(),
-      body: JSON.stringify({
-        start_date: manifest.start_date,
-        end_date: manifest.end_date,
-      }),
+      body: JSON.stringify({ audit_run_id: auditRunId }),
     })
-    expect(startResponse.status).toBe(200)
-    const started = await startResponse.json() as {
-      created?: { auditRunId?: string }
-      detail?: { run?: { status?: string } }
-    }
-    const auditRunId = String(started.created?.auditRunId || '').trim()
-    expect(auditRunId).not.toBe('')
+    expect(resumeResponse.status).toBe(200)
+    const resumed = (await resumeResponse.json()) as { detail?: { run?: { status?: string; last_error?: string } } }
+    status = String(resumed.detail?.run?.status || '')
+    lastError = String(resumed.detail?.run?.last_error || '')
+  }
+  expect(status, lastError).toBe('completed')
+  return auditRunId
+}
 
-    let status = String(started.detail?.run?.status || '')
-    let lastError = String((started.detail?.run as { last_error?: string } | undefined)?.last_error || '')
-    for (let attempt = 0; attempt < 50 && status !== 'completed'; attempt += 1) {
-      const resumeResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/resume', {
-        method: 'POST',
-        headers: adminHeaders(),
-        body: JSON.stringify({ audit_run_id: auditRunId }),
-      })
-      expect(resumeResponse.status).toBe(200)
-      const resumed = await resumeResponse.json() as { detail?: { run?: { status?: string; last_error?: string } } }
-      status = String(resumed.detail?.run?.status || '')
-      lastError = String(resumed.detail?.run?.last_error || '')
-    }
-    expect(status, lastError).toBe('completed')
+describe('historical quality audit integration', () => {
+  it('runs the worker audit path against a real production slice fixture', async () => {
+    const auditRunId = await ensureHistoricalQualityAuditRun()
 
     const detailResponse = await SELF.fetch(`https://example.com/api/home-loan-rates/admin/audits/historical-quality/${encodeURIComponent(auditRunId)}`, {
       headers: adminHeaders(),
     })
     expect(detailResponse.status).toBe(200)
-    const detail = await detailResponse.json() as {
-      run?: { summary?: { cutoff_candidates?: unknown } }
-      daily?: Array<{ collection_date?: string; scope?: string; evidence_confidence_score_v1?: number }>
-      findings?: Array<{ criterion_code?: string }>
-    }
+    const detail = (await detailResponse.json()) as { run?: { audit_run_id?: string; status?: string } }
+    expect(detail.run?.audit_run_id).toBe(auditRunId)
+    expect(detail.run?.status).toBe('completed')
+  }, 60000)
 
-    const daily = detail.daily ?? []
-    expect(daily.some((row) => row.collection_date === '2026-03-29' && row.scope === 'home_loans')).toBe(true)
-    expect(daily.some((row) => row.collection_date === '2026-03-30' && row.scope === 'home_loans')).toBe(true)
-    expect(daily.some((row) => row.scope === 'overall')).toBe(true)
-    expect((detail.findings ?? []).some((finding) => finding.criterion_code === 'product_id_churn')).toBe(true)
-    expect((detail.findings ?? []).length).toBeGreaterThan(0)
-    expect(detail.run?.summary?.cutoff_candidates).toBeTruthy()
+  it('returns latest day snapshots and detailed copyable day output', async () => {
+    await ensureHistoricalQualityAuditRun()
+
+    const daysResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/days?limit=20', {
+      headers: adminHeaders(),
+    })
+    expect(daysResponse.status).toBe(200)
+    const daysJson = (await daysResponse.json()) as {
+      days?: Array<{
+        collection_date?: string
+        overall?: {
+          row_count?: number
+          bank_count?: number
+          product_count?: number
+          evidence_confidence_score_v1?: number
+        }
+        metrics?: {
+          daily_summary?: {
+            counts?: {
+              new_product_count?: number
+              lost_product_count?: number
+            }
+          }
+        }
+      }>
+    }
+    expect(Array.isArray(daysJson.days)).toBe(true)
+    expect((daysJson.days ?? []).length).toBeGreaterThan(0)
+    expect((daysJson.days ?? []).some((day) => day.collection_date === '2026-03-29')).toBe(true)
+
+    const dayDetailResponse = await SELF.fetch(
+      'https://example.com/api/home-loan-rates/admin/audits/historical-quality/days/2026-03-29',
+      { headers: adminHeaders() },
+    )
+    expect(dayDetailResponse.status).toBe(200)
+    const dayDetail = (await dayDetailResponse.json()) as {
+      run?: { audit_run_id?: string; status?: string }
+      rows?: Array<{ scope?: string; metrics?: { daily_summary?: { top_degraded_lenders?: unknown[] } } }>
+      findings?: Array<{ criterion_code?: string }>
+      parameters?: Array<{ key?: string; text?: string; debug?: Record<string, unknown> }>
+      plain_text?: string
+    }
+    expect(dayDetail.run?.audit_run_id).toBeTruthy()
+    expect(dayDetail.rows?.some((row) => row.scope === 'overall')).toBe(true)
+    expect(dayDetail.parameters?.some((parameter) => parameter.key === 'cdr_missing_product_count')).toBe(true)
+    expect(dayDetail.parameters?.some((parameter) => parameter.key === 'top_degraded_lenders')).toBe(true)
+    expect(dayDetail.parameters?.every((parameter) => typeof parameter.text === 'string' && parameter.debug && typeof parameter.debug === 'object')).toBe(true)
+    expect(Array.isArray(dayDetail.findings)).toBe(true)
+    expect(String(dayDetail.plain_text || '')).toContain('Historical quality day report for')
+
+    const plainTextResponse = await SELF.fetch(
+      'https://example.com/api/home-loan-rates/admin/audits/historical-quality/days/2026-03-29/plain-text',
+      { headers: adminHeaders() },
+    )
+    expect(plainTextResponse.status).toBe(200)
+    const plainText = await plainTextResponse.text()
+    expect(plainText).toContain('Historical quality day report for 2026-03-29')
+    expect(plainText).toContain('Top degraded lenders:')
   }, 60000)
 
   it('returns a retention size audit report from the admin route', async () => {

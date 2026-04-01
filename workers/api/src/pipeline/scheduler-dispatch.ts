@@ -1,6 +1,7 @@
 import {
   DAILY_BACKUP_CRON_EXPRESSION,
   DAILY_SCHEDULE_CRON_EXPRESSION,
+  HISTORICAL_QUALITY_DAILY_CRON_EXPRESSION,
   INTEGRITY_AUDIT_CRON_EXPRESSION,
   MONTHLY_EXPORT_CRON_EXPRESSION,
   SITE_HEALTH_CRON_EXPRESSION,
@@ -20,9 +21,17 @@ import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
 import { getMelbourneNowParts } from '../utils/time'
 import { collectRbaCashRateForDate } from '../ingest/rba'
+import { runScheduledHistoricalQualitySnapshot } from './historical-quality-scheduler'
 
 type CronEvent = ScheduledController & { cron?: string }
-export type ScheduledTask = 'daily' | 'hourly_wayback' | 'site_health' | 'monthly_export' | 'integrity_audit' | 'daily_backup'
+export type ScheduledTask =
+  | 'daily'
+  | 'hourly_wayback'
+  | 'site_health'
+  | 'monthly_export'
+  | 'integrity_audit'
+  | 'daily_backup'
+  | 'historical_quality_daily'
 
 export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   const normalizedCron = String(cron || '').trim()
@@ -40,6 +49,9 @@ export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   }
   if (normalizedCron === DAILY_BACKUP_CRON_EXPRESSION) {
     return ['daily_backup']
+  }
+  if (normalizedCron === HISTORICAL_QUALITY_DAILY_CRON_EXPRESSION) {
+    return ['historical_quality_daily']
   }
   return []
 }
@@ -172,6 +184,18 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       r2_key: backupResult.r2_key,
       byte_size: backupResult.byte_size,
       error: backupResult.error,
+    }
+  }
+
+  if (tasks.length === 1 && tasks[0] === 'historical_quality_daily') {
+    log.info('scheduler', `Dispatching historical quality daily snapshot cron (${cron})`, {
+      context: `scheduled_time=${scheduledIso}`,
+    })
+    const qualityResult = await runScheduledHistoricalQualitySnapshot(env, event.scheduledTime)
+    return {
+      replay_dispatch: replayDispatch,
+      kind: 'historical_quality_daily',
+      ...qualityResult,
     }
   }
 

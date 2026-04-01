@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { ensureAppConfigTable } from '../db/app-config'
 import {
   CHART_LEGEND_OPACITY_KEY,
+  CHART_LEGEND_OPACITY_DESKTOP_KEY,
+  CHART_LEGEND_OPACITY_MOBILE_KEY,
   INGEST_PAUSE_MODE_KEY,
   INGEST_PAUSE_MODES,
   MIN_RATE_CHECK_INTERVAL_MINUTES,
@@ -99,8 +101,12 @@ adminConfigRoutes.put('/config', async (c) => {
     value = normalized.value
   }
 
-  if (key === CHART_LEGEND_OPACITY_KEY) {
-    const normalized = normalizeChartLegendOpacityForPut(value)
+  if (
+    key === CHART_LEGEND_OPACITY_KEY ||
+    key === CHART_LEGEND_OPACITY_DESKTOP_KEY ||
+    key === CHART_LEGEND_OPACITY_MOBILE_KEY
+  ) {
+    const normalized = normalizeChartLegendOpacityForPut(value, key)
     if (!normalized.ok) {
       return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
     }

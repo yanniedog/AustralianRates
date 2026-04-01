@@ -206,6 +206,7 @@
         if (context.admin) {
             var path = window.location.pathname.toLowerCase();
             if (path.indexOf('/admin/status') >= 0) return 'Status';
+            if (path.indexOf('/admin/historical-quality') >= 0) return 'Historical quality';
             if (path.indexOf('/admin/database') >= 0) return 'Database';
             if (path.indexOf('/admin/clear') >= 0) return 'Clear';
             if (path.indexOf('/admin/config') >= 0) return 'Config';
@@ -308,6 +309,7 @@
             { href: '/admin/dashboard.html', label: 'Dashboard' },
             { href: '/admin/settings.html', label: 'Settings' },
             { href: '/admin/status.html', label: 'Status' },
+            { href: '/admin/historical-quality.html', label: 'Historical quality' },
             { href: '/admin/database.html', label: 'Database' },
             { href: '/admin/clear.html', label: 'Clear' },
             { href: '/admin/config.html', label: 'Config' },

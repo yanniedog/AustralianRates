@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Historical Quality | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=04d3578">
+    <link rel="stylesheet" href="../public-shell.css?v=04d3578">
+    <link rel="stylesheet" href="admin-layout.css?v=04d3578">
+    <link rel="stylesheet" href="admin-pages.css?v=04d3578">
+    <script src="../site-variant.js?v=04d3578"></script>
+    <script src="../theme.js?v=04d3578"></script>
+    <style>
+        .historical-quality-table-wrap,
+        .historical-quality-debug-wrap { overflow: auto; max-width: 100%; }
+        .historical-quality-table { width: 100%; border-collapse: collapse; }
+        .historical-quality-table th, .historical-quality-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--ar-line); text-align: left; vertical-align: top; }
+        .historical-quality-table td:last-child, .historical-quality-table th:last-child { white-space: nowrap; }
+        .historical-quality-table .mono { font-family: "JetBrains Mono","SF Mono","Consolas","Monaco","ui-monospace",monospace; font-size: 0.88rem; }
+        .historical-quality-parameter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+        .historical-quality-parameter-card { padding: 0.85rem; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); }
+        .historical-quality-parameter-card h3 { margin: 0 0 0.35rem; font-size: 0.98rem; }
+        .historical-quality-parameter-value { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.55rem; }
+        .historical-quality-actions-inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .historical-quality-copy-btn { min-height: auto; padding: 0.45rem 0.7rem; }
+        .historical-quality-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .historical-quality-toolbar input[type="date"] { min-width: 160px; }
+        .historical-quality-copy-status { color: var(--ar-text-muted); font-size: 0.9rem; }
+        .historical-quality-top-lenders { margin: 0; padding-left: 1.2rem; }
+        .historical-quality-summary-pre, .historical-quality-debug-pre { margin: 0; padding: 14px; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); white-space: pre-wrap; }
+    </style>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Historical quality</p>
+            <h1>Daily historical quality</h1>
+            <p class="admin-subtitle">Daily provenance, continuity, anomaly, and product-change snapshots. Scheduled end-of-day quality snapshots run at 23:59 Melbourne/Hobart local time.</p>
+        </div>
+        <div class="admin-card">
+            <div class="historical-quality-toolbar">
+                <label for="historical-quality-date">Manual date audit</label>
+                <input type="date" id="historical-quality-date">
+                <button type="button" class="primary" id="historical-quality-run-btn">Run selected date</button>
+                <button type="button" class="secondary" id="historical-quality-refresh-btn">Refresh</button>
+                <span class="admin-status-line" id="historical-quality-status">Loading daily snapshots...</span>
+            </div>
+        </div>
+        <section class="admin-card">
+            <h2>Daily snapshots</h2>
+            <div class="historical-quality-table-wrap" id="historical-quality-days-wrap"></div>
+        </section>
+        <section class="admin-card">
+            <div class="historical-quality-actions-inline">
+                <h2 style="margin:0;">Selected day</h2>
+                <button type="button" class="secondary historical-quality-copy-btn" id="historical-quality-copy-summary-btn">Copy summary</button>
+                <button type="button" class="secondary historical-quality-copy-btn" id="historical-quality-copy-debug-btn">Copy debug JSON</button>
+                <span class="historical-quality-copy-status" id="historical-quality-copy-status"></span>
+            </div>
+            <div id="historical-quality-selected-meta" class="admin-status-line" style="margin-top:0.5rem;"></div>
+            <div class="historical-quality-parameter-grid" id="historical-quality-parameters" style="margin-top:1rem;"></div>
+            <h3 style="margin-top:1rem;">Top degraded lenders</h3>
+            <ol class="historical-quality-top-lenders" id="historical-quality-top-lenders"></ol>
+            <h3 style="margin-top:1rem;">Plain text</h3>
+            <pre class="historical-quality-summary-pre" id="historical-quality-summary-pre">Select a day.</pre>
+            <h3 style="margin-top:1rem;">Debug JSON</h3>
+            <div class="historical-quality-debug-wrap">
+                <pre class="historical-quality-debug-pre" id="historical-quality-debug-pre">Select a day.</pre>
+            </div>
+        </section>
+    </main>
+    <script src="admin-portal.js?v=04d3578"></script>
+    <script src="admin-sidebar.js?v=04d3578"></script>
+    <script src="historical-quality-page.js?v=20260402a"></script>
+</body>
+</html>

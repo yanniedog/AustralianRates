@@ -55,6 +55,65 @@ export async function createHistoricalQualityRun(
     .run()
 }
 
+export async function restartHistoricalQualityRun(
+  db: D1Database,
+  input: {
+    auditRunId: string
+    triggerSource: 'manual' | 'resume' | 'script' | 'scheduled'
+    targetDb?: string
+    criteriaVersion?: string
+    status?: HistoricalQualityRunStatus
+    mode?: HistoricalQualityMode
+    nextCollectionDate?: string | null
+    nextScope?: Exclude<HistoricalQualityScope, 'overall'> | null
+    totalDates?: number
+    filters?: Record<string, unknown>
+    summary?: Record<string, unknown>
+    artifacts?: Record<string, unknown>
+  },
+): Promise<void> {
+  await db.prepare(`DELETE FROM historical_quality_daily WHERE audit_run_id = ?1`).bind(input.auditRunId).run()
+  await db.prepare(`DELETE FROM historical_quality_findings WHERE audit_run_id = ?1`).bind(input.auditRunId).run()
+  await db
+    .prepare(
+      `UPDATE historical_quality_runs
+       SET trigger_source = ?2,
+           target_db = ?3,
+           criteria_version = ?4,
+           status = ?5,
+           mode = ?6,
+           next_collection_date = ?7,
+           next_scope = ?8,
+           lender_cursor = NULL,
+           total_dates = ?9,
+           processed_batches = 0,
+           completed_dates = 0,
+           last_error = NULL,
+           filters_json = ?10,
+           summary_json = ?11,
+           artifacts_json = ?12,
+           started_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP,
+           finished_at = NULL
+       WHERE audit_run_id = ?1`,
+    )
+    .bind(
+      input.auditRunId,
+      input.triggerSource,
+      input.targetDb ?? 'australianrates_api',
+      input.criteriaVersion ?? 'v1',
+      input.status ?? 'pending',
+      input.mode ?? 'whole_date_scope',
+      input.nextCollectionDate ?? null,
+      input.nextScope ?? null,
+      Math.max(0, Math.floor(input.totalDates ?? 0)),
+      json(input.filters ?? {}),
+      json(input.summary ?? {}),
+      json(input.artifacts ?? {}),
+    )
+    .run()
+}
+
 export async function updateHistoricalQualityRun(
   db: D1Database,
   auditRunId: string,
@@ -314,6 +373,25 @@ export async function listHistoricalQualityFindingsByRun(db: D1Database, auditRu
   const rows = await db
     .prepare(`SELECT * FROM historical_quality_findings WHERE audit_run_id = ?1 ORDER BY collection_date ASC, severity_weight DESC, id ASC`)
     .bind(auditRunId)
+    .all<HistoricalQualityFindingRow>()
+  return rows.results ?? []
+}
+
+export async function listHistoricalQualityFindingsByRunDateScope(
+  db: D1Database,
+  auditRunId: string,
+  collectionDate: string,
+  scope: HistoricalQualityScope,
+): Promise<HistoricalQualityFindingRow[]> {
+  const rows = await db
+    .prepare(
+      `SELECT * FROM historical_quality_findings
+       WHERE audit_run_id = ?1
+         AND collection_date = ?2
+         AND scope = ?3
+       ORDER BY severity_weight DESC, id ASC`,
+    )
+    .bind(auditRunId, collectionDate, scope)
     .all<HistoricalQualityFindingRow>()
   return rows.results ?? []
 }

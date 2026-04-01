@@ -1,5 +1,7 @@
 import { FETCH_EVENT_PROVENANCE_ENFORCEMENT_START } from './retention-prune'
 import { datasetConfigForScope } from './historical-quality-common'
+import { attachHistoricalQualityDailySummary, readHistoricalQualityDailySummary } from './historical-quality-daily-payload'
+import { mergeHistoricalQualityDailySummaries } from './historical-quality-daily-summary'
 import { collectHistoricalQualityFindings, type HistoricalQualityFindingsResult } from './historical-quality-findings'
 import {
   anomalyPressureScore,
@@ -384,7 +386,7 @@ export function aggregateHistoricalQualityOverallRow(
   const sum = (selector: (row: HistoricalQualityDailyRow) => number) => rows.reduce((total, row) => total + selector(row), 0)
   const avg = (selector: (row: HistoricalQualityDailyRow) => number | null) =>
     rows.length === 0 ? 0 : rows.reduce((total, row) => total + num(selector(row)), 0) / rows.length
-  return {
+  const overallRow: HistoricalQualityDailyRow = {
     audit_run_id: auditRunId,
     collection_date: collectionDate,
     scope: 'overall' as HistoricalQualityScope,
@@ -435,4 +437,8 @@ export function aggregateHistoricalQualityOverallRow(
     metrics_json: JSON.stringify({ dataset_scopes: rows.map((row) => row.scope) }),
     evidence_json: JSON.stringify({ aggregated_from_dataset_rows: true }),
   }
+  const summaries = rows
+    .map((row) => readHistoricalQualityDailySummary(row))
+    .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary))
+  return summaries.length > 0 ? attachHistoricalQualityDailySummary(overallRow, mergeHistoricalQualityDailySummaries(summaries)) : overallRow
 }

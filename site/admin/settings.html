@@ -30,13 +30,20 @@
         <div class="admin-message" id="msg"></div>
         <section class="admin-card" id="chart-legend-section">
             <h2>Chart legend opacity</h2>
-            <p class="admin-hint">Opacity of the floating legend on Home Loans, Savings, and Term Deposits Rate Report charts (Lightweight Charts) and on the Economic Data normalized compare chart. Visitors see this after a short cache; default 75%.</p>
+            <p class="admin-hint">Set independent opacity for desktop and mobile floating legends on Home Loans, Savings, Term Deposits, and Economic Data charts. Both fall back to the legacy default of 75% until you save.</p>
             <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
-                <label for="chart-legend-opacity-pct">Opacity</label>
-                <input type="range" id="chart-legend-opacity-pct" min="5" max="100" step="1" value="75" style="min-width:180px;">
-                <output id="chart-legend-opacity-out" for="chart-legend-opacity-pct" style="min-width:3.5em;font-variant-numeric:tabular-nums;">75%</output>
-                <button type="button" id="chart-legend-save-btn" class="primary">Save</button>
-                <button type="button" id="chart-legend-reset-btn" class="secondary">Use default (75%)</button>
+                <label for="chart-legend-opacity-desktop-pct">Desktop</label>
+                <input type="range" id="chart-legend-opacity-desktop-pct" min="5" max="100" step="1" value="75" style="min-width:180px;">
+                <output id="chart-legend-opacity-desktop-out" for="chart-legend-opacity-desktop-pct" style="min-width:3.5em;font-variant-numeric:tabular-nums;">75%</output>
+            </div>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="chart-legend-opacity-mobile-pct">Mobile</label>
+                <input type="range" id="chart-legend-opacity-mobile-pct" min="5" max="100" step="1" value="75" style="min-width:180px;">
+                <output id="chart-legend-opacity-mobile-out" for="chart-legend-opacity-mobile-pct" style="min-width:3.5em;font-variant-numeric:tabular-nums;">75%</output>
+            </div>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <button type="button" id="chart-legend-save-btn" class="primary">Save both</button>
+                <button type="button" id="chart-legend-reset-btn" class="secondary">Use defaults (75%)</button>
             </div>
             <p class="admin-hint" id="chart-legend-stored" style="margin-top:8px;opacity:0.75;"></p>
         </section>
@@ -50,10 +57,14 @@
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
 
             var portal = window.AR.AdminPortal;
-            var KEY = 'chart_legend_opacity';
+            var DESKTOP_KEY = 'chart_legend_opacity_desktop';
+            var MOBILE_KEY = 'chart_legend_opacity_mobile';
+            var LEGACY_KEY = 'chart_legend_opacity';
             var msgEl = document.getElementById('msg');
-            var rangeEl = document.getElementById('chart-legend-opacity-pct');
-            var outEl = document.getElementById('chart-legend-opacity-out');
+            var desktopRangeEl = document.getElementById('chart-legend-opacity-desktop-pct');
+            var desktopOutEl = document.getElementById('chart-legend-opacity-desktop-out');
+            var mobileRangeEl = document.getElementById('chart-legend-opacity-mobile-pct');
+            var mobileOutEl = document.getElementById('chart-legend-opacity-mobile-out');
             var storedEl = document.getElementById('chart-legend-stored');
 
             function showMsg(text, isError) {
@@ -73,63 +84,91 @@
             }
 
             function syncOutput() {
-                if (!rangeEl || !outEl) return;
-                outEl.textContent = rangeEl.value + '%';
+                if (desktopRangeEl && desktopOutEl) desktopOutEl.textContent = desktopRangeEl.value + '%';
+                if (mobileRangeEl && mobileOutEl) mobileOutEl.textContent = mobileRangeEl.value + '%';
             }
 
             function loadFromConfig() {
                 portal.fetchAdmin('/config').then(function (r) { return r.json(); }).then(function (d) {
                     if (!d.ok || !Array.isArray(d.config)) return;
-                    var row = null;
-                    d.config.forEach(function (r) { if (r.key === KEY) row = r; });
-                    if (rangeEl) {
-                        rangeEl.value = String(pctFromStored(row ? row.value : ''));
-                        syncOutput();
-                    }
+                    var desktopRow = null;
+                    var mobileRow = null;
+                    var legacyRow = null;
+                    d.config.forEach(function (r) {
+                        if (r.key === DESKTOP_KEY) desktopRow = r;
+                        if (r.key === MOBILE_KEY) mobileRow = r;
+                        if (r.key === LEGACY_KEY) legacyRow = r;
+                    });
+                    var fallbackPct = pctFromStored(legacyRow ? legacyRow.value : '');
+                    if (desktopRangeEl) desktopRangeEl.value = String(pctFromStored(desktopRow ? desktopRow.value : fallbackPct));
+                    if (mobileRangeEl) mobileRangeEl.value = String(pctFromStored(mobileRow ? mobileRow.value : fallbackPct));
+                    syncOutput();
                     if (storedEl) {
-                        storedEl.textContent = row
-                            ? ('Stored: ' + String(row.value) + ' (updated ' + String(row.updated_at || '') + ').')
-                            : 'No custom value; public site uses default 0.75 until you save.';
+                        storedEl.textContent =
+                            'Desktop: '
+                            + (desktopRow ? (String(desktopRow.value) + ' (updated ' + String(desktopRow.updated_at || '') + ')') : 'default/legacy')
+                            + ' | Mobile: '
+                            + (mobileRow ? (String(mobileRow.value) + ' (updated ' + String(mobileRow.updated_at || '') + ')') : 'default/legacy')
+                            + (legacyRow ? (' | Legacy fallback: ' + String(legacyRow.value) + ' (updated ' + String(legacyRow.updated_at || '') + ').') : ' | Legacy fallback: default 0.75.');
                     }
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load config', true); });
             }
 
-            function savePct(pct) {
+            function saveKey(key, pct) {
                 var n = parseInt(String(pct), 10);
-                if (!Number.isFinite(n)) { showMsg('Invalid opacity.', true); return; }
-                portal.fetchAdmin('/config', {
+                if (!Number.isFinite(n)) return Promise.reject(new Error('Invalid opacity.'));
+                return portal.fetchAdmin('/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: KEY, value: String(n) }),
+                    body: JSON.stringify({ key: key, value: String(n) }),
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d.ok) { showMsg('Saved. Allow up to one minute for cached public responses to refresh.', false); loadFromConfig(); }
-                        else { showMsg(d.error && d.error.message ? d.error.message : 'Save failed', true); }
+                        if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Save failed');
+                        return d;
+                    });
+            }
+
+            function saveBoth() {
+                Promise.all([
+                    saveKey(DESKTOP_KEY, desktopRangeEl ? desktopRangeEl.value : '75'),
+                    saveKey(MOBILE_KEY, mobileRangeEl ? mobileRangeEl.value : '75')
+                ])
+                    .then(function () {
+                        showMsg('Saved. Allow up to one minute for cached public responses to refresh.', false);
+                        loadFromConfig();
                     })
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
             }
 
             function resetToDefault() {
-                if (!confirm('Remove chart_legend_opacity from app config? The public site will use 75% opacity.')) return;
-                portal.fetchAdmin('/config', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: KEY }),
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) {
-                        if (d.ok) { showMsg('Reset to default.', false); if (rangeEl) { rangeEl.value = '75'; syncOutput(); } loadFromConfig(); }
-                        else { showMsg(d.error && d.error.message ? d.error.message : 'Reset failed', true); }
+                if (!confirm('Remove device-specific opacity overrides? The public site will use the legacy/default 75% opacity until you save new values.')) return;
+                Promise.all([
+                    portal.fetchAdmin('/config', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: DESKTOP_KEY }),
+                    }).then(function (r) { return r.json(); }),
+                    portal.fetchAdmin('/config', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: MOBILE_KEY }),
+                    }).then(function (r) { return r.json(); })
+                ])
+                    .then(function () {
+                        showMsg('Reset to defaults.', false);
+                        if (desktopRangeEl) desktopRangeEl.value = '75';
+                        if (mobileRangeEl) mobileRangeEl.value = '75';
+                        syncOutput();
+                        loadFromConfig();
                     })
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
             }
 
-            if (rangeEl) {
-                rangeEl.addEventListener('input', syncOutput);
-            }
+            if (desktopRangeEl) desktopRangeEl.addEventListener('input', syncOutput);
+            if (mobileRangeEl) mobileRangeEl.addEventListener('input', syncOutput);
             var saveBtn = document.getElementById('chart-legend-save-btn');
-            if (saveBtn) saveBtn.addEventListener('click', function () { savePct(rangeEl ? rangeEl.value : '75'); });
+            if (saveBtn) saveBtn.addEventListener('click', saveBoth);
             var resetBtn = document.getElementById('chart-legend-reset-btn');
             if (resetBtn) resetBtn.addEventListener('click', resetToDefault);
 

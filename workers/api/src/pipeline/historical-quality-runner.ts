@@ -1,4 +1,12 @@
 import {
+  computeHistoricalQualityDailySummary,
+  mergeHistoricalQualityDailySummaries,
+} from '../db/historical-quality-daily-summary'
+import {
+  attachHistoricalQualityDailySummary,
+  readHistoricalQualityDailySummary,
+} from '../db/historical-quality-daily-payload'
+import {
   aggregateHistoricalQualityOverallRow,
   buildHistoricalQualityDailyRow,
   computeHistoricalQualityDatasetBatch,
@@ -20,9 +28,11 @@ import {
   createHistoricalQualityRun,
   getHistoricalQualityRun,
   listHistoricalQualityDailyByRun,
+  listHistoricalQualityFindingsByRunDateScope,
   listHistoricalQualityFindingsByRun,
   listHistoricalQualityRuns,
   replaceHistoricalQualityFindings,
+  restartHistoricalQualityRun,
   updateHistoricalQualityRun,
   upsertHistoricalQualityDaily,
   upsertHistoricalQualityFindings,
@@ -31,6 +41,7 @@ import {
   HISTORICAL_QUALITY_DATASET_SCOPES,
   type HistoricalQualityDatasetScope,
   type HistoricalQualityRunRow,
+  type HistoricalQualityRunStatus,
 } from '../db/historical-quality-types'
 import { nextHistoricalQualityLenderCursor, shouldSplitHistoricalQualityBatch } from './historical-quality-batching'
 import type { EnvBindings } from '../types'
@@ -147,6 +158,19 @@ function shouldRetryAsSplit(error: unknown): boolean {
 }
 
 async function finalizeHistoricalQualityRun(db: D1Database, auditRunId: string, summary: RunSummary): Promise<void> {
+  const existingRows = await listHistoricalQualityDailyByRun(db, auditRunId)
+  const rowsByDate = new Map<string, typeof existingRows>()
+  for (const row of existingRows) {
+    const bucket = rowsByDate.get(row.collection_date) ?? []
+    bucket.push(row)
+    rowsByDate.set(row.collection_date, bucket)
+  }
+  for (const [collectionDate, rowsForDate] of rowsByDate) {
+    if (rowsForDate.some((row) => row.scope === 'overall')) continue
+    const datasetRows = rowsForDate.filter((row) => row.scope !== 'overall')
+    if (datasetRows.length === 0) continue
+    await upsertHistoricalQualityDaily(db, aggregateHistoricalQualityOverallRow(auditRunId, collectionDate, datasetRows))
+  }
   const rows = await listHistoricalQualityDailyByRun(db, auditRunId)
   const cutoffs = computeHistoricalQualityCutoffs(rows)
   await updateHistoricalQualityRun(db, auditRunId, {
@@ -158,6 +182,15 @@ async function finalizeHistoricalQualityRun(db: D1Database, auditRunId: string, 
     lenderCursor: null,
     mode: 'whole_date_scope',
   })
+}
+
+function previousDateFromRow(row: { metrics_json: string }): string | null {
+  try {
+    const parsed = JSON.parse(row.metrics_json || '{}') as { previous_date?: string | null }
+    return typeof parsed.previous_date === 'string' && parsed.previous_date ? parsed.previous_date : null
+  } catch {
+    return null
+  }
 }
 
 async function initializeSplitMode(
@@ -290,7 +323,7 @@ async function processSplitModeStep(
     loadRunStateSnapshot(env.DB, currentDate, currentScope),
     hasPermanentHistoricalQualityEvidence(env.DB, currentDate, currentScope),
   ])
-  const finalDailyRow = buildHistoricalQualityDailyRow({
+  let finalDailyRow = buildHistoricalQualityDailyRow({
     auditRunId: run.audit_run_id,
     collectionDate: currentDate,
     scope: currentScope,
@@ -302,6 +335,14 @@ async function processSplitModeStep(
     permanentEvidencePresent,
     findingMetrics: aggregate,
   })
+  const splitFindings = await listHistoricalQualityFindingsByRunDateScope(env.DB, run.audit_run_id, currentDate, currentScope)
+  const splitSummary = await computeHistoricalQualityDailySummary(env.DB, {
+    collectionDate: currentDate,
+    scope: currentScope,
+    previousDate: reference.previousDate,
+    findings: splitFindings,
+  })
+  finalDailyRow = attachHistoricalQualityDailySummary(finalDailyRow, splitSummary)
   await upsertHistoricalQualityDaily(env.DB, finalDailyRow)
   const settledSummary = { ...nextSummary, split_state: undefined }
   return advanceAfterDatasetComplete(env.DB, run.audit_run_id, dates, currentDate, currentScope, settledSummary)
@@ -309,11 +350,29 @@ async function processSplitModeStep(
 
 export async function startHistoricalQualityRun(
   env: Pick<EnvBindings, 'DB'>,
-  input?: { startDate?: string; endDate?: string; triggerSource?: 'manual' | 'script' | 'scheduled'; targetDb?: string },
+  input?: {
+    startDate?: string
+    endDate?: string
+    triggerSource?: 'manual' | 'script' | 'scheduled'
+    targetDb?: string
+    auditRunId?: string
+    replaceExisting?: boolean
+  },
 ): Promise<{ auditRunId: string }> {
   const dates = await filteredDates(env.DB, input?.startDate, input?.endDate)
-  const auditRunId = `historical-quality:${new Date().toISOString()}:${crypto.randomUUID()}`
-  await createHistoricalQualityRun(env.DB, {
+  const auditRunId = input?.auditRunId || `historical-quality:${new Date().toISOString()}:${crypto.randomUUID()}`
+  const existing = input?.replaceExisting ? await getHistoricalQualityRun(env.DB, auditRunId) : null
+  const createInput: {
+    auditRunId: string
+    triggerSource: 'manual' | 'script' | 'scheduled'
+    targetDb: string
+    status: HistoricalQualityRunStatus
+    nextCollectionDate: string | null
+    nextScope: HistoricalQualityDatasetScope | null
+    totalDates: number
+    filters: { startDate: string | null; endDate: string | null }
+    summary: Record<string, unknown>
+  } = {
     auditRunId,
     triggerSource: input?.triggerSource ?? 'manual',
     targetDb: input?.targetDb ?? 'australianrates_api',
@@ -323,7 +382,12 @@ export async function startHistoricalQualityRun(
     totalDates: dates.length,
     filters: { startDate: input?.startDate ?? null, endDate: input?.endDate ?? null },
     summary: dates.length === 0 ? { cutoff_candidates: null, total_daily_rows: 0 } : {},
-  })
+  }
+  if (existing) {
+    await restartHistoricalQualityRun(env.DB, createInput)
+  } else {
+    await createHistoricalQualityRun(env.DB, createInput)
+  }
   if (dates.length === 0) {
     await updateHistoricalQualityRun(env.DB, auditRunId, { finished: true })
   }
@@ -361,8 +425,15 @@ export async function processHistoricalQualityRunStep(
     }
 
     const result = await computeHistoricalQualityDatasetBatch(env.DB, auditRunId, currentDate, currentScope)
-    await upsertHistoricalQualityDaily(env.DB, result.dailyRow)
     await replaceHistoricalQualityFindings(env.DB, auditRunId, currentDate, currentScope, result.findings.findings)
+    const persistedFindings = await listHistoricalQualityFindingsByRunDateScope(env.DB, auditRunId, currentDate, currentScope)
+    const summaryForRow = await computeHistoricalQualityDailySummary(env.DB, {
+      collectionDate: currentDate,
+      scope: currentScope,
+      previousDate: previousDateFromRow(result.dailyRow),
+      findings: persistedFindings,
+    })
+    await upsertHistoricalQualityDaily(env.DB, attachHistoricalQualityDailySummary(result.dailyRow, summaryForRow))
     return advanceAfterDatasetComplete(env.DB, auditRunId, dates, currentDate, currentScope, summary)
   } catch (error) {
     if (run.mode === 'whole_date_scope' && shouldRetryAsSplit(error)) {
@@ -388,4 +459,22 @@ export async function getHistoricalQualityRunDetail(env: Pick<EnvBindings, 'DB'>
 
 export async function listHistoricalQualityRunHistory(env: Pick<EnvBindings, 'DB'>, limit = 20) {
   return listHistoricalQualityRuns(env.DB, limit)
+}
+
+export async function processHistoricalQualityRunUntilSettled(
+  env: Pick<EnvBindings, 'DB'>,
+  auditRunId: string,
+  options?: { maxSteps?: number; maxMs?: number },
+): Promise<{ auditRunId: string; status: string; steps: number }> {
+  const maxSteps = Math.max(1, Math.floor(options?.maxSteps ?? 64))
+  const maxMs = Math.max(250, Math.floor(options?.maxMs ?? 20000))
+  const startedAt = Date.now()
+  let steps = 0
+  let last = await processHistoricalQualityRunStep(env, auditRunId)
+  steps += 1
+  while (last.status === 'running' && steps < maxSteps && Date.now() - startedAt < maxMs) {
+    last = await processHistoricalQualityRunStep(env, auditRunId)
+    steps += 1
+  }
+  return { ...last, steps }
 }
