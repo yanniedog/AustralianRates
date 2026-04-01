@@ -63,9 +63,17 @@ dead_letter_queue = "australianrates-ingest-dlq"
 name = "RUN_LOCK_DO"
 class_name = "RunLockDO"
 
+[[durable_objects.bindings]]
+name = "HISTORICAL_QUALITY_AUDIT_DO"
+class_name = "HistoricalQualityAuditDO"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RunLockDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["HistoricalQualityAuditDO"]
 
 [observability]
 enabled = true
@@ -141,9 +149,17 @@ dead_letter_queue = "australianrates-ingest-dlq-test"
 name = "RUN_LOCK_DO"
 class_name = "RunLockDO"
 
+[[env.test.durable_objects.bindings]]
+name = "HISTORICAL_QUALITY_AUDIT_DO"
+class_name = "HistoricalQualityAuditDO"
+
 [[env.test.migrations]]
 tag = "v1"
 new_sqlite_classes = ["RunLockDO"]
+
+[[env.test.migrations]]
+tag = "v2"
+new_sqlite_classes = ["HistoricalQualityAuditDO"]
 
 [env.test.vars]
 WORKER_VERSION = "test"

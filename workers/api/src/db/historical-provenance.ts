@@ -525,6 +525,49 @@ export async function getHistoricalProvenanceSummary(
   return readSummary(db, input || {})
 }
 
+async function recordHistoricalProvenanceRecoveryRun(
+  db: D1Database,
+  input: {
+    recoveryJobId: string
+    actor: string
+    status: 'completed' | 'dry_run' | 'failed'
+    lookbackDays: number
+    dataset?: DatasetKind
+    runId?: string
+    repairSummary?: Record<string, unknown>
+    syncSummary?: Record<string, unknown>
+    beforeSummary?: Record<string, unknown>
+    afterSummary?: Record<string, unknown>
+    statusRowsUpserted?: number
+    logRowsWritten?: number
+  },
+): Promise<void> {
+  if (!(await tableExists(db, 'historical_provenance_recovery_runs'))) return
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO historical_provenance_recovery_runs (
+         recovery_job_id, actor, status, lookback_days, dataset_filter, run_id_filter,
+         repair_summary_json, sync_summary_json, before_summary_json, after_summary_json,
+         status_rows_upserted, log_rows_written, started_at, finished_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+    .bind(
+      input.recoveryJobId,
+      input.actor,
+      input.status,
+      input.lookbackDays,
+      input.dataset ?? null,
+      input.runId ?? null,
+      JSON.stringify(input.repairSummary ?? {}),
+      JSON.stringify(input.syncSummary ?? {}),
+      JSON.stringify(input.beforeSummary ?? {}),
+      JSON.stringify(input.afterSummary ?? {}),
+      Math.max(0, Math.floor(input.statusRowsUpserted ?? 0)),
+      Math.max(0, Math.floor(input.logRowsWritten ?? 0)),
+    )
+    .run()
+}
+
 export async function refreshHistoricalProvenanceStatus(
   db: D1Database,
   input?: { lookbackDays?: number; dataset?: DatasetKind; runId?: string; actor?: string; recoveryJobId?: string },
@@ -556,6 +599,19 @@ export async function refreshHistoricalProvenanceStatus(
     lookbackDays,
     dataset: input?.dataset,
     runId: input?.runId,
+  })
+
+  await recordHistoricalProvenanceRecoveryRun(db, {
+    recoveryJobId,
+    actor,
+    status: 'completed',
+    lookbackDays,
+    dataset: input?.dataset,
+    runId: input?.runId,
+    syncSummary: summary,
+    afterSummary: summary,
+    statusRowsUpserted,
+    logRowsWritten,
   })
 
   return {
@@ -622,6 +678,21 @@ export async function runHistoricalProvenanceRecoveryProgram(
         dataset: input?.dataset,
         runId: input?.runId,
       })
+
+  await recordHistoricalProvenanceRecoveryRun(env.DB, {
+    recoveryJobId,
+    actor,
+    status: input?.dryRun ? 'dry_run' : 'completed',
+    lookbackDays,
+    dataset: input?.dataset,
+    runId: input?.runId,
+    repairSummary: repair as unknown as Record<string, unknown>,
+    syncSummary: sync.summary as unknown as Record<string, unknown>,
+    beforeSummary: before as unknown as Record<string, unknown>,
+    afterSummary: after as unknown as Record<string, unknown>,
+    statusRowsUpserted: sync.status_rows_upserted,
+    logRowsWritten: sync.log_rows_written,
+  })
 
   return {
     ok: true,

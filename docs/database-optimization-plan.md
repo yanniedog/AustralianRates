@@ -1,53 +1,84 @@
 # Database optimization plan
 
-This document defines how to keep the D1 database smaller and optimised while (a) never losing front-end data and (b) keeping admin status and integrity features pragmatic and useful.
+This document defines how to keep the D1 database smaller while preserving user-facing history and enough operational evidence for integrity work.
 
 ## Invariants
 
-### (a) Front-end data is never lost
+### Front-end data is never lost
 
-- **Do not drop or over-prune** any table or column that feeds the public site or API.
-- **User-facing data** lives in:
-  - `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates` (one row per (product_key, collection_date); migration 0032). Within each day the **single row per product** is chosen by: prefer `run_source = 'scheduled'`, then latest `parsed_at` (deduplication in 0032); new writes use ON CONFLICT so the last write for that day wins.
+- Do not drop or over-prune any table or column that feeds the public site or API.
+- User-facing data lives in:
+  - `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates`
   - `latest_home_loan_series`, `latest_savings_series`, `latest_td_series`
-  - `home_loan_rate_events`, `savings_rate_events`, `term_deposit_rate_events` (if used by charts/exports)
+  - `home_loan_rate_events`, `savings_rate_events`, `term_deposit_rate_events` when used by charts or exports
   - `chart_pivot_cache`, `rba_cash_rates`
-  - `cdr_detail_payload_store` (referenced by historical/latest for detail)
-- **Retention on user data**: If historical rates (or events/intervals) ever get retention pruning, it must be **no shorter than** the intended chart/export horizon (e.g. 730 days). Do not prune these tables unless product explicitly agrees.
-- **Orphan pruning** on `cdr_detail_payload_store` is safe only for hashes that are no longer referenced by any row in historical_* or latest_* (or after historical retention has run).
+  - `cdr_detail_payload_store` when still referenced by historical or latest rows
+- If historical rates or events are ever pruned, the retention horizon must not be shorter than the intended chart/export horizon and must have explicit product approval.
 
-### (b) Admin status and integrity remain pragmatic and useful
+### Admin status and integrity remain useful
 
-- **Run history**: `run_reports` (and run_seen_*, lender_dataset_runs) drive run list, coverage gaps, and “runs with no outputs”. Keep **1 day** for a compact DB; admin diagnostics (lineage repair, CDR audit, coverage-gap) see last 24h only.
-- **Logs**: `global_log` 48h for all levels plus ~200k row cap (see `retention-prune.ts`).
-- Older historical rate rows may have `fetch_event_id` pointing to pruned fetch_events (lookup returns null); that is acceptable.
+- `run_reports` (+ `run_seen_*`, `lender_dataset_runs`) are retained for 30 days because the historical-quality evidence model now exists and the production size audit showed that 30 days is cheap enough.
+- `fetch_events` and `raw_objects` remain long-retention provenance tables.
+- `historical_provenance_recovery_runs` is the durable summary record for provenance repair activity.
+- `historical_provenance_recovery_log` is only a recent debug log and can be pruned after summaries exist.
 
-## Concrete actions
+## Current retention model
 
-### 1. Backend retention and raw_objects (implemented)
+### Long-term
 
-- **fetch_events**: Prune rows where `fetched_at < now - 1 day` (in `runRetentionPrunes`).
-- **raw_objects**: After pruning fetch_events, delete rows where `content_hash NOT IN (SELECT content_hash FROM fetch_events)` so storage matches the 1-day lineage window.
-- **run_reports**, **ingest_anomalies**, **health_check_runs**, **integrity_audit_runs**: 1 day. **download_change_feed**, **client_historical_runs** (+ tasks/batches): 1 day.
-- **Effect**: Backend tables stay compact; admin remediation and CDR audit use last 24h lineage only.
+- `historical_*_rates`
+- `latest_*_series`
+- `fetch_events`
+- `raw_objects`
+- `historical_provenance_status`
+- `historical_provenance_recovery_runs`
+- `product_catalog`, `series_catalog`, `product_presence_status`, `series_presence_status`
+- `rba_cash_rates`
 
-### 2. Fetch_events column slim (implemented)
+### Medium-term
 
-- **Drop** from `fetch_events` (migration): `response_headers_json`, `body_bytes`, `duration_ms`, `notes`, `job_kind`.
-- **Reason**: Not used in WHERE/JOIN/ORDER; only for admin display. `body_bytes` is redundant with `raw_objects.body_bytes`; headers/duration/notes/job_kind are not required for lineage or audit.
-- **Code**: Stop inserting and selecting these columns; for `getFetchEventById`, source `body_bytes` from `raw_objects` in the existing JOIN when needed for display.
+- `run_reports`
+- `run_seen_products`
+- `run_seen_series`
+- `lender_dataset_runs`
+- `historical_provenance_recovery_log`
 
-### 3. Other retention (already in place or optional)
+Current target: 30 days.
 
-- **Already in place**: `global_log`, `ingest_anomalies`, `run_reports` (+ run_seen_*, lender_dataset_runs), `raw_payloads` orphans, `health_check_runs`, `integrity_audit_runs` (see `database-optimization.md`).
-- **Implemented**: `download_change_feed` and `client_historical_runs` (+ tasks/batches) now have 1-day retention (see `retention-prune.ts`). **Optional later**: `admin_download_jobs` (+ artifacts), and/or `historical_*` (e.g. 730 days) with aligned pruning of `*_rate_events` and `*_rate_intervals`; do not add without explicit product/ops agreement and without ensuring (a) and (b) above.
+### Short-term
 
-### 4. Raw_objects (implemented)
+- `ingest_anomalies`
+- `health_check_runs`
+- `integrity_audit_runs`
+- `download_change_feed`
+- `client_historical_runs`, `client_historical_tasks`, `client_historical_batches`
 
-- Prune `raw_objects` after `fetch_events` retention: delete where `content_hash NOT IN (SELECT content_hash FROM fetch_events)`. Keeps only objects referenced by the retained 1-day fetch_events window.
+Current target: 1 day.
+
+### Special
+
+- `raw_payloads`: orphan cleanup only.
+- `raw_objects`: prune only when no retained `fetch_events` row still references the content hash.
+- `ingest_replay_queue`: terminal rows retain a short recent window; active rows are never pruned by age.
+
+## Concrete actions already implemented
+
+1. Keep `fetch_events` on a 3650-day window and prune `raw_objects` only after `fetch_events` pruning.
+2. Keep raw run-state (`run_reports` + `run_seen_*` + `lender_dataset_runs`) on a 30-day window.
+3. Keep low-value churn (`ingest_anomalies`, `download_change_feed`, `client_historical_*`) on a 1-day window.
+4. Write `historical_provenance_recovery_runs` summaries and prune `historical_provenance_recovery_log` to 30 days only after summaries exist.
 
 ## Verification
 
-- After any retention or schema change: run `npm run test:api` and `npm run typecheck:api`; run `npm run test:homepage` if deploy affects production.
-- Admin: confirm status page, coverage-gap report, CDR audit, and remediation (e.g. “show fetch events”) still work within the retained windows.
-- After applying migration 0032: optionally run projection rebuild for all datasets so rate_events and rate_intervals reflect deduplicated historical data; chart_pivot_cache refreshes on next cron.
+After any retention or schema change:
+
+- `npm run typecheck:api`
+- `npm run test:api`
+- `npm run test:homepage` if production behavior changed
+- `npm run test:archive` for deploy sign-off in this repo
+
+Operational verification:
+
+- Run `node scripts/retention-size-audit-prod.js`
+- Run `node scripts/historical-quality-audit-prod.js` when the evidence model or scoring logic changes materially
+- Trigger `node trigger-retention.js` after deploy if you need the new pruning policy to take effect immediately

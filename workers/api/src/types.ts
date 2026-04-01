@@ -232,6 +232,7 @@ export type EnvBindings = {
   /** Optional: caches chart/pivot API responses for fast loads. Create via wrangler kv:namespace create "CHART_CACHE". */
   CHART_CACHE_KV?: KVNamespace
   RUN_LOCK_DO: DurableObjectNamespace
+  HISTORICAL_QUALITY_AUDIT_DO?: DurableObjectNamespace
   ADMIN_API_TOKEN?: string
   ADMIN_API_TOKENS?: string
   CF_ACCESS_TEAM_DOMAIN?: string

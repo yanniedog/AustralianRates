@@ -10,5 +10,6 @@ All fixtures in this directory must be **real data**: exported from production, 
 - **real-amp-mortgage-variables.json** - Real AMP home-loan variable payload excerpt captured from `https://www.amp.com.au/graphql/execute.json/amp-2024/variables` on 2026-03-09. Used by AMP fallback parsing regression tests.
 - **real-westpac-mortgage-detail.json** - Real CDR mortgage detail payload excerpt captured from Westpac on 2026-03-09. Used by mortgage-detail parsing regression tests.
 - **real-westpac-savings-gap-lender-dataset-row.json** - Lender_dataset_runs-shaped snapshot from production coverage-gap output for Westpac savings (2026-03-25 run, detail_processing_incomplete). Used by run-reconciliation force-finalize E2E tests.
+- **historical-quality/** - Real production D1 slice for the historical-quality audit integration path. Generated with `node scripts/export-historical-quality-fixture.js --db australianrates_api --remote`. Keep the `.sql.gz` artifact and the `.manifest.json` in sync.
 
 To refresh fixtures from production or a real run, use your project's export/ingest tooling and save the output here.

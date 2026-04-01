@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 import { API_BASE_PATH, ECONOMIC_API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from './constants'
+import { HistoricalQualityAuditDO } from './durable/historical-quality-audit'
 import { RunLockDO } from './durable/run-lock'
 import { dispatchScheduledEvent } from './pipeline/scheduler-dispatch'
 import { consumeIngestQueue } from './queue/consumer'
@@ -135,5 +136,5 @@ const worker: ExportedHandler<EnvBindings, IngestMessage> = {
   },
 }
 
-export { RunLockDO }
+export { HistoricalQualityAuditDO, RunLockDO }
 export default worker

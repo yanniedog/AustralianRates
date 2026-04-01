@@ -12,82 +12,100 @@ High-churn tables are pruned so they stay bounded. Pruning runs after every heal
 | `ingest_anomalies` | 1 day | `workers/api/src/db/retention-prune.ts` |
 | `health_check_runs` | 1 day | `workers/api/src/db/health-check-runs.ts` |
 | `integrity_audit_runs` | 1 day | `workers/api/src/db/integrity-audit-runs.ts` |
-| `run_reports` (+ run_seen_*, lender_dataset_runs) | 1 day | `workers/api/src/db/retention-prune.ts` |
-| `fetch_events` | 1 day | `workers/api/src/db/retention-prune.ts` |
-| `raw_objects` | Orphan cleanup (content_hash not in fetch_events) | `workers/api/src/db/retention-prune.ts` |
-| `raw_payloads` | Orphan cleanup (no matching raw_objects) | `workers/api/src/db/retention-prune.ts` |
+| `run_reports` (+ `run_seen_*`, `lender_dataset_runs`) | 30 days | `workers/api/src/db/retention-prune.ts` |
+| `fetch_events` | 3650 days | `workers/api/src/db/retention-prune.ts` |
+| `raw_objects` | Orphan cleanup only after fetch-event pruning; effectively follows the retained fetch-events window | `workers/api/src/db/retention-prune.ts` |
+| `raw_payloads` | Orphan cleanup (no matching `raw_objects`) | `workers/api/src/db/retention-prune.ts` |
 | `download_change_feed` | 1 day | `workers/api/src/db/retention-prune.ts` |
 | `client_historical_runs` (+ tasks, batches CASCADE) | 1 day | `workers/api/src/db/retention-prune.ts` |
+| `historical_provenance_recovery_log` | 30 days, but only after `historical_provenance_recovery_runs` has summary rows | `workers/api/src/db/retention-prune.ts` |
 
-Effects: compact D1 (1-day backend), faster queries, less storage. Retention runs after every health check (~every 15 min). To compact immediately after deploy (without waiting for the next health check), run from repo root with `ADMIN_API_TOKEN` in `.env`: `node trigger-retention.js`. For the full plan, see `docs/database-optimization-plan.md`.
+Effects:
+- Low-value operational churn stays compact.
+- Raw run-state remains available for recent longitudinal quality investigations.
+- Provenance lineage (`fetch_events`, `raw_objects`, `historical_provenance_status`) remains long-term.
+
+Guardrail:
+- Do not shorten `fetch_events` / `raw_objects` retention.
+- Do not lengthen raw run-state retention further unless the historical-quality evidence model is still complete and the size audit still supports it.
+
+To compact immediately after deploy, run from repo root with `ADMIN_API_TOKEN` in `.env`:
+
+```bash
+node trigger-retention.js
+```
+
+## Retention size audit
+
+Before changing any raw run-state retention window, run the read-only retention size audit and inspect the recommendation:
+
+- Admin route: `GET /api/home-loan-rates/admin/audits/historical-quality/retention-size-audit`
+- Script: `node scripts/retention-size-audit-prod.js --output-json artifacts/retention-size-audit.json --output-md docs/retention-size-audit.md`
+- Guardrail: if `evidence_backfill.has_permanent_evidence_backfill` is false, do not lengthen raw run-state retention.
+
+Production result on 2026-04-01 after backfill:
+- `historical_quality_daily` evidence backfill completed for all 34 retained historical dates.
+- Current DB size was about `730.649 MB`.
+- 30-day raw run-state retention was recommended and allowed.
+- Estimated extra storage for moving from 1 day to 30 days was only `12.718 MB`.
 
 ## Log context size
 
-Logger limits persisted `context` to 8,000 characters per row (`workers/api/src/utils/logger.ts`). Reduces `global_log` row size and storage.
+Logger limits persisted `context` to 8,000 characters per row (`workers/api/src/utils/logger.ts`). This reduces `global_log` row size and storage.
 
 ## Export (dump) throughput
 
-Admin full-dump job uses larger batches and more parts per pass to reduce queue invocations and finish faster: `DATABASE_DUMP_ROW_BATCH_SIZE` and `DATABASE_DUMP_PARTS_PER_PASS` in `workers/api/src/routes/admin-download-dump.ts`.
-
-## Rate bounds triggers after migration 0032
-
-Migration 0032 drops and does not recreate the rate bounds triggers (from 0012) because D1/wrangler splits migration SQL on semicolons, which breaks `CREATE TRIGGER` bodies on remote. Application validation remains the primary enforcement. To re-create the triggers, run the DDL from `workers/api/migrations/0012_rate_bounds_triggers.sql` manually (e.g. one trigger per file with `wrangler d1 execute australianrates_api --remote --file=...` from `workers/api`).
+Admin full-dump jobs use larger batches and more parts per pass to reduce queue invocations and finish faster: `DATABASE_DUMP_ROW_BATCH_SIZE` and `DATABASE_DUMP_PARTS_PER_PASS` in `workers/api/src/routes/admin-download-dump.ts`.
 
 ## VACUUM (reclaim space after deletes)
 
-After large deletes (e.g. retention prunes or one-off cleanups), SQLite does not automatically reclaim disk space until `VACUUM` is run. In Cloudflare D1, run VACUUM only during a maintenance window; it can be slow and may affect availability. From `workers/api`:
+After large deletes, SQLite does not automatically reclaim disk space until `VACUUM` is run. In Cloudflare D1, run `VACUUM` only during a maintenance window because it can be slow and may affect availability.
+
+From `workers/api`:
 
 ```bash
 npx wrangler d1 execute australianrates_api --remote --command "VACUUM;"
 ```
 
-Use sparingly; retention pruning alone keeps growth in check.
+Use sparingly. Retention pruning alone usually keeps growth in check.
 
 ## Database size and breakdown
 
-- **Total size:** Reported by the D1 API as `meta.size_after` (bytes) on query results. In the Cloudflare dashboard: D1 > your database > Metrics. Typical production size is in the hundreds of MB; limits are 500 MB (Free) / 10 GB (Paid).
-- **What drives size:** Row count and average row size per table. The largest contributors are usually:
-  - **historical_loan_rates**, **historical_savings_rates**, **historical_term_deposit_rates** – one row per (product_key, collection_date); bulk of user-facing data (migration 0032). Do not prune without product agreement.
-  - **fetch_events** – one row per HTTP fetch; 3-day retention keeps it bounded.
-  - **raw_objects** – pruned to content_hashes still in fetch_events (3-day window).
-  - **run_reports**, **run_seen_***, **lender_dataset_runs** – 3-day retention.
-  - **global_log**, **ingest_anomalies** – 48h + row cap, and 3-day retention for anomalies.
-- **Live breakdown:** After deploying the API, run from repo root (with `ADMIN_API_TOKEN` in `.env`):
-  ```bash
-  node fetch-db-stats.js
-  ```
-  This calls `GET /api/home-loan-rates/admin/db/stats` and prints total size and per-table row counts (largest first). Alternatively use `GET /api/home-loan-rates/admin/db/audit` for table row counts only.
+The largest storage contributors are usually:
 
-## Plan status (one row per day, no intra-day duplicates)
+- `historical_loan_rates`, `historical_savings_rates`, `historical_term_deposit_rates`: user-facing time-series truth. Do not prune without explicit product agreement.
+- `fetch_events`: one row per HTTP fetch; retained for 3650 days because it is part of the provenance chain.
+- `raw_objects`: retained only while referenced by retained `fetch_events`.
+- `run_reports`, `run_seen_*`, `lender_dataset_runs`: 30-day raw run-state window.
+- `historical_provenance_recovery_log`: high-churn row-level debug table; capped at 30 days once summary rows exist.
+- `global_log`, `ingest_anomalies`, `download_change_feed`, `client_historical_*`: deliberately short-lived operational churn.
 
-The optimization plan in `docs/database-optimization-plan.md` is **fully implemented**:
-
-- **Front-end historical tables:** One row per (product_key, collection_date). Migration 0032 deduplicated existing data (preferring `run_source = 'scheduled'`, then latest `parsed_at`). The write path uses `ON CONFLICT` on the natural key so new inserts never create a second row for the same product and day.
-- **Backend retention:** All backend/operational tables use **1-day** retention for a compact DB: fetch_events, run_reports (+ run_seen_*, lender_dataset_runs), ingest_anomalies, health_check_runs, integrity_audit_runs, download_change_feed, client_historical_runs (+ tasks/batches). raw_objects and raw_payloads are pruned to the retained fetch_events window. Retention runs after every health check (e.g. every 15 minutes via cron). Admin diagnostics (lineage, CDR audit) see the last 24 hours only.
-
-**Row count after compaction:** Backend tables are pruned to 1 day, so total rows and size drop sharply. Largest remaining contributors:
-
-| Source | After 1-day retention | Notes |
-|--------|------------------------|-------|
-| fetch_events, raw_objects | ~60k combined (1-day window) | One row per HTTP fetch |
-| run_seen_*, lender_dataset_runs | Bounded by 1-day runs | One per (run, series/product) |
-| download_change_feed, client_historical_* | Bounded to 1 day | Pruned by retention |
-| historical_* (3 tables) | ~41k | One row per product per day; never pruned by retention |
-
-To confirm there are no intra-day duplicates in historical tables, run (with `ADMIN_API_TOKEN` in `.env`):
+For a live breakdown, run from repo root:
 
 ```bash
-node fetch-duplicate-check.js
+node fetch-db-stats.js
 ```
 
-Expect `duplicate_rows=0` for each table and `one_row_per_day: yes`. The API also exposes `GET /api/home-loan-rates/admin/db/duplicate-check` (admin auth required).
+This calls `GET /api/home-loan-rates/admin/db/stats` and prints total size and per-table row counts. Alternatively use `GET /api/home-loan-rates/admin/db/audit` for row counts only.
+
+## Plan status
+
+Current state:
+
+- Historical rate tables are one row per `(product_key, collection_date)`.
+- Raw run-state is retained for 30 days.
+- Long-term provenance is preserved through `fetch_events`, `raw_objects`, and `historical_provenance_status`.
+- Row-level provenance recovery churn is compacted after 30 days once `historical_provenance_recovery_runs` summaries exist.
+- Low-value operational churn remains on 1-day retention.
 
 ## Front-end data shape
 
-- **One row per (product_key, collection_date):** Migration 0032 enforces at most one row per product per day in historical_* tables. Charts and APIs naturally get one point per day. Write path uses ON CONFLICT on the natural key (no run_source) so the last write for that day wins.
+- One row per `(product_key, collection_date)`: migration 0032 enforces at most one row per product per day in `historical_*` tables.
+- Charts and APIs naturally get one point per day.
+- The write path uses `ON CONFLICT` on the natural key so the last write for that day wins.
 
 ## Schema and indexes
 
-- Canonical keys (`product_key`, `series_key`) are used for longitudinal correctness; see AGENTS.md and `docs/MISSION_AND_TECHNICAL_SPEC.md`.
+- Canonical keys (`product_key`, `series_key`) are used for longitudinal correctness; see `AGENTS.md` and `docs/MISSION_AND_TECHNICAL_SPEC.md`.
 - Metadata tables use `WITHOUT ROWID` where the primary key is the natural key (migration 0022), saving space and improving lookup performance.
-- Indexes are added in migrations to match hot query patterns (latest by series, filters, admin lists). Do not drop indexes without measuring query plans first.
+- Indexes are added in migrations to match hot query patterns. Do not drop indexes without measuring query plans first.

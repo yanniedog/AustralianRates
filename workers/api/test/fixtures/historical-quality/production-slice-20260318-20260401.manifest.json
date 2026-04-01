@@ -1,0 +1,37 @@
+{
+  "source_db": "australianrates_api",
+  "remote": true,
+  "generated_at": "2026-04-01T03:21:18.522Z",
+  "selected_dates": [
+    "2026-03-18",
+    "2026-03-19",
+    "2026-03-20",
+    "2026-03-29",
+    "2026-03-30",
+    "2026-03-31",
+    "2026-04-01"
+  ],
+  "start_date": "2026-03-18",
+  "end_date": "2026-04-01",
+  "schema_version": "0046_historical_quality_scores_view",
+  "generation_command": "node scripts/export-historical-quality-fixture.js --db australianrates_api --remote --dates 2026-03-18,2026-03-19,2026-03-20,2026-03-29,2026-03-30,2026-03-31,2026-04-01",
+  "gzip_file_name": "production-slice-20260318-20260401.sql.gz",
+  "fixture_module_file_name": "production-slice-20260318-20260401.fixture.ts",
+  "sql_file_name": null,
+  "source_sql_retained": false,
+  "row_counts": {
+    "product_catalog": 583,
+    "series_catalog": 3007,
+    "product_presence_status": 583,
+    "series_presence_status": 3007,
+    "raw_objects": 1125,
+    "fetch_events": 2999,
+    "historical_loan_rates": 7484,
+    "historical_savings_rates": 3120,
+    "historical_term_deposit_rates": 8226,
+    "lender_dataset_runs": 51,
+    "historical_provenance_status": 10275,
+    "rba_cash_rates": 72
+  },
+  "compressed_bytes": 1414642
+}

@@ -5,6 +5,7 @@
 
 import { Hono } from 'hono'
 import { emitHistoricalDeleteTombstones, readHistoricalDeleteKeys } from '../db/analytics/admin-tombstones'
+import { getApproximateDatabaseSizeBytes, listDbTableStats } from '../db/db-stats'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -95,76 +96,11 @@ export const adminDbRoutes = new Hono<AppContext>()
 
 const SAFE_TABLE_NAME_RE = /^[a-zA-Z0-9_]+$/
 const SAFE_COLUMN_NAME_RE = /^[a-zA-Z0-9_]+$/
-const SAMPLE_SIZE = 2000
-
-/** Estimate bytes for one table: sample rows and extrapolate from sum of column lengths. */
-async function estimateTableBytes(
-  db: D1Database,
-  tableName: string,
-  rowCount: number,
-): Promise<number | null> {
-  if (rowCount <= 0) return 0
-  try {
-    const pragma = await db
-      .prepare(`PRAGMA table_info(${tableName})`)
-      .all<{ name: string }>()
-    const columns = (pragma.results ?? [])
-      .map((r) => String(r.name ?? '').trim())
-      .filter((n) => SAFE_COLUMN_NAME_RE.test(n))
-    if (columns.length === 0) return null
-    const lengthExpr = columns
-      .map((col) => `LENGTH(COALESCE("${col}", ''))`)
-      .join(' + ')
-    const limit = Math.min(SAMPLE_SIZE, rowCount)
-    const stmt = db.prepare(
-      `SELECT SUM(s) AS total FROM (SELECT (${lengthExpr}) AS s FROM "${tableName}" LIMIT ?1)`,
-    ).bind(limit)
-    const row = await stmt.first<{ total: number | null }>()
-    const total = row?.total
-    if (total == null || total === 0) return limit === rowCount ? 0 : null
-    const avgPerRow = total / limit
-    return Math.round(avgPerRow * rowCount)
-  } catch {
-    return null
-  }
-}
 
 /** GET /admin/db/stats - total DB size (bytes) and per-table row counts + estimated bytes. Read-only. */
 adminDbRoutes.get('/db/stats', async (c) => {
   const db = c.env.DB
-  let totalBytesApprox: number | null = null
-  try {
-    const run = await db.prepare('SELECT 1').run()
-    const sizeAfter = (run.meta as { size_after?: number } | undefined)?.size_after
-    if (typeof sizeAfter === 'number' && sizeAfter > 0) totalBytesApprox = sizeAfter
-  } catch {
-    // ignore
-  }
-  const list = await db
-    .prepare(
-      `SELECT name FROM sqlite_master
-       WHERE type = 'table'
-         AND name NOT LIKE 'sqlite_%'
-         AND name NOT LIKE '_cf_%'
-       ORDER BY name ASC`,
-    )
-    .all<{ name: string }>()
-  const names = (list.results ?? []).map((r) => String(r.name || '').trim()).filter(Boolean)
-  const tables: { name: string; row_count: number; estimated_bytes: number | null }[] = []
-  for (const name of names) {
-    if (!SAFE_TABLE_NAME_RE.test(name)) continue
-    let rowCount = -1
-    try {
-      const r = await db.prepare(`SELECT COUNT(*) AS n FROM ${name}`).first<{ n: number }>()
-      rowCount = r?.n ?? 0
-    } catch {
-      // keep -1
-    }
-    const estimatedBytes =
-      rowCount >= 0 ? await estimateTableBytes(db, name, rowCount) : null
-    tables.push({ name, row_count: rowCount, estimated_bytes: estimatedBytes })
-  }
-  tables.sort((a, b) => (b.estimated_bytes ?? 0) - (a.estimated_bytes ?? 0))
+  const [totalBytesApprox, tables] = await Promise.all([getApproximateDatabaseSizeBytes(db), listDbTableStats(db)])
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode ?? null,

@@ -33,6 +33,7 @@ import { adminKnownCdrRepairRoutes } from './admin-known-cdr-repair'
 import { adminLenderDatasetRepairRoutes } from './admin-lender-dataset-repair'
 import { adminLiveCdrRepairRoutes } from './admin-live-cdr-repair'
 import { adminLogRoutes } from './admin-logs'
+import { adminHistoricalQualityRoutes } from './admin-historical-quality'
 import { getMelbourneNowParts } from '../utils/time'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
@@ -90,6 +91,7 @@ adminRoutes.route('/', adminKnownCdrRepairRoutes)
 adminRoutes.route('/', adminLenderDatasetRepairRoutes)
 adminRoutes.route('/', adminLiveCdrRepairRoutes)
 adminRoutes.route('/', adminRemediationRoutes)
+adminRoutes.route('/', adminHistoricalQualityRoutes)
 
 // Admin-only dataset exports (UI is in /admin/exports.html).
 registerHomeLoanExportRoutes(adminRoutes, {
@@ -108,7 +110,7 @@ registerTdExportRoutes(adminRoutes, {
   guardCreateJob: () => null,
 })
 
-/** Run retention prunes now (1-day backend, log turnover). Use after deploy to compact DB without waiting for next health check. */
+/** Run retention prunes now (30-day raw run-state, long-retention provenance). Use after deploy to compact DB without waiting for next health check. */
 adminRoutes.post('/retention/run', async (c) => {
   try {
     await runRetentionPrunes(c.env.DB)
@@ -116,7 +118,7 @@ adminRoutes.post('/retention/run', async (c) => {
       ok: true,
       auth_mode: c.get('adminAuthState')?.mode ?? null,
       message:
-        'Retention prunes completed. global_log: 48h + row cap; backend lineage tables trimmed to 1 day.',
+        'Retention prunes completed. global_log: 48h + row cap; raw run-state retained for 30 days, provenance recovery log capped at 30 days, and fetch_events/raw_objects remain long-retention provenance.',
     })
   } catch (error) {
     log.error('admin', 'retention_run_failed', { error, context: '/admin/retention/run' })

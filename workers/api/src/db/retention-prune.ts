@@ -8,9 +8,13 @@
 const GLOBAL_LOG_RETENTION_HOURS = 48
 /** After time-based prune, drop oldest rows so bursts cannot grow the table without bound. */
 const GLOBAL_LOG_MAX_ROWS = 200_000
-/** Backend run-state tables stay short-lived; product provenance tables must remain long-lived. */
-const BACKEND_RETENTION_DAYS = 1
-const INGEST_ANOMALIES_RETENTION_DAYS = BACKEND_RETENTION_DAYS
+/**
+ * Backend run-state tables stay short-lived; product provenance tables must remain long-lived.
+ * Guardrail: do not reduce lineage retention or expand raw run-state pruning policy until
+ * permanent historical_quality_daily evidence has been backfilled and validated.
+ */
+const BACKEND_RETENTION_DAYS = 30
+const INGEST_ANOMALIES_RETENTION_DAYS = 1
 const RUN_REPORTS_RETENTION_DAYS = BACKEND_RETENTION_DAYS
 /**
  * Historical provenance is a first-class requirement. fetch_events/raw_objects provide the
@@ -29,9 +33,10 @@ const FETCH_EVENT_PROVENANCE_ENFORCEMENT_START = '2026-03-29T00:00:00.000Z'
  * fetch_events can be inserted shortly after raw_objects for the same payload.
  */
 const RAW_OBJECT_ORPHAN_GRACE_DAYS = FETCH_EVENTS_RETENTION_DAYS + 2
-/** Operational tables with no retention previously; keep 1 day for compact DB. */
-const DOWNLOAD_CHANGE_FEED_RETENTION_DAYS = BACKEND_RETENTION_DAYS
-const CLIENT_HISTORICAL_RETENTION_DAYS = BACKEND_RETENTION_DAYS
+/** Keep low-value operational churn on an aggressive window even after raw run-state was extended. */
+const DOWNLOAD_CHANGE_FEED_RETENTION_DAYS = 1
+const CLIENT_HISTORICAL_RETENTION_DAYS = 1
+const HISTORICAL_PROVENANCE_RECOVERY_LOG_RETENTION_DAYS = 30
 const REPLAY_QUEUE_TERMINAL_RETENTION_DAYS = 14
 
 export {
@@ -39,6 +44,24 @@ export {
   FETCH_EVENTS_RETENTION_DAYS,
   FETCH_EVENT_PROVENANCE_ENFORCEMENT_START,
   RUN_REPORTS_RETENTION_DAYS,
+}
+
+async function tableHasRows(db: D1Database, tableName: string): Promise<boolean> {
+  try {
+    const exists = await db
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM sqlite_master
+         WHERE type = 'table' AND name = ?1`,
+      )
+      .bind(tableName)
+      .first<{ n: number }>()
+    if (!Number(exists?.n)) return false
+    const rows = await db.prepare(`SELECT COUNT(*) AS n FROM ${tableName}`).first<{ n: number }>()
+    return Number(rows?.n) > 0
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -225,6 +248,25 @@ export async function pruneClientHistoricalRuns(db: D1Database): Promise<void> {
 }
 
 /**
+ * Delete row-level provenance recovery churn after a summary record exists.
+ * The summary table is retained long-term; this log is only for recent debugging.
+ */
+export async function pruneHistoricalProvenanceRecoveryLog(db: D1Database): Promise<void> {
+  if (!(await tableHasRows(db, 'historical_provenance_recovery_runs'))) return
+  try {
+    await db
+      .prepare(
+        `DELETE FROM historical_provenance_recovery_log
+         WHERE created_at < datetime('now', ?1)`,
+      )
+      .bind(`-${HISTORICAL_PROVENANCE_RECOVERY_LOG_RETENTION_DAYS} days`)
+      .run()
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Delete old replay queue terminal rows so current diagnostics and dispatch scans stay cheap.
  * Keep active queued/dispatching rows regardless of age; only remove succeeded/failed history.
  */
@@ -255,5 +297,6 @@ export async function runRetentionPrunes(db: D1Database): Promise<void> {
   await pruneRawObjectsOrphans(db)
   await pruneDownloadChangeFeed(db)
   await pruneClientHistoricalRuns(db)
+  await pruneHistoricalProvenanceRecoveryLog(db)
   await pruneReplayQueueTerminalRows(db)
 }
