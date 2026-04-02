@@ -6,6 +6,7 @@ import { querySavingsRatesPaginated, querySavingsTimeseries } from '../db/saving
 import { queryTdRatesPaginated, queryTdTimeseries } from '../db/td-queries'
 import type { AnalyticsRepresentation } from './analytics-route-utils'
 import { collectAllPages } from './analytics-route-utils'
+import { projectChartRows } from '../utils/chart-row-projection'
 
 type DbPair = {
   canonicalDb: D1Database
@@ -85,40 +86,44 @@ async function resolveRepresentationRows(
 ): Promise<ResolvedAnalyticsRows> {
   if (representation !== 'change') {
     const rows = await fetchDayRows()
+    const projectedRows = projectChartRows(dataset, 'day', rows)
     return {
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: null,
-      rows: capRows(rows, filters.disableRowCap),
+      rows: capRows(projectedRows, filters.disableRowCap),
     }
   }
 
   const ready = await analyticsProjectionReady(dbs.analyticsDb, dataset)
   if (!ready) {
     const rows = await fetchDayRows()
+    const projectedRows = projectChartRows(dataset, 'day', rows)
     return {
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_unavailable',
-      rows: capRows(rows, filters.disableRowCap),
+      rows: capRows(projectedRows, filters.disableRowCap),
     }
   }
 
   try {
     const rows = await fetchChangeRows()
+    const projectedRows = projectChartRows(dataset, 'change', rows)
     return {
       requestedRepresentation: representation,
       representation: 'change',
       fallbackReason: null,
-      rows: capRows(rows, filters.disableRowCap),
+      rows: capRows(projectedRows, filters.disableRowCap),
     }
   } catch {
     const rows = await fetchDayRows()
+    const projectedRows = projectChartRows(dataset, 'day', rows)
     return {
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_query_failed',
-      rows: capRows(rows, filters.disableRowCap),
+      rows: capRows(projectedRows, filters.disableRowCap),
     }
   }
 }

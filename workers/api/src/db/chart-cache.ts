@@ -451,6 +451,13 @@ export async function getCachedOrCompute(
   }
 
   const result = await compute()
+  if (cacheScope) {
+    try {
+      await writeD1ChartCache(env.DB, section, representation, cacheScope, result)
+    } catch {
+      /* ignore D1 cache write failure on live requests */
+    }
+  }
   if (env.CHART_CACHE_KV) {
     try {
       await env.CHART_CACHE_KV.put(key, JSON.stringify(result), { expirationTtl: CHART_CACHE_KV_TTL })
