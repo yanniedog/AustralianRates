@@ -118,6 +118,7 @@
         if (key === 'end_date') return 'To';
         if (key === 'mode') return 'Rate Mode';
         if (key === 'include_manual') return 'Manual Runs';
+        if (key === 'exclude_compare_edge_cases') return 'Compare edge cases';
         if (key === 'balance_band') return 'Balance band';
         return toTitleWords(key);
     }
@@ -129,6 +130,7 @@
         if (key === 'min_rate' && text === '0.01') return true;
         if (section === 'savings' && key === 'account_type' && text === 'savings') return true;
         if (key === 'mode' && text === 'all') return true;
+        if (key === 'exclude_compare_edge_cases' && text !== '0' && text !== 'false' && text !== 'no' && text !== 'off') return true;
         return false;
     }
 
@@ -154,6 +156,7 @@
             values.forEach(function (rawValue) {
                 var displayValue = rawValue;
                 if (key === 'include_manual') displayValue = 'Included';
+                else if (key === 'exclude_compare_edge_cases') displayValue = 'Included';
                 else if (field) displayValue = formatFilterValue(field.param, rawValue);
                 entries.push({
                     key: key,
@@ -273,6 +276,9 @@
             '</span>';
         });
 
+        chips.push(
+            '<button class="chip-clear-all" type="button" data-clear-filters="true" aria-label="Clear all filters">Clear all</button>'
+        );
         els.activeFilterChips.innerHTML = chips.join('');
     }
 
@@ -304,7 +310,14 @@
         for (var i = 0; i < filterFields.length; i++) {
             controls.push(getFilterEl(filterFields[i].id));
         }
-        controls.push(els.filterStartDate, els.filterEndDate, els.filterMode, els.filterIncludeManual, els.refreshInterval);
+        controls.push(
+            els.filterStartDate,
+            els.filterEndDate,
+            els.filterMode,
+            els.filterIncludeManual,
+            els.filterExcludeCompareEdgeCases,
+            els.refreshInterval
+        );
         controls.forEach(function (el) {
             if (!el) return;
             el.addEventListener('change', refreshFilterUiState);
@@ -314,6 +327,13 @@
         });
         if (els.activeFilterChips) {
             els.activeFilterChips.addEventListener('click', function (event) {
+                var clearButton = event.target && event.target.closest
+                    ? event.target.closest('[data-clear-filters]')
+                    : null;
+                if (clearButton) {
+                    resetFilters();
+                    return;
+                }
                 var button = event.target && event.target.closest
                     ? event.target.closest('[data-remove-param]')
                     : null;
@@ -368,6 +388,8 @@
             els.filterMode.value = 'all';
         } else if (key === 'include_manual' && els.filterIncludeManual) {
             els.filterIncludeManual.checked = false;
+        } else if (key === 'exclude_compare_edge_cases' && els.filterExcludeCompareEdgeCases) {
+            els.filterExcludeCompareEdgeCases.checked = true;
         } else {
             var field = findFieldByParam(key);
             var el = field ? getFilterEl(field.id) : null;
@@ -416,6 +438,7 @@
         if (els.filterEndDate) els.filterEndDate.value = '';
         if (els.filterMode) els.filterMode.value = 'all';
         if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
+        if (els.filterExcludeCompareEdgeCases) els.filterExcludeCompareEdgeCases.checked = true;
         if (els.refreshInterval) els.refreshInterval.value = '60';
         applyDefaultMinRateIfEmpty();
         applyDefaultHomeLoanScenarioIfEmpty();
@@ -521,7 +544,7 @@
 
     function setControlVisible(el, visible) {
         if (!el) return;
-        var wrap = el.closest('label') || el.closest('.toggle-label') || el.closest('.filter-actions');
+        var wrap = el.closest('.terminal-field') || el.closest('label') || el.closest('.toggle-label') || el.closest('.filter-actions');
         if (!wrap) return;
         wrap.classList.toggle('mode-hidden', !visible);
     }
@@ -541,6 +564,7 @@
             resetFieldValue(getFilterEl(field.id), field);
         }
         if (els.filterIncludeManual) els.filterIncludeManual.checked = false;
+        if (els.filterExcludeCompareEdgeCases) els.filterExcludeCompareEdgeCases.checked = true;
         if (els.filterMode) els.filterMode.value = 'all';
         if (els.refreshInterval) els.refreshInterval.value = '60';
     }
@@ -556,6 +580,7 @@
 
         if (els.filterMode) setControlVisible(els.filterMode, analyst);
         if (els.filterIncludeManual) setControlVisible(els.filterIncludeManual, analyst);
+        if (els.filterExcludeCompareEdgeCases) setControlVisible(els.filterExcludeCompareEdgeCases, analyst);
         if (els.refreshInterval) setControlVisible(els.refreshInterval, analyst);
         if (els.filterBar && els.filterBar.tagName === 'DETAILS') {
             if (!analyst) els.filterBar.open = false;
@@ -601,13 +626,13 @@
         if (isAnalystMode()) {
             if (els.filterMode && els.filterMode.value) p.mode = els.filterMode.value;
             if (els.filterIncludeManual && els.filterIncludeManual.checked) p.include_manual = 'true';
+            if (els.filterExcludeCompareEdgeCases && !els.filterExcludeCompareEdgeCases.checked) {
+                p.exclude_compare_edge_cases = '0';
+            }
         }
 
         if (readColumnPrefs().showRemoved) {
             p.include_removed = 'true';
-        }
-        if (isAnalystMode()) {
-            p.exclude_compare_edge_cases = '0';
         }
 
         if ((section === 'savings' || section === 'term-deposits') && !String(p.deposit_tier || '').trim()) {
@@ -643,7 +668,9 @@
         if (fp.mode && fp.mode !== 'all') q.set('mode', fp.mode);
         if (fp.include_manual) q.set('include_manual', fp.include_manual);
         if (fp.include_removed) q.set('include_removed', fp.include_removed);
-        if (isAnalystMode() && fp.exclude_compare_edge_cases) q.set('exclude_compare_edge_cases', fp.exclude_compare_edge_cases);
+        if (isAnalystMode() && fp.exclude_compare_edge_cases) {
+            q.set('exclude_compare_edge_cases', fp.exclude_compare_edge_cases);
+        }
 
         if (els.refreshInterval && els.refreshInterval.value !== '60') q.set('refresh_interval', els.refreshInterval.value);
         if (apiOverride) q.set('apiBase', apiOverride);
@@ -707,6 +734,15 @@
         if (p.get('include_manual') === 'true' && els.filterIncludeManual) {
             els.filterIncludeManual.checked = true;
             restored.include_manual = 'true';
+        }
+        if (els.filterExcludeCompareEdgeCases) {
+            els.filterExcludeCompareEdgeCases.checked = true;
+            if (p.has('exclude_compare_edge_cases')) {
+                var edgeSetting = String(p.get('exclude_compare_edge_cases') || '').trim().toLowerCase();
+                var isExcluded = !(edgeSetting === '0' || edgeSetting === 'false' || edgeSetting === 'no' || edgeSetting === 'off');
+                els.filterExcludeCompareEdgeCases.checked = isExcluded;
+                restored.exclude_compare_edge_cases = isExcluded ? '1' : '0';
+            }
         }
         if (p.get('refresh_interval') && els.refreshInterval) {
             els.refreshInterval.value = p.get('refresh_interval');

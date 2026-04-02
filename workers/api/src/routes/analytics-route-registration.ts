@@ -7,6 +7,7 @@ import {
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
+import type { ChartWindow } from '../utils/chart-window'
 import {
   parseAnalyticsRepresentation,
   type AnalyticsRepresentation,
@@ -25,6 +26,7 @@ type AnalyticsDbs = {
 type AnalyticsFilters = Record<string, unknown> & {
   startDate?: string
   endDate?: string
+  chartWindow?: ChartWindow | null
 }
 
 type AnalyticsResult = Pick<ResolvedAnalyticsRows, 'rows' | 'representation' | 'fallbackReason'>
@@ -58,7 +60,9 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const resolvedFilters =
     baseFilters.startDate && baseFilters.endDate
       ? baseFilters
-      : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters)) as TFilters
+      : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
+          window: baseFilters.chartWindow ?? null,
+        })) as TFilters
 
   const result = await getCachedOrCompute(
     c.env,

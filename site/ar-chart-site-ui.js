@@ -11,7 +11,8 @@
         desktop: DEFAULT,
         mobile: DEFAULT,
         resolved: DEFAULT,
-        chartMaxProducts: null
+        chartMaxProducts: null,
+        chartMaxProductsMode: 'default'
     };
     var legends = [];
     var mobileMedia = null;
@@ -33,6 +34,7 @@
                     chart_legend_opacity_desktop: cached.desktop,
                     chart_legend_opacity_mobile: cached.mobile,
                     chart_max_products: cached.chartMaxProducts,
+                    chart_max_products_mode: cached.chartMaxProductsMode,
                     device_mode: resolveIsMobile() ? 'mobile' : 'desktop'
                 }
             }));
@@ -71,6 +73,7 @@
         cached.desktop = desktop;
         cached.mobile = mobile;
         cached.chartMaxProducts = normalizeChartMaxProducts(body.chart_max_products);
+        cached.chartMaxProductsMode = String(body.chart_max_products_mode || 'default').trim().toLowerCase() || 'default';
         applyAll();
     }
 
@@ -116,11 +119,15 @@
                 desktop: cached.desktop,
                 mobile: cached.mobile,
                 resolved: resolvedOpacity(),
-                chartMaxProducts: cached.chartMaxProducts
+                chartMaxProducts: cached.chartMaxProducts,
+                chartMaxProductsMode: cached.chartMaxProductsMode
             };
         },
         getChartMaxProducts: function () {
             return cached.chartMaxProducts;
+        },
+        getChartMaxProductsMode: function () {
+            return cached.chartMaxProductsMode;
         },
         registerReportLegend: function (el) {
             if (!el) return;

@@ -1,6 +1,7 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import { applyTdCompareEdgeExclusions } from '../compare-edge-exclusions'
 import {
   addBalanceBandOverlapWhere,
   addBankWhere,
@@ -47,6 +48,7 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
   if (input.depositTier) { where.push('h.deposit_tier = ?'); binds.push(input.depositTier) }
   addBalanceBandOverlapWhere(where, binds, 'h.min_deposit', 'h.max_deposit', input.balanceMin, input.balanceMax)
   if (input.interestPayment) { where.push('h.interest_payment = ?'); binds.push(input.interestPayment) }
+  applyTdCompareEdgeExclusions(where, 'h.product_name', 'h.min_deposit', input.excludeCompareEdgeCases)
   if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('h.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('h.collection_date >= ?'); binds.push(input.startDate) }

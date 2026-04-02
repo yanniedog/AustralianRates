@@ -7,10 +7,19 @@ import type { EnvBindings } from '../types'
 import { queryHomeLoanCollectionDateRange } from './home-loans/paginated'
 import { querySavingsCollectionDateRange } from './savings/paginated'
 import { queryTdCollectionDateRange } from './term-deposits/paginated'
+import {
+  buildChartWindowScope,
+  parseChartWindow,
+  PRECOMPUTED_CHART_WINDOWS,
+  resolveChartWindowStart,
+  type ChartWindow,
+} from '../utils/chart-window'
 
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
+export type ChartCacheScope = 'default' | `window:${ChartWindow}`
 
-const CACHE_TABLE = 'chart_pivot_cache'
+const CACHE_TABLE = 'chart_request_cache'
+const LEGACY_CACHE_TABLE = 'chart_pivot_cache'
 /** Bump when chart row selection semantics change so legacy D1 payloads are ignored. */
 const CHART_PIVOT_PAYLOAD_VERSION = 2
 /** D1 cache row considered fresh if built within this many minutes. */
@@ -23,6 +32,7 @@ const GZIP_PREFIX = 'gz:'
 const MAX_UNCOMPRESSED_CHARS = 500_000
 /** KV TTL for computed responses (seconds). */
 export const CHART_CACHE_KV_TTL = 300
+export { PRECOMPUTED_CHART_WINDOWS }
 
 function toYmd(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -94,6 +104,7 @@ export async function resolveChartDateRangeFromDb(
   db: D1Database,
   section: ChartCacheSection,
   filters: Record<string, unknown> & { startDate?: string; endDate?: string },
+  options: { window?: ChartWindow | null } = {},
 ): Promise<Record<string, unknown> & { startDate: string; endDate: string }> {
   const start = filters.startDate?.trim()
   const end = filters.endDate?.trim()
@@ -107,8 +118,17 @@ export async function resolveChartDateRangeFromDb(
     range = await queryTdCollectionDateRange(db, filters as Parameters<typeof queryTdCollectionDateRange>[1])
   }
   const fallback = toYmd(new Date())
-  const startDate = start || range?.startDate || fallback
-  const endDate = end || range?.endDate || fallback
+  const rangeStart = range?.startDate || fallback
+  const rangeEnd = range?.endDate || fallback
+  if (options.window && !start && !end) {
+    return {
+      ...filters,
+      startDate: resolveChartWindowStart(rangeStart, rangeEnd, options.window),
+      endDate: rangeEnd,
+    }
+  }
+  const startDate = start || rangeStart
+  const endDate = end || rangeEnd
   return { ...filters, startDate, endDate }
 }
 
@@ -118,6 +138,8 @@ type DefaultCheckInput = {
   bank?: string
   banks?: string[]
   includeRemoved?: boolean
+  includeManual?: boolean
+  excludeCompareEdgeCases?: boolean
   mode?: string
   [k: string]: unknown
 }
@@ -129,6 +151,8 @@ export function isDefaultChartRequest(
 ): boolean {
   if (params.bank || (params.banks && params.banks.length > 0)) return false
   if (params.includeRemoved) return false
+  if (params.includeManual) return false
+  if (params.excludeCompareEdgeCases === false) return false
   if (params.mode && params.mode !== 'all') return false
   if (params.startDate?.trim() || params.endDate?.trim()) return false
   if (section === 'home_loans') {
@@ -167,10 +191,69 @@ export function isDefaultChartRequest(
   return true
 }
 
+function buildDefaultRequestInput(params: Record<string, string | undefined>): DefaultCheckInput {
+  const banks = params.banks
+    ? String(params.banks)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined
+  return {
+    startDate: params.start_date,
+    endDate: params.end_date,
+    bank: params.bank,
+    banks: banks?.length ? banks : undefined,
+    includeRemoved: params.include_removed === 'true',
+    includeManual: params.include_manual === 'true',
+    excludeCompareEdgeCases:
+      params.exclude_compare_edge_cases === '0' ||
+      params.exclude_compare_edge_cases === 'false' ||
+      params.exclude_compare_edge_cases === 'no' ||
+      params.exclude_compare_edge_cases === 'off'
+        ? false
+        : undefined,
+    mode: params.mode,
+    securityPurpose: params.security_purpose,
+    repaymentType: params.repayment_type,
+    rateStructure: params.rate_structure,
+    lvrTier: params.lvr_tier,
+    featureSet: params.feature_set,
+    minRate: params.min_rate ? Number(params.min_rate) : undefined,
+    maxRate: params.max_rate ? Number(params.max_rate) : undefined,
+    minComparisonRate: params.min_comparison_rate ? Number(params.min_comparison_rate) : undefined,
+    maxComparisonRate: params.max_comparison_rate ? Number(params.max_comparison_rate) : undefined,
+    accountType: params.account_type,
+    rateType: params.rate_type,
+    depositTier: params.deposit_tier,
+    balanceMin: params.balance_min ? Number(params.balance_min) : undefined,
+    balanceMax: params.balance_max ? Number(params.balance_max) : undefined,
+    termMonths: params.term_months,
+    interestPayment: params.interest_payment,
+  }
+}
+
+function resolveDefaultChartScope(params: Record<string, string | undefined>): ChartCacheScope {
+  const chartWindow = parseChartWindow(params.chart_window)
+  return chartWindow ? buildChartWindowScope(chartWindow) : 'default'
+}
+
+export function resolveDefaultChartCacheScope(
+  section: ChartCacheSection,
+  params: Record<string, string | undefined>,
+): ChartCacheScope | null {
+  return isDefaultChartRequest(section, buildDefaultRequestInput(params))
+    ? resolveDefaultChartScope(params)
+    : null
+}
+
 export type ChartCacheRow = {
   payload_json: string
   row_count: number
   built_at: string
+}
+
+type ChartCacheRowWithScope = ChartCacheRow & {
+  request_scope: ChartCacheScope
 }
 
 function isNoSuchTableError(e: unknown, table: string): boolean {
@@ -183,18 +266,35 @@ export async function readD1ChartCache(
   db: D1Database,
   section: ChartCacheSection,
   representation: 'day' | 'change',
+  scope: ChartCacheScope = 'default',
 ): Promise<{ rows: Array<Record<string, unknown>>; representation: 'day' | 'change'; fallbackReason: string | null; builtAt: string } | null> {
-  let row: ChartCacheRow | null
+  let row: ChartCacheRow | null = null
   try {
     row = await db
       .prepare(
-        `SELECT payload_json, row_count, built_at FROM ${CACHE_TABLE} WHERE section = ? AND representation = ?`,
+        `SELECT payload_json, row_count, built_at
+         FROM ${CACHE_TABLE}
+         WHERE section = ? AND representation = ? AND request_scope = ?`,
       )
-      .bind(section, representation)
-      .first<ChartCacheRow>()
+      .bind(section, representation, scope)
+      .first<ChartCacheRowWithScope>()
   } catch (e) {
-    if (isNoSuchTableError(e, CACHE_TABLE)) return null
-    throw e
+    if (!isNoSuchTableError(e, CACHE_TABLE)) throw e
+  }
+  if (!row && scope === 'default') {
+    try {
+      row = await db
+        .prepare(
+          `SELECT payload_json, row_count, built_at
+           FROM ${LEGACY_CACHE_TABLE}
+           WHERE section = ? AND representation = ?`,
+        )
+        .bind(section, representation)
+        .first<ChartCacheRow>()
+    } catch (e) {
+      if (isNoSuchTableError(e, LEGACY_CACHE_TABLE)) return null
+      throw e
+    }
   }
   if (!row?.payload_json) return null
   const builtAt = row.built_at
@@ -229,11 +329,38 @@ export async function readD1ChartCache(
   }
 }
 
-/** Write precomputed result to D1 (upsert). No-op if table does not exist (migration 0030 not applied). */
+async function writeLegacyD1ChartCache(
+  db: D1Database,
+  section: ChartCacheSection,
+  representation: 'day' | 'change',
+  payloadJson: string,
+  rowCount: number,
+  builtAt: string,
+): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO ${LEGACY_CACHE_TABLE} (section, representation, payload_json, row_count, built_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (section, representation) DO UPDATE SET
+           payload_json = excluded.payload_json,
+           row_count = excluded.row_count,
+           built_at = excluded.built_at`,
+      )
+      .bind(section, representation, payloadJson, rowCount, builtAt)
+      .run()
+  } catch (e) {
+    if (isNoSuchTableError(e, LEGACY_CACHE_TABLE)) return
+    throw e
+  }
+}
+
+/** Write precomputed result to D1 (upsert). No-op if table does not exist (migration 0047 not applied). */
 export async function writeD1ChartCache(
   db: D1Database,
   section: ChartCacheSection,
   representation: 'day' | 'change',
+  scope: ChartCacheScope,
   result: { rows: Array<Record<string, unknown>> },
 ): Promise<void> {
   const rawJson = JSON.stringify({ v: CHART_PIVOT_PAYLOAD_VERSION, rows: result.rows })
@@ -243,18 +370,20 @@ export async function writeD1ChartCache(
   try {
     await db
       .prepare(
-        `INSERT INTO ${CACHE_TABLE} (section, representation, payload_json, row_count, built_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT (section, representation) DO UPDATE SET
+        `INSERT INTO ${CACHE_TABLE} (section, representation, request_scope, payload_json, row_count, built_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (section, representation, request_scope) DO UPDATE SET
            payload_json = excluded.payload_json,
            row_count = excluded.row_count,
            built_at = excluded.built_at`,
       )
-      .bind(section, representation, payloadJson, result.rows.length, builtAt)
+      .bind(section, representation, scope, payloadJson, result.rows.length, builtAt)
       .run()
   } catch (e) {
-    if (isNoSuchTableError(e, CACHE_TABLE)) return
-    throw e
+    if (!isNoSuchTableError(e, CACHE_TABLE)) throw e
+  }
+  if (scope === 'default') {
+    await writeLegacyD1ChartCache(db, section, representation, payloadJson, result.rows.length, builtAt)
   }
 }
 
@@ -269,6 +398,15 @@ export function buildChartCacheKey(
     .map((k) => `${k}=${String(params[k] ?? '')}`)
     .join('&')
   return `chart:${section}:${representation}:${sorted}`
+}
+
+export function buildPrecomputedChartScope(window: ChartWindow | null): ChartCacheScope {
+  return window ? buildChartWindowScope(window) : 'default'
+}
+
+export function buildPrecomputedChartParams(scope: ChartCacheScope): Record<string, string | undefined> {
+  if (scope === 'default') return {}
+  return { chart_window: scope.slice('window:'.length) }
 }
 
 export type ChartAnalyticsPayload = {
@@ -299,36 +437,9 @@ export async function getCachedOrCompute(
     }
   }
 
-  const banks = params.banks
-    ? String(params.banks)
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined
-  const defaultParams = {
-    startDate: params.start_date,
-    endDate: params.end_date,
-    bank: params.bank,
-    banks: banks?.length ? banks : undefined,
-    includeRemoved: params.include_removed === 'true',
-    mode: params.mode,
-    securityPurpose: params.security_purpose,
-    repaymentType: params.repayment_type,
-    rateStructure: params.rate_structure,
-    lvrTier: params.lvr_tier,
-    featureSet: params.feature_set,
-    minRate: params.min_rate ? Number(params.min_rate) : undefined,
-    maxRate: params.max_rate ? Number(params.max_rate) : undefined,
-    minComparisonRate: params.min_comparison_rate ? Number(params.min_comparison_rate) : undefined,
-    maxComparisonRate: params.max_comparison_rate ? Number(params.max_comparison_rate) : undefined,
-    accountType: params.account_type,
-    rateType: params.rate_type,
-    depositTier: params.deposit_tier,
-    termMonths: params.term_months,
-    interestPayment: params.interest_payment,
-  }
-  if (isDefaultChartRequest(section, defaultParams)) {
-    const d1Cached = await readD1ChartCache(env.DB, section, representation)
+  const cacheScope = resolveDefaultChartCacheScope(section, params)
+  if (cacheScope) {
+    const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope)
     if (d1Cached) {
       return {
         rows: d1Cached.rows,

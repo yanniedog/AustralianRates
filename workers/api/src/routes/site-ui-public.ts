@@ -8,7 +8,11 @@ import {
 import { getAppConfig } from '../db/app-config'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
-import { resolveChartLegendOpacitySetFromDb, resolveChartMaxProductsFromDb } from '../utils/chart-site-ui'
+import {
+  resolveChartLegendOpacitySetFromDb,
+  resolveChartMaxProductsFromDb,
+  resolveChartMaxProductsModeFromDb,
+} from '../utils/chart-site-ui'
 import { withPublicCache } from '../utils/http'
 
 /** GET /site-ui — safe public UI prefs (no secrets). Cached briefly at the edge. */
@@ -28,12 +32,14 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
       mobileRaw,
     })
     const chartMaxProducts = resolveChartMaxProductsFromDb(chartMaxProductsRaw)
+    const chartMaxProductsMode = resolveChartMaxProductsModeFromDb(chartMaxProductsRaw)
     return c.json({
       ok: true,
       chart_legend_opacity: opacities.desktop,
       chart_legend_opacity_desktop: opacities.desktop,
       chart_legend_opacity_mobile: opacities.mobile,
       chart_max_products: chartMaxProducts,
+      chart_max_products_mode: chartMaxProductsMode,
     })
   })
 }

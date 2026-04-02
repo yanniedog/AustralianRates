@@ -5,6 +5,7 @@ import {
   resolveChartLegendOpacityFromDb,
   resolveChartLegendOpacitySetFromDb,
   resolveChartMaxProductsFromDb,
+  resolveChartMaxProductsModeFromDb,
 } from '../src/utils/chart-site-ui'
 
 describe('chart-site-ui', () => {
@@ -60,6 +61,10 @@ describe('chart-site-ui', () => {
     expect(resolveChartMaxProductsFromDb('unlimited')).toBeNull()
     expect(resolveChartMaxProductsFromDb('24')).toBe(24)
     expect(resolveChartMaxProductsFromDb('1001')).toBe(1000)
+    expect(resolveChartMaxProductsModeFromDb(null)).toBe('default')
+    expect(resolveChartMaxProductsModeFromDb('')).toBe('default')
+    expect(resolveChartMaxProductsModeFromDb('unlimited')).toBe('unlimited')
+    expect(resolveChartMaxProductsModeFromDb('24')).toBe('capped')
 
     expect(normalizeChartMaxProductsForPut('unlimited')).toEqual({ ok: true, value: 'unlimited' })
     expect(normalizeChartMaxProductsForPut('48')).toEqual({ ok: true, value: '48' })

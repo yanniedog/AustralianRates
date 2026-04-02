@@ -148,6 +148,13 @@
 
     var SHARED_ADVANCED_FIELDS = [
         {
+            kind: 'toggle',
+            id: 'filter-exclude-compare-edge-cases',
+            label: 'Exclude compare edge cases',
+            icon: 'compare',
+            help: 'Exclude niche or mis-filed outlier products from compare views and report charts.'
+        },
+        {
             kind: 'select',
             id: 'filter-mode',
             label: 'Data scope',

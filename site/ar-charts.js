@@ -37,6 +37,7 @@
         totalRows: 0,
         truncated: false,
         loadedRepresentation: 'change',
+        loadedChartWindow: '',
         stale: false,
         fallbackReason: '',
         selectedSeriesKeys: [],
@@ -548,6 +549,13 @@
         params.dir = 'asc';
         var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
+        if (currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport') {
+            var shared = window.AR.chartMacroLwcShared;
+            var reportRange = shared && typeof shared.getReportRange === 'function'
+                ? String(shared.getReportRange(section) || '')
+                : '';
+            if (reportRange) params.chart_window = reportRange;
+        }
         return params;
     }
 
@@ -576,6 +584,7 @@
             chartState.totalRows = Number(payload.total || chartState.rows.length || 0);
             chartState.truncated = !!payload.truncated;
             chartState.loadedRepresentation = payload.representation || buildBaseParams().representation || 'change';
+            chartState.loadedChartWindow = String(buildBaseParams().chart_window || '');
             chartState.stale = false;
             chartState.fallbackReason = payload.fallbackReason || '';
             chartState.tdCurveDates = [];
@@ -683,6 +692,11 @@
             return;
         }
         if ((currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope') && chartState.loadedRepresentation !== 'day') {
+            drawChart();
+            return;
+        }
+        if ((currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport')
+            && String(buildBaseParams().chart_window || '') !== String(chartState.loadedChartWindow || '')) {
             drawChart();
             return;
         }

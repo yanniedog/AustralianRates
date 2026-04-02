@@ -1197,6 +1197,27 @@ body.ar-public .chip-strip .chip-remove:hover {
     color: var(--ar-text);
 }
 
+body.ar-public .chip-strip .chip-clear-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ar-text-soft);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+body.ar-public .chip-strip .chip-clear-all:hover,
+body.ar-public .chip-strip .chip-clear-all:focus-visible {
+    border-color: color-mix(in srgb, var(--ar-accent) 40%, transparent);
+    background: color-mix(in srgb, var(--ar-accent-soft) 82%, transparent);
+    color: var(--ar-text);
+}
+
 /* ── Mobile adjustments ─────────────────────────────────────────── */
 @media (max-width: 760px) {
     body.ar-public .workspace-nav-row {

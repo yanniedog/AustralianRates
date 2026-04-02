@@ -254,16 +254,21 @@
         if (!bankMax) bankMax = todayYmd();
         if (!bankMin) bankMin = bankMax;
 
-        var ctxMin = M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin;
+        var dataMin = reportRange === 'All'
+            ? (M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin)
+            : bankMin;
         var ctxMax = bankMax;
-        var viewStart = M.resolveReportRangeStart(ctxMin, ctxMax, reportRange);
+        var viewStart = reportRange === 'All'
+            ? dataMin
+            : M.resolveReportRangeStart(bankMin, ctxMax, reportRange);
+        var windowStart = viewStart;
 
-        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMin, ctxMax);
+        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, windowStart, ctxMax);
         var rbaData = prep.rbaData;
         var cpiPts = prep.cpiPoints;
-        var chartStart = prep.chartStart || ctxMin;
+        var chartStart = prep.chartStart || windowStart;
         var overlayDefs = overlayModule.prepareWindowSeries
-            ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], ctxMin, ctxMax)
+            ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], windowStart, ctxMax)
             : [];
 
         var compact = (container.clientWidth || 800) < 480;
@@ -291,10 +296,14 @@
         wrapper.appendChild(M.createReportRangeBar({
             section: section,
             range: reportRange,
-            minDate: ctxMin,
+            minDate: dataMin,
             maxDate: ctxMax,
             onChange: function () {
-                render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+                if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
+                    window.AR.charts.drawChart();
+                } else {
+                    render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+                }
             },
         }));
 
@@ -338,13 +347,13 @@
             var allPts = line.points;
             var carryPt = null;
             for (var j = 0; j < allPts.length; j++) {
-                if (allPts[j].date <= ctxMin) carryPt = allPts[j];
+                if (allPts[j].date <= windowStart) carryPt = allPts[j];
                 else break;
             }
-            var rawPts = allPts.filter(function (p) { return p.date >= ctxMin && p.date <= ctxMax; });
+            var rawPts = allPts.filter(function (p) { return p.date >= windowStart && p.date <= ctxMax; });
             if (carryPt) {
                 rawPts = [{
-                    date: ctxMin,
+                    date: windowStart,
                     value: carryPt.value,
                     productName: carryPt.productName,
                 }].concat(rawPts);

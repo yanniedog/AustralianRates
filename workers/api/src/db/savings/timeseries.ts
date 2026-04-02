@@ -1,6 +1,7 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentSavingsRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import { applySavingsCompareEdgeExclusions } from '../compare-edge-exclusions'
 import {
   addBalanceBandOverlapWhere,
   addBankWhere,
@@ -41,6 +42,7 @@ export async function querySavingsTimeseries(db: D1Database, input: SavingsTimes
   if (input.rateType) { where.push('t.rate_type = ?'); binds.push(input.rateType) }
   if (input.depositTier) { where.push('t.deposit_tier = ?'); binds.push(input.depositTier) }
   addBalanceBandOverlapWhere(where, binds, 't.min_balance', 't.max_balance', input.balanceMin, input.balanceMax)
+  applySavingsCompareEdgeExclusions(where, 't.product_name', input.excludeCompareEdgeCases)
   if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('t.collection_date >= ?'); binds.push(input.startDate) }

@@ -2,6 +2,11 @@ import type { DatasetKind } from '../../../../../packages/shared/src/index.js'
 import { runSourceWhereClause, type SourceMode } from '../../utils/source-mode'
 import { presentHomeLoanRow, presentSavingsRow, presentTdRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import {
+  applyHomeLoanCompareEdgeExclusions,
+  applySavingsCompareEdgeExclusions,
+  applyTdCompareEdgeExclusions,
+} from '../compare-edge-exclusions'
 import { MIN_CONFIDENCE_ALL, MIN_CONFIDENCE_HISTORICAL, MAX_PUBLIC_RATE as HOME_MAX_RATE, MIN_PUBLIC_RATE as HOME_MIN_RATE } from '../home-loans/shared'
 import {
   addBalanceBandOverlapWhere,
@@ -33,6 +38,8 @@ type CommonInput = {
   offset?: number
   /** Newest-first SQL order for chunked reads; default asc for normal pagination. */
   rowSort?: 'asc' | 'desc'
+  disableRowCap?: boolean
+  excludeCompareEdgeCases?: boolean
 }
 
 export type HomeLoanAnalyticsInput = CommonInput & {
@@ -130,6 +137,7 @@ export async function queryHomeLoanAnalyticsRows(db: D1Database, input: HomeLoan
   if (input.rateStructure) { where.push('e.rate_structure = ?'); binds.push(input.rateStructure) }
   if (input.lvrTier) { where.push('e.lvr_tier = ?'); binds.push(input.lvrTier) }
   if (input.featureSet) { where.push('e.feature_set = ?'); binds.push(input.featureSet) }
+  applyHomeLoanCompareEdgeExclusions(where, 'e.product_name', input.excludeCompareEdgeCases)
   const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
   return queryAnalyticsRows(
     db,
@@ -161,6 +169,7 @@ export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAn
   if (input.rateType) { where.push('e.rate_type = ?'); binds.push(input.rateType) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
   addBalanceBandOverlapWhere(where, binds, 'e.min_balance', 'e.max_balance', input.balanceMin, input.balanceMax)
+  applySavingsCompareEdgeExclusions(where, 'e.product_name', input.excludeCompareEdgeCases)
   const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
   return queryAnalyticsRows(
     db,
@@ -192,6 +201,7 @@ export async function queryTdAnalyticsRows(db: D1Database, input: TdAnalyticsInp
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
   addBalanceBandOverlapWhere(where, binds, 'e.min_deposit', 'e.max_deposit', input.balanceMin, input.balanceMax)
   if (input.interestPayment) { where.push('e.interest_payment = ?'); binds.push(input.interestPayment) }
+  applyTdCompareEdgeExclusions(where, 'e.product_name', 'e.min_deposit', input.excludeCompareEdgeCases)
   const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
   return queryAnalyticsRows(
     db,

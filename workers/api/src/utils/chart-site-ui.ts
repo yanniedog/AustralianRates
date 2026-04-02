@@ -14,6 +14,7 @@ export type ChartLegendOpacitySet = {
 }
 
 export type ChartProductLimit = number | null
+export type ChartProductLimitMode = 'default' | 'capped' | 'unlimited'
 
 function clampChartLegendOpacity(opacity: number): number {
   return Math.min(CHART_LEGEND_OPACITY_MAX, Math.max(CHART_LEGEND_OPACITY_MIN, opacity))
@@ -85,6 +86,15 @@ export function resolveChartMaxProductsFromDb(raw: string | null): ChartProductL
   const parsed = Number(text)
   if (!Number.isFinite(parsed) || parsed < CHART_MAX_PRODUCTS_MIN) return null
   return Math.min(CHART_MAX_PRODUCTS_MAX, Math.floor(parsed))
+}
+
+export function resolveChartMaxProductsModeFromDb(raw: string | null): ChartProductLimitMode {
+  const text = String(raw ?? '').trim().toLowerCase()
+  if (!text) return 'default'
+  if (text === CHART_MAX_PRODUCTS_UNLIMITED) return 'unlimited'
+  const parsed = Number(text)
+  if (!Number.isFinite(parsed) || parsed < CHART_MAX_PRODUCTS_MIN) return 'default'
+  return 'capped'
 }
 
 export function normalizeChartMaxProductsForPut(

@@ -1,5 +1,11 @@
 import { getReadDb } from '../db/read-db'
-import { writeD1ChartCache, type ChartCacheSection } from '../db/chart-cache'
+import {
+  buildPrecomputedChartScope,
+  PRECOMPUTED_CHART_WINDOWS,
+  resolveChartDateRangeFromDb,
+  writeD1ChartCache,
+  type ChartCacheSection,
+} from '../db/chart-cache'
 import type { EnvBindings } from '../types'
 import {
   collectHomeLoanAnalyticsRowsResolved,
@@ -7,10 +13,12 @@ import {
   collectTdAnalyticsRowsResolved,
 } from '../routes/analytics-data'
 import { log } from '../utils/logger'
+import type { ChartWindow } from '../utils/chart-window'
 
 const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
 const REPRESENTATIONS = ['day', 'change'] as const
 const DEFAULT_CACHE_LOOKBACK_DAYS = 365
+const PRECOMPUTED_SCOPES: Array<'default' | ChartWindow> = ['default', ...PRECOMPUTED_CHART_WINDOWS]
 
 const SECTION_TABLES: Record<ChartCacheSection, string> = {
   home_loans: 'historical_loan_rates',
@@ -60,7 +68,25 @@ async function defaultFilters(
   }
 }
 
-/** Refresh chart_pivot_cache for all sections and representations. Called by cron every 15 min. */
+async function scopeFilters(
+  db: EnvBindings['DB'],
+  section: ChartCacheSection,
+  scope: 'default' | ChartWindow,
+): Promise<{ startDate: string; endDate: string; mode: 'all'; includeRemoved: false; sourceMode: 'all' }> {
+  if (scope === 'default') return defaultFilters(db, section)
+  return resolveChartDateRangeFromDb(
+    db,
+    section,
+    {
+      mode: 'all' as const,
+      includeRemoved: false,
+      sourceMode: 'all' as const,
+    },
+    { window: scope },
+  ) as Promise<{ startDate: string; endDate: string; mode: 'all'; includeRemoved: false; sourceMode: 'all' }>
+}
+
+/** Refresh scoped chart request caches for all sections and representations. Called by cron every 15 min. */
 export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
   const db = env.DB
   const analyticsDb = getReadDb(env)
@@ -69,24 +95,27 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   let refreshed = 0
 
   for (const section of SECTIONS) {
-    const filters = await defaultFilters(db, section)
-    for (const rep of REPRESENTATIONS) {
-      try {
-        const result =
-          section === 'home_loans'
-            ? await collectHomeLoanAnalyticsRowsResolved(dbs, rep, filters)
-            : section === 'savings'
-              ? await collectSavingsAnalyticsRowsResolved(dbs, rep, filters)
-              : await collectTdAnalyticsRowsResolved(dbs, rep, filters)
-        await writeD1ChartCache(db, section, rep, result)
-        refreshed++
-      } catch (e) {
-        const msg = (e as Error)?.message ?? String(e)
-        errors.push(`${section}:${rep}: ${msg}`)
-        log.warn('chart_cache_refresh', `Failed to refresh ${section} ${rep}`, {
-          code: 'chart_cache_refresh_failed',
-          context: msg,
-        })
+    for (const scope of PRECOMPUTED_SCOPES) {
+      const filters = await scopeFilters(db, section, scope)
+      const cacheScope = buildPrecomputedChartScope(scope === 'default' ? null : scope)
+      for (const rep of REPRESENTATIONS) {
+        try {
+          const result =
+            section === 'home_loans'
+              ? await collectHomeLoanAnalyticsRowsResolved(dbs, rep, { ...filters, disableRowCap: true })
+              : section === 'savings'
+                ? await collectSavingsAnalyticsRowsResolved(dbs, rep, { ...filters, disableRowCap: true })
+                : await collectTdAnalyticsRowsResolved(dbs, rep, { ...filters, disableRowCap: true })
+          await writeD1ChartCache(db, section, rep, cacheScope, result)
+          refreshed++
+        } catch (e) {
+          const msg = (e as Error)?.message ?? String(e)
+          errors.push(`${section}:${rep}:${cacheScope}: ${msg}`)
+          log.warn('chart_cache_refresh', `Failed to refresh ${section} ${rep} ${cacheScope}`, {
+            code: 'chart_cache_refresh_failed',
+            context: msg,
+          })
+        }
       }
     }
   }

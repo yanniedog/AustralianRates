@@ -585,11 +585,15 @@
         var fallback = Number(defaultLimit);
         if (!Number.isFinite(fallback) || fallback < 1) fallback = 1;
         var siteUi = window.AR && window.AR.chartSiteUi;
+        var mode = siteUi && typeof siteUi.getChartMaxProductsMode === 'function'
+            ? String(siteUi.getChartMaxProductsMode() || '').toLowerCase()
+            : '';
+        if (mode === 'unlimited') return Number.MAX_SAFE_INTEGER;
         var cap = siteUi && typeof siteUi.getChartMaxProducts === 'function'
             ? siteUi.getChartMaxProducts()
             : null;
         if (!Number.isFinite(Number(cap)) || Number(cap) < 1) return fallback;
-        return Math.max(1, Math.min(fallback, Math.floor(Number(cap))));
+        return Math.max(1, Math.floor(Number(cap)));
     }
 
     function seriesValueAtClick(param, api) {

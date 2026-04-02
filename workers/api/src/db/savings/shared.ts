@@ -74,6 +74,7 @@ export type SavingsTimeseriesFilters = {
   minRate?: number
   maxRate?: number
   includeRemoved?: boolean
+  excludeCompareEdgeCases?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   startDate?: string

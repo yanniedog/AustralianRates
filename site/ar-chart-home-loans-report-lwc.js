@@ -286,15 +286,20 @@
         if (!bankMax) bankMax = todayYmd();
         if (!bankMin) bankMin = bankMax;
 
-        var ctxMin = M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin;
+        var dataMin = reportRange === 'All'
+            ? (M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin)
+            : bankMin;
         var ctxMax = bankMax;
-        var viewStart = M.resolveReportRangeStart(ctxMin, ctxMax, reportRange);
+        var viewStart = reportRange === 'All'
+            ? dataMin
+            : M.resolveReportRangeStart(bankMin, ctxMax, reportRange);
+        var windowStart = viewStart;
 
-        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, ctxMin, ctxMax);
+        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, windowStart, ctxMax);
         var rbaData = prep.rbaData;
         var cpiPoints = prep.cpiPoints;
-        var chartStart = prep.chartStart || ctxMin;
-        var overlayDefs = overlayModule.prepareWindowSeries ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], ctxMin, ctxMax) : [];
+        var chartStart = prep.chartStart || windowStart;
+        var overlayDefs = overlayModule.prepareWindowSeries ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], windowStart, ctxMax) : [];
 
         var compact = (container.clientWidth || 800) < 480;
         var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? 25 : 100);
@@ -321,10 +326,14 @@
         wrapper.appendChild(M.createReportRangeBar({
             section: section,
             range: reportRange,
-            minDate: ctxMin,
+            minDate: dataMin,
             maxDate: ctxMax,
             onChange: function () {
-                render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+                if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
+                    window.AR.charts.drawChart();
+                } else {
+                    render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+                }
             },
         }));
 
@@ -363,7 +372,7 @@
         var lineWidth = isProductMode && vm.mode !== 'focus' ? 1.5 : (compact ? 1.5 : 2);
         var seriesApis = [];
         visiLines.forEach(function (bank) {
-            var clippedPts = clipSteppedPoints(bank.points, ctxMin, ctxMax);
+            var clippedPts = clipSteppedPoints(bank.points, windowStart, ctxMax);
             var data = clippedPts.map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; });
             if (!data.length) return;
             var seriesApi = chart.addSeries(L.LineSeries, { color: bank.color, lineWidth: lineWidth, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });

@@ -34,6 +34,7 @@ export type TimeseriesFilters = {
   minComparisonRate?: number
   maxComparisonRate?: number
   includeRemoved?: boolean
+  excludeCompareEdgeCases?: boolean
   mode?: 'all' | 'daily' | 'historical'
   sourceMode?: SourceMode
   startDate?: string

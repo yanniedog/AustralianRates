@@ -29,12 +29,12 @@ const CHART_SERIES_MAX_ROWS = 20_000
 async function collectByOffset<T>(
   fetchChunk: (limit: number, offset: number) => Promise<T[]>,
   pageSize = 5000,
-  maxRows: number = CHART_SERIES_MAX_ROWS,
+  maxRows?: number,
 ): Promise<T[]> {
   const rows: T[] = []
   let offset = 0
-  while (rows.length < maxRows) {
-    const need = maxRows - rows.length
+  while (maxRows == null || rows.length < maxRows) {
+    const need = maxRows == null ? pageSize : maxRows - rows.length
     const lim = Math.min(pageSize, need)
     const chunk = await fetchChunk(lim, offset)
     if (chunk.length === 0) break
@@ -67,7 +67,11 @@ function dedupeAnalyticsRows(
 }
 
 /** Keep the most recent rows when over the chart cap (canonical data is sorted ascending by date). */
-function capRows(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+function capRows(
+  rows: Array<Record<string, unknown>>,
+  disableRowCap?: boolean,
+): Array<Record<string, unknown>> {
+  if (disableRowCap) return rows
   return rows.length <= CHART_SERIES_MAX_ROWS ? rows : rows.slice(-CHART_SERIES_MAX_ROWS)
 }
 
@@ -75,6 +79,7 @@ async function resolveRepresentationRows(
   dataset: DatasetKind,
   dbs: DbPair,
   representation: AnalyticsRepresentation,
+  filters: { disableRowCap?: boolean },
   fetchChangeRows: () => Promise<Array<Record<string, unknown>>>,
   fetchDayRows: () => Promise<Array<Record<string, unknown>>>,
 ): Promise<ResolvedAnalyticsRows> {
@@ -84,7 +89,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: null,
-      rows: capRows(rows),
+      rows: capRows(rows, filters.disableRowCap),
     }
   }
 
@@ -95,7 +100,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_unavailable',
-      rows: capRows(rows),
+      rows: capRows(rows, filters.disableRowCap),
     }
   }
 
@@ -105,7 +110,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'change',
       fallbackReason: null,
-      rows: capRows(rows),
+      rows: capRows(rows, filters.disableRowCap),
     }
   } catch {
     const rows = await fetchDayRows()
@@ -113,7 +118,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_query_failed',
-      rows: capRows(rows),
+      rows: capRows(rows, filters.disableRowCap),
     }
   }
 }
@@ -140,6 +145,7 @@ async function collectHomeLoanCanonicalRows(
       minComparisonRate: filters.minComparisonRate,
       maxComparisonRate: filters.maxComparisonRate,
       includeRemoved: filters.includeRemoved,
+      excludeCompareEdgeCases: filters.excludeCompareEdgeCases,
       mode: filters.mode,
       sourceMode: filters.sourceMode,
     })
@@ -180,6 +186,7 @@ async function collectSavingsCanonicalRows(
       minRate: filters.minRate,
       maxRate: filters.maxRate,
       includeRemoved: filters.includeRemoved,
+      excludeCompareEdgeCases: filters.excludeCompareEdgeCases,
       mode: filters.mode,
       sourceMode: filters.sourceMode,
     })
@@ -220,6 +227,7 @@ async function collectTdCanonicalRows(
       minRate: filters.minRate,
       maxRate: filters.maxRate,
       includeRemoved: filters.includeRemoved,
+      excludeCompareEdgeCases: filters.excludeCompareEdgeCases,
       mode: filters.mode,
       sourceMode: filters.sourceMode,
     })
@@ -247,9 +255,13 @@ export async function collectHomeLoanAnalyticsRowsResolved(
     'home_loans',
     dbs,
     representation,
+    filters,
     () =>
-      collectByOffset((limit, offset) =>
-        queryHomeLoanAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+      collectByOffset(
+        (limit, offset) =>
+          queryHomeLoanAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+        5000,
+        filters.disableRowCap ? undefined : CHART_SERIES_MAX_ROWS,
       ),
     () => collectHomeLoanCanonicalRows(dbs, filters),
   )
@@ -272,9 +284,13 @@ export async function collectSavingsAnalyticsRowsResolved(
     'savings',
     dbs,
     representation,
+    filters,
     () =>
-      collectByOffset((limit, offset) =>
-        querySavingsAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+      collectByOffset(
+        (limit, offset) =>
+          querySavingsAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+        5000,
+        filters.disableRowCap ? undefined : CHART_SERIES_MAX_ROWS,
       ),
     () => collectSavingsCanonicalRows(dbs, filters),
   )
@@ -297,9 +313,13 @@ export async function collectTdAnalyticsRowsResolved(
     'term_deposits',
     dbs,
     representation,
+    filters,
     () =>
-      collectByOffset((limit, offset) =>
-        queryTdAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+      collectByOffset(
+        (limit, offset) =>
+          queryTdAnalyticsRows(dbs.analyticsDb, { ...filters, limit, offset, rowSort: 'desc' }),
+        5000,
+        filters.disableRowCap ? undefined : CHART_SERIES_MAX_ROWS,
       ),
     () => collectTdCanonicalRows(dbs, filters),
   )
@@ -322,6 +342,7 @@ export async function queryHomeLoanRepresentationTimeseriesResolved(
     'home_loans',
     dbs,
     representation,
+    filters,
     () => queryHomeLoanAnalyticsRows(dbs.analyticsDb, filters),
     async () => dedupeAnalyticsRows(await queryTimeseries(dbs.canonicalDb, filters), [
       'series_key',
@@ -357,6 +378,7 @@ export async function querySavingsRepresentationTimeseriesResolved(
     'savings',
     dbs,
     representation,
+    filters,
     () => querySavingsAnalyticsRows(dbs.analyticsDb, filters),
     async () => dedupeAnalyticsRows(await querySavingsTimeseries(dbs.canonicalDb, filters), [
       'series_key',
@@ -392,6 +414,7 @@ export async function queryTdRepresentationTimeseriesResolved(
     'term_deposits',
     dbs,
     representation,
+    filters,
     () => queryTdAnalyticsRows(dbs.analyticsDb, filters),
     async () => dedupeAnalyticsRows(await queryTdTimeseries(dbs.canonicalDb, filters), [
       'series_key',

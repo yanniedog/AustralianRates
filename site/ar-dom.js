@@ -37,6 +37,7 @@
         filterEndDate: document.getElementById('filter-end-date'),
         filterDateStatus: document.getElementById('filter-date-status'),
         filterMode: document.getElementById('filter-mode'),
+        filterExcludeCompareEdgeCases: document.getElementById('filter-exclude-compare-edge-cases'),
         filterBar: document.getElementById('scenario'),
         applyFilters: document.getElementById('apply-filters'),
         resetFilters: document.getElementById('reset-filters'),

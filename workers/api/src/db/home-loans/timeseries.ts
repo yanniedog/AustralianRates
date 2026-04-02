@@ -1,6 +1,7 @@
 import { runSourceWhereClause } from '../../utils/source-mode'
 import { presentHomeLoanRow } from '../../utils/row-presentation'
 import { hydrateCdrDetailJson } from '../cdr-detail-payloads'
+import { applyHomeLoanCompareEdgeExclusions } from '../compare-edge-exclusions'
 import { addBankWhere, addRateBoundsWhere, rows, safeLimit } from '../query-common'
 import {
   MAX_PUBLIC_RATE,
@@ -37,6 +38,7 @@ export async function queryTimeseries(db: D1Database, input: TimeseriesFilters) 
     where.push('t.feature_set = ?')
     binds.push(input.featureSet)
   }
+  applyHomeLoanCompareEdgeExclusions(where, 't.product_name', input.excludeCompareEdgeCases)
   if (!input.includeRemoved) {
     where.push('COALESCE(pps.is_removed, 0) = 0')
   }
