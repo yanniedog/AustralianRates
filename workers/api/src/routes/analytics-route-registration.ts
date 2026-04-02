@@ -6,6 +6,7 @@ import {
 } from '../db/chart-cache'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
+import { buildGroupedChartRows } from '../utils/chart-row-groups'
 import { withPublicCache } from '../utils/http'
 import type { ChartWindow } from '../utils/chart-window'
 import {
@@ -49,6 +50,11 @@ function toQueryParams(input: QueryRecord): QueryRecord {
   return params
 }
 
+function wantsCompactRows(query: QueryRecord): boolean {
+  const value = String(query.compact || '').trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
 async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   c: Context<AppContext>,
   options: AnalyticsRouteOptions<TFilters>,
@@ -76,6 +82,7 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
         fallbackReason: rows.fallbackReason,
       })),
   )
+  const compactRows = wantsCompactRows(merged) ? buildGroupedChartRows(result.rows) : null
 
   withPublicCache(c, CHART_CACHE_MAX_AGE)
   return c.json({
@@ -85,7 +92,9 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
     fallback_reason: result.fallbackReason,
     count: result.rows.length,
     total: result.rows.length,
-    rows: result.rows,
+    rows: compactRows ? [] : result.rows,
+    rows_format: compactRows ? 'grouped_v1' : 'flat_v1',
+    grouped_rows: compactRows,
   })
 }
 

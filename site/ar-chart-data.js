@@ -558,6 +558,7 @@
 
     function fetchAnalyticsRows(params) {
         var query = new URLSearchParams(params || {});
+        query.set('compact', '1');
         var url = apiBase + '/analytics/series?' + query.toString();
         if (requestJson) {
             return requestJson(url, {
@@ -577,9 +578,31 @@
         });
     }
 
+    function expandGroupedRows(payload) {
+        if (!payload || !Array.isArray(payload.groups)) return [];
+        var rows = [];
+        payload.groups.forEach(function (group) {
+            var meta = group && group.meta && typeof group.meta === 'object' ? group.meta : {};
+            var points = group && Array.isArray(group.points) ? group.points : [];
+            points.forEach(function (point) {
+                var row = {};
+                Object.keys(meta).forEach(function (key) {
+                    row[key] = meta[key];
+                });
+                Object.keys(point || {}).forEach(function (key) {
+                    row[key] = point[key];
+                });
+                rows.push(row);
+            });
+        });
+        return rows;
+    }
+
     async function fetchAllRateRows(baseParams, onProgress) {
         var response = await fetchAnalyticsRows(baseParams);
-        var rows = Array.isArray(response.rows) ? response.rows : [];
+        var rows = response && response.rows_format === 'grouped_v1'
+            ? expandGroupedRows(response.grouped_rows)
+            : (Array.isArray(response.rows) ? response.rows : []);
         var total = Number(response.total || rows.length || 0);
         var representation = String(response.representation || (baseParams && baseParams.representation) || 'day');
         var fallbackReason = response.fallback_reason ? String(response.fallback_reason) : '';
