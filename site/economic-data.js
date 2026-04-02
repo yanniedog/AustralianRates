@@ -29,6 +29,7 @@
         };
     var sessionKey = 'ar-economic-data-debug-session';
     var Y_SCALE_STORAGE_KEY = 'ar-economic-y-scale';
+    var MULTI_SELECT_STORAGE_KEY = 'ar-economic-multi-select';
     var ECONOMIC_CHART_PALETTE = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
 
     function readStoredYScale() {
@@ -45,10 +46,24 @@
         } catch (_e) {}
     }
 
+    function readStoredMultiSelect() {
+        try {
+            return window.localStorage.getItem(MULTI_SELECT_STORAGE_KEY) === '1';
+        } catch (_e) {}
+        return false;
+    }
+
+    function persistMultiSelect(enabled) {
+        try {
+            window.localStorage.setItem(MULTI_SELECT_STORAGE_KEY, enabled ? '1' : '0');
+        } catch (_e) {}
+    }
+
     var state = {
         catalog: null,
         range: '5Y',
         yScale: readStoredYScale(),
+        multiSelect: readStoredMultiSelect(),
         selectedPreset: 'rba_watchlist',
         selectedIds: [],
         series: [],
@@ -65,6 +80,8 @@
         presetRow: document.getElementById('preset-row'),
         rangeRow: document.getElementById('range-row'),
         categoryGroups: document.getElementById('category-groups'),
+        multiSelectToggle: document.getElementById('economic-multiselect'),
+        selectionModeNote: document.getElementById('economic-selection-mode-note'),
         chartMeta: document.getElementById('chart-meta'),
         rangeNote: document.getElementById('economic-range-note'),
         chartEl: document.getElementById('economic-chart'),
@@ -75,7 +92,8 @@
         activePreset: document.getElementById('economic-active-preset'),
         selectedCount: document.getElementById('economic-selected-count'),
         statusText: document.getElementById('economic-status-text'),
-        yScaleBtn: document.getElementById('economic-y-scale')
+        yScaleBtn: document.getElementById('economic-y-scale'),
+        yScaleNote: document.getElementById('economic-y-scale-note')
     };
 
     function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -270,13 +288,15 @@
     function syncYScaleButton(opt) {
         if (!refs.yScaleBtn) return;
         var effective = opt && opt.effectiveYAxis;
-        var isLog = state.yScale === 'log';
-        refs.yScaleBtn.textContent = isLog ? 'log' : 'lin';
-        refs.yScaleBtn.setAttribute('aria-pressed', isLog ? 'true' : 'false');
-        var forcedLinear = isLog && effective === 'value';
+        var requestedLog = state.yScale === 'log';
+        var actualLog = effective === 'log' || (!effective && requestedLog);
+        refs.yScaleBtn.textContent = actualLog ? 'log' : 'lin';
+        refs.yScaleBtn.setAttribute('aria-pressed', actualLog ? 'true' : 'false');
+        var forcedLinear = requestedLog && effective === 'value';
+        refs.yScaleBtn.classList.toggle('is-forced-linear', forcedLinear);
         if (forcedLinear) {
             refs.yScaleBtn.title = 'Log scale is selected, but the chart uses linear because some series have zero or negative index values in this range.';
-        } else if (isLog) {
+        } else if (actualLog) {
             refs.yScaleBtn.title = 'Y-axis: logarithmic (base 10). Click for linear scale.';
         } else {
             refs.yScaleBtn.title = 'Y-axis: linear. Click for logarithmic scale.';
@@ -285,8 +305,56 @@
             'aria-label',
             forcedLinear
                 ? 'Chart uses a linear Y-axis; log scale is unavailable for the current data. Click to confirm linear preference.'
-                : (isLog ? 'Y-axis logarithmic. Click for linear.' : 'Y-axis linear. Click for logarithmic.')
+                : (actualLog ? 'Y-axis logarithmic. Click for linear.' : 'Y-axis linear. Click for logarithmic.')
         );
+        if (refs.yScaleNote) {
+            refs.yScaleNote.textContent = forcedLinear
+                ? 'Log unavailable for the current selection because at least one indexed series reaches zero or below in this range.'
+                : (actualLog ? 'Log scale active.' : 'Linear scale active.');
+        }
+    }
+
+    function syncSelectionModeUi() {
+        if (refs.multiSelectToggle) refs.multiSelectToggle.checked = !!state.multiSelect;
+        if (refs.selectionModeNote) {
+            refs.selectionModeNote.textContent = state.multiSelect
+                ? 'Multiselect mode: combine indicators with checkboxes.'
+                : 'Single-select mode: one indicator at a time.';
+        }
+    }
+
+    function catalogSeriesIds() {
+        var ids = [];
+        ((state.catalog && state.catalog.categories) || []).forEach(function (category) {
+            (category.series || []).forEach(function (series) {
+                var id = String(series && series.id || '').trim();
+                if (id) ids.push(id);
+            });
+        });
+        return ids;
+    }
+
+    function fallbackSelectedIds() {
+        var preset = findPreset(state.selectedPreset) || findPreset('rba_watchlist');
+        if (preset && Array.isArray(preset.seriesIds) && preset.seriesIds.length) {
+            return state.multiSelect ? preset.seriesIds.slice() : [preset.seriesIds[0]];
+        }
+        var allIds = catalogSeriesIds();
+        return allIds.length ? [allIds[0]] : [];
+    }
+
+    function normalizeSelectedIds(ids) {
+        var seen = {};
+        var next = [];
+        (ids || []).forEach(function (id) {
+            var value = String(id || '').trim();
+            if (!value || seen[value]) return;
+            seen[value] = true;
+            next.push(value);
+        });
+        if (!next.length) next = fallbackSelectedIds();
+        if (!state.multiSelect && next.length > 1) next = [next[0]];
+        return next;
     }
 
     function syncDebugSurface() {
@@ -297,6 +365,7 @@
                 return {
                     range: state.range,
                     yScale: state.yScale,
+                    multiSelect: state.multiSelect,
                     selectedPreset: state.selectedPreset,
                     selectedIds: state.selectedIds.slice(),
                     seriesCount: state.series.length,
@@ -316,6 +385,7 @@
     }
 
     function renderPresets() {
+        syncSelectionModeUi();
         refs.presetRow.innerHTML = state.catalog.presets.map(function (preset) {
             var active = preset.id === state.selectedPreset;
             return '<button type="button" class="chip-btn secondary' + (active ? ' active' : '') + '" data-preset-id="' + esc(preset.id) + '">' + esc(preset.label) + '</button>';
@@ -328,8 +398,9 @@
                 '<h3>' + esc(category.label) + '</h3>' +
                 category.series.map(function (series) {
                     var checked = state.selectedIds.indexOf(series.id) >= 0;
+                    var inputType = state.multiSelect ? 'checkbox' : 'radio';
                     return '<label class="economic-option">' +
-                        '<input type="checkbox" data-series-id="' + esc(series.id) + '"' + (checked ? ' checked' : '') + '>' +
+                        '<input type="' + inputType + '" name="economic-series-selection" data-series-id="' + esc(series.id) + '"' + (checked ? ' checked' : '') + '>' +
                         '<span class="economic-option-label">' + esc(series.short_label || series.label) + '</span>' +
                         (series.proxy ? badge('Proxy', 'is-proxy') : '') +
                     '</label>';
@@ -770,7 +841,8 @@
         return fetchJson('/catalog').then(function (payload) {
             state.catalog = payload;
             state.lastCatalogLoadedAt = new Date().toISOString();
-            state.selectedIds = (findPreset('rba_watchlist') || { seriesIds: [] }).seriesIds.slice();
+            state.selectedPreset = findPreset(state.selectedPreset) ? state.selectedPreset : ((payload.presets && payload.presets[0] && payload.presets[0].id) || 'rba_watchlist');
+            state.selectedIds = normalizeSelectedIds((findPreset(state.selectedPreset) || { seriesIds: [] }).seriesIds.slice());
             renderPresets();
             renderCategories();
             syncDebugSurface();
@@ -803,12 +875,13 @@
             var preset = findPreset(button.getAttribute('data-preset-id'));
             if (!preset) return;
             state.selectedPreset = preset.id;
-            state.selectedIds = preset.seriesIds.slice();
+            state.selectedIds = normalizeSelectedIds(state.multiSelect ? preset.seriesIds.slice() : [preset.seriesIds[0]]);
             renderPresets();
             renderCategories();
             logEvent('info', 'Economic preset changed', {
                 presetId: preset.id,
                 selectedIds: state.selectedIds.slice(),
+                multiSelect: state.multiSelect,
             });
             loadSeries('preset-change');
         });
@@ -836,23 +909,54 @@
                 }
             });
         }
+        if (refs.multiSelectToggle) {
+            refs.multiSelectToggle.addEventListener('change', function () {
+                state.multiSelect = !!refs.multiSelectToggle.checked;
+                persistMultiSelect(state.multiSelect);
+                state.selectedIds = normalizeSelectedIds(state.selectedIds);
+                renderCategories();
+                renderPresets();
+                syncSelectionModeUi();
+                logEvent('info', 'Economic selection mode changed', {
+                    multiSelect: state.multiSelect,
+                    selectedIds: state.selectedIds.slice(),
+                });
+                loadSeries('selection-mode-change');
+            });
+        }
         refs.categoryGroups.addEventListener('change', function (event) {
             var input = event.target.closest('input[data-series-id]');
             if (!input) return;
+            var seriesId = String(input.getAttribute('data-series-id') || '').trim();
+            if (!seriesId) return;
+            if (!state.multiSelect) {
+                state.selectedPreset = 'custom';
+                state.selectedIds = [seriesId];
+                renderPresets();
+                renderCategories();
+                logEvent('info', 'Economic selection changed', {
+                    selectedIds: state.selectedIds.slice(),
+                    count: state.selectedIds.length,
+                    multiSelect: false,
+                });
+                loadSeries('selection-change');
+                return;
+            }
             var next = Array.from(refs.categoryGroups.querySelectorAll('input[data-series-id]:checked')).map(function (node) { return node.getAttribute('data-series-id'); });
             if (!next.length) {
                 input.checked = true;
                 logEvent('warn', 'Economic selection prevented empty state', {
-                    attemptedSeriesId: input.getAttribute('data-series-id'),
+                    attemptedSeriesId: seriesId,
                 });
                 return;
             }
             state.selectedPreset = 'custom';
-            state.selectedIds = next;
+            state.selectedIds = normalizeSelectedIds(next);
             renderPresets();
             logEvent('info', 'Economic selection changed', {
                 selectedIds: state.selectedIds.slice(),
                 count: state.selectedIds.length,
+                multiSelect: true,
             });
             loadSeries('selection-change');
         });

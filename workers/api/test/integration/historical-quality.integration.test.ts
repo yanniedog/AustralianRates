@@ -66,6 +66,17 @@ describe('historical quality audit integration', () => {
   it('returns latest day snapshots and detailed copyable day output', async () => {
     await ensureHistoricalQualityAuditRun()
 
+    const criteriaResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/criteria', {
+      headers: adminHeaders(),
+    })
+    expect(criteriaResponse.status).toBe(200)
+    const criteriaJson = (await criteriaResponse.json()) as {
+      criteria_groups?: Array<{ key?: string; criteria?: Array<{ code?: string }> }>
+    }
+    expect(Array.isArray(criteriaJson.criteria_groups)).toBe(true)
+    expect((criteriaJson.criteria_groups ?? []).some((group) => group.key === 'daily_counters')).toBe(true)
+    expect((criteriaJson.criteria_groups ?? []).some((group) => (group.criteria ?? []).some((criterion) => criterion.code === 'transition_score_v1'))).toBe(true)
+
     const daysResponse = await SELF.fetch('https://example.com/api/home-loan-rates/admin/audits/historical-quality/days?limit=20', {
       headers: adminHeaders(),
     })
@@ -109,6 +120,8 @@ describe('historical quality audit integration', () => {
     expect(dayDetail.rows?.some((row) => row.scope === 'overall')).toBe(true)
     expect(dayDetail.parameters?.some((parameter) => parameter.key === 'cdr_missing_product_count')).toBe(true)
     expect(dayDetail.parameters?.some((parameter) => parameter.key === 'top_degraded_lenders')).toBe(true)
+    expect(dayDetail.parameters?.some((parameter) => parameter.key === 'coverage_score_v1')).toBe(true)
+    expect(dayDetail.parameters?.some((parameter) => parameter.key === 'finding_summary')).toBe(true)
     expect(dayDetail.parameters?.every((parameter) => typeof parameter.text === 'string' && parameter.debug && typeof parameter.debug === 'object')).toBe(true)
     expect(Array.isArray(dayDetail.findings)).toBe(true)
     expect(String(dayDetail.plain_text || '')).toContain('Historical quality day report for')

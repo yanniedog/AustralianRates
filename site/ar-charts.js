@@ -752,6 +752,14 @@
     window.addEventListener('ar:tab-changed', scheduleResponsiveSync);
     window.addEventListener('ar:ui-mode-changed', function () { chartState.lwcNeedsRedraw = true; scheduleResponsiveSync(); });
     window.addEventListener('ar:theme-changed', function () { chartState.lwcNeedsRedraw = true; scheduleResponsiveSync(); });
+    window.addEventListener('ar:site-ui-settings', function () {
+        chartState.lwcNeedsRedraw = true;
+        if (chartState.rows.length && !chartState.stale) {
+            refreshFromCache('site-ui');
+            return;
+        }
+        scheduleResponsiveSync();
+    });
     window.addEventListener('beforeunload', disconnectResizeObserver);
 
     window.AR.charts = {

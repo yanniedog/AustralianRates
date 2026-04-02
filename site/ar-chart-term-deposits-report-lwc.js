@@ -229,29 +229,8 @@
 
     // ── Info box ─────────────────────────────────────────────────────────────
     function createInfoBox(t) {
-        var el = document.createElement('div');
-        el.style.cssText = 'display:none;padding:6px 10px;font:11px/1.5 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;margin-top:4px;flex-shrink:0;position:relative;';
-        var close = document.createElement('button'); close.type = 'button'; close.innerHTML = '&times;';
-        close.style.cssText = 'position:absolute;top:2px;right:6px;background:none;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:0.4;padding:0;line-height:1;';
-        close.addEventListener('click', function () { el.style.display = 'none'; });
-        el.appendChild(close);
-        var body = document.createElement('div'); el.appendChild(body);
         var M = window.AR.chartMacroLwcShared;
-        return {
-            el: el,
-            show: function (d) {
-                body.innerHTML =
-                    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
-                    '<span style="width:8px;height:8px;border-radius:2px;background:' + (d.color || '#666') + ';flex-shrink:0;display:inline-block;"></span>' +
-                    '<span style="font-weight:600;">' + M.escHtml(d.bankName) + '</span>' +
-                    (d.productName ? '<span style="opacity:0.4;">\u00b7</span><span>' + M.escHtml(d.productName) + '</span>' : '') +
-                    '</div><div style="font-size:10px;color:' + t.muted + ';">' +
-                    (d.rate != null ? Number(d.rate).toFixed(2) + '%' : '') +
-                    (d.subtitle ? ' \u00b7 ' + M.escHtml(d.subtitle) : '') + '</div>';
-                el.style.display = 'block';
-            },
-            hide: function () { el.style.display = 'none'; },
-        };
+        return M.createReportSelectionInfoBox(t);
     }
 
     // ── Main render ─────────────────────────────────────────────────────────
@@ -309,7 +288,8 @@
         var overlayDefs = overlayModule.prepareWindowSeries ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], ctxMin, ctxMax) : [];
 
         var compact = (container.clientWidth || 800) < 480;
-        var maxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? 25 : 100);
+        var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? 25 : 100);
+        var maxLines = M.resolveChartProductLimit(defaultMaxLines);
         var visiLines = lines.slice(0, Math.min(lines.length, maxLines));
 
         // ── DOM ─────────────────────────────────────────────────────────────
@@ -500,24 +480,13 @@
 
         // Click → info box
         chart.subscribeClick(function (param) {
-            if (!param || !param.point || param.time == null) return;
-            var clickY = param.point.y; var bestDist = Infinity; var bestEntry = null;
-            seriesApis.forEach(function (si) { var sd = param.seriesData && param.seriesData.get(si.api); if (!sd || !Number.isFinite(sd.value)) return; var coord = si.api.priceToCoordinate(sd.value); if (coord == null) return; var dist = Math.abs(coord - clickY); if (dist < bestDist) { bestDist = dist; bestEntry = si; } });
-            if (bestEntry && bestDist < 30) {
-                var ln = bestEntry.line;
-                var clickYmd = M.utcToYmd(param.time);
-                var sd = param.seriesData && param.seriesData.get(bestEntry.api);
-                var rateAt = (sd && Number.isFinite(sd.value)) ? sd.value : bestEntry.lastValue;
-                var prodAt = M.stepFieldAtDate(bestEntry.stepPoints, clickYmd, 'productName');
-                infoBox.show({
-                    bankName: ln.bankName || ln.short,
-                    productName: prodAt != null && String(prodAt) !== '' ? String(prodAt) : (ln.productName || null),
-                    rate: rateAt,
-                    subtitle: ln.subtitle || '',
-                    color: ln.color,
-                });
-            }
-            else { infoBox.hide(); }
+            var cluster = M.findOverlappingClickEntries(seriesApis, param);
+            if (!cluster || !cluster.entries.length) { infoBox.hide(); return; }
+            infoBox.show({
+                heading: fmtFull(cluster.clickYmd),
+                meta: cluster.entries.length > 1 ? (cluster.entries.length + ' overlapping products at ' + Number(cluster.rate).toFixed(2) + '%') : ('1 product at ' + Number(cluster.rate).toFixed(2) + '%'),
+                items: cluster.entries,
+            });
         });
 
         // Resize

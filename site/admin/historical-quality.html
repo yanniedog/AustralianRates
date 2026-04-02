@@ -15,10 +15,20 @@
     <style>
         .historical-quality-table-wrap,
         .historical-quality-debug-wrap { overflow: auto; max-width: 100%; }
-        .historical-quality-table { width: 100%; border-collapse: collapse; }
-        .historical-quality-table th, .historical-quality-table td { padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--ar-line); text-align: left; vertical-align: top; }
+        .historical-quality-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.84rem; }
+        .historical-quality-table th, .historical-quality-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--ar-line); text-align: left; vertical-align: top; }
+        .historical-quality-table th { font-size: 0.71rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ar-text-soft); }
         .historical-quality-table td:last-child, .historical-quality-table th:last-child { white-space: nowrap; }
+        .historical-quality-table tr.is-selected { background: color-mix(in srgb, var(--ar-accent) 12%, transparent); }
+        .historical-quality-table tr { cursor: pointer; }
         .historical-quality-table .mono { font-family: "JetBrains Mono","SF Mono","Consolas","Monaco","ui-monospace",monospace; font-size: 0.88rem; }
+        .historical-quality-day-cell { display: grid; gap: 0.1rem; }
+        .historical-quality-day-title { font-weight: 700; }
+        .historical-quality-micro-grid { display: grid; gap: 0.15rem; }
+        .historical-quality-micro-line { display: flex; justify-content: space-between; gap: 8px; }
+        .historical-quality-micro-line span:first-child { color: var(--ar-text-soft); }
+        .historical-quality-actions-stack { display: grid; gap: 0.35rem; }
+        .historical-quality-actions-stack .secondary { padding: 0.35rem 0.55rem; min-height: auto; font-size: 0.78rem; }
         .historical-quality-parameter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
         .historical-quality-parameter-card { padding: 0.85rem; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); }
         .historical-quality-parameter-card h3 { margin: 0 0 0.35rem; font-size: 0.98rem; }
@@ -30,6 +40,16 @@
         .historical-quality-copy-status { color: var(--ar-text-muted); font-size: 0.9rem; }
         .historical-quality-top-lenders { margin: 0; padding-left: 1.2rem; }
         .historical-quality-summary-pre, .historical-quality-debug-pre { margin: 0; padding: 14px; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); white-space: pre-wrap; }
+        .historical-quality-criteria-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        .historical-quality-criteria-card { padding: 0.85rem; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); }
+        .historical-quality-criteria-card h3 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+        .historical-quality-criteria-card p { margin: 0 0 0.5rem; color: var(--ar-text-soft); font-size: 0.84rem; }
+        .historical-quality-criteria-list { margin: 0; padding-left: 1rem; display: grid; gap: 0.32rem; font-size: 0.84rem; }
+        .historical-quality-criteria-list strong { display: inline-block; margin-right: 0.25rem; }
+        @media (max-width: 1180px) {
+            .historical-quality-table { font-size: 0.8rem; }
+            .historical-quality-table th, .historical-quality-table td { padding: 0.4rem 0.4rem; }
+        }
     </style>
 </head>
 <body class="ar-admin">
@@ -56,7 +76,13 @@
             </div>
         </div>
         <section class="admin-card">
+            <h2>Criteria assessed</h2>
+            <p class="admin-hint">The daily audit stores compact counters, component scores, and persistent anomaly classifications. This list is served from the admin API so the definitions stay aligned with the backend.</p>
+            <div class="historical-quality-criteria-grid" id="historical-quality-criteria"></div>
+        </section>
+        <section class="admin-card">
             <h2>Daily snapshots</h2>
+            <p class="admin-hint">Compact grouped cells show inventory, availability, identity churn, rate moves, and quality scores without forcing a horizontal scroll.</p>
             <div class="historical-quality-table-wrap" id="historical-quality-days-wrap"></div>
         </section>
         <section class="admin-card">
@@ -80,6 +106,6 @@
     </main>
     <script src="admin-portal.js?v=04d3578"></script>
     <script src="admin-sidebar.js?v=04d3578"></script>
-    <script src="historical-quality-page.js?v=20260402a"></script>
+    <script src="historical-quality-page.js?v=20260402b"></script>
 </body>
 </html>

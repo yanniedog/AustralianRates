@@ -13,8 +13,8 @@ body.ar-section-economic-data {
 
 body.ar-section-economic-data .market-terminal.economic-terminal {
     display: grid;
-    grid-template-columns: minmax(220px, 280px) minmax(280px, 1fr);
-    gap: 18px;
+    grid-template-columns: minmax(180px, 228px) minmax(280px, 1fr);
+    gap: 14px;
     align-items: start;
 }
 
@@ -43,6 +43,32 @@ body.ar-section-economic-data .market-terminal.economic-terminal {
     width: 100%;
 }
 
+.economic-mode-row {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.economic-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.economic-mode-toggle input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+}
+
+.economic-chip-row .chip-btn {
+    min-height: 34px;
+    padding: 0.38rem 0.75rem;
+    font-size: 0.84rem;
+}
+
 .economic-y-scale-btn {
     flex-shrink: 0;
     margin-left: auto;
@@ -68,6 +94,11 @@ body.ar-section-economic-data .market-terminal.economic-terminal {
 .economic-y-scale-btn[aria-pressed="true"] {
     border-color: color-mix(in srgb, var(--ar-spark, #66f6cf) 55%, var(--ar-line));
     color: var(--ar-text, inherit);
+}
+
+.economic-y-scale-btn.is-forced-linear {
+    border-color: color-mix(in srgb, var(--ar-warn-strong, #f59e0b) 55%, var(--ar-line));
+    color: var(--ar-warn-strong, #f59e0b);
 }
 
 body.ar-section-economic-data .economic-y-scale-btn:focus-visible {
@@ -105,20 +136,20 @@ body.ar-section-economic-data #details {
 .economic-point-details,
 .economic-source-list {
     display: grid;
-    gap: 12px;
+    gap: 9px;
 }
 
 .economic-group,
 .economic-source-card,
 .economic-point-row {
-    padding: 12px;
+    padding: 10px;
     border: 1px solid var(--ar-line);
-    border-radius: 14px;
+    border-radius: 12px;
     background: color-mix(in srgb, var(--ar-surface) 90%, transparent);
 }
 
 .economic-series-card {
-    padding: 9px 12px;
+    padding: 8px 10px;
     border: 1px solid var(--ar-line);
     border-radius: 10px;
     background: color-mix(in srgb, var(--ar-surface) 90%, transparent);
@@ -127,11 +158,11 @@ body.ar-section-economic-data #details {
 }
 
 .economic-group h3 {
-    margin: 0 0 8px;
-    font-size: 0.72rem;
+    margin: 0 0 6px;
+    font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.09em;
     color: var(--ar-text-soft);
 }
 
@@ -144,7 +175,7 @@ body.ar-section-economic-data #details {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 0;
+    padding: 5px 0;
     border-top: 1px solid var(--ar-line);
     min-width: 0;
 }
@@ -154,7 +185,8 @@ body.ar-section-economic-data #details {
     padding-top: 0;
 }
 
-.economic-option input[type="checkbox"] {
+.economic-option input[type="checkbox"],
+.economic-option input[type="radio"] {
     width: 15px;
     height: 15px;
     min-width: 15px;
@@ -164,7 +196,7 @@ body.ar-section-economic-data #details {
 
 .economic-option-label {
     font-weight: 500;
-    font-size: 0.875rem;
+    font-size: 0.82rem;
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -178,7 +210,7 @@ body.ar-section-economic-data #details {
 .economic-source-meta,
 .economic-point-meta {
     color: var(--ar-text-soft);
-    font-size: 0.78rem;
+    font-size: 0.74rem;
 }
 
 .economic-badge {
@@ -196,9 +228,9 @@ body.ar-section-economic-data #details {
 }
 
 .economic-option .economic-badge {
-    min-height: 18px;
-    padding: 0 6px;
-    font-size: 0.67rem;
+    min-height: 16px;
+    padding: 0 5px;
+    font-size: 0.64rem;
 }
 
 .economic-badge.is-proxy {
@@ -366,11 +398,12 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
     }
 
     body.ar-section-economic-data .economic-option {
-        padding: 12px 0;
+        padding: 8px 0;
         gap: 10px;
     }
 
-    body.ar-section-economic-data .economic-option input[type="checkbox"] {
+    body.ar-section-economic-data .economic-option input[type="checkbox"],
+    body.ar-section-economic-data .economic-option input[type="radio"] {
         width: 22px;
         height: 22px;
         min-width: 22px;
@@ -379,8 +412,8 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
     body.ar-section-economic-data .economic-group,
     body.ar-section-economic-data .economic-series-card,
     body.ar-section-economic-data .economic-source-card {
-        padding: 14px;
-        border-radius: 16px;
+        padding: 12px;
+        border-radius: 14px;
     }
 
     body.ar-section-economic-data .terminal-column-left .panel,

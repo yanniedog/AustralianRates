@@ -77,6 +77,14 @@
         expanded: { key: 'expanded', label: 'Expanded', rowLimit: 40, compareLimit: 8 },
     };
 
+    function chartMaxProducts() {
+        var siteUi = window.AR && window.AR.chartSiteUi;
+        if (siteUi && typeof siteUi.getChartMaxProducts === 'function') {
+            return siteUi.getChartMaxProducts();
+        }
+        return null;
+    }
+
     function titleCase(value) {
         return String(value || '')
             .split('_')
@@ -152,7 +160,18 @@
 
     function parseDensity(value) {
         var key = String(value || 'standard').trim().toLowerCase();
-        return DENSITIES[key] || DENSITIES.standard;
+        var base = DENSITIES[key] || DENSITIES.standard;
+        var cap = chartMaxProducts();
+        var rowLimit = base.rowLimit;
+        if (Number.isFinite(cap) && cap > 0) rowLimit = Math.min(rowLimit, cap);
+        var compareLimit = Math.max(1, Math.min(base.compareLimit, rowLimit));
+        return {
+            key: base.key,
+            label: base.label,
+            rowLimit: rowLimit,
+            compareLimit: compareLimit,
+            chartMaxProducts: Number.isFinite(cap) && cap > 0 ? cap : null,
+        };
     }
 
     function defaultView() {

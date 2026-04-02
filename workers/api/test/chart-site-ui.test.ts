@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizeChartLegendOpacityForPut,
+  normalizeChartMaxProductsForPut,
   resolveChartLegendOpacityFromDb,
   resolveChartLegendOpacitySetFromDb,
+  resolveChartMaxProductsFromDb,
 } from '../src/utils/chart-site-ui'
 
 describe('chart-site-ui', () => {
@@ -50,5 +52,19 @@ describe('chart-site-ui', () => {
       desktop: 0.68,
       mobile: 0.68,
     })
+  })
+
+  it('resolves and normalizes chart max products', () => {
+    expect(resolveChartMaxProductsFromDb(null)).toBeNull()
+    expect(resolveChartMaxProductsFromDb('')).toBeNull()
+    expect(resolveChartMaxProductsFromDb('unlimited')).toBeNull()
+    expect(resolveChartMaxProductsFromDb('24')).toBe(24)
+    expect(resolveChartMaxProductsFromDb('1001')).toBe(1000)
+
+    expect(normalizeChartMaxProductsForPut('unlimited')).toEqual({ ok: true, value: 'unlimited' })
+    expect(normalizeChartMaxProductsForPut('48')).toEqual({ ok: true, value: '48' })
+    expect(normalizeChartMaxProductsForPut('0').ok).toBe(false)
+    expect(normalizeChartMaxProductsForPut('1001').ok).toBe(false)
+    expect(normalizeChartMaxProductsForPut('abc').ok).toBe(false)
   })
 })

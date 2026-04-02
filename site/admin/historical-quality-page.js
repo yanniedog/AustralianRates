@@ -3,6 +3,7 @@
     if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
 
     var portal = window.AR.AdminPortal;
+    var criteriaEl = document.getElementById('historical-quality-criteria');
     var daysWrap = document.getElementById('historical-quality-days-wrap');
     var statusEl = document.getElementById('historical-quality-status');
     var dateEl = document.getElementById('historical-quality-date');
@@ -19,6 +20,7 @@
 
     var state = {
         days: [],
+        criteriaGroups: [],
         selectedDate: '',
         selectedDetail: null,
     };
@@ -54,6 +56,34 @@
         return (Number(value || 0) * 100).toFixed(1) + '%';
     }
 
+    function fmtCount(value) {
+        return Number(value || 0).toLocaleString('en-AU');
+    }
+
+    function statLine(label, value) {
+        return '<div class="historical-quality-micro-line"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+    }
+
+    function renderCriteria() {
+        if (!criteriaEl) return;
+        if (!Array.isArray(state.criteriaGroups) || !state.criteriaGroups.length) {
+            criteriaEl.innerHTML = '<p>No criteria metadata loaded.</p>';
+            return;
+        }
+        criteriaEl.innerHTML = state.criteriaGroups.map(function (group) {
+            return ''
+                + '<article class="historical-quality-criteria-card">'
+                + '<h3>' + esc(group.label || '') + '</h3>'
+                + '<p>' + esc(group.description || '') + '</p>'
+                + '<ul class="historical-quality-criteria-list">'
+                + (group.criteria || []).map(function (criterion) {
+                    return '<li><strong>' + esc(criterion.label || criterion.code || '') + '.</strong> ' + esc(criterion.description || '') + '</li>';
+                }).join('')
+                + '</ul>'
+                + '</article>';
+        }).join('');
+    }
+
     function copyText(text) {
         if (!navigator.clipboard || !navigator.clipboard.writeText) return Promise.reject(new Error('Clipboard unavailable'));
         return navigator.clipboard.writeText(String(text || ''));
@@ -68,30 +98,49 @@
         daysWrap.innerHTML = ''
             + '<table class="historical-quality-table">'
             + '<thead><tr>'
-            + '<th>Date</th><th>Status</th><th>Rows</th><th>Lenders</th><th>Products</th>'
-            + '<th>New</th><th>Lost</th><th>Rename</th><th>ID churn</th><th>Up</th><th>Down</th><th>Provenance</th><th>Evidence</th><th>Actions</th>'
+            + '<th>Date</th><th>Inventory</th><th>Availability</th><th>Identity</th><th>Rates</th><th>Quality</th><th>Actions</th>'
             + '</tr></thead><tbody>'
             + state.days.map(function (day) {
                 var counts = readSummaryCounts(day);
+                var selected = day.collection_date === state.selectedDate;
                 return ''
-                    + '<tr data-date="' + esc(day.collection_date) + '">'
-                    + '<td class="mono">' + esc(day.collection_date) + '</td>'
-                    + '<td>' + esc(day.status || '') + ' <span class="admin-status-line">(' + esc(day.trigger_source || '') + ')</span></td>'
-                    + '<td>' + esc(day.overall.row_count) + '</td>'
-                    + '<td>' + esc(day.overall.bank_count) + '</td>'
-                    + '<td>' + esc(day.overall.product_count) + '</td>'
-                    + '<td>' + esc(counts.new_product_count || 0) + '</td>'
-                    + '<td>' + esc(counts.lost_product_count || 0) + '</td>'
-                    + '<td>' + esc(counts.renamed_same_id_count || 0) + '</td>'
-                    + '<td>' + esc(counts.changed_id_same_name_count || 0) + '</td>'
-                    + '<td>' + esc(counts.increased_rate_product_count || 0) + '</td>'
-                    + '<td>' + esc(counts.decreased_rate_product_count || 0) + '</td>'
-                    + '<td>' + esc(fmtPct(day.overall.provenance_score_v1)) + '</td>'
-                    + '<td>' + esc(fmtPct(day.overall.evidence_confidence_score_v1)) + '</td>'
+                    + '<tr data-date="' + esc(day.collection_date) + '"' + (selected ? ' class="is-selected"' : '') + '>'
+                    + '<td><div class="historical-quality-day-cell">'
+                    +   '<span class="historical-quality-day-title mono">' + esc(day.collection_date) + '</span>'
+                    +   '<span>' + esc(day.status || '') + '</span>'
+                    +   '<span class="admin-status-line">' + esc(day.trigger_source || '') + '</span>'
+                    + '</div></td>'
+                    + '<td><div class="historical-quality-micro-grid">'
+                    +   statLine('Rows', fmtCount(day.overall.row_count))
+                    +   statLine('Lenders', fmtCount(day.overall.bank_count))
+                    +   statLine('Products', fmtCount(day.overall.product_count))
+                    + '</div></td>'
+                    + '<td><div class="historical-quality-micro-grid">'
+                    +   statLine('New', fmtCount(counts.new_product_count))
+                    +   statLine('Lost', fmtCount(counts.lost_product_count))
+                    +   statLine('CDR miss', fmtCount(counts.cdr_missing_product_count))
+                    + '</div></td>'
+                    + '<td><div class="historical-quality-micro-grid">'
+                    +   statLine('Rename', fmtCount(counts.renamed_same_id_count))
+                    +   statLine('Detail', fmtCount(counts.same_id_name_same_rate_other_detail_changed_count))
+                    +   statLine('ID churn', fmtCount(counts.changed_id_same_name_count))
+                    + '</div></td>'
+                    + '<td><div class="historical-quality-micro-grid">'
+                    +   statLine('Up', fmtCount(counts.increased_rate_product_count))
+                    +   statLine('Down', fmtCount(counts.decreased_rate_product_count))
+                    + '</div></td>'
+                    + '<td><div class="historical-quality-micro-grid">'
+                    +   statLine('Struct', fmtPct(day.overall.structural_score_v1))
+                    +   statLine('Prov', fmtPct(day.overall.provenance_score_v1))
+                    +   statLine('Trans', fmtPct(day.overall.transition_score_v1))
+                    +   statLine('Evid', fmtPct(day.overall.evidence_confidence_score_v1))
+                    + '</div></td>'
                     + '<td>'
-                    + '<button type="button" class="secondary" data-action="view" data-date="' + esc(day.collection_date) + '">View</button> '
-                    + '<button type="button" class="secondary" data-action="copy-text" data-date="' + esc(day.collection_date) + '">Copy text</button> '
-                    + '<button type="button" class="secondary" data-action="copy-debug" data-date="' + esc(day.collection_date) + '">Copy debug</button>'
+                    + '<div class="historical-quality-actions-stack">'
+                    + '<button type="button" class="secondary" data-action="view" data-date="' + esc(day.collection_date) + '">View</button>'
+                    + '<button type="button" class="secondary" data-action="copy-text" data-date="' + esc(day.collection_date) + '">Text</button>'
+                    + '<button type="button" class="secondary" data-action="copy-debug" data-date="' + esc(day.collection_date) + '">Debug</button>'
+                    + '</div>'
                     + '</td>'
                     + '</tr>';
             }).join('')
@@ -143,6 +192,7 @@
             .then(function (body) {
                 if (!body || !body.ok) throw new Error('Failed to load historical quality day');
                 state.selectedDate = date;
+                renderDaysTable();
                 renderDetail(body);
                 setStatus('Loaded ' + date + '.');
                 return body;
@@ -172,6 +222,21 @@
             .finally(function () {
                 runBtn.disabled = false;
                 refreshBtn.disabled = false;
+            });
+    }
+
+    function loadCriteria() {
+        return portal.fetchAdmin('/audits/historical-quality/criteria', { cache: 'no-store' })
+            .then(function (res) { return res.json(); })
+            .then(function (body) {
+                if (!body || !body.ok || !Array.isArray(body.criteria_groups)) throw new Error('Failed to load criteria');
+                state.criteriaGroups = body.criteria_groups;
+                renderCriteria();
+                return body;
+            })
+            .catch(function () {
+                state.criteriaGroups = [];
+                renderCriteria();
             });
     }
 
@@ -286,8 +351,13 @@
     if (daysWrap) {
         daysWrap.addEventListener('click', function (event) {
             var target = event.target.closest('button[data-action][data-date]');
-            if (!target) return;
-            handleTableAction(target);
+            if (target) {
+                handleTableAction(target);
+                return;
+            }
+            var row = event.target.closest('tr[data-date]');
+            if (!row) return;
+            fetchDayDetail(String(row.getAttribute('data-date') || '')).catch(function () {});
         });
     }
     if (parametersEl) {
@@ -308,6 +378,7 @@
         });
     }
 
+    loadCriteria();
     loadDays().catch(function (error) {
         setStatus(error && error.message ? error.message : 'Failed to load historical quality daily snapshots.');
     });

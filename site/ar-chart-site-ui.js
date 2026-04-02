@@ -10,7 +10,8 @@
     var cached = {
         desktop: DEFAULT,
         mobile: DEFAULT,
-        resolved: DEFAULT
+        resolved: DEFAULT,
+        chartMaxProducts: null
     };
     var legends = [];
     var mobileMedia = null;
@@ -31,6 +32,7 @@
                     chart_legend_opacity: cached.resolved,
                     chart_legend_opacity_desktop: cached.desktop,
                     chart_legend_opacity_mobile: cached.mobile,
+                    chart_max_products: cached.chartMaxProducts,
                     device_mode: resolveIsMobile() ? 'mobile' : 'desktop'
                 }
             }));
@@ -51,6 +53,13 @@
         return typeof value === 'number' && Number.isFinite(value) && value >= 0.05 && value <= 1;
     }
 
+    function normalizeChartMaxProducts(value) {
+        if (value == null || value === '' || value === 'unlimited') return null;
+        var parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed < 1) return null;
+        return Math.floor(parsed);
+    }
+
     function ingestPayload(body) {
         if (!body || body.ok !== true) return;
         var desktop = validOpacity(body.chart_legend_opacity_desktop)
@@ -61,6 +70,7 @@
             : desktop;
         cached.desktop = desktop;
         cached.mobile = mobile;
+        cached.chartMaxProducts = normalizeChartMaxProducts(body.chart_max_products);
         applyAll();
     }
 
@@ -105,8 +115,12 @@
             return {
                 desktop: cached.desktop,
                 mobile: cached.mobile,
-                resolved: resolvedOpacity()
+                resolved: resolvedOpacity(),
+                chartMaxProducts: cached.chartMaxProducts
             };
+        },
+        getChartMaxProducts: function () {
+            return cached.chartMaxProducts;
         },
         registerReportLegend: function (el) {
             if (!el) return;

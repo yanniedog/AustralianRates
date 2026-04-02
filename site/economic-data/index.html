@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="../public-showcase-hero.css?v=2544dd7">
     <link rel="stylesheet" href="../responsive.css?v=2544dd7">
     <link rel="stylesheet" href="../mobile-host.css?v=2544dd7">
-    <link rel="stylesheet" href="../economic-data.css?v=2544dd7">
+    <link rel="stylesheet" href="../economic-data.css?v=20260402b">
     <script src="../theme.js?v=2544dd7"></script>
 </head>
 <body class="ar-public ar-section-economic-data" data-ar-section="economic-data">
@@ -85,6 +85,13 @@
                         <span class="panel-code">SET</span>
                         <h2 class="terminal-panel-title">Indicator Set</h2>
                     </div>
+                    <div class="economic-mode-row">
+                        <label class="economic-mode-toggle" for="economic-multiselect">
+                            <input type="checkbox" id="economic-multiselect">
+                            <span>Multiselect mode</span>
+                        </label>
+                        <span class="hint" id="economic-selection-mode-note">Single-select mode.</span>
+                    </div>
                     <div id="preset-row" class="economic-chip-row">
                         <button type="button" class="chip-btn secondary active" data-preset-id="rba_watchlist">RBA Watchlist</button>
                     </div>
@@ -113,6 +120,7 @@
                                 <button type="button" id="economic-y-scale" class="economic-y-scale-btn" aria-pressed="true" aria-label="Y-axis scale: logarithmic. Click to use linear.">log</button>
                             </div>
                             <p id="economic-range-note" class="hint">Loading current range...</p>
+                            <p id="economic-y-scale-note" class="hint">Loading scale…</p>
                         </div>
                         <div id="economic-chart" class="economic-chart" role="img" aria-label="Economic data chart"></div>
                         <p id="economic-empty" class="terminal-inline-feedback" hidden></p>
@@ -133,9 +141,9 @@
     <script src="../ar-section-config.js?v=2544dd7"></script>
     <script src="../ar-config.js?v=2544dd7"></script>
     <script src="../ar-network.js?v=2544dd7"></script>
-    <script src="../ar-chart-site-ui.js?v=20260402a"></script>
+    <script src="../ar-chart-site-ui.js?v=20260402b"></script>
     <script src="../ar-chart-echarts-helpers.js?v=2544dd7"></script>
-    <script src="../economic-data.js?v=2544dd7"></script>
+    <script src="../economic-data.js?v=20260402b"></script>
     <script src="../frame.js?v=2544dd7"></script>
     <script src="../site-variant-ui.js?v=2544dd7"></script>
 </body>

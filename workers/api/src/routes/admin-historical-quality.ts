@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono'
+import { listHistoricalQualityCriteria } from '../db/historical-quality-criteria'
 import { getHistoricalQualityDayDetail, listLatestHistoricalQualityDays } from '../db/historical-quality-day-reports'
 import { runRetentionSizeAudit } from '../db/retention-size-audit'
 import { jsonError } from '../utils/http'
@@ -49,6 +50,14 @@ adminHistoricalQualityRoutes.get('/audits/historical-quality/days', async (c) =>
       metrics: JSON.parse(day.overall.metrics_json || '{}'),
       evidence: JSON.parse(day.overall.evidence_json || '{}'),
     })),
+  })
+})
+
+adminHistoricalQualityRoutes.get('/audits/historical-quality/criteria', async (c) => {
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    criteria_groups: listHistoricalQualityCriteria(),
   })
 })
 

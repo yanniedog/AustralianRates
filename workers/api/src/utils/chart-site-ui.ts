@@ -1,6 +1,10 @@
 import {
   CHART_LEGEND_OPACITY_MAX,
   CHART_LEGEND_OPACITY_MIN,
+  CHART_MAX_PRODUCTS_KEY,
+  CHART_MAX_PRODUCTS_MAX,
+  CHART_MAX_PRODUCTS_MIN,
+  CHART_MAX_PRODUCTS_UNLIMITED,
   DEFAULT_CHART_LEGEND_OPACITY,
 } from '../constants'
 
@@ -8,6 +12,8 @@ export type ChartLegendOpacitySet = {
   desktop: number
   mobile: number
 }
+
+export type ChartProductLimit = number | null
 
 function clampChartLegendOpacity(opacity: number): number {
   return Math.min(CHART_LEGEND_OPACITY_MAX, Math.max(CHART_LEGEND_OPACITY_MIN, opacity))
@@ -71,4 +77,39 @@ export function normalizeChartLegendOpacityForPut(
     }
   }
   return { ok: true, value: clampChartLegendOpacity(opacity).toFixed(2) }
+}
+
+export function resolveChartMaxProductsFromDb(raw: string | null): ChartProductLimit {
+  const text = String(raw ?? '').trim().toLowerCase()
+  if (!text || text === CHART_MAX_PRODUCTS_UNLIMITED) return null
+  const parsed = Number(text)
+  if (!Number.isFinite(parsed) || parsed < CHART_MAX_PRODUCTS_MIN) return null
+  return Math.min(CHART_MAX_PRODUCTS_MAX, Math.floor(parsed))
+}
+
+export function normalizeChartMaxProductsForPut(
+  raw: unknown,
+  keyLabel = CHART_MAX_PRODUCTS_KEY,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const text = String(raw ?? '').trim().toLowerCase()
+  if (!text) {
+    return {
+      ok: false,
+      error: `${labelText(keyLabel)} must be ${CHART_MAX_PRODUCTS_MIN}-${CHART_MAX_PRODUCTS_MAX} or "${CHART_MAX_PRODUCTS_UNLIMITED}".`,
+    }
+  }
+  if (text === CHART_MAX_PRODUCTS_UNLIMITED) {
+    return { ok: true, value: CHART_MAX_PRODUCTS_UNLIMITED }
+  }
+  if (!/^\d+$/.test(text)) {
+    return { ok: false, error: `${labelText(keyLabel)} must be a whole number or "${CHART_MAX_PRODUCTS_UNLIMITED}".` }
+  }
+  const parsed = Number(text)
+  if (!Number.isFinite(parsed) || parsed < CHART_MAX_PRODUCTS_MIN || parsed > CHART_MAX_PRODUCTS_MAX) {
+    return {
+      ok: false,
+      error: `${labelText(keyLabel)} must be between ${CHART_MAX_PRODUCTS_MIN} and ${CHART_MAX_PRODUCTS_MAX}, or "${CHART_MAX_PRODUCTS_UNLIMITED}".`,
+    }
+  }
+  return { ok: true, value: String(Math.floor(parsed)) }
 }

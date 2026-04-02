@@ -47,6 +47,23 @@
             </div>
             <p class="admin-hint" id="chart-legend-stored" style="margin-top:8px;opacity:0.75;"></p>
         </section>
+        <section class="admin-card" id="chart-product-limit-section">
+            <h2>Chart product limit</h2>
+            <p class="admin-hint">Set a global ceiling for products or series shown on public charts. Use unlimited to remove the admin cap while keeping each chart view&apos;s built-in density behavior.</p>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="chart-max-products-value">Maximum visible products</label>
+                <input type="number" id="chart-max-products-value" min="1" max="1000" step="1" value="40" style="width:120px;">
+                <label style="display:inline-flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="chart-max-products-unlimited" checked>
+                    Unlimited
+                </label>
+            </div>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <button type="button" id="chart-max-products-save-btn" class="primary">Save product limit</button>
+                <button type="button" id="chart-max-products-reset-btn" class="secondary">Reset to default</button>
+            </div>
+            <p class="admin-hint" id="chart-max-products-stored" style="margin-top:8px;opacity:0.75;"></p>
+        </section>
     </main>
     <script src="admin-portal.js?v=04d3578"></script>
     <script src="admin-sidebar.js?v=04d3578"></script>
@@ -60,12 +77,17 @@
             var DESKTOP_KEY = 'chart_legend_opacity_desktop';
             var MOBILE_KEY = 'chart_legend_opacity_mobile';
             var LEGACY_KEY = 'chart_legend_opacity';
+            var CHART_MAX_PRODUCTS_KEY = 'chart_max_products';
+            var CHART_MAX_PRODUCTS_UNLIMITED = 'unlimited';
             var msgEl = document.getElementById('msg');
             var desktopRangeEl = document.getElementById('chart-legend-opacity-desktop-pct');
             var desktopOutEl = document.getElementById('chart-legend-opacity-desktop-out');
             var mobileRangeEl = document.getElementById('chart-legend-opacity-mobile-pct');
             var mobileOutEl = document.getElementById('chart-legend-opacity-mobile-out');
             var storedEl = document.getElementById('chart-legend-stored');
+            var chartMaxProductsValueEl = document.getElementById('chart-max-products-value');
+            var chartMaxProductsUnlimitedEl = document.getElementById('chart-max-products-unlimited');
+            var chartMaxProductsStoredEl = document.getElementById('chart-max-products-stored');
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
@@ -88,16 +110,23 @@
                 if (mobileRangeEl && mobileOutEl) mobileOutEl.textContent = mobileRangeEl.value + '%';
             }
 
+            function syncChartMaxProductsUi() {
+                var unlimited = !!(chartMaxProductsUnlimitedEl && chartMaxProductsUnlimitedEl.checked);
+                if (chartMaxProductsValueEl) chartMaxProductsValueEl.disabled = unlimited;
+            }
+
             function loadFromConfig() {
                 portal.fetchAdmin('/config').then(function (r) { return r.json(); }).then(function (d) {
                     if (!d.ok || !Array.isArray(d.config)) return;
                     var desktopRow = null;
                     var mobileRow = null;
                     var legacyRow = null;
+                    var chartMaxProductsRow = null;
                     d.config.forEach(function (r) {
                         if (r.key === DESKTOP_KEY) desktopRow = r;
                         if (r.key === MOBILE_KEY) mobileRow = r;
                         if (r.key === LEGACY_KEY) legacyRow = r;
+                        if (r.key === CHART_MAX_PRODUCTS_KEY) chartMaxProductsRow = r;
                     });
                     var fallbackPct = pctFromStored(legacyRow ? legacyRow.value : '');
                     if (desktopRangeEl) desktopRangeEl.value = String(pctFromStored(desktopRow ? desktopRow.value : fallbackPct));
@@ -110,6 +139,16 @@
                             + ' | Mobile: '
                             + (mobileRow ? (String(mobileRow.value) + ' (updated ' + String(mobileRow.updated_at || '') + ')') : 'default/legacy')
                             + (legacyRow ? (' | Legacy fallback: ' + String(legacyRow.value) + ' (updated ' + String(legacyRow.updated_at || '') + ').') : ' | Legacy fallback: default 0.75.');
+                    }
+                    var rawChartMax = chartMaxProductsRow ? String(chartMaxProductsRow.value || '').trim().toLowerCase() : '';
+                    var unlimited = !rawChartMax || rawChartMax === CHART_MAX_PRODUCTS_UNLIMITED;
+                    if (chartMaxProductsUnlimitedEl) chartMaxProductsUnlimitedEl.checked = unlimited;
+                    if (chartMaxProductsValueEl) chartMaxProductsValueEl.value = unlimited ? '40' : String(rawChartMax || '40');
+                    syncChartMaxProductsUi();
+                    if (chartMaxProductsStoredEl) {
+                        chartMaxProductsStoredEl.textContent = chartMaxProductsRow
+                            ? ('Stored value: ' + String(chartMaxProductsRow.value) + ' (updated ' + String(chartMaxProductsRow.updated_at || '') + ').')
+                            : 'No explicit admin cap stored. Public charts use their built-in defaults.';
                     }
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load config', true); });
             }
@@ -141,6 +180,24 @@
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
             }
 
+            function saveChartMaxProducts() {
+                var value = chartMaxProductsUnlimitedEl && chartMaxProductsUnlimitedEl.checked
+                    ? CHART_MAX_PRODUCTS_UNLIMITED
+                    : (chartMaxProductsValueEl ? String(chartMaxProductsValueEl.value || '').trim() : '');
+                portal.fetchAdmin('/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: CHART_MAX_PRODUCTS_KEY, value: value }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Save failed');
+                        showMsg('Saved chart product limit. Allow up to one minute for cached public responses to refresh.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            }
+
             function resetToDefault() {
                 if (!confirm('Remove device-specific opacity overrides? The public site will use the legacy/default 75% opacity until you save new values.')) return;
                 Promise.all([
@@ -165,12 +222,35 @@
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
             }
 
+            function resetChartMaxProducts() {
+                if (!confirm('Remove the stored chart product cap and return to the built-in chart defaults?')) return;
+                portal.fetchAdmin('/config', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: CHART_MAX_PRODUCTS_KEY }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function () {
+                        if (chartMaxProductsUnlimitedEl) chartMaxProductsUnlimitedEl.checked = true;
+                        if (chartMaxProductsValueEl) chartMaxProductsValueEl.value = '40';
+                        syncChartMaxProductsUi();
+                        showMsg('Reset chart product limit.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
+            }
+
             if (desktopRangeEl) desktopRangeEl.addEventListener('input', syncOutput);
             if (mobileRangeEl) mobileRangeEl.addEventListener('input', syncOutput);
+            if (chartMaxProductsUnlimitedEl) chartMaxProductsUnlimitedEl.addEventListener('change', syncChartMaxProductsUi);
             var saveBtn = document.getElementById('chart-legend-save-btn');
             if (saveBtn) saveBtn.addEventListener('click', saveBoth);
             var resetBtn = document.getElementById('chart-legend-reset-btn');
             if (resetBtn) resetBtn.addEventListener('click', resetToDefault);
+            var chartMaxProductsSaveBtn = document.getElementById('chart-max-products-save-btn');
+            if (chartMaxProductsSaveBtn) chartMaxProductsSaveBtn.addEventListener('click', saveChartMaxProducts);
+            var chartMaxProductsResetBtn = document.getElementById('chart-max-products-reset-btn');
+            if (chartMaxProductsResetBtn) chartMaxProductsResetBtn.addEventListener('click', resetChartMaxProducts);
 
             loadFromConfig();
         })();

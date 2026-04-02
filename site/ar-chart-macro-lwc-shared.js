@@ -581,6 +581,119 @@
         return last;
     }
 
+    function resolveChartProductLimit(defaultLimit) {
+        var fallback = Number(defaultLimit);
+        if (!Number.isFinite(fallback) || fallback < 1) fallback = 1;
+        var siteUi = window.AR && window.AR.chartSiteUi;
+        var cap = siteUi && typeof siteUi.getChartMaxProducts === 'function'
+            ? siteUi.getChartMaxProducts()
+            : null;
+        if (!Number.isFinite(Number(cap)) || Number(cap) < 1) return fallback;
+        return Math.max(1, Math.min(fallback, Math.floor(Number(cap))));
+    }
+
+    function seriesValueAtClick(param, api) {
+        var point = param && param.seriesData && api ? param.seriesData.get(api) : null;
+        if (point && Number.isFinite(Number(point.value))) return Number(point.value);
+        if (point && Number.isFinite(Number(point.close))) return Number(point.close);
+        return null;
+    }
+
+    function findOverlappingClickEntries(seriesApis, param) {
+        if (!param || !param.point || param.time == null) return null;
+        var clickY = Number(param.point.y);
+        if (!Number.isFinite(clickY)) return null;
+        var bestDist = Infinity;
+        var bestEntry = null;
+        (Array.isArray(seriesApis) ? seriesApis : []).forEach(function (entry) {
+            var value = seriesValueAtClick(param, entry.api);
+            if (!Number.isFinite(value)) return;
+            var coord = entry.api && typeof entry.api.priceToCoordinate === 'function'
+                ? entry.api.priceToCoordinate(value)
+                : null;
+            if (coord == null || !Number.isFinite(Number(coord))) return;
+            var dist = Math.abs(Number(coord) - clickY);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestEntry = { entry: entry, value: value };
+            }
+        });
+        if (!bestEntry || bestDist >= 30) return null;
+        var clickYmd = utcToYmd(param.time);
+        var anchorValue = bestEntry.value;
+        var matches = [];
+        (Array.isArray(seriesApis) ? seriesApis : []).forEach(function (entry) {
+            var value = seriesValueAtClick(param, entry.api);
+            if (!Number.isFinite(value)) return;
+            if (Math.abs(value - anchorValue) > 1e-6) return;
+            var line = entry.line || {};
+            var productAtDate = stepFieldAtDate(entry.stepPoints, clickYmd, 'productName');
+            matches.push({
+                bankName: line.bankName || line.short || '',
+                productName: productAtDate != null && String(productAtDate) !== '' ? String(productAtDate) : (line.productName || ''),
+                rate: value,
+                subtitle: line.subtitle || '',
+                color: line.color || '#64748b',
+            });
+        });
+        matches.sort(function (left, right) {
+            var bank = String(left.bankName || '').localeCompare(String(right.bankName || ''));
+            if (bank !== 0) return bank;
+            return String(left.productName || '').localeCompare(String(right.productName || ''));
+        });
+        return {
+            clickYmd: clickYmd,
+            rate: anchorValue,
+            entries: matches,
+        };
+    }
+
+    function createReportSelectionInfoBox(t) {
+        var el = document.createElement('div');
+        el.style.cssText = 'display:none;padding:8px 10px;font:11px/1.5 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:6px;margin-top:4px;flex-shrink:0;position:relative;max-height:240px;overflow:auto;';
+        var close = document.createElement('button');
+        close.type = 'button';
+        close.innerHTML = '&times;';
+        close.style.cssText = 'position:absolute;top:3px;right:7px;background:none;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:0.45;padding:0;line-height:1;';
+        close.addEventListener('click', function () { el.style.display = 'none'; });
+        el.appendChild(close);
+        var body = document.createElement('div');
+        el.appendChild(body);
+        return {
+            el: el,
+            show: function (input) {
+                var items = Array.isArray(input && input.items) ? input.items : [];
+                if (!items.length) {
+                    el.style.display = 'none';
+                    return;
+                }
+                var heading = input && input.heading ? '<div style="font-weight:700;margin-bottom:4px;padding-right:16px;">' + escHtml(input.heading) + '</div>' : '';
+                var meta = input && input.meta ? '<div style="font-size:10px;color:' + t.muted + ';margin-bottom:6px;">' + escHtml(input.meta) + '</div>' : '';
+                var rows = items.map(function (item) {
+                    var titleBits = [
+                        '<span style="width:8px;height:8px;border-radius:2px;background:' + escHtml(item.color || '#666') + ';flex-shrink:0;display:inline-block;"></span>',
+                        '<span style="font-weight:600;">' + escHtml(item.bankName || 'Unknown') + '</span>',
+                    ];
+                    if (item.productName) {
+                        titleBits.push('<span style="opacity:0.35;">\u00b7</span>');
+                        titleBits.push('<span>' + escHtml(item.productName) + '</span>');
+                    }
+                    var metaBits = [];
+                    if (item.rate != null && Number.isFinite(Number(item.rate))) metaBits.push(Number(item.rate).toFixed(2) + '%');
+                    if (item.subtitle) metaBits.push(String(item.subtitle));
+                    return ''
+                        + '<div style="display:grid;gap:2px;padding:5px 0;border-top:1px solid rgba(148,163,184,0.16);">'
+                        +   '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + titleBits.join('') + '</div>'
+                        +   '<div style="font-size:10px;color:' + t.muted + ';padding-left:14px;">' + escHtml(metaBits.join(' \u00b7 ')) + '</div>'
+                        + '</div>';
+                }).join('');
+                body.innerHTML = heading + meta + rows;
+                el.style.display = 'block';
+            },
+            hide: function () { el.style.display = 'none'; },
+        };
+    }
+
     /**
      * HTML row for indexed economic overlay in the report legend (dashed swatch matches LWC overlay series).
      */
@@ -620,6 +733,9 @@
         shortProductName: shortProductName,
         escHtml: escHtml,
         lastFiniteNormalizedOverlay: lastFiniteNormalizedOverlay,
+        resolveChartProductLimit: resolveChartProductLimit,
+        findOverlappingClickEntries: findOverlappingClickEntries,
+        createReportSelectionInfoBox: createReportSelectionInfoBox,
         economicOverlayLegendItemHtml: economicOverlayLegendItemHtml,
     };
 })();

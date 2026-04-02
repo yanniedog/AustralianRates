@@ -4,12 +4,13 @@ import {
   CHART_LEGEND_OPACITY_KEY,
   CHART_LEGEND_OPACITY_DESKTOP_KEY,
   CHART_LEGEND_OPACITY_MOBILE_KEY,
+  CHART_MAX_PRODUCTS_KEY,
   INGEST_PAUSE_MODE_KEY,
   INGEST_PAUSE_MODES,
   MIN_RATE_CHECK_INTERVAL_MINUTES,
   RATE_CHECK_INTERVAL_MINUTES_KEY,
 } from '../constants'
-import { normalizeChartLegendOpacityForPut } from '../utils/chart-site-ui'
+import { normalizeChartLegendOpacityForPut, normalizeChartMaxProductsForPut } from '../utils/chart-site-ui'
 import type { AppContext, EnvBindings } from '../types'
 import { jsonError } from '../utils/http'
 
@@ -107,6 +108,14 @@ adminConfigRoutes.put('/config', async (c) => {
     key === CHART_LEGEND_OPACITY_MOBILE_KEY
   ) {
     const normalized = normalizeChartLegendOpacityForPut(value, key)
+    if (!normalized.ok) {
+      return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
+    }
+    value = normalized.value
+  }
+
+  if (key === CHART_MAX_PRODUCTS_KEY) {
+    const normalized = normalizeChartMaxProductsForPut(value, key)
     if (!normalized.ok) {
       return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
     }
