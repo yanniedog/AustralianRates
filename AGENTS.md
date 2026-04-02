@@ -86,6 +86,16 @@ Tests and tooling must not use mock or simulated data. This is project philosoph
 
 See docs/MISSION_AND_TECHNICAL_SPEC.md (Project Philosophy: Real Data Only) and .cursor/rules/no-mock-test-data.mdc.
 
+## Presentation Rule: Data First
+
+This project is data-first. That is a hard presentation rule.
+
+- Prefer dense tables, compact controls, terse labels, and direct values.
+- Default to one-line rows and linear parameter layouts when presenting operational or analytical data.
+- Do not add descriptive paragraphs, marketing copy, explanatory subtitles, embellished helper text, or discursive sentences unless the user explicitly asks for them.
+- When in doubt, remove words and surface the underlying data instead.
+- Any new admin or public UI should optimize for scan speed, compactness, and factual display over narrative explanation.
+
 ## Code Quality Standards
 
 - **Max file size**: 300 lines (flag for review), 500+ lines (trigger refactor).

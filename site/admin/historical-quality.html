@@ -15,40 +15,31 @@
     <style>
         .historical-quality-table-wrap,
         .historical-quality-debug-wrap { overflow: auto; max-width: 100%; }
-        .historical-quality-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.84rem; }
-        .historical-quality-table th, .historical-quality-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--ar-line); text-align: left; vertical-align: top; }
-        .historical-quality-table th { font-size: 0.71rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ar-text-soft); }
+        .historical-quality-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.73rem; }
+        .historical-quality-table th, .historical-quality-table td { padding: 0.34rem 0.38rem; border-bottom: 1px solid var(--ar-line); text-align: left; vertical-align: middle; white-space: nowrap; }
+        .historical-quality-table th { font-size: 0.67rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ar-text-soft); }
         .historical-quality-table td:last-child, .historical-quality-table th:last-child { white-space: nowrap; }
         .historical-quality-table tr.is-selected { background: color-mix(in srgb, var(--ar-accent) 12%, transparent); }
         .historical-quality-table tr { cursor: pointer; }
         .historical-quality-table .mono { font-family: "JetBrains Mono","SF Mono","Consolas","Monaco","ui-monospace",monospace; font-size: 0.88rem; }
-        .historical-quality-day-cell { display: grid; gap: 0.1rem; }
-        .historical-quality-day-title { font-weight: 700; }
-        .historical-quality-micro-grid { display: grid; gap: 0.15rem; }
-        .historical-quality-micro-line { display: flex; justify-content: space-between; gap: 8px; }
-        .historical-quality-micro-line span:first-child { color: var(--ar-text-soft); }
-        .historical-quality-actions-stack { display: grid; gap: 0.35rem; }
-        .historical-quality-actions-stack .secondary { padding: 0.35rem 0.55rem; min-height: auto; font-size: 0.78rem; }
+        .historical-quality-cell-date { font-size: 0.82rem; font-weight: 700; }
+        .historical-quality-cell-num { text-align: right; font-variant-numeric: tabular-nums; }
         .historical-quality-parameter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
         .historical-quality-parameter-card { padding: 0.85rem; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); }
         .historical-quality-parameter-card h3 { margin: 0 0 0.35rem; font-size: 0.98rem; }
         .historical-quality-parameter-value { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.55rem; }
         .historical-quality-actions-inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .historical-quality-actions-inline--tight { gap: 4px; justify-content: flex-end; }
+        .historical-quality-actions-inline--tight .secondary { min-height: auto; padding: 0.18rem 0.34rem; font-size: 0.68rem; line-height: 1.1; }
         .historical-quality-copy-btn { min-height: auto; padding: 0.45rem 0.7rem; }
         .historical-quality-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .historical-quality-toolbar input[type="date"] { min-width: 160px; }
         .historical-quality-copy-status { color: var(--ar-text-muted); font-size: 0.9rem; }
         .historical-quality-top-lenders { margin: 0; padding-left: 1.2rem; }
         .historical-quality-summary-pre, .historical-quality-debug-pre { margin: 0; padding: 14px; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); white-space: pre-wrap; }
-        .historical-quality-criteria-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-        .historical-quality-criteria-card { padding: 0.85rem; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-2); background: var(--ar-surface-soft); }
-        .historical-quality-criteria-card h3 { margin: 0 0 0.3rem; font-size: 0.95rem; }
-        .historical-quality-criteria-card p { margin: 0 0 0.5rem; color: var(--ar-text-soft); font-size: 0.84rem; }
-        .historical-quality-criteria-list { margin: 0; padding-left: 1rem; display: grid; gap: 0.32rem; font-size: 0.84rem; }
-        .historical-quality-criteria-list strong { display: inline-block; margin-right: 0.25rem; }
         @media (max-width: 1180px) {
-            .historical-quality-table { font-size: 0.8rem; }
-            .historical-quality-table th, .historical-quality-table td { padding: 0.4rem 0.4rem; }
+            .historical-quality-table { font-size: 0.69rem; }
+            .historical-quality-table th, .historical-quality-table td { padding: 0.28rem 0.32rem; }
         }
     </style>
 </head>
@@ -63,49 +54,42 @@
         <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
         <div class="admin-page-head">
             <p class="eyebrow">Historical quality</p>
-            <h1>Daily historical quality</h1>
-            <p class="admin-subtitle">Daily provenance, continuity, anomaly, and product-change snapshots. Scheduled end-of-day quality snapshots run at 23:59 Melbourne/Hobart local time.</p>
+            <h1>Historical quality</h1>
         </div>
         <div class="admin-card">
             <div class="historical-quality-toolbar">
-                <label for="historical-quality-date">Manual date audit</label>
+                <label for="historical-quality-date">Date</label>
                 <input type="date" id="historical-quality-date">
-                <button type="button" class="primary" id="historical-quality-run-btn">Run selected date</button>
+                <button type="button" class="primary" id="historical-quality-run-btn">Run</button>
                 <button type="button" class="secondary" id="historical-quality-refresh-btn">Refresh</button>
-                <span class="admin-status-line" id="historical-quality-status">Loading daily snapshots...</span>
+                <span class="admin-status-line" id="historical-quality-status">loading</span>
             </div>
         </div>
         <section class="admin-card">
-            <h2>Criteria assessed</h2>
-            <p class="admin-hint">The daily audit stores compact counters, component scores, and persistent anomaly classifications. This list is served from the admin API so the definitions stay aligned with the backend.</p>
-            <div class="historical-quality-criteria-grid" id="historical-quality-criteria"></div>
-        </section>
-        <section class="admin-card">
-            <h2>Daily snapshots</h2>
-            <p class="admin-hint">Compact grouped cells show inventory, availability, identity churn, rate moves, and quality scores without forcing a horizontal scroll.</p>
+            <h2>Snapshots</h2>
             <div class="historical-quality-table-wrap" id="historical-quality-days-wrap"></div>
         </section>
         <section class="admin-card">
             <div class="historical-quality-actions-inline">
-                <h2 style="margin:0;">Selected day</h2>
-                <button type="button" class="secondary historical-quality-copy-btn" id="historical-quality-copy-summary-btn">Copy summary</button>
-                <button type="button" class="secondary historical-quality-copy-btn" id="historical-quality-copy-debug-btn">Copy debug JSON</button>
+                <h2 style="margin:0;">Selected</h2>
+                <button type="button" class="secondary historical-quality-copy-btn" id="historical-quality-copy-summary-btn">Text</button>
+                <button type="button" class="secondary historical-quality-copy-btn" id="historical-quality-copy-debug-btn">JSON</button>
                 <span class="historical-quality-copy-status" id="historical-quality-copy-status"></span>
             </div>
             <div id="historical-quality-selected-meta" class="admin-status-line" style="margin-top:0.5rem;"></div>
             <div class="historical-quality-parameter-grid" id="historical-quality-parameters" style="margin-top:1rem;"></div>
-            <h3 style="margin-top:1rem;">Top degraded lenders</h3>
+            <h3 style="margin-top:1rem;">Top lenders</h3>
             <ol class="historical-quality-top-lenders" id="historical-quality-top-lenders"></ol>
-            <h3 style="margin-top:1rem;">Plain text</h3>
-            <pre class="historical-quality-summary-pre" id="historical-quality-summary-pre">Select a day.</pre>
-            <h3 style="margin-top:1rem;">Debug JSON</h3>
+            <h3 style="margin-top:1rem;">Text</h3>
+            <pre class="historical-quality-summary-pre" id="historical-quality-summary-pre">select a day</pre>
+            <h3 style="margin-top:1rem;">JSON</h3>
             <div class="historical-quality-debug-wrap">
-                <pre class="historical-quality-debug-pre" id="historical-quality-debug-pre">Select a day.</pre>
+                <pre class="historical-quality-debug-pre" id="historical-quality-debug-pre">select a day</pre>
             </div>
         </section>
     </main>
     <script src="admin-portal.js?v=04d3578"></script>
     <script src="admin-sidebar.js?v=04d3578"></script>
-    <script src="historical-quality-page.js?v=20260402b"></script>
+    <script src="historical-quality-page.js?v=20260403a"></script>
 </body>
 </html>

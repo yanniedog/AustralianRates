@@ -599,10 +599,17 @@
         return null;
     }
 
-    function findOverlappingClickEntries(seriesApis, param) {
+    function selectionMetaText(cluster) {
+        if (!cluster || !Array.isArray(cluster.entries) || !cluster.entries.length) return '';
+        var count = cluster.entries.length;
+        var noun = count === 1 ? 'product' : 'products';
+        return count + ' ' + noun + ' at ' + Number(cluster.rate).toFixed(2) + '%';
+    }
+
+    function findOverlappingSelectionEntries(seriesApis, param) {
         if (!param || !param.point || param.time == null) return null;
-        var clickY = Number(param.point.y);
-        if (!Number.isFinite(clickY)) return null;
+        var pointerY = Number(param.point.y);
+        if (!Number.isFinite(pointerY)) return null;
         var bestDist = Infinity;
         var bestEntry = null;
         (Array.isArray(seriesApis) ? seriesApis : []).forEach(function (entry) {
@@ -612,14 +619,14 @@
                 ? entry.api.priceToCoordinate(value)
                 : null;
             if (coord == null || !Number.isFinite(Number(coord))) return;
-            var dist = Math.abs(Number(coord) - clickY);
+            var dist = Math.abs(Number(coord) - pointerY);
             if (dist < bestDist) {
                 bestDist = dist;
                 bestEntry = { entry: entry, value: value };
             }
         });
         if (!bestEntry || bestDist >= 30) return null;
-        var clickYmd = utcToYmd(param.time);
+        var selectionYmd = utcToYmd(param.time);
         var anchorValue = bestEntry.value;
         var matches = [];
         (Array.isArray(seriesApis) ? seriesApis : []).forEach(function (entry) {
@@ -627,7 +634,7 @@
             if (!Number.isFinite(value)) return;
             if (Math.abs(value - anchorValue) > 1e-6) return;
             var line = entry.line || {};
-            var productAtDate = stepFieldAtDate(entry.stepPoints, clickYmd, 'productName');
+            var productAtDate = stepFieldAtDate(entry.stepPoints, selectionYmd, 'productName');
             matches.push({
                 bankName: line.bankName || line.short || '',
                 productName: productAtDate != null && String(productAtDate) !== '' ? String(productAtDate) : (line.productName || ''),
@@ -642,7 +649,7 @@
             return String(left.productName || '').localeCompare(String(right.productName || ''));
         });
         return {
-            clickYmd: clickYmd,
+            selectionYmd: selectionYmd,
             rate: anchorValue,
             entries: matches,
         };
@@ -734,7 +741,9 @@
         escHtml: escHtml,
         lastFiniteNormalizedOverlay: lastFiniteNormalizedOverlay,
         resolveChartProductLimit: resolveChartProductLimit,
-        findOverlappingClickEntries: findOverlappingClickEntries,
+        selectionMetaText: selectionMetaText,
+        findOverlappingSelectionEntries: findOverlappingSelectionEntries,
+        findOverlappingClickEntries: findOverlappingSelectionEntries,
         createReportSelectionInfoBox: createReportSelectionInfoBox,
         economicOverlayLegendItemHtml: economicOverlayLegendItemHtml,
     };

@@ -9,7 +9,12 @@ Git/GitHub:
 - Prefer feature branches and PRs for non-trivial work; merge when CI is green. Use `gh` for PRs/checks when available.
 
 Deployed app:
-- Do not claim the UI is correct based only on localhost if the app uses Cloudflare D1/KV/Workers or similar. End UI-facing tasks with a Verification block: URL (Preview if available), 3–7 concrete things to check, and what might regress.
+- Do not claim the UI is correct based only on localhost if the app uses Cloudflare D1/KV/Workers or similar. End UI-facing tasks with a Verification block: URL (Preview if available), 3-7 concrete things to check, and what might regress.
+
+Presentation:
+- This repo is data-first. Prefer dense tables, compact controls, terse labels, and direct values.
+- Do not add explanatory subtitles, descriptive paragraphs, marketing copy, or verbose helper text unless explicitly requested.
+- Default to one-line rows and linear parameter layouts for operational or analytical data.
 
 When handing off:
 - Give branch/PR link, CI status if known, and the Verification checklist. Do not say production is safe for schema/migrations/secrets without calling that out clearly.

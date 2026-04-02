@@ -47,6 +47,7 @@ adminHistoricalQualityRoutes.get('/audits/historical-quality/days', async (c) =>
     auth_mode: c.get('adminAuthState')?.mode || null,
     days: days.map((day) => ({
       ...day,
+      summary: day.summary,
       metrics: JSON.parse(day.overall.metrics_json || '{}'),
       evidence: JSON.parse(day.overall.evidence_json || '{}'),
     })),
@@ -74,6 +75,7 @@ adminHistoricalQualityRoutes.get('/audits/historical-quality/days/:collectionDat
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
     run: detail.run,
+    summary: detail.summary,
     rows: detail.rows.map((row) => ({
       ...row,
       metrics: JSON.parse(row.metrics_json || '{}'),

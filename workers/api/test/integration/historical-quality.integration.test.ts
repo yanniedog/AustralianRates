@@ -84,25 +84,24 @@ describe('historical quality audit integration', () => {
     const daysJson = (await daysResponse.json()) as {
       days?: Array<{
         collection_date?: string
+        summary?: {
+          counts?: {
+            new_product_count?: number
+            lost_product_count?: number
+          }
+        }
         overall?: {
           row_count?: number
           bank_count?: number
           product_count?: number
           evidence_confidence_score_v1?: number
         }
-        metrics?: {
-          daily_summary?: {
-            counts?: {
-              new_product_count?: number
-              lost_product_count?: number
-            }
-          }
-        }
       }>
     }
     expect(Array.isArray(daysJson.days)).toBe(true)
     expect((daysJson.days ?? []).length).toBeGreaterThan(0)
     expect((daysJson.days ?? []).some((day) => day.collection_date === '2026-03-29')).toBe(true)
+    expect((daysJson.days ?? []).every((day) => typeof day.summary?.counts?.new_product_count === 'number')).toBe(true)
 
     const dayDetailResponse = await SELF.fetch(
       'https://example.com/api/home-loan-rates/admin/audits/historical-quality/days/2026-03-29',
@@ -111,6 +110,7 @@ describe('historical quality audit integration', () => {
     expect(dayDetailResponse.status).toBe(200)
     const dayDetail = (await dayDetailResponse.json()) as {
       run?: { audit_run_id?: string; status?: string }
+      summary?: { counts?: { new_product_count?: number }; top_degraded_lenders?: unknown[] }
       rows?: Array<{ scope?: string; metrics?: { daily_summary?: { top_degraded_lenders?: unknown[] } } }>
       findings?: Array<{ criterion_code?: string }>
       parameters?: Array<{ key?: string; text?: string; debug?: Record<string, unknown> }>
@@ -124,7 +124,9 @@ describe('historical quality audit integration', () => {
     expect(dayDetail.parameters?.some((parameter) => parameter.key === 'finding_summary')).toBe(true)
     expect(dayDetail.parameters?.every((parameter) => typeof parameter.text === 'string' && parameter.debug && typeof parameter.debug === 'object')).toBe(true)
     expect(Array.isArray(dayDetail.findings)).toBe(true)
-    expect(String(dayDetail.plain_text || '')).toContain('Historical quality day report for')
+    expect(typeof dayDetail.summary?.counts?.new_product_count).toBe('number')
+    expect(Array.isArray(dayDetail.summary?.top_degraded_lenders)).toBe(true)
+    expect(String(dayDetail.plain_text || '')).toContain('run=')
 
     const plainTextResponse = await SELF.fetch(
       'https://example.com/api/home-loan-rates/admin/audits/historical-quality/days/2026-03-29/plain-text',
@@ -132,8 +134,8 @@ describe('historical quality audit integration', () => {
     )
     expect(plainTextResponse.status).toBe(200)
     const plainText = await plainTextResponse.text()
-    expect(plainText).toContain('Historical quality day report for 2026-03-29')
-    expect(plainText).toContain('Top degraded lenders:')
+    expect(plainText).toContain('2026-03-29')
+    expect(plainText).toContain('top_lenders=')
   }, 60000)
 
   it('returns a retention size audit report from the admin route', async () => {

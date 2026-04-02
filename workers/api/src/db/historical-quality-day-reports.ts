@@ -1,4 +1,5 @@
 import type { HistoricalQualityDailyRow, HistoricalQualityFindingRow, HistoricalQualityRunRow, HistoricalQualityScope } from './historical-quality-types'
+import { computeHistoricalQualityDailySummary, mergeHistoricalQualityDailySummaries, type HistoricalQualityDailySummary } from './historical-quality-daily-summary'
 import { readHistoricalQualityDailySummary } from './historical-quality-daily-payload'
 
 type DailyRowWithRun = HistoricalQualityDailyRow &
@@ -12,6 +13,7 @@ export type HistoricalQualityDaySummary = {
   started_at: string
   finished_at: string | null
   overall: DailyRowWithRun
+  summary: HistoricalQualityDailySummary | null
 }
 
 export type HistoricalQualityDayParameter = {
@@ -32,6 +34,44 @@ function parseJson<T>(raw: string): T {
 
 function pct(value: number | null | undefined): string {
   return `${(Number(value ?? 0) * 100).toFixed(1)}%`
+}
+
+function previousDateFromMetrics(row: Pick<HistoricalQualityDailyRow, 'metrics_json'>): string | null {
+  const metrics = parseJson<Record<string, unknown>>(row.metrics_json)
+  return typeof metrics.previous_date === 'string' && metrics.previous_date ? metrics.previous_date : null
+}
+
+async function resolveScopeSummary(
+  db: D1Database,
+  row: HistoricalQualityDailyRow,
+  findings: HistoricalQualityFindingRow[],
+): Promise<HistoricalQualityDailySummary | null> {
+  const summary = readHistoricalQualityDailySummary(row)
+  if (summary) return summary
+  if (row.scope === 'overall') return null
+  const previousDate = previousDateFromMetrics(row)
+  return computeHistoricalQualityDailySummary(db, {
+    collectionDate: row.collection_date,
+    scope: row.scope,
+    previousDate,
+    findings: findings.filter((finding) => finding.scope === row.scope),
+  })
+}
+
+async function resolveOverallSummary(
+  db: D1Database,
+  overall: HistoricalQualityDailyRow,
+  scopeRows: HistoricalQualityDailyRow[],
+  findings: HistoricalQualityFindingRow[],
+): Promise<HistoricalQualityDailySummary | null> {
+  const summary = readHistoricalQualityDailySummary(overall)
+  if (summary) return summary
+  const summaries: HistoricalQualityDailySummary[] = []
+  for (const row of scopeRows) {
+    const scopeSummary = await resolveScopeSummary(db, row, findings)
+    if (scopeSummary) summaries.push(scopeSummary)
+  }
+  return summaries.length ? mergeHistoricalQualityDailySummaries(summaries) : null
 }
 
 async function loadRunForDate(db: D1Database, collectionDate: string): Promise<{ audit_run_id: string } | null> {
@@ -82,14 +122,29 @@ export async function listLatestHistoricalQualityDays(db: D1Database, limit: num
     )
     .bind(Math.max(1, Math.min(365, Math.floor(limit))))
     .all<DailyRowWithRun>()
-  return (rows.results ?? []).map((row) => ({
-    collection_date: row.collection_date,
-    audit_run_id: row.audit_run_id,
-    trigger_source: row.trigger_source,
-    status: row.status,
-    started_at: row.started_at,
-    finished_at: row.finished_at,
-    overall: row,
+  return Promise.all((rows.results ?? []).map(async (row) => {
+    let summary = readHistoricalQualityDailySummary(row)
+    if (!summary) {
+      const scopeSet = await db
+        .prepare(`SELECT * FROM historical_quality_daily WHERE audit_run_id = ?1 AND collection_date = ?2 AND scope != 'overall' ORDER BY scope ASC`)
+        .bind(row.audit_run_id, row.collection_date)
+        .all<HistoricalQualityDailyRow>()
+      const findingSet = await db
+        .prepare(`SELECT * FROM historical_quality_findings WHERE audit_run_id = ?1 AND collection_date = ?2 ORDER BY id ASC`)
+        .bind(row.audit_run_id, row.collection_date)
+        .all<HistoricalQualityFindingRow>()
+      summary = await resolveOverallSummary(db, row, scopeSet.results ?? [], findingSet.results ?? [])
+    }
+    return {
+      collection_date: row.collection_date,
+      audit_run_id: row.audit_run_id,
+      trigger_source: row.trigger_source,
+      status: row.status,
+      started_at: row.started_at,
+      finished_at: row.finished_at,
+      overall: row,
+      summary,
+    }
   }))
 }
 
@@ -127,12 +182,11 @@ function parametersForRow(
   row: HistoricalQualityDailyRow,
   scopeRows: HistoricalQualityDailyRow[],
   findings: HistoricalQualityFindingRow[],
+  summary: HistoricalQualityDailySummary | null,
+  scopeSummaries: Record<string, HistoricalQualityDailySummary | null>,
 ): HistoricalQualityDayParameter[] {
-  const summary = readHistoricalQualityDailySummary(row)
   const scopeMap = Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, candidate]))
-  const scopeSummaryMap = Object.fromEntries(
-    scopeRows.map((candidate) => [candidate.scope, readHistoricalQualityDailySummary(candidate)]),
-  )
+  const scopeSummaryMap = scopeSummaries
   const counts = summary?.counts
   const topLenders = summary?.top_degraded_lenders ?? []
   const evidence = parseJson<Record<string, unknown>>(row.evidence_json)
@@ -141,9 +195,9 @@ function parametersForRow(
     parameter(collectionDate, `${scope} rows`, 'row_count', row.row_count, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, candidate.row_count])) }),
     parameter(collectionDate, `${scope} lenders`, 'bank_count', row.bank_count, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, candidate.bank_count])) }),
     parameter(collectionDate, `${scope} products`, 'product_count', row.product_count, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, candidate.product_count])) }),
-    parameter(collectionDate, `${scope} new products`, 'new_product_count', counts?.new_product_count ?? 0, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, readHistoricalQualityDailySummary(candidate)?.counts.new_product_count ?? 0])) }),
-    parameter(collectionDate, `${scope} lost products`, 'lost_product_count', counts?.lost_product_count ?? 0, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, readHistoricalQualityDailySummary(candidate)?.counts.lost_product_count ?? 0])) }),
-    parameter(collectionDate, `${scope} CDR-missing products`, 'cdr_missing_product_count', counts?.cdr_missing_product_count ?? 0, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, readHistoricalQualityDailySummary(candidate)?.counts.cdr_missing_product_count ?? 0])) }),
+    parameter(collectionDate, `${scope} new products`, 'new_product_count', counts?.new_product_count ?? 0, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, scopeSummaryMap[candidate.scope]?.counts.new_product_count ?? 0])) }),
+    parameter(collectionDate, `${scope} lost products`, 'lost_product_count', counts?.lost_product_count ?? 0, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, scopeSummaryMap[candidate.scope]?.counts.lost_product_count ?? 0])) }),
+    parameter(collectionDate, `${scope} CDR-missing products`, 'cdr_missing_product_count', counts?.cdr_missing_product_count ?? 0, { by_scope: Object.fromEntries(scopeRows.map((candidate) => [candidate.scope, scopeSummaryMap[candidate.scope]?.counts.cdr_missing_product_count ?? 0])) }),
     parameter(collectionDate, `${scope} same-ID renamed products`, 'renamed_same_id_count', counts?.renamed_same_id_count ?? 0, { summary: scopeSummaryMap[scope] }),
     parameter(collectionDate, `${scope} same-ID same-name same-rate other-detail changes`, 'same_id_name_same_rate_other_detail_changed_count', counts?.same_id_name_same_rate_other_detail_changed_count ?? 0, { summary: scopeSummaryMap[scope] }),
     parameter(collectionDate, `${scope} changed-ID same-name products`, 'changed_id_same_name_count', counts?.changed_id_same_name_count ?? 0, { summary: scopeSummaryMap[scope] }),
@@ -168,24 +222,21 @@ function buildPlainText(detail: {
   collectionDate: string
   run: HistoricalQualityRunRow
   rows: HistoricalQualityDailyRow[]
+  summary: HistoricalQualityDailySummary | null
 }): string {
   const overall = detail.rows.find((row) => row.scope === 'overall')
   if (!overall) return `${detail.collectionDate}: no historical quality row found.`
-  const summary = readHistoricalQualityDailySummary(overall)
-  const counts = summary?.counts
-  const lenders = summary?.top_degraded_lenders ?? []
+  const counts = detail.summary?.counts
+  const lenders = detail.summary?.top_degraded_lenders ?? []
   return [
-    `Historical quality day report for ${detail.collectionDate}`,
-    `Run: ${detail.run.audit_run_id} (${detail.run.trigger_source}, ${detail.run.status})`,
-    `Rows ${overall.row_count} | lenders ${overall.bank_count} | products ${overall.product_count}`,
-    `New ${counts?.new_product_count ?? 0} | lost ${counts?.lost_product_count ?? 0} | CDR-missing ${counts?.cdr_missing_product_count ?? 0}`,
-    `Renamed same ID ${counts?.renamed_same_id_count ?? 0} | same ID/name/rate other-detail ${counts?.same_id_name_same_rate_other_detail_changed_count ?? 0} | changed ID same name ${counts?.changed_id_same_name_count ?? 0}`,
-    `Rate increases ${counts?.increased_rate_product_count ?? 0} | rate decreases ${counts?.decreased_rate_product_count ?? 0}`,
-    `Structural ${pct(overall.structural_score_v1)} | provenance ${pct(overall.provenance_score_v1)} | coverage ${pct(overall.coverage_score_v1)} | anomaly pressure ${pct(overall.anomaly_pressure_score_v1)}`,
-    `Continuity ${pct(overall.continuity_score_v1)} | count stability ${pct(overall.count_stability_score_v1)} | rate flow ${pct(overall.rate_flow_score_v1)} | transition ${pct(overall.transition_score_v1)} | evidence ${pct(overall.evidence_confidence_score_v1)}`,
+    `${detail.collectionDate}`,
+    `run=${detail.run.audit_run_id} src=${detail.run.trigger_source} status=${detail.run.status}`,
+    `rows=${overall.row_count} lenders=${overall.bank_count} products=${overall.product_count} new=${counts?.new_product_count ?? 0} lost=${counts?.lost_product_count ?? 0} cdr_miss=${counts?.cdr_missing_product_count ?? 0}`,
+    `rename=${counts?.renamed_same_id_count ?? 0} detail=${counts?.same_id_name_same_rate_other_detail_changed_count ?? 0} id_churn=${counts?.changed_id_same_name_count ?? 0} up=${counts?.increased_rate_product_count ?? 0} down=${counts?.decreased_rate_product_count ?? 0}`,
+    `struct=${pct(overall.structural_score_v1)} prov=${pct(overall.provenance_score_v1)} cov=${pct(overall.coverage_score_v1)} anom=${pct(overall.anomaly_pressure_score_v1)} cont=${pct(overall.continuity_score_v1)} stab=${pct(overall.count_stability_score_v1)} flow=${pct(overall.rate_flow_score_v1)} trans=${pct(overall.transition_score_v1)} evid=${pct(overall.evidence_confidence_score_v1)}`,
     lenders.length
-      ? `Top degraded lenders: ${lenders.map((lender) => `${lender.rank}. ${lender.bank_name} (${lender.degradation_score.toFixed(2)})`).join('; ')}`
-      : 'Top degraded lenders: none',
+      ? `top_lenders=${lenders.map((lender) => `${lender.rank}:${lender.bank_name}(${lender.degradation_score.toFixed(2)})`).join('; ')}`
+      : 'top_lenders=none',
   ].join('\n')
 }
 
@@ -193,12 +244,13 @@ export async function getHistoricalQualityDayDetail(db: D1Database, collectionDa
   run: HistoricalQualityRunRow | null
   rows: HistoricalQualityDailyRow[]
   findings: HistoricalQualityFindingRow[]
+  summary: HistoricalQualityDailySummary | null
   plain_text: string
   parameters: HistoricalQualityDayParameter[]
 }> {
   const selected = await loadRunForDate(db, collectionDate)
   if (!selected) {
-    return { run: null, rows: [], findings: [], plain_text: `${collectionDate}: no historical quality run found.`, parameters: [] }
+    return { run: null, rows: [], findings: [], summary: null, plain_text: `${collectionDate}: no historical quality run found.`, parameters: [] }
   }
   const [run, rowSet, findingSet] = await Promise.all([
     db.prepare(`SELECT * FROM historical_quality_runs WHERE audit_run_id = ?1`).bind(selected.audit_run_id).first<HistoricalQualityRunRow>(),
@@ -209,12 +261,17 @@ export async function getHistoricalQualityDayDetail(db: D1Database, collectionDa
   const scopeRows = rows.filter((row) => row.scope !== 'overall')
   const overall = rows.find((row) => row.scope === 'overall')
   const findings = findingSet.results ?? []
-  const parameters = overall ? parametersForRow(collectionDate, 'overall', overall, scopeRows, findings) : []
+  const scopeSummaries = Object.fromEntries(
+    await Promise.all(scopeRows.map(async (row) => [row.scope, await resolveScopeSummary(db, row, findings)])),
+  ) as Record<string, HistoricalQualityDailySummary | null>
+  const summary = overall ? await resolveOverallSummary(db, overall, scopeRows, findings) : null
+  const parameters = overall ? parametersForRow(collectionDate, 'overall', overall, scopeRows, findings, summary, scopeSummaries) : []
   return {
     run: run ?? null,
     rows,
     findings,
-    plain_text: run ? buildPlainText({ collectionDate, run, rows }) : `${collectionDate}: no historical quality run found.`,
+    summary,
+    plain_text: run ? buildPlainText({ collectionDate, run, rows, summary }) : `${collectionDate}: no historical quality run found.`,
     parameters,
   }
 }

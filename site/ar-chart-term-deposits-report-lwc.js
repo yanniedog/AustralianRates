@@ -459,10 +459,30 @@
             legendEl.style.opacity = '0.75';
         }
 
-        mount.addEventListener('mouseleave', function () { legendEl.innerHTML = defaultLegendHTML; });
+        function refreshSelectionInfo(param) {
+            var cluster = M.findOverlappingSelectionEntries(seriesApis, param);
+            if (!cluster || !cluster.entries.length) {
+                infoBox.hide();
+                return;
+            }
+            infoBox.show({
+                heading: fmtFull(cluster.selectionYmd),
+                meta: M.selectionMetaText(cluster),
+                items: cluster.entries,
+            });
+        }
+
+        mount.addEventListener('mouseleave', function () {
+            legendEl.innerHTML = defaultLegendHTML;
+            infoBox.hide();
+        });
 
         chart.subscribeCrosshairMove(function (param) {
-            if (!param || !param.point || !param.time) { legendEl.innerHTML = defaultLegendHTML; return; }
+            if (!param || !param.point || !param.time) {
+                legendEl.innerHTML = defaultLegendHTML;
+                infoBox.hide();
+                return;
+            }
             var time = M.utcToYmd(param.time);
             var cpiVal = M.cpiAtDate(cpiPts, time);
             var rbaVal = null;
@@ -474,19 +494,18 @@
                 var sd = param.seriesData && param.seriesData.get(e.api);
                 if (sd && Number.isFinite(sd.value)) hasEconOverlay = true;
             });
-            if (!bankItems.length && rbaVal == null && cpiVal == null && !hasEconOverlay) { legendEl.innerHTML = defaultLegendHTML; return; }
+            if (!bankItems.length && rbaVal == null && cpiVal == null && !hasEconOverlay) {
+                legendEl.innerHTML = defaultLegendHTML;
+                infoBox.hide();
+                return;
+            }
             refreshLegend(bankItems, rbaVal, cpiVal, time, param);
+            refreshSelectionInfo(param);
         });
 
         // Click → info box
         chart.subscribeClick(function (param) {
-            var cluster = M.findOverlappingClickEntries(seriesApis, param);
-            if (!cluster || !cluster.entries.length) { infoBox.hide(); return; }
-            infoBox.show({
-                heading: fmtFull(cluster.clickYmd),
-                meta: cluster.entries.length > 1 ? (cluster.entries.length + ' overlapping products at ' + Number(cluster.rate).toFixed(2) + '%') : ('1 product at ' + Number(cluster.rate).toFixed(2) + '%'),
-                items: cluster.entries,
-            });
+            refreshSelectionInfo(param);
         });
 
         // Resize
