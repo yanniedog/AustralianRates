@@ -152,6 +152,7 @@
             id: 'filter-exclude-compare-edge-cases',
             label: 'Exclude compare edge cases',
             icon: 'compare',
+            checked: true,
             help: 'Exclude niche or mis-filed outlier products from compare views and report charts.'
         },
         {
@@ -404,7 +405,7 @@
             return '' +
                 '<div class="terminal-field terminal-field-toggle"' + attrs + '>' +
                     fieldLabelBlock(field, { forId: field.id }) +
-                    '<input id="' + field.id + '" type="checkbox" aria-labelledby="' + esc(fieldLabelId(field)) + '">' +
+                    '<input id="' + field.id + '" type="checkbox"' + (field.checked ? ' checked' : '') + ' aria-labelledby="' + esc(fieldLabelId(field)) + '">' +
                 '</div>';
         }
         if (field.kind === 'number') {

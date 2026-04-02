@@ -16,10 +16,6 @@
             (window.innerHeight <= MOBILE_BREAKPOINT && window.matchMedia('(orientation: landscape)').matches);
     }
 
-    function prefersReducedMotion() {
-        return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    }
-
     function getActiveTab() {
         return window.AR.tabs && typeof window.AR.tabs.getActiveTab === 'function'
             ? window.AR.tabs.getActiveTab()
@@ -110,7 +106,7 @@
         );
         window.scrollTo({
             top: target,
-            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+            behavior: 'auto',
         });
     }
 
