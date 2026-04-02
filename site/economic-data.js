@@ -77,7 +77,11 @@
     };
 
     var refs = {
-        presetRow: document.getElementById('preset-row'),
+        presetPicker: document.getElementById('economic-preset-picker'),
+        presetSelect: document.getElementById('economic-preset-select'),
+        presetSummary: document.getElementById('economic-preset-summary'),
+        indicatorPicker: document.getElementById('economic-indicator-picker'),
+        indicatorSummary: document.getElementById('economic-indicator-summary'),
         rangeRow: document.getElementById('range-row'),
         categoryGroups: document.getElementById('category-groups'),
         multiSelectToggle: document.getElementById('economic-multiselect'),
@@ -357,6 +361,53 @@
         return next;
     }
 
+    function categoryId(label) {
+        return String(label || 'group')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'group';
+    }
+
+    function selectedSeriesLabels() {
+        var labels = [];
+        var seen = {};
+        ((state.catalog && state.catalog.categories) || []).forEach(function (category) {
+            (category.series || []).forEach(function (series) {
+                if (state.selectedIds.indexOf(series.id) < 0 || seen[series.id]) return;
+                seen[series.id] = true;
+                labels.push(series.short_label || series.label || series.id);
+            });
+        });
+        return labels;
+    }
+
+    function selectedCountForCategory(category) {
+        return (category.series || []).reduce(function (count, series) {
+            return count + (state.selectedIds.indexOf(series.id) >= 0 ? 1 : 0);
+        }, 0);
+    }
+
+    function groupCountLabel(category) {
+        var selected = selectedCountForCategory(category);
+        if (selected > 0) return selected + ' selected';
+        return (category.series || []).length + ' items';
+    }
+
+    function indicatorSummaryText() {
+        var labels = selectedSeriesLabels();
+        if (!labels.length) return 'None';
+        if (labels.length === 1) return labels[0];
+        return labels[0] + ' +' + (labels.length - 1);
+    }
+
+    function syncPickerSummaries() {
+        var preset = findPreset(state.selectedPreset);
+        if (refs.presetSummary) refs.presetSummary.textContent = preset ? preset.label : 'Custom';
+        if (refs.indicatorSummary) refs.indicatorSummary.textContent = state.selectedIds.length + ' selected';
+        if (refs.presetPicker) refs.presetPicker.dataset.currentPreset = preset ? preset.id : 'custom';
+        if (refs.indicatorPicker) refs.indicatorPicker.dataset.selectionPreview = indicatorSummaryText();
+    }
+
     function syncDebugSurface() {
         ar.economicData = {
             reloadCatalog: loadCatalog,
@@ -386,27 +437,43 @@
 
     function renderPresets() {
         syncSelectionModeUi();
-        refs.presetRow.innerHTML = state.catalog.presets.map(function (preset) {
-            var active = preset.id === state.selectedPreset;
-            return '<button type="button" class="chip-btn secondary' + (active ? ' active' : '') + '" data-preset-id="' + esc(preset.id) + '">' + esc(preset.label) + '</button>';
-        }).join('');
+        if (!refs.presetSelect) return;
+        var options = (state.catalog.presets || []).map(function (preset) {
+            return '<option value="' + esc(preset.id) + '">' + esc(preset.label) + '</option>';
+        });
+        if (!findPreset(state.selectedPreset)) {
+            options.push('<option value="custom">Custom</option>');
+        }
+        refs.presetSelect.innerHTML = options.join('');
+        refs.presetSelect.value = findPreset(state.selectedPreset) ? state.selectedPreset : 'custom';
+        syncPickerSummaries();
     }
 
     function renderCategories() {
         refs.categoryGroups.innerHTML = state.catalog.categories.map(function (category) {
-            return '<section class="economic-group">' +
-                '<h3>' + esc(category.label) + '</h3>' +
+            var selectedCount = selectedCountForCategory(category);
+            var open = selectedCount > 0 ? ' open' : '';
+            return '<details class="economic-group" data-category-id="' + esc(categoryId(category.label)) + '"' + open + '>' +
+                '<summary class="economic-group-summary">' +
+                    '<span class="economic-group-title">' + esc(category.label) + '</span>' +
+                    '<span class="economic-group-count">' + esc(groupCountLabel(category)) + '</span>' +
+                '</summary>' +
+                '<div class="economic-options-grid">' +
                 category.series.map(function (series) {
                     var checked = state.selectedIds.indexOf(series.id) >= 0;
                     var inputType = state.multiSelect ? 'checkbox' : 'radio';
                     return '<label class="economic-option">' +
                         '<input type="' + inputType + '" name="economic-series-selection" data-series-id="' + esc(series.id) + '"' + (checked ? ' checked' : '') + '>' +
-                        '<span class="economic-option-label">' + esc(series.short_label || series.label) + '</span>' +
-                        (series.proxy ? badge('Proxy', 'is-proxy') : '') +
+                        '<span class="economic-option-body">' +
+                            '<span class="economic-option-label">' + esc(series.short_label || series.label) + '</span>' +
+                            '<span class="economic-option-meta">' + (series.proxy ? badge('Proxy', 'is-proxy') : '') + '</span>' +
+                        '</span>' +
                     '</label>';
                 }).join('') +
-            '</section>';
+                '</div>' +
+            '</details>';
         }).join('');
+        syncPickerSummaries();
     }
 
     function findPreset(id) {
@@ -758,6 +825,7 @@
         refs.activePreset.textContent = preset ? preset.label : 'Custom';
         refs.selectedCount.textContent = state.selectedIds.length + ' selected';
         refs.rangeNote.textContent = state.range === 'All' ? 'Visible window: full available history.' : ('Visible window: last ' + state.range + ' to ' + todayIso() + '.');
+        syncPickerSummaries();
     }
 
     function loadSeries(reason) {
@@ -869,22 +937,23 @@
     function bindControls() {
         if (bindControls.bound) return;
         bindControls.bound = true;
-        refs.presetRow.addEventListener('click', function (event) {
-            var button = event.target.closest('[data-preset-id]');
-            if (!button) return;
-            var preset = findPreset(button.getAttribute('data-preset-id'));
-            if (!preset) return;
-            state.selectedPreset = preset.id;
-            state.selectedIds = normalizeSelectedIds(state.multiSelect ? preset.seriesIds.slice() : [preset.seriesIds[0]]);
-            renderPresets();
-            renderCategories();
-            logEvent('info', 'Economic preset changed', {
-                presetId: preset.id,
-                selectedIds: state.selectedIds.slice(),
-                multiSelect: state.multiSelect,
+        if (refs.presetSelect) {
+            refs.presetSelect.addEventListener('change', function () {
+                var preset = findPreset(refs.presetSelect.value);
+                if (!preset) return;
+                state.selectedPreset = preset.id;
+                state.selectedIds = normalizeSelectedIds(state.multiSelect ? preset.seriesIds.slice() : [preset.seriesIds[0]]);
+                renderPresets();
+                renderCategories();
+                if (refs.presetPicker) refs.presetPicker.open = false;
+                logEvent('info', 'Economic preset changed', {
+                    presetId: preset.id,
+                    selectedIds: state.selectedIds.slice(),
+                    multiSelect: state.multiSelect,
+                });
+                loadSeries('preset-change');
             });
-            loadSeries('preset-change');
-        });
+        }
         refs.rangeRow.addEventListener('click', function (event) {
             var button = event.target.closest('[data-range]');
             if (!button) return;
@@ -934,6 +1003,7 @@
                 state.selectedIds = [seriesId];
                 renderPresets();
                 renderCategories();
+                if (refs.indicatorPicker) refs.indicatorPicker.open = false;
                 logEvent('info', 'Economic selection changed', {
                     selectedIds: state.selectedIds.slice(),
                     count: state.selectedIds.length,
@@ -953,6 +1023,7 @@
             state.selectedPreset = 'custom';
             state.selectedIds = normalizeSelectedIds(next);
             renderPresets();
+            renderCategories();
             logEvent('info', 'Economic selection changed', {
                 selectedIds: state.selectedIds.slice(),
                 count: state.selectedIds.length,

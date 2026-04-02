@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="../public-showcase-hero.css?v=2544dd7">
     <link rel="stylesheet" href="../responsive.css?v=2544dd7">
     <link rel="stylesheet" href="../mobile-host.css?v=2544dd7">
-    <link rel="stylesheet" href="../economic-data.css?v=20260402b">
+    <link rel="stylesheet" href="../economic-data.css?v=20260403a">
     <script src="../theme.js?v=2544dd7"></script>
 </head>
 <body class="ar-public ar-section-economic-data" data-ar-section="economic-data">
@@ -79,25 +79,6 @@
             </div>
         </section>
         <section class="market-terminal economic-terminal" aria-label="Economic data workspace">
-            <aside class="terminal-column terminal-column-left">
-                <section id="scenario" class="panel" aria-label="Indicator controls">
-                    <div class="terminal-panel-head">
-                        <span class="panel-code">SET</span>
-                        <h2 class="terminal-panel-title">Indicator Set</h2>
-                    </div>
-                    <div class="economic-mode-row">
-                        <label class="economic-mode-toggle" for="economic-multiselect">
-                            <input type="checkbox" id="economic-multiselect">
-                            <span>Multiselect mode</span>
-                        </label>
-                        <span class="hint" id="economic-selection-mode-note">Single-select mode.</span>
-                    </div>
-                    <div id="preset-row" class="economic-chip-row">
-                        <button type="button" class="chip-btn secondary active" data-preset-id="rba_watchlist">RBA Watchlist</button>
-                    </div>
-                    <div id="category-groups" class="economic-groups" aria-live="polite"></div>
-                </section>
-            </aside>
             <section class="terminal-column terminal-column-center">
                 <section id="chart" class="panel terminal-panel terminal-stage-panel" aria-label="Economic chart">
                     <div class="chart-block">
@@ -108,6 +89,44 @@
                             </div>
                             <p id="chart-meta" class="hint">Index = 100 at the start of the visible range for each selected series.</p>
                         </div>
+                        <section id="scenario" class="economic-selection-panel" aria-label="Indicator controls">
+                            <div class="economic-selection-head">
+                                <span class="panel-code">SET</span>
+                                <h2 class="terminal-panel-title">Indicator Set</h2>
+                            </div>
+                            <div class="economic-picker-row">
+                                <details id="economic-preset-picker" class="economic-picker" open>
+                                    <summary class="economic-picker-summary">
+                                        <span class="economic-picker-title">Preset</span>
+                                        <span id="economic-preset-summary" class="economic-picker-count">RBA Watchlist</span>
+                                    </summary>
+                                    <div class="economic-picker-panel">
+                                        <label class="economic-inline-field" for="economic-preset-select">
+                                            <span class="economic-inline-label">Preset</span>
+                                            <select id="economic-preset-select" class="economic-select" aria-label="Indicator preset">
+                                                <option value="rba_watchlist">RBA Watchlist</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                </details>
+                                <details id="economic-indicator-picker" class="economic-picker">
+                                    <summary class="economic-picker-summary">
+                                        <span class="economic-picker-title">Indicators</span>
+                                        <span id="economic-indicator-summary" class="economic-picker-count">5 selected</span>
+                                    </summary>
+                                    <div class="economic-picker-panel economic-picker-panel-indicators">
+                                        <div class="economic-mode-row">
+                                            <label class="economic-mode-toggle" for="economic-multiselect">
+                                                <input type="checkbox" id="economic-multiselect">
+                                                <span>Multiselect mode</span>
+                                            </label>
+                                            <span class="hint" id="economic-selection-mode-note">Single-select mode.</span>
+                                        </div>
+                                        <div id="category-groups" class="economic-groups" aria-live="polite"></div>
+                                    </div>
+                                </details>
+                            </div>
+                        </section>
                         <div class="economic-toolbar">
                             <div class="economic-toolbar-row">
                                 <div id="range-row" class="economic-chip-row" role="group" aria-label="Date range shortcuts">
@@ -143,7 +162,7 @@
     <script src="../ar-network.js?v=2544dd7"></script>
     <script src="../ar-chart-site-ui.js?v=20260402b"></script>
     <script src="../ar-chart-echarts-helpers.js?v=2544dd7"></script>
-    <script src="../economic-data.js?v=20260402b"></script>
+    <script src="../economic-data.js?v=20260403a"></script>
     <script src="../frame.js?v=2544dd7"></script>
     <script src="../site-variant-ui.js?v=2544dd7"></script>
 </body>
