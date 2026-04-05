@@ -565,6 +565,13 @@
         return '0.75';
     }
 
+    function chartLegendTextBrightnessForStack() {
+        if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.getChartLegendTextBrightness === 'function') {
+            return String(window.AR.chartSiteUi.getChartLegendTextBrightness());
+        }
+        return '1';
+    }
+
     function ensureLegendStackEl() {
         if (!refs.chartEl) return null;
         var el = refs.chartEl.querySelector('.economic-chart-legend-stack');
@@ -639,7 +646,8 @@
             'box-sizing:border-box',
             'pointer-events:auto',
             'cursor:default',
-            'opacity:' + chartLegendOpacityForStack()
+            'opacity:' + chartLegendOpacityForStack(),
+            '--ar-chart-legend-text-brightness:' + chartLegendTextBrightnessForStack()
         ].join(';');
 
         var rows = [];
@@ -658,7 +666,7 @@
         var parts = [];
         if (hoverYmd) {
             parts.push(
-                '<div class="economic-chart-legend-stack-date" style="font-size:' + (compact ? '7px' : '8px') + ';opacity:0.75;white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;">' +
+                '<div class="economic-chart-legend-stack-date" style="font-size:' + (compact ? '7px' : '8px') + ';opacity:0.75;white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;filter:brightness(var(--ar-chart-legend-text-brightness,1));">' +
                 esc(formatDate(hoverYmd.indexOf('T') >= 0 ? hoverYmd : (hoverYmd + 'T12:00:00.000Z'))) +
                 '</div>'
             );
@@ -667,8 +675,8 @@
             parts.push(
                 '<span class="economic-chart-legend-stack-row" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;max-width:100%;">' +
                 '<span style="display:inline-block;width:14px;height:2px;background:' + esc(row.color) + ';flex-shrink:0;border-radius:1px;"></span>' +
-                '<span style="opacity:0.7;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(row.series.short_label) + '</span>' +
-                '<span style="font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;">' + esc(formatLegendIndex(row.value)) + '</span>' +
+                '<span style="opacity:0.7;overflow:hidden;text-overflow:ellipsis;min-width:0;filter:brightness(var(--ar-chart-legend-text-brightness,1));">' + esc(row.series.short_label) + '</span>' +
+                '<span style="font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;filter:brightness(var(--ar-chart-legend-text-brightness,1));">' + esc(formatLegendIndex(row.value)) + '</span>' +
                 '</span>'
             );
         });
@@ -910,9 +918,14 @@
             state.catalog = payload;
             state.lastCatalogLoadedAt = new Date().toISOString();
             state.selectedPreset = findPreset(state.selectedPreset) ? state.selectedPreset : ((payload.presets && payload.presets[0] && payload.presets[0].id) || 'rba_watchlist');
+            if (findPreset(state.selectedPreset)) {
+                state.multiSelect = true;
+                persistMultiSelect(true);
+            }
             state.selectedIds = normalizeSelectedIds((findPreset(state.selectedPreset) || { seriesIds: [] }).seriesIds.slice());
             renderPresets();
             renderCategories();
+            syncSelectionModeUi();
             syncDebugSurface();
             logEvent('info', 'Economic catalog load completed', {
                 presets: (payload.presets || []).length,
@@ -941,10 +954,15 @@
             refs.presetSelect.addEventListener('change', function () {
                 var preset = findPreset(refs.presetSelect.value);
                 if (!preset) return;
+                if (!state.multiSelect) {
+                    state.multiSelect = true;
+                    persistMultiSelect(true);
+                }
                 state.selectedPreset = preset.id;
-                state.selectedIds = normalizeSelectedIds(state.multiSelect ? preset.seriesIds.slice() : [preset.seriesIds[0]]);
+                state.selectedIds = normalizeSelectedIds(preset.seriesIds.slice());
                 renderPresets();
                 renderCategories();
+                syncSelectionModeUi();
                 if (refs.presetPicker) refs.presetPicker.open = false;
                 logEvent('info', 'Economic preset changed', {
                     presetId: preset.id,

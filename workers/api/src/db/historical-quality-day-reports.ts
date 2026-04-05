@@ -120,7 +120,7 @@ export async function listLatestHistoricalQualityDays(db: D1Database, limit: num
        ORDER BY collection_date DESC
        LIMIT ?1`,
     )
-    .bind(Math.max(1, Math.min(365, Math.floor(limit))))
+    .bind(Math.max(1, Math.min(5000, Math.floor(limit))))
     .all<DailyRowWithRun>()
   return Promise.all((rows.results ?? []).map(async (row) => {
     let summary = readHistoricalQualityDailySummary(row)

@@ -19,6 +19,10 @@ type ObservationAggregateRow = {
   proxy_mismatch_count: number | null
   frequency_mismatch_count: number | null
   source_mismatch_count: number | null
+  future_observation_count: number | null
+  release_before_observation_count: number | null
+  latest_future_observation_date: string | null
+  earliest_release_before_observation_date: string | null
 }
 
 type LatestObservationRow = {
@@ -177,7 +181,11 @@ async function getObservationAggregate(
          MAX(observation_date) AS latest_observation_date,
          SUM(CASE WHEN proxy_flag != ?2 THEN 1 ELSE 0 END) AS proxy_mismatch_count,
          SUM(CASE WHEN frequency != ?3 THEN 1 ELSE 0 END) AS frequency_mismatch_count,
-         SUM(CASE WHEN source_url != ?4 THEN 1 ELSE 0 END) AS source_mismatch_count
+         SUM(CASE WHEN source_url != ?4 THEN 1 ELSE 0 END) AS source_mismatch_count,
+         SUM(CASE WHEN observation_date > ?5 THEN 1 ELSE 0 END) AS future_observation_count,
+         SUM(CASE WHEN release_date IS NOT NULL AND release_date < observation_date THEN 1 ELSE 0 END) AS release_before_observation_count,
+         MAX(CASE WHEN observation_date > ?5 THEN observation_date ELSE NULL END) AS latest_future_observation_date,
+         MIN(CASE WHEN release_date IS NOT NULL AND release_date < observation_date THEN release_date ELSE NULL END) AS earliest_release_before_observation_date
        FROM economic_series_observations
        WHERE series_id = ?1`,
     )
@@ -186,6 +194,7 @@ async function getObservationAggregate(
       definition.proxy ? 1 : 0,
       definition.frequency,
       definition.sourceUrl,
+      todayIso,
     )
     .first<ObservationAggregateRow>()
 
@@ -195,6 +204,10 @@ async function getObservationAggregate(
     proxy_mismatch_count: 0,
     frequency_mismatch_count: 0,
     source_mismatch_count: 0,
+    future_observation_count: 0,
+    release_before_observation_count: 0,
+    latest_future_observation_date: null,
+    earliest_release_before_observation_date: null,
   }
 }
 
@@ -298,6 +311,10 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
 
   const perSeries: EconomicSeriesCoverageRow[] = []
   let invalidRows = 0
+  const futureObservationCountBySeries = new Map<string, number>()
+  const latestFutureObservationDateBySeries = new Map<string, string | null>()
+  const releaseBeforeObservationCountBySeries = new Map<string, number>()
+  const earliestReleaseBeforeObservationDateBySeries = new Map<string, string | null>()
 
   for (const definition of definitions) {
     const statusRow = statusMap.get(definition.id) ?? null
@@ -310,6 +327,16 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     const observationCount = Number(observationAggregate.observation_count ?? 0)
     const latestObservationDate = latestObservation?.observation_date ?? observationAggregate.latest_observation_date ?? null
     const latestValue = latestObservation?.value ?? null
+    const futureObservationCount = Number(observationAggregate.future_observation_count ?? 0)
+    const releaseBeforeObservationCount = Number(observationAggregate.release_before_observation_count ?? 0)
+
+    futureObservationCountBySeries.set(definition.id, futureObservationCount)
+    latestFutureObservationDateBySeries.set(definition.id, observationAggregate.latest_future_observation_date ?? null)
+    releaseBeforeObservationCountBySeries.set(definition.id, releaseBeforeObservationCount)
+    earliestReleaseBeforeObservationDateBySeries.set(
+      definition.id,
+      observationAggregate.earliest_release_before_observation_date ?? null,
+    )
 
     if (!statusRow) {
       issues.push('missing_status')
@@ -354,6 +381,14 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     if (Number(observationAggregate.source_mismatch_count ?? 0) > 0) {
       issues.push('observation_source_url_mismatch')
       invalidRows += Number(observationAggregate.source_mismatch_count ?? 0)
+    }
+    if (futureObservationCount > 0) {
+      issues.push('future_observation_dates')
+      invalidRows += futureObservationCount
+    }
+    if (releaseBeforeObservationCount > 0) {
+      issues.push('release_before_observation')
+      invalidRows += releaseBeforeObservationCount
     }
     const computedStatus = computedStatusForRow(definition, statusRow, latestObservationDate)
     if (statusRow?.status === 'error') {
@@ -415,6 +450,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
       issue === 'status_success_after_checked',
     ),
   )
+  const futureObservationRows = perSeries.filter((row) => row.issues.includes('future_observation_dates'))
+  const releaseBeforeObservationRows = perSeries.filter((row) => row.issues.includes('release_before_observation'))
 
   pushFinding(findings, {
     code: 'economic_missing_status_rows',
@@ -508,6 +545,28 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
         issue === 'stored_status_mismatch' ||
         issue === 'status_success_after_checked',
       ),
+    })),
+  })
+  pushFinding(findings, {
+    code: 'economic_future_observation_dates',
+    severity: 'error',
+    message: 'Economic series contain future-dated observations.',
+    count: Array.from(futureObservationCountBySeries.values()).reduce((sum, value) => sum + value, 0),
+    sample: futureObservationRows.map((row) => ({
+      series_id: row.series_id,
+      latest_future_observation_date: latestFutureObservationDateBySeries.get(row.series_id) ?? null,
+      latest_observation_date: row.latest_observation_date,
+    })),
+  })
+  pushFinding(findings, {
+    code: 'economic_release_before_observation',
+    severity: 'error',
+    message: 'Economic observations have release dates earlier than their observation dates.',
+    count: Array.from(releaseBeforeObservationCountBySeries.values()).reduce((sum, value) => sum + value, 0),
+    sample: releaseBeforeObservationRows.map((row) => ({
+      series_id: row.series_id,
+      earliest_release_date: earliestReleaseBeforeObservationDateBySeries.get(row.series_id) ?? null,
+      latest_observation_date: row.latest_observation_date,
     })),
   })
   const summary: EconomicCoverageSummary = {

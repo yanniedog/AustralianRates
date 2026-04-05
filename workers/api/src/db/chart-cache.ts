@@ -38,6 +38,13 @@ function toYmd(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+function clampChartDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
+  const today = toYmd(new Date())
+  const cappedEndDate = endDate && endDate > today ? today : endDate || today
+  const cappedStartDate = startDate && startDate <= cappedEndDate ? startDate : cappedEndDate
+  return { startDate: cappedStartDate, endDate: cappedEndDate }
+}
+
 async function streamToUint8Array(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   const reader = stream.getReader()
   const chunks: Uint8Array[] = []
@@ -118,18 +125,20 @@ export async function resolveChartDateRangeFromDb(
     range = await queryTdCollectionDateRange(db, filters as Parameters<typeof queryTdCollectionDateRange>[1])
   }
   const fallback = toYmd(new Date())
-  const rangeStart = range?.startDate || fallback
-  const rangeEnd = range?.endDate || fallback
+  const baseRange = clampChartDateRange(range?.startDate || fallback, range?.endDate || fallback)
+  const rangeStart = baseRange.startDate
+  const rangeEnd = baseRange.endDate
   if (options.window && !start && !end) {
+    const windowStart = resolveChartWindowStart(rangeStart, rangeEnd, options.window)
+    const windowRange = clampChartDateRange(windowStart, rangeEnd)
     return {
       ...filters,
-      startDate: resolveChartWindowStart(rangeStart, rangeEnd, options.window),
-      endDate: rangeEnd,
+      startDate: windowRange.startDate,
+      endDate: windowRange.endDate,
     }
   }
-  const startDate = start || rangeStart
-  const endDate = end || rangeEnd
-  return { ...filters, startDate, endDate }
+  const nextRange = clampChartDateRange(start || rangeStart, end || rangeEnd)
+  return { ...filters, startDate: nextRange.startDate, endDate: nextRange.endDate }
 }
 
 type DefaultCheckInput = {

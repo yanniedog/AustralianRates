@@ -488,6 +488,11 @@
 
     function buildChartModel(rows, fields, selectionState) {
         rows = Array.isArray(rows) ? rows : [];
+        var today = todayYmd();
+        rows = rows.filter(function (row) {
+            var date = String(row && row.collection_date || '').slice(0, 10);
+            return !date || date <= today;
+        });
         var included = selectionState && selectionState.includedRateStructures;
         if (included && Array.isArray(included) && included.length) {
             rows = rows.filter(function (r) {

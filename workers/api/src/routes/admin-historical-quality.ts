@@ -40,7 +40,7 @@ adminHistoricalQualityRoutes.get('/audits/historical-quality', async (c) => {
 })
 
 adminHistoricalQualityRoutes.get('/audits/historical-quality/days', async (c) => {
-  const limit = Math.max(1, Math.min(365, Math.floor(Number(c.req.query('limit') || 90))))
+  const limit = Math.max(1, Math.min(5000, Math.floor(Number(c.req.query('limit') || 3650))))
   const days = await listLatestHistoricalQualityDays(c.env.DB, limit)
   return c.json({
     ok: true,

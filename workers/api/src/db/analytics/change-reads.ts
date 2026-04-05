@@ -42,6 +42,10 @@ type CommonInput = {
   excludeCompareEdgeCases?: boolean
 }
 
+function todayYmd(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export type HomeLoanAnalyticsInput = CommonInput & {
   securityPurpose?: string
   repaymentType?: string
@@ -90,10 +94,8 @@ function addCommonEventWhere(
     where.push(`${alias}.collection_date >= ?`)
     binds.push(input.startDate)
   }
-  if (input.endDate) {
-    where.push(`${alias}.collection_date <= ?`)
-    binds.push(input.endDate)
-  }
+  where.push(`${alias}.collection_date <= ?`)
+  binds.push(input.endDate && input.endDate <= todayYmd() ? input.endDate : todayYmd())
 }
 
 async function queryAnalyticsRows<T extends Record<string, unknown>>(

@@ -219,38 +219,25 @@
     }
 
     /** Best-per-bank merge: max rate; tie → lexicographically smaller product name. */
-    function mergeWinningDeposit(byDateCell, v, productName) {
+    function mergeWinningDeposit(byDateCell, v, productName, row) {
         var pn = String(productName || '');
-        if (byDateCell == null) return { value: v, productName: pn };
-        if (v > byDateCell.value + 1e-9) return { value: v, productName: pn };
+        if (byDateCell == null) return { value: v, productName: pn, row: row || null };
+        if (v > byDateCell.value + 1e-9) return { value: v, productName: pn, row: row || null };
         if (Math.abs(v - byDateCell.value) <= 1e-9 && pn.localeCompare(byDateCell.productName) < 0) {
-            return { value: v, productName: pn };
+            return { value: v, productName: pn, row: row || null };
         }
         return byDateCell;
     }
 
     /** Best-per-bank merge: min rate; tie → lexicographically smaller product name. */
-    function mergeWinningMortgage(byDateCell, v, productName) {
+    function mergeWinningMortgage(byDateCell, v, productName, row) {
         var pn = String(productName || '');
-        if (byDateCell == null) return { value: v, productName: pn };
-        if (v < byDateCell.value - 1e-9) return { value: v, productName: pn };
+        if (byDateCell == null) return { value: v, productName: pn, row: row || null };
+        if (v < byDateCell.value - 1e-9) return { value: v, productName: pn, row: row || null };
         if (Math.abs(v - byDateCell.value) <= 1e-9 && pn.localeCompare(byDateCell.productName) < 0) {
-            return { value: v, productName: pn };
+            return { value: v, productName: pn, row: row || null };
         }
         return byDateCell;
-    }
-
-    /**
-     * Legend label HTML for a series row at a given date (bank aggregate uses productName on step points).
-     */
-    function legendSliceLabelHtml(line, stepPoints, ymd, ctxMax) {
-        var dt = ymd || ctxMax;
-        var pn = stepPoints && stepPoints.length ? stepFieldAtDate(stepPoints, dt, 'productName') : null;
-        if (pn != null && String(pn) !== '') {
-            var sh = line.short != null ? line.short : '';
-            return escHtml(sh + ' \u00b7 ' + shortProductName(String(pn)));
-        }
-        return escHtml(line.legendLabel || '');
     }
 
     /**
@@ -461,9 +448,17 @@
         return wrap;
     }
 
+    function trackingModeOptions(L) {
+        var exitMode = L && L.TrackingModeExitMode;
+        if (!exitMode) return null;
+        if (exitMode.OnNextTap != null) return { exitMode: exitMode.OnNextTap };
+        if (exitMode.OnTouchEnd != null) return { exitMode: exitMode.OnTouchEnd };
+        return null;
+    }
+
     function reportChartOptions(L, theme, hasLeftScale) {
         var lineStyle = (L && L.LineStyle) || { Dashed: 2 };
-        return {
+        var options = {
             layout: {
                 background: { type: L.ColorType.Solid, color: 'transparent' },
                 textColor: theme.muted,
@@ -514,6 +509,9 @@
                 pinch: false,
             },
         };
+        var trackingMode = trackingModeOptions(L);
+        if (trackingMode) options.trackingMode = trackingMode;
+        return options;
     }
 
     /**
@@ -530,8 +528,8 @@
         var up = cur > prev;
         var absChg = Math.abs(cur - prev);
         var amt = absChg.toFixed(fd);
-        var stArrow = 'font-size:7px;line-height:1;margin-left:1px;display:inline-block;vertical-align:0.08em;';
-        var stAmt = 'font-size:7px;line-height:1;margin-left:2px;display:inline-block;vertical-align:0.08em;font-variant-numeric:tabular-nums;';
+        var stArrow = 'font-size:7px;line-height:1;margin-left:1px;display:inline-block;vertical-align:0.08em;filter:brightness(var(--ar-chart-legend-text-brightness,1));';
+        var stAmt = 'font-size:7px;line-height:1;margin-left:2px;display:inline-block;vertical-align:0.08em;font-variant-numeric:tabular-nums;filter:brightness(var(--ar-chart-legend-text-brightness,1));';
         var g = goodColor || '#059669';
         var b = badColor || '#dc2626';
         var c;
@@ -570,6 +568,284 @@
 
     function escHtml(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function legendTextStyle(extraCss) {
+        return 'filter:brightness(var(--ar-chart-legend-text-brightness,1));' + String(extraCss || '');
+    }
+
+    var BANK_ACRONYM = {
+        'commonwealth bank of australia': 'CBA',
+        'westpac banking corporation': 'WBC',
+        'anz': 'ANZ',
+        'national australia bank': 'NAB',
+        'macquarie bank': 'MQG',
+        'ing': 'ING',
+        'ubank': 'UBank',
+        'bankwest': 'BWT',
+        'bank of queensland': 'BOQ',
+        'suncorp bank': 'SUN',
+        'great southern bank': 'GSB',
+        'amp bank': 'AMP',
+        'bendigo and adelaide bank': 'BEN',
+        'bank of melbourne': 'BoM',
+        'st. george bank': 'STG',
+        'hsbc australia': 'HSBC',
+        'teachers mutual bank': 'TMB',
+        'beyond bank australia': 'BBA',
+        'me bank': 'MEB',
+        'mystate bank': 'MYS',
+    };
+
+    function bankAcronym(name) {
+        var key = String(name || '').trim().toLowerCase();
+        if (BANK_ACRONYM[key]) return BANK_ACRONYM[key];
+        var clean = String(name || '').trim().replace(/[^A-Za-z0-9 ]+/g, ' ');
+        if (!clean) return '';
+        var words = clean.split(/\s+/).filter(Boolean);
+        if (words.length === 1) return words[0].slice(0, 4).toUpperCase();
+        return words.slice(0, 3).map(function (word) { return word.charAt(0).toUpperCase(); }).join('');
+    }
+
+    function titleToken(word) {
+        var clean = String(word || '').replace(/[^A-Za-z0-9]/g, '');
+        if (!clean) return '';
+        if (clean.length <= 4 && clean === clean.toUpperCase()) return clean;
+        return clean.charAt(0).toUpperCase() + clean.slice(1, 4).toLowerCase();
+    }
+
+    function purposeAbbr(value) {
+        var normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'owner_occupied') return 'OO';
+        if (normalized === 'investment') return 'Inv';
+        return '';
+    }
+
+    function repaymentAbbr(value) {
+        var normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'principal_and_interest') return 'PI';
+        if (normalized === 'interest_only') return 'IO';
+        return '';
+    }
+
+    function structureAbbr(value) {
+        var normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'variable') return 'Var';
+        var fixed = normalized.match(/^fixed_(\d+)yr$/);
+        if (fixed) return fixed[1] + 'Y';
+        return '';
+    }
+
+    function accountTypeAbbr(value) {
+        var normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'savings') return 'Sav';
+        if (normalized === 'transaction') return 'Txn';
+        if (normalized === 'at_call') return 'Call';
+        return '';
+    }
+
+    function rateTypeAbbr(value) {
+        var normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'total') return 'Tot';
+        if (normalized === 'base') return 'Base';
+        if (normalized === 'bonus') return 'Bonus';
+        if (normalized === 'introductory' || normalized === 'intro') return 'Intro';
+        if (normalized === 'bundle') return 'Bndl';
+        return '';
+    }
+
+    function termMonthsAbbr(value) {
+        var months = Number(value);
+        return Number.isFinite(months) && months > 0 ? String(Math.round(months)) + 'M' : '';
+    }
+
+    function interestPaymentAbbr(value) {
+        var normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'at_maturity') return 'Mat';
+        if (normalized === 'monthly') return 'Mth';
+        if (normalized === 'quarterly') return 'Qtr';
+        if (normalized === 'annually') return 'Yr';
+        return '';
+    }
+
+    function compactProductToken(row, fallbackName, bankName) {
+        var source = row && row.product_name ? row.product_name : fallbackName;
+        var lowerBank = String(bankName || '').trim().toLowerCase();
+        var words = String(source || '')
+            .replace(/[^A-Za-z0-9]+/g, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .filter(function (word) {
+                var lower = word.toLowerCase();
+                if (!lower) return false;
+                if (lowerBank && lowerBank.indexOf(lower) >= 0) return false;
+                return [
+                    'home', 'loan', 'loans', 'mortgage', 'savings', 'saving', 'account', 'accounts',
+                    'deposit', 'deposits', 'term', 'rate', 'rates', 'variable', 'fixed', 'owner',
+                    'occupied', 'occupier', 'investment', 'investor', 'principal', 'interest',
+                    'only', 'and', 'the', 'standard', 'basic', 'premium', 'plus', 'offset',
+                ].indexOf(lower) < 0;
+            });
+        if (!words.length) return '';
+        return words.slice(0, 2).map(titleToken).filter(Boolean).join('');
+    }
+
+    function uniqueParts(parts) {
+        var seen = {};
+        return (Array.isArray(parts) ? parts : []).filter(function (part) {
+            var key = String(part || '').trim();
+            if (!key || seen[key]) return false;
+            seen[key] = true;
+            return true;
+        });
+    }
+
+    function rowLegendParts(row, section) {
+        if (!row || typeof row !== 'object') return [];
+        if (section === 'home-loans') {
+            return [purposeAbbr(row.security_purpose), repaymentAbbr(row.repayment_type), structureAbbr(row.rate_structure)];
+        }
+        if (section === 'savings') {
+            return [accountTypeAbbr(row.account_type), rateTypeAbbr(row.rate_type)];
+        }
+        if (section === 'term-deposits') {
+            return [termMonthsAbbr(row.term_months), interestPaymentAbbr(row.interest_payment)];
+        }
+        return [];
+    }
+
+    function legendSliceLabelHtml(line, stepPoints, ymd, ctxMax) {
+        var dt = ymd || ctxMax;
+        var activeRow = stepPoints && stepPoints.length ? stepFieldAtDate(stepPoints, dt, 'row') : null;
+        var productName = stepPoints && stepPoints.length ? stepFieldAtDate(stepPoints, dt, 'productName') : null;
+        var section = String(line && line.section || (window.AR && window.AR.section) || '').trim();
+        var bankName = String(line && (line.bankName || line.short) || (activeRow && activeRow.bank_name) || '').trim();
+        var parts = [bankAcronym(bankName)].concat(rowLegendParts(activeRow || (line && line.latestRow), section));
+        var token = compactProductToken(activeRow || (line && line.latestRow), productName || (line && line.productName) || '', bankName);
+        if (token) parts.push(token);
+        parts = uniqueParts(parts);
+        if (!parts.length) return escHtml(line && line.legendLabel || '');
+        return escHtml(parts.join(' '));
+    }
+
+    function parseColor(color) {
+        var value = String(color || '').trim();
+        if (!value) return null;
+        var rgba = value.match(/^rgba?\(([^)]+)\)$/i);
+        if (rgba) {
+            var parts = rgba[1].split(',').map(function (part) { return Number(String(part).trim()); });
+            if (parts.length >= 3 && parts.every(function (part, index) { return index > 2 || Number.isFinite(part); })) {
+                return {
+                    r: parts[0],
+                    g: parts[1],
+                    b: parts[2],
+                    a: Number.isFinite(parts[3]) ? parts[3] : 1,
+                };
+            }
+        }
+        var hex = value.replace('#', '');
+        if (/^[0-9a-f]{6}$/i.test(hex)) {
+            return {
+                r: parseInt(hex.slice(0, 2), 16),
+                g: parseInt(hex.slice(2, 4), 16),
+                b: parseInt(hex.slice(4, 6), 16),
+                a: 1,
+            };
+        }
+        if (/^[0-9a-f]{3}$/i.test(hex)) {
+            return {
+                r: parseInt(hex.charAt(0) + hex.charAt(0), 16),
+                g: parseInt(hex.charAt(1) + hex.charAt(1), 16),
+                b: parseInt(hex.charAt(2) + hex.charAt(2), 16),
+                a: 1,
+            };
+        }
+        return null;
+    }
+
+    function colorWithAlpha(color, alpha) {
+        var parsed = parseColor(color);
+        if (!parsed) return String(color || '');
+        var nextAlpha = Math.max(0, Math.min(1, Number(alpha)));
+        return 'rgba(' + Math.round(parsed.r) + ', ' + Math.round(parsed.g) + ', ' + Math.round(parsed.b) + ', ' + nextAlpha.toFixed(3) + ')';
+    }
+
+    function applySeriesSelectionState(seriesApis, activeKeys) {
+        var wanted = {};
+        (Array.isArray(activeKeys) ? activeKeys : []).forEach(function (key) {
+            var normalized = String(key || '').trim();
+            if (normalized) wanted[normalized] = true;
+        });
+        var hasActive = Object.keys(wanted).length > 0;
+        (Array.isArray(seriesApis) ? seriesApis : []).forEach(function (entry) {
+            if (!entry || !entry.api || typeof entry.api.applyOptions !== 'function') return;
+            var baseColor = String(entry.baseColor || (entry.line && entry.line.color) || '#64748b');
+            var baseLineWidth = Number(entry.baseLineWidth || 2);
+            var selected = hasActive && wanted[String(entry.selectionKey || (entry.line && entry.line.selectionKey) || '').trim()];
+            entry.api.applyOptions({
+                color: hasActive && !selected ? colorWithAlpha(baseColor, 0.24) : baseColor,
+                lineWidth: hasActive && selected ? baseLineWidth + 1 : baseLineWidth,
+            });
+        });
+    }
+
+    function clearSeriesSelectionState(seriesApis) {
+        applySeriesSelectionState(seriesApis, []);
+    }
+
+    function rbaDecisionLabel(decisions, index) {
+        if (!Array.isArray(decisions) || index < 0 || index >= decisions.length) return 'RBA';
+        var current = decisions[index];
+        var previous = index > 0 ? decisions[index - 1] : null;
+        var deltaBps = previous ? Math.round((Number(current.rate) - Number(previous.rate)) * 100) : 0;
+        if (!previous || !Number.isFinite(deltaBps) || deltaBps === 0) return 'RBA';
+        return 'RBA ' + (deltaBps > 0 ? '+' : '') + String(deltaBps) + 'bp';
+    }
+
+    function ensureDecisionLayer(mount) {
+        if (!mount) return null;
+        var layer = mount.querySelector('.lwc-report-decision-layer');
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'lwc-report-decision-layer';
+            layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;';
+            mount.appendChild(layer);
+        }
+        return layer;
+    }
+
+    function renderRbaDecisionLines(mount, chart, decisions, options) {
+        var layer = ensureDecisionLayer(mount);
+        if (!layer) return;
+        layer.innerHTML = '';
+        if (!chart || !Array.isArray(decisions) || !decisions.length) return;
+        var start = String(options && options.startYmd || '').slice(0, 10);
+        var end = String(options && options.endYmd || '').slice(0, 10);
+        var lineColor = String(options && options.lineColor || '#f59e0b');
+        var labelBg = String(options && options.labelBg || 'rgba(15,23,42,0.92)');
+        var labelColor = String(options && options.labelColor || lineColor);
+        var timeScale = chart.timeScale && chart.timeScale();
+        if (!timeScale || typeof timeScale.timeToCoordinate !== 'function') return;
+        var lastLabelX = -Infinity;
+        decisions.forEach(function (decision, index) {
+            var date = String(decision && decision.date || '').slice(0, 10);
+            if (!date || (start && date < start) || (end && date > end)) return;
+            var x = timeScale.timeToCoordinate(ymdToUtc(date));
+            if (!Number.isFinite(Number(x))) return;
+            var rail = document.createElement('div');
+            rail.style.cssText = 'position:absolute;top:22px;bottom:20px;left:' + Math.round(Number(x)) + 'px;border-left:1px dashed ' + colorWithAlpha(lineColor, 0.55) + ';';
+            layer.appendChild(rail);
+            if (Math.abs(Number(x) - lastLabelX) < 54) return;
+            lastLabelX = Number(x);
+            var label = document.createElement('div');
+            label.textContent = rbaDecisionLabel(decisions, index);
+            label.style.cssText =
+                'position:absolute;top:4px;left:' + Math.round(Number(x) + 4) + 'px;' +
+                'padding:1px 5px;border-radius:999px;border:1px solid ' + colorWithAlpha(lineColor, 0.35) + ';' +
+                'background:' + labelBg + ';color:' + labelColor + ';font:700 9px/1.3 "Space Grotesk",system-ui,sans-serif;white-space:nowrap;';
+            layer.appendChild(label);
+        });
     }
 
     /** Last finite normalized_value along an economic overlay point list (chronological). */
@@ -640,6 +916,7 @@
             var line = entry.line || {};
             var productAtDate = stepFieldAtDate(entry.stepPoints, selectionYmd, 'productName');
             matches.push({
+                selectionKey: String(entry.selectionKey || line.selectionKey || ''),
                 bankName: line.bankName || line.short || '',
                 productName: productAtDate != null && String(productAtDate) !== '' ? String(productAtDate) : (line.productName || ''),
                 rate: value,
@@ -715,8 +992,8 @@
         var v = Number(value).toFixed(1);
         return '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
             '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + c + ';flex-shrink:0;"></span>' +
-            '<span style="opacity:0.75;color:' + c + ';">' + lbl + '</span>' +
-            '<span style="font-variant-numeric:tabular-nums;font-weight:600;color:' + c + ';">' + v + '</span></span>';
+            '<span style="' + legendTextStyle('opacity:0.75;color:' + c + ';') + '">' + lbl + '</span>' +
+            '<span style="' + legendTextStyle('font-variant-numeric:tabular-nums;font-weight:600;color:' + c + ';') + '">' + v + '</span></span>';
     }
 
     window.AR.chartMacroLwcShared = {
@@ -743,6 +1020,8 @@
         productColorVariant: productColorVariant,
         shortProductName: shortProductName,
         escHtml: escHtml,
+        legendTextStyle: legendTextStyle,
+        bankAcronym: bankAcronym,
         lastFiniteNormalizedOverlay: lastFiniteNormalizedOverlay,
         resolveChartProductLimit: resolveChartProductLimit,
         selectionMetaText: selectionMetaText,
@@ -750,5 +1029,8 @@
         findOverlappingClickEntries: findOverlappingSelectionEntries,
         createReportSelectionInfoBox: createReportSelectionInfoBox,
         economicOverlayLegendItemHtml: economicOverlayLegendItemHtml,
+        applySeriesSelectionState: applySeriesSelectionState,
+        clearSeriesSelectionState: clearSeriesSelectionState,
+        renderRbaDecisionLines: renderRbaDecisionLines,
     };
 })();

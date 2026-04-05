@@ -358,7 +358,7 @@
             : 'Clear site cache and reload to get the latest version';
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
-            '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + actionIconMarkup('help', 'Help') + '</button>',
+            '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>',
             '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>',
         ];
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
@@ -419,8 +419,14 @@
     }
 
     function buildLegalDrawer(context) {
-        if (!context.legal) return;
         if (document.getElementById('site-menu-drawer')) return;
+        var menuBody = '';
+        if (context.legal) {
+            menuBody = legalMenuMarkup();
+        } else if (!context.admin && !context.notFound && !document.querySelector('.terminal-column-left')) {
+            menuBody = publicTreeMarkup(context);
+        }
+        if (!menuBody) return;
 
         var drawer = document.createElement('aside');
         drawer.id = 'site-menu-drawer';
@@ -433,7 +439,7 @@
                     panelIcon('menu', 'Menu') +
                     '<button type="button" class="icon-btn secondary" data-menu-close aria-label="Close menu">' + iconOnly('close', 'Close menu') + '</button>' +
                 '</div>' +
-                legalMenuMarkup() +
+                menuBody +
             '</div>';
         document.body.appendChild(drawer);
     }

@@ -13,6 +13,13 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function clampDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
+  const today = todayIso()
+  const nextEndDate = endDate > today ? today : endDate
+  const nextStartDate = startDate > nextEndDate ? nextEndDate : startDate
+  return { startDate: nextStartDate, endDate: nextEndDate }
+}
+
 function shiftYears(isoDate: string, years: number): string {
   const date = new Date(`${isoDate}T00:00:00.000Z`)
   date.setUTCFullYear(date.getUTCFullYear() + years)
@@ -118,11 +125,13 @@ economicPublicRoutes.get('/series', async (c) => {
     return jsonError(c, 400, 'INVALID_SERIES', 'No valid economic series were requested.')
   }
 
-  const endDate = c.req.query('end_date') || c.req.query('endDate') || todayIso()
-  const startDate = c.req.query('start_date') || c.req.query('startDate') || shiftYears(endDate, -DEFAULT_LOOKBACK_YEARS)
-  if (!isIsoDate(startDate) || !isIsoDate(endDate) || startDate > endDate) {
+  const requestedEndDate = c.req.query('end_date') || c.req.query('endDate') || todayIso()
+  const requestedStartDate =
+    c.req.query('start_date') || c.req.query('startDate') || shiftYears(requestedEndDate, -DEFAULT_LOOKBACK_YEARS)
+  if (!isIsoDate(requestedStartDate) || !isIsoDate(requestedEndDate) || requestedStartDate > requestedEndDate) {
     return jsonError(c, 400, 'INVALID_DATE_RANGE', 'Dates must be YYYY-MM-DD and start_date must be on or before end_date.')
   }
+  const { startDate, endDate } = clampDateRange(requestedStartDate, requestedEndDate)
 
   const statusMap = await getEconomicStatusMap(c.env.DB, ids)
   const series = await Promise.all(

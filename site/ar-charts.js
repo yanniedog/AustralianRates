@@ -57,7 +57,7 @@
         renderGen: 0,
         pendingReload: false,
         statusLine: freshStatusLineState(),
-        includedRateStructures: section === 'home-loans' ? ['variable'] : null,
+        includedRateStructures: null,
     };
     var HL_RATE_STRUCTURES = [
         { value: 'variable', label: 'Variable' },
@@ -277,6 +277,32 @@
         });
     }
 
+    function syncStructureFilterCheckboxes() {
+        if (!els.chartStructureFilters) return;
+        var included = Array.isArray(chartState.includedRateStructures) ? chartState.includedRateStructures.slice() : [];
+        els.chartStructureFilters.querySelectorAll('input[type="checkbox"]').forEach(function (input) {
+            var value = String(input.getAttribute('data-rate-structure') || '');
+            input.checked = included.indexOf(value) >= 0;
+        });
+    }
+
+    function reconcileIncludedRateStructuresWithRows() {
+        if (section !== 'home-loans' || !Array.isArray(chartState.rows) || !chartState.rows.length) return;
+        var available = [];
+        chartState.rows.forEach(function (row) {
+            var structure = String(row && row.rate_structure || '').trim();
+            if (!structure || available.indexOf(structure) >= 0) return;
+            available.push(structure);
+        });
+        if (!available.length) return;
+        var included = Array.isArray(chartState.includedRateStructures) ? chartState.includedRateStructures.slice() : [];
+        var overlap = included.some(function (structure) { return available.indexOf(structure) >= 0; });
+        if (!included.length || !overlap) {
+            chartState.includedRateStructures = available.slice();
+        }
+        syncStructureFilterCheckboxes();
+    }
+
     function scheduleResponsiveSync() {
         scheduleResizeCharts();
         if (responsiveSyncTimer) window.clearTimeout(responsiveSyncTimer);
@@ -323,6 +349,7 @@
         var section = (window.AR && window.AR.section) || '';
         try {
             ensureStructureFiltersUi();
+            reconcileIncludedRateStructuresWithRows();
             if (!chartState.rows.length) {
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
                 clearOutput('WAIT');

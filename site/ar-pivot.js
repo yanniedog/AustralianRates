@@ -93,7 +93,12 @@
     function buildPivotUiOptions() {
         registerPivotFormatters();
 
-        var renderers = $.extend($.pivotUtilities.renderers, $.pivotUtilities.plotly_renderers);
+        var renderers = {};
+        var baseRenderers = $.pivotUtilities.renderers || {};
+        ['Table', 'Table Barchart'].forEach(function (name) {
+            if (baseRenderers[name]) renderers[name] = baseRenderers[name];
+        });
+        if (!Object.keys(renderers).length) renderers = baseRenderers;
         var defaults = sc.pivotDefaults || {};
         var rateAggregator = ($.pivotUtilities.aggregators && $.pivotUtilities.aggregators[defaults.aggregator]) ? defaults.aggregator : 'Average';
 

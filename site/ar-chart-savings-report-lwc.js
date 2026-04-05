@@ -14,25 +14,25 @@
 
     var BANK_SHORT = {
         'commonwealth bank of australia': 'CBA',
-        'westpac banking corporation':    'Westpac',
+        'westpac banking corporation':    'WBC',
         'anz':                            'ANZ',
         'national australia bank':        'NAB',
-        'macquarie bank':                 'Macquarie',
+        'macquarie bank':                 'MQG',
         'ing':                            'ING',
         'ubank':                          'UBank',
-        'bankwest':                       'Bankwest',
+        'bankwest':                       'BWT',
         'bank of queensland':             'BOQ',
-        'suncorp bank':                   'Suncorp',
+        'suncorp bank':                   'SUN',
         'great southern bank':            'GSB',
         'amp bank':                       'AMP',
-        'bendigo and adelaide bank':      'Bendigo',
+        'bendigo and adelaide bank':      'BEN',
         'bank of melbourne':              'BoM',
-        'st. george bank':                'St.George',
+        'st. george bank':                'STG',
         'hsbc australia':                 'HSBC',
-        'teachers mutual bank':           'Teachers',
-        'beyond bank australia':          'Beyond',
-        'me bank':                        'ME Bank',
-        'mystate bank':                   'MyState',
+        'teachers mutual bank':           'TMB',
+        'beyond bank australia':          'BBA',
+        'me bank':                        'MEB',
+        'mystate bank':                   'MYS',
     };
     var BANK_COLOR = {
         'commonwealth bank of australia': '#e8b400',
@@ -59,6 +59,8 @@
     var PALETTE = ['#4f8dfd','#27c27a','#f0b90b','#f97316','#8b5cf6','#ef4444','#14b8a6','#64748b','#a78bfa','#fb923c'];
 
     function bankShort(name) {
+        var shared = window.AR && window.AR.chartMacroLwcShared;
+        if (shared && typeof shared.bankAcronym === 'function') return shared.bankAcronym(name);
         var k = String(name || '').trim().toLowerCase();
         return BANK_SHORT[k] || String(name || '').slice(0, 12).trim();
     }
@@ -119,7 +121,7 @@
                 var d = String(p.date || '');
                 var v = Number(p.value);
                 if (!d || !Number.isFinite(v) || v < 1.0) return;
-                byBank[k].byDate[d] = M.mergeWinningDeposit(byBank[k].byDate[d], v, pn);
+                byBank[k].byDate[d] = M.mergeWinningDeposit(byBank[k].byDate[d], v, pn, p.row || null);
             });
         });
         return Object.keys(byBank)
@@ -127,7 +129,7 @@
                 var e = byBank[k];
                 var pts = Object.keys(e.byDate).sort().map(function (d) {
                     var cell = e.byDate[d];
-                    return { date: d, value: cell.value, productName: cell.productName };
+                    return { date: d, value: cell.value, productName: cell.productName, row: cell.row || null };
                 });
                 return { bankName: e.bankName, points: pts, latest: pts.length ? pts[pts.length - 1].value : 0 };
             })
@@ -136,6 +138,8 @@
                 b.short = bankShort(b.bankName);
                 b.color = bankColor(b.bankName, i);
                 b.legendLabel = b.short;
+                b.section = 'savings';
+                b.selectionKey = String(b.bankName || '').trim().toLowerCase();
                 return b;
             });
     }
@@ -154,7 +158,7 @@
                 var v = Number(p.value);
                 return p.date && Number.isFinite(v) && v >= 1.0;
             }).map(function (p) {
-                return { date: String(p.date), value: Number(p.value) };
+                return { date: String(p.date), value: Number(p.value), row: p.row || null };
             });
             if (!pts.length) return;
             if (bankCount[bk] == null) { bankCount[bk] = 0; bankIdx[bk] = Object.keys(bankIdx).length; }
@@ -175,6 +179,8 @@
         products.forEach(function (p, i) {
             p.short = bankShort(p.bankName);
             p.productShort = M.shortProductName(p.productName);
+            p.section = 'savings';
+            p.selectionKey = String((p.latestRow && p.latestRow.product_key) || (p.bankName + '|' + p.productName)).trim().toLowerCase();
             if (focusBank) {
                 p.color = PALETTE[i % PALETTE.length];
                 p.legendLabel = p.productShort;
@@ -330,9 +336,9 @@
         var cpiSeriesApi = null;
         if (cpiPts.length) {
             cpiSeriesApi = chart.addSeries(L.LineSeries, {
-                color: t.cpi, lineWidth: 2, lineStyle: LineStyle.Dashed, lineType: LineType.Simple,
+                color: t.cpi, lineWidth: 3, lineStyle: LineStyle.LargeDashed || LineStyle.Dashed, lineType: LineType.Simple,
                 title: '', priceLineVisible: false, lastValueVisible: false,
-                crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
+                crosshairMarkerVisible: true, crosshairMarkerRadius: 4,
             });
             cpiSeriesApi.setData(
                 M.fillForwardDaily(cpiPts, 'date', 'value', chartStart, ctxMax)
@@ -356,6 +362,7 @@
                     date: windowStart,
                     value: carryPt.value,
                     productName: carryPt.productName,
+                    row: carryPt.row || null,
                 }].concat(rawPts);
             }
             if (rawPts.length) {
@@ -365,6 +372,7 @@
                         date: ctxMax,
                         value: lastPt.value,
                         productName: lastPt.productName,
+                        row: lastPt.row || null,
                     }]);
                 }
             }
@@ -375,16 +383,24 @@
                 crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
             });
             ser.setData(data);
-            seriesApis.push({ api: ser, line: line, lastValue: data.length ? data[data.length - 1].value : null, stepPoints: rawPts });
+            seriesApis.push({
+                api: ser,
+                line: line,
+                lastValue: data.length ? data[data.length - 1].value : null,
+                stepPoints: rawPts,
+                baseColor: line.color,
+                baseLineWidth: lineWidth,
+                selectionKey: line.selectionKey,
+            });
         });
 
         // ── RBA line ────────────────────────────────────────────────────────
         var rbaSeriesApi = null;
         if (rbaData.points.length) {
             rbaSeriesApi = chart.addSeries(L.LineSeries, {
-                color: t.rba, lineWidth: 2, lineType: LineType.Simple,
+                color: t.rba, lineWidth: 3, lineStyle: LineStyle.Dashed, lineType: LineType.Simple,
                 title: '', priceLineVisible: false, lastValueVisible: false,
-                crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
+                crosshairMarkerVisible: true, crosshairMarkerRadius: 4,
             });
             rbaSeriesApi.setData(
                 M.fillForwardDaily(rbaData.points, 'date', 'rate', chartStart, ctxMax)
@@ -411,6 +427,13 @@
         });
 
         chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
+        M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
+            startYmd: viewStart,
+            endYmd: ctxMax,
+            lineColor: t.rba,
+            labelBg: t.ttBg,
+            labelColor: t.rba,
+        });
 
         // ── Legend ──────────────────────────────────────────────────────────
         var legendEl = document.createElement('div');
@@ -433,12 +456,12 @@
                 items.push(
                     '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
                     '<span style="display:inline-block;width:14px;height:2px;background:' + entry.line.color + ';flex-shrink:0;border-radius:1px;"></span>' +
-                    '<span style="opacity:0.7;">' + lblHtml + '</span>' +
-                    '<span style="font-variant-numeric:tabular-nums;font-weight:600;">' + entry.value.toFixed(2) + '%' + arrB + '</span></span>'
+                    '<span style="' + M.legendTextStyle('opacity:0.7;') + '">' + lblHtml + '</span>' +
+                    '<span style="' + M.legendTextStyle('font-variant-numeric:tabular-nums;font-weight:600;') + '">' + entry.value.toFixed(2) + '%' + arrB + '</span></span>'
                 );
             });
             if (sorted.length > LEGEND_CAP) {
-                items.push('<span style="opacity:0.35;font-size:8px;">+' + (sorted.length - LEGEND_CAP) + ' more</span>');
+                items.push('<span style="' + M.legendTextStyle('opacity:0.35;font-size:8px;') + '">+' + (sorted.length - LEGEND_CAP) + ' more</span>');
             }
             return items;
         }
@@ -451,8 +474,8 @@
                 items.push(
                     '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);">' +
                     '<span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span>' +
-                    '<span style="color:' + t.rba + ';opacity:0.8;">RBA</span>' +
-                    '<span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaVal.toFixed(2) + '%' + arrR + '</span></span>'
+                    '<span style="' + M.legendTextStyle('color:' + t.rba + ';opacity:0.8;') + '">RBA</span>' +
+                    '<span style="' + M.legendTextStyle('color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;') + '">' + rbaVal.toFixed(2) + '%' + arrR + '</span></span>'
                 );
             }
             if (cpiVal != null) {
@@ -461,8 +484,8 @@
                 items.push(
                     '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
                     '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
-                    '<span style="color:' + t.cpi + ';opacity:0.8;">CPI</span>' +
-                    '<span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiVal).toFixed(1) + '%' + arrC + '</span></span>'
+                    '<span style="' + M.legendTextStyle('color:' + t.cpi + ';opacity:0.8;') + '">CPI</span>' +
+                    '<span style="' + M.legendTextStyle('color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;') + '">' + Number(cpiVal).toFixed(1) + '%' + arrC + '</span></span>'
                 );
             }
             return items;
@@ -485,7 +508,7 @@
         function refreshLegend(bankItems, rbaVal, cpiVal, crosshairYmd, param) {
             var parts = [];
             if (crosshairYmd) {
-                parts.push('<span style="font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;">' + fmtFull(crosshairYmd) + '</span>');
+                parts.push('<span style="' + M.legendTextStyle('font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;') + '">' + fmtFull(crosshairYmd) + '</span>');
             }
             parts = parts.concat(buildLegendItems(bankItems, crosshairYmd));
             parts = parts.concat(buildMacroItems(rbaVal, cpiVal, crosshairYmd));
@@ -514,24 +537,29 @@
         function refreshSelectionInfo(param) {
             var cluster = M.findOverlappingSelectionEntries(seriesApis, param);
             if (!cluster || !cluster.entries.length) {
+                M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
-                return;
+                return null;
             }
+            M.applySeriesSelectionState(seriesApis, cluster.entries.map(function (entry) { return entry.selectionKey; }));
             infoBox.show({
                 heading: fmtFull(cluster.selectionYmd),
                 meta: M.selectionMetaText(cluster),
                 items: cluster.entries,
             });
+            return cluster;
         }
 
         mount.addEventListener('mouseleave', function () {
             legendEl.innerHTML = defaultLegendHTML;
+            M.clearSeriesSelectionState(seriesApis);
             infoBox.hide();
         });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
                 legendEl.innerHTML = defaultLegendHTML;
+                M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
                 return;
             }
@@ -555,6 +583,7 @@
             });
             if (!bankItems.length && rbaVal == null && cpiVal == null && !hasEconOverlay) {
                 legendEl.innerHTML = defaultLegendHTML;
+                M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
                 return;
             }
@@ -573,6 +602,13 @@
             if (!entry) return;
             chart.resize(entry.contentRect.width, Math.max(200, entry.contentRect.height));
             chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
+            M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
+                startYmd: viewStart,
+                endYmd: ctxMax,
+                lineColor: t.rba,
+                labelBg: t.ttBg,
+                labelColor: t.rba,
+            });
         });
         ro.observe(mount);
 

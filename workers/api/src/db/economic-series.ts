@@ -213,6 +213,7 @@ export function expandEconomicObservationsDaily(
   const sorted = observations
     .slice()
     .sort((left, right) => left.observation_date.localeCompare(right.observation_date))
+  const finalObservationDate = sorted.length ? sorted[sorted.length - 1].observation_date : ''
 
   let cursor = 0
   let active: EconomicObservationRow | null = null
@@ -226,7 +227,7 @@ export function expandEconomicObservationsDaily(
       cursor += 1
     }
 
-    if (!active) {
+    if (!active || (finalObservationDate && date > finalObservationDate)) {
       points.push({
         date,
         raw_value: null,

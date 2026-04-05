@@ -55,6 +55,23 @@ function wantsCompactRows(query: QueryRecord): boolean {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }
 
+function todayYmd(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function clampAnalyticsFiltersToToday<TFilters extends AnalyticsFilters>(filters: TFilters): TFilters {
+  const today = todayYmd()
+  const startDate = typeof filters.startDate === 'string' ? filters.startDate.trim() : ''
+  const rawEndDate = typeof filters.endDate === 'string' ? filters.endDate.trim() : ''
+  const endDate = !rawEndDate || rawEndDate > today ? today : rawEndDate
+  const nextStartDate = startDate && startDate <= endDate ? startDate : endDate
+  return {
+    ...filters,
+    startDate: nextStartDate,
+    endDate,
+  }
+}
+
 async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   c: Context<AppContext>,
   options: AnalyticsRouteOptions<TFilters>,
@@ -63,12 +80,15 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
   const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
   const baseFilters = options.buildFilters(merged)
-  const resolvedFilters =
-    baseFilters.startDate && baseFilters.endDate
-      ? baseFilters
-      : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
+  const resolvedFilters = clampAnalyticsFiltersToToday(
+    (
+      baseFilters.startDate && baseFilters.endDate
+        ? baseFilters
+        : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
           window: baseFilters.chartWindow ?? null,
-        })) as TFilters
+        }))
+    ) as TFilters,
+  )
 
   const result = await getCachedOrCompute(
     c.env,

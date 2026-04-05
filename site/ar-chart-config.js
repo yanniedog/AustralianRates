@@ -85,6 +85,14 @@
         return null;
     }
 
+    function chartMaxProductsMode() {
+        var siteUi = window.AR && window.AR.chartSiteUi;
+        if (siteUi && typeof siteUi.getChartMaxProductsMode === 'function') {
+            return String(siteUi.getChartMaxProductsMode() || '').trim().toLowerCase();
+        }
+        return 'default';
+    }
+
     function titleCase(value) {
         return String(value || '')
             .split('_')
@@ -162,9 +170,13 @@
         var key = String(value || 'standard').trim().toLowerCase();
         var base = DENSITIES[key] || DENSITIES.standard;
         var cap = chartMaxProducts();
+        var mode = chartMaxProductsMode();
         var rowLimit = base.rowLimit;
+        if (mode === 'unlimited') rowLimit = Number.MAX_SAFE_INTEGER;
         if (Number.isFinite(cap) && cap > 0) rowLimit = Math.min(rowLimit, cap);
-        var compareLimit = Math.max(1, Math.min(base.compareLimit, rowLimit));
+        var compareLimit = mode === 'unlimited'
+            ? Math.max(base.compareLimit, 12)
+            : Math.max(1, Math.min(base.compareLimit, rowLimit));
         return {
             key: base.key,
             label: base.label,

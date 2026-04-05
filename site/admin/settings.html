@@ -47,9 +47,28 @@
             </div>
             <p class="admin-hint" id="chart-legend-stored" style="margin-top:8px;opacity:0.75;"></p>
         </section>
+        <section class="admin-card" id="chart-legend-text-section">
+            <h2>Chart legend text brightness</h2>
+            <p class="admin-hint">Adjust desktop and mobile legend text brightness independently. 100% is neutral.</p>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="chart-legend-text-brightness-desktop-pct">Desktop</label>
+                <input type="range" id="chart-legend-text-brightness-desktop-pct" min="50" max="160" step="1" value="100" style="min-width:180px;">
+                <output id="chart-legend-text-brightness-desktop-out" for="chart-legend-text-brightness-desktop-pct" style="min-width:4em;font-variant-numeric:tabular-nums;">100%</output>
+            </div>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="chart-legend-text-brightness-mobile-pct">Mobile</label>
+                <input type="range" id="chart-legend-text-brightness-mobile-pct" min="50" max="160" step="1" value="100" style="min-width:180px;">
+                <output id="chart-legend-text-brightness-mobile-out" for="chart-legend-text-brightness-mobile-pct" style="min-width:4em;font-variant-numeric:tabular-nums;">100%</output>
+            </div>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <button type="button" id="chart-legend-text-save-btn" class="primary">Save brightness</button>
+                <button type="button" id="chart-legend-text-reset-btn" class="secondary">Use defaults (100%)</button>
+            </div>
+            <p class="admin-hint" id="chart-legend-text-stored" style="margin-top:8px;opacity:0.75;"></p>
+        </section>
         <section class="admin-card" id="chart-product-limit-section">
             <h2>Chart product limit</h2>
-            <p class="admin-hint">Set a global ceiling for products or series shown on public charts. Use unlimited to remove the admin cap while keeping each chart view&apos;s built-in density behavior.</p>
+            <p class="admin-hint">Set a global ceiling for products or series shown on public charts. Use unlimited to render all rows for the currently displayed chart window.</p>
             <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
                 <label for="chart-max-products-value">Maximum visible products</label>
                 <input type="number" id="chart-max-products-value" min="1" max="1000" step="1" value="40" style="width:120px;">
@@ -77,6 +96,9 @@
             var DESKTOP_KEY = 'chart_legend_opacity_desktop';
             var MOBILE_KEY = 'chart_legend_opacity_mobile';
             var LEGACY_KEY = 'chart_legend_opacity';
+            var TEXT_DESKTOP_KEY = 'chart_legend_text_brightness_desktop';
+            var TEXT_MOBILE_KEY = 'chart_legend_text_brightness_mobile';
+            var TEXT_LEGACY_KEY = 'chart_legend_text_brightness';
             var CHART_MAX_PRODUCTS_KEY = 'chart_max_products';
             var CHART_MAX_PRODUCTS_UNLIMITED = 'unlimited';
             var msgEl = document.getElementById('msg');
@@ -85,6 +107,11 @@
             var mobileRangeEl = document.getElementById('chart-legend-opacity-mobile-pct');
             var mobileOutEl = document.getElementById('chart-legend-opacity-mobile-out');
             var storedEl = document.getElementById('chart-legend-stored');
+            var textDesktopRangeEl = document.getElementById('chart-legend-text-brightness-desktop-pct');
+            var textDesktopOutEl = document.getElementById('chart-legend-text-brightness-desktop-out');
+            var textMobileRangeEl = document.getElementById('chart-legend-text-brightness-mobile-pct');
+            var textMobileOutEl = document.getElementById('chart-legend-text-brightness-mobile-out');
+            var textStoredEl = document.getElementById('chart-legend-text-stored');
             var chartMaxProductsValueEl = document.getElementById('chart-max-products-value');
             var chartMaxProductsUnlimitedEl = document.getElementById('chart-max-products-unlimited');
             var chartMaxProductsStoredEl = document.getElementById('chart-max-products-stored');
@@ -105,9 +132,21 @@
                 return Math.round(dec * 100);
             }
 
+            function pctFromStoredBrightness(valueStr) {
+                if (valueStr == null || String(valueStr).trim() === '') return 100;
+                var n = Number(String(valueStr).trim());
+                if (!Number.isFinite(n)) return 100;
+                var dec = n > 2 ? n / 100 : n;
+                if (dec < 0.5) dec = 0.5;
+                if (dec > 1.6) dec = 1.6;
+                return Math.round(dec * 100);
+            }
+
             function syncOutput() {
                 if (desktopRangeEl && desktopOutEl) desktopOutEl.textContent = desktopRangeEl.value + '%';
                 if (mobileRangeEl && mobileOutEl) mobileOutEl.textContent = mobileRangeEl.value + '%';
+                if (textDesktopRangeEl && textDesktopOutEl) textDesktopOutEl.textContent = textDesktopRangeEl.value + '%';
+                if (textMobileRangeEl && textMobileOutEl) textMobileOutEl.textContent = textMobileRangeEl.value + '%';
             }
 
             function syncChartMaxProductsUi() {
@@ -121,16 +160,25 @@
                     var desktopRow = null;
                     var mobileRow = null;
                     var legacyRow = null;
+                    var textDesktopRow = null;
+                    var textMobileRow = null;
+                    var textLegacyRow = null;
                     var chartMaxProductsRow = null;
                     d.config.forEach(function (r) {
                         if (r.key === DESKTOP_KEY) desktopRow = r;
                         if (r.key === MOBILE_KEY) mobileRow = r;
                         if (r.key === LEGACY_KEY) legacyRow = r;
+                        if (r.key === TEXT_DESKTOP_KEY) textDesktopRow = r;
+                        if (r.key === TEXT_MOBILE_KEY) textMobileRow = r;
+                        if (r.key === TEXT_LEGACY_KEY) textLegacyRow = r;
                         if (r.key === CHART_MAX_PRODUCTS_KEY) chartMaxProductsRow = r;
                     });
                     var fallbackPct = pctFromStored(legacyRow ? legacyRow.value : '');
+                    var fallbackTextPct = pctFromStoredBrightness(textLegacyRow ? textLegacyRow.value : '');
                     if (desktopRangeEl) desktopRangeEl.value = String(pctFromStored(desktopRow ? desktopRow.value : fallbackPct));
                     if (mobileRangeEl) mobileRangeEl.value = String(pctFromStored(mobileRow ? mobileRow.value : fallbackPct));
+                    if (textDesktopRangeEl) textDesktopRangeEl.value = String(pctFromStoredBrightness(textDesktopRow ? textDesktopRow.value : fallbackTextPct));
+                    if (textMobileRangeEl) textMobileRangeEl.value = String(pctFromStoredBrightness(textMobileRow ? textMobileRow.value : fallbackTextPct));
                     syncOutput();
                     if (storedEl) {
                         storedEl.textContent =
@@ -139,6 +187,14 @@
                             + ' | Mobile: '
                             + (mobileRow ? (String(mobileRow.value) + ' (updated ' + String(mobileRow.updated_at || '') + ')') : 'default/legacy')
                             + (legacyRow ? (' | Legacy fallback: ' + String(legacyRow.value) + ' (updated ' + String(legacyRow.updated_at || '') + ').') : ' | Legacy fallback: default 0.75.');
+                    }
+                    if (textStoredEl) {
+                        textStoredEl.textContent =
+                            'Desktop: '
+                            + (textDesktopRow ? (String(textDesktopRow.value) + ' (updated ' + String(textDesktopRow.updated_at || '') + ')') : 'default/legacy')
+                            + ' | Mobile: '
+                            + (textMobileRow ? (String(textMobileRow.value) + ' (updated ' + String(textMobileRow.updated_at || '') + ')') : 'default/legacy')
+                            + (textLegacyRow ? (' | Legacy fallback: ' + String(textLegacyRow.value) + ' (updated ' + String(textLegacyRow.updated_at || '') + ').') : ' | Legacy fallback: default 1.00.');
                     }
                     var rawChartMax = chartMaxProductsRow ? String(chartMaxProductsRow.value || '').trim().toLowerCase() : '';
                     var unlimited = !rawChartMax || rawChartMax === CHART_MAX_PRODUCTS_UNLIMITED;
@@ -175,6 +231,18 @@
                 ])
                     .then(function () {
                         showMsg('Saved. Allow up to one minute for cached public responses to refresh.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            }
+
+            function saveTextBrightness() {
+                Promise.all([
+                    saveKey(TEXT_DESKTOP_KEY, textDesktopRangeEl ? textDesktopRangeEl.value : '100'),
+                    saveKey(TEXT_MOBILE_KEY, textMobileRangeEl ? textMobileRangeEl.value : '100')
+                ])
+                    .then(function () {
+                        showMsg('Saved text brightness. Allow up to one minute for cached public responses to refresh.', false);
                         loadFromConfig();
                     })
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
@@ -222,6 +290,30 @@
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
             }
 
+            function resetTextBrightnessToDefault() {
+                if (!confirm('Remove device-specific text-brightness overrides? The public site will use the default 100% brightness until you save new values.')) return;
+                Promise.all([
+                    portal.fetchAdmin('/config', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: TEXT_DESKTOP_KEY }),
+                    }).then(function (r) { return r.json(); }),
+                    portal.fetchAdmin('/config', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: TEXT_MOBILE_KEY }),
+                    }).then(function (r) { return r.json(); })
+                ])
+                    .then(function () {
+                        if (textDesktopRangeEl) textDesktopRangeEl.value = '100';
+                        if (textMobileRangeEl) textMobileRangeEl.value = '100';
+                        syncOutput();
+                        showMsg('Reset text brightness to defaults.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
+            }
+
             function resetChartMaxProducts() {
                 if (!confirm('Remove the stored chart product cap and return to the built-in chart defaults?')) return;
                 portal.fetchAdmin('/config', {
@@ -242,11 +334,17 @@
 
             if (desktopRangeEl) desktopRangeEl.addEventListener('input', syncOutput);
             if (mobileRangeEl) mobileRangeEl.addEventListener('input', syncOutput);
+            if (textDesktopRangeEl) textDesktopRangeEl.addEventListener('input', syncOutput);
+            if (textMobileRangeEl) textMobileRangeEl.addEventListener('input', syncOutput);
             if (chartMaxProductsUnlimitedEl) chartMaxProductsUnlimitedEl.addEventListener('change', syncChartMaxProductsUi);
             var saveBtn = document.getElementById('chart-legend-save-btn');
             if (saveBtn) saveBtn.addEventListener('click', saveBoth);
             var resetBtn = document.getElementById('chart-legend-reset-btn');
             if (resetBtn) resetBtn.addEventListener('click', resetToDefault);
+            var textSaveBtn = document.getElementById('chart-legend-text-save-btn');
+            if (textSaveBtn) textSaveBtn.addEventListener('click', saveTextBrightness);
+            var textResetBtn = document.getElementById('chart-legend-text-reset-btn');
+            if (textResetBtn) textResetBtn.addEventListener('click', resetTextBrightnessToDefault);
             var chartMaxProductsSaveBtn = document.getElementById('chart-max-products-save-btn');
             if (chartMaxProductsSaveBtn) chartMaxProductsSaveBtn.addEventListener('click', saveChartMaxProducts);
             var chartMaxProductsResetBtn = document.getElementById('chart-max-products-reset-btn');

@@ -14,25 +14,25 @@
 
     var BANK_SHORT = {
         'commonwealth bank of australia': 'CBA',
-        'westpac banking corporation': 'Westpac',
+        'westpac banking corporation': 'WBC',
         'anz': 'ANZ',
         'national australia bank': 'NAB',
-        'macquarie bank': 'Macquarie',
+        'macquarie bank': 'MQG',
         'ing': 'ING',
         'ubank': 'UBank',
-        'bankwest': 'Bankwest',
+        'bankwest': 'BWT',
         'bank of queensland': 'BOQ',
-        'suncorp bank': 'Suncorp',
+        'suncorp bank': 'SUN',
         'great southern bank': 'GSB',
         'amp bank': 'AMP',
-        'bendigo and adelaide bank': 'Bendigo',
+        'bendigo and adelaide bank': 'BEN',
         'bank of melbourne': 'BoM',
-        'st. george bank': 'St.George',
+        'st. george bank': 'STG',
         'hsbc australia': 'HSBC',
-        'teachers mutual bank': 'Teachers',
-        'beyond bank australia': 'Beyond',
-        'me bank': 'ME Bank',
-        'mystate bank': 'MyState',
+        'teachers mutual bank': 'TMB',
+        'beyond bank australia': 'BBA',
+        'me bank': 'MEB',
+        'mystate bank': 'MYS',
     };
     var BANK_COLOR = {
         'commonwealth bank of australia': '#e8b400',
@@ -59,6 +59,8 @@
     var PALETTE = ['#4f8dfd', '#27c27a', '#f0b90b', '#f97316', '#8b5cf6', '#ef4444', '#14b8a6', '#64748b', '#a78bfa', '#fb923c'];
 
     function bankShort(name) {
+        var shared = window.AR && window.AR.chartMacroLwcShared;
+        if (shared && typeof shared.bankAcronym === 'function') return shared.bankAcronym(name);
         var key = String(name || '').trim().toLowerCase();
         return BANK_SHORT[key] || String(name || '').slice(0, 12).trim();
     }
@@ -154,7 +156,7 @@
                 var d = String(p.date || '');
                 var v = Number(p.value);
                 if (!d || !Number.isFinite(v) || v < 4.0) return;
-                byBank[k].byDate[d] = M.mergeWinningMortgage(byBank[k].byDate[d], v, pn);
+                byBank[k].byDate[d] = M.mergeWinningMortgage(byBank[k].byDate[d], v, pn, p.row || null);
             });
         });
         return Object.keys(byBank)
@@ -162,7 +164,7 @@
                 var e = byBank[k];
                 var pts = Object.keys(e.byDate).sort().map(function (d) {
                     var cell = e.byDate[d];
-                    return { date: d, value: cell.value, productName: cell.productName };
+                    return { date: d, value: cell.value, productName: cell.productName, row: cell.row || null };
                 });
                 var latest = pts.length ? pts[pts.length - 1].value : 0;
                 return { bankName: e.bankName, short: bankShort(e.bankName), color: bankColor(e.bankName, 0), latest: latest, points: pts };
@@ -175,6 +177,8 @@
             .map(function (entry, index) {
                 entry.color = bankColor(entry.bankName, index);
                 entry.legendLabel = entry.short;
+                entry.section = 'home-loans';
+                entry.selectionKey = String(entry.bankName || '').trim().toLowerCase();
                 return entry;
             });
     }
@@ -194,7 +198,7 @@
                 var v = Number(p.value);
                 return p.date && Number.isFinite(v) && v >= 4.0;
             }).map(function (p) {
-                return { date: String(p.date), value: Number(p.value) };
+                return { date: String(p.date), value: Number(p.value), row: p.row || null };
             });
             if (!pts.length) return;
             if (bankCount[bk] == null) { bankCount[bk] = 0; bankIdx[bk] = Object.keys(bankIdx).length; }
@@ -216,6 +220,8 @@
         products.forEach(function (p, i) {
             p.short = bankShort(p.bankName);
             p.productShort = M.shortProductName(p.productName);
+            p.section = 'home-loans';
+            p.selectionKey = String((p.latestRow && p.latestRow.product_key) || (p.bankName + '|' + p.productName)).trim().toLowerCase();
             if (focusBank) {
                 p.color = PALETTE[i % PALETTE.length];
                 p.legendLabel = p.productShort;
@@ -364,7 +370,7 @@
         // CPI
         var cpiSeriesApi = null;
         if (cpiPoints.length) {
-            cpiSeriesApi = chart.addSeries(L.LineSeries, { color: t.cpi, lineWidth: 2, lineStyle: LineStyle.Dashed, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });
+            cpiSeriesApi = chart.addSeries(L.LineSeries, { color: t.cpi, lineWidth: 3, lineStyle: LineStyle.LargeDashed || LineStyle.Dashed, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 4 });
             cpiSeriesApi.setData(M.fillForwardDaily(cpiPoints, 'date', 'value', chartStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
         }
 
@@ -377,13 +383,21 @@
             if (!data.length) return;
             var seriesApi = chart.addSeries(L.LineSeries, { color: bank.color, lineWidth: lineWidth, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });
             seriesApi.setData(data);
-            seriesApis.push({ api: seriesApi, line: bank, lastValue: data.length ? data[data.length - 1].value : null, stepPoints: clippedPts });
+            seriesApis.push({
+                api: seriesApi,
+                line: bank,
+                lastValue: data.length ? data[data.length - 1].value : null,
+                stepPoints: clippedPts,
+                baseColor: bank.color,
+                baseLineWidth: lineWidth,
+                selectionKey: bank.selectionKey,
+            });
         });
 
         // RBA
         var rbaSeriesApi = null;
         if (rbaData.points.length) {
-            rbaSeriesApi = chart.addSeries(L.LineSeries, { color: t.rba, lineWidth: 2, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 3 });
+            rbaSeriesApi = chart.addSeries(L.LineSeries, { color: t.rba, lineWidth: 3, lineStyle: LineStyle.Dashed, lineType: LineType.Simple, title: '', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, crosshairMarkerRadius: 4 });
             rbaSeriesApi.setData(M.fillForwardDaily(rbaData.points, 'date', 'rate', chartStart, ctxMax).map(function (point) { return { time: M.ymdToUtc(point.date), value: point.value }; }));
         }
 
@@ -405,6 +419,13 @@
         });
 
         chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
+        M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
+            startYmd: viewStart,
+            endYmd: ctxMax,
+            lineColor: t.rba,
+            labelBg: t.ttBg,
+            labelColor: t.rba,
+        });
 
         // ── Legend ───────────────────────────────────────────────────────────
         var legendEl = document.createElement('div');
@@ -419,15 +440,15 @@
                 var prev = M.prevStepValue(e.stepPoints, ymd || ctxMax, 'value');
                 var arr = M.rateLegendArrowHtml(e.value, prev, 'mortgage', t.good, t.bad);
                 var lblHtml = M.legendSliceLabelHtml(e.line, e.stepPoints, ymd, ctxMax);
-                items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:2px;background:' + e.line.color + ';flex-shrink:0;border-radius:1px;"></span><span style="opacity:0.7;">' + lblHtml + '</span><span style="font-variant-numeric:tabular-nums;font-weight:600;">' + e.value.toFixed(2) + '%' + arr + '</span></span>');
+                items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:2px;background:' + e.line.color + ';flex-shrink:0;border-radius:1px;"></span><span style="' + M.legendTextStyle('opacity:0.7;') + '">' + lblHtml + '</span><span style="' + M.legendTextStyle('font-variant-numeric:tabular-nums;font-weight:600;') + '">' + e.value.toFixed(2) + '%' + arr + '</span></span>');
             });
-            if (sorted.length > LEGEND_CAP) items.push('<span style="opacity:0.35;font-size:8px;">+' + (sorted.length - LEGEND_CAP) + ' more</span>');
+            if (sorted.length > LEGEND_CAP) items.push('<span style="' + M.legendTextStyle('opacity:0.35;font-size:8px;') + '">+' + (sorted.length - LEGEND_CAP) + ' more</span>');
             return items;
         }
         function buildMacroItems(rbaVal, cpiVal, ymd) {
             var items = [];
-            if (rbaVal != null) { var p = M.prevStepValue(rbaData.points, ymd || ctxMax, 'rate'); var a = M.rateLegendArrowHtml(rbaVal, p, 'mortgage', t.good, t.bad); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);"><span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span><span style="color:' + t.rba + ';opacity:0.8;">RBA</span><span style="color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;">' + rbaVal.toFixed(2) + '%' + a + '</span></span>'); }
-            if (cpiVal != null) { var pc = M.prevStepValue(cpiPoints, ymd || ctxMax, 'value'); var ac = M.rateLegendArrowHtml(Number(cpiVal), pc, 'mortgage', t.good, t.bad, 1); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span><span style="color:' + t.cpi + ';opacity:0.8;">CPI</span><span style="color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;">' + Number(cpiVal).toFixed(1) + '%' + ac + '</span></span>'); }
+            if (rbaVal != null) { var p = M.prevStepValue(rbaData.points, ymd || ctxMax, 'rate'); var a = M.rateLegendArrowHtml(rbaVal, p, 'mortgage', t.good, t.bad); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);"><span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span><span style="' + M.legendTextStyle('color:' + t.rba + ';opacity:0.8;') + '">RBA</span><span style="' + M.legendTextStyle('color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;') + '">' + rbaVal.toFixed(2) + '%' + a + '</span></span>'); }
+            if (cpiVal != null) { var pc = M.prevStepValue(cpiPoints, ymd || ctxMax, 'value'); var ac = M.rateLegendArrowHtml(Number(cpiVal), pc, 'mortgage', t.good, t.bad, 1); items.push('<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span><span style="' + M.legendTextStyle('color:' + t.cpi + ';opacity:0.8;') + '">CPI</span><span style="' + M.legendTextStyle('color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;') + '">' + Number(cpiVal).toFixed(1) + '%' + ac + '</span></span>'); }
             return items;
         }
         function buildEconomicOverlayLegendItems(param) {
@@ -445,7 +466,7 @@
         }
         function refreshLegend(bankItems, rbaVal, cpiVal, ymd, param) {
             var parts = [];
-            if (ymd) parts.push('<span style="font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;">' + fmtFull(ymd) + '</span>');
+            if (ymd) parts.push('<span style="' + M.legendTextStyle('font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;') + '">' + fmtFull(ymd) + '</span>');
             parts = parts.concat(buildLegendItems(bankItems, ymd));
             parts = parts.concat(buildMacroItems(rbaVal, cpiVal, ymd));
             var econItems = buildEconomicOverlayLegendItems(param || null);
@@ -471,24 +492,29 @@
         function refreshSelectionInfo(param) {
             var cluster = M.findOverlappingSelectionEntries(seriesApis, param);
             if (!cluster || !cluster.entries.length) {
+                M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
-                return;
+                return null;
             }
+            M.applySeriesSelectionState(seriesApis, cluster.entries.map(function (entry) { return entry.selectionKey; }));
             infoBox.show({
                 heading: fmtFull(cluster.selectionYmd),
                 meta: M.selectionMetaText(cluster),
                 items: cluster.entries,
             });
+            return cluster;
         }
 
         mount.addEventListener('mouseleave', function () {
             legendEl.innerHTML = defaultLegendHTML;
+            M.clearSeriesSelectionState(seriesApis);
             infoBox.hide();
         });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
                 legendEl.innerHTML = defaultLegendHTML;
+                M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
                 return;
             }
@@ -505,6 +531,7 @@
             });
             if (!bankItems.length && rbaValue == null && cpiValue == null && !hasEconOverlay) {
                 legendEl.innerHTML = defaultLegendHTML;
+                M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
                 return;
             }
@@ -518,7 +545,19 @@
         });
 
         // Resize
-        var resizeObserver = new ResizeObserver(function (entries) { var entry = entries[0]; if (!entry) return; chart.resize(entry.contentRect.width, Math.max(200, entry.contentRect.height)); chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) }); });
+        var resizeObserver = new ResizeObserver(function (entries) {
+            var entry = entries[0];
+            if (!entry) return;
+            chart.resize(entry.contentRect.width, Math.max(200, entry.contentRect.height));
+            chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
+            M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
+                startYmd: viewStart,
+                endYmd: ctxMax,
+                lineColor: t.rba,
+                labelBg: t.ttBg,
+                labelColor: t.rba,
+            });
+        });
         resizeObserver.observe(mount);
 
         var disposed = false;

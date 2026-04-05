@@ -329,6 +329,61 @@ export async function runDataIntegrityAudit(
   }
 
   try {
+    const today = checkedAt.slice(0, 10)
+    const [futureHome, futureSavings, futureTd] = await Promise.all([
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n, MIN(collection_date) AS earliest_future_date, MAX(collection_date) AS latest_future_date
+           FROM historical_loan_rates
+           WHERE collection_date > ?1`,
+        )
+        .bind(today)
+        .first<{ n: number; earliest_future_date: string | null; latest_future_date: string | null }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n, MIN(collection_date) AS earliest_future_date, MAX(collection_date) AS latest_future_date
+           FROM historical_savings_rates
+           WHERE collection_date > ?1`,
+        )
+        .bind(today)
+        .first<{ n: number; earliest_future_date: string | null; latest_future_date: string | null }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n, MIN(collection_date) AS earliest_future_date, MAX(collection_date) AS latest_future_date
+           FROM historical_term_deposit_rates
+           WHERE collection_date > ?1`,
+        )
+        .bind(today)
+        .first<{ n: number; earliest_future_date: string | null; latest_future_date: string | null }>(),
+    ])
+    for (const [name, row] of [
+      ['future_collection_dates_home_loans', futureHome],
+      ['future_collection_dates_savings', futureSavings],
+      ['future_collection_dates_term_deposits', futureTd],
+    ] as const) {
+      const n = num(row?.n)
+      findings.push({
+        category: 'invalid',
+        check: name,
+        passed: n === 0,
+        count: n,
+        detail: {
+          checked_date: today,
+          earliest_future_date: row?.earliest_future_date ?? null,
+          latest_future_date: row?.latest_future_date ?? null,
+        },
+      })
+    }
+  } catch (e) {
+    findings.push({
+      category: 'invalid',
+      check: 'future_collection_dates_checks',
+      passed: false,
+      detail: { error: errorMessage(e), hint: 'Failed to audit future-dated historical rows.' },
+    })
+  }
+
+  try {
     const [nullHome, nullSavings, nullTd] = await Promise.all([
       db
         .prepare(
