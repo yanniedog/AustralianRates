@@ -783,9 +783,18 @@
             var baseColor = String(entry.baseColor || (entry.line && entry.line.color) || '#64748b');
             var baseLineWidth = Number(entry.baseLineWidth || 2);
             var selected = hasActive && wanted[String(entry.selectionKey || (entry.line && entry.line.selectionKey) || '').trim()];
+            var nextState = hasActive ? (selected ? 'selected' : 'dimmed') : 'normal';
+            if (entry._selectionVisualState === nextState
+                && entry._selectionBaseColor === baseColor
+                && entry._selectionBaseLineWidth === baseLineWidth) {
+                return;
+            }
+            entry._selectionVisualState = nextState;
+            entry._selectionBaseColor = baseColor;
+            entry._selectionBaseLineWidth = baseLineWidth;
             entry.api.applyOptions({
-                color: hasActive && !selected ? colorWithAlpha(baseColor, 0.24) : baseColor,
-                lineWidth: hasActive && selected ? baseLineWidth + 1 : baseLineWidth,
+                color: nextState === 'dimmed' ? colorWithAlpha(baseColor, 0.24) : baseColor,
+                lineWidth: nextState === 'selected' ? baseLineWidth + 1 : baseLineWidth,
             });
         });
     }
