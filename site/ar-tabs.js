@@ -55,13 +55,13 @@
 
         clientLog('info', 'Tab activated', { tab: activeTab });
 
-        if (window.AR.filters && window.AR.filters.syncUrlState) {
+        if (!opts.skipFilterSync && window.AR.filters && window.AR.filters.syncUrlState) {
             window.AR.filters.syncUrlState();
         }
     }
 
     function applyUiMode() {
-        activateTab(tabState.activeTab || 'chart', { skipHash: true });
+        activateTab(tabState.activeTab || 'chart', { skipHash: true, skipFilterSync: true });
     }
 
     function bindTabListeners() {
