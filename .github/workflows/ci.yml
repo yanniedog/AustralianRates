@@ -5,13 +5,26 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  validate:
+  ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,14 +38,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate local public assets
-        run: npm run check:public-assets
-
       - name: Typecheck API
         run: npm run typecheck:api
 
-      - name: Typecheck scripts
+      - name: Typecheck repo scripts
         run: npm run typecheck:scripts
+
+      - name: Build (assets, vendor bundle, prototype, site version)
+        run: npm run build
 
       - name: Test archive worker
         run: npm run test:archive
@@ -40,20 +53,5 @@ jobs:
       - name: Test API worker
         run: npm run test:api
 
-  api_integration:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run API integration runtime tests
+      - name: API integration tests
         run: npm run test:integration -w workers/api

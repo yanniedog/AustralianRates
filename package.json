@@ -27,6 +27,7 @@
     "test:theme-contrast": "node test-theme-contrast.js",
     "test:table-errors": "node test-table-error-detect.js",
     "test:site": "node test-homepage.js && node diagnose-api.js",
+    "verify": "npm run typecheck:api && npm run typecheck:scripts && npm run build && npm run test:archive && npm run test:api && npm run test:integration -w workers/api",
     "fix:e2e": "node automate-fix-e2e.js",
     "verify:macquarie-td-e2e": "node verify-macquarie-td-e2e.js",
     "verify:macquarie-td-pipeline": "npm run typecheck:api && npm run test:api && npm run verify:macquarie-td-e2e && npm run test:archive",
