@@ -1,0 +1,17 @@
+{
+  "name": "australianrates-mobile-site-qa",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright mobile viewport/touch QA for www (not a Cloudflare Worker; no browser runtime on Workers).",
+  "scripts": {
+    "check": "npx tsx src/run-mobile-site-qa.ts",
+    "test": "npm run check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "playwright": "^1.58.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}
