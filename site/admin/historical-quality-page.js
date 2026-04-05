@@ -13,29 +13,29 @@
     var state = { days: [] };
 
     var columns = [
-        { key: 'collection_date', label: 'Date', type: 'text' },
-        { key: 'status', label: 'St', type: 'text' },
-        { key: 'trigger_source', label: 'Src', type: 'text' },
-        { key: 'intra_day_score_v1', label: 'Q', type: 'pct' },
-        { key: 'row_count', label: 'Rows', type: 'num' },
-        { key: 'bank_count', label: 'Banks', type: 'num' },
-        { key: 'product_count', label: 'Prod', type: 'num' },
-        { key: 'new_product_count', label: 'New', type: 'num' },
-        { key: 'lost_product_count', label: 'Lost', type: 'num' },
-        { key: 'cdr_missing_product_count', label: 'CDR miss', type: 'num' },
-        { key: 'renamed_same_id_count', label: 'Rename', type: 'num' },
-        { key: 'same_id_name_same_rate_other_detail_changed_count', label: 'Detail', type: 'num' },
-        { key: 'changed_id_same_name_count', label: 'ID', type: 'num' },
-        { key: 'increased_rate_product_count', label: 'Up', type: 'num' },
-        { key: 'decreased_rate_product_count', label: 'Down', type: 'num' },
-        { key: 'structural_score_v1', label: 'Struct', type: 'pct' },
-        { key: 'provenance_score_v1', label: 'Prov', type: 'pct' },
-        { key: 'coverage_score_v1', label: 'Cov', type: 'pct' },
-        { key: 'anomaly_pressure_score_v1', label: 'Anom', type: 'pct' },
-        { key: 'continuity_score_v1', label: 'Cont', type: 'pct' },
-        { key: 'count_stability_score_v1', label: 'Count', type: 'pct' },
-        { key: 'transition_score_v1', label: 'Trans', type: 'pct' },
-        { key: 'evidence_confidence_score_v1', label: 'Evid', type: 'pct' }
+        { key: 'collection_date', label: 'Date', type: 'text', title: 'Collection date for this daily audit row.' },
+        { key: 'status', label: 'St', type: 'text', title: 'Audit run status (e.g. completed, running, failed, partial, pending).' },
+        { key: 'trigger_source', label: 'Src', type: 'text', title: 'What started the run: scheduled, manual, resume, or script.' },
+        { key: 'intra_day_score_v1', label: 'Q', type: 'pct', title: 'Intra-day quality (v1): blend of structural, provenance, coverage, and anomaly pressure (30% / 30% / 25% / 15%).' },
+        { key: 'row_count', label: 'Rows', type: 'num', title: 'Number of rate rows stored for this day and scope.' },
+        { key: 'bank_count', label: 'Banks', type: 'num', title: 'Distinct lenders (banks) in the dataset for this day.' },
+        { key: 'product_count', label: 'Prod', type: 'num', title: 'Distinct home-loan products for this day.' },
+        { key: 'new_product_count', label: 'New', type: 'num', title: 'Products that appear today but were absent on the prior collection day.' },
+        { key: 'lost_product_count', label: 'Lost', type: 'num', title: 'Products that were present on the prior day but missing today.' },
+        { key: 'cdr_missing_product_count', label: 'CDR miss', type: 'num', title: 'Products without a matching Open Banking (CDR) product mapping.' },
+        { key: 'renamed_same_id_count', label: 'Rename', type: 'num', title: 'Same product_id as yesterday but the product name changed.' },
+        { key: 'same_id_name_same_rate_other_detail_changed_count', label: 'Detail', type: 'num', title: 'Same id, name, and rate as yesterday, but other detail fields changed.' },
+        { key: 'changed_id_same_name_count', label: 'ID', type: 'num', title: 'Same lender and product name as yesterday but product_id changed (identifier churn).' },
+        { key: 'increased_rate_product_count', label: 'Up', type: 'num', title: 'Products whose interest rate rose versus the prior day.' },
+        { key: 'decreased_rate_product_count', label: 'Down', type: 'num', title: 'Products whose interest rate fell versus the prior day.' },
+        { key: 'structural_score_v1', label: 'Struct', type: 'pct', title: 'Structural quality: uniqueness, required fields, valid values, and cross-table consistency (penalises duplicates, gaps, invalid rows).' },
+        { key: 'provenance_score_v1', label: 'Prov', type: 'pct', title: 'Provenance mix: exact vs reconstructed vs legacy vs quarantined source classification.' },
+        { key: 'coverage_score_v1', label: 'Cov', type: 'pct', title: 'Coverage vs rolling baseline: lender, product, and series counts compared to the reference window.' },
+        { key: 'anomaly_pressure_score_v1', label: 'Anom', type: 'pct', title: 'Pressure from audit findings, weighted by how many series they affect.' },
+        { key: 'continuity_score_v1', label: 'Cont', type: 'pct', title: 'Continuity of the catalogue: explained vs unexplained appearances and disappearances.' },
+        { key: 'count_stability_score_v1', label: 'Count', type: 'pct', title: 'Stability of active series count vs the previous day (relative to baseline context).' },
+        { key: 'transition_score_v1', label: 'Trans', type: 'pct', title: 'Day-to-day transition quality: average of continuity, count stability, and rate-flow scores.' },
+        { key: 'evidence_confidence_score_v1', label: 'Evid', type: 'pct', title: 'Confidence in supporting evidence: blend of provenance score and run-state / permanent-evidence observability.' }
     ];
 
     function esc(value) {
@@ -115,7 +115,10 @@
         tableWrap.innerHTML = ''
             + '<table class="historical-quality-table">'
             + '<thead><tr>'
-            + columns.map(function (column) { return '<th>' + esc(column.label) + '</th>'; }).join('')
+            + columns.map(function (column) {
+                var tip = column.title ? ' title="' + esc(column.title) + '"' : '';
+                return '<th' + tip + '>' + esc(column.label) + '</th>';
+            }).join('')
             + '</tr></thead><tbody>'
             + state.days.map(function (day) {
                 return '<tr>' + columns.map(function (column) { return renderCell(day, column); }).join('') + '</tr>';
