@@ -489,8 +489,20 @@
             legendEl.style.opacity = '0.75';
         }
 
-        function refreshSelectionInfo(param) {
-            var cluster = M.findOverlappingSelectionEntries(seriesApis, param);
+        var pinnedSelection = null;
+
+        function selectionMatches(left, right) {
+            if (!left || !right) return false;
+            if (left.selectionYmd !== right.selectionYmd) return false;
+            if (!Array.isArray(left.entries) || !Array.isArray(right.entries)) return false;
+            if (left.entries.length !== right.entries.length) return false;
+            for (var i = 0; i < left.entries.length; i++) {
+                if (String(left.entries[i].selectionKey || '') !== String(right.entries[i].selectionKey || '')) return false;
+            }
+            return true;
+        }
+
+        function applySelectionCluster(cluster) {
             if (!cluster || !cluster.entries.length) {
                 M.clearSeriesSelectionState(seriesApis);
                 infoBox.hide();
@@ -505,17 +517,29 @@
             return cluster;
         }
 
-        mount.addEventListener('mouseleave', function () {
-            legendEl.innerHTML = defaultLegendHTML;
+        function refreshSelectionInfo(param) {
+            return applySelectionCluster(M.findOverlappingSelectionEntries(seriesApis, param));
+        }
+
+        function restorePinnedSelection() {
+            if (pinnedSelection && pinnedSelection.entries && pinnedSelection.entries.length) {
+                applySelectionCluster(pinnedSelection);
+                return true;
+            }
             M.clearSeriesSelectionState(seriesApis);
             infoBox.hide();
+            return false;
+        }
+
+        mount.addEventListener('mouseleave', function () {
+            legendEl.innerHTML = defaultLegendHTML;
+            restorePinnedSelection();
         });
 
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
                 legendEl.innerHTML = defaultLegendHTML;
-                M.clearSeriesSelectionState(seriesApis);
-                infoBox.hide();
+                restorePinnedSelection();
                 return;
             }
             var time = M.utcToYmd(param.time);
@@ -531,17 +555,28 @@
             });
             if (!bankItems.length && rbaValue == null && cpiValue == null && !hasEconOverlay) {
                 legendEl.innerHTML = defaultLegendHTML;
-                M.clearSeriesSelectionState(seriesApis);
-                infoBox.hide();
+                restorePinnedSelection();
                 return;
             }
             refreshLegend(bankItems, rbaValue, cpiValue, time, param);
-            refreshSelectionInfo(param);
+            if (!pinnedSelection) refreshSelectionInfo(param);
         });
 
         // Click → info box
         chart.subscribeClick(function (param) {
-            refreshSelectionInfo(param);
+            var cluster = refreshSelectionInfo(param);
+            if (!cluster) {
+                pinnedSelection = null;
+                restorePinnedSelection();
+                return;
+            }
+            if (selectionMatches(cluster, pinnedSelection)) {
+                pinnedSelection = null;
+                restorePinnedSelection();
+                return;
+            }
+            pinnedSelection = cluster;
+            applySelectionCluster(pinnedSelection);
         });
 
         // Resize

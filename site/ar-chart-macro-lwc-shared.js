@@ -291,7 +291,7 @@
         clearBtn.disabled = vm.mode !== 'focus';
         clearBtn.addEventListener('click', function () {
             if (vm.mode !== 'focus') return;
-            setViewMode(section, 'bank');
+            setViewMode(section, 'products');
             onReRender();
         });
 
@@ -544,11 +544,11 @@
     var _viewModeBySection = {};
 
     function getViewMode(section) {
-        return _viewModeBySection[section] || { mode: 'bank', focusBank: '' };
+        return _viewModeBySection[section] || { mode: 'products', focusBank: '' };
     }
 
     function setViewMode(section, mode, focusBank) {
-        _viewModeBySection[section] = { mode: mode || 'bank', focusBank: focusBank || '' };
+        _viewModeBySection[section] = { mode: mode || 'products', focusBank: focusBank || '' };
     }
 
     function productColorVariant(baseHex, idx, total) {
