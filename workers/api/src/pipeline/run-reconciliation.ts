@@ -1,8 +1,9 @@
+import { MELBOURNE_TIMEZONE } from '../constants'
 import { deriveTerminalRunStatus, loadRunInvariantSummary, type SummaryTotals } from '../db/run-terminal-state'
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { tryMarkLenderDatasetFinalized } from '../db/lender-dataset-runs'
 import { isLenderDatasetReadyForFinalization } from '../utils/lender-dataset-invariants'
-import { nowIso } from '../utils/time'
+import { getMelbourneNowParts, nowIso } from '../utils/time'
 import { log } from '../utils/logger'
 
 export { deriveTerminalRunStatus } from '../db/run-terminal-state'
@@ -16,6 +17,7 @@ type ReconciliationOptions = {
   staleRunMinutes?: number
   staleUnfinalizedMinutes?: number
   maxRows?: number
+  timeZone?: string
 }
 
 type LenderDatasetFinalizeCandidate = {
@@ -116,13 +118,17 @@ function cutoffIso(minutes: number): string {
   return new Date(Date.now() - Math.max(1, minutes) * 60 * 1000).toISOString()
 }
 
-/** True if now is past 23:59 on the calendar day of started_at (UTC). Used for same-day abandonment. */
-function isPastEndOfStartDay(startedAtIso: string): boolean {
+/** True if the configured local date has advanced past the start day. Used for same-day abandonment. */
+export function isPastEndOfStartDay(
+  startedAtIso: string,
+  now = new Date(),
+  timeZone = MELBOURNE_TIMEZONE,
+): boolean {
   const s = String(startedAtIso || '').trim()
   if (!s) return false
-  const day = s.slice(0, 10)
-  const endOfDay = `${day}T23:59:59.999Z`
-  return new Date().toISOString() > endOfDay
+  const startedAt = new Date(s)
+  if (Number.isNaN(startedAt.getTime())) return false
+  return getMelbourneNowParts(now, timeZone).date > getMelbourneNowParts(startedAt, timeZone).date
 }
 
 type LenderDatasetReadinessRow = {
@@ -357,39 +363,42 @@ export async function reconcileReadyFinalizations(
 
 export async function closeStaleRunningRuns(
   db: D1Database,
-  options?: { dryRun?: boolean; staleRunMinutes?: number; maxRows?: number },
+  options?: { dryRun?: boolean; staleRunMinutes?: number; maxRows?: number; timeZone?: string },
 ): Promise<StaleRunClosureReconciliation> {
   const dryRun = Boolean(options?.dryRun)
   const staleMinutes = Math.max(1, Math.floor(Number(options?.staleRunMinutes) || 120))
   const maxRows = Math.max(1, Math.min(5000, Math.floor(Number(options?.maxRows) || 2000)))
   const cutoff = cutoffIso(staleMinutes)
+  const timeZone = String(options?.timeZone || MELBOURNE_TIMEZONE)
   const errors: string[] = []
   const statusBreakdown = { ok: 0, partial: 0 }
   let closedRuns = 0
   let abandonedEod = 0
+  let scannedRuns = 0
 
   // Select runs that are (a) stale by time, or (b) past 23:59 on their start day (same-day abandonment).
   const rows = await db
     .prepare(
       `SELECT run_id, started_at, finished_at, per_lender_json, errors_json
        FROM run_reports
-       WHERE status = 'running'
-         AND (
-           started_at < ?1
-           OR datetime('now') > (strftime('%Y-%m-%d', started_at) || ' 23:59:59')
-         )
-       ORDER BY started_at ASC
-       LIMIT ?2`,
+        WHERE status = 'running'
+        ORDER BY started_at ASC
+        LIMIT ?1`,
     )
-    .bind(cutoff, maxRows)
+    .bind(maxRows)
     .all<StaleRunningRun>()
 
   for (const row of rows.results ?? []) {
+    const staleByCutoff = String(row.started_at || '') < cutoff
+    const eodAbandon = isPastEndOfStartDay(row.started_at, new Date(), timeZone)
+    if (!staleByCutoff && !eodAbandon) {
+      continue
+    }
+    scannedRuns += 1
     const totals = asSummaryTotals(row.per_lender_json)
     const invariantSummary = await loadRunInvariantSummary(db, row.run_id)
     const nextStatus = deriveTerminalRunStatus(totals, invariantSummary)
     const reconciliationTime = nowIso()
-    const eodAbandon = isPastEndOfStartDay(row.started_at)
     const note = eodAbandon
       ? `[${reconciliationTime}] reconciliation_autoclose: abandoned_run_not_completed_by_2359_same_day` +
         ` started_at=${row.started_at}` +
@@ -449,7 +458,7 @@ export async function closeStaleRunningRuns(
   return {
     cutoff_iso: cutoff,
     stale_minutes: staleMinutes,
-    scanned_runs: (rows.results ?? []).length,
+    scanned_runs: scannedRuns,
     closed_runs: closedRuns,
     abandoned_eod: abandonedEod,
     status_breakdown: statusBreakdown,
@@ -686,6 +695,7 @@ export async function runLifecycleReconciliation(
     dryRun,
     staleRunMinutes: options?.staleRunMinutes,
     maxRows: options?.maxRows,
+    timeZone: options?.timeZone,
   })
 
   // 2. Force-close lender_dataset_runs that have been unfinalized too long (prevents reconciliation stall).

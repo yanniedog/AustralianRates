@@ -64,6 +64,7 @@ async function runSiteHealthCron(env: EnvBindings) {
       dryRun: false,
       idleMinutes: 5,
       staleRunMinutes: 90,
+      timeZone: env.MELBOURNE_TIMEZONE,
     })
     log.info('scheduler', 'Site health preflight reconciliation completed', {
       context: JSON.stringify({

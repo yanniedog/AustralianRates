@@ -56,6 +56,7 @@ import { registerCpiRoutes } from './cpi-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerSavingsChartDataRoute } from './chart-data/savings'
 import { registerSiteUiPublicRoute } from './site-ui-public'
+import { registerDebugLogRoutes } from './debug-log'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -67,6 +68,7 @@ savingsPublicRoutes.use('*', async (c, next) => {
 })
 
 registerSavingsExportRoutes(savingsPublicRoutes)
+registerDebugLogRoutes(savingsPublicRoutes)
 registerSavingsAnalyticsRoutes(savingsPublicRoutes)
 registerRbaRoutes(savingsPublicRoutes)
 registerCpiRoutes(savingsPublicRoutes)

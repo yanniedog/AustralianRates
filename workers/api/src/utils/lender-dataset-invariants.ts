@@ -34,6 +34,31 @@ function hasIndexSuccess(snapshot: Pick<LenderDatasetInvariantSnapshot, 'index_f
   return asCount(snapshot.index_fetch_succeeded) > 0
 }
 
+/** Partial detail failures are acceptable once enough details completed and at least some rows persisted. */
+function allowsPartialFailureFinalization(
+  snapshot: Pick<
+    LenderDatasetInvariantSnapshot,
+    | 'expected_detail_count'
+    | 'accepted_row_count'
+    | 'written_row_count'
+    | 'detail_fetch_event_count'
+    | 'completed_detail_count'
+    | 'failed_detail_count'
+  >,
+): boolean {
+  const expectedDetails = asCount(snapshot.expected_detail_count)
+  const completedDetails = asCount(snapshot.completed_detail_count)
+  const failedDetails = asCount(snapshot.failed_detail_count)
+  const processedDetails = completedDetails + failedDetails
+  if (expectedDetails <= 0 || failedDetails <= 0) return false
+  if (processedDetails < expectedDetails) return false
+  if (asCount(snapshot.accepted_row_count) <= 0) return false
+  if (asCount(snapshot.written_row_count) <= 0) return false
+  if (asCount(snapshot.detail_fetch_event_count) <= 0) return false
+  const minCompleted = Math.ceil(expectedDetails * MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION)
+  return completedDetails >= minCompleted
+}
+
 export function assessLenderDatasetCoverage(
   snapshot: Pick<
     LenderDatasetInvariantSnapshot,
@@ -66,7 +91,7 @@ export function assessLenderDatasetCoverage(
   if (acceptedRows > writtenRows) {
     reasons.push('accepted_written_mismatch')
   }
-  if (failedDetails > 0) {
+  if (failedDetails > 0 && !allowsPartialFailureFinalization(snapshot)) {
     reasons.push('failed_detail_fetches_present')
   }
   if (processedDetails < expectedDetails) {
@@ -187,11 +212,8 @@ export function isLenderDatasetReadyForFinalization(
     return { ready: false, reason: 'detail_fetch_events_missing' }
   }
   if (processedDetails < expectedDetails) return { ready: false, reason: 'detail_processing_incomplete' }
-  if (failedDetails > 0) {
-    const minCompleted = Math.ceil(expectedDetails * MIN_COMPLETED_RATIO_FOR_PARTIAL_FINALIZATION)
-    if (completedDetails < minCompleted) {
-      return { ready: false, reason: 'failed_detail_fetches_present' }
-    }
+  if (failedDetails > 0 && !allowsPartialFailureFinalization(snapshot)) {
+    return { ready: false, reason: 'failed_detail_fetches_present' }
   }
   return { ready: true, reason: null }
 }

@@ -2,7 +2,7 @@
  * Stale unfinalized / incomplete-detail regression: see lender-dataset-invariants.test.ts + fixtures/real-westpac-savings-gap-lender-dataset-row.json.
  */
 import { describe, expect, it } from 'vitest'
-import { deriveTerminalRunStatus } from '../src/pipeline/run-reconciliation'
+import { deriveTerminalRunStatus, isPastEndOfStartDay } from '../src/pipeline/run-reconciliation'
 
 describe('run lifecycle reconciliation status derivation', () => {
   it('returns ok when all enqueued work completed without failures', () => {
@@ -58,6 +58,23 @@ describe('run lifecycle reconciliation status derivation', () => {
         },
       ),
     ).toBe('partial')
+  })
+
+  it('uses the configured Australian timezone for same-day abandonment checks', () => {
+    expect(
+      isPastEndOfStartDay(
+        '2026-01-01T12:00:00.000Z',
+        new Date('2026-01-01T14:00:00.000Z'),
+        'Australia/Melbourne',
+      ),
+    ).toBe(true)
+    expect(
+      isPastEndOfStartDay(
+        '2026-01-01T13:30:00.000Z',
+        new Date('2026-01-01T23:00:00.000Z'),
+        'Australia/Melbourne',
+      ),
+    ).toBe(false)
   })
 
 })

@@ -52,6 +52,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       dryRun: false,
       idleMinutes: 5,
       staleRunMinutes: 90,
+      timeZone: env.MELBOURNE_TIMEZONE,
     })
     const ready = reconciliation.ready_finalizations
     const stale = reconciliation.stale_runs

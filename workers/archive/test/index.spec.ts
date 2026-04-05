@@ -70,14 +70,17 @@ describe('australianrates-archive worker', () => {
 			...(env as unknown as Record<string, unknown>),
 			FEATURE_ARCHIVE_DEBUG_ENABLED: 'true',
 			ARCHIVE_OPERATOR_TOKEN: 'test-token',
+			ARCHIVE_DEPLOY_VERSION: 'prod-2026-04-06',
+			ARCHIVE_WORKER_NAME: 'australianrates-archive-prod',
 		} as Parameters<typeof worker.fetch>[1];
 		const ctx = createExecutionContext();
 		const response = await worker.fetch(request, testEnv, ctx);
 		await waitOnExecutionContext(ctx);
 		expect(response.status).toBe(200);
-		const data = (await response.json()) as { ok: boolean; version?: string; hasBindings?: object };
+		const data = (await response.json()) as { ok: boolean; version?: string; workerName?: string; hasBindings?: object };
 		expect(data.ok).toBe(true);
-		expect(typeof data.version).toBe('string');
+		expect(data.version).toBe('prod-2026-04-06');
+		expect(data.workerName).toBe('australianrates-archive-prod');
 		expect(data.hasBindings).toBeDefined();
 	});
 

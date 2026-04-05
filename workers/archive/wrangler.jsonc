@@ -16,6 +16,8 @@
 	  "dev": {
 		"name": "australianrates-archive-dev",
 		"vars": {
+		  "ARCHIVE_DEPLOY_VERSION": "dev",
+		  "ARCHIVE_WORKER_NAME": "australianrates-archive-dev",
 		  "FEATURE_ARCHIVE_QUEUE_TEST_ENABLED": "false",
 		  "FEATURE_ARCHIVE_ADMIN_ENABLED": "false",
 		  "FEATURE_ARCHIVE_DEBUG_ENABLED": "false"
@@ -56,6 +58,8 @@
 	  "prod": {
 		"name": "australianrates-archive-prod",
 		"vars": {
+		  "ARCHIVE_DEPLOY_VERSION": "prod",
+		  "ARCHIVE_WORKER_NAME": "australianrates-archive-prod",
 		  "FEATURE_ARCHIVE_QUEUE_TEST_ENABLED": "false",
 		  "FEATURE_ARCHIVE_ADMIN_ENABLED": "false",
 		  "FEATURE_ARCHIVE_DEBUG_ENABLED": "false"

@@ -15,14 +15,22 @@ export interface Env {
   FEATURE_ARCHIVE_ADMIN_ENABLED?: string;
   FEATURE_ARCHIVE_DEBUG_ENABLED?: string;
   ARCHIVE_OPERATOR_TOKEN?: string;
+  ARCHIVE_DEPLOY_VERSION?: string;
+  ARCHIVE_WORKER_NAME?: string;
 }
 
 const KV_KEY = "last_queue_ping";
-const DEPLOY_VERSION = "2026-02-22-australianrates-archive";
-const WORKER_NAME = "australianrates-archive-dev";
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function archiveDeployVersion(env: Env): string {
+  return String(env.ARCHIVE_DEPLOY_VERSION ?? "").trim() || "unknown";
+}
+
+function archiveWorkerName(env: Env): string {
+  return String(env.ARCHIVE_WORKER_NAME ?? "").trim() || "australianrates-archive";
 }
 
 function safeJsonParse(val: unknown): { parsed: unknown; ok: boolean } {
@@ -209,8 +217,8 @@ function handleDebugVersion(env: Env): Response {
   };
   return jsonResponse({
     ok: true,
-    version: DEPLOY_VERSION,
-    workerName: WORKER_NAME,
+    version: archiveDeployVersion(env),
+    workerName: archiveWorkerName(env),
     hasBindings,
   });
 }

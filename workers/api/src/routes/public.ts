@@ -19,6 +19,8 @@ import { handlePublicRunStatus } from './public-run-status'
 import { registerHomeLoanExportRoutes } from './home-loan-exports'
 import { registerHomeLoanAnalyticsRoutes } from './home-loan-analytics'
 import { HOME_LOAN_COMPARISON_RATE_DISCLOSURE } from './home-loan-disclosures'
+import { registerDebugLogRoutes } from './debug-log'
+import { handlePublicReadFailure } from './public-read-error'
 import {
   matchLatestCache,
   matchPublicReadCache,
@@ -56,6 +58,7 @@ publicRoutes.use('*', async (c, next) => {
 })
 
 registerHomeLoanExportRoutes(publicRoutes)
+registerDebugLogRoutes(publicRoutes)
 registerHomeLoanAnalyticsRoutes(publicRoutes)
 registerPublicCoreRoutes(publicRoutes)
 registerRbaRoutes(publicRoutes)
@@ -157,21 +160,17 @@ publicRoutes.get('/rates', async (c) => {
       sourceMode,
     }
 
-  let queryFailed = false
   let result: Awaited<ReturnType<typeof queryRatesPaginated>>
   try {
     result = await queryRatesPaginated(c.env.DB, filters)
   } catch (err) {
-    queryFailed = true
-    log.error('public', 'rates paginated failed, returning empty', {
-      context: (err as Error)?.message ?? String(err),
-    })
-    result = {
-      last_page: 1,
-      total: 0,
-      data: [],
-      source_mix: { scheduled: 0, manual: 0 },
-    }
+    return handlePublicReadFailure(
+      c,
+      'home_loan_rates_query_failed',
+      'PUBLIC_RATES_QUERY_FAILED',
+      'Failed to query home loan rates.',
+      err,
+    )
   }
 
   const meta = buildListMeta({
@@ -185,9 +184,7 @@ publicRoutes.get('/rates', async (c) => {
   })
 
   const response = c.json({ ...result, meta })
-  if (!queryFailed) {
-    storePublicReadCache(c, cacheKey, response)
-  }
+  storePublicReadCache(c, cacheKey, response)
   return response
 })
 
@@ -210,11 +207,9 @@ publicRoutes.get('/export', async (c) => {
   const includeRemoved = parseIncludeRemoved(query.include_removed)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
-  let data: Array<Record<string, unknown>> = []
-  let total = 0
-  let source_mix = { scheduled: 0, manual: 0 }
+  let result: Awaited<ReturnType<typeof queryRatesForExport>>
   try {
-    const result = await queryRatesForExport(c.env.DB, {
+    result = await queryRatesForExport(c.env.DB, {
       startDate: query.start_date,
       endDate: query.end_date,
       bank: query.bank,
@@ -236,20 +231,21 @@ publicRoutes.get('/export', async (c) => {
       sourceMode,
       ...(exportLimit != null ? { limit: exportLimit } : {}),
     })
-    data = result.data
-    total = result.total
-    source_mix = result.source_mix
   } catch (err) {
-    log.error('public', 'rates export failed, returning empty', {
-      context: (err as Error)?.message ?? String(err),
-    })
+    return handlePublicReadFailure(
+      c,
+      'home_loan_export_query_failed',
+      'PUBLIC_EXPORT_QUERY_FAILED',
+      'Failed to export home loan rates.',
+      err,
+    )
   }
   const meta = buildListMeta({
     sourceMode,
-    totalRows: total,
-    returnedRows: data.length,
-    sourceMix: source_mix,
-    limited: total > data.length,
+    totalRows: result.total,
+    returnedRows: result.data.length,
+    sourceMix: result.source_mix,
+    limited: result.total > result.data.length,
     excludeCompareEdgeCases,
     disclosures: HOME_LOAN_COMPARISON_RATE_DISCLOSURE,
   })
@@ -258,14 +254,14 @@ publicRoutes.get('/export', async (c) => {
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', 'attachment; filename="rates-export.csv"')
     setCsvMetaHeaders(c, meta)
-    const response = c.body(toCsv(data as Array<Record<string, unknown>>))
+    const response = c.body(toCsv(result.data as Array<Record<string, unknown>>))
     storePublicReadCache(c, cacheKey, response)
     return response
   }
 
   c.header('Content-Type', 'application/json; charset=utf-8')
   c.header('Content-Disposition', 'attachment; filename="rates-export.json"')
-  const response = c.json({ data, total, last_page: 1, meta })
+  const response = c.json({ data: result.data, total: result.total, last_page: 1, meta })
   storePublicReadCache(c, cacheKey, response)
   return response
 })

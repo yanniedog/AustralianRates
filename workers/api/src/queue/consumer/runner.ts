@@ -129,21 +129,16 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
         if (claim.reason === 'active_claim') {
           const retryDelaySeconds = activeClaimRetryDelaySeconds(claim.leaseUntil, claim.leaseSeconds)
           if (attempts >= maxAttempts) {
+            let replayContext = ''
             if (isIngestMessage(body)) {
               const replayRow = await scheduleReplayForExhaustedMessage(env, {
                 message: body,
                 errorMessage: 'queue_message_duplicate_active_claim',
               })
-              log.error('consumer', 'replay_queue_scheduled', {
-                code: 'replay_queue_scheduled',
-                runId: context.runId ?? undefined,
-                lenderCode: context.lenderCode ?? undefined,
-                context:
-                  `${messageContext} replay_id=${replayRow.replay_id}` +
-                  ` replay_status=${replayRow.status}` +
-                  ` next_attempt_at=${replayRow.next_attempt_at}` +
-                  ` error=queue_message_duplicate_active_claim`,
-              })
+              replayContext =
+                ` replay_id=${replayRow.replay_id}` +
+                ` replay_status=${replayRow.status}` +
+                ` next_attempt_at=${replayRow.next_attempt_at}`
             }
             msg.ack()
             metrics.acked += 1
@@ -156,6 +151,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
                 `${messageContext} reason=${claim.reason} key=${claim.key ?? 'none'}` +
                 ` retry_delay_seconds=${retryDelaySeconds}` +
                 ` ttl=${claim.ttlSeconds} lease_until=${claim.leaseUntil ?? 'unknown'}` +
+                replayContext +
                 ` elapsed_ms=${elapsedMs(messageStartedAt)}`,
             })
             continue

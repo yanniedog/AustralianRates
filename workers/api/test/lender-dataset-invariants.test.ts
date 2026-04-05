@@ -216,6 +216,23 @@ describe('lender dataset invariants', () => {
     expect(isLenderDatasetReadyForFinalization(snapshot)).toEqual({ ready: true, reason: null })
   })
 
+  it('does not classify allowed partial-finalization runs as coverage gaps', () => {
+    const assessment = assessLenderDatasetCoverage({
+      expected_detail_count: 13,
+      index_fetch_succeeded: 1,
+      accepted_row_count: 20,
+      written_row_count: 20,
+      detail_fetch_event_count: 17,
+      lineage_error_count: 0,
+      completed_detail_count: 12,
+      failed_detail_count: 5,
+      finalized_at: '2026-04-06T00:00:00.000Z',
+    })
+
+    expect(assessment.severity).toBe('ok')
+    expect(assessment.reasons).not.toContain('failed_detail_fetches_present')
+  })
+
   it('blocks finalization when even one detail is still missing', () => {
     const snapshot = {
       expected_detail_count: 5,

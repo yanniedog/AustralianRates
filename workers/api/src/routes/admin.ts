@@ -635,6 +635,7 @@ adminRoutes.post('/runs/reconcile', async (c) => {
     dryRun,
     idleMinutes: 5,
     staleRunMinutes: 90,
+    timeZone: c.env.MELBOURNE_TIMEZONE,
   })
   return c.json({
     ok: true,

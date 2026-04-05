@@ -19,18 +19,22 @@ function makeEnv(overrides?: Partial<EnvBindings>): EnvBindings {
   }
 }
 
-async function fetchJson(pathname: string, envOverrides?: Partial<EnvBindings>) {
+async function fetchResponse(pathname: string, envOverrides?: Partial<EnvBindings>) {
   const fetchHandler = worker.fetch?.bind(worker)
   if (!fetchHandler) throw new Error('worker fetch handler is missing')
   const request = new Request(`https://example.com${pathname}`) as unknown as Request<
     unknown,
     IncomingRequestCfProperties<unknown>
   >
-  const response = await fetchHandler(
+  return fetchHandler(
     request,
     makeEnv(envOverrides),
     makeExecutionContext(),
   )
+}
+
+async function fetchJson(pathname: string, envOverrides?: Partial<EnvBindings>) {
+  const response = await fetchResponse(pathname, envOverrides)
   const json = (await response.json()) as {
     ok?: boolean
     error?: { code?: string }
