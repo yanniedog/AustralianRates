@@ -324,7 +324,7 @@
         });
 
         return {
-            mount: wrapper,
+            mount: mount,
             chart: {
                 resize: function (width, height) {
                     chart.resize({ width: width, height: height });
@@ -333,6 +333,7 @@
             kind: 'report-plot',
             dispose: function () {
                 chart.dispose();
+                if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
             },
         };
     }

@@ -66,13 +66,14 @@ type SectionConfig = {
 }
 
 const TD_TERM_PREFERENCE = [12, 6, 24, 3, 18, 36, 9, 2, 1]
+const pendingReportDeltaRefreshes = new Map<ReportPlotSection, Promise<void>>()
 
 const SECTION_CONFIG: Record<ReportPlotSection, SectionConfig> = {
   home_loans: {
     deltaTable: 'home_loan_report_deltas',
     historyTable: 'historical_loan_rates',
     refreshSql: `
-      INSERT INTO home_loan_report_deltas (
+      INSERT OR REPLACE INTO home_loan_report_deltas (
         series_key, product_key, bank_name, product_name, collection_date, previous_collection_date,
         interest_rate, previous_interest_rate, delta_bps, delta_sign,
         security_purpose, repayment_type, rate_structure, lvr_tier, feature_set, has_offset_account,
@@ -137,7 +138,7 @@ const SECTION_CONFIG: Record<ReportPlotSection, SectionConfig> = {
     deltaTable: 'savings_report_deltas',
     historyTable: 'historical_savings_rates',
     refreshSql: `
-      INSERT INTO savings_report_deltas (
+      INSERT OR REPLACE INTO savings_report_deltas (
         series_key, product_key, bank_name, product_name, collection_date, previous_collection_date,
         interest_rate, previous_interest_rate, delta_bps, delta_sign,
         account_type, rate_type, deposit_tier, min_balance, max_balance, monthly_fee,
@@ -200,7 +201,7 @@ const SECTION_CONFIG: Record<ReportPlotSection, SectionConfig> = {
     deltaTable: 'td_report_deltas',
     historyTable: 'historical_term_deposit_rates',
     refreshSql: `
-      INSERT INTO td_report_deltas (
+      INSERT OR REPLACE INTO td_report_deltas (
         series_key, product_key, bank_name, product_name, collection_date, previous_collection_date,
         interest_rate, previous_interest_rate, delta_bps, delta_sign,
         term_months, deposit_tier, min_deposit, max_deposit, interest_payment,
@@ -410,7 +411,17 @@ export async function ensureReportDeltaTableReady(
     .first<{ n: number }>()
   if (Number(row?.n || 0) > 0) return
   if (!(await historyTableHasRows(db, config.historyTable))) return
-  await refreshReportDeltaTable(db, section)
+  const pending = pendingReportDeltaRefreshes.get(section)
+  if (pending) {
+    await pending
+    return
+  }
+  const refreshPromise = refreshReportDeltaTable(db, section)
+    .finally(() => {
+      pendingReportDeltaRefreshes.delete(section)
+    })
+  pendingReportDeltaRefreshes.set(section, refreshPromise)
+  await refreshPromise
 }
 
 async function resolveTdTermMonths(

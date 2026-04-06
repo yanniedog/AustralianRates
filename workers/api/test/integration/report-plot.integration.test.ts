@@ -48,6 +48,24 @@ describe('report-plot routes', () => {
     expect(json.meta?.section).toBe('term_deposits')
     expect(json.meta?.resolved_term_months ?? null).toBeNull()
   })
+
+  it('serializes first-load report-plot warm-up for parallel requests', async () => {
+    await env.DB.prepare('DELETE FROM savings_report_deltas').run()
+
+    const [movesResponse, bandsResponse] = await Promise.all([
+      SELF.fetch('https://example.com/api/savings-rates/analytics/report-plot?mode=moves&chart_window=90D'),
+      SELF.fetch('https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D'),
+    ])
+
+    expect(movesResponse.status).toBe(200)
+    expect(bandsResponse.status).toBe(200)
+
+    const row = await env.DB
+      .prepare('SELECT COUNT(*) AS n FROM savings_report_deltas')
+      .first<{ n: number }>()
+
+    expect(Number(row?.n || 0)).toBeGreaterThan(0)
+  })
 })
 
 describe('report-plot cache refresh', () => {

@@ -1423,7 +1423,7 @@ body.ar-public .lwc-focus-bank-chip-fallback {
     color: var(--ar-text);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1040px) {
     body.ar-public .lwc-focus-bank-tray-wrap {
         flex-basis: 100%;
         padding-left: 0;

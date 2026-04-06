@@ -13,6 +13,11 @@ function normalizeValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
 }
 
+function isBeforeIsoCutoff(value: unknown, cutoffIso: string): boolean {
+  const ts = String(value ?? '').trim()
+  return Boolean(ts) && ts < cutoffIso
+}
+
 /** Serialize log context for substring checks (D1 may return TEXT as string or parsed JSON). */
 function contextToSearchString(raw: unknown): string {
   if (raw == null) return ''
@@ -190,6 +195,23 @@ export function shouldIgnoreStatusActionableLog(
       ctxLower.includes('/diagnostics/') ||
       ctxLower.includes('/runs/repair-lineage') ||
       ctxLower.includes('/runs/provenance-recovery')
+    )
+  ) {
+    return true
+  }
+  // Initial report-plot warm-up on 2026-04-06 could race two concurrent priming requests
+  // against an empty delta table. The warm-up path was serialized on 2026-04-07; keep the
+  // pre-fix one-off PK collision rows from holding actionable red indefinitely.
+  if (
+    source === 'api' &&
+    message === 'unhandled internal error' &&
+    isBeforeIsoCutoff(entry.ts, '2026-04-07T00:00:00.000Z') &&
+    ctxLower.includes('/analytics/report-plot') &&
+    ctxLower.includes('unique constraint failed:') &&
+    (
+      ctxLower.includes('home_loan_report_deltas.series_key, home_loan_report_deltas.collection_date') ||
+      ctxLower.includes('savings_report_deltas.series_key, savings_report_deltas.collection_date') ||
+      ctxLower.includes('td_report_deltas.series_key, td_report_deltas.collection_date')
     )
   ) {
     return true
