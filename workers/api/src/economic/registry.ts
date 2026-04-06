@@ -1,4 +1,4 @@
-export type EconomicFrequency = 'daily' | 'monthly' | 'quarterly' | 'policy'
+export type EconomicFrequency = 'daily' | 'monthly' | 'quarterly' | 'annual' | 'policy'
 export type EconomicCategory =
   | 'labour'
   | 'inflation'
@@ -73,6 +73,7 @@ const RBA_H3 = 'https://www.rba.gov.au/statistics/tables/csv/h3-data.csv'
 const RBA_H4 = 'https://www.rba.gov.au/statistics/tables/csv/h4-data.csv'
 const RBA_D1 = 'https://www.rba.gov.au/statistics/tables/csv/d1-data.csv'
 const RBA_F1 = 'https://www.rba.gov.au/statistics/tables/csv/f1-data.csv'
+const RBA_F1_1 = 'https://www.rba.gov.au/statistics/tables/csv/f1.1-data.csv'
 const RBA_F5 = 'https://www.rba.gov.au/statistics/tables/csv/f5-data.csv'
 const RBA_F7 = 'https://www.rba.gov.au/statistics/tables/csv/f7-data.csv'
 const RBA_F11 = 'https://www.rba.gov.au/statistics/tables/csv/f11-data.csv'
@@ -82,7 +83,7 @@ const RBNZ_DECISIONS = 'https://www.rbnz.govt.nz/monetary-policy/monetary-policy
 const RBNZ_DECISIONS_TRANSPORT = 'https://r.jina.ai/http://www.rbnz.govt.nz/monetary-policy/monetary-policy-decisions'
 const FED_OPEN_MARKET = 'https://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
 const FED_OPEN_MARKET_TRANSPORT = 'https://r.jina.ai/http://www.federalreserve.gov/monetarypolicy/openmarket.htm?os=shmmfp'
-const FRED_CHINA_GDP = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPNQDSMEI'
+const FRED_CHINA_GDP = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPRAPSMEI'
 
 export const ECONOMIC_PRESETS: Array<{
   id: EconomicPresetId
@@ -210,14 +211,14 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     shortLabel: '90-day bank bill',
     category: 'markets',
     unit: 'Per cent',
-    frequency: 'daily',
+    frequency: 'monthly',
     proxy: false,
-    sourceLabel: 'RBA F1',
-    sourceUrl: RBA_F1,
-    staleAfterDays: 7,
-    description: 'RBA F1 end-of-day three-month BAB/NCD yield, a market proxy for expected policy moves.',
+    sourceLabel: 'RBA F1.1',
+    sourceUrl: RBA_F1_1,
+    staleAfterDays: 62,
+    description: 'RBA F1.1 monthly-average three-month BAB/NCD yield, a maintained money-market proxy for expected policy moves.',
     presets: ['rba_watchlist'],
-    collector: { kind: 'rba_csv', url: RBA_F1, seriesId: 'FIRMMBAB90D' },
+    collector: { kind: 'rba_csv', url: RBA_F1_1, seriesId: 'FIRMMBAB90' },
   },
   {
     id: 'household_consumption',
@@ -321,17 +322,17 @@ export const ECONOMIC_SERIES_DEFINITIONS: EconomicSeriesDefinition[] = [
     shortLabel: 'China GDP proxy',
     category: 'global',
     unit: 'Per cent',
-    frequency: 'quarterly',
+    frequency: 'annual',
     proxy: true,
     sourceLabel: 'OECD via FRED',
     sourceUrl: FRED_CHINA_GDP,
-    staleAfterDays: 140,
-    description: 'Quarterly year-over-year China GDP proxy derived from the OECD GDP level series delivered via FRED.',
+    staleAfterDays: 420,
+    description: 'Annual China GDP growth proxy from the OECD MEI feed delivered via FRED.',
     presets: ['global_pulse'],
     collector: {
       kind: 'fred_csv',
       url: FRED_CHINA_GDP,
-      valueMode: 'china_yoy_from_level',
+      valueMode: 'identity',
     },
   },
   {

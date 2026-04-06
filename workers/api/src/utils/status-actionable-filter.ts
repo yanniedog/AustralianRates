@@ -165,11 +165,15 @@ export function shouldIgnoreStatusActionableLog(
   // Temporary D1 overload spikes can emit one-off failed queue/upsert logs that self-heal on retry.
   if (
     (source === 'consumer' || source === 'db' || source === 'api') &&
-    ctxLower.includes('d1 db is overloaded. requests queued for too long.') &&
+    (
+      ctxLower.includes('d1 db is overloaded. requests queued for too long.') ||
+      ctxLower.includes('d1_error: network connection lost.')
+    ) &&
     (code === 'queue_message_failed' ||
       code === 'historical_task_execute_failed' ||
       message === 'unhandled internal error' ||
       message.includes('queue_message_failed') ||
+      message.includes('upsert_failed') ||
       message.includes('historical_task_execute failed') ||
       message.includes('td_upsert_failed'))
   ) {

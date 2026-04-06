@@ -110,13 +110,18 @@ describe('schema migration smoke test', () => {
   })
 
   it('includes economic series schema migration', () => {
-    const file = resolve(process.cwd(), 'migrations/0039_economic_series.sql')
-    const sql = readFileSync(file, 'utf8')
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS economic_series_observations')
-    expect(sql).toContain('PRIMARY KEY (series_id, observation_date)')
-    expect(sql).toContain("frequency IN ('daily', 'monthly', 'quarterly', 'policy')")
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS economic_series_status')
-    expect(sql).toContain("status IN ('ok', 'stale', 'error')")
+    const baseFile = resolve(process.cwd(), 'migrations/0039_economic_series.sql')
+    const baseSql = readFileSync(baseFile, 'utf8')
+    expect(baseSql).toContain('CREATE TABLE IF NOT EXISTS economic_series_observations')
+    expect(baseSql).toContain('PRIMARY KEY (series_id, observation_date)')
+    expect(baseSql).toContain('CREATE TABLE IF NOT EXISTS economic_series_status')
+    expect(baseSql).toContain("status IN ('ok', 'stale', 'error')")
+
+    const annualFrequencyFile = resolve(process.cwd(), 'migrations/0048_economic_series_annual_frequency.sql')
+    const annualFrequencySql = readFileSync(annualFrequencyFile, 'utf8')
+    expect(annualFrequencySql).toContain('CREATE TABLE IF NOT EXISTS economic_series_observations_new')
+    expect(annualFrequencySql).toContain("frequency IN ('daily', 'monthly', 'quarterly', 'annual', 'policy')")
+    expect(annualFrequencySql).toContain('ALTER TABLE economic_series_observations_new RENAME TO economic_series_observations')
   })
 
   it('includes health-check economic JSON migration', () => {

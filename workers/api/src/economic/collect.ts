@@ -1,5 +1,7 @@
 import {
+  deleteEconomicObservationsForSeries,
   getEconomicStatusMap,
+  seriesHasObservationMetadataMismatch,
   upsertEconomicObservations,
   upsertEconomicStatus,
   type EconomicStatusRow,
@@ -143,9 +145,18 @@ async function persistSeries(
   const latest = sorted[sorted.length - 1] ?? null
   const checkedDate = checkedAt.slice(0, 10)
   const stale = shouldMarkStale(definition, latest?.observationDate ?? null, checkedDate)
-  const rowsToUpsert = shouldUpsertRows(definition, sorted, previousStatus)
+  const needsFullRefresh = await seriesHasObservationMetadataMismatch(env.DB, {
+    seriesId: definition.id,
+    sourceUrl: definition.sourceUrl,
+    frequency: definition.frequency,
+    proxy: definition.proxy,
+  })
+  const rowsToUpsert = needsFullRefresh ? sorted : shouldUpsertRows(definition, sorted, previousStatus)
 
   if (rowsToUpsert.length > 0) {
+    if (needsFullRefresh) {
+      await deleteEconomicObservationsForSeries(env.DB, definition.id)
+    }
     await upsertEconomicObservations(env.DB, rowsToUpsert)
   }
 
@@ -169,6 +180,8 @@ async function persistSeries(
     status: stale ? 'stale' : 'ok',
     message: stale
       ? `Latest observation ${latest?.observationDate ?? 'missing'} is older than the freshness threshold.`
+      : needsFullRefresh
+        ? `Replaced ${rowsToUpsert.length} observation(s) after source/frequency drift.`
       : rowsToUpsert.length > 0
         ? `Upserted ${rowsToUpsert.length} observation(s).`
         : 'Source checked; no new observations.',
@@ -370,10 +383,10 @@ async function collectFredSeries(env: EnvBindings, definition: EconomicSeriesDef
     env,
     'economic_fred_proxy',
   )
-  if (definition.collector.valueMode === 'china_yoy_from_level') {
-    return parseFredChinaGdpProxyCsv(csv, definition.id, definition.sourceUrl, definition.proxy)
-  }
-  return []
+  return parseFredChinaGdpProxyCsv(csv, definition.id, definition.sourceUrl, definition.proxy, {
+    valueMode: definition.collector.valueMode,
+    frequency: definition.frequency,
+  })
 }
 
 async function collectSeriesRows(

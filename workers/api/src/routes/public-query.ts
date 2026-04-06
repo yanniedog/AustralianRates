@@ -16,6 +16,19 @@ export function parseOptionalNumber(value: string | undefined): number | undefin
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+/**
+ * Savings and term-deposit UIs use 0.01 as a display default for "no min rate filter".
+ * Normalize that sentinel so public requests stay on the default query path.
+ */
+export function parseOptionalPublicMinRate(
+  value: string | undefined,
+  options: { treatPointZeroOneAsDefault?: boolean } = {},
+): number | undefined {
+  const parsed = parseOptionalNumber(value)
+  if (options.treatPointZeroOneAsDefault && parsed === 0.01) return undefined
+  return parsed
+}
+
 export type PublicDatasetMode = 'daily' | 'historical' | 'all'
 
 export type PublicRateOrderBy = 'default' | 'rate_asc' | 'rate_desc'

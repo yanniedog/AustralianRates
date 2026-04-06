@@ -150,6 +150,39 @@ export async function upsertEconomicStatus(db: D1Database, input: EconomicStatus
     .run()
 }
 
+export async function seriesHasObservationMetadataMismatch(
+  db: D1Database,
+  input: {
+    seriesId: string
+    sourceUrl: string
+    frequency: string
+    proxy: boolean
+  },
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS mismatch
+       FROM economic_series_observations
+       WHERE series_id = ?1
+         AND (
+           source_url != ?2
+           OR frequency != ?3
+           OR proxy_flag != ?4
+         )
+       LIMIT 1`,
+    )
+    .bind(input.seriesId, input.sourceUrl, input.frequency, input.proxy ? 1 : 0)
+    .first<{ mismatch: number }>()
+  return Number(row?.mismatch ?? 0) === 1
+}
+
+export async function deleteEconomicObservationsForSeries(db: D1Database, seriesId: string): Promise<void> {
+  await db
+    .prepare('DELETE FROM economic_series_observations WHERE series_id = ?1')
+    .bind(seriesId)
+    .run()
+}
+
 export async function getEconomicStatusMap(
   db: D1Database,
   seriesIds?: string[],

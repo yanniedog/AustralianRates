@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseExcludeCompareEdgeCases,
+  parseOptionalPublicMinRate,
   parsePublicMode,
   parseRateOrderBy,
   parseSortDirection,
@@ -32,6 +33,24 @@ describe('public-query', () => {
     it('falls back on invalid input', () => {
       expect(parseSortDirection(undefined)).toBe('desc')
       expect(parseSortDirection(' sideways ', 'asc')).toBe('asc')
+    })
+  })
+
+  describe('parseOptionalPublicMinRate', () => {
+    it('treats 0.01 as unset when requested', () => {
+      expect(
+        parseOptionalPublicMinRate('0.01', { treatPointZeroOneAsDefault: true }),
+      ).toBeUndefined()
+      expect(
+        parseOptionalPublicMinRate(' 0.01 ', { treatPointZeroOneAsDefault: true }),
+      ).toBeUndefined()
+    })
+
+    it('preserves other values and the raw 0.01 when sentinel handling is off', () => {
+      expect(parseOptionalPublicMinRate('0.01')).toBe(0.01)
+      expect(
+        parseOptionalPublicMinRate('0.25', { treatPointZeroOneAsDefault: true }),
+      ).toBe(0.25)
     })
   })
 

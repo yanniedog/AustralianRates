@@ -8,6 +8,7 @@ import {
   parseCsvList,
   parseIncludeRemoved,
   parseOptionalNumber,
+  parseOptionalPublicMinRate,
   parsePublicMode,
 } from './public-query'
 import { parseChartWindow } from '../utils/chart-window'
@@ -25,7 +26,7 @@ function buildFilters(query: Record<string, string | undefined>) {
     balanceMin: parseOptionalNumber(query.balance_min),
     balanceMax: parseOptionalNumber(query.balance_max),
     interestPayment: query.interest_payment,
-    minRate: parseOptionalNumber(query.min_rate),
+    minRate: parseOptionalPublicMinRate(query.min_rate, { treatPointZeroOneAsDefault: true }),
     maxRate: parseOptionalNumber(query.max_rate),
     includeRemoved: parseIncludeRemoved(query.include_removed),
     excludeCompareEdgeCases: parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases),

@@ -20,7 +20,7 @@ const RBA_CASES = [
   ['rba-h3.csv', 'business_conditions', 'GICNBC', '2010-01-31'],
   ['rba-h4.csv', 'wage_growth', 'GWPIYP', '1998-09-30'],
   ['rba-d1.csv', 'housing_credit_growth', 'DGFACH12', '1977-08-31'],
-  ['rba-f1.csv', 'bank_bill_90d', 'FIRMMBAB90D', '2011-01-04'],
+  ['rba-f1-1.csv', 'bank_bill_90d', 'FIRMMBAB90', '2025-11-30'],
   ['rba-f5.csv', 'major_bank_lending_rates', 'FILRHLBVD', '2004-06-30'],
   ['rba-f7.csv', 'major_bank_lending_rates', 'FLRBFOSBT', '2019-07-31'],
   ['rba-f11.csv', 'aud_twi', 'FXRTWI', '2010-01-29'],
@@ -64,13 +64,18 @@ describe('economic parsers', () => {
 
   it('parses China GDP proxy from real captured FRED CSV', () => {
     const rows = parseFredChinaGdpProxyCsv(
-      fixture('fred-china-gdp.csv'),
+      fixture('fred-china-gdp-growth.csv'),
       'major_trading_partner_growth_proxy',
-      'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPNQDSMEI',
+      'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNGDPRAPSMEI',
       true,
+      {
+        valueMode: 'identity',
+        frequency: 'annual',
+      },
     )
-    expect(rows.length).toBeGreaterThanOrEqual(4)
-    expect(rows[0].observationDate).toBe('1993-01-01')
-    expect(rows[0].value).toBeCloseTo(29.866, 3)
+    expect(rows.length).toBe(5)
+    expect(rows[0].observationDate).toBe('2021-01-01')
+    expect(rows[0].value).toBeCloseTo(8.6, 3)
+    expect(rows[0].frequency).toBe('annual')
   })
 })

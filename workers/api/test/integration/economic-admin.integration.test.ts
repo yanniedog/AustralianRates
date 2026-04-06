@@ -2,9 +2,16 @@ import { SELF, env } from 'cloudflare:test'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { runEconomicCoverageAudit } from '../../src/db/economic-coverage-audit'
 import { insertHealthCheckRun } from '../../src/db/health-check-runs'
-import { upsertEconomicObservations, upsertEconomicStatus } from '../../src/db/economic-series'
+import {
+  deleteEconomicObservationsForSeries,
+  seriesHasObservationMetadataMismatch,
+  upsertEconomicObservations,
+  upsertEconomicStatus,
+} from '../../src/db/economic-series'
 import { parseRbaTableCsv, extractRbaSeriesObservations } from '../../src/economic/rba-table'
 import { ECONOMIC_SERIES_DEFINITIONS } from '../../src/economic/registry'
+import f1Fixture from '../fixtures/economic/rba-f1.csv?raw'
+import f1_1Fixture from '../fixtures/economic/rba-f1-1.csv?raw'
 import g3Fixture from '../fixtures/economic/rba-g3.csv?raw'
 import h3Fixture from '../fixtures/economic/rba-h3.csv?raw'
 
@@ -94,6 +101,35 @@ describe('economic admin coverage', () => {
     expect(report.per_series.find((row) => row.series_id === 'inflation_expectations')?.issues).not.toContain(
       'release_before_observation',
     )
+  })
+
+  it('can detect and clear stored observation metadata drift before a source migration refresh', async () => {
+    const oldTable = parseRbaTableCsv(f1Fixture, 'https://www.rba.gov.au/statistics/tables/csv/f1-data.csv')
+    const newTable = parseRbaTableCsv(f1_1Fixture, 'https://www.rba.gov.au/statistics/tables/csv/f1.1-data.csv')
+    const oldRows = extractRbaSeriesObservations(oldTable, 'bank_bill_90d', 'FIRMMBAB90D', false)
+    const newRows = extractRbaSeriesObservations(newTable, 'bank_bill_90d', 'FIRMMBAB90', false)
+
+    await upsertEconomicObservations(env.DB, oldRows.slice(-6))
+    expect(
+      await seriesHasObservationMetadataMismatch(env.DB, {
+        seriesId: 'bank_bill_90d',
+        sourceUrl: 'https://www.rba.gov.au/statistics/tables/csv/f1.1-data.csv',
+        frequency: 'monthly',
+        proxy: false,
+      }),
+    ).toBe(true)
+
+    await deleteEconomicObservationsForSeries(env.DB, 'bank_bill_90d')
+    await upsertEconomicObservations(env.DB, newRows.slice(-6))
+
+    expect(
+      await seriesHasObservationMetadataMismatch(env.DB, {
+        seriesId: 'bank_bill_90d',
+        sourceUrl: 'https://www.rba.gov.au/statistics/tables/csv/f1.1-data.csv',
+        frequency: 'monthly',
+        proxy: false,
+      }),
+    ).toBe(false)
   })
 
   it('returns economic summary from admin health history', async () => {

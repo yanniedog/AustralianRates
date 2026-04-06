@@ -4,6 +4,7 @@
  */
 
 import type { EnvBindings } from '../types'
+import { parseOptionalPublicMinRate } from '../routes/public-query'
 import { queryHomeLoanCollectionDateRange } from './home-loans/paginated'
 import { querySavingsCollectionDateRange } from './savings/paginated'
 import { queryTdCollectionDateRange } from './term-deposits/paginated'
@@ -200,7 +201,10 @@ export function isDefaultChartRequest(
   return true
 }
 
-function buildDefaultRequestInput(params: Record<string, string | undefined>): DefaultCheckInput {
+function buildDefaultRequestInput(
+  section: ChartCacheSection,
+  params: Record<string, string | undefined>,
+): DefaultCheckInput {
   const banks = params.banks
     ? String(params.banks)
         .split(',')
@@ -227,7 +231,10 @@ function buildDefaultRequestInput(params: Record<string, string | undefined>): D
     rateStructure: params.rate_structure,
     lvrTier: params.lvr_tier,
     featureSet: params.feature_set,
-    minRate: params.min_rate ? Number(params.min_rate) : undefined,
+    minRate:
+      section === 'savings' || section === 'term_deposits'
+        ? parseOptionalPublicMinRate(params.min_rate, { treatPointZeroOneAsDefault: true })
+        : (params.min_rate ? Number(params.min_rate) : undefined),
     maxRate: params.max_rate ? Number(params.max_rate) : undefined,
     minComparisonRate: params.min_comparison_rate ? Number(params.min_comparison_rate) : undefined,
     maxComparisonRate: params.max_comparison_rate ? Number(params.max_comparison_rate) : undefined,
@@ -250,7 +257,7 @@ export function resolveDefaultChartCacheScope(
   section: ChartCacheSection,
   params: Record<string, string | undefined>,
 ): ChartCacheScope | null {
-  return isDefaultChartRequest(section, buildDefaultRequestInput(params))
+  return isDefaultChartRequest(section, buildDefaultRequestInput(section, params))
     ? resolveDefaultChartScope(params)
     : null
 }

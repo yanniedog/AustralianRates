@@ -390,6 +390,21 @@ describe('shouldIgnoreStatusActionableLog', () => {
     ).toBe(false)
   })
 
+  it('ignores transient D1 network disconnects when an upsert retries cleanly later', () => {
+    expect(
+      shouldIgnoreStatusActionableLog(
+        {
+          source: 'db',
+          level: 'error',
+          code: 'upsert_failed',
+          message: 'upsert_failed product=x bank=Bankwest date=2026-04-06',
+          context: { context: 'D1_ERROR: Network connection lost.' },
+        },
+        'active',
+      ),
+    ).toBe(true)
+  })
+
   it('ignores historical run lifecycle reconciliation failures caused by rowid on WITHOUT ROWID lender_dataset_runs', () => {
     const ctxFromProd = {
       context: 'D1_ERROR: no such column: rowid at offset 7: SQLITE_ERROR',

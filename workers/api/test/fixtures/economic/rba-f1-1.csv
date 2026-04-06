@@ -1,0 +1,16 @@
+F1.1 INTEREST RATES AND YIELDS – MONEY MARKET
+Title,Cash Rate Target,Interbank Overnight Cash Rate,Highest Interbank Overnight Cash Rate,Lowest Interbank Overnight Cash Rate,Volume of Cash Market Transactions,Number of Cash Market Transactions,1-month BABs/NCDs,3-month BABs/NCDs,6-month BABs/NCDs
+Description,Cash Rate Target; monthly average,Interbank Overnight Cash Rate; monthly average,Highest Interbank Overnight Cash Rate; monthly average,Lowest Interbank Overnight Cash Rate; monthly average,Volume of Interbank Overnight Cash Market Transactions; monthly sum,Number of Interbank Overnight Cash Market Transactions; monthly sum,Bank Accepted Bills/Negotiable Certificates of Deposit-1 month; monthly average,Bank Accepted Bills/Negotiable Certificates of Deposit-3 months; monthly average,Bank Accepted Bills/Negotiable Certificates of Deposit- 6 months; monthly average
+Frequency,Monthly,Monthly,Monthly,Monthly,Monthly,Monthly,Monthly,Monthly,Monthly
+Type,Original,Original,Original,Original,Original,Original,Original,Original,Original
+Units,Per cent,Per cent,Per cent,Per cent,$m,Number,Per cent,Per cent,Per cent
+
+
+Source,RBA,RBA,RBA,RBA,RBA,RBA,ASX,ASX,ASX
+Publication date,01-Apr-2026,01-Apr-2026,01-Apr-2026,01-Apr-2026,01-Apr-2026,01-Apr-2026,01-Apr-2026,01-Apr-2026,01-Apr-2026
+Series ID,FIRMMCRT,FIRMMCRI,FIRMMCRIHM,FIRMMCRILM,FIRMMCRIVM,FIRMMCRINM,FIRMMBAB30,FIRMMBAB90,FIRMMBAB180
+30/11/2025,3.60,3.60,3.60,3.60,38207,232,3.55,3.65,3.89
+31/12/2025,3.60,3.60,3.60,3.60,28672,205,3.55,3.71,4.06
+31/01/2026,3.60,3.60,3.60,3.60,30055,185,3.59,3.77,4.08
+28/02/2026,3.83,3.83,3.83,3.83,29244,198,3.79,3.96,4.23
+31/03/2026,3.96,3.96,3.97,3.96,36695,274,3.96,4.19,4.60

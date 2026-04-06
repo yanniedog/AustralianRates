@@ -1,6 +1,11 @@
 import { parseDelimitedText, parseFlexibleDate, parseNumber } from './parser-utils'
 import type { EconomicObservationInput } from './rba-table'
 
+type FredCsvOptions = {
+  valueMode?: 'identity' | 'china_yoy_from_level'
+  frequency?: string
+}
+
 export function parseRbnzOcrText(
   raw: string,
   seriesId: string,
@@ -98,7 +103,10 @@ export function parseFredChinaGdpProxyCsv(
   seriesId: string,
   sourceUrl: string,
   proxy: boolean,
+  options?: FredCsvOptions,
 ): EconomicObservationInput[] {
+  const frequency = String(options?.frequency || 'quarterly').trim() || 'quarterly'
+  const valueMode = options?.valueMode ?? 'china_yoy_from_level'
   const rows = parseDelimitedText(csv)
   const points = rows
     .slice(1)
@@ -107,6 +115,21 @@ export function parseFredChinaGdpProxyCsv(
       value: parseNumber(row[1]),
     }))
     .filter((row) => row.observationDate && row.value != null)
+
+  if (valueMode === 'identity') {
+    return points.map((point) => ({
+      seriesId,
+      observationDate: point.observationDate,
+      value: Number((point.value as number).toFixed(3)),
+      sourceUrl,
+      releaseDate: point.observationDate,
+      frequency,
+      proxy,
+      notesJson: JSON.stringify({
+        basis: 'fred_identity',
+      }),
+    }))
+  }
 
   const byDate = new Map<string, number>(points.map((row) => [row.observationDate, row.value as number]))
   const observations: EconomicObservationInput[] = []
@@ -122,7 +145,7 @@ export function parseFredChinaGdpProxyCsv(
       value: Number(yoy.toFixed(3)),
       sourceUrl,
       releaseDate: point.observationDate,
-      frequency: 'quarterly',
+      frequency,
       proxy,
       notesJson: JSON.stringify({
         basis: 'year_over_year_from_quarterly_level',
