@@ -5,6 +5,7 @@ import { insertHealthCheckRun } from '../../src/db/health-check-runs'
 import { upsertEconomicObservations, upsertEconomicStatus } from '../../src/db/economic-series'
 import { parseRbaTableCsv, extractRbaSeriesObservations } from '../../src/economic/rba-table'
 import { ECONOMIC_SERIES_DEFINITIONS } from '../../src/economic/registry'
+import g3Fixture from '../fixtures/economic/rba-g3.csv?raw'
 import h3Fixture from '../fixtures/economic/rba-h3.csv?raw'
 
 function adminHeaders() {
@@ -61,6 +62,38 @@ describe('economic admin coverage', () => {
     const consumerSentiment = report.per_series.find((row) => row.series_id === 'consumer_sentiment')
     expect(consumerSentiment?.observation_row_count).toBeGreaterThan(0)
     expect(consumerSentiment?.stored_status).toBe('ok')
+  })
+
+  it('does not treat RBA publication metadata as a release-before-observation failure', async () => {
+    const sentimentTable = parseRbaTableCsv(h3Fixture, 'https://www.rba.gov.au/statistics/tables/csv/h3-data.csv')
+    const inflationTable = parseRbaTableCsv(g3Fixture, 'https://www.rba.gov.au/statistics/tables/csv/g3-data.csv')
+    const sentimentRows = extractRbaSeriesObservations(sentimentTable, 'consumer_sentiment', 'GICWMICS', false)
+    const inflationRows = extractRbaSeriesObservations(inflationTable, 'inflation_expectations', 'GCONEXP', false)
+    await upsertEconomicObservations(env.DB, [...sentimentRows, ...inflationRows])
+
+    for (const rows of [sentimentRows, inflationRows]) {
+      const latest = rows[rows.length - 1]
+      await upsertEconomicStatus(env.DB, {
+        seriesId: latest.seriesId,
+        lastCheckedAt: '2026-04-06T00:00:00.000Z',
+        lastSuccessAt: '2026-04-06T00:00:00.000Z',
+        lastObservationDate: latest.observationDate,
+        lastValue: latest.value,
+        status: 'ok',
+        message: 'Loaded from real RBA fixture.',
+        sourceUrl: latest.sourceUrl,
+        proxy: latest.proxy,
+      })
+    }
+
+    const report = await runEconomicCoverageAudit(env.DB, { checkedAt: '2026-04-06T00:00:00.000Z' })
+    expect(report.findings.some((finding) => finding.code === 'economic_release_before_observation')).toBe(false)
+    expect(report.per_series.find((row) => row.series_id === 'consumer_sentiment')?.issues).not.toContain(
+      'release_before_observation',
+    )
+    expect(report.per_series.find((row) => row.series_id === 'inflation_expectations')?.issues).not.toContain(
+      'release_before_observation',
+    )
   })
 
   it('returns economic summary from admin health history', async () => {

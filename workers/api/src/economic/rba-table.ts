@@ -50,6 +50,8 @@ export function extractRbaSeriesObservations(
   const columnIndex = table.seriesIdRow.findIndex((value) => String(value || '').trim() === wantedSeriesId)
   if (columnIndex < 1) return []
 
+  // RBA "Publication date" is table-snapshot metadata reused across the series,
+  // not a row-level guarantee about when each observation became available.
   const releaseDate = parseFlexibleDate(table.publicationRow[columnIndex] || '')
   const frequency = String(table.frequencyRow[columnIndex] || '').trim().toLowerCase() || 'unknown'
   const units = String(table.unitsRow[columnIndex] || '').trim()
