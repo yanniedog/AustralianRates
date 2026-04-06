@@ -1253,7 +1253,8 @@
 body.ar-public .lwc-report-viewmode {
     display: flex;
     align-items: center;
-    gap: 0;
+    flex-wrap: wrap;
+    gap: 6px 0;
     flex-shrink: 0;
     padding: 2px 0 4px;
     min-height: 26px;
@@ -1319,7 +1320,7 @@ body.ar-public .lwc-report-viewmode-tab:focus-visible {
 }
 
 body.ar-public .lwc-focus-bank-tray-wrap {
-    flex: 1;
+    flex: 1 1 240px;
     min-width: 0;
     margin: 0;
     padding: 0 0 0 4px;
@@ -1420,4 +1421,11 @@ body.ar-public .lwc-focus-bank-chip-logo {
 body.ar-public .lwc-focus-bank-chip-fallback {
     font: 700 0.62rem/1 "Space Grotesk", system-ui, sans-serif;
     color: var(--ar-text);
+}
+
+@media (max-width: 720px) {
+    body.ar-public .lwc-focus-bank-tray-wrap {
+        flex-basis: 100%;
+        padding-left: 0;
+    }
 }

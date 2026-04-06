@@ -49,6 +49,7 @@
         tdCurveFrames: [],
         economicOverlayIds: [],
         economicOverlaySeries: [],
+        reportPlots: { moves: null, bands: null },
         mainChart: null,
         detailChart: null,
         lwcMain: null,
@@ -358,6 +359,7 @@
 
             currentFields = fields();
             var model = chartData.buildChartModel(chartState.rows, currentFields, chartState);
+            model.reportPlots = chartState.reportPlots || { moves: null, bands: null };
             chartState.tdCurveFrames = Array.isArray(model.tdCurveFrames) ? model.tdCurveFrames : [];
             chartState.tdCurveDates = Array.isArray(model.tdCurveDates) ? model.tdCurveDates : [];
             if (currentFields.view === 'market' && (!model.market || !model.market.categories || !model.market.categories.length)) {
@@ -601,7 +603,28 @@
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
         chartLoadPromise = (async function () {
-            var payload = await chartData.fetchAllRateRows(buildBaseParams(), function (progress) {
+            var baseParams = buildBaseParams();
+            var currentView = fields().view;
+            var wantsReportPlots = currentView === 'economicReport' || currentView === 'homeLoanReport' || currentView === 'termDepositReport';
+            var reportPlotPromise = wantsReportPlots && chartData.fetchReportPlot
+                ? Promise.all([
+                    chartData.fetchReportPlot('moves', baseParams),
+                    chartData.fetchReportPlot('bands', baseParams),
+                ]).then(function (results) {
+                    return {
+                        moves: results[0] || null,
+                        bands: results[1] || null,
+                    };
+                }).catch(function (error) {
+                    clientLog('warn', 'Report plot fetch failed', {
+                        message: String(error && error.message || 'Report plot fetch failed'),
+                        view: currentView,
+                    });
+                    return { moves: null, bands: null };
+                })
+                : Promise.resolve({ moves: null, bands: null });
+
+            var payload = await chartData.fetchAllRateRows(baseParams, function (progress) {
                 if (chartUi.setStatus) {
                     chartUi.setStatus('LOAD ' + progress.loaded.toLocaleString() + '/' + progress.total.toLocaleString() + ' ' + progress.page + '/' + progress.lastPage);
                 }
@@ -610,8 +633,8 @@
             chartState.rows = payload.rows || [];
             chartState.totalRows = Number(payload.total || chartState.rows.length || 0);
             chartState.truncated = !!payload.truncated;
-            chartState.loadedRepresentation = payload.representation || buildBaseParams().representation || 'change';
-            chartState.loadedChartWindow = String(buildBaseParams().chart_window || '');
+            chartState.loadedRepresentation = payload.representation || baseParams.representation || 'change';
+            chartState.loadedChartWindow = String(baseParams.chart_window || '');
             chartState.stale = false;
             chartState.fallbackReason = payload.fallbackReason || '';
             chartState.tdCurveDates = [];
@@ -619,6 +642,7 @@
             chartState.tdCurveFrameIndex = null;
             chartState.economicOverlayIds = fields().economicOverlayIds ? fields().economicOverlayIds.slice() : [];
             chartState.economicOverlaySeries = [];
+            chartState.reportPlots = await reportPlotPromise;
             if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
                 els.chartRepresentation.value = payload.representation;
             }

@@ -29,8 +29,8 @@ const D1_CACHE_FRESH_MINUTES = 20
  * D1 has practical limits on row/value sizes; large JSON payloads can fail with SQLITE_TOOBIG.
  * We store JSON directly when small, otherwise store gzip(base64(JSON)) with a prefix.
  */
-const GZIP_PREFIX = 'gz:'
-const MAX_UNCOMPRESSED_CHARS = 500_000
+export const GZIP_PREFIX = 'gz:'
+export const MAX_UNCOMPRESSED_CHARS = 500_000
 /** KV TTL for computed responses (seconds). */
 export const CHART_CACHE_KV_TTL = 300
 export { PRECOMPUTED_CHART_WINDOWS }
@@ -84,7 +84,7 @@ function base64ToBytes(b64: string): Uint8Array {
   return out
 }
 
-async function gzipToBase64(input: string): Promise<string> {
+export async function gzipToBase64(input: string): Promise<string> {
   if (typeof CompressionStream === 'undefined') {
     throw new Error('CompressionStream not available in this runtime')
   }
@@ -95,7 +95,7 @@ async function gzipToBase64(input: string): Promise<string> {
   return bytesToBase64(gzBytes)
 }
 
-async function gunzipFromBase64(b64: string): Promise<string> {
+export async function gunzipFromBase64(b64: string): Promise<string> {
   if (typeof DecompressionStream === 'undefined') {
     throw new Error('DecompressionStream not available in this runtime')
   }

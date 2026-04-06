@@ -3,6 +3,7 @@ import type { AppContext } from '../types'
 import { parseSourceMode } from '../utils/source-mode'
 import { collectTdAnalyticsRowsResolved } from './analytics-data'
 import { registerAnalyticsRoutes } from './analytics-route-registration'
+import { registerReportPlotRoutes } from './report-plot-route-registration'
 import {
   parseExcludeCompareEdgeCases,
   parseCsvList,
@@ -41,5 +42,9 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
     section: 'term_deposits',
     buildFilters,
     collectRowsResolved: collectTdAnalyticsRowsResolved,
+  })
+  registerReportPlotRoutes(publicRoutes, {
+    section: 'term_deposits',
+    buildFilters,
   })
 }

@@ -261,6 +261,7 @@
         var L = window.LightweightCharts;
         if (!L || !container) return null;
         var M = window.AR.chartMacroLwcShared;
+        var reportPlot = window.AR.chartReportPlot;
         var overlayModule = window.AR.chartEconomicOverlays || {};
         if (!M || typeof M.prepareRbaCpiForReport !== 'function') throw new Error('chartMacroLwcShared not loaded');
 
@@ -269,6 +270,50 @@
         var section = window.AR.section || 'home-loans';
         var vm = M.getViewMode(section);
         var reportRange = M.getReportRange(section);
+        container.setAttribute('data-report-view-mode', vm.mode);
+        if ((vm.mode === 'moves' || vm.mode === 'bands') && reportPlot && typeof reportPlot.render === 'function') {
+            var plotPayload = model && model.reportPlots ? model.reportPlots[vm.mode] : null;
+            var plotRange = reportPlot.payloadDateRange(plotPayload);
+            var plotMin = plotRange.minDate || todayYmd();
+            var plotMax = plotRange.maxDate || plotMin;
+            var dataMinPlot = reportRange === 'All'
+                ? (M.resolveReportDataMin(plotMin, rbaHistory, cpiData, economicOverlaySeries) || plotMin)
+                : plotMin;
+            var ctxMaxPlot = plotMax;
+            var viewStartPlot = reportRange === 'All'
+                ? dataMinPlot
+                : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
+            return reportPlot.render({
+                container: container,
+                section: section,
+                vm: vm,
+                bankList: extractBankNames(model),
+                plotPayload: plotPayload,
+                range: {
+                    reportRange: reportRange,
+                    dataMin: dataMinPlot,
+                    ctxMax: ctxMaxPlot,
+                    viewStart: viewStartPlot,
+                    chartStart: viewStartPlot,
+                },
+                theme: theme(),
+                rbaHistory: rbaHistory,
+                cpiData: cpiData,
+                economicOverlaySeries: economicOverlaySeries,
+                bankColor: bankColor,
+                noteText: contextLabel(),
+                onReRender: function () {
+                    render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+                },
+                onRangeChange: function () {
+                    if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
+                        window.AR.charts.drawChart();
+                    } else {
+                        render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
+                    }
+                },
+            });
+        }
         var isProductMode = vm.mode === 'products' || vm.mode === 'focus';
 
         // Build lines based on mode

@@ -583,6 +583,31 @@
         });
     }
 
+    function fetchReportPlot(mode, params) {
+        var query = new URLSearchParams(params || {});
+        query.delete('representation');
+        query.delete('sort');
+        query.delete('dir');
+        query.set('mode', String(mode || 'moves'));
+        var url = apiBase + '/analytics/report-plot?' + query.toString();
+        if (requestJson) {
+            return requestJson(url, {
+                requestLabel: 'Report plot ' + String(mode || 'moves'),
+                timeoutMs: 40000,
+                retryCount: 0,
+            }).then(function (result) {
+                return result.data;
+            }).catch(function (err) {
+                throw err;
+            });
+        }
+        var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
+        return fetch(fetchUrl, { cache: 'no-store' }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/report-plot');
+            return response.json();
+        });
+    }
+
     function expandGroupedRows(payload) {
         if (!payload || !Array.isArray(payload.groups)) return [];
         var rows = [];
@@ -694,6 +719,7 @@
         buildChartModel: buildChartModel,
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
+        fetchReportPlot: fetchReportPlot,
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,
     };

@@ -109,6 +109,37 @@ async function switchViewWithoutRatesFetch(page, view) {
     return requestCount;
 }
 
+async function switchReportModeWithoutAnalyticsFetch(page, mode) {
+    let seriesRequests = 0;
+    let plotRequests = 0;
+    const handler = (request) => {
+        const url = String(request.url() || '');
+        if (url.includes('/analytics/series?')) seriesRequests += 1;
+        if (url.includes('/analytics/report-plot?')) plotRequests += 1;
+    };
+
+    page.context().on('request', handler);
+    try {
+        await page.evaluate((nextMode) => {
+            const buttons = Array.from(document.querySelectorAll('.lwc-report-viewmode-tab'));
+            const match = buttons.find((button) => String(button.textContent || '').trim().toLowerCase() === String(nextMode || '').trim().toLowerCase());
+            if (match instanceof HTMLElement) match.click();
+        }, mode);
+        await page.waitForFunction((nextMode) => {
+            const output = document.getElementById('chart-output');
+            if (!output) return false;
+            const err = String((document.getElementById('chart-error') || {}).textContent || '').trim();
+            if (err) return false;
+            return String(output.getAttribute('data-report-view-mode') || '') === String(nextMode || '');
+        }, mode, { timeout: 45000 });
+        await page.waitForTimeout(800);
+    } finally {
+        page.context().off('request', handler);
+    }
+
+    return { seriesRequests, plotRequests };
+}
+
 async function collectChartMetrics(page) {
     return await page.evaluate(() => {
         const selectors = [
@@ -138,6 +169,7 @@ async function collectChartMetrics(page) {
                 || document.querySelector('[data-chart-view].is-active')?.getAttribute('data-chart-view')
                 || ''
             ),
+            reportMode: String(document.getElementById('chart-output')?.getAttribute('data-report-view-mode') || ''),
             status: String(document.getElementById('chart-status')?.textContent || '').trim(),
             guidance: String(document.getElementById('chart-guidance')?.textContent || '').trim(),
             summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
@@ -180,6 +212,18 @@ function verifyChartState(metrics, failures, label, expectedView) {
     assertFits(metrics, failures, label, 'pointDetails');
 }
 
+async function verifyReportModes(page, section, failures, labelPrefix) {
+    for (const mode of ['bands', 'moves']) {
+        const requestCounts = await switchReportModeWithoutAnalyticsFetch(page, mode);
+        if (requestCounts.seriesRequests !== 0) failures.push(`${labelPrefix} ${mode}: switching modes triggered ${requestCounts.seriesRequests} unexpected /analytics/series requests`);
+        if (requestCounts.plotRequests !== 0) failures.push(`${labelPrefix} ${mode}: switching modes triggered ${requestCounts.plotRequests} unexpected /analytics/report-plot requests`);
+        const metrics = await collectChartMetrics(page);
+        verifyChartState(metrics, failures, `${labelPrefix} ${mode}`, section.defaultView);
+        if (metrics.reportMode !== mode) failures.push(`${labelPrefix} ${mode}: expected report mode ${mode}, got ${metrics.reportMode || 'none'}`);
+        if (!metrics.pageFits) failures.push(`${labelPrefix} ${mode}: page has horizontal overflow`);
+    }
+}
+
 async function verifyHistoryPane(page, failures, label) {
     const hasHistory = await page.locator('#tab-history').count().catch(() => 0);
     if (!hasHistory) return;
@@ -204,6 +248,7 @@ async function verifyDesktopSection(page, section, failures) {
 
     let metrics = await collectChartMetrics(page);
     verifyChartState(metrics, failures, `${section.name} default report`, section.defaultView);
+    await verifyReportModes(page, section, failures, `${section.name} report`);
 
     for (const view of section.extraViews) {
         const requestCount = await switchViewWithoutRatesFetch(page, view);
@@ -224,6 +269,7 @@ async function verifyMobileSection(browser, section, failures) {
         const metrics = await collectChartMetrics(page);
         if (!metrics.pageFits) failures.push(`${section.name} mobile: page has horizontal overflow`);
         verifyChartState(metrics, failures, `${section.name} mobile default report`, section.defaultView);
+        await verifyReportModes(page, section, failures, `${section.name} mobile report`);
 
         const firstExtra = section.extraViews[0];
         if (!firstExtra) return;

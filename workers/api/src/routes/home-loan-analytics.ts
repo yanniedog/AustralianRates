@@ -3,6 +3,7 @@ import type { AppContext } from '../types'
 import { parseSourceMode } from '../utils/source-mode'
 import { collectHomeLoanAnalyticsRowsResolved } from './analytics-data'
 import { registerAnalyticsRoutes } from './analytics-route-registration'
+import { registerReportPlotRoutes } from './report-plot-route-registration'
 import {
   parseExcludeCompareEdgeCases,
   parseCsvList,
@@ -42,5 +43,9 @@ export function registerHomeLoanAnalyticsRoutes(publicRoutes: Hono<AppContext>):
     section: 'home_loans',
     buildFilters,
     collectRowsResolved: collectHomeLoanAnalyticsRowsResolved,
+  })
+  registerReportPlotRoutes(publicRoutes, {
+    section: 'home_loans',
+    buildFilters,
   })
 }

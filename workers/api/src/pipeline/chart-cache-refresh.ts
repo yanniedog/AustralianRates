@@ -6,6 +6,8 @@ import {
   writeD1ChartCache,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
+import { writeD1ReportPlotCache } from '../db/report-plot-cache'
 import type { EnvBindings } from '../types'
 import {
   collectHomeLoanAnalyticsRowsResolved,
@@ -14,9 +16,11 @@ import {
 } from '../routes/analytics-data'
 import { log } from '../utils/logger'
 import type { ChartWindow } from '../utils/chart-window'
+import type { ReportPlotMode } from '../db/report-plot-types'
 
 const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
 const REPRESENTATIONS = ['day', 'change'] as const
+const REPORT_PLOT_MODES: ReportPlotMode[] = ['moves', 'bands']
 const DEFAULT_CACHE_LOOKBACK_DAYS = 365
 const PRECOMPUTED_SCOPES: Array<'default' | ChartWindow> = ['default', ...PRECOMPUTED_CHART_WINDOWS]
 
@@ -94,6 +98,17 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   const errors: string[] = []
   let refreshed = 0
 
+  try {
+    await refreshAllReportDeltaTables(db)
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e)
+    errors.push(`report_deltas: ${msg}`)
+    log.warn('chart_cache_refresh', 'Failed to refresh report delta projections', {
+      code: 'report_delta_refresh_failed',
+      context: msg,
+    })
+  }
+
   for (const section of SECTIONS) {
     for (const scope of PRECOMPUTED_SCOPES) {
       const filters = await scopeFilters(db, section, scope)
@@ -113,6 +128,20 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
           errors.push(`${section}:${rep}:${cacheScope}: ${msg}`)
           log.warn('chart_cache_refresh', `Failed to refresh ${section} ${rep} ${cacheScope}`, {
             code: 'chart_cache_refresh_failed',
+            context: msg,
+          })
+        }
+      }
+      for (const mode of REPORT_PLOT_MODES) {
+        try {
+          const payload = await queryReportPlotPayload(db, section, mode, filters)
+          await writeD1ReportPlotCache(db, section, mode, cacheScope, payload)
+          refreshed++
+        } catch (e) {
+          const msg = (e as Error)?.message ?? String(e)
+          errors.push(`${section}:report-plot:${mode}:${cacheScope}: ${msg}`)
+          log.warn('chart_cache_refresh', `Failed to refresh ${section} report-plot ${mode} ${cacheScope}`, {
+            code: 'report_plot_cache_refresh_failed',
             context: msg,
           })
         }

@@ -3,6 +3,7 @@ import type { AppContext } from '../types'
 import { parseSourceMode } from '../utils/source-mode'
 import { collectSavingsAnalyticsRowsResolved } from './analytics-data'
 import { registerAnalyticsRoutes } from './analytics-route-registration'
+import { registerReportPlotRoutes } from './report-plot-route-registration'
 import {
   parseExcludeCompareEdgeCases,
   parseCsvList,
@@ -41,5 +42,9 @@ export function registerSavingsAnalyticsRoutes(publicRoutes: Hono<AppContext>): 
     section: 'savings',
     buildFilters,
     collectRowsResolved: collectSavingsAnalyticsRowsResolved,
+  })
+  registerReportPlotRoutes(publicRoutes, {
+    section: 'savings',
+    buildFilters,
   })
 }

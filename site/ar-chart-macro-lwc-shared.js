@@ -241,7 +241,7 @@
     }
 
     /**
-     * View mode bar: Best per bank | All products | horizontal bank logo tray (focus).
+     * View mode bar: Moves | Bands | Best | Products | horizontal bank logo tray (focus).
      */
     function createReportViewModeBar(opts) {
         var section = opts.section;
@@ -262,13 +262,25 @@
             return b;
         }
 
-        var btnBank = mkTab('Best per bank', vm.mode === 'bank', 'lwc-report-viewmode-tab--first');
+        var btnMoves = mkTab('Moves', vm.mode === 'moves', 'lwc-report-viewmode-tab--first');
+        btnMoves.addEventListener('click', function () {
+            setViewMode(section, 'moves');
+            onReRender();
+        });
+
+        var btnBands = mkTab('Bands', vm.mode === 'bands', '');
+        btnBands.addEventListener('click', function () {
+            setViewMode(section, 'bands');
+            onReRender();
+        });
+
+        var btnBank = mkTab('Best', vm.mode === 'bank', '');
         btnBank.addEventListener('click', function () {
             setViewMode(section, 'bank');
             onReRender();
         });
 
-        var btnAll = mkTab('All products', vm.mode === 'products', '');
+        var btnAll = mkTab('Products', vm.mode === 'products', '');
         btnAll.addEventListener('click', function () {
             setViewMode(section, 'products');
             onReRender();
@@ -335,6 +347,8 @@
         });
 
         trayWrap.appendChild(tray);
+        bar.appendChild(btnMoves);
+        bar.appendChild(btnBands);
         bar.appendChild(btnBank);
         bar.appendChild(btnAll);
         bar.appendChild(trayWrap);
@@ -544,11 +558,11 @@
     var _viewModeBySection = {};
 
     function getViewMode(section) {
-        return _viewModeBySection[section] || { mode: 'products', focusBank: '' };
+        return _viewModeBySection[section] || { mode: 'moves', focusBank: '' };
     }
 
     function setViewMode(section, mode, focusBank) {
-        _viewModeBySection[section] = { mode: mode || 'products', focusBank: focusBank || '' };
+        _viewModeBySection[section] = { mode: mode || 'moves', focusBank: focusBank || '' };
     }
 
     function productColorVariant(baseHex, idx, total) {
