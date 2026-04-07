@@ -1,6 +1,7 @@
 import { SELF, env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { refreshChartPivotCache } from '../../src/pipeline/chart-cache-refresh'
+import savingsWarmupSeedSql from './report-plot-warmup-seed.sql?raw'
 
 describe('report-plot routes', () => {
   it('returns empty but valid home-loan moves payload when no real rows match', async () => {
@@ -50,21 +51,74 @@ describe('report-plot routes', () => {
   })
 
   it('serializes first-load report-plot warm-up for parallel requests', async () => {
-    await env.DB.prepare('DELETE FROM savings_report_deltas').run()
+    // Rows shaped from test/fixtures/real-normalized-savings-row.json; two collection dates
+    // so savings_report_deltas refresh yields at least one delta (integration DB is migration-only).
+    const bank = 'ANZ'
+    const productId = 'sav-1'
+    const d1 = '2025-02-20'
+    const d2 = '2025-02-21'
+    const seriesKey = `${bank}|${productId}|savings|base|all`
 
-    const [movesResponse, bandsResponse] = await Promise.all([
-      SELF.fetch('https://example.com/api/savings-rates/analytics/report-plot?mode=moves&chart_window=90D'),
-      SELF.fetch('https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D'),
-    ])
+    await env.DB
+      .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id = ? AND collection_date IN (?, ?)')
+      .bind(bank, productId, d1, d2)
+      .run()
 
-    expect(movesResponse.status).toBe(200)
-    expect(bandsResponse.status).toBe(200)
+    const insertSql = String(savingsWarmupSeedSql).trim()
+    await env.DB.prepare(insertSql)
+      .bind(
+        bank,
+        d1,
+        productId,
+        'ANZ Online Savings Account',
+        seriesKey,
+        4.5,
+        'https://example.com/savings',
+        `${d1}T00:00:00.000Z`,
+      )
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(
+        bank,
+        d2,
+        productId,
+        'ANZ Online Savings Account',
+        seriesKey,
+        4.6,
+        'https://example.com/savings',
+        `${d2}T00:00:00.000Z`,
+      )
+      .run()
 
-    const row = await env.DB
-      .prepare('SELECT COUNT(*) AS n FROM savings_report_deltas')
-      .first<{ n: number }>()
+    try {
+      await env.DB.prepare('DELETE FROM savings_report_deltas').run()
+      // Default chart_window requests use D1 report-plot cache; clear so compute() runs and repopulates deltas.
+      await env.DB
+        .prepare(
+          `DELETE FROM report_plot_request_cache WHERE section = ? AND request_scope = ?`,
+        )
+        .bind('savings', 'window:90D')
+        .run()
 
-    expect(Number(row?.n || 0)).toBeGreaterThan(0)
+      const [movesResponse, bandsResponse] = await Promise.all([
+        SELF.fetch('https://example.com/api/savings-rates/analytics/report-plot?mode=moves&chart_window=90D'),
+        SELF.fetch('https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D'),
+      ])
+
+      expect(movesResponse.status).toBe(200)
+      expect(bandsResponse.status).toBe(200)
+
+      const row = await env.DB
+        .prepare('SELECT COUNT(*) AS n FROM savings_report_deltas')
+        .first<{ n: number }>()
+
+      expect(Number(row?.n || 0)).toBeGreaterThan(0)
+    } finally {
+      await env.DB
+        .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id = ? AND collection_date IN (?, ?)')
+        .bind(bank, productId, d1, d2)
+        .run()
+    }
   })
 })
 
