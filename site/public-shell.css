@@ -898,8 +898,8 @@ body.ar-public .filters-drawer > summary::-webkit-details-marker { display: none
 
 body.ar-public .filters-drawer > summary::after {
     content: "▾";
-    font-size: 0.7em;
-    opacity: 0.6;
+    font-size: 0.9em;
+    opacity: 0.72;
     margin-left: 2px;
     transition: transform var(--ar-motion-fast) var(--ar-ease);
 }
