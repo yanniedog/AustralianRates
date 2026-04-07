@@ -1,4 +1,4 @@
-import { markRunSeenProduct, markRunSeenSeries } from '../../db/catalog'
+import { markRunSeenProducts, markRunSeenSeriesBatch } from '../../db/catalog'
 import type { DatasetKind } from '../../../../../packages/shared/src'
 import { homeLoanSeriesKey, savingsSeriesKey, tdSeriesKey } from '../../utils/series-identity'
 import type { NormalizedRateRow } from '../../ingest/normalize'
@@ -19,8 +19,9 @@ export async function markProductsSeenForRun(
     productIds: string[]
   },
 ): Promise<void> {
-  for (const productId of Array.from(new Set(input.productIds)).filter(Boolean)) {
-    await markRunSeenProduct(db, {
+  const rows = Array.from(new Set(input.productIds))
+    .filter(Boolean)
+    .map((productId) => ({
       runId: input.runId,
       lenderCode: input.lenderCode,
       dataset: input.dataset,
@@ -28,8 +29,8 @@ export async function markProductsSeenForRun(
       productId,
       productCode: productId,
       collectionDate: input.collectionDate,
-    })
-  }
+    }))
+  await markRunSeenProducts(db, rows)
 }
 
 export async function markHomeLoanSeriesSeenForRun(
@@ -41,8 +42,9 @@ export async function markHomeLoanSeriesSeenForRun(
     rows: NormalizedRateRow[]
   },
 ): Promise<void> {
-  for (const row of input.rows) {
-    await markRunSeenSeries(db, {
+  await markRunSeenSeriesBatch(
+    db,
+    input.rows.map((row) => ({
       runId: input.runId,
       lenderCode: input.lenderCode,
       dataset: 'home_loans',
@@ -51,8 +53,8 @@ export async function markHomeLoanSeriesSeenForRun(
       productId: row.productId,
       productCode: row.productId,
       collectionDate: input.collectionDate,
-    })
-  }
+    })),
+  )
 }
 
 export async function markSavingsSeriesSeenForRun(
@@ -64,8 +66,9 @@ export async function markSavingsSeriesSeenForRun(
     rows: NormalizedSavingsRow[]
   },
 ): Promise<void> {
-  for (const row of input.rows) {
-    await markRunSeenSeries(db, {
+  await markRunSeenSeriesBatch(
+    db,
+    input.rows.map((row) => ({
       runId: input.runId,
       lenderCode: input.lenderCode,
       dataset: 'savings',
@@ -74,8 +77,8 @@ export async function markSavingsSeriesSeenForRun(
       productId: row.productId,
       productCode: row.productId,
       collectionDate: input.collectionDate,
-    })
-  }
+    })),
+  )
 }
 
 export async function markTdSeriesSeenForRun(
@@ -87,8 +90,9 @@ export async function markTdSeriesSeenForRun(
     rows: NormalizedTdRow[]
   },
 ): Promise<void> {
-  for (const row of input.rows) {
-    await markRunSeenSeries(db, {
+  await markRunSeenSeriesBatch(
+    db,
+    input.rows.map((row) => ({
       runId: input.runId,
       lenderCode: input.lenderCode,
       dataset: 'term_deposits',
@@ -97,6 +101,6 @@ export async function markTdSeriesSeenForRun(
       productId: row.productId,
       productCode: row.productId,
       collectionDate: input.collectionDate,
-    })
-  }
+    })),
+  )
 }

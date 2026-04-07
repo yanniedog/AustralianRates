@@ -1,5 +1,13 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
 
+function chunk<T>(rows: T[], size: number): T[][] {
+  const output: T[][] = []
+  for (let index = 0; index < rows.length; index += size) {
+    output.push(rows.slice(index, index + size))
+  }
+  return output
+}
+
 type CommonObserveInput = {
   dataset: DatasetKind
   bankName: string
@@ -278,6 +286,38 @@ export async function markRunSeenProduct(
     .run()
 }
 
+export async function markRunSeenProducts(
+  db: D1Database,
+  rows: Array<{
+    runId: string
+    lenderCode: string
+    dataset: DatasetKind
+    bankName: string
+    productId: string
+    productCode: string
+    collectionDate: string
+  }>,
+): Promise<void> {
+  if (rows.length === 0) return
+  const sql = `INSERT INTO run_seen_products (
+         run_id, lender_code, dataset_kind, bank_name, product_id, product_code, collection_date, seen_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, CURRENT_TIMESTAMP)
+       ON CONFLICT(run_id, lender_code, dataset_kind, bank_name, product_id) DO UPDATE SET
+         product_code = excluded.product_code,
+         collection_date = excluded.collection_date,
+         seen_at = CURRENT_TIMESTAMP`
+
+  for (const part of chunk(rows, 64)) {
+    await db.batch(
+      part.map((row) =>
+        db
+          .prepare(sql)
+          .bind(row.runId, row.lenderCode, row.dataset, row.bankName, row.productId, row.productCode, row.collectionDate),
+      ),
+    )
+  }
+}
+
 export async function markRunSeenSeries(
   db: D1Database,
   input: {
@@ -312,6 +352,48 @@ export async function markRunSeenSeries(
       input.collectionDate,
     )
     .run()
+}
+
+export async function markRunSeenSeriesBatch(
+  db: D1Database,
+  rows: Array<{
+    runId: string
+    lenderCode: string
+    dataset: DatasetKind
+    seriesKey: string
+    bankName: string
+    productId: string
+    productCode: string
+    collectionDate: string
+  }>,
+): Promise<void> {
+  if (rows.length === 0) return
+  const sql = `INSERT INTO run_seen_series (
+         run_id, lender_code, dataset_kind, series_key, bank_name, product_id, product_code, collection_date, seen_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, CURRENT_TIMESTAMP)
+       ON CONFLICT(run_id, lender_code, dataset_kind, series_key) DO UPDATE SET
+         product_code = excluded.product_code,
+         collection_date = excluded.collection_date,
+         seen_at = CURRENT_TIMESTAMP`
+
+  for (const part of chunk(rows, 64)) {
+    await db.batch(
+      part.map((row) =>
+        db
+          .prepare(sql)
+          .bind(
+            row.runId,
+            row.lenderCode,
+            row.dataset,
+            row.seriesKey,
+            row.bankName,
+            row.productId,
+            row.productCode,
+            row.collectionDate,
+          ),
+      ),
+    )
+  }
 }
 
 export async function insertMissingProductCatalogFromRunSeenProducts(

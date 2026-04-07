@@ -707,7 +707,19 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
   }
 
   const writeStartedAt = Date.now()
-  const written = await upsertHistoricalRateRows(env.DB, accepted)
+  const deferProjectionWrites = fallbackSeedFetches > 0 && accepted.length >= 100
+  const written = await upsertHistoricalRateRows(
+    env.DB,
+    accepted,
+    deferProjectionWrites
+      ? {
+          emitCanonicalFeed: false,
+          writeProjection: false,
+          updateCatalogs: false,
+          markSeriesSeen: false,
+        }
+      : undefined,
+  )
   writeMs = elapsedMs(writeStartedAt)
   await recordLenderDatasetWriteStats(env.DB, {
     runId: job.runId,
@@ -727,6 +739,7 @@ export async function handleDailyLenderJob(env: EnvBindings, job: DailyLenderJob
       ` endpoints_tried=${endpointsTried} index_payloads=${indexPayloads}` +
       ` upstream_blocks=${observedUpstreamBlocks.length}` +
       ` detail_jobs=${detailJobsEnqueued}` +
+      ` projection_deferred=${deferProjectionWrites ? 1 : 0}` +
       ` seed_fetches=${fallbackSeedFetches}` +
       ` timings(ms):discover=${endpointDiscoveryMs},collect=${collectionMs},validate=${validationMs},write=${writeMs},total=${elapsedMs(jobStartedAt)}`,
   })
