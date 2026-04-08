@@ -1,11 +1,18 @@
 /**
  * Multi-section API diagnostics and lightweight benchmark.
+ *
+ * Flags: --quick (or DOCTOR_QUICK=1): fewer bench reps, no warmup, subset of bench paths.
  */
 
 const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const ORIGIN = new URL(DEFAULT_TEST_URL).origin;
-const BENCH_N = Math.max(3, Math.floor(Number(process.env.DIAG_BENCH_N || 20)));
-const BENCH_WARMUP_N = Math.max(0, Math.floor(Number(process.env.DIAG_BENCH_WARMUP_N || 1)));
+const QUICK =
+  process.argv.includes('--quick') ||
+  ['1', 'true', 'yes'].includes(String(process.env.DOCTOR_QUICK || '').trim().toLowerCase());
+const BENCH_N = QUICK
+  ? Math.max(2, Math.floor(Number(process.env.DIAG_BENCH_N_QUICK || 3)))
+  : Math.max(3, Math.floor(Number(process.env.DIAG_BENCH_N || 20)));
+const BENCH_WARMUP_N = QUICK ? 0 : Math.max(0, Math.floor(Number(process.env.DIAG_BENCH_WARMUP_N || 1)));
 const P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_P95_TARGET_MS || 500)));
 const EXPORT_P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_EXPORT_P95_TARGET_MS || 4000)));
 const DATASET_P95_OVERRIDES: Record<string, { default: number; exportJson: number }> = {
@@ -99,21 +106,30 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     benchmark: [] as Array<{ path: string; avgMs: number; p50Ms: number; p95Ms: number; non200: number; pass: boolean }>,
   };
 
-  const health = await requestJson(`${base}/health`);
-  out.checks.push({ name: 'health', status: health.status, ms: health.durationMs });
+  const pushCheck = (name: string, r: { status: number; durationMs: number }) => {
+    out.checks.push({ name, status: r.status, ms: r.durationMs });
+  };
+
+  const [health, filters, rates, latest, latestAll, exportJson] = await Promise.all([
+    requestJson(`${base}/health`),
+    requestJson(`${base}/filters`),
+    requestJson(`${base}/rates?page=1&size=1&source_mode=all`),
+    requestJson(`${base}/latest?limit=5&source_mode=all`),
+    requestJson(`${base}/latest-all?limit=50&source_mode=all`),
+    requestJson(`${base}/export?format=json&source_mode=all`),
+  ]);
+
+  pushCheck('health', health);
   if (health.status !== 200) out.failures.push(`health status ${health.status}`);
 
-  const filters = await requestJson(`${base}/filters`);
-  out.checks.push({ name: 'filters', status: filters.status, ms: filters.durationMs });
+  pushCheck('filters', filters);
   if (filters.status !== 200) out.failures.push(`filters status ${filters.status}`);
 
-  const rates = await requestJson(`${base}/rates?page=1&size=1&source_mode=all`);
-  out.checks.push({ name: 'rates', status: rates.status, ms: rates.durationMs });
+  pushCheck('rates', rates);
   if (rates.status !== 200 || !rates.json) out.failures.push(`rates status ${rates.status}`);
   const ratesShape = inferRowsAndTotal(rates.json);
 
-  const latest = await requestJson(`${base}/latest?limit=5&source_mode=all`);
-  out.checks.push({ name: 'latest', status: latest.status, ms: latest.durationMs });
+  pushCheck('latest', latest);
   if (latest.status !== 200 || !latest.json) out.failures.push(`latest status ${latest.status}`);
   const latestShape = inferRowsAndTotal(latest.json);
   if (latest.status === 200 && latestShape.rows.length > 0) {
@@ -122,8 +138,7 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     if (!first || !first.product_key) out.failures.push('latest shape missing product_key');
   }
 
-  const latestAll = await requestJson(`${base}/latest-all?limit=50&source_mode=all`);
-  out.checks.push({ name: 'latest-all', status: latestAll.status, ms: latestAll.durationMs });
+  pushCheck('latest-all', latestAll);
   if (latestAll.status !== 200 || !latestAll.json) out.failures.push(`latest-all status ${latestAll.status}`);
   const latestAllShape = inferRowsAndTotal(latestAll.json);
   if (latestAll.status === 200 && !Array.isArray(latestAllShape.rows)) {
@@ -134,7 +149,7 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   if (productKey) {
     const encoded = encodeURIComponent(String(productKey));
     const timeseries = await requestJson(`${base}/timeseries?product_key=${encoded}&limit=5&source_mode=all`);
-    out.checks.push({ name: 'timeseries', status: timeseries.status, ms: timeseries.durationMs });
+    pushCheck('timeseries', timeseries);
     if (timeseries.status !== 200) out.failures.push(`timeseries status ${timeseries.status}`);
     const timeseriesShape = inferRowsAndTotal(timeseries.json);
     for (const row of timeseriesShape.rows) {
@@ -146,10 +161,38 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     }
   }
 
-  const exportJson = await requestJson(`${base}/export?format=json&source_mode=all`);
-  out.checks.push({ name: 'export(json)', status: exportJson.status, ms: exportJson.durationMs });
+  pushCheck('export(json)', exportJson);
   if (exportJson.status !== 200 || !exportJson.json) out.failures.push(`export(json) status ${exportJson.status}`);
   const exportShape = inferRowsAndTotal(exportJson.json);
+
+  const analytics = await requestJson(`${base}/analytics/series`);
+  pushCheck('analytics/series', analytics);
+  if (analytics.status !== 200 || !analytics.json || analytics.json.ok !== true) {
+    out.failures.push(`analytics/series status ${analytics.status} or ok!=true`);
+  }
+  if (analytics.json && typeof analytics.json.count !== 'number') {
+    out.failures.push('analytics/series missing numeric count');
+  }
+
+  if (dataset.key === 'home-loans') {
+    const [siteUi, cpi, rba] = await Promise.all([
+      requestJson(`${base}/site-ui`),
+      requestJson(`${base}/cpi/history`),
+      requestJson(`${base}/rba/history`),
+    ]);
+    pushCheck('site-ui', siteUi);
+    if (siteUi.status !== 200 || !siteUi.json || siteUi.json.ok !== true) {
+      out.failures.push(`site-ui status ${siteUi.status} or ok!=true`);
+    }
+    pushCheck('cpi/history', cpi);
+    if (cpi.status !== 200 || !cpi.json || cpi.json.ok !== true) {
+      out.failures.push(`cpi/history status ${cpi.status} or ok!=true`);
+    }
+    pushCheck('rba/history', rba);
+    if (rba.status !== 200 || !rba.json || rba.json.ok !== true) {
+      out.failures.push(`rba/history status ${rba.status} or ok!=true`);
+    }
+  }
 
   if (ratesShape.total === 0 && exportShape.total > 0) {
     out.failures.push(`contradiction: rates total=0 but export total=${exportShape.total}`);
@@ -166,13 +209,15 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     out.failures.push('latest-all returned zero rows while latest returned data');
   }
 
-  const benchTargets = [
-    `${base}/rates?page=1&size=50&source_mode=all`,
-    `${base}/latest?limit=200&source_mode=all`,
-    `${base}/latest-all?limit=200&source_mode=all`,
-    `${base}/filters`,
-    `${base}/export?format=json&source_mode=all&limit=500`,
-  ];
+  const benchTargets = QUICK
+    ? [`${base}/filters`, `${base}/latest?limit=200&source_mode=all`]
+    : [
+        `${base}/rates?page=1&size=50&source_mode=all`,
+        `${base}/latest?limit=200&source_mode=all`,
+        `${base}/latest-all?limit=200&source_mode=all`,
+        `${base}/filters`,
+        `${base}/export?format=json&source_mode=all&limit=500`,
+      ];
   for (const pathname of benchTargets) {
     const stats = await benchmark(pathname, BENCH_N);
     const thresholds = DATASET_P95_OVERRIDES[dataset.key] || { default: P95_TARGET_MS, exportJson: EXPORT_P95_TARGET_MS };
@@ -191,6 +236,7 @@ async function main(): Promise<void> {
   console.log('AustralianRates API Diagnostics');
   console.log('========================================');
   console.log(`Origin: ${ORIGIN}`);
+  console.log(`Quick mode: ${QUICK}`);
   console.log(`Bench repetitions: ${BENCH_N}`);
   console.log(`Bench warmup requests per endpoint: ${BENCH_WARMUP_N}`);
   console.log(`P95 target: ${P95_TARGET_MS}ms`);
@@ -202,7 +248,7 @@ async function main(): Promise<void> {
     const result = await runDatasetDiagnostics(dataset);
     results.push(result);
     for (const check of result.checks) {
-      console.log(`${check.name.padEnd(12)} status=${check.status} ms=${check.ms}`);
+      console.log(`${check.name.padEnd(18)} status=${check.status} ms=${check.ms}`);
     }
     for (const bench of result.benchmark) {
       console.log(`bench ${bench.path} avg=${bench.avgMs} p50=${bench.p50Ms} p95=${bench.p95Ms} pass=${bench.pass}`);
