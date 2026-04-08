@@ -223,6 +223,70 @@
         return wrap;
     }
 
+    /**
+     * Data for LWC HistogramSeries on a report chart moves pane (above the time scale, inside the chart mount).
+     * Requires window.AR.chartMacroLwcShared.ymdToUtc.
+     */
+    function prepareLwcMovesHistogram(section, plotPayload, viewStart, ctxMax, theme) {
+        var M = window.AR.chartMacroLwcShared;
+        if (!plotPayload || plotPayload.mode !== 'moves' || !M || typeof M.ymdToUtc !== 'function') return null;
+        var dates = buildDateRange(viewStart, ctxMax);
+        if (!dates.length) return null;
+        var byDate = {};
+        (plotPayload.points || []).forEach(function (point) {
+            byDate[String(point.date || '').slice(0, 10)] = point;
+        });
+        var upColor = isHomeLoan(section) ? theme.bad : theme.good;
+        var downColor = isHomeLoan(section) ? theme.good : theme.bad;
+        var maxCount = 0;
+        var upData = [];
+        var downData = [];
+        dates.forEach(function (date) {
+            var point = byDate[date] || {};
+            var up = Math.max(0, Number(point.up_count || 0));
+            var down = Math.max(0, Number(point.down_count || 0));
+            maxCount = Math.max(maxCount, up, down);
+            var tm = M.ymdToUtc(date);
+            upData.push({ time: tm, value: up, color: upColor });
+            downData.push({ time: tm, value: down > 0 ? -down : 0, color: downColor });
+        });
+        if (!maxCount) return null;
+        return { upData: upData, downData: downData, upColor: upColor, downColor: downColor, maxCount: maxCount };
+    }
+
+    var REPORT_MOVES_PANE_HEIGHT = 84;
+    var REPORT_MOVES_SCALE_ID = 'ar-report-moves';
+
+    /** Second LWC pane: histogram above shared time scale. No-op if data or HistogramSeries missing. */
+    function attachLwcMovesPane(chart, L, movesPaneData) {
+        if (!chart || !L || !L.HistogramSeries || !movesPaneData) return;
+        chart.addPane(false);
+        try {
+            chart.panes()[1].setHeight(REPORT_MOVES_PANE_HEIGHT);
+        } catch (_ph) {}
+        var Hist = L.HistogramSeries;
+        var upApi = chart.addSeries(Hist, {
+            priceScaleId: REPORT_MOVES_SCALE_ID,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            color: movesPaneData.upColor,
+        }, 1);
+        var downApi = chart.addSeries(Hist, {
+            priceScaleId: REPORT_MOVES_SCALE_ID,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            color: movesPaneData.downColor,
+        }, 1);
+        try {
+            chart.priceScale(REPORT_MOVES_SCALE_ID, 1).applyOptions({
+                borderColor: 'rgba(148, 163, 184, 0.22)',
+                scaleMargins: { top: 0.08, bottom: 0.05 },
+            });
+        } catch (_ps) {}
+        upApi.setData(movesPaneData.upData);
+        downApi.setData(movesPaneData.downData);
+    }
+
     function render(options) {
         var echarts = window.echarts;
         var M = window.AR.chartMacroLwcShared;
@@ -383,6 +447,8 @@
 
     window.AR.chartReportPlot = {
         createMovesStrip: createMovesStrip,
+        prepareLwcMovesHistogram: prepareLwcMovesHistogram,
+        attachLwcMovesPane: attachLwcMovesPane,
         payloadDateRange: payloadDateRange,
         render: render,
     };

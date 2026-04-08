@@ -394,18 +394,6 @@
 
         var infoBox = createInfoBox(t);
         wrapper.appendChild(infoBox.el);
-        var movesStrip = reportPlot && typeof reportPlot.createMovesStrip === 'function'
-            ? reportPlot.createMovesStrip({
-                section: section,
-                plotPayload: model && model.reportPlots ? model.reportPlots.moves : null,
-                range: {
-                    viewStart: viewStart,
-                    ctxMax: ctxMax,
-                },
-                theme: t,
-            })
-            : null;
-        if (movesStrip) wrapper.appendChild(movesStrip);
 
         // Context label
         var label = document.createElement('div');
@@ -422,6 +410,13 @@
             timeFormatter: function (time) { return fmtFull(M.utcToYmd(time)); },
         };
         var chart = L.createChart(mount, chartOptions);
+
+        var movesPaneData = reportPlot && typeof reportPlot.prepareLwcMovesHistogram === 'function'
+            ? reportPlot.prepareLwcMovesHistogram(section, model && model.reportPlots ? model.reportPlots.moves : null, viewStart, ctxMax, t)
+            : null;
+        if (reportPlot && typeof reportPlot.attachLwcMovesPane === 'function') {
+            reportPlot.attachLwcMovesPane(chart, L, movesPaneData);
+        }
 
         // CPI
         var cpiSeriesApi = null;
