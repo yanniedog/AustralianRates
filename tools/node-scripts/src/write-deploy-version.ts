@@ -140,9 +140,9 @@ function sanitizeVersionToken(value: string): string {
 
 function main() {
   fs.writeFileSync(outPath, JSON.stringify(payload, null, 0) + '\n', 'utf8');
-  const rewrittenCount = rewriteHtmlAssets(outDir, assetVersion);
+  const { total, updated } = rewriteHtmlAssets(outDir, assetVersion);
   console.log('Wrote', outPath, shortCommit || '(no commit)');
-  console.log('Stamped', rewrittenCount, 'HTML file(s) with asset version', assetVersion);
+  console.log('Stamped', total, 'HTML file(s);', updated, 'updated (content ?v= per .css/.js file)');
 }
 
 if (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) {

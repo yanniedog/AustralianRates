@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-/** Align with tools/node-scripts/src/write-deploy-version.ts (short commit for cache bust). */
+/** Proto UI build stamp (commit/branch). HTML uses per-file content hashes from write-deploy-version. */
 function sanitizeVersionToken(value: string): string {
   return String(value || '')
     .trim()
