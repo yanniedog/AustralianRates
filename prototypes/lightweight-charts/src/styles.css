@@ -154,20 +154,24 @@ html[data-theme="dark"] {
   flex-direction: column;
   gap: 0.65rem;
   min-width: 0;
+  align-items: stretch;
 }
 
+/* Keep chart + moves pane height stable when the product panel opens below */
 .prototype-chart-area {
   position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
   border: 1px solid var(--prototype-border);
   border-radius: 22px;
   background: color-mix(in srgb, var(--prototype-surface) 92%, transparent 8%);
   overflow: hidden;
-  min-height: 0;
 }
 
 .prototype-chart-viewport {
   position: relative;
   width: 100%;
+  flex: 0 0 auto;
   height: clamp(300px, 52vh, 600px);
 }
 

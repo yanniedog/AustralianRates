@@ -34,6 +34,8 @@ type ChartProps = {
   movesPoints: ReportMovesPoint[] | null
   hiddenSeriesIds: string[]
   highlightedSeriesId: string | null
+  /** When false, crosshair tooltip omits per-product status meta until a line is clicked */
+  showTooltipSeriesMeta: boolean
   onSeriesLineClick?: (seriesId: string) => void
 }
 
@@ -385,7 +387,7 @@ export default function Chart(props: ChartProps) {
             </div>
           ))}
         </div>
-        <Tooltip {...tooltip} />
+        <Tooltip {...tooltip} showSeriesMeta={props.showTooltipSeriesMeta} />
       </div>
     </div>
   )

@@ -17,6 +17,8 @@ type TooltipProps = {
   date: string | null
   rows: TooltipRow[]
   events: ChartEvent[]
+  /** Product status meta (LVR, structure, etc.) — only after user clicks a rate line */
+  showSeriesMeta: boolean
 }
 
 export default function Tooltip(props: TooltipProps) {
@@ -36,13 +38,15 @@ export default function Tooltip(props: TooltipProps) {
             </strong>
             <span>{row.productName}</span>
             <span className="prototype-tooltip-rate">{formatRate(row.rate)}</span>
-            <div className="prototype-tooltip-meta">
-              {row.meta.map((item) => (
-                <span key={`${row.id}:${item.label}`}>
-                  {item.label}: {item.value}
-                </span>
-              ))}
-            </div>
+            {props.showSeriesMeta && row.meta.length > 0 ? (
+              <div className="prototype-tooltip-meta">
+                {row.meta.map((item) => (
+                  <span key={`${row.id}:${item.label}`}>
+                    {item.label}: {item.value}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </section>
         ))}
       </div>

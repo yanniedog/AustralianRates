@@ -63,6 +63,7 @@ export default function App() {
   const [activeDataset, setActiveDataset] = useState<DatasetKey>(parseInitialDataset)
   const [productPanelOpen, setProductPanelOpen] = useState(false)
   const [productFocusId, setProductFocusId] = useState<string | null>(null)
+  const [tooltipSeriesMeta, setTooltipSeriesMeta] = useState(false)
   const [states, setStates] = useState<Record<DatasetKey, DatasetRuntimeState>>({
     'home-loans': initialState(),
     savings: initialState(),
@@ -238,6 +239,7 @@ export default function App() {
   useEffect(() => {
     setProductPanelOpen(false)
     setProductFocusId(null)
+    setTooltipSeriesMeta(false)
   }, [activeDataset, chartRequestKey])
 
   function updateSelection(nextSelection: AnySelection) {
@@ -540,7 +542,9 @@ export default function App() {
               movesPoints={currentState.movesPoints}
               hiddenSeriesIds={currentState.hiddenSeriesIds}
               highlightedSeriesId={currentState.highlightedSeriesId}
+              showTooltipSeriesMeta={tooltipSeriesMeta}
               onSeriesLineClick={(seriesId) => {
+                setTooltipSeriesMeta(true)
                 setProductPanelOpen(true)
                 setProductFocusId(seriesId)
               }}
@@ -553,6 +557,7 @@ export default function App() {
               onDismiss={() => {
                 setProductPanelOpen(false)
                 setProductFocusId(null)
+                setTooltipSeriesMeta(false)
               }}
               onToggle={toggleSeries}
               onHighlight={(seriesId) =>
