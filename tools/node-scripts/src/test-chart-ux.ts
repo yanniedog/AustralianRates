@@ -121,9 +121,20 @@ async function switchReportModeWithoutAnalyticsFetch(page, mode) {
     page.context().on('request', handler);
     try {
         await page.evaluate((nextMode) => {
+            const target = String(nextMode || '').trim().toLowerCase();
             const buttons = Array.from(document.querySelectorAll('.lwc-report-viewmode-tab'));
-            const match = buttons.find((button) => String(button.textContent || '').trim().toLowerCase() === String(nextMode || '').trim().toLowerCase());
-            if (match instanceof HTMLElement) match.click();
+            const buttonLabel = target === 'bank' ? 'best' : target;
+            const buttonMatch = buttons.find((button) => String(button.textContent || '').trim().toLowerCase() === buttonLabel);
+            if (buttonMatch instanceof HTMLElement) {
+                buttonMatch.click();
+                return;
+            }
+
+            const select = document.querySelector('.lwc-report-viewmode-select');
+            if (select instanceof HTMLSelectElement) {
+                select.value = target === 'bank' ? 'bank' : target;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
         }, mode);
         await page.waitForFunction((nextMode) => {
             const output = document.getElementById('chart-output');
@@ -213,7 +224,7 @@ function verifyChartState(metrics, failures, label, expectedView) {
 }
 
 async function verifyReportModes(page, section, failures, labelPrefix) {
-    for (const mode of ['bands', 'moves']) {
+    for (const mode of ['bands', 'bank', 'products']) {
         const requestCounts = await switchReportModeWithoutAnalyticsFetch(page, mode);
         if (requestCounts.seriesRequests !== 0) failures.push(`${labelPrefix} ${mode}: switching modes triggered ${requestCounts.seriesRequests} unexpected /analytics/series requests`);
         if (requestCounts.plotRequests !== 0) failures.push(`${labelPrefix} ${mode}: switching modes triggered ${requestCounts.plotRequests} unexpected /analytics/report-plot requests`);

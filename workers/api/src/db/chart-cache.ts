@@ -17,7 +17,13 @@ import {
 } from '../utils/chart-window'
 
 export type ChartCacheSection = 'home_loans' | 'savings' | 'term_deposits'
-export type ChartCacheScope = 'default' | `window:${ChartWindow}`
+type ChartCachePreset = 'consumer-default'
+
+export type ChartCacheScope =
+  | 'default'
+  | `window:${ChartWindow}`
+  | `preset:${ChartCachePreset}`
+  | `preset:${ChartCachePreset}:window:${ChartWindow}`
 
 const CACHE_TABLE = 'chart_request_cache'
 const LEGACY_CACHE_TABLE = 'chart_pivot_cache'
@@ -34,6 +40,8 @@ export const MAX_UNCOMPRESSED_CHARS = 500_000
 /** KV TTL for computed responses (seconds). */
 export const CHART_CACHE_KV_TTL = 300
 export { PRECOMPUTED_CHART_WINDOWS }
+
+const CONSUMER_DEFAULT_SCOPE = 'preset:consumer-default' as const
 
 function toYmd(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -248,18 +256,102 @@ function buildDefaultRequestInput(
   }
 }
 
-function resolveDefaultChartScope(params: Record<string, string | undefined>): ChartCacheScope {
+function resolveRawDefaultChartScope(params: Record<string, string | undefined>): ChartCacheScope {
   const chartWindow = parseChartWindow(params.chart_window)
   return chartWindow ? buildChartWindowScope(chartWindow) : 'default'
+}
+
+function resolveConsumerDefaultChartScope(params: Record<string, string | undefined>): ChartCacheScope {
+  const chartWindow = parseChartWindow(params.chart_window)
+  return chartWindow ? `${CONSUMER_DEFAULT_SCOPE}:window:${chartWindow}` : CONSUMER_DEFAULT_SCOPE
+}
+
+function hasNoSelectiveBaseFilters(params: DefaultCheckInput): boolean {
+  if (params.bank || (params.banks && params.banks.length > 0)) return false
+  if (params.includeRemoved) return false
+  if (params.includeManual) return false
+  if (params.excludeCompareEdgeCases === false) return false
+  if (params.mode && params.mode !== 'all') return false
+  if (params.startDate?.trim() || params.endDate?.trim()) return false
+  return true
+}
+
+function isDefaultishMinRate(value: unknown): boolean {
+  if (value == null) return true
+  return Number(value) === 0.01
+}
+
+export function isConsumerDefaultChartRequest(
+  section: ChartCacheSection,
+  params: DefaultCheckInput,
+): boolean {
+  if (!hasNoSelectiveBaseFilters(params)) return false
+  if (section === 'home_loans') {
+    const h = params as DefaultCheckInput & {
+      securityPurpose?: string
+      repaymentType?: string
+      rateStructure?: string
+      lvrTier?: string
+      featureSet?: string
+      minRate?: number
+      maxRate?: number
+      minComparisonRate?: number
+      maxComparisonRate?: number
+    }
+    return (
+      h.securityPurpose === 'owner_occupied' &&
+      h.repaymentType === 'principal_and_interest' &&
+      h.rateStructure === 'variable' &&
+      h.lvrTier === 'lvr_80-85%' &&
+      !h.featureSet &&
+      isDefaultishMinRate(h.minRate) &&
+      h.maxRate == null &&
+      h.minComparisonRate == null &&
+      h.maxComparisonRate == null
+    )
+  }
+  if (section === 'savings') {
+    const s = params as DefaultCheckInput & {
+      accountType?: string
+      rateType?: string
+      depositTier?: string
+      balanceMin?: number
+      balanceMax?: number
+      minRate?: number
+      maxRate?: number
+    }
+    return (
+      s.accountType === 'savings' &&
+      !s.rateType &&
+      !s.depositTier &&
+      s.balanceMin == null &&
+      s.balanceMax == null &&
+      isDefaultishMinRate(s.minRate) &&
+      s.maxRate == null
+    )
+  }
+  return false
+}
+
+export function resolveChartCacheScope(
+  section: ChartCacheSection,
+  params: Record<string, string | undefined>,
+): ChartCacheScope | null {
+  const requestInput = buildDefaultRequestInput(section, params)
+  if (isDefaultChartRequest(section, requestInput)) {
+    return resolveRawDefaultChartScope(params)
+  }
+  if (isConsumerDefaultChartRequest(section, requestInput)) {
+    return resolveConsumerDefaultChartScope(params)
+  }
+  return null
 }
 
 export function resolveDefaultChartCacheScope(
   section: ChartCacheSection,
   params: Record<string, string | undefined>,
 ): ChartCacheScope | null {
-  return isDefaultChartRequest(section, buildDefaultRequestInput(section, params))
-    ? resolveDefaultChartScope(params)
-    : null
+  return resolveChartCacheScope(section, params)
 }
 
 export type ChartCacheRow = {
@@ -417,11 +509,26 @@ export function buildChartCacheKey(
 }
 
 export function buildPrecomputedChartScope(window: ChartWindow | null): ChartCacheScope {
+  return buildPrecomputedChartScopeForPreset(window, null)
+}
+
+export function buildPrecomputedChartScopeForPreset(
+  window: ChartWindow | null,
+  preset: ChartCachePreset | null,
+): ChartCacheScope {
+  if (preset === 'consumer-default') {
+    return window ? `${CONSUMER_DEFAULT_SCOPE}:window:${window}` : CONSUMER_DEFAULT_SCOPE
+  }
   return window ? buildChartWindowScope(window) : 'default'
 }
 
-export function buildPrecomputedChartParams(scope: ChartCacheScope): Record<string, string | undefined> {
-  if (scope === 'default') return {}
+export function buildPrecomputedChartParams(
+  scope: ChartCacheScope,
+): Record<string, string | undefined> {
+  if (scope === 'default' || scope === CONSUMER_DEFAULT_SCOPE) return {}
+  if (scope.startsWith(`${CONSUMER_DEFAULT_SCOPE}:window:`)) {
+    return { chart_window: scope.slice(`${CONSUMER_DEFAULT_SCOPE}:window:`.length) }
+  }
   return { chart_window: scope.slice('window:'.length) }
 }
 
@@ -453,7 +560,7 @@ export async function getCachedOrCompute(
     }
   }
 
-  const cacheScope = resolveDefaultChartCacheScope(section, params)
+  const cacheScope = resolveChartCacheScope(section, params)
   if (cacheScope) {
     const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope)
     if (d1Cached) {

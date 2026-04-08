@@ -1,9 +1,11 @@
 import { getReadDb } from '../db/read-db'
 import {
   buildPrecomputedChartScope,
+  buildPrecomputedChartScopeForPreset,
   PRECOMPUTED_CHART_WINDOWS,
   resolveChartDateRangeFromDb,
   writeD1ChartCache,
+  type ChartCacheScope,
   type ChartCacheSection,
 } from '../db/chart-cache'
 import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
@@ -22,7 +24,12 @@ const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
 const REPRESENTATIONS = ['day', 'change'] as const
 const REPORT_PLOT_MODES: ReportPlotMode[] = ['moves', 'bands']
 const DEFAULT_CACHE_LOOKBACK_DAYS = 365
-const PRECOMPUTED_SCOPES: Array<'default' | ChartWindow> = ['default', ...PRECOMPUTED_CHART_WINDOWS]
+
+type PrecomputedScopeSpec = {
+  cacheScope: ChartCacheScope
+  window: ChartWindow | null
+  preset: 'consumer-default' | null
+}
 
 const SECTION_TABLES: Record<ChartCacheSection, string> = {
   home_loans: 'historical_loan_rates',
@@ -72,22 +79,82 @@ async function defaultFilters(
   }
 }
 
+type PrecomputedFilters = {
+  startDate: string
+  endDate: string
+  mode: 'all'
+  includeRemoved: false
+  sourceMode: 'all'
+  securityPurpose?: 'owner_occupied'
+  repaymentType?: 'principal_and_interest'
+  rateStructure?: 'variable'
+  lvrTier?: 'lvr_80-85%'
+  minRate?: number
+  accountType?: 'savings'
+}
+
+function precomputedScopeSpecs(section: ChartCacheSection): PrecomputedScopeSpec[] {
+  const rawScopes: PrecomputedScopeSpec[] = [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) => ({
+    cacheScope: buildPrecomputedChartScope(window),
+    window,
+    preset: null,
+  }))
+  if (section === 'home_loans' || section === 'savings') {
+    return rawScopes.concat(
+      [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) => ({
+        cacheScope: buildPrecomputedChartScopeForPreset(window, 'consumer-default'),
+        window,
+        preset: 'consumer-default' as const,
+      })),
+    )
+  }
+  return rawScopes
+}
+
+function applyPresetFilters(
+  section: ChartCacheSection,
+  filters: PrecomputedFilters,
+  preset: 'consumer-default' | null,
+): PrecomputedFilters {
+  if (preset !== 'consumer-default') return filters
+  if (section === 'home_loans') {
+    return {
+      ...filters,
+      securityPurpose: 'owner_occupied',
+      repaymentType: 'principal_and_interest',
+      rateStructure: 'variable',
+      lvrTier: 'lvr_80-85%',
+      // Public home-loan UI injects 0.01 as the min-rate display sentinel on first load.
+      minRate: 0.01,
+    }
+  }
+  if (section === 'savings') {
+    return {
+      ...filters,
+      accountType: 'savings',
+    }
+  }
+  return filters
+}
+
 async function scopeFilters(
   db: EnvBindings['DB'],
   section: ChartCacheSection,
-  scope: 'default' | ChartWindow,
-): Promise<{ startDate: string; endDate: string; mode: 'all'; includeRemoved: false; sourceMode: 'all' }> {
-  if (scope === 'default') return defaultFilters(db, section)
-  return resolveChartDateRangeFromDb(
-    db,
-    section,
-    {
-      mode: 'all' as const,
-      includeRemoved: false,
-      sourceMode: 'all' as const,
-    },
-    { window: scope },
-  ) as Promise<{ startDate: string; endDate: string; mode: 'all'; includeRemoved: false; sourceMode: 'all' }>
+  spec: PrecomputedScopeSpec,
+): Promise<PrecomputedFilters> {
+  const baseFilters = !spec.window
+    ? await defaultFilters(db, section)
+    : (await resolveChartDateRangeFromDb(
+        db,
+        section,
+        {
+          mode: 'all' as const,
+          includeRemoved: false,
+          sourceMode: 'all' as const,
+        },
+        { window: spec.window },
+      )) as PrecomputedFilters
+  return applyPresetFilters(section, baseFilters, spec.preset)
 }
 
 /** Refresh scoped chart request caches for all sections and representations. Called by cron every 15 min. */
@@ -110,9 +177,9 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   }
 
   for (const section of SECTIONS) {
-    for (const scope of PRECOMPUTED_SCOPES) {
-      const filters = await scopeFilters(db, section, scope)
-      const cacheScope = buildPrecomputedChartScope(scope === 'default' ? null : scope)
+    for (const spec of precomputedScopeSpecs(section)) {
+      const filters = await scopeFilters(db, section, spec)
+      const cacheScope = spec.cacheScope
       for (const rep of REPRESENTATIONS) {
         try {
           const result =

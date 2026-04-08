@@ -216,6 +216,6 @@ describe('report-plot cache refresh', () => {
       .prepare('SELECT COUNT(*) AS n FROM report_plot_request_cache')
       .first<{ n: number }>()
 
-    expect(Number(row?.n || 0)).toBe(36)
+    expect(Number(row?.n || 0)).toBe(60)
   })
 })

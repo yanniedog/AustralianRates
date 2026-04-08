@@ -74,9 +74,41 @@
         }
     }
 
+    function sortQueryParams(url) {
+        var u = String(url || '').trim();
+        if (!u) return u;
+        try {
+            var parsed = new URL(u, window.location.href);
+            var entries = [];
+            parsed.searchParams.forEach(function (value, key) {
+                entries.push([key, value]);
+            });
+            entries.sort(function (left, right) {
+                if (left[0] === right[0]) return String(left[1]).localeCompare(String(right[1]));
+                return String(left[0]).localeCompare(String(right[0]));
+            });
+            parsed.search = '';
+            entries.forEach(function (entry) {
+                parsed.searchParams.append(entry[0], entry[1]);
+            });
+            return parsed.toString();
+        } catch (_error) {
+            return u;
+        }
+    }
+
+    function prepareRequestUrl(url, options) {
+        var opts = options || {};
+        var nextUrl = String(url || '').trim();
+        if (!nextUrl) return nextUrl;
+        if (opts.sortQuery) nextUrl = sortQueryParams(nextUrl);
+        if (!opts.skipCacheBust) nextUrl = appendCacheBust(nextUrl);
+        return nextUrl;
+    }
+
     async function requestJson(url, options) {
         var opts = options || {};
-        url = appendCacheBust(url || '');
+        url = prepareRequestUrl(url || '', opts);
         var timeoutMs = asPositiveInt(opts.timeoutMs, 12000);
         var retryCount = Math.max(0, Math.floor(Number(opts.retryCount || 0)));
         var retryDelayMs = asPositiveInt(opts.retryDelayMs, 650);
@@ -165,6 +197,8 @@
         describeError: describeError,
         isRetriable: isRetriable,
         isTimeoutError: isTimeoutError,
+        prepareRequestUrl: prepareRequestUrl,
         requestJson: requestJson,
+        sortQueryParams: sortQueryParams,
     };
 })();

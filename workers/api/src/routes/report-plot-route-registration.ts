@@ -95,6 +95,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
   )
 
   withPublicCache(c, REPORT_PLOT_CACHE_MAX_AGE)
+  c.header('X-AR-Cache', payload.fromCache)
   return c.json({
     ok: true,
     ...payload,

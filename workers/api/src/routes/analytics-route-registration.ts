@@ -105,6 +105,9 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const compactRows = wantsCompactRows(merged) ? buildGroupedChartRows(result.rows) : null
 
   withPublicCache(c, CHART_CACHE_MAX_AGE)
+  if (c.req.method === 'GET') {
+    c.header('X-AR-Cache', result.fromCache)
+  }
   return c.json({
     ok: true,
     representation: result.representation,

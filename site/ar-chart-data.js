@@ -561,48 +561,183 @@
         };
     }
 
+    function stableQueryString(params) {
+        var pairs = [];
+        Object.keys(params || {}).forEach(function (key) {
+            var value = params[key];
+            if (value == null) return;
+            pairs.push([String(key), String(value)]);
+        });
+        pairs.sort(function (left, right) {
+            if (left[0] === right[0]) return left[1].localeCompare(right[1]);
+            return left[0].localeCompare(right[0]);
+        });
+        return pairs.map(function (entry) {
+            return encodeURIComponent(entry[0]) + '=' + encodeURIComponent(entry[1]);
+        }).join('&');
+    }
+
+    function isKnownChartWindow(value) {
+        var text = String(value || '').trim().toUpperCase();
+        return text === '' || text === '30D' || text === '90D' || text === '180D' || text === '1Y' || text === 'ALL';
+    }
+
+    function isDefaultishMinRate(value) {
+        var text = String(value == null ? '' : value).trim();
+        if (!text) return true;
+        return Number(text) === 0.01;
+    }
+
+    function isDisabledCompareEdgeCases(value) {
+        var text = String(value == null ? '' : value).trim().toLowerCase();
+        return text === '0' || text === 'false' || text === 'no' || text === 'off';
+    }
+
+    function hasNoSelectiveFilters(params, requestKind) {
+        if (!params || typeof params !== 'object') return true;
+        if (params.bank || params.banks) return false;
+        if (params.include_removed === 'true') return false;
+        if (params.include_manual === 'true') return false;
+        if (isDisabledCompareEdgeCases(params.exclude_compare_edge_cases)) return false;
+        if (params.start_date || params.end_date) return false;
+        if (!isKnownChartWindow(params.chart_window)) return false;
+        if (params.dataset_mode && String(params.dataset_mode).trim() !== 'all') return false;
+        if (requestKind === 'series' && params.mode && String(params.mode).trim() !== 'all') return false;
+        return true;
+    }
+
+    function isCacheablePublicChartRequest(requestKind, params) {
+        if (!hasNoSelectiveFilters(params, requestKind)) return false;
+        var section = String((window.AR && window.AR.section) || 'home-loans');
+        if (section === 'home-loans') {
+            var rawDefault = !params.security_purpose
+                && !params.repayment_type
+                && !params.rate_structure
+                && !params.lvr_tier
+                && !params.feature_set
+                && !params.min_rate
+                && !params.max_rate
+                && !params.min_comparison_rate
+                && !params.max_comparison_rate;
+            var consumerPreset = params.security_purpose === 'owner_occupied'
+                && params.repayment_type === 'principal_and_interest'
+                && params.rate_structure === 'variable'
+                && params.lvr_tier === 'lvr_80-85%'
+                && !params.feature_set
+                && isDefaultishMinRate(params.min_rate)
+                && !params.max_rate
+                && !params.min_comparison_rate
+                && !params.max_comparison_rate;
+            return rawDefault || consumerPreset;
+        }
+        if (section === 'savings') {
+            var savingsRawDefault = !params.account_type
+                && !params.rate_type
+                && !params.deposit_tier
+                && !params.balance_min
+                && !params.balance_max
+                && isDefaultishMinRate(params.min_rate)
+                && !params.max_rate;
+            var savingsPreset = params.account_type === 'savings'
+                && !params.rate_type
+                && !params.deposit_tier
+                && !params.balance_min
+                && !params.balance_max
+                && isDefaultishMinRate(params.min_rate)
+                && !params.max_rate;
+            return savingsRawDefault || savingsPreset;
+        }
+        if (section === 'term-deposits') {
+            return !params.term_months
+                && !params.deposit_tier
+                && !params.interest_payment
+                && !params.balance_min
+                && !params.balance_max
+                && isDefaultishMinRate(params.min_rate)
+                && !params.max_rate;
+        }
+        return false;
+    }
+
+    function buildRequestPolicy(path, params, requestKind) {
+        var cacheable = isCacheablePublicChartRequest(requestKind, params || {});
+        var query = stableQueryString(params || {});
+        return {
+            url: apiBase + path + (query ? '?' + query : ''),
+            fetchCache: cacheable ? 'default' : 'no-store',
+            skipCacheBust: cacheable,
+            sortQuery: cacheable,
+        };
+    }
+
     function fetchAnalyticsRows(params) {
-        var query = new URLSearchParams(params || {});
-        query.set('compact', '1');
-        var url = apiBase + '/analytics/series?' + query.toString();
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            queryParams[key] = params[key];
+        });
+        queryParams.compact = '1';
+        var policy = buildRequestPolicy('/analytics/series', queryParams, 'series');
         if (requestJson) {
-            return requestJson(url, {
+            return requestJson(policy.url, {
                 requestLabel: 'Chart history',
                 timeoutMs: 40000,
                 retryCount: 0,
+                cache: policy.fetchCache,
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
             }).then(function (result) {
                 return result.data;
             }).catch(function (err) {
                 throw err;
             });
         }
-        var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
-        return fetch(fetchUrl, { cache: 'no-store' }).then(function (response) {
+        var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
+            ? window.AR.network.prepareRequestUrl(policy.url, {
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
+            })
+            : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
+                ? window.AR.network.appendCacheBust(policy.url)
+                : policy.url);
+        return fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/series');
             return response.json();
         });
     }
 
     function fetchReportPlot(mode, params) {
-        var query = new URLSearchParams(params || {});
-        query.delete('representation');
-        query.delete('sort');
-        query.delete('dir');
-        query.set('mode', String(mode || 'moves'));
-        var url = apiBase + '/analytics/report-plot?' + query.toString();
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            queryParams[key] = params[key];
+        });
+        delete queryParams.representation;
+        delete queryParams.sort;
+        delete queryParams.dir;
+        queryParams.mode = String(mode || 'moves');
+        var policy = buildRequestPolicy('/analytics/report-plot', queryParams, 'report-plot');
         if (requestJson) {
-            return requestJson(url, {
+            return requestJson(policy.url, {
                 requestLabel: 'Report plot ' + String(mode || 'moves'),
                 timeoutMs: 40000,
                 retryCount: 0,
+                cache: policy.fetchCache,
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
             }).then(function (result) {
                 return result.data;
             }).catch(function (err) {
                 throw err;
             });
         }
-        var fetchUrl = (window.AR.network && window.AR.network.appendCacheBust) ? window.AR.network.appendCacheBust(url) : url;
-        return fetch(fetchUrl, { cache: 'no-store' }).then(function (response) {
+        var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
+            ? window.AR.network.prepareRequestUrl(policy.url, {
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
+            })
+            : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
+                ? window.AR.network.appendCacheBust(policy.url)
+                : policy.url);
+        return fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/report-plot');
             return response.json();
         });
