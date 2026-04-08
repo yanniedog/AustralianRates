@@ -2,8 +2,8 @@
  * Term Deposit Report chart — LightweightCharts (TradingView) implementation.
  *
  * View modes:
- *   'bank'     — Best TD rate per bank for preferred term (default)
- *   'products' — Individual product lines across all banks
+ *   'bank'     — Best TD rate per bank for preferred term
+ *   'products' — Individual product lines across all banks (default)
  *   'focus'    — All products for a single selected bank
  *
  * Always shows RBA cash rate + CPI overlay lines.
@@ -199,7 +199,6 @@
             });
         });
         products.sort(function (a, b) { return b.latest - a.latest; });
-        if (!focusBank) products = products.slice(0, 25);
         var M = window.AR.chartMacroLwcShared;
         products.forEach(function (p, i) {
             p.short = bankShort(p.bankName);
@@ -347,7 +346,7 @@
         var overlayDefs = overlayModule.prepareWindowSeries ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], windowStart, ctxMax) : [];
 
         var compact = (container.clientWidth || 800) < 480;
-        var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? 25 : 100);
+        var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : 100);
         var maxLines = M.resolveChartProductLimit(defaultMaxLines);
         var visiLines = lines.slice(0, Math.min(lines.length, maxLines));
 

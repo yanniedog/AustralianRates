@@ -246,7 +246,7 @@
         if (value === 'bands') return 'bands';
         if (value === 'products') return 'products';
         if (value === 'focus') return 'focus';
-        return 'bank';
+        return 'products';
     }
 
     function preloadBankIcons(bankList) {
@@ -258,7 +258,7 @@
     }
 
     /**
-     * View mode bar: Bands | product dropdown (Best / Products) | horizontal bank logo tray (focus).
+     * View mode bar: Bands | product dropdown (Products / Best) | horizontal bank logo tray (focus).
      */
     function createReportViewModeBar(opts) {
         var section = opts.section;
@@ -293,15 +293,15 @@
         select.className = 'lwc-report-viewmode-select';
         select.setAttribute('aria-label', 'Products view');
 
-        var bestOption = document.createElement('option');
-        bestOption.value = 'bank';
-        bestOption.textContent = 'Best';
-        select.appendChild(bestOption);
-
         var productsOption = document.createElement('option');
         productsOption.value = 'products';
         productsOption.textContent = 'Products';
         select.appendChild(productsOption);
+
+        var bestOption = document.createElement('option');
+        bestOption.value = 'bank';
+        bestOption.textContent = 'Best';
+        select.appendChild(bestOption);
 
         select.value = vm.mode === 'products' || vm.mode === 'focus' ? 'products' : 'bank';
         select.addEventListener('change', function () {
@@ -580,7 +580,7 @@
     var _viewModeBySection = {};
 
     function getViewMode(section) {
-        var state = _viewModeBySection[section] || { mode: 'bank', focusBank: '' };
+        var state = _viewModeBySection[section] || { mode: 'products', focusBank: '' };
         return {
             mode: normalizeViewMode(state.mode),
             focusBank: String(state.focusBank || ''),
