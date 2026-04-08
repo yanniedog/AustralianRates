@@ -218,7 +218,7 @@ type BundleMetrics = {
   remediation_hints: number | null
   replay_queue_count: number | null
   coverage_report_present: boolean
-  log_stats_count: number | null
+  log_problem_row_total: number | null
 }
 
 function readBundleMetrics(bundleAbsPath: string): BundleMetrics | null {
@@ -229,17 +229,18 @@ function readBundleMetrics(bundleAbsPath: string): BundleMetrics | null {
       remediation?: { hints?: unknown[] }
       replay_queue?: { count?: number }
       coverage_gaps?: { report?: unknown }
-      logs?: { stats?: { count?: number } }
+      logs?: { total?: number }
     }
     const hints = Array.isArray(j.remediation?.hints) ? j.remediation.hints.length : null
     const rq = j.replay_queue?.count
+    const logTotal = j.logs?.total
     return {
       health_run_id: j.meta?.health_run_id ?? null,
       health_checked_at: j.meta?.health_checked_at ?? null,
       remediation_hints: hints,
       replay_queue_count: typeof rq === 'number' ? rq : null,
       coverage_report_present: j.coverage_gaps?.report != null,
-      log_stats_count: typeof j.logs?.stats?.count === 'number' ? j.logs.stats.count : null,
+      log_problem_row_total: typeof logTotal === 'number' ? logTotal : null,
     }
   } catch {
     return null
@@ -321,7 +322,6 @@ async function mainAsync(): Promise<void> {
   }
 
   let bundleGateCode = 0
-  let bundleGateMessage = ''
   if (bundleWritten && !tolerateBundleDb) {
     console.log('\n--- Step 5: bundle database / integrity gate ---\n')
     try {
@@ -329,8 +329,7 @@ async function mainAsync(): Promise<void> {
       console.log('[doctor] Bundle integrity + CDR audit gates passed.')
     } catch (e) {
       bundleGateCode = 1
-      bundleGateMessage = (e as Error).message
-      console.error('[doctor]', bundleGateMessage)
+      console.error('[doctor]', (e as Error).message)
     }
   } else if (!skipBundle && !bundleWritten && hasAdminToken()) {
     console.warn(
@@ -363,7 +362,7 @@ async function mainAsync(): Promise<void> {
     console.log(`  remediation_hints:                 ${metrics.remediation_hints ?? '(n/a)'}`)
     console.log(`  replay_queue_count:                ${metrics.replay_queue_count ?? '(n/a)'}`)
     console.log(`  coverage_gaps.report:              ${metrics.coverage_report_present ? 'present' : 'absent'}`)
-    console.log(`  logs.stats.count (in bundle):      ${metrics.log_stats_count ?? '(n/a)'}`)
+    console.log(`  logs.total (problem rows in bundle): ${metrics.log_problem_row_total ?? '(n/a)'}`)
   }
   if (!dumpBundle && bundleWritten) {
     console.log(`  (use --dump-bundle-diagnostics for full status_page_diagnostics / diagnostics / integrity_audit JSON)`)
