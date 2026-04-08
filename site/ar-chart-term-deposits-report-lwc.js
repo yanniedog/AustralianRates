@@ -604,28 +604,33 @@
         });
 
         // Resize
+        var disposed = false;
         var ro = new ResizeObserver(function (entries) {
+            if (disposed) return;
             var e = entries[0];
             if (!e) return;
-            chart.resize(e.contentRect.width, Math.max(200, e.contentRect.height));
-            chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
-            M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
-                startYmd: viewStart,
-                endYmd: ctxMax,
-                lineColor: t.rba,
-                labelBg: t.ttBg,
-                labelColor: t.rba,
-            });
+            var rw = Number(e.contentRect.width);
+            var rh = Number(e.contentRect.height);
+            if (!Number.isFinite(rw) || rw < 1 || !Number.isFinite(rh) || rh < 1) return;
+            try {
+                chart.resize(rw, Math.max(200, rh));
+                chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
+                M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
+                    startYmd: viewStart,
+                    endYmd: ctxMax,
+                    lineColor: t.rba,
+                    labelBg: t.ttBg,
+                    labelColor: t.rba,
+                });
+            } catch (_e) {}
         });
         ro.observe(mount);
-
-        var disposed = false;
         var state = {
             chart: chart, mount: mount, kind: 'termDepositReport',
             dispose: function () {
                 if (disposed) return;
                 disposed = true;
-                ro.disconnect();
+                try { ro.disconnect(); } catch (_) {}
                 try {
                     if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.unregisterReportLegend === 'function') {
                         window.AR.chartSiteUi.unregisterReportLegend(legendEl);

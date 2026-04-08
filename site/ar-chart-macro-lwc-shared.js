@@ -835,10 +835,12 @@
             entry._selectionVisualState = nextState;
             entry._selectionBaseColor = baseColor;
             entry._selectionBaseLineWidth = baseLineWidth;
-            entry.api.applyOptions({
-                color: nextState === 'dimmed' ? colorWithAlpha(baseColor, 0.24) : baseColor,
-                lineWidth: nextState === 'selected' ? baseLineWidth + 1 : baseLineWidth,
-            });
+            try {
+                entry.api.applyOptions({
+                    color: nextState === 'dimmed' ? colorWithAlpha(baseColor, 0.24) : baseColor,
+                    lineWidth: nextState === 'selected' ? baseLineWidth + 1 : baseLineWidth,
+                });
+            } catch (_e) { /* LWC can throw if series is disposed */ }
         });
     }
 

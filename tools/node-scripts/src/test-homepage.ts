@@ -1183,6 +1183,13 @@ async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
     }
 
     if (pageErrors.length > 0) {
+        const stacks = pageErrors
+            .map((e) => (e.stack && e.stack.trim() ? e.stack : e.message))
+            .filter(Boolean);
+        const unique = [...new Set(stacks)];
+        unique.slice(0, 3).forEach((block) => {
+            console.error('\n--- captured pageerror (first stacks) ---\n', block);
+        });
         fail(results, `browser page errors detected: ${pageErrors.map((error) => error.message).join(' | ')}`);
     } else {
         pass(results, 'no browser page errors detected');
@@ -1227,7 +1234,9 @@ async function runTests() {
     const page = await context.newPage();
 
     page.on('pageerror', (error) => {
-        pageErrors.push({ message: error && error.message ? error.message : String(error) });
+        const message = error && error.message ? error.message : String(error);
+        const stack = error && error.stack ? String(error.stack) : '';
+        pageErrors.push({ message, stack });
     });
     page.on('requestfailed', (request) => {
         const failure = request.failure();

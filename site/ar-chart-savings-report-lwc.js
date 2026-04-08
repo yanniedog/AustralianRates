@@ -653,22 +653,27 @@
         });
 
         // ── Resize ──────────────────────────────────────────────────────────
+        var disposed = false;
         var ro = new ResizeObserver(function (entries) {
+            if (disposed) return;
             var entry = entries[0];
             if (!entry) return;
-            chart.resize(entry.contentRect.width, Math.max(200, entry.contentRect.height));
-            chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
-            M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
-                startYmd: viewStart,
-                endYmd: ctxMax,
-                lineColor: t.rba,
-                labelBg: t.ttBg,
-                labelColor: t.rba,
-            });
+            var rw = Number(entry.contentRect.width);
+            var rh = Number(entry.contentRect.height);
+            if (!Number.isFinite(rw) || rw < 1 || !Number.isFinite(rh) || rh < 1) return;
+            try {
+                chart.resize(rw, Math.max(200, rh));
+                chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
+                M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
+                    startYmd: viewStart,
+                    endYmd: ctxMax,
+                    lineColor: t.rba,
+                    labelBg: t.ttBg,
+                    labelColor: t.rba,
+                });
+            } catch (_e) {}
         });
         ro.observe(mount);
-
-        var disposed = false;
         var state = {
             chart: chart,
             mount: mount,
@@ -676,7 +681,7 @@
             dispose: function () {
                 if (disposed) return;
                 disposed = true;
-                ro.disconnect();
+                try { ro.disconnect(); } catch (_) {}
                 try {
                     if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.unregisterReportLegend === 'function') {
                         window.AR.chartSiteUi.unregisterReportLegend(legendEl);
