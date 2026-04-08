@@ -295,7 +295,7 @@
 
         var productsOption = document.createElement('option');
         productsOption.value = 'products';
-        productsOption.textContent = 'Products';
+        productsOption.textContent = 'All products';
         select.appendChild(productsOption);
 
         var bestOption = document.createElement('option');

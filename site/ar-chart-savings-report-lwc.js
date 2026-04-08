@@ -323,7 +323,7 @@
 
         var compact = (container.clientWidth || 800) < 480;
         var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : 100);
-        var maxLines = M.resolveChartProductLimit(defaultMaxLines);
+        var maxLines = vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : M.resolveChartProductLimit(defaultMaxLines);
         var visiLines = lines.slice(0, Math.min(lines.length, maxLines));
 
         // ── DOM: wrapper → toggle + mount + infoBox ─────────────────────────
@@ -610,8 +610,6 @@
         chart.subscribeCrosshairMove(function (param) {
             if (!param || !param.point || !param.time) {
                 legendEl.innerHTML = defaultLegendHTML;
-                M.clearSeriesSelectionState(seriesApis);
-                infoBox.hide();
                 return;
             }
             var time = M.utcToYmd(param.time);
@@ -634,12 +632,9 @@
             });
             if (!bankItems.length && rbaVal == null && cpiVal == null && !hasEconOverlay) {
                 legendEl.innerHTML = defaultLegendHTML;
-                M.clearSeriesSelectionState(seriesApis);
-                infoBox.hide();
                 return;
             }
             refreshLegend(bankItems, rbaVal, cpiVal, time, param);
-            refreshSelectionInfo(param);
         });
 
         // ── Click → info box ────────────────────────────────────────────────

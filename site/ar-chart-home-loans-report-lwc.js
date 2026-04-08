@@ -353,7 +353,7 @@
 
         var compact = (container.clientWidth || 800) < 480;
         var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : 100);
-        var maxLines = M.resolveChartProductLimit(defaultMaxLines);
+        var maxLines = vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : M.resolveChartProductLimit(defaultMaxLines);
         var visiLines = lines.slice(0, Math.min(lines.length, maxLines));
 
         // ── DOM ─────────────────────────────────────────────────────────────
@@ -610,7 +610,7 @@
                 return;
             }
             refreshLegend(bankItems, rbaValue, cpiValue, time, param);
-            if (!pinnedSelection) refreshSelectionInfo(param);
+            if (pinnedSelection) restorePinnedSelection();
         });
 
         // Click → info box
