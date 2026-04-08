@@ -355,6 +355,12 @@
         var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : 100);
         var maxLines = vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : M.resolveChartProductLimit(defaultMaxLines);
         var visiLines = lines.slice(0, Math.min(lines.length, maxLines));
+        // #region agent log
+        (function () {
+            var su = window.AR && window.AR.chartSiteUi;
+            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cbb8e5' }, body: JSON.stringify({ sessionId: 'cbb8e5', hypothesisId: 'H1_H4_H5', location: 'ar-chart-home-loans-report-lwc.js:render', message: 'home loan report render', data: { vmMode: vm.mode, linesLen: lines.length, maxLines: maxLines === Number.MAX_SAFE_INTEGER ? 'MAX' : maxLines, visiLen: visiLines.length, allSeriesN: model && model.allSeries ? model.allSeries.length : -1, visibleSeriesN: model && model.visibleSeries ? model.visibleSeries.length : -1, siteCap: su && typeof su.getChartMaxProducts === 'function' ? su.getChartMaxProducts() : null, siteCapMode: su && typeof su.getChartMaxProductsMode === 'function' ? su.getChartMaxProductsMode() : null }, timestamp: Date.now() }) }).catch(function () {});
+        }());
+        // #endregion
 
         // ── DOM ─────────────────────────────────────────────────────────────
         container.innerHTML = '';

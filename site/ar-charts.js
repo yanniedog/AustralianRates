@@ -760,6 +760,12 @@
             drawChart();
             return;
         }
+        // #region agent log
+        if (reason === 'site-ui') {
+            var _su = window.AR && window.AR.chartSiteUi;
+            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cbb8e5' }, body: JSON.stringify({ sessionId: 'cbb8e5', hypothesisId: 'H1_H5', location: 'ar-charts.js:refreshFromCache', message: 'refreshFromCache site-ui', data: { view: currentFields.view, chartMaxProducts: _su && typeof _su.getChartMaxProducts === 'function' ? _su.getChartMaxProducts() : null }, timestamp: Date.now() }) }).catch(function () {});
+        }
+        // #endregion
         renderFromCache();
         if (chartUi.setStatus) chartUi.setStatus('LIVE ' + currentFields.view + (reason ? ' | ' + reason : ''));
     }

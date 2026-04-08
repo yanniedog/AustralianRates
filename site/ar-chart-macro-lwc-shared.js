@@ -821,6 +821,11 @@
             if (normalized) wanted[normalized] = true;
         });
         var hasActive = Object.keys(wanted).length > 0;
+        // #region agent log
+        if (hasActive && seriesApis && seriesApis.length > 4) {
+            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cbb8e5' }, body: JSON.stringify({ sessionId: 'cbb8e5', hypothesisId: 'H2', location: 'ar-chart-macro-lwc-shared.js:applySeriesSelectionState', message: 'dimming active', data: { activeKeyCount: Object.keys(wanted).length, seriesApiCount: seriesApis.length }, timestamp: Date.now() }) }).catch(function () {});
+        }
+        // #endregion
         (Array.isArray(seriesApis) ? seriesApis : []).forEach(function (entry) {
             if (!entry || !entry.api || typeof entry.api.applyOptions !== 'function') return;
             var baseColor = String(entry.baseColor || (entry.line && entry.line.color) || '#64748b');
@@ -922,8 +927,17 @@
         var cap = siteUi && typeof siteUi.getChartMaxProducts === 'function'
             ? siteUi.getChartMaxProducts()
             : null;
-        if (!Number.isFinite(Number(cap)) || Number(cap) < 1) return fallback;
-        return Math.max(1, Math.floor(Number(cap)));
+        if (!Number.isFinite(Number(cap)) || Number(cap) < 1) {
+            // #region agent log
+            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cbb8e5' }, body: JSON.stringify({ sessionId: 'cbb8e5', hypothesisId: 'H1', location: 'ar-chart-macro-lwc-shared.js:resolveChartProductLimit', message: 'resolve cap miss uses fallback', data: { fallbackIsMax: fallback >= 9007199250000000, cap: cap, mode: mode, returnVal: fallback }, timestamp: Date.now() }) }).catch(function () {});
+            // #endregion
+            return fallback;
+        }
+        var out = Math.max(1, Math.floor(Number(cap)));
+        // #region agent log
+        fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cbb8e5' }, body: JSON.stringify({ sessionId: 'cbb8e5', hypothesisId: 'H1', location: 'ar-chart-macro-lwc-shared.js:resolveChartProductLimit', message: 'resolve cap hit', data: { cap: cap, mode: mode, fallbackIsMax: fallback >= 9007199250000000, returnVal: out }, timestamp: Date.now() }) }).catch(function () {});
+        // #endregion
+        return out;
     }
 
     function seriesValueAtClick(param, api) {
