@@ -1,3 +1,9 @@
+/**
+ * Site static cache busting for local .css / .js href/src:
+ * `?v=` is the first 10 hex chars of SHA-256(file bytes). HTML is rewritten only
+ * when a referenced asset’s content changes (not on every git commit).
+ * `version.json` still records deploy commit metadata for diagnostics.
+ */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
