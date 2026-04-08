@@ -1,9 +1,10 @@
 import { startTransition, useEffect, useRef, useState } from 'react'
 import Chart from './components/Chart'
 import Legend from './components/Legend'
-import { fetchChartData, fetchFilters } from './lib/api'
+import { fetchChartData, fetchFilters, fetchReportPlotMoves } from './lib/api'
 import {
   buildChartRequestKey,
+  buildMovesRequestKey,
   datasetLabel,
   defaultSelection,
   loadHiddenSeries,
@@ -41,6 +42,8 @@ function initialState(): DatasetRuntimeState {
     hiddenSeriesIds: [],
     highlightedSeriesId: null,
     lastLoadedKey: null,
+    movesPoints: null,
+    lastMovesKey: null,
   }
 }
 
@@ -58,6 +61,8 @@ export default function App() {
   const config = configRef.current
   const initialParamsRef = useRef(new URLSearchParams(window.location.search))
   const [activeDataset, setActiveDataset] = useState<DatasetKey>(parseInitialDataset)
+  const [productPanelOpen, setProductPanelOpen] = useState(false)
+  const [productFocusId, setProductFocusId] = useState<string | null>(null)
   const [states, setStates] = useState<Record<DatasetKey, DatasetRuntimeState>>({
     'home-loans': initialState(),
     savings: initialState(),
@@ -180,6 +185,61 @@ export default function App() {
     return () => controller.abort()
   }, [activeDataset, config.prototypeSlug, currentState.error, currentState.filters, currentState.lastLoadedKey, currentState.range, currentState.response, currentState.selection])
 
+  useEffect(() => {
+    if (!currentState.selection || !currentState.filters) return
+    const movesKey = buildMovesRequestKey(activeDataset, currentState.selection, currentState.range)
+    if (currentState.lastMovesKey === movesKey && currentState.movesPoints !== null) return
+
+    const controller = new AbortController()
+    fetchReportPlotMoves(activeDataset, currentState.selection, currentState.range, controller.signal)
+      .then((points) => {
+        if (controller.signal.aborted) return
+        setStates((previous) => {
+          const slice = previous[activeDataset]
+          if (!slice.selection) return previous
+          const keyNow = buildMovesRequestKey(activeDataset, slice.selection, slice.range)
+          if (keyNow !== movesKey) return previous
+          return {
+            ...previous,
+            [activeDataset]: {
+              ...slice,
+              movesPoints: points,
+              lastMovesKey: movesKey,
+            },
+          }
+        })
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setStates((previous) => {
+          const slice = previous[activeDataset]
+          if (!slice.selection) return previous
+          const keyNow = buildMovesRequestKey(activeDataset, slice.selection, slice.range)
+          if (keyNow !== movesKey) return previous
+          return {
+            ...previous,
+            [activeDataset]: {
+              ...slice,
+              movesPoints: [],
+              lastMovesKey: movesKey,
+            },
+          }
+        })
+      })
+
+    return () => controller.abort()
+  }, [activeDataset, currentState.filters, currentState.lastMovesKey, currentState.range, currentState.selection])
+
+  const chartRequestKey =
+    currentState.selection && currentState.filters
+      ? buildChartRequestKey(activeDataset, currentState.selection, currentState.range)
+      : ''
+
+  useEffect(() => {
+    setProductPanelOpen(false)
+    setProductFocusId(null)
+  }, [activeDataset, chartRequestKey])
+
   function updateSelection(nextSelection: AnySelection) {
     setStates((previous) => ({
       ...previous,
@@ -189,6 +249,8 @@ export default function App() {
         response: null,
         error: null,
         lastLoadedKey: null,
+        movesPoints: null,
+        lastMovesKey: null,
       },
     }))
   }
@@ -420,6 +482,8 @@ export default function App() {
                     response: null,
                     error: null,
                     lastLoadedKey: null,
+                    movesPoints: null,
+                    lastMovesKey: null,
                   },
                 }))
               }
@@ -468,18 +532,28 @@ export default function App() {
           <div className="prototype-empty">No real chart data is available for the current selection.</div>
         ) : null}
         {!currentState.error && currentSeries.length > 0 ? (
-          <div className="prototype-chart-grid">
+          <div className="prototype-chart-stack">
             <Chart
               dataset={activeDataset}
               series={currentSeries}
               events={currentState.response?.events ?? []}
+              movesPoints={currentState.movesPoints}
               hiddenSeriesIds={currentState.hiddenSeriesIds}
               highlightedSeriesId={currentState.highlightedSeriesId}
+              onSeriesLineClick={(seriesId) => {
+                setProductPanelOpen(true)
+                setProductFocusId(seriesId)
+              }}
             />
             <Legend
+              open={productPanelOpen}
               series={currentSeries}
               hiddenSeriesIds={currentState.hiddenSeriesIds}
-              highlightedSeriesId={currentState.highlightedSeriesId}
+              focusSeriesId={productFocusId}
+              onDismiss={() => {
+                setProductPanelOpen(false)
+                setProductFocusId(null)
+              }}
               onToggle={toggleSeries}
               onHighlight={(seriesId) =>
                 setStates((previous) => ({

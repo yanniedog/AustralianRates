@@ -1,9 +1,11 @@
 import {
   apiBaseForDataset,
+  buildReportPlotMovesQuery,
   rangeToRequest,
   readPrototypeConfig,
   serializeQuery,
   validateChartResponse,
+  validateReportMovesPayload,
 } from './chartHelpers'
 import type {
   AnyChartResponse,
@@ -13,6 +15,7 @@ import type {
   HomeLoanFilters,
   HomeLoanSelection,
   RangeKey,
+  ReportMovesPoint,
   SavingsFilters,
   SavingsSelection,
   TdFilters,
@@ -107,4 +110,17 @@ export async function fetchChartData(
 
   const payload = await requestJson(`${apiBase}/chart-data?${query}`, signal)
   return validateChartResponse(dataset, payload)
+}
+
+export async function fetchReportPlotMoves(
+  dataset: DatasetKey,
+  selection: AnySelection,
+  range: RangeKey,
+  signal: AbortSignal,
+): Promise<ReportMovesPoint[]> {
+  const config = readPrototypeConfig()
+  const apiBase = apiBaseForDataset(dataset, config)
+  const plotQuery = buildReportPlotMovesQuery(dataset, selection, range)
+  const payload = await requestJson(`${apiBase}/analytics/report-plot?mode=moves&${plotQuery}`, signal)
+  return validateReportMovesPayload(payload)
 }

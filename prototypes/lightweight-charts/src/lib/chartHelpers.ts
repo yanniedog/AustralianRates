@@ -10,6 +10,7 @@ import type {
   PrototypeConfig,
   RangeKey,
   RenderableSeries,
+  ReportMovesPoint,
   SavingsChartResponse,
   SavingsFilters,
   SavingsSelection,
@@ -304,4 +305,85 @@ export function eventsByDate(events: ChartEvent[]): Map<string, ChartEvent[]> {
 
 export function buildChartRequestKey(dataset: DatasetKey, selection: AnySelection, range: RangeKey): string {
   return `${dataset}:${range}:${serializeQuery(selection as Record<string, string | number | boolean | Array<string | number> | undefined>)}`
+}
+
+export function buildMovesRequestKey(dataset: DatasetKey, selection: AnySelection, range: RangeKey): string {
+  return `moves:${buildChartRequestKey(dataset, selection, range)}`
+}
+
+/** Aligns with `workers/api` chart-data `lvrTierFor` mapping. */
+export function lvrTierFromNumber(lvr: number): string {
+  if (!Number.isFinite(lvr) || lvr < 0 || lvr > 95) return 'lvr_80-85%'
+  if (lvr <= 60) return 'lvr_=60%'
+  if (lvr <= 70) return 'lvr_60-70%'
+  if (lvr <= 80) return 'lvr_70-80%'
+  if (lvr <= 85) return 'lvr_80-85%'
+  if (lvr <= 90) return 'lvr_85-90%'
+  return 'lvr_90-95%'
+}
+
+function serializeSnakeQuery(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === '') return
+    search.set(key, String(value))
+  })
+  return search.toString()
+}
+
+/** Query string for `GET .../analytics/report-plot` (mode=moves added in fetch). */
+export function buildReportPlotMovesQuery(dataset: DatasetKey, selection: AnySelection, range: RangeKey): string {
+  const rangeParams = rangeToRequest(range)
+  const base: Record<string, string | number | undefined> = {
+    min_rate: 0.01,
+    start_date: rangeParams.startDate,
+    end_date: rangeParams.endDate,
+  }
+
+  if (dataset === 'home-loans') {
+    const s = selection as HomeLoanSelection
+    return serializeSnakeQuery({
+      ...base,
+      security_purpose: s.occupancy === 'Investor' ? 'investment' : 'owner_occupied',
+      repayment_type: s.repaymentType === 'IO' ? 'interest_only' : 'principal_and_interest',
+      lvr_tier: lvrTierFromNumber(s.lvr),
+      rate_structure: 'variable',
+      banks: s.lenders.length ? s.lenders.join(',') : undefined,
+    })
+  }
+
+  if (dataset === 'savings') {
+    const s = selection as SavingsSelection
+    return serializeSnakeQuery({
+      ...base,
+      banks: s.lenders.length ? s.lenders.join(',') : undefined,
+      account_type: s.accountType,
+      rate_type: s.rateType,
+      deposit_tier: s.depositTier,
+    })
+  }
+
+  const s = selection as TdSelection
+  return serializeSnakeQuery({
+    ...base,
+    banks: s.lenders.length ? s.lenders.join(',') : undefined,
+    term_months: s.termMonths != null ? String(s.termMonths) : undefined,
+    interest_payment: s.interestPayment,
+    deposit_tier: s.depositTier,
+  })
+}
+
+export function validateReportMovesPayload(payload: unknown): ReportMovesPoint[] {
+  if (!isRecord(payload) || payload.mode !== 'moves' || !Array.isArray(payload.points)) {
+    throw new Error('Report plot moves response is invalid.')
+  }
+  return payload.points.map((row) => {
+    if (!isRecord(row) || !isDateString(row.date)) throw new Error('Report plot moves response is invalid.')
+    return {
+      date: row.date,
+      up_count: Number(row.up_count || 0),
+      flat_count: Number(row.flat_count || 0),
+      down_count: Number(row.down_count || 0),
+    }
+  })
 }

@@ -115,6 +115,14 @@ export type LegendState = {
   highlightedSeriesId: string | null
 }
 
+/** Matches workers/api `ReportMovesPoint` (real report-plot payload). */
+export type ReportMovesPoint = {
+  date: string
+  up_count: number
+  flat_count: number
+  down_count: number
+}
+
 export type DatasetRuntimeState = {
   filters: AnyFilters | null
   selection: AnySelection | null
@@ -126,6 +134,9 @@ export type DatasetRuntimeState = {
   hiddenSeriesIds: string[]
   highlightedSeriesId: string | null
   lastLoadedKey: string | null
+  /** Daily moves from report-plot; null if not yet loaded or fetch failed. */
+  movesPoints: ReportMovesPoint[] | null
+  lastMovesKey: string | null
 }
 
 export type PrototypeConfig = {

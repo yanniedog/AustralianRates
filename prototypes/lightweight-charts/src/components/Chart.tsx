@@ -1,7 +1,14 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { ColorType, CrosshairMode, LineSeries, LineType, createChart } from 'lightweight-charts'
+import {
+  ColorType,
+  CrosshairMode,
+  HistogramSeries,
+  LineSeries,
+  LineType,
+  createChart,
+} from 'lightweight-charts'
 import { eventsByDate, formatDate, insertWhitespaceGaps } from '../lib/chartHelpers'
-import type { ChartEvent, DatasetKey, RenderableSeries } from '../lib/types'
+import type { ChartEvent, DatasetKey, RenderableSeries, ReportMovesPoint } from '../lib/types'
 import Tooltip from './Tooltip'
 
 type TooltipState = {
@@ -24,22 +31,42 @@ type ChartProps = {
   dataset: DatasetKey
   series: RenderableSeries[]
   events: ChartEvent[]
+  movesPoints: ReportMovesPoint[] | null
   hiddenSeriesIds: string[]
   highlightedSeriesId: string | null
+  onSeriesLineClick?: (seriesId: string) => void
 }
 
 type EventLine = ChartEvent & { left: number }
+
+const MOVES_PANE_HEIGHT = 92
+const MOVES_PRICE_SCALE = 'ar-moves'
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+function movesHistogramColors(dataset: DatasetKey): { up: string; down: string } {
+  if (dataset === 'home-loans') {
+    return { up: '#b91c1c', down: '#0f766e' }
+  }
+  return { up: '#0f766e', down: '#b91c1c' }
+}
+
 export default function Chart(props: ChartProps) {
-  const chartContainerRef = useRef<HTMLDivElement | null>(null)
-  const chartRef = useRef<any>(null)
+  const chartMountRef = useRef<HTMLDivElement | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
   const seriesRefs = useRef(new Map<string, { api: any; source: RenderableSeries }>())
+  const movesUpRef = useRef<any>(null)
+  const movesDownRef = useRef<any>(null)
   const stickyTouchRef = useRef(false)
   const lastSeriesKeyRef = useRef<string>('')
+  const onLineClickRef = useRef(props.onSeriesLineClick)
+  onLineClickRef.current = props.onSeriesLineClick
+  const datasetRef = useRef(props.dataset)
+  datasetRef.current = props.dataset
+
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     left: 0,
@@ -53,23 +80,43 @@ export default function Chart(props: ChartProps) {
   const hiddenSeries = new Set(props.hiddenSeriesIds)
   const groupedEvents = eventsByDate(props.events)
 
-  const updateEventOverlay = useEffectEvent(() => {
-    const container = chartContainerRef.current
+  const positionEventOverlay = useEffectEvent(() => {
+    const mount = chartMountRef.current
     const chart = chartRef.current
-    if (!container || !chart) return
+    const overlay = overlayRef.current
+    if (!mount || !chart || !overlay) return
+    const pane0 = chart.panes()[0]?.getHTMLElement()
+    if (!pane0) {
+      overlay.style.display = 'none'
+      return
+    }
+    const mr = mount.getBoundingClientRect()
+    const pr = pane0.getBoundingClientRect()
+    overlay.style.display = 'block'
+    overlay.style.top = `${pr.top - mr.top}px`
+    overlay.style.left = '0'
+    overlay.style.width = `${mount.clientWidth}px`
+    overlay.style.height = `${pr.height}px`
+  })
+
+  const updateEventOverlay = useEffectEvent(() => {
+    const mount = chartMountRef.current
+    const chart = chartRef.current
+    if (!mount || !chart) return
     const nextLines = props.events
       .map((event) => {
         const left = chart.timeScale().timeToCoordinate(event.date)
         if (!Number.isFinite(left)) return null
         return { ...event, left: Number(left) }
       })
-      .filter((event): event is EventLine => event != null && event.left >= 0 && event.left <= container.clientWidth)
+      .filter((event): event is EventLine => event != null && event.left >= 0 && event.left <= mount.clientWidth)
     setEventLines(nextLines)
+    positionEventOverlay()
   })
 
   const updateTooltip = useEffectEvent((param: any) => {
-    const container = chartContainerRef.current
-    if (!container) return
+    const mount = chartMountRef.current
+    if (!mount) return
     const point = param?.point
     const time = typeof param?.time === 'string' ? param.time : null
 
@@ -98,8 +145,8 @@ export default function Chart(props: ChartProps) {
       .filter((row): row is NonNullable<typeof row> => row != null)
 
     const tooltipWidth = 280
-    const left = clamp(point.x + 14, 12, Math.max(12, container.clientWidth - tooltipWidth - 12))
-    const top = clamp(point.y + 14, 12, Math.max(12, container.clientHeight - 200))
+    const left = clamp(point.x + 14, 12, Math.max(12, mount.clientWidth - tooltipWidth - 12))
+    const top = clamp(point.y + 14, 12, Math.max(12, mount.clientHeight - 200))
     setTooltip({
       visible: rows.length > 0 || (groupedEvents.get(time)?.length ?? 0) > 0,
       left,
@@ -110,15 +157,67 @@ export default function Chart(props: ChartProps) {
     })
   })
 
-  useEffect(() => {
-    const container = chartContainerRef.current
-    if (!container) return
+  const applyMovesData = useEffectEvent(() => {
+    const chart = chartRef.current
+    const upApi = movesUpRef.current
+    const downApi = movesDownRef.current
+    if (!chart || !upApi || !downApi) return
+    const points = props.movesPoints
+    const pane1 = chart.panes()[1]
+    if (!pane1) return
 
-    const chart = createChart(container, {
+    if (!points || points.length === 0) {
+      upApi.setData([])
+      downApi.setData([])
+      pane1.setHeight(0)
+      return
+    }
+
+    const { up, down } = movesHistogramColors(props.dataset)
+    const upData = points.map((p) => ({
+      time: p.date,
+      value: p.up_count,
+      color: up,
+    }))
+    const downData = points.map((p) => ({
+      time: p.date,
+      value: p.down_count > 0 ? -p.down_count : 0,
+      color: down,
+    }))
+    upApi.setData(upData)
+    downApi.setData(downData)
+    upApi.applyOptions({ color: up })
+    downApi.applyOptions({ color: down })
+    pane1.setHeight(MOVES_PANE_HEIGHT)
+    positionEventOverlay()
+  })
+
+  const onChartClick = useEffectEvent((param: any) => {
+    const hovered = param?.hoveredSeries
+    if (!hovered) return
+    for (const [id, handle] of seriesRefs.current) {
+      if (handle.api === hovered) {
+        onLineClickRef.current?.(id)
+        return
+      }
+    }
+  })
+
+  useEffect(() => {
+    const mount = chartMountRef.current
+    if (!mount) return
+
+    const chart = createChart(mount, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: getComputedStyle(document.documentElement).getPropertyValue('--prototype-text').trim() || '#0f172a',
         fontFamily: '"Space Grotesk", sans-serif',
+        panes: {
+          enableResize: false,
+          separatorColor: 'rgba(148, 163, 184, 0.28)',
+          separatorHoverColor: 'rgba(148, 163, 184, 0.4)',
+        },
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: 'rgba(148, 163, 184, 0.15)' },
@@ -137,17 +236,48 @@ export default function Chart(props: ChartProps) {
     })
 
     chartRef.current = chart
-    chart.subscribeCrosshairMove(updateTooltip)
-    chart.timeScale().subscribeVisibleTimeRangeChange(updateEventOverlay)
+    chart.addPane(false)
+    const pane1 = chart.panes()[1]
+    pane1.setHeight(0)
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (!entry) return
-      chart.resize(entry.contentRect.width, entry.contentRect.height)
-      updateEventOverlay()
+    const { up, down } = movesHistogramColors(datasetRef.current)
+    const upApi = chart.addSeries(
+      HistogramSeries,
+      {
+        priceScaleId: MOVES_PRICE_SCALE,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        color: up,
+      },
+      1,
+    )
+    const downApi = chart.addSeries(
+      HistogramSeries,
+      {
+        priceScaleId: MOVES_PRICE_SCALE,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        color: down,
+      },
+      1,
+    )
+    movesUpRef.current = upApi
+    movesDownRef.current = downApi
+    chart.priceScale(MOVES_PRICE_SCALE, 1).applyOptions({
+      borderColor: 'rgba(148, 163, 184, 0.2)',
+      scaleMargins: { top: 0.15, bottom: 0.02 },
     })
 
-    resizeObserver.observe(container)
+    chart.subscribeCrosshairMove(updateTooltip)
+    chart.subscribeClick(onChartClick)
+    chart.timeScale().subscribeVisibleTimeRangeChange(updateEventOverlay)
+
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize(mount.clientWidth, mount.clientHeight)
+      updateEventOverlay()
+      positionEventOverlay()
+    })
+    resizeObserver.observe(mount)
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === 'touch') {
@@ -156,24 +286,30 @@ export default function Chart(props: ChartProps) {
     }
 
     const onDocumentPointerDown = (event: PointerEvent) => {
-      if (!container.contains(event.target as Node)) {
+      if (!mount.contains(event.target as Node)) {
         stickyTouchRef.current = false
         setTooltip((current) => ({ ...current, visible: false }))
       }
     }
 
-    container.addEventListener('pointerdown', onPointerDown)
+    mount.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('pointerdown', onDocumentPointerDown)
 
     return () => {
-      container.removeEventListener('pointerdown', onPointerDown)
+      mount.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('pointerdown', onDocumentPointerDown)
       resizeObserver.disconnect()
       chart.remove()
       chartRef.current = null
       seriesRefs.current.clear()
+      movesUpRef.current = null
+      movesDownRef.current = null
     }
-  }, [updateEventOverlay, updateTooltip])
+  }, [onChartClick, positionEventOverlay, updateEventOverlay, updateTooltip])
+
+  useEffect(() => {
+    applyMovesData()
+  }, [applyMovesData, props.dataset, props.movesPoints])
 
   useEffect(() => {
     const chart = chartRef.current
@@ -234,21 +370,23 @@ export default function Chart(props: ChartProps) {
 
   return (
     <div className="prototype-chart-area">
-      <div className="prototype-chart-canvas" ref={chartContainerRef} />
-      <div className="prototype-event-overlay" aria-hidden="true">
-        {eventLines.map((event, index) => (
-          <div
-            className="prototype-event-line"
-            data-type={event.type}
-            key={`${event.type}:${event.date}:${index}`}
-            style={{ left: event.left }}
-            title={`${formatDate(event.date)} - ${event.label}`}
-          >
-            <span className="prototype-event-label">{event.label}</span>
-          </div>
-        ))}
+      <div className="prototype-chart-viewport">
+        <div className="prototype-chart-mount" ref={chartMountRef} />
+        <div className="prototype-event-overlay" ref={overlayRef} aria-hidden="true">
+          {eventLines.map((event, index) => (
+            <div
+              className="prototype-event-line"
+              data-type={event.type}
+              key={`${event.type}:${event.date}:${index}`}
+              style={{ left: event.left }}
+              title={`${formatDate(event.date)} - ${event.label}`}
+            >
+              <span className="prototype-event-label">{event.label}</span>
+            </div>
+          ))}
+        </div>
+        <Tooltip {...tooltip} />
       </div>
-      <Tooltip {...tooltip} />
     </div>
   )
 }
