@@ -52,6 +52,11 @@ binding = "IDEMPOTENCY_KV"
 id = "6b34fb3979c3480ab74ae80c65749ae2"
 preview_id = "004d7a0f3e26440f9aeee889d27e48ca"
 
+[[kv_namespaces]]
+binding = "CHART_CACHE_KV"
+id = "f4df70d373d54e08af64efd2ec148551"
+preview_id = "3fc214de39e447f8a72d0eb46c19bf70"
+
 [[queues.consumers]]
 queue = "australianrates-ingest"
 max_batch_size = 50
@@ -137,6 +142,11 @@ queue = "australianrates-ingest-test"
 binding = "IDEMPOTENCY_KV"
 id = "11111111111111111111111111111111"
 preview_id = "11111111111111111111111111111111"
+
+[[env.test.kv_namespaces]]
+binding = "CHART_CACHE_KV"
+id = "22222222222222222222222222222222"
+preview_id = "22222222222222222222222222222222"
 
 [[env.test.queues.consumers]]
 queue = "australianrates-ingest-test"

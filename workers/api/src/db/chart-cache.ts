@@ -538,6 +538,19 @@ export type ChartAnalyticsPayload = {
   fallbackReason: string | null
 }
 
+async function writeChartPayloadToKv(
+  kv: KVNamespace | undefined,
+  key: string,
+  payload: ChartAnalyticsPayload,
+): Promise<void> {
+  if (!kv) return
+  try {
+    await kv.put(key, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
+  } catch {
+    /* ignore KV write failure */
+  }
+}
+
 /** Try KV cache, then D1 cache if default request, else compute. Returns payload and cache source. */
 export async function getCachedOrCompute(
   env: { DB: D1Database; CHART_CACHE_KV?: KVNamespace },
@@ -564,10 +577,14 @@ export async function getCachedOrCompute(
   if (cacheScope) {
     const d1Cached = await readD1ChartCache(env.DB, section, representation, cacheScope)
     if (d1Cached) {
-      return {
+      const d1Payload = {
         rows: d1Cached.rows,
         representation: d1Cached.representation,
         fallbackReason: d1Cached.fallbackReason,
+      } satisfies ChartAnalyticsPayload
+      await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      return {
+        ...d1Payload,
         fromCache: 'd1',
       }
     }
@@ -581,12 +598,6 @@ export async function getCachedOrCompute(
       /* ignore D1 cache write failure on live requests */
     }
   }
-  if (env.CHART_CACHE_KV) {
-    try {
-      await env.CHART_CACHE_KV.put(key, JSON.stringify(result), { expirationTtl: CHART_CACHE_KV_TTL })
-    } catch {
-      /* ignore KV write failure */
-    }
-  }
+  await writeChartPayloadToKv(env.CHART_CACHE_KV, key, result)
   return { ...result, fromCache: 'live' }
 }

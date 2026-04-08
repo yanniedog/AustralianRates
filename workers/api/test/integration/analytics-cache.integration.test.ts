@@ -34,6 +34,21 @@ describe('analytics cache headers', () => {
     expect(Array.isArray(json.grouped_rows?.groups)).toBe(true)
   })
 
+  it('promotes a D1-backed chart response into KV for the next hit', async () => {
+    await warmChartCache()
+
+    const url =
+      'https://example.com/api/home-loan-rates/analytics/series?compact=1&representation=day&sort=collection_date&dir=asc&security_purpose=owner_occupied&repayment_type=principal_and_interest&rate_structure=variable&lvr_tier=lvr_80-85%&min_rate=0.01'
+
+    const firstResponse = await SELF.fetch(url)
+    const secondResponse = await SELF.fetch(url)
+
+    expect(firstResponse.status).toBe(200)
+    expect(firstResponse.headers.get('X-AR-Cache')).toBe('d1')
+    expect(secondResponse.status).toBe(200)
+    expect(secondResponse.headers.get('X-AR-Cache')).toBe('kv')
+  })
+
   it('serves savings consumer default chart-window series from D1 after refresh', async () => {
     await warmChartCache()
 
@@ -88,5 +103,20 @@ describe('analytics cache headers', () => {
     expect(json.ok).toBe(true)
     expect(json.mode).toBe('moves')
     expect(Array.isArray(json.points)).toBe(true)
+  })
+
+  it('promotes a D1-backed report-plot response into KV for the next hit', async () => {
+    await warmChartCache()
+
+    const url =
+      'https://example.com/api/home-loan-rates/analytics/report-plot?mode=moves&security_purpose=owner_occupied&repayment_type=principal_and_interest&rate_structure=variable&lvr_tier=lvr_80-85%&chart_window=1Y&min_rate=0.01'
+
+    const firstResponse = await SELF.fetch(url)
+    const secondResponse = await SELF.fetch(url)
+
+    expect(firstResponse.status).toBe(200)
+    expect(firstResponse.headers.get('X-AR-Cache')).toBe('d1')
+    expect(secondResponse.status).toBe(200)
+    expect(secondResponse.headers.get('X-AR-Cache')).toBe('kv')
   })
 })

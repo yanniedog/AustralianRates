@@ -54,6 +54,19 @@ function payloadItemCount(payload: ReportPlotPayload): number {
   return payload.mode === 'moves' ? payload.points.length : payload.series.length
 }
 
+async function writeReportPlotPayloadToKv(
+  kv: KVNamespace | undefined,
+  key: string,
+  payload: ReportPlotPayload,
+): Promise<void> {
+  if (!kv) return
+  try {
+    await kv.put(key, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
+  } catch {
+    /* ignore KV write failure */
+  }
+}
+
 export async function readD1ReportPlotCache(
   db: D1Database,
   section: ReportPlotSection,
@@ -149,7 +162,10 @@ export async function getCachedOrComputeReportPlot(
   const scope = resolveDefaultReportPlotCacheScope(section, params)
   if (scope) {
     const d1Cached = await readD1ReportPlotCache(env.DB, section, mode, scope)
-    if (d1Cached) return { ...d1Cached, fromCache: 'd1' }
+    if (d1Cached) {
+      await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, key, d1Cached)
+      return { ...d1Cached, fromCache: 'd1' }
+    }
   }
 
   const payload = await compute()
@@ -160,12 +176,6 @@ export async function getCachedOrComputeReportPlot(
       /* ignore D1 cache write failure */
     }
   }
-  if (env.CHART_CACHE_KV) {
-    try {
-      await env.CHART_CACHE_KV.put(key, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
-    } catch {
-      /* ignore KV write failure */
-    }
-  }
+  await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, key, payload)
   return { ...payload, fromCache: 'live' }
 }
