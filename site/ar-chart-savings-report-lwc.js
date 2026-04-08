@@ -240,8 +240,11 @@
         if (vm.mode === 'bands' && reportPlot && typeof reportPlot.render === 'function') {
             var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
             var plotRange = reportPlot.payloadDateRange(plotPayload);
-            var plotMin = plotRange.minDate || todayYmd();
-            var plotMax = plotRange.maxDate || plotMin;
+            var fbRangeSav = reportPlot.fallbackSeriesDateBoundsFromModel
+                ? reportPlot.fallbackSeriesDateBoundsFromModel(model)
+                : { minDate: '', maxDate: '' };
+            var plotMin = plotRange.minDate || fbRangeSav.minDate || todayYmd();
+            var plotMax = plotRange.maxDate || fbRangeSav.maxDate || plotMin;
             var dataMinPlot = reportRange === 'All'
                 ? (M.resolveReportDataMin(plotMin, rbaHistory, cpiData, economicOverlaySeries) || plotMin)
                 : plotMin;
@@ -253,6 +256,7 @@
                 container: container,
                 section: section,
                 vm: vm,
+                reportViewKind: 'economicReport',
                 bankList: extractBankNames(allSeries),
                 plotPayload: plotPayload,
                 range: {

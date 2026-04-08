@@ -273,8 +273,11 @@
         if (vm.mode === 'bands' && reportPlot && typeof reportPlot.render === 'function') {
             var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
             var plotRange = reportPlot.payloadDateRange(plotPayload);
-            var plotMin = plotRange.minDate || todayYmd();
-            var plotMax = plotRange.maxDate || plotMin;
+            var fbRangeHl = reportPlot.fallbackSeriesDateBoundsFromModel
+                ? reportPlot.fallbackSeriesDateBoundsFromModel(model)
+                : { minDate: '', maxDate: '' };
+            var plotMin = plotRange.minDate || fbRangeHl.minDate || todayYmd();
+            var plotMax = plotRange.maxDate || fbRangeHl.maxDate || plotMin;
             var dataMinPlot = reportRange === 'All'
                 ? (M.resolveReportDataMin(plotMin, rbaHistory, cpiData, economicOverlaySeries) || plotMin)
                 : plotMin;
@@ -286,6 +289,7 @@
                 container: container,
                 section: section,
                 vm: vm,
+                reportViewKind: 'homeLoanReport',
                 bankList: extractBankNames(model),
                 plotPayload: plotPayload,
                 range: {

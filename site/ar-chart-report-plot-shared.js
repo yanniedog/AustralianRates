@@ -18,6 +18,22 @@
         return dates;
     }
 
+    /** When report-plot bands/moves payload has no points, use visible series dates so the chart window matches the main data. */
+    function fallbackSeriesDateBoundsFromModel(model) {
+        var all = model && (model.allSeries || model.visibleSeries) || [];
+        var minDate = '';
+        var maxDate = '';
+        all.forEach(function (s) {
+            (s.points || []).forEach(function (p) {
+                var d = String(p && p.date || '').slice(0, 10);
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+                if (!minDate || d < minDate) minDate = d;
+                if (!maxDate || d > maxDate) maxDate = d;
+            });
+        });
+        return { minDate: minDate, maxDate: maxDate };
+    }
+
     function payloadDateRange(plotPayload) {
         var minDate = '';
         var maxDate = '';
@@ -415,7 +431,7 @@
                     chart.resize({ width: width, height: height });
                 },
             },
-            kind: 'report-plot',
+            kind: options.reportViewKind || 'report-plot',
             dispose: function () {
                 chart.dispose();
                 if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
@@ -428,6 +444,7 @@
         prepareLwcMovesHistogram: prepareLwcMovesHistogram,
         attachLwcMovesPane: attachLwcMovesPane,
         payloadDateRange: payloadDateRange,
+        fallbackSeriesDateBoundsFromModel: fallbackSeriesDateBoundsFromModel,
         render: render,
     };
 })();
