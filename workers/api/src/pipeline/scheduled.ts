@@ -189,6 +189,13 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
         replayLimit: 25,
         persist: true,
       })
+      coverageAudit = await runCoverageGapAudit(env, {
+        collectionDate,
+        runSource: 'scheduled',
+        idleMinutes: 120,
+        limit: 200,
+        persist: true,
+      })
     } catch (error) {
       log.error('scheduler', 'Coverage gap auto-remediation failed', {
         code: 'coverage_slo_breach',

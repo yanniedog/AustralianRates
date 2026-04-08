@@ -240,14 +240,32 @@
         return byDateCell;
     }
 
+    function normalizeViewMode(mode) {
+        var value = String(mode || '').trim().toLowerCase();
+        if (value === 'moves') return 'bank';
+        if (value === 'bands') return 'bands';
+        if (value === 'products') return 'products';
+        if (value === 'focus') return 'focus';
+        return 'bank';
+    }
+
+    function preloadBankIcons(bankList) {
+        var BB = window.AR.bankBrand;
+        if (!BB || typeof BB.preloadIcons !== 'function') return;
+        BB.preloadIcons((Array.isArray(bankList) ? bankList : []).map(function (bank) {
+            return bank && bank.full ? bank.full : '';
+        }));
+    }
+
     /**
-     * View mode bar: Moves | Bands | Best | Products | horizontal bank logo tray (focus).
+     * View mode bar: Bands | product dropdown (Best / Products) | horizontal bank logo tray (focus).
      */
     function createReportViewModeBar(opts) {
         var section = opts.section;
         var vm = opts.vm;
         var bankList = opts.bankList || [];
         var onReRender = opts.onReRender;
+        preloadBankIcons(bankList);
 
         var bar = document.createElement('div');
         bar.className = 'lwc-report-viewmode';
@@ -262,29 +280,35 @@
             return b;
         }
 
-        var btnMoves = mkTab('Moves', vm.mode === 'moves', 'lwc-report-viewmode-tab--first');
-        btnMoves.addEventListener('click', function () {
-            setViewMode(section, 'moves');
-            onReRender();
-        });
-
-        var btnBands = mkTab('Bands', vm.mode === 'bands', '');
+        var btnBands = mkTab('Bands', vm.mode === 'bands', 'lwc-report-viewmode-tab--first');
         btnBands.addEventListener('click', function () {
             setViewMode(section, 'bands');
             onReRender();
         });
 
-        var btnBank = mkTab('Best', vm.mode === 'bank', '');
-        btnBank.addEventListener('click', function () {
-            setViewMode(section, 'bank');
-            onReRender();
-        });
+        var selectWrap = document.createElement('div');
+        selectWrap.className = 'lwc-report-viewmode-select-wrap' + (vm.mode !== 'bands' ? ' is-active' : '');
 
-        var btnAll = mkTab('Products', vm.mode === 'products', '');
-        btnAll.addEventListener('click', function () {
-            setViewMode(section, 'products');
+        var select = document.createElement('select');
+        select.className = 'lwc-report-viewmode-select';
+        select.setAttribute('aria-label', 'Products view');
+
+        var bestOption = document.createElement('option');
+        bestOption.value = 'bank';
+        bestOption.textContent = 'Best';
+        select.appendChild(bestOption);
+
+        var productsOption = document.createElement('option');
+        productsOption.value = 'products';
+        productsOption.textContent = 'Products';
+        select.appendChild(productsOption);
+
+        select.value = vm.mode === 'products' || vm.mode === 'focus' ? 'products' : 'bank';
+        select.addEventListener('change', function () {
+            setViewMode(section, select.value === 'products' ? 'products' : 'bank');
             onReRender();
         });
+        selectWrap.appendChild(select);
 
         var trayWrap = document.createElement('div');
         trayWrap.className = 'lwc-focus-bank-tray-wrap';
@@ -328,8 +352,8 @@
                 img.className = 'lwc-focus-bank-chip-logo';
                 img.width = 20;
                 img.height = 20;
-                img.loading = 'lazy';
-                img.decoding = 'async';
+                img.loading = 'eager';
+                img.decoding = 'sync';
                 img.draggable = false;
                 chip.appendChild(img);
             } else {
@@ -347,10 +371,8 @@
         });
 
         trayWrap.appendChild(tray);
-        bar.appendChild(btnMoves);
         bar.appendChild(btnBands);
-        bar.appendChild(btnBank);
-        bar.appendChild(btnAll);
+        bar.appendChild(selectWrap);
         bar.appendChild(trayWrap);
         return bar;
     }
@@ -558,11 +580,18 @@
     var _viewModeBySection = {};
 
     function getViewMode(section) {
-        return _viewModeBySection[section] || { mode: 'moves', focusBank: '' };
+        var state = _viewModeBySection[section] || { mode: 'bank', focusBank: '' };
+        return {
+            mode: normalizeViewMode(state.mode),
+            focusBank: String(state.focusBank || ''),
+        };
     }
 
     function setViewMode(section, mode, focusBank) {
-        _viewModeBySection[section] = { mode: mode || 'moves', focusBank: focusBank || '' };
+        _viewModeBySection[section] = {
+            mode: normalizeViewMode(mode),
+            focusBank: focusBank || '',
+        };
     }
 
     function productColorVariant(baseHex, idx, total) {

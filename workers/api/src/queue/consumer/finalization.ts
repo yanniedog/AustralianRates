@@ -4,6 +4,7 @@ import {
   tryMarkLenderDatasetFinalized,
   type LenderDatasetRunRow,
 } from '../../db/lender-dataset-runs'
+import { runWithD1Retry } from '../../db/d1-retry'
 import { finalizePresenceForRun } from '../../db/presence-finalize'
 import type { EnvBindings } from '../../types'
 import { isLenderDatasetReadyForFinalization } from '../../utils/lender-dataset-invariants'
@@ -212,7 +213,9 @@ export async function markDetailProcessedAndFinalize(
     errorMessage?: string | null
   },
 ): Promise<void> {
-  await defaultDeps.markLenderDatasetDetailProcessed(env.DB, input)
+  await runWithD1Retry(async () => {
+    await defaultDeps.markLenderDatasetDetailProcessed(env.DB, input)
+  })
   await finalizeLenderDataset(env, {
     runId: input.runId,
     lenderCode: input.lenderCode,

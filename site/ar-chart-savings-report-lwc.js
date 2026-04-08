@@ -238,8 +238,8 @@
         var reportRange = M.getReportRange(section);
         var allSeries = (model && (model.allSeries || model.visibleSeries)) || [];
         container.setAttribute('data-report-view-mode', vm.mode);
-        if ((vm.mode === 'moves' || vm.mode === 'bands') && reportPlot && typeof reportPlot.render === 'function') {
-            var plotPayload = model && model.reportPlots ? model.reportPlots[vm.mode] : null;
+        if (vm.mode === 'bands' && reportPlot && typeof reportPlot.render === 'function') {
+            var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
             var plotRange = reportPlot.payloadDateRange(plotPayload);
             var plotMin = plotRange.minDate || todayYmd();
             var plotMax = plotRange.maxDate || plotMin;
@@ -365,6 +365,18 @@
 
         var infoBox = createInfoBox(t);
         wrapper.appendChild(infoBox.el);
+        var movesStrip = reportPlot && typeof reportPlot.createMovesStrip === 'function'
+            ? reportPlot.createMovesStrip({
+                section: section,
+                plotPayload: model && model.reportPlots ? model.reportPlots.moves : null,
+                range: {
+                    viewStart: viewStart,
+                    ctxMax: ctxMax,
+                },
+                theme: t,
+            })
+            : null;
+        if (movesStrip) wrapper.appendChild(movesStrip);
 
         // ── LWC chart ───────────────────────────────────────────────────────
         var LineStyle = L.LineStyle || { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3, SparseDotted: 4 };

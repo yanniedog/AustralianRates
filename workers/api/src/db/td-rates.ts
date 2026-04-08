@@ -15,32 +15,7 @@ import {
   recordHistoricalWriteContractViolation,
 } from './historical-write-guard'
 
-export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Promise<void> {
-  const verdict = validateNormalizedTdRow(row)
-  if (!verdict.ok) {
-    throw new Error(`invalid_td_row:${verdict.reason}`)
-  }
-  assertHistoricalWriteAllowed('term_deposits', row)
-
-  const parsedAt = nowIso()
-  const seriesKey = tdSeriesKey(row)
-  const productCode = row.productId
-  const productKey = legacyProductKey('term_deposits', {
-    bankName: row.bankName,
-    productId: row.productId,
-    termMonths: row.termMonths,
-    depositTier: row.depositTier,
-    interestPayment: row.interestPayment,
-  })
-  const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
-  const cdrProductDetailHash =
-    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
-      ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
-      : null
-
-  await db
-    .prepare(
-      `INSERT INTO historical_term_deposit_rates (
+const UPSERT_HISTORICAL_TD_RATE_SQL = `INSERT INTO historical_term_deposit_rates (
         bank_name, collection_date, product_id, product_code, product_name,
         series_key, term_months, interest_rate, deposit_tier,
         min_deposit, max_deposit, interest_payment,
@@ -66,8 +41,70 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
         parsed_at = excluded.parsed_at,
         fetch_event_id = COALESCE(excluded.fetch_event_id, historical_term_deposit_rates.fetch_event_id),
         run_id = excluded.run_id,
-        run_source = excluded.run_source`,
-    )
+        run_source = excluded.run_source`
+
+export type TdRateWriteOptions = {
+  emitCanonicalFeed?: boolean
+  writeProjection?: boolean
+  emitProjectionChangeFeed?: boolean
+  updateCatalogs?: boolean
+  markSeriesSeen?: boolean
+  upsertLatestSeries?: boolean
+}
+
+type PreparedTdRow = {
+  row: NormalizedTdRow
+  seriesKey: string
+  productKey: string
+  productCode: string
+  retrievalType: string
+  parsedAt: string
+  cdrProductDetailHash: string | null
+}
+
+function chunk<T>(rows: T[], size: number): T[][] {
+  const output: T[][] = []
+  for (let index = 0; index < rows.length; index += size) {
+    output.push(rows.slice(index, index + size))
+  }
+  return output
+}
+
+async function prepareTdRow(db: D1Database, row: NormalizedTdRow): Promise<PreparedTdRow> {
+  const parsedAt = nowIso()
+  const seriesKey = tdSeriesKey(row)
+  const productCode = row.productId
+  const productKey = legacyProductKey('term_deposits', {
+    bankName: row.bankName,
+    productId: row.productId,
+    termMonths: row.termMonths,
+    depositTier: row.depositTier,
+    interestPayment: row.interestPayment,
+  })
+  const retrievalType = row.retrievalType ?? deriveRetrievalType(row.dataQualityFlag, row.sourceUrl)
+  const cdrProductDetailHash =
+    row.cdrProductDetailJson && row.cdrProductDetailJson.trim().length > 0
+      ? await storeCdrDetailPayload(db, row.cdrProductDetailJson)
+      : null
+
+  return {
+    row,
+    seriesKey,
+    productKey,
+    productCode,
+    retrievalType,
+    parsedAt,
+    cdrProductDetailHash,
+  }
+}
+
+function buildHistoricalTdRateStatement(
+  db: D1Database,
+  prepared: PreparedTdRow,
+): D1PreparedStatement {
+  const { row, seriesKey, productCode, retrievalType, parsedAt, cdrProductDetailHash } = prepared
+  return db
+    .prepare(UPSERT_HISTORICAL_TD_RATE_SQL)
     .bind(
       row.bankName,
       row.collectionDate,
@@ -93,140 +130,223 @@ export async function upsertTdRateRow(db: D1Database, row: NormalizedTdRow): Pro
       row.runId ?? null,
       row.runSource ?? 'scheduled',
     )
-    .run()
-
-  await emitCanonicalHistoricalUpsert(
-    db,
-    'term_deposits',
-    {
-      bank_name: row.bankName,
-      collection_date: row.collectionDate,
-      product_id: row.productId,
-      term_months: row.termMonths,
-      deposit_tier: row.depositTier,
-      interest_payment: row.interestPayment,
-      run_source: row.runSource ?? 'scheduled',
-    },
-    row.runId ?? null,
-    row.collectionDate,
-  )
-
-  await upsertProductCatalog(db, {
-    dataset: 'term_deposits',
-    bankName: row.bankName,
-    productId: row.productId,
-    productCode,
-    productName: row.productName,
-    collectionDate: row.collectionDate,
-    runId: row.runId ?? null,
-    sourceUrl: row.sourceUrl,
-    productUrl: row.productUrl ?? row.sourceUrl,
-    publishedAt: row.publishedAt ?? null,
-  })
-
-  await upsertSeriesCatalog(db, {
-    dataset: 'term_deposits',
-    seriesKey,
-    bankName: row.bankName,
-    productId: row.productId,
-    productCode,
-    productName: row.productName,
-    collectionDate: row.collectionDate,
-    runId: row.runId ?? null,
-    sourceUrl: row.sourceUrl,
-    productUrl: row.productUrl ?? row.sourceUrl,
-    publishedAt: row.publishedAt ?? null,
-    rawDimensionsJson: tdDimensionJson(row),
-    depositTier: row.depositTier,
-    termMonths: row.termMonths,
-    interestPayment: row.interestPayment,
-  })
-
-  await markSeriesSeen(db, {
-    dataset: 'term_deposits',
-    seriesKey,
-    bankName: row.bankName,
-    productId: row.productId,
-    productCode,
-    collectionDate: row.collectionDate,
-    runId: row.runId ?? null,
-  })
-
-  await upsertLatestTdSeries(db, {
-    bankName: row.bankName,
-    collectionDate: row.collectionDate,
-    productId: row.productId,
-    productCode,
-    productName: row.productName,
-    termMonths: row.termMonths,
-    interestRate: row.interestRate,
-    depositTier: row.depositTier,
-    minDeposit: row.minDeposit,
-    maxDeposit: row.maxDeposit,
-    interestPayment: row.interestPayment,
-    sourceUrl: row.sourceUrl,
-    productUrl: row.productUrl ?? row.sourceUrl,
-    publishedAt: row.publishedAt ?? null,
-    cdrProductDetailHash,
-    dataQualityFlag: row.dataQualityFlag,
-    confidenceScore: row.confidenceScore,
-    retrievalType,
-    parsedAt,
-    runId: row.runId ?? null,
-    runSource: row.runSource ?? 'scheduled',
-    seriesKey,
-    productKey,
-  })
-
-  await writeTdProjection(db, {
-    seriesKey,
-    productKey,
-    bankName: row.bankName,
-    productId: row.productId,
-    productName: row.productName,
-    collectionDate: row.collectionDate,
-    parsedAt,
-    termMonths: row.termMonths,
-    depositTier: row.depositTier,
-    interestPayment: row.interestPayment,
-    interestRate: row.interestRate,
-    minDeposit: row.minDeposit,
-    maxDeposit: row.maxDeposit,
-    sourceUrl: row.sourceUrl,
-    productUrl: row.productUrl ?? row.sourceUrl,
-    publishedAt: row.publishedAt ?? null,
-    cdrProductDetailHash,
-    dataQualityFlag: row.dataQualityFlag,
-    confidenceScore: row.confidenceScore,
-    retrievalType,
-    runId: row.runId ?? null,
-    runSource: row.runSource ?? 'scheduled',
-  })
 }
 
-export async function upsertTdRateRows(db: D1Database, rows: NormalizedTdRow[]): Promise<number> {
+async function runTdPostWriteSideEffects(
+  db: D1Database,
+  prepared: PreparedTdRow,
+  options: TdRateWriteOptions,
+): Promise<void> {
+  const { row, seriesKey, productKey, productCode, retrievalType, parsedAt, cdrProductDetailHash } = prepared
+
+  if (options.emitCanonicalFeed !== false) {
+    await emitCanonicalHistoricalUpsert(
+      db,
+      'term_deposits',
+      {
+        bank_name: row.bankName,
+        collection_date: row.collectionDate,
+        product_id: row.productId,
+        term_months: row.termMonths,
+        deposit_tier: row.depositTier,
+        interest_payment: row.interestPayment,
+        run_source: row.runSource ?? 'scheduled',
+      },
+      row.runId ?? null,
+      row.collectionDate,
+    )
+  }
+
+  if (options.updateCatalogs !== false) {
+    await upsertProductCatalog(db, {
+      dataset: 'term_deposits',
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode,
+      productName: row.productName,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+      sourceUrl: row.sourceUrl,
+      productUrl: row.productUrl ?? row.sourceUrl,
+      publishedAt: row.publishedAt ?? null,
+    })
+
+    await upsertSeriesCatalog(db, {
+      dataset: 'term_deposits',
+      seriesKey,
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode,
+      productName: row.productName,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+      sourceUrl: row.sourceUrl,
+      productUrl: row.productUrl ?? row.sourceUrl,
+      publishedAt: row.publishedAt ?? null,
+      rawDimensionsJson: tdDimensionJson(row),
+      depositTier: row.depositTier,
+      termMonths: row.termMonths,
+      interestPayment: row.interestPayment,
+    })
+  }
+
+  if (options.markSeriesSeen !== false) {
+    await markSeriesSeen(db, {
+      dataset: 'term_deposits',
+      seriesKey,
+      bankName: row.bankName,
+      productId: row.productId,
+      productCode,
+      collectionDate: row.collectionDate,
+      runId: row.runId ?? null,
+    })
+  }
+
+  if (options.upsertLatestSeries !== false) {
+    await upsertLatestTdSeries(db, {
+      bankName: row.bankName,
+      collectionDate: row.collectionDate,
+      productId: row.productId,
+      productCode,
+      productName: row.productName,
+      termMonths: row.termMonths,
+      interestRate: row.interestRate,
+      depositTier: row.depositTier,
+      minDeposit: row.minDeposit,
+      maxDeposit: row.maxDeposit,
+      interestPayment: row.interestPayment,
+      sourceUrl: row.sourceUrl,
+      productUrl: row.productUrl ?? row.sourceUrl,
+      publishedAt: row.publishedAt ?? null,
+      cdrProductDetailHash,
+      dataQualityFlag: row.dataQualityFlag,
+      confidenceScore: row.confidenceScore,
+      retrievalType,
+      parsedAt,
+      runId: row.runId ?? null,
+      runSource: row.runSource ?? 'scheduled',
+      seriesKey,
+      productKey,
+    })
+  }
+
+  if (options.writeProjection !== false) {
+    await writeTdProjection(
+      db,
+      {
+        seriesKey,
+        productKey,
+        bankName: row.bankName,
+        productId: row.productId,
+        productName: row.productName,
+        collectionDate: row.collectionDate,
+        parsedAt,
+        termMonths: row.termMonths,
+        depositTier: row.depositTier,
+        interestPayment: row.interestPayment,
+        interestRate: row.interestRate,
+        minDeposit: row.minDeposit,
+        maxDeposit: row.maxDeposit,
+        sourceUrl: row.sourceUrl,
+        productUrl: row.productUrl ?? row.sourceUrl,
+        publishedAt: row.publishedAt ?? null,
+        cdrProductDetailHash,
+        dataQualityFlag: row.dataQualityFlag,
+        confidenceScore: row.confidenceScore,
+        retrievalType,
+        runId: row.runId ?? null,
+        runSource: row.runSource ?? 'scheduled',
+      },
+      {
+        emitChangeFeed: options.emitProjectionChangeFeed !== false,
+      },
+    )
+  }
+}
+
+export async function upsertTdRateRow(
+  db: D1Database,
+  row: NormalizedTdRow,
+  options: TdRateWriteOptions = {},
+): Promise<void> {
+  const verdict = validateNormalizedTdRow(row)
+  if (!verdict.ok) {
+    throw new Error(`invalid_td_row:${verdict.reason}`)
+  }
+  assertHistoricalWriteAllowed('term_deposits', row)
+
+  const prepared = await prepareTdRow(db, row)
+  await buildHistoricalTdRateStatement(db, prepared).run()
+  await runTdPostWriteSideEffects(db, prepared, options)
+}
+
+async function upsertTdRateRowsBatched(
+  db: D1Database,
+  rows: NormalizedTdRow[],
+  options: TdRateWriteOptions,
+): Promise<number> {
+  const preparedRows = await Promise.all(rows.map((row) => prepareTdRow(db, row)))
   let written = 0
-  for (const row of rows) {
+
+  for (const part of chunk(preparedRows, 32)) {
     try {
-      await upsertTdRateRow(db, row)
-      written += 1
-    } catch (error) {
-      const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
-      if (isHistoricalWriteContractError(error)) {
-        await recordHistoricalWriteContractViolation(db, {
-          dataset: 'term_deposits',
-          row,
-          lenderCode: error.lenderCode,
-          reason: error.reason,
-          seriesKey: tdSeriesKey(row),
-        })
+      await db.batch(part.map((prepared) => buildHistoricalTdRateStatement(db, prepared)))
+      for (const prepared of part) {
+        try {
+          await runTdPostWriteSideEffects(db, prepared, options)
+          written += 1
+        } catch (error) {
+          const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
+          if (isHistoricalWriteContractError(error)) {
+            await recordHistoricalWriteContractViolation(db, {
+              dataset: 'term_deposits',
+              row: prepared.row,
+              lenderCode: error.lenderCode,
+              reason: error.reason,
+              seriesKey: prepared.seriesKey,
+            })
+          }
+          log.error('db', `td_upsert_failed product=${prepared.row.productId} bank=${prepared.row.bankName}`, {
+            code,
+            context: (error as Error)?.message || String(error),
+            lenderCode: prepared.row.bankName,
+          })
+        }
       }
-      log.error('db', `td_upsert_failed product=${row.productId} bank=${row.bankName}`, {
-        code,
-        context: (error as Error)?.message || String(error),
-        lenderCode: row.bankName,
-      })
+    } catch {
+      for (const prepared of part) {
+        try {
+          await upsertTdRateRow(db, prepared.row, options)
+          written += 1
+        } catch (error) {
+          const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
+          if (isHistoricalWriteContractError(error)) {
+            await recordHistoricalWriteContractViolation(db, {
+              dataset: 'term_deposits',
+              row: prepared.row,
+              lenderCode: error.lenderCode,
+              reason: error.reason,
+              seriesKey: prepared.seriesKey,
+            })
+          }
+          log.error('db', `td_upsert_failed product=${prepared.row.productId} bank=${prepared.row.bankName}`, {
+            code,
+            context: (error as Error)?.message || String(error),
+            lenderCode: prepared.row.bankName,
+          })
+        }
+      }
     }
   }
+
   return written
+}
+
+export async function upsertTdRateRows(
+  db: D1Database,
+  rows: NormalizedTdRow[],
+  options: TdRateWriteOptions = {},
+): Promise<number> {
+  if (rows.length === 0) return 0
+  return upsertTdRateRowsBatched(db, rows, options)
 }

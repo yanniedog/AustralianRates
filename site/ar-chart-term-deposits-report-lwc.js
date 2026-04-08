@@ -254,8 +254,8 @@
         var vm = M.getViewMode(section);
         var reportRange = M.getReportRange(section);
         container.setAttribute('data-report-view-mode', vm.mode);
-        if ((vm.mode === 'moves' || vm.mode === 'bands') && reportPlot && typeof reportPlot.render === 'function') {
-            var plotPayload = model && model.reportPlots ? model.reportPlots[vm.mode] : null;
+        if (vm.mode === 'bands' && reportPlot && typeof reportPlot.render === 'function') {
+            var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
             var plotRange = reportPlot.payloadDateRange(plotPayload);
             var plotMin = plotRange.minDate || todayYmd();
             var plotMax = plotRange.maxDate || plotMin;
@@ -389,6 +389,18 @@
 
         var infoBox = createInfoBox(t);
         wrapper.appendChild(infoBox.el);
+        var movesStrip = reportPlot && typeof reportPlot.createMovesStrip === 'function'
+            ? reportPlot.createMovesStrip({
+                section: section,
+                plotPayload: model && model.reportPlots ? model.reportPlots.moves : null,
+                range: {
+                    viewStart: viewStart,
+                    ctxMax: ctxMax,
+                },
+                theme: t,
+            })
+            : null;
+        if (movesStrip) wrapper.appendChild(movesStrip);
 
         // Context label
         if (resolvedTerm != null) {

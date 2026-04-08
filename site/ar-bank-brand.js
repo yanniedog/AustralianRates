@@ -31,6 +31,7 @@
         'ubank': { short: 'ubank', icon: '/assets/banks/ubank.png', aliases: ['u bank'] },
         'westpac banking corporation': { short: 'Westpac', icon: '/assets/banks/westpac-banking-corporation.png', aliases: ['westpac', 'wbc'] },
     };
+    var PRELOADED_ICONS = {};
 
     function normalize(value) {
         return String(value == null ? '' : value)
@@ -81,6 +82,22 @@
         return getMeta(value).search.indexOf(needle) >= 0;
     }
 
+    function preloadIcon(icon) {
+        var src = String(icon || '').trim();
+        if (!src || PRELOADED_ICONS[src]) return;
+        var img = new Image();
+        img.decoding = 'sync';
+        img.src = src;
+        PRELOADED_ICONS[src] = img;
+    }
+
+    function preloadIcons(values) {
+        (Array.isArray(values) ? values : []).forEach(function (value) {
+            var meta = getMeta(value);
+            preloadIcon(meta.icon);
+        });
+    }
+
     function badge(value, options) {
         var meta = getMeta(value);
         var opts = options || {};
@@ -107,6 +124,7 @@
         fullLabel: fullLabel,
         getMeta: getMeta,
         matchesQuery: matchesQuery,
+        preloadIcons: preloadIcons,
         shortLabel: shortLabel,
     };
 })();

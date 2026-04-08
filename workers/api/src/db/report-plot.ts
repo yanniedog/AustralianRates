@@ -46,6 +46,7 @@ import type {
   ReportPlotPayload,
   ReportPlotSection,
 } from './report-plot-types'
+import { withReportPlotRefreshLock } from './report-plot-refresh-lock'
 
 type ReportFiltersBase = {
   startDate?: string
@@ -66,7 +67,10 @@ type SectionConfig = {
 }
 
 const TD_TERM_PREFERENCE = [12, 6, 24, 3, 18, 36, 9, 2, 1]
-const pendingReportDeltaRefreshes = new Map<ReportPlotSection, Promise<void>>()
+
+export const reportPlotTestState = {
+  refreshCountBySection: new Map<ReportPlotSection, number>(),
+}
 
 const SECTION_CONFIG: Record<ReportPlotSection, SectionConfig> = {
   home_loans: {
@@ -391,6 +395,10 @@ export async function refreshReportDeltaTable(
   section: ReportPlotSection,
 ): Promise<void> {
   const config = SECTION_CONFIG[section]
+  reportPlotTestState.refreshCountBySection.set(
+    section,
+    (reportPlotTestState.refreshCountBySection.get(section) ?? 0) + 1,
+  )
   await db.prepare(`DELETE FROM ${config.deltaTable}`).run()
   await db.prepare(config.refreshSql).run()
 }
@@ -411,17 +419,17 @@ export async function ensureReportDeltaTableReady(
     .first<{ n: number }>()
   if (Number(row?.n || 0) > 0) return
   if (!(await historyTableHasRows(db, config.historyTable))) return
-  const pending = pendingReportDeltaRefreshes.get(section)
-  if (pending) {
-    await pending
-    return
-  }
-  const refreshPromise = refreshReportDeltaTable(db, section)
-    .finally(() => {
-      pendingReportDeltaRefreshes.delete(section)
-    })
-  pendingReportDeltaRefreshes.set(section, refreshPromise)
-  await refreshPromise
+  await withReportPlotRefreshLock(db, {
+    section,
+    table: config.deltaTable,
+    task: async () => {
+      const latest = await db
+        .prepare(`SELECT COUNT(*) AS n FROM ${config.deltaTable}`)
+        .first<{ n: number }>()
+      if (Number(latest?.n || 0) > 0) return
+      await refreshReportDeltaTable(db, section)
+    },
+  })
 }
 
 async function resolveTdTermMonths(
@@ -481,6 +489,9 @@ async function queryBandSeries(
   table: string,
   where: WhereClause,
 ): Promise<ReportBandSeries[]> {
+  const bandWhereClause = where.clause
+    ? `${where.clause} AND d.delta_bps <> 0`
+    : 'WHERE d.delta_bps <> 0'
   const result = await db
     .prepare(
       `SELECT
@@ -490,7 +501,7 @@ async function queryBandSeries(
          MAX(d.delta_bps) AS max_delta_bps,
          CAST(ROUND((MIN(d.delta_bps) + MAX(d.delta_bps)) / 2.0, 0) AS INTEGER) AS mid_delta_bps
        FROM ${table} d
-       ${where.clause}
+       ${bandWhereClause}
        GROUP BY d.bank_name, d.collection_date
        ORDER BY LOWER(d.bank_name) ASC, d.collection_date ASC`,
     )

@@ -1,6 +1,7 @@
 import { TARGET_LENDERS } from '../../../constants'
 import { getCachedEndpoint } from '../../../db/endpoint-cache'
 import { ensureLenderDatasetRun, markLenderDatasetDetailProcessed, recordLenderDatasetWriteStats } from '../../../db/lender-dataset-runs'
+import { runWithD1Retry } from '../../../db/d1-retry'
 import { upsertHistoricalRateRows } from '../../../db/historical-rates'
 import { upsertSavingsRateRows } from '../../../db/savings-rates'
 import { upsertTdRateRows } from '../../../db/td-rates'
@@ -206,7 +207,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         throw new Error(`detail_lineage_persist_failed:home_loans:${job.productId}`)
       }
       if (accepted.length > 0) {
-        written = await upsertHistoricalRateRows(env.DB, accepted)
+        written = await runWithD1Retry(async () => upsertHistoricalRateRows(env.DB, accepted))
       }
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,
@@ -328,7 +329,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         throw new Error(`detail_lineage_persist_failed:savings:${job.productId}`)
       }
       if (accepted.length > 0) {
-        written = await upsertSavingsRateRows(env.DB, accepted)
+        written = await runWithD1Retry(async () => upsertSavingsRateRows(env.DB, accepted))
       }
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,
@@ -450,7 +451,7 @@ export async function handleProductDetailJob(env: EnvBindings, job: ProductDetai
         throw new Error(`detail_lineage_persist_failed:term_deposits:${job.productId}`)
       }
       if (accepted.length > 0) {
-        written = await upsertTdRateRows(env.DB, accepted)
+        written = await runWithD1Retry(async () => upsertTdRateRows(env.DB, accepted))
       }
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,

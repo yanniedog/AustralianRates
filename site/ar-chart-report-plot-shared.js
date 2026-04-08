@@ -51,15 +51,13 @@
         var downColor = isHomeLoan(section) ? theme.good : theme.bad;
         var upData = [];
         var downData = [];
-        var flatData = [];
-        dates.forEach(function (date, index) {
+        dates.forEach(function (date) {
             var point = byDate[date] || {};
             var upCount = Number(point.up_count || 0);
             var flatCount = Number(point.flat_count || 0);
             var downCount = Number(point.down_count || 0);
-            upData.push({ value: [index, upCount], raw: { date: date, up: upCount, flat: flatCount, down: downCount } });
-            downData.push({ value: [index, -downCount], raw: { date: date, up: upCount, flat: flatCount, down: downCount } });
-            flatData.push({ value: [index, flatCount], raw: { date: date, up: upCount, flat: flatCount, down: downCount } });
+            upData.push({ value: [date, upCount], raw: { date: date, up: upCount, flat: flatCount, down: downCount } });
+            downData.push({ value: [date, -downCount], raw: { date: date, up: upCount, flat: flatCount, down: downCount } });
         });
         return [
             {
@@ -78,36 +76,6 @@
                 itemStyle: { color: downColor },
                 data: downData,
             },
-            {
-                name: 'Flat',
-                type: 'custom',
-                yAxisIndex: 1,
-                data: flatData,
-                renderItem: function (params, api) {
-                    var x = api.value(0);
-                    var flatCount = Number(api.value(1) || 0);
-                    if (!Number.isFinite(flatCount) || flatCount <= 0) return null;
-                    var center = api.coord([x, 0]);
-                    var top = api.coord([x, 0.35]);
-                    var halfWidth = 4;
-                    var width = Math.max(8, halfWidth * 2);
-                    var height = Math.max(4, Math.abs(center[1] - top[1]) * 2);
-                    return {
-                        type: 'rect',
-                        shape: {
-                            x: center[0] - width / 2,
-                            y: center[1] - height / 2,
-                            width: width,
-                            height: height,
-                        },
-                        style: {
-                            fill: 'rgba(148,163,184,0.55)',
-                            stroke: 'rgba(148,163,184,0.9)',
-                            lineWidth: 1,
-                        },
-                    };
-                },
-            },
         ];
     }
 
@@ -121,13 +89,13 @@
             var bandData = (series.points || []).map(function (point) {
                 return {
                     value: [
-                        dates.indexOf(String(point.date || '').slice(0, 10)),
+                        String(point.date || '').slice(0, 10),
                         Number(point.min_delta_bps || 0),
                         Number(point.max_delta_bps || 0),
                     ],
                 };
             }).filter(function (item) {
-                return item.value[0] >= 0;
+                return !!item.value[0];
             });
             var midData = dates.map(function (date) {
                 var match = (series.points || []).find(function (point) {
@@ -148,7 +116,8 @@
                     var maxVal = Number(api.value(2) || 0);
                     var p1 = api.coord([x, minVal]);
                     var p2 = api.coord([x, maxVal]);
-                    var width = 6;
+                    var bandWidth = api.size([1, 0])[0];
+                    var width = Math.max(4, Math.min(18, Number.isFinite(bandWidth) ? bandWidth * 0.6 : 6));
                     var top = Math.min(p1[1], p2[1]);
                     var height = Math.max(3, Math.abs(p1[1] - p2[1]));
                     return {
@@ -173,11 +142,85 @@
                 type: 'line',
                 yAxisIndex: 1,
                 symbol: 'none',
+                connectNulls: false,
                 lineStyle: { color: color, width: 1.4, opacity: 0.95 },
                 data: midData,
             });
         });
         return out;
+    }
+
+    function createMovesStrip(options) {
+        var plotPayload = options && options.plotPayload;
+        var range = options && options.range || {};
+        var theme = options && options.theme || {};
+        var section = options && options.section;
+        if (!plotPayload || plotPayload.mode !== 'moves') return null;
+        var dates = buildDateRange(range.viewStart, range.ctxMax);
+        if (!dates.length) return null;
+
+        var byDate = {};
+        (plotPayload.points || []).forEach(function (point) {
+            byDate[String(point.date || '').slice(0, 10)] = point;
+        });
+
+        var points = dates.map(function (date) {
+            var point = byDate[date] || {};
+            return {
+                date: date,
+                up: Math.max(0, Number(point.up_count || 0)),
+                down: Math.max(0, Number(point.down_count || 0)),
+            };
+        });
+        var maxCount = 0;
+        points.forEach(function (point) {
+            maxCount = Math.max(maxCount, point.up, point.down);
+        });
+        if (!maxCount) return null;
+
+        var upColor = isHomeLoan(section) ? theme.bad : theme.good;
+        var downColor = isHomeLoan(section) ? theme.good : theme.bad;
+        var wrap = document.createElement('div');
+        wrap.className = 'lwc-report-moves-strip';
+
+        var labelRow = document.createElement('div');
+        labelRow.className = 'lwc-report-moves-strip-header';
+        labelRow.innerHTML =
+            '<span>Moves</span>' +
+            '<span>' + String(maxCount) + '</span>';
+        wrap.appendChild(labelRow);
+
+        var plot = document.createElement('div');
+        plot.className = 'lwc-report-moves-strip-plot';
+        wrap.appendChild(plot);
+
+        points.forEach(function (point) {
+            var column = document.createElement('div');
+            column.className = 'lwc-report-moves-strip-col';
+            column.title = point.date + '  Up ' + String(point.up) + '  Down ' + String(point.down);
+
+            var upLane = document.createElement('div');
+            upLane.className = 'lwc-report-moves-strip-lane is-up';
+            var upBar = document.createElement('span');
+            upBar.className = 'lwc-report-moves-strip-bar is-up';
+            upBar.style.height = (point.up > 0 ? Math.max(6, (point.up / maxCount) * 100) : 0) + '%';
+            upBar.style.background = upColor;
+            if (point.up > 0) upLane.appendChild(upBar);
+
+            var downLane = document.createElement('div');
+            downLane.className = 'lwc-report-moves-strip-lane is-down';
+            var downBar = document.createElement('span');
+            downBar.className = 'lwc-report-moves-strip-bar is-down';
+            downBar.style.height = (point.down > 0 ? Math.max(6, (point.down / maxCount) * 100) : 0) + '%';
+            downBar.style.background = downColor;
+            if (point.down > 0) downLane.appendChild(downBar);
+
+            column.appendChild(upLane);
+            column.appendChild(downLane);
+            plot.appendChild(column);
+        });
+
+        return wrap;
     }
 
     function render(options) {
@@ -339,6 +382,7 @@
     }
 
     window.AR.chartReportPlot = {
+        createMovesStrip: createMovesStrip,
         payloadDateRange: payloadDateRange,
         render: render,
     };

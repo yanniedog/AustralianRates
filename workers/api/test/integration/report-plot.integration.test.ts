@@ -1,5 +1,6 @@
 import { SELF, env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
+import { reportPlotTestState } from '../../src/db/report-plot'
 import { refreshChartPivotCache } from '../../src/pipeline/chart-cache-refresh'
 import savingsWarmupSeedSql from './report-plot-warmup-seed.sql?raw'
 
@@ -50,6 +51,82 @@ describe('report-plot routes', () => {
     expect(json.meta?.resolved_term_months ?? null).toBeNull()
   })
 
+  it('excludes flat deltas from savings bands', async () => {
+    const bank = 'ANZ'
+    const d1 = '2025-02-20'
+    const d2 = '2025-02-21'
+    const productIds = ['sav-band-1', 'sav-band-2']
+    const seriesKeys = [
+      `${bank}|sav-band-1|savings|base|all`,
+      `${bank}|sav-band-2|savings|base|all`,
+    ]
+
+    await env.DB
+      .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id IN (?, ?) AND collection_date IN (?, ?)')
+      .bind(bank, productIds[0], productIds[1], d1, d2)
+      .run()
+
+    const insertSql = String(savingsWarmupSeedSql).trim()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d1, productIds[0], 'ANZ Online Savings Account', seriesKeys[0], 4.5, 'https://example.com/savings', `${d1}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d2, productIds[0], 'ANZ Online Savings Account', seriesKeys[0], 4.6, 'https://example.com/savings', `${d2}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d1, productIds[1], 'ANZ Progress Saver', seriesKeys[1], 4.4, 'https://example.com/savings', `${d1}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d2, productIds[1], 'ANZ Progress Saver', seriesKeys[1], 4.4, 'https://example.com/savings', `${d2}T00:00:00.000Z`)
+      .run()
+
+    try {
+      await env.DB.prepare('DELETE FROM savings_report_deltas').run()
+      await env.DB
+        .prepare('DELETE FROM report_plot_request_cache WHERE section = ?')
+        .bind('savings')
+        .run()
+
+      const response = await SELF.fetch(
+        'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D',
+      )
+
+      expect(response.status).toBe(200)
+      const json = (await response.json()) as {
+        mode?: string
+        series?: Array<{
+          bank_name?: string
+          points?: Array<{
+            date?: string
+            min_delta_bps?: number
+            max_delta_bps?: number
+            mid_delta_bps?: number
+          }>
+        }>
+      }
+
+      const anz = (json.series || []).find((entry) => entry.bank_name === bank)
+      const targetPoint = (anz?.points || []).find((point) => point.date === d2)
+
+      expect(json.mode).toBe('bands')
+      expect(targetPoint).toMatchObject({
+        date: d2,
+        min_delta_bps: 10,
+        max_delta_bps: 10,
+        mid_delta_bps: 10,
+      })
+    } finally {
+      await env.DB
+        .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id IN (?, ?) AND collection_date IN (?, ?)')
+        .bind(bank, productIds[0], productIds[1], d1, d2)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM report_plot_request_cache WHERE section = ?')
+        .bind('savings')
+        .run()
+    }
+  })
+
   it('serializes first-load report-plot warm-up for parallel requests', async () => {
     // Rows shaped from test/fixtures/real-normalized-savings-row.json; two collection dates
     // so savings_report_deltas refresh yields at least one delta (integration DB is migration-only).
@@ -91,6 +168,7 @@ describe('report-plot routes', () => {
       .run()
 
     try {
+      reportPlotTestState.refreshCountBySection.clear()
       await env.DB.prepare('DELETE FROM savings_report_deltas').run()
       // Default chart_window requests use D1 report-plot cache; clear so compute() runs and repopulates deltas.
       await env.DB
@@ -111,9 +189,16 @@ describe('report-plot routes', () => {
       const row = await env.DB
         .prepare('SELECT COUNT(*) AS n FROM savings_report_deltas')
         .first<{ n: number }>()
+      const lockRow = await env.DB
+        .prepare('SELECT COUNT(*) AS n FROM report_plot_refresh_locks WHERE section = ?')
+        .bind('savings')
+        .first<{ n: number }>()
 
       expect(Number(row?.n || 0)).toBeGreaterThan(0)
+      expect(reportPlotTestState.refreshCountBySection.get('savings') ?? 0).toBe(1)
+      expect(Number(lockRow?.n || 0)).toBe(0)
     } finally {
+      reportPlotTestState.refreshCountBySection.clear()
       await env.DB
         .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id = ? AND collection_date IN (?, ?)')
         .bind(bank, productId, d1, d2)

@@ -1,4 +1,5 @@
 import { nowIso } from '../../utils/time'
+import { runWithD1Retry } from '../d1-retry'
 import type { HistoricalProductScope } from '../../types'
 import { listDatesInclusive } from './dates'
 import { deriveRunStatus, getTaskCounters } from './stats'
@@ -118,6 +119,23 @@ export async function refreshHistoricalRunStats(db: D1Database, runId: string): 
   return getHistoricalRunById(db, runId)
 }
 
+async function markHistoricalRunStartedOnClaim(db: D1Database, runId: string): Promise<void> {
+  const now = nowIso()
+  await db
+    .prepare(
+      `UPDATE client_historical_runs
+       SET status = CASE
+             WHEN status IN ('pending', 'running') THEN 'running'
+             ELSE status
+           END,
+           started_at = COALESCE(started_at, ?1),
+           updated_at = ?1
+       WHERE run_id = ?2`,
+    )
+    .bind(now, runId)
+    .run()
+}
+
 export async function claimHistoricalTask(
   db: D1Database,
   input: {
@@ -189,34 +207,37 @@ export async function claimHistoricalTaskById(
     claimTtlSeconds: number
   },
 ): Promise<HistoricalTaskRow | null> {
-  const now = nowIso()
-  const expiresAt = new Date(Date.now() + Math.max(30, input.claimTtlSeconds) * 1000).toISOString()
-
-  const result = await db
-    .prepare(
-      `UPDATE client_historical_tasks
-       SET status = 'claimed',
-           claimed_by = ?1,
-           claimed_at = ?2,
-           claim_expires_at = ?3,
-           attempt_count = attempt_count + CASE WHEN status = 'pending' THEN 1 ELSE 0 END,
-           updated_at = ?2
-       WHERE task_id = ?4
-         AND run_id = ?5
-         AND (
-           status = 'pending'
-           OR (status = 'claimed' AND claimed_by = ?1)
-           OR (status = 'claimed' AND claim_expires_at IS NOT NULL AND claim_expires_at <= ?2)
-         )`,
-    )
-    .bind(input.workerId, now, expiresAt, input.taskId, input.runId)
-    .run()
+  const result = await runWithD1Retry(async () => {
+    const now = nowIso()
+    const expiresAt = new Date(Date.now() + Math.max(30, input.claimTtlSeconds) * 1000).toISOString()
+    return db
+      .prepare(
+        `UPDATE client_historical_tasks
+         SET status = 'claimed',
+             claimed_by = ?1,
+             claimed_at = ?2,
+             claim_expires_at = ?3,
+             attempt_count = attempt_count + CASE WHEN status = 'pending' THEN 1 ELSE 0 END,
+             updated_at = ?2
+         WHERE task_id = ?4
+           AND run_id = ?5
+           AND (
+             status = 'pending'
+             OR (status = 'claimed' AND claimed_by = ?1)
+             OR (status = 'claimed' AND claim_expires_at IS NOT NULL AND claim_expires_at <= ?2)
+           )`,
+      )
+      .bind(input.workerId, now, expiresAt, input.taskId, input.runId)
+      .run()
+  })
 
   if (Number(result.meta?.changes ?? 0) <= 0) {
     return null
   }
 
-  await refreshHistoricalRunStats(db, input.runId)
+  await runWithD1Retry(async () => {
+    await markHistoricalRunStartedOnClaim(db, input.runId)
+  })
   return getHistoricalTaskById(db, input.taskId)
 }
 
@@ -288,26 +309,28 @@ export async function finalizeHistoricalTask(
     hadSignals?: boolean
   },
 ): Promise<HistoricalTaskRow | null> {
-  const now = nowIso()
   const status = input.status
   const lastError = input.lastError ? String(input.lastError).slice(0, 2000) : null
 
-  const result = await db
-    .prepare(
-      `UPDATE client_historical_tasks
-       SET status = ?1,
-           completed_at = ?2,
-           claim_expires_at = NULL,
-           had_signals = CASE WHEN had_signals = 1 OR ?3 = 1 THEN 1 ELSE 0 END,
-           last_error = ?4,
-           updated_at = ?2
-       WHERE task_id = ?5
-         AND run_id = ?6
-         AND status IN ('claimed', ?1)
-         AND (?7 IS NULL OR claimed_by = ?7 OR claimed_by IS NULL)`,
-    )
-    .bind(status, now, input.hadSignals ? 1 : 0, lastError, input.taskId, input.runId, input.workerId ?? null)
-    .run()
+  const result = await runWithD1Retry(async () => {
+    const now = nowIso()
+    return db
+      .prepare(
+        `UPDATE client_historical_tasks
+         SET status = ?1,
+             completed_at = ?2,
+             claim_expires_at = NULL,
+             had_signals = CASE WHEN had_signals = 1 OR ?3 = 1 THEN 1 ELSE 0 END,
+             last_error = ?4,
+             updated_at = ?2
+         WHERE task_id = ?5
+           AND run_id = ?6
+           AND status IN ('claimed', ?1)
+           AND (?7 IS NULL OR claimed_by = ?7 OR claimed_by IS NULL)`,
+      )
+      .bind(status, now, input.hadSignals ? 1 : 0, lastError, input.taskId, input.runId, input.workerId ?? null)
+      .run()
+  })
 
   if (Number(result.meta?.changes ?? 0) > 0) {
     await refreshHistoricalRunStats(db, input.runId)

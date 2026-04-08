@@ -1,4 +1,5 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
+import { runWithD1Retry } from './d1-retry'
 import { nowIso } from '../utils/time'
 
 export type LenderDatasetRunRow = {
@@ -111,33 +112,35 @@ export async function recordLenderDatasetWriteStats(
     errorMessage?: string | null
   },
 ): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE lender_dataset_runs
-       SET accepted_row_count = accepted_row_count + ?1,
-           written_row_count = written_row_count + ?2,
-           dropped_row_count = dropped_row_count + ?3,
-           detail_fetch_event_count = detail_fetch_event_count + ?4,
-           lineage_error_count = lineage_error_count + ?5,
-           last_error = COALESCE(?6, last_error),
-           updated_at = ?7
-       WHERE run_id = ?8
-         AND lender_code = ?9
-         AND dataset_kind = ?10`,
-    )
-    .bind(
-      Math.max(0, Math.floor(input.acceptedRows ?? 0)),
-      Math.max(0, Math.floor(input.writtenRows ?? 0)),
-      Math.max(0, Math.floor(input.droppedRows ?? 0)),
-      Math.max(0, Math.floor(input.detailFetchEventCount ?? 0)),
-      Math.max(0, Math.floor(input.lineageErrors ?? 0)),
-      input.errorMessage ?? null,
-      nowIso(),
-      input.runId,
-      input.lenderCode,
-      input.dataset,
-    )
-    .run()
+  await runWithD1Retry(async () => {
+    await db
+      .prepare(
+        `UPDATE lender_dataset_runs
+         SET accepted_row_count = accepted_row_count + ?1,
+             written_row_count = written_row_count + ?2,
+             dropped_row_count = dropped_row_count + ?3,
+             detail_fetch_event_count = detail_fetch_event_count + ?4,
+             lineage_error_count = lineage_error_count + ?5,
+             last_error = COALESCE(?6, last_error),
+             updated_at = ?7
+         WHERE run_id = ?8
+           AND lender_code = ?9
+           AND dataset_kind = ?10`,
+      )
+      .bind(
+        Math.max(0, Math.floor(input.acceptedRows ?? 0)),
+        Math.max(0, Math.floor(input.writtenRows ?? 0)),
+        Math.max(0, Math.floor(input.droppedRows ?? 0)),
+        Math.max(0, Math.floor(input.detailFetchEventCount ?? 0)),
+        Math.max(0, Math.floor(input.lineageErrors ?? 0)),
+        input.errorMessage ?? null,
+        nowIso(),
+        input.runId,
+        input.lenderCode,
+        input.dataset,
+      )
+      .run()
+  })
 }
 
 export async function markLenderDatasetDetailProcessed(
@@ -166,11 +169,15 @@ export async function markLenderDatasetDetailProcessed(
          AND dataset_kind = ?4`
 
   if (input.failed) {
-    await db.prepare(sql).bind(input.errorMessage ?? null, nowIso(), input.runId, input.lenderCode, input.dataset).run()
+    await runWithD1Retry(async () => {
+      await db.prepare(sql).bind(input.errorMessage ?? null, nowIso(), input.runId, input.lenderCode, input.dataset).run()
+    })
     return
   }
 
-  await db.prepare(sql).bind(nowIso(), input.runId, input.lenderCode, input.dataset).run()
+  await runWithD1Retry(async () => {
+    await db.prepare(sql).bind(nowIso(), input.runId, input.lenderCode, input.dataset).run()
+  })
 }
 
 export async function getLenderDatasetRun(
