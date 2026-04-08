@@ -21,9 +21,8 @@ export type ReportMovesPoint = {
 
 export type ReportBandPoint = {
   date: string
-  min_delta_bps: number
-  max_delta_bps: number
-  mid_delta_bps: number
+  min_rate: number
+  max_rate: number
 }
 
 export type ReportBandSeries = {

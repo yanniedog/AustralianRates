@@ -51,7 +51,7 @@ describe('report-plot routes', () => {
     expect(json.meta?.resolved_term_months ?? null).toBeNull()
   })
 
-  it('excludes flat deltas from savings bands', async () => {
+  it('returns min/max actual rates per bank per day in savings bands', async () => {
     const bank = 'ANZ'
     const d1 = '2025-02-20'
     const d2 = '2025-02-21'
@@ -98,9 +98,8 @@ describe('report-plot routes', () => {
           bank_name?: string
           points?: Array<{
             date?: string
-            min_delta_bps?: number
-            max_delta_bps?: number
-            mid_delta_bps?: number
+            min_rate?: number
+            max_rate?: number
           }>
         }>
       }
@@ -109,11 +108,11 @@ describe('report-plot routes', () => {
       const targetPoint = (anz?.points || []).find((point) => point.date === d2)
 
       expect(json.mode).toBe('bands')
+      // Both products included (unchanged product not filtered): min=4.4, max=4.6
       expect(targetPoint).toMatchObject({
         date: d2,
-        min_delta_bps: 10,
-        max_delta_bps: 10,
-        mid_delta_bps: 10,
+        min_rate: 4.4,
+        max_rate: 4.6,
       })
     } finally {
       await env.DB

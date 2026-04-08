@@ -489,19 +489,15 @@ async function queryBandSeries(
   table: string,
   where: WhereClause,
 ): Promise<ReportBandSeries[]> {
-  const bandWhereClause = where.clause
-    ? `${where.clause} AND d.delta_bps <> 0`
-    : 'WHERE d.delta_bps <> 0'
   const result = await db
     .prepare(
       `SELECT
          d.bank_name,
          d.collection_date AS date,
-         MIN(d.delta_bps) AS min_delta_bps,
-         MAX(d.delta_bps) AS max_delta_bps,
-         CAST(ROUND((MIN(d.delta_bps) + MAX(d.delta_bps)) / 2.0, 0) AS INTEGER) AS mid_delta_bps
+         MIN(d.interest_rate) AS min_rate,
+         MAX(d.interest_rate) AS max_rate
        FROM ${table} d
-       ${bandWhereClause}
+       ${where.clause}
        GROUP BY d.bank_name, d.collection_date
        ORDER BY LOWER(d.bank_name) ASC, d.collection_date ASC`,
     )
@@ -509,9 +505,8 @@ async function queryBandSeries(
     .all<{
       bank_name: string
       date: string
-      min_delta_bps: number
-      max_delta_bps: number
-      mid_delta_bps: number
+      min_rate: number
+      max_rate: number
     }>()
 
   const byBank = new Map<string, ReportBandSeries>()
@@ -520,9 +515,8 @@ async function queryBandSeries(
     if (!bankName) continue
     const point: ReportBandPoint = {
       date: String(row.date || ''),
-      min_delta_bps: Number(row.min_delta_bps || 0),
-      max_delta_bps: Number(row.max_delta_bps || 0),
-      mid_delta_bps: Number(row.mid_delta_bps || 0),
+      min_rate: Number(row.min_rate || 0),
+      max_rate: Number(row.max_rate || 0),
     }
     if (!byBank.has(bankName)) {
       byBank.set(bankName, {

@@ -86,65 +86,43 @@
         var out = [];
         (plotPayload && plotPayload.series || []).forEach(function (series, index) {
             var color = bankColor(series.bank_name, index);
-            var bandData = (series.points || []).map(function (point) {
-                return {
-                    value: [
-                        String(point.date || '').slice(0, 10),
-                        Number(point.min_delta_bps || 0),
-                        Number(point.max_delta_bps || 0),
-                    ],
-                };
-            }).filter(function (item) {
-                return !!item.value[0];
+            var byDate = {};
+            (series.points || []).forEach(function (point) {
+                byDate[String(point.date || '').slice(0, 10)] = point;
             });
-            var midData = dates.map(function (date) {
-                var match = (series.points || []).find(function (point) {
-                    return String(point.date || '').slice(0, 10) === date;
-                });
-                return match == null
-                    ? [date, null]
-                    : [date, Number(match.mid_delta_bps || 0)];
+            var minData = dates.map(function (date) {
+                var point = byDate[date];
+                return [date, point != null ? Number(point.min_rate) : null];
             });
+            var deltaData = dates.map(function (date) {
+                var point = byDate[date];
+                if (point == null) return [date, null];
+                return [date, Math.max(0, Number(point.max_rate) - Number(point.min_rate))];
+            });
+            var stackKey = 'band_' + series.bank_name;
+            // Lower edge: sets the base of the ribbon (transparent fill)
             out.push({
                 name: series.bank_name,
-                type: 'custom',
-                yAxisIndex: 1,
-                data: bandData,
-                renderItem: function (params, api) {
-                    var x = api.value(0);
-                    var minVal = Number(api.value(1) || 0);
-                    var maxVal = Number(api.value(2) || 0);
-                    var p1 = api.coord([x, minVal]);
-                    var p2 = api.coord([x, maxVal]);
-                    var bandWidth = api.size([1, 0])[0];
-                    var width = Math.max(4, Math.min(18, Number.isFinite(bandWidth) ? bandWidth * 0.6 : 6));
-                    var top = Math.min(p1[1], p2[1]);
-                    var height = Math.max(3, Math.abs(p1[1] - p2[1]));
-                    return {
-                        type: 'rect',
-                        shape: {
-                            x: p1[0] - width / 2,
-                            y: top,
-                            width: width,
-                            height: height,
-                        },
-                        style: {
-                            fill: color,
-                            opacity: 0.28,
-                            stroke: color,
-                            lineWidth: 1,
-                        },
-                    };
-                },
-            });
-            out.push({
-                name: series.bank_name + ' midpoint',
                 type: 'line',
-                yAxisIndex: 1,
+                yAxisIndex: 0,
+                stack: stackKey,
                 symbol: 'none',
-                connectNulls: false,
-                lineStyle: { color: color, width: 1.4, opacity: 0.95 },
-                data: midData,
+                connectNulls: true,
+                lineStyle: { color: color, width: 0.8, opacity: 0.7 },
+                areaStyle: { opacity: 0 },
+                data: minData,
+            });
+            // Upper delta: fills the ribbon between min and max rate
+            out.push({
+                name: series.bank_name + ' band',
+                type: 'line',
+                yAxisIndex: 0,
+                stack: stackKey,
+                symbol: 'none',
+                connectNulls: true,
+                lineStyle: { color: color, width: 0.8, opacity: 0.7 },
+                areaStyle: { color: color, opacity: 0.22 },
+                data: deltaData,
             });
         });
         return out;
@@ -418,7 +396,7 @@
                 },
                 {
                     type: 'value',
-                    name: plotPayload && plotPayload.mode === 'moves' ? 'Count' : 'bps',
+                    name: plotPayload && plotPayload.mode === 'moves' ? 'Count' : '',
                     position: 'right',
                     min: function (value) { return Math.min(value.min, 0); },
                     max: function (value) { return Math.max(value.max, 0); },
