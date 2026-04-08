@@ -615,7 +615,7 @@
                 && !params.rate_structure
                 && !params.lvr_tier
                 && !params.feature_set
-                && !params.min_rate
+                && isDefaultishMinRate(params.min_rate)
                 && !params.max_rate
                 && !params.min_comparison_rate
                 && !params.max_comparison_rate;

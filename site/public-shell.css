@@ -1197,6 +1197,13 @@ body.ar-public .chip-strip .chip-remove:hover {
     color: var(--ar-text);
 }
 
+/* Dark: × was too low-contrast on muted token; match chip body legibility. */
+:root[data-theme="dark"] body.ar-public .chip-strip .chip-remove {
+    color: var(--ar-text-soft);
+    font-size: 14px;
+    font-weight: 700;
+}
+
 body.ar-public .chip-strip .chip-clear-all {
     display: inline-flex;
     align-items: center;

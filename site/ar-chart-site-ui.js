@@ -101,9 +101,6 @@
         cached.textBrightnessMobile = textBrightnessMobile;
         cached.chartMaxProducts = normalizeChartMaxProducts(body.chart_max_products);
         cached.chartMaxProductsMode = String(body.chart_max_products_mode || 'default').trim().toLowerCase() || 'default';
-        // #region agent log
-        fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cbb8e5' }, body: JSON.stringify({ sessionId: 'cbb8e5', hypothesisId: 'H1', location: 'ar-chart-site-ui.js:ingestPayload', message: 'site-ui chart max applied', data: { chartMaxProducts: cached.chartMaxProducts, chartMaxProductsMode: cached.chartMaxProductsMode }, timestamp: Date.now() }) }).catch(function () {});
-        // #endregion
         applyAll();
     }
 
