@@ -17,8 +17,13 @@ export const TD_API_BASE_PATH = '/api/term-deposit-rates'
 export const ECONOMIC_API_BASE_PATH = '/api/economic-data'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
-/** Dual UTC hours bracket Melbourne 06:00 across AEDT/AEST; `handleScheduledDaily` gates on local hour === MELBOURNE_TARGET_HOUR. */
-export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 19,20 * * *'
+/** Second default wall-clock hour (Melbourne) for scheduled daily ingest when `MELBOURNE_DAILY_INGEST_HOURS` is unset. */
+export const MELBOURNE_SECOND_INGEST_HOUR = 18
+/**
+ * Four UTC hours: pairs bracket Melbourne 06:00 (19,20) and 18:00 (07,08) across AEDT/AEST.
+ * `handleScheduledDaily` gates on local hours from `MELBOURNE_DAILY_INGEST_HOURS` or 6+18.
+ */
+export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 7,8,19,20 * * *'
 export const SITE_HEALTH_CRON_EXPRESSION = '*/15 * * * *'
 /** Top-of-hour UTC: Wayback backfill, chart pivot cache refresh, same-day RBA cash tick (not full daily ingest). */
 export const HOURLY_MAINTENANCE_CRON_EXPRESSION = '0 * * * *'

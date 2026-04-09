@@ -73,6 +73,7 @@ These rules are mandatory and override any conflicting preference.
 
 - **Goal:** Charts and pivot tables load almost instantly by serving from a slim precomputed layer instead of scanning the full raw DB on every request.
 - **D1 table:** `chart_pivot_cache` (migration 0030) holds one row per (section, representation) with JSON payload for the default slice (last 365 days, no filters). Refreshed hourly by the maintenance cron (`0 * * * *` UTC) alongside Wayback backfill and same-day RBA cash; site health stays on `*/15 * * * *`.
+- **Scheduled full ingest:** Default twice per Melbourne day (06:00 and 18:00 local); cron `0 7,8,19,20 * * *` UTC with handler gating. Override hours with `MELBOURNE_DAILY_INGEST_HOURS` (comma-separated) or adjust `MELBOURNE_TARGET_HOUR` / `MELBOURNE_SECOND_INGEST_HOUR`.
 - **API behaviour:** `GET /analytics/series` and `POST /analytics/pivot` try (1) optional KV cache by request key, (2) D1 cache when the request matches default filters, (3) live collect from analytics/canonical DB. All responses set `Cache-Control: public, s-maxage=300, stale-while-revalidate=600`.
 - **Non-stale:** Cron keeps the D1 cache updated; optional `CHART_CACHE_KV` (see types) can cache any response for 5 min. Apply migration 0030 before or after deploy so the table exists.
 

@@ -401,7 +401,7 @@
                     var activeCount = d.runs && Array.isArray(d.runs.active) ? d.runs.active.length : 0;
                     var dailyCron = d.scheduler && d.scheduler.daily_cron_expression
                         ? d.scheduler.daily_cron_expression
-                        : (d.scheduler && d.scheduler.cron_expression ? d.scheduler.cron_expression : '0 19,20 * * *');
+                        : (d.scheduler && d.scheduler.cron_expression ? d.scheduler.cron_expression : '0 7,8,19,20 * * *');
                     var siteHealthCron = d.scheduler && d.scheduler.hourly_cron_expression ? d.scheduler.hourly_cron_expression : '*/15 * * * *';
                     var maintCron = d.scheduler && d.scheduler.maintenance_cron_expression ? d.scheduler.maintenance_cron_expression : '0 * * * *';
                     liveMeta.textContent = 'Live updates every ' + Math.round(pollIntervalMs / 1000) + 's | Active runs: '

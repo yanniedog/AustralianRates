@@ -1,5 +1,6 @@
 import { ensureAppConfigTable, getIngestPauseConfig, setAppConfig } from '../db/app-config'
 import {
+  MELBOURNE_SECOND_INGEST_HOUR,
   MELBOURNE_TARGET_HOUR,
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
@@ -20,18 +21,35 @@ function compactErrorSample(values: string[], max = 3): string[] {
   return values.slice(0, Math.max(1, max))
 }
 
+function melbourneDailyIngestHours(env: EnvBindings): number[] {
+  const raw = env.MELBOURNE_DAILY_INGEST_HOURS?.trim()
+  if (raw) {
+    const parts: number[] = []
+    for (const token of raw.split(',')) {
+      const n = parseInt(token.trim(), 10)
+      if (Number.isFinite(n)) parts.push(Math.max(0, Math.min(23, n)))
+    }
+    const uniq = [...new Set(parts)].sort((a, b) => a - b)
+    if (uniq.length > 0) return uniq
+  }
+  return [
+    Math.max(0, Math.min(23, parseIntegerEnv(env.MELBOURNE_TARGET_HOUR, MELBOURNE_TARGET_HOUR))),
+    Math.max(0, Math.min(23, parseIntegerEnv(env.MELBOURNE_SECOND_INGEST_HOUR, MELBOURNE_SECOND_INGEST_HOUR))),
+  ].sort((a, b) => a - b)
+}
+
 export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {
   const scheduledMs = Number.isFinite(event.scheduledTime) ? event.scheduledTime : Date.now()
   const melbourneParts = getMelbourneNowParts(
     new Date(scheduledMs),
     env.MELBOURNE_TIMEZONE || 'Australia/Melbourne',
   )
-  const targetHour = Math.max(0, Math.min(23, parseIntegerEnv(env.MELBOURNE_TARGET_HOUR, MELBOURNE_TARGET_HOUR)))
-  if (melbourneParts.hour !== targetHour) {
+  const ingestHours = melbourneDailyIngestHours(env)
+  if (!ingestHours.includes(melbourneParts.hour)) {
     return {
       ok: true,
       skipped: true,
-      reason: 'not_melbourne_target_hour',
+      reason: 'not_melbourne_ingest_hour',
       melbourne: melbourneParts,
       intervalMinutes: 0,
     }

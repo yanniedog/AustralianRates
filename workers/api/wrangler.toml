@@ -92,14 +92,15 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Daily ingest: 19:00 and 20:00 UTC (DST-safe bracket for Melbourne 06:00); handler gates on MELBOURNE_TARGET_HOUR. Site health only every 15 min. Hourly: wayback + chart cache + RBA cash for Melbourne date. Monthly export 23:59 UTC last day; integrity 04:00 UTC; backup 09:00 UTC; historical quality 23:59 Melbourne via 12,13 UTC.
-crons = ["0 19,20 * * *", "*/15 * * * *", "0 * * * *", "59 23 * * *", "0 4 * * *", "0 9 * * *", "59 12,13 * * *"]
+# Daily ingest: 07,08,19,20 UTC (DST-safe brackets for Melbourne 06:00 and 18:00); handler gates on MELBOURNE_DAILY_INGEST_HOURS or 6+18. Site health every 15 min. Hourly: wayback + chart cache + RBA. Monthly export 23:59 UTC last day; integrity 04:00 UTC; backup 09:00 UTC; historical quality 23:59 Melbourne via 12,13 UTC.
+crons = ["0 7,8,19,20 * * *", "*/15 * * * *", "0 * * * *", "59 23 * * *", "0 4 * * *", "0 9 * * *", "59 12,13 * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
 PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
 MELBOURNE_TARGET_HOUR = "6"
+MELBOURNE_SECOND_INGEST_HOUR = "18"
 MANUAL_RUN_COOLDOWN_SECONDS = "60"
 LOCK_TTL_SECONDS = "7200"
 MAX_QUEUE_ATTEMPTS = "3"
@@ -180,6 +181,7 @@ WORKER_VERSION = "test"
 PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
 MELBOURNE_TARGET_HOUR = "6"
+MELBOURNE_SECOND_INGEST_HOUR = "18"
 MANUAL_RUN_COOLDOWN_SECONDS = "60"
 LOCK_TTL_SECONDS = "7200"
 MAX_QUEUE_ATTEMPTS = "3"
