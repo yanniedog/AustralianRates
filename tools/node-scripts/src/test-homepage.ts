@@ -582,14 +582,16 @@ async function verifyPublicFooter(page, results, label) {
 
     const expected = [
         { text: 'About', href: '/about/' },
+        { text: 'GitHub', href: 'https://github.com/yanniedog/AustralianRates' },
+        { text: 'Donate', href: 'https://github.com/sponsors/yanniedog' },
         { text: 'Contact', href: '/contact/' },
         { text: 'Privacy', href: '/privacy/' },
         { text: 'Terms', href: '/terms/' },
     ];
     const missing = expected.filter((item) => !footer.links.some((link) => link.text === item.text && link.href === item.href));
 
-    if (missing.length === 0) pass(results, `${label}: footer legal links render`);
-    else fail(results, `${label}: missing footer legal links (${missing.map((item) => item.text).join(', ')})`);
+    if (missing.length === 0) pass(results, `${label}: footer legal and project links render`);
+    else fail(results, `${label}: missing footer links (${missing.map((item) => item.text).join(', ')})`);
 
     if (!footer.hasTechnical && !footer.hasLogLink) {
         pass(results, `${label}: public footer keeps technical diagnostics hidden`);
