@@ -822,8 +822,17 @@
             return id;
         }
 
+        function normRibbonBankName(n) {
+            return String(n || '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .toLowerCase();
+        }
+
         function ribbonChartHighlightBank() {
-            return ribbonProductBank ? ribbonProductBank : (hoveredBank || '');
+            var sel = String(ribbonProductBank || '').trim();
+            if (sel) return sel;
+            return String(hoveredBank || '').trim();
         }
 
         function ribbonLineFilterKeys() {
@@ -884,13 +893,17 @@
         function syncRibbonTrayUi() {
             if (!ribbonTrayRoot) return;
             var dimRef = ribbonProductBank ? ribbonProductBank : (hoveredBank || '');
+            var dimKey = dimRef ? normRibbonBankName(dimRef) : '';
+            var hbKey = hoveredBank ? normRibbonBankName(hoveredBank) : '';
+            var selKey = ribbonProductBank ? normRibbonBankName(ribbonProductBank) : '';
             var chips = ribbonTrayRoot.querySelectorAll('.lwc-focus-bank-chip');
             for (var i = 0; i < chips.length; i++) {
                 var ch = chips[i];
                 var full = String(ch.title || '').trim();
-                ch.classList.toggle('is-ribbon-hover', !!hoveredBank && full === hoveredBank);
-                ch.classList.toggle('is-ribbon-selected', !!ribbonProductBank && full === ribbonProductBank);
-                ch.classList.toggle('is-ribbon-dim', !!dimRef && full !== dimRef);
+                var fk = normRibbonBankName(full);
+                ch.classList.toggle('is-ribbon-hover', !!hbKey && fk === hbKey);
+                ch.classList.toggle('is-ribbon-selected', !!selKey && fk === selKey);
+                ch.classList.toggle('is-ribbon-dim', !!dimKey && fk !== dimKey);
             }
             if (ribbonHoverLabelEl) {
                 var txt = hoveredBank || ribbonProductBank || '';
@@ -939,6 +952,9 @@
         function updateProductVisibility() {
             if (useRibbonCanvas) {
                 scheduleRibbonRedraw();
+                if (isBandsMode) {
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                }
                 return;
             }
             if (!productOverlay.length) return;
@@ -952,7 +968,7 @@
                 var rest = s.name.slice(3);
                 var pipe = rest.indexOf('|');
                 var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                var showBank = ribbonProductBank && bn === ribbonProductBank;
+                var showBank = ribbonProductBank && normRibbonBankName(bn) === normRibbonBankName(ribbonProductBank);
                 var match = productLineVisible(s.name);
                 var show = showBank && match;
                 var isSelected = s.name === selectedProductName;
@@ -969,7 +985,10 @@
                     silent: !show,
                 });
             });
-            chart.setOption({ series: updates });
+            chart.setOption({ series: updates }, { lazyUpdate: false, silent: true });
+            if (isBandsMode) {
+                applyRibbonBankHighlightState(ribbonChartHighlightBank());
+            }
         }
 
         function syncRibbonCanvasSize() {
@@ -1151,9 +1170,11 @@
         function applyRibbonBankHighlightState(hoveredBankName) {
             if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
             var rs = getRibbonStyleResolved();
+            var focusRaw = String(hoveredBankName || '').trim();
+            var focusKey = focusRaw ? normRibbonBankName(focusRaw) : '';
             var updates = [];
             plotPayload.series.forEach(function (bank, index) {
-                var active = !hoveredBankName || bank.bank_name === hoveredBankName;
+                var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
                 var c0 = options.bankColor(bank.bank_name, index);
                 var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
@@ -1189,7 +1210,7 @@
                 });
             });
             try {
-                chart.setOption({ series: updates }, false, true);
+                chart.setOption({ series: updates }, { lazyUpdate: false, silent: true });
             } catch (_e) {}
         }
 
@@ -1427,9 +1448,9 @@
                 var bankChanged = next !== hoveredBank;
                 if (bankChanged) {
                     hoveredBank = next;
-                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                 }
+                applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 var prevPh = ribbonChartHoverProductKey;
                 if (ribbonProductBank && !selectedProductName && next === ribbonProductBank) {
                     var pickH = useRibbonCanvas ? ribbonCanvasPickProduct(xy[0], xy[1]) : overlayPickProduct(xy[0], xy[1]);
