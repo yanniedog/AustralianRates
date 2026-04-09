@@ -1264,7 +1264,7 @@
                     var scopeId = registerRibbonHoverScope([p.key]);
                     var row = document.createElement('div');
                     row.className = 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row';
-                    row.style.cssText = 'display:flex;align-items:baseline;gap:5px;padding:1px 0;border-top:1px solid rgba(148,163,184,0.12);font-size:10px;line-height:1.2;min-width:0;cursor:default;padding-left:' + (4 + depth * 10) + 'px;';
+                    row.style.cssText = 'display:flex;align-items:baseline;gap:6px;padding:2px 0;border-top:1px solid rgba(148,163,184,0.18);font-size:11px;line-height:1.25;min-width:0;cursor:default;padding-left:' + (6 + depth * 12) + 'px;';
                     row.setAttribute('data-ribbon-scope', scopeId);
                     row.setAttribute('data-ribbon-prod-key', p.key);
                     var sw = document.createElement('span');
@@ -1299,20 +1299,24 @@
                 if (!keys.length) return;
                 var scopeId = registerRibbonHoverScope(keys);
                 var mr = maxRibbonNodeRate(g.child, anchorYmd);
+                var branchLabel = ribbonFieldLabel(node.field) + ': ' + g.label;
                 var brow = document.createElement('div');
                 brow.className = 'ar-report-infobox-trow ar-report-infobox-trow--branch';
-                brow.style.cssText = 'display:flex;align-items:baseline;gap:5px;padding:2px 0;border-top:1px solid rgba(148,163,184,0.12);font-size:10px;line-height:1.2;min-width:0;cursor:pointer;padding-left:' + (2 + depth * 10) + 'px;';
+                brow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;border-top:1px solid rgba(148,163,184,0.2);font-size:11px;line-height:1.25;min-width:0;cursor:pointer;padding-left:' + (4 + depth * 12) + 'px;';
                 brow.setAttribute('data-ribbon-scope', scopeId);
                 brow.setAttribute('role', 'button');
                 brow.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                brow.setAttribute('aria-label', (expanded ? 'Collapse tier, ' : 'Expand tier, ') + branchLabel);
+                brow.setAttribute('title', expanded ? 'Collapse tier' : 'Expand tier');
                 brow.tabIndex = 0;
                 var twist = document.createElement('span');
                 twist.className = 'ar-report-infobox-twist';
-                twist.style.cssText = 'flex-shrink:0;width:1em;font-size:9px;opacity:0.75;user-select:none;';
-                twist.textContent = expanded ? '\u25be' : '\u25b8';
+                twist.setAttribute('aria-hidden', 'true');
+                twist.style.cssText = 'flex-shrink:0;user-select:none;';
+                twist.textContent = expanded ? '\u25bc' : '\u25b6';
                 var lab = document.createElement('span');
                 lab.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;';
-                lab.textContent = ribbonFieldLabel(node.field) + ': ' + g.label;
+                lab.textContent = branchLabel;
                 var rateSpan = document.createElement('span');
                 rateSpan.style.cssText = 'font-variant-numeric:tabular-nums;opacity:0.9;flex-shrink:0;';
                 rateSpan.textContent = mr != null && Number.isFinite(mr) ? mr.toFixed(2) + '%' : '';
@@ -1390,7 +1394,7 @@
             var n = prodsAtAnchor.length;
             ib.show({
                 heading: fmtReportDateYmd(anchor),
-                meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : '') + ' \u00b7 click row to expand tier',
+                meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : '') + ' \u00b7 focus bank above \u00b7 click tier rows to expand or collapse',
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);

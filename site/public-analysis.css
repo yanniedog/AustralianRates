@@ -1472,14 +1472,62 @@ body.ar-public .lwc-focus-bank-chip.is-ribbon-dim {
 
 body.ar-public .lwc-ribbon-hover-bank-label {
     margin-left: 8px;
-    font: 600 0.7rem/1.2 "Space Grotesk", system-ui, sans-serif;
+    font: 600 0.74rem/1.25 "Space Grotesk", system-ui, sans-serif;
     color: var(--ar-text);
+    letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: min(200px, 28vw);
+    max-width: min(240px, 34vw);
     align-self: center;
     flex-shrink: 1;
+}
+
+body.ar-public .ar-report-infobox--ribbon-tree.ar-report-infobox--compact {
+    border-color: color-mix(in srgb, var(--ar-line-strong) 70%, var(--ar-line));
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--ar-text) 6%, transparent);
+}
+
+body.ar-public .ar-report-infobox-ribbon-tree {
+    margin-top: 2px;
+    padding: 4px 2px 2px 8px;
+    border-left: 2px solid color-mix(in srgb, var(--ar-accent) 38%, var(--ar-line-strong));
+    border-radius: 0 4px 4px 0;
+    background: color-mix(in srgb, var(--ar-surface-2) 55%, transparent);
+}
+
+body.ar-public .ar-report-infobox-tnest {
+    margin: 0 0 0 4px;
+    padding: 0 0 2px 10px;
+    border-left: 2px solid color-mix(in srgb, var(--ar-line-strong) 85%, var(--ar-accent));
+}
+
+body.ar-public .ar-report-infobox-twist {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    min-width: 1.15rem;
+    margin-right: 1px;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 90%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 92%, transparent);
+    font-size: 0.55rem;
+    line-height: 1;
+    color: var(--ar-text-muted);
+}
+
+body.ar-public .ar-report-infobox-trow--branch:hover .ar-report-infobox-twist,
+body.ar-public .ar-report-infobox-trow--branch:focus-visible .ar-report-infobox-twist {
+    border-color: color-mix(in srgb, var(--ar-accent) 45%, var(--ar-line-strong));
+    color: var(--ar-text);
+    background: color-mix(in srgb, var(--ar-accent-soft) 22%, var(--ar-surface-2));
+}
+
+body.ar-public .ar-report-infobox-trow--branch:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 1px;
 }
 
 body.ar-public .ar-report-infobox--compact .ar-report-infobox-row:hover {
