@@ -680,7 +680,7 @@
         if (requestJson) {
             return requestJson(policy.url, {
                 requestLabel: 'Chart history',
-                timeoutMs: 40000,
+                timeoutMs: 90000,
                 retryCount: 0,
                 cache: policy.fetchCache,
                 skipCacheBust: policy.skipCacheBust,
@@ -718,7 +718,7 @@
         if (requestJson) {
             return requestJson(policy.url, {
                 requestLabel: 'Report plot ' + String(mode || 'moves'),
-                timeoutMs: 40000,
+                timeoutMs: 90000,
                 retryCount: 0,
                 cache: policy.fetchCache,
                 skipCacheBust: policy.skipCacheBust,
