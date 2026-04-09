@@ -1455,12 +1455,16 @@ body.ar-public .lwc-focus-bank-chip.is-selected {
 }
 
 body.ar-public .lwc-focus-bank-chip.is-ribbon-hover {
+    position: relative;
+    z-index: 1;
     opacity: 1;
     border-color: color-mix(in srgb, var(--ar-accent) 42%, var(--ar-line-strong));
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-accent) 35%, transparent);
 }
 
 body.ar-public .lwc-focus-bank-chip.is-ribbon-selected {
+    position: relative;
+    z-index: 2;
     opacity: 1;
     border-color: color-mix(in srgb, var(--ar-accent) 55%, var(--ar-line-strong));
     background: color-mix(in srgb, var(--ar-accent-soft) 48%, var(--ar-surface-2));

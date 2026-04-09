@@ -873,16 +873,6 @@
         var ribbonHoverScopeSeq = 0;
         var ribbonExpandedPaths = {};
         var ribbonTreeAnchorYmd = '';
-        var _dbgRibbonTs = Object.create(null);
-        function dbgRibbonPost(payload) {
-            try {
-                var t = Date.now();
-                var k = String(payload.hypothesisId || '') + '|' + JSON.stringify(payload.data || {});
-                if (_dbgRibbonTs[k] && t - _dbgRibbonTs[k] < 500) return;
-                _dbgRibbonTs[k] = t;
-                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8d12a3' }, body: JSON.stringify({ sessionId: '8d12a3', location: payload.location, message: payload.message, data: payload.data, timestamp: t, hypothesisId: payload.hypothesisId }) }).catch(function () {});
-            } catch (_eDbg) {}
-        }
 
         function clearRibbonHoverScopes() {
             ribbonHoverScopeMap = {};
@@ -995,36 +985,20 @@
         function syncRibbonTrayUi() {
             if (!ribbonTrayRoot) return;
             var dimRef = ribbonChartHighlightBank();
-            var dimKey = dimRef ? normRibbonBankName(dimRef) : '';
-            var hlKey = normRibbonBankName(
-                ribbonTrayHoverBank || (ribbonProductBank ? '' : hoveredBank)
-            );
-            var selKey = ribbonProductBank ? normRibbonBankName(ribbonProductBank) : '';
+            var dimWant = resolveBandsFocusKey(dimRef);
+            var dimKey = dimWant || '';
+            var hlRaw = String(ribbonTrayHoverBank || (ribbonProductBank ? '' : hoveredBank) || '').trim();
+            var hlKey = hlRaw ? normRibbonBankName(canonicalBandsBankFromUi(hlRaw)) : '';
+            var selKey =
+                ribbonProductBank && resolveBandsFocusKey(ribbonProductBank)
+                    ? normRibbonBankName(canonicalBandsBankFromUi(String(ribbonProductBank || '').trim()))
+                    : '';
             var chips = ribbonTrayRoot.querySelectorAll('.lwc-focus-bank-chip');
-            // #region agent log
-            (function () {
-                var sample = [];
-                for (var si = 0; si < chips.length && sample.length < 4; si++) {
-                    var c = chips[si];
-                    sample.push({
-                        title: String(c.title || ''),
-                        fk: normRibbonBankName(String(c.title || '')),
-                        aria: String(c.getAttribute('aria-label') || '').slice(0, 80),
-                    });
-                }
-                var selCount = 0;
-                for (var sj = 0; sj < chips.length; sj++) {
-                    var chj = chips[sj];
-                    var fkj = normRibbonBankName(String(chj.title || ''));
-                    if (!!selKey && fkj === selKey) selCount++;
-                }
-                dbgRibbonPost({ location: 'ar-chart-report-plot-shared.js:syncRibbonTrayUi', message: 'ribbon tray sync', data: { selKey: selKey, dimKey: dimKey, hlKey: hlKey, ribbonProductBank: String(ribbonProductBank || ''), chipCount: chips.length, selMatchCount: selCount, sampleChips: sample }, hypothesisId: 'H1' });
-            })();
-            // #endregion
             for (var i = 0; i < chips.length; i++) {
                 var ch = chips[i];
-                var full = String(ch.title || '').trim();
-                var fk = normRibbonBankName(full);
+                var fk = normRibbonBankName(
+                    canonicalBandsBankFromUi(String(ch.getAttribute('data-ar-bank-full') || ch.title || '').trim())
+                );
                 ch.classList.toggle('is-ribbon-hover', !!hlKey && fk === hlKey);
                 ch.classList.toggle('is-ribbon-selected', !!selKey && fk === selKey);
                 ch.classList.toggle('is-ribbon-dim', !!dimKey && fk !== dimKey);
@@ -1299,9 +1273,6 @@
             if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
             var rs = getRibbonStyleResolved();
             var focusKey = resolveBandsFocusKey(hoveredBankName);
-            // #region agent log
-            dbgRibbonPost({ location: 'ar-chart-report-plot-shared.js:applyRibbonBankHighlightState', message: 'ribbon chart highlight', data: { hoveredBankName: String(hoveredBankName || ''), focusKey: String(focusKey || ''), activeZ: Number(rs.active_z), inactiveZ: Number(rs.inactive_z), seriesN: plotPayload.series.length, panelBank: String(ribbonPanelBank() || ''), chartHl: String(ribbonChartHighlightBank() || '') }, hypothesisId: 'H2' });
-            // #endregion
             var updates = [];
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
@@ -1687,9 +1658,6 @@
 
             ribbonChromeHandlers.onChipClick = function (fullName) {
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
-                // #region agent log
-                dbgRibbonPost({ location: 'ar-chart-report-plot-shared.js:onChipClick', message: 'ribbon chip click', data: { fullName: String(fullName || ''), canonicalBn: String(bn || ''), earlyReturn: !bn, resolveFocus: bn ? resolveBandsFocusKey(bn) : '' }, hypothesisId: 'H3' });
-                // #endregion
                 if (!bn) return;
                 ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;

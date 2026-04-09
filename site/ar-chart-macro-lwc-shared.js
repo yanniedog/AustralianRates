@@ -342,6 +342,7 @@
             chip.setAttribute('role', 'radio');
             chip.setAttribute('aria-checked', vm.mode === 'focus' && bn.full === vm.focusBank ? 'true' : 'false');
             chip.title = bn.full;
+            chip.setAttribute('data-ar-bank-full', bn.full);
             chip.setAttribute('aria-label', 'Focus ' + bn.full);
             if (vm.mode === 'focus' && bn.full === vm.focusBank) chip.classList.add('is-selected');
 
