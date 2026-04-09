@@ -1202,6 +1202,7 @@
                 var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
                 var zb = zRoot + index * 0.08;
+                var zlv = focusKey ? (active ? 2 : 0) : 0;
                 var ew = Math.max(0, Number(rs.edge_width) || 0);
                 var eo = Math.max(0, Math.min(1, Number(active ? rs.edge_opacity : rs.edge_opacity_others)));
                 var edgeLine = { color: strokeC, width: ew > 0 ? ew : 0.01, opacity: ew > 0 ? eo : 0, cap: 'round', join: 'round' };
@@ -1212,17 +1213,19 @@
                 var fillPeak = active ? fp : fp * sc;
                 var mw = Math.max(0, Number(rs.mean_width) || 0);
                 var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
-                updates.push({ id: 'ribbon_min_' + index, z: zb, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
+                updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
                     id: 'ribbon_fill_' + index,
                     z: zb + 0.01,
+                    zlevel: zlv,
                     lineStyle: { color: strokeC, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
                     areaStyle: ribbonFlowGradientFill(strokeC, fillEnd, fillPeak),
                 });
-                updates.push({ id: 'ribbon_max_' + index, z: zb + 0.02, lineStyle: edgeLine });
+                updates.push({ id: 'ribbon_max_' + index, z: zb + 0.02, zlevel: zlv, lineStyle: edgeLine });
                 updates.push({
                     id: 'ribbon_mean_' + index,
                     z: zb + 0.03,
+                    zlevel: zlv,
                     lineStyle: {
                         color: strokeC,
                         width: mw > 0 ? mw : 0.01,
@@ -1456,6 +1459,7 @@
 
         if (isBandsMode) {
             var zr = chart.getZr();
+            var _agentPickMissAt = 0;
             function ribbonZrXY(ev) {
                 var ox = typeof ev.offsetX === 'number' ? ev.offsetX : (ev.zrX != null ? ev.zrX : 0);
                 var oy = typeof ev.offsetY === 'number' ? ev.offsetY : (ev.zrY != null ? ev.zrY : 0);
@@ -1469,6 +1473,26 @@
                 if (dateStr) lastPointerDate = dateStr;
                 var yVal = data[1];
                 var next = pickBankFromRibbonBand(dateStr, yVal);
+                // #region agent log
+                if (!next && dateStr && Number.isFinite(yVal)) {
+                    var _tp = Date.now();
+                    if (_tp - _agentPickMissAt >= 600) {
+                        _agentPickMissAt = _tp;
+                        fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
+                            body: JSON.stringify({
+                                sessionId: 'f5b4c8',
+                                hypothesisId: 'H7',
+                                location: 'ar-chart-report-plot-shared.js:pickBankFromRibbonBand',
+                                message: 'empty band pick with grid coords',
+                                data: { dateStr: dateStr, yVal: yVal, knownBankCount: Object.keys(knownBanks).length },
+                                timestamp: _tp,
+                            }),
+                        }).catch(function () {});
+                    }
+                }
+                // #endregion
                 var bankChanged = next !== hoveredBank;
                 if (bankChanged) {
                     hoveredBank = next;
