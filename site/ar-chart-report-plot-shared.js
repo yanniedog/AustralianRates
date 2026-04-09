@@ -220,6 +220,13 @@
         return Number.isFinite(n) ? n : null;
     }
 
+    /** Report ribbons: exclude non-positive rates (stale cache / zero rows); matches band SQL excluding interest_rate <= 0. */
+    function positiveRibbonRateOrNull(v) {
+        var n = finiteRateOrNull(v);
+        if (n == null || n <= 0) return null;
+        return n;
+    }
+
     function buildBandSeries(opts) {
         var dates = opts.dates;
         var plotPayload = opts.plotPayload;
@@ -234,23 +241,23 @@
             });
             var minData = dates.map(function (date) {
                 var point = byDate[date];
-                return [date, point == null ? null : finiteRateOrNull(point.min_rate)];
+                return [date, point == null ? null : positiveRibbonRateOrNull(point.min_rate)];
             });
             var deltaData = dates.map(function (date) {
                 var point = byDate[date];
                 if (point == null) return [date, null];
-                var lo = finiteRateOrNull(point.min_rate);
-                var hi = finiteRateOrNull(point.max_rate);
+                var lo = positiveRibbonRateOrNull(point.min_rate);
+                var hi = positiveRibbonRateOrNull(point.max_rate);
                 if (lo == null || hi == null || hi < lo) return [date, null];
                 return [date, Math.max(0, hi - lo)];
             });
             var meanData = dates.map(function (date) {
                 var point = byDate[date];
-                return [date, point == null ? null : finiteRateOrNull(point.mean_rate)];
+                return [date, point == null ? null : positiveRibbonRateOrNull(point.mean_rate)];
             });
             var maxData = dates.map(function (date) {
                 var point = byDate[date];
-                return [date, point == null ? null : finiteRateOrNull(point.max_rate)];
+                return [date, point == null ? null : positiveRibbonRateOrNull(point.max_rate)];
             });
             var stackKey = 'band_' + series.bank_name;
             var ew = Math.max(0, Number(rs.edge_width) || 0);
@@ -269,9 +276,9 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                smooth: false,
                 symbol: 'none',
-                connectNulls: true,
+                connectNulls: false,
                 lineStyle: flowEdge,
                 areaStyle: { opacity: 0 },
                 data: minData,
@@ -285,9 +292,9 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                smooth: false,
                 symbol: 'none',
-                connectNulls: true,
+                connectNulls: false,
                 lineStyle: { color: color, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
                 areaStyle: ribbonFlowGradientFill(color, fillEnd, fillPeak),
                 data: deltaData,
@@ -298,9 +305,9 @@
                 name: series.bank_name + ' max',
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                smooth: false,
                 symbol: 'none',
-                connectNulls: true,
+                connectNulls: false,
                 lineStyle: flowEdge,
                 data: maxData,
                 z: zBase + 0.02,
@@ -312,9 +319,9 @@
                 name: series.bank_name + ' mean',
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                smooth: false,
                 symbol: 'none',
-                connectNulls: true,
+                connectNulls: false,
                 lineStyle: {
                     color: color,
                     width: mw > 0 ? mw : 0.01,
@@ -438,7 +445,7 @@
             (s.points || []).forEach(function (p) {
                 var d = String(p.date || '').slice(0, 10);
                 var v = Number(p.value);
-                if (d && Number.isFinite(v)) byDate[d] = v;
+                if (d && Number.isFinite(v) && v > 0) byDate[d] = v;
             });
             var hasData = false;
             var data = dates.map(function (date) {
@@ -452,9 +459,9 @@
                 name: '[P]' + bn + '|' + pn,
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                smooth: false,
                 symbol: 'none',
-                connectNulls: true,
+                connectNulls: false,
                 lineStyle: { color: hexToRgba(baseHex, 0.5), width: 1.2, opacity: 0, cap: 'round', join: 'round' },
                 silent: true,
                 data: data,
@@ -483,7 +490,7 @@
             (s.points || []).forEach(function (p) {
                 var d = String(p.date || '').slice(0, 10);
                 var v = Number(p.value);
-                if (d && Number.isFinite(v)) byDate[d] = v;
+                if (d && Number.isFinite(v) && v > 0) byDate[d] = v;
             });
             var hasData = false;
             for (var di = 0; di < dates.length; di++) {
@@ -758,7 +765,9 @@
                     return [date, point ? finiteRateOrNull(point.value) : null];
                 }),
             },
-            {
+        ];
+        if (plotPayload && plotPayload.mode === 'moves') {
+            series.push({
                 name: 'Baseline',
                 type: 'line',
                 yAxisIndex: 1,
@@ -766,8 +775,8 @@
                 silent: true,
                 lineStyle: { color: theme.axis, width: 1, opacity: 0.65 },
                 data: dates.map(function (date) { return [date, 0]; }),
-            },
-        ];
+            });
+        }
         (overlayDefs || []).forEach(function (overlay) {
             series.push({
                 name: overlay.label,
@@ -818,8 +827,8 @@
                 (bank.points || []).forEach(function (p) {
                     var d = String(p.date || '').slice(0, 10);
                     if (!d) return;
-                    var lo = finiteRateOrNull(p.min_rate);
-                    var hi = finiteRateOrNull(p.max_rate);
+                    var lo = positiveRibbonRateOrNull(p.min_rate);
+                    var hi = positiveRibbonRateOrNull(p.max_rate);
                     if (lo == null || hi == null || hi < lo) return;
                     byDate[d] = p;
                 });
@@ -915,8 +924,8 @@
             Object.keys(knownBanks).forEach(function (bn) {
                 var p = bandByDateByBank[bn] && bandByDateByBank[bn][dateStr];
                 if (!p) return;
-                var lo = finiteRateOrNull(p.min_rate);
-                var hi = finiteRateOrNull(p.max_rate);
+                var lo = positiveRibbonRateOrNull(p.min_rate);
+                var hi = positiveRibbonRateOrNull(p.max_rate);
                 if (lo == null || hi == null || hi < lo) return;
                 if (yVal >= lo && yVal <= hi) {
                     var w = hi - lo;
@@ -1458,6 +1467,7 @@
                 },
                 {
                     type: 'value',
+                    show: !!(plotPayload && plotPayload.mode === 'moves'),
                     name: plotPayload && plotPayload.mode === 'moves' ? 'Count' : '',
                     position: 'right',
                     min: function (value) { return Math.min(value.min, 0); },

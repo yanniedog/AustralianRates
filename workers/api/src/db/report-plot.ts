@@ -515,14 +515,15 @@ async function queryBandSeries(
   where: WhereClause,
   section: ReportPlotSection,
 ): Promise<ReportBandSeries[]> {
+  // Omit interest_rate <= 0 from aggregates so placeholder/stale zero rows do not pin TD/savings ribbons to the baseline.
   const result = await db
     .prepare(
       `SELECT
          d.bank_name,
          d.collection_date AS date,
-         MIN(d.interest_rate) AS min_rate,
-         MAX(d.interest_rate) AS max_rate,
-         AVG(d.interest_rate) AS mean_rate
+         MIN(CASE WHEN d.interest_rate > 0 THEN d.interest_rate END) AS min_rate,
+         MAX(CASE WHEN d.interest_rate > 0 THEN d.interest_rate END) AS max_rate,
+         AVG(CASE WHEN d.interest_rate > 0 THEN d.interest_rate END) AS mean_rate
        FROM ${table} d
        ${where.clause}
        GROUP BY d.bank_name, d.collection_date
