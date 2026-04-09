@@ -4,15 +4,28 @@ export async function waitForChartReady(page: Page, timeout = 90_000): Promise<v
   await page.waitForFunction(() => {
     const output = document.getElementById('chart-output')
     if (!output) return false
-    const rendered =
-      output.getAttribute('data-chart-engine') === 'echarts' ||
-      !!output.querySelector('canvas') ||
-      !!output.querySelector('svg')
-    if (!rendered) return false
     const status = String((document.getElementById('chart-status') || {}).textContent || '')
       .trim()
       .toLowerCase()
-    return status.indexOf('err') === -1
+    // Word-boundary "error" only — substring "err" matches "preferred" and stalls until timeout.
+    if (status && /\berror\b/i.test(status)) return false
+    if (/^load\s|^loading$|^wait$/i.test(status)) return false
+
+    const engine = String(output.getAttribute('data-chart-engine') || '')
+    const rendered =
+      engine === 'echarts' ||
+      engine === 'lightweight' ||
+      output.getAttribute('data-chart-rendered') === 'true' ||
+      !!output.querySelector('canvas') ||
+      !!output.querySelector('svg')
+    if (rendered) return true
+
+    // Report views can finish with clearOutput('No data') — no engine/canvas, only .chart-output-empty.
+    const empty = output.querySelector('.chart-output-empty')
+    if (!empty || !status) return false
+    return /^(no data|no curve data|no time ribbon data|no term vs time data|no lender match|no slope data|no ladder data|no distribution data|no numeric values)$/.test(
+      status,
+    )
   }, null, { timeout })
   await page.waitForTimeout(1200)
 }

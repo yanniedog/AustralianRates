@@ -9,7 +9,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only cancel superseded runs for pull requests; rapid pushes to main should not mark prior runs "cancelled".
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -43,6 +44,9 @@ jobs:
 
       - name: Typecheck repo scripts
         run: npm run typecheck:scripts
+
+      - name: Typecheck mobile-site-qa worker
+        run: npm run typecheck:mobile-site-qa
 
       - name: Build (assets, vendor bundle, prototype, site version)
         run: npm run build
