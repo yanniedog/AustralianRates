@@ -583,7 +583,7 @@ async function verifyPublicFooter(page, results, label) {
     const expected = [
         { text: 'About', href: '/about/' },
         { text: 'GitHub', href: 'https://github.com/yanniedog/AustralianRates' },
-        { text: 'Donate', href: 'https://github.com/sponsors/yanniedog' },
+        { text: 'Donate', href: '#donate' },
         { text: 'Contact', href: '/contact/' },
         { text: 'Privacy', href: '/privacy/' },
         { text: 'Terms', href: '/terms/' },
@@ -604,6 +604,24 @@ async function verifyPublicFooter(page, results, label) {
     } else {
         fail(results, `${label}: public footer guidance note is missing`);
     }
+}
+
+async function verifyDonateModal(page, results, label) {
+    const donate = page.locator('#site-footer-donate');
+    const count = await donate.count().catch(() => 0);
+    if (count === 0) {
+        fail(results, `${label}: footer Donate control missing`);
+        return;
+    }
+    await donate.click();
+    const titleText = await page.locator('#site-donate-title').textContent().catch(() => '');
+    if (/fuel the development/i.test(String(titleText || ''))) {
+        pass(results, `${label}: donate modal opens with fuel-the-development title`);
+    } else {
+        fail(results, `${label}: donate modal title missing or wrong`);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
 }
 
 async function verifyPublicHeaderRefresh(page, results, label) {
@@ -1312,6 +1330,7 @@ async function runTests() {
         await verifyDefaultUrlState(page, results, 'Homepage');
         await verifyBankBadgeLogos(page, results, 'Homepage');
         await verifyPublicFooter(page, results, 'Homepage');
+        await verifyDonateModal(page, results, 'Homepage');
         await verifyClientLog(page, results, 'Homepage');
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
         await verifyNoScriptFallback(homeUrl, '/api/home-loan-rates', results, 'Homepage');

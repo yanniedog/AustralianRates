@@ -574,6 +574,111 @@ body.is-resizing-panels * {
     margin-top: 12px;
 }
 
+.site-donate-panel.site-help-panel {
+    width: min(420px, calc(100vw - 24px));
+}
+
+.site-donate-lead {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--ar-text-soft);
+}
+
+.site-donate-config-hint {
+    margin: 0;
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.site-donate-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+}
+
+.site-donate-blockchain-label {
+    margin: 0 0 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ar-text-muted);
+}
+
+.site-donate-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.site-donate-tab {
+    padding: 6px 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 999px;
+    background: var(--ar-surface-2);
+    color: var(--ar-text);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+        border-color var(--ar-motion-fast) var(--ar-ease),
+        background-color var(--ar-motion-fast) var(--ar-ease);
+}
+
+.site-donate-tab[aria-selected='true'] {
+    border-color: var(--ar-line-strong);
+    background: var(--ar-accent-soft);
+}
+
+.site-donate-wallet-label {
+    margin: 0 0 4px;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.site-donate-field-label {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--ar-text-muted);
+}
+
+.site-donate-address {
+    margin: 8px 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+    background: var(--ar-surface-2);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.site-donate-copy {
+    justify-self: start;
+    margin-top: 2px;
+}
+
+.site-donate-copy-status {
+    min-height: 1.2em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--ar-accent);
+}
+
+.site-donate-qr {
+    display: block;
+    margin: 14px auto 0;
+    border: 1px solid var(--ar-line);
+    border-radius: 12px;
+    background: #fff;
+}
+
 .site-help-head h2 {
     font-size: 0.9rem;
     font-weight: 600;

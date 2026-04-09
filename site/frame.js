@@ -3,7 +3,6 @@
 
     var GITHUB_REPO = 'yanniedog/AustralianRates';
     var GITHUB_REPO_URL = 'https://github.com/' + GITHUB_REPO;
-    var GITHUB_SPONSORS_URL = 'https://github.com/sponsors/yanniedog';
     var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
     var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
@@ -19,6 +18,7 @@
     var currentTooltipTarget = null;
     var longPressTimer = 0;
     var helpSheet = null;
+    var donateSheet = null;
     var navScrim = null;
 
     (function stripNocacheFromUrl() {
@@ -364,9 +364,9 @@
                 '<a href="' + esc(GITHUB_REPO_URL) + '" class="icon-btn secondary buttonish site-action-btn site-action-github" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub repository">' +
                     iconOnly('github', 'GitHub', 'site-action-icon') +
                 '</a>',
-                '<a href="' + esc(GITHUB_SPONSORS_URL) + '" class="icon-btn secondary buttonish site-action-btn site-action-donate" target="_blank" rel="noopener" aria-label="Support this project" title="Support this project">' +
+                '<button type="button" id="site-donate-btn" class="icon-btn secondary site-action-btn site-action-donate" aria-label="Donate" title="Donate">' +
                     iconOnly('heart', 'Donate', 'site-action-icon') +
-                '</a>'
+                '</button>'
             );
         }
         var actions = [
@@ -470,7 +470,7 @@
                     '<strong>AustralianRates</strong>' +
                     '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
                     '<a href="' + esc(GITHUB_REPO_URL) + '" target="_blank" rel="noopener">GitHub</a>' +
-                    '<a href="' + esc(GITHUB_SPONSORS_URL) + '" target="_blank" rel="noopener">Donate</a>' +
+                    '<a href="#donate" id="site-footer-donate">Donate</a>' +
                     '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                     '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
                     '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
@@ -631,6 +631,152 @@
             '</div>';
     }
 
+    function getDonateNetworks() {
+        var raw = window.AR && Array.isArray(window.AR.donateNetworks) ? window.AR.donateNetworks : [];
+        return raw.filter(function (n) {
+            return n && String(n.address || '').trim().length > 0;
+        });
+    }
+
+    function donateQrUrl(address) {
+        var text = String(address || '').trim();
+        if (!text) return '';
+        return 'https://quickchart.io/qr?size=220x220&margin=2&text=' + encodeURIComponent(text);
+    }
+
+    function donateModalHtml(networks) {
+        var sub = 'Choose a network, scan the QR, or copy the wallet to support AustralianRates.';
+        if (!networks.length) {
+            return '' +
+                '<div class="site-help-backdrop" data-donate-close></div>' +
+                '<div class="site-help-panel site-donate-panel" role="dialog" aria-modal="true" aria-labelledby="site-donate-title">' +
+                    '<div class="site-help-head">' +
+                        '<h2 id="site-donate-title" tabindex="-1">Fuel the development</h2>' +
+                        '<button type="button" class="icon-btn secondary" data-donate-close aria-label="Close">' + iconOnly('close', 'Close') + '</button>' +
+                    '</div>' +
+                    '<div class="site-help-body site-donate-body">' +
+                        '<p class="site-donate-lead">' + esc(sub) + '</p>' +
+                        '<p class="site-donate-config-hint">Add receiving addresses to <code class="site-donate-code">window.AR.donateNetworks</code> in <code class="site-donate-code">site/site-variant.js</code> (same layout as Order Skew: Solana, Cardano, BNB, Dogecoin, Monero). Empty <code class="site-donate-code">address</code> values hide that tab.</p>' +
+                    '</div>' +
+                '</div>';
+        }
+        var tabs = networks.map(function (n, i) {
+            return '<button type="button" class="site-donate-tab" role="tab" aria-selected="' + (i === 0 ? 'true' : 'false') + '" data-donate-tab="' + i + '" id="site-donate-tab-' + i + '">' + esc(n.label) + '</button>';
+        }).join('');
+        var panes = networks.map(function (n, i) {
+            var addr = String(n.address || '').trim();
+            var shortLabel = String(n.label || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || 'Wallet';
+            var qr = donateQrUrl(addr);
+            return '' +
+                '<div class="site-donate-pane" role="tabpanel" aria-labelledby="site-donate-tab-' + i + '" data-donate-pane="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
+                    '<p class="site-donate-wallet-label">' + esc(shortLabel) + ' wallet</p>' +
+                    '<p class="site-donate-field-label">Wallet address</p>' +
+                    '<pre class="site-donate-address" aria-label="Wallet address">' + esc(addr) + '</pre>' +
+                    '<button type="button" class="buttonish secondary site-donate-copy" data-donate-copy>Copy address</button>' +
+                    (qr
+                        ? '<img class="site-donate-qr" src="' + esc(qr) + '" width="220" height="220" alt="" loading="lazy" decoding="async">'
+                        : '') +
+                '</div>';
+        }).join('');
+        return '' +
+            '<div class="site-help-backdrop" data-donate-close></div>' +
+            '<div class="site-help-panel site-donate-panel" role="dialog" aria-modal="true" aria-labelledby="site-donate-title">' +
+                '<div class="site-help-head">' +
+                    '<h2 id="site-donate-title" tabindex="-1">Fuel the development</h2>' +
+                    '<button type="button" class="icon-btn secondary" data-donate-close aria-label="Close">' + iconOnly('close', 'Close') + '</button>' +
+                '</div>' +
+                '<div class="site-help-body site-donate-body">' +
+                    '<p class="site-donate-lead">' + esc(sub) + '</p>' +
+                    '<p class="site-donate-blockchain-label">Blockchain</p>' +
+                    '<div class="site-donate-tabs" role="tablist" aria-label="Blockchain">' + tabs + '</div>' +
+                    '<div id="site-donate-copy-status" class="site-donate-copy-status" aria-live="polite" hidden></div>' +
+                    '<div class="site-donate-panels">' + panes + '</div>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function isDonateOpen() {
+        return !!(donateSheet && !donateSheet.hidden);
+    }
+
+    function ensureDonateSheet() {
+        if (donateSheet) return donateSheet;
+        donateSheet = document.createElement('div');
+        donateSheet.id = 'site-donate-sheet';
+        donateSheet.className = 'site-help-sheet';
+        donateSheet.hidden = true;
+        donateSheet.addEventListener('click', function (event) {
+            if (event.target && event.target.closest && event.target.closest('[data-donate-close]')) {
+                closeDonateSheet();
+                return;
+            }
+            var tabBtn = event.target && event.target.closest ? event.target.closest('[data-donate-tab]') : null;
+            if (tabBtn) {
+                var idx = Number(tabBtn.getAttribute('data-donate-tab'));
+                if (!Number.isNaN(idx)) setDonateTab(idx);
+                return;
+            }
+            if (event.target && event.target.closest && event.target.closest('[data-donate-copy]')) {
+                var pane = event.target.closest('.site-donate-pane');
+                var addrEl = pane && pane.querySelector('.site-donate-address');
+                var t = addrEl ? String(addrEl.textContent || '').trim() : '';
+                if (!t) return;
+                var statusEl = document.getElementById('site-donate-copy-status');
+                var done = function () {
+                    if (statusEl) {
+                        statusEl.textContent = 'Value copied!';
+                        statusEl.hidden = false;
+                        window.setTimeout(function () {
+                            if (statusEl) statusEl.hidden = true;
+                        }, 2200);
+                    }
+                };
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    navigator.clipboard.writeText(t).then(done).catch(function () {});
+                }
+            }
+        });
+        document.body.appendChild(donateSheet);
+        return donateSheet;
+    }
+
+    function setDonateTab(index) {
+        var sheet = ensureDonateSheet();
+        var tabs = sheet.querySelectorAll('[data-donate-tab]');
+        var panes = sheet.querySelectorAll('[data-donate-pane]');
+        for (var i = 0; i < tabs.length; i++) {
+            tabs[i].setAttribute('aria-selected', i === index ? 'true' : 'false');
+        }
+        for (var j = 0; j < panes.length; j++) {
+            if (j === index) panes[j].removeAttribute('hidden');
+            else panes[j].setAttribute('hidden', 'hidden');
+        }
+    }
+
+    function openDonateSheet() {
+        closeHelpSheet();
+        setMenuOpen(false);
+        var sheet = ensureDonateSheet();
+        var networks = getDonateNetworks();
+        sheet.innerHTML = donateModalHtml(networks);
+        sheet.hidden = false;
+        document.body.classList.add('has-donate-open');
+        syncOverlayState();
+        var focusTarget = sheet.querySelector('[data-donate-close]') || sheet.querySelector('#site-donate-title');
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            window.setTimeout(function () {
+                focusTarget.focus();
+            }, 0);
+        }
+    }
+
+    function closeDonateSheet() {
+        if (!donateSheet) return;
+        donateSheet.hidden = true;
+        document.body.classList.remove('has-donate-open');
+        syncOverlayState();
+    }
+
     function ensureNavScrim() {
         if (navScrim) return navScrim;
         navScrim = document.createElement('button');
@@ -652,7 +798,7 @@
 
     function syncOverlayState() {
         var menuOpen = document.body.classList.contains('is-nav-open');
-        var overlayOpen = menuOpen || isHelpOpen();
+        var overlayOpen = menuOpen || isHelpOpen() || isDonateOpen();
         var scrim = ensureNavScrim();
         var showNavScrim = menuOpen && isPublicMobileMenuContext(getPageContext());
         scrim.hidden = !showNavScrim;
@@ -676,6 +822,7 @@
     }
 
     function openHelpSheet(title, text) {
+        closeDonateSheet();
         setMenuOpen(false);
         var sheet = ensureHelpSheet();
         sheet.innerHTML = helpSheetHtml(title, '<p>' + esc(text) + '</p>');
@@ -891,6 +1038,7 @@
 
     function setMenuOpen(open) {
         if (open && isHelpOpen()) closeHelpSheet();
+        if (open && isDonateOpen()) closeDonateSheet();
         document.body.classList.toggle('is-nav-open', !!open);
         var drawer = document.getElementById('site-menu-drawer');
         if (drawer) drawer.hidden = !open;
@@ -916,6 +1064,12 @@
                 openHelpSheet(currentPageLabel(context), pageHelpText(context));
             });
         }
+        var donateBtn = document.getElementById('site-donate-btn');
+        if (donateBtn) {
+            donateBtn.addEventListener('click', function () {
+                openDonateSheet();
+            });
+        }
         if (menuBtn) {
             menuBtn.addEventListener('click', function () {
                 setMenuOpen(!document.body.classList.contains('is-nav-open'));
@@ -923,6 +1077,11 @@
         }
         document.addEventListener('click', function (event) {
             var link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+            if (link && link.id === 'site-footer-donate') {
+                event.preventDefault();
+                openDonateSheet();
+                return;
+            }
             var navigation = samePageHashNavigation(context, link);
             if (navigation) {
                 event.preventDefault();
@@ -937,6 +1096,7 @@
             if (event.key === 'Escape') {
                 setMenuOpen(false);
                 closeHelpSheet();
+                closeDonateSheet();
                 hideTooltip();
             }
         });
