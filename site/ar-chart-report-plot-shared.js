@@ -823,7 +823,6 @@
         var ribbonHoverScopeSeq = 0;
         var ribbonExpandedPaths = {};
         var ribbonTreeAnchorYmd = '';
-        var _orphanFocusLogAt = 0;
 
         function clearRibbonHoverScopes() {
             ribbonHoverScopeMap = {};
@@ -1226,26 +1225,6 @@
                 }
                 focusKey = resolvedKey;
             }
-            // #region agent log
-            if (focusRaw && !focusKey) {
-                var _orf = Date.now();
-                if (_orf - _orphanFocusLogAt > 800) {
-                    _orphanFocusLogAt = _orf;
-                    fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
-                        body: JSON.stringify({
-                            sessionId: 'f5b4c8',
-                            hypothesisId: 'H9-orphan-focus',
-                            location: 'ar-chart-report-plot-shared.js:applyRibbonBankHighlightState',
-                            message: 'highlight name did not resolve to a band series',
-                            data: { focusRaw: String(focusRaw).slice(0, 120), seriesCount: plotPayload.series.length },
-                            timestamp: _orf,
-                        }),
-                    }).catch(function () {});
-                }
-            }
-            // #endregion
             var updates = [];
             var activeCount = 0;
             plotPayload.series.forEach(function (bank, index) {
