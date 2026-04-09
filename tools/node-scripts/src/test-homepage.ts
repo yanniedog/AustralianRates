@@ -920,6 +920,7 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
     await page.setViewportSize({ width: 375, height: 667 });
     await gotoPublic(page, baseUrl);
     await page.click('a[href="#scenario"]');
+    await page.waitForFunction(() => window.location.hash === '#scenario', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(600);
 
     const launch = await page.evaluate(() => {
