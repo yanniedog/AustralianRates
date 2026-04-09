@@ -23,6 +23,7 @@ export type ReportBandPoint = {
   date: string
   min_rate: number
   max_rate: number
+  mean_rate: number
 }
 
 export type ReportBandSeries = {

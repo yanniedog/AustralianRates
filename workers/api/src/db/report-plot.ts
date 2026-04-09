@@ -495,7 +495,8 @@ async function queryBandSeries(
          d.bank_name,
          d.collection_date AS date,
          MIN(d.interest_rate) AS min_rate,
-         MAX(d.interest_rate) AS max_rate
+         MAX(d.interest_rate) AS max_rate,
+         AVG(d.interest_rate) AS mean_rate
        FROM ${table} d
        ${where.clause}
        GROUP BY d.bank_name, d.collection_date
@@ -507,6 +508,7 @@ async function queryBandSeries(
       date: string
       min_rate: number
       max_rate: number
+      mean_rate: number
     }>()
 
   const byBank = new Map<string, ReportBandSeries>()
@@ -517,6 +519,7 @@ async function queryBandSeries(
       date: String(row.date || ''),
       min_rate: Number(row.min_rate || 0),
       max_rate: Number(row.max_rate || 0),
+      mean_rate: Number(row.mean_rate || 0),
     }
     if (!byBank.has(bankName)) {
       byBank.set(bankName, {

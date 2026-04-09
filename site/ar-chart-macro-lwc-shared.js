@@ -258,7 +258,7 @@
     }
 
     /**
-     * View mode bar: Bands | product dropdown (Products / Best) | horizontal bank logo tray (focus).
+     * View mode bar: Ribbon | product dropdown (Products / Best) | horizontal bank logo tray (focus).
      */
     function createReportViewModeBar(opts) {
         var section = opts.section;
@@ -280,7 +280,7 @@
             return b;
         }
 
-        var btnBands = mkTab('Bands', vm.mode === 'bands', 'lwc-report-viewmode-tab--first');
+        var btnBands = mkTab('Ribbon', vm.mode === 'bands', 'lwc-report-viewmode-tab--first');
         btnBands.addEventListener('click', function () {
             setViewMode(section, 'bands');
             onReRender();
@@ -580,7 +580,7 @@
     var _viewModeBySection = {};
 
     function getViewMode(section) {
-        var state = _viewModeBySection[section] || { mode: 'products', focusBank: '' };
+        var state = _viewModeBySection[section] || { mode: 'bands', focusBank: '' };
         return {
             mode: normalizeViewMode(state.mode),
             focusBank: String(state.focusBank || ''),

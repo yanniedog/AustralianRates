@@ -292,6 +292,7 @@
                 reportViewKind: 'homeLoanReport',
                 bankList: extractBankNames(model),
                 plotPayload: plotPayload,
+                allSeries: (model && (model.allSeries || model.visibleSeries)) || [],
                 range: {
                     reportRange: reportRange,
                     dataMin: dataMinPlot,

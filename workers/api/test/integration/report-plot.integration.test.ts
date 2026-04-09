@@ -100,6 +100,7 @@ describe('report-plot routes', () => {
             date?: string
             min_rate?: number
             max_rate?: number
+            mean_rate?: number
           }>
         }>
       }
@@ -108,11 +109,12 @@ describe('report-plot routes', () => {
       const targetPoint = (anz?.points || []).find((point) => point.date === d2)
 
       expect(json.mode).toBe('bands')
-      // Both products included (unchanged product not filtered): min=4.4, max=4.6
+      // Both products included (unchanged product not filtered): min=4.4, max=4.6, mean=4.5
       expect(targetPoint).toMatchObject({
         date: d2,
         min_rate: 4.4,
         max_rate: 4.6,
+        mean_rate: 4.5,
       })
     } finally {
       await env.DB

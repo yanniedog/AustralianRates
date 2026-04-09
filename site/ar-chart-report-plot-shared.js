@@ -115,30 +115,92 @@
                 if (point == null) return [date, null];
                 return [date, Math.max(0, Number(point.max_rate) - Number(point.min_rate))];
             });
+            var meanData = dates.map(function (date) {
+                var point = byDate[date];
+                return [date, point != null && Number.isFinite(Number(point.mean_rate)) ? Number(point.mean_rate) : null];
+            });
             var stackKey = 'band_' + series.bank_name;
-            // Lower edge: sets the base of the ribbon (transparent fill)
+            // Lower edge: sets the base of the ribbon (transparent fill, min line at full opacity)
             out.push({
+                id: 'ribbon_min_' + index,
                 name: series.bank_name,
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 0.8, opacity: 0.7 },
+                lineStyle: { color: color, width: 1.5, opacity: 1 },
                 areaStyle: { opacity: 0 },
                 data: minData,
+                z: 2,
             });
-            // Upper delta: fills the ribbon between min and max rate
+            // Upper delta: fills the ribbon between min and max rate (50% transparent bank colour)
             out.push({
-                name: series.bank_name + ' band',
+                id: 'ribbon_fill_' + index,
+                name: series.bank_name + ' ribbon',
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 0.8, opacity: 0.7 },
-                areaStyle: { color: color, opacity: 0.22 },
+                lineStyle: { color: color, width: 1.5, opacity: 1 },
+                areaStyle: { color: color, opacity: 0.5 },
                 data: deltaData,
+                z: 2,
+            });
+            // Mean line
+            out.push({
+                id: 'ribbon_mean_' + index,
+                name: series.bank_name + ' mean',
+                type: 'line',
+                yAxisIndex: 0,
+                symbol: 'none',
+                connectNulls: true,
+                lineStyle: { color: color, width: 1.5, type: 'dashed', opacity: 0.85 },
+                data: meanData,
+                z: 3,
+            });
+        });
+        return out;
+    }
+
+    /** Build hidden product overlay lines for ribbon hover reveal. */
+    function buildProductOverlay(dates, allSeries, bankColor) {
+        var out = [];
+        if (!allSeries || !allSeries.length) return out;
+        var bankIndexMap = {};
+        var bankCount = 0;
+        allSeries.forEach(function (s) {
+            var bn = String(s.bankName || '').trim();
+            if (!bn) return;
+            var bk = bn.toLowerCase();
+            if (bankIndexMap[bk] == null) { bankIndexMap[bk] = bankCount++; }
+            var color = bankColor(bn, bankIndexMap[bk]);
+            var pn = String(s.productName || 'Unknown');
+            var byDate = {};
+            (s.points || []).forEach(function (p) {
+                var d = String(p.date || '').slice(0, 10);
+                var v = Number(p.value);
+                if (d && Number.isFinite(v)) byDate[d] = v;
+            });
+            var hasData = false;
+            var data = dates.map(function (date) {
+                var v = byDate[date];
+                if (v != null) { hasData = true; return [date, v]; }
+                return [date, null];
+            });
+            if (!hasData) return;
+            out.push({
+                id: 'ribbon_prod_' + out.length,
+                name: '[P]' + bn + '|' + pn,
+                type: 'line',
+                yAxisIndex: 0,
+                symbol: 'none',
+                connectNulls: true,
+                lineStyle: { color: color, width: 1.2, opacity: 0 },
+                silent: true,
+                data: data,
+                z: 4,
             });
         });
         return out;
@@ -383,16 +445,121 @@
         });
 
         if (plotPayload && plotPayload.mode === 'moves') series = series.concat(buildMovesSeries(section, dates, plotPayload, theme));
-        if (plotPayload && plotPayload.mode === 'bands') series = series.concat(buildBandSeries({
-            dates: dates,
-            plotPayload: plotPayload,
-            bankColor: options.bankColor,
-        }));
+
+        var productOverlay = [];
+        var isBandsMode = plotPayload && plotPayload.mode === 'bands';
+        if (isBandsMode) {
+            series = series.concat(buildBandSeries({
+                dates: dates,
+                plotPayload: plotPayload,
+                bankColor: options.bankColor,
+            }));
+            productOverlay = buildProductOverlay(dates, options.allSeries || [], options.bankColor);
+            series = series.concat(productOverlay);
+        }
+
+        // Pre-build lookup structures for ribbon tooltip and hover
+        var bandByDateByBank = {};
+        var knownBanks = {};
+        if (isBandsMode && plotPayload.series) {
+            plotPayload.series.forEach(function (bank) {
+                knownBanks[bank.bank_name] = true;
+                var byDate = {};
+                (bank.points || []).forEach(function (p) {
+                    byDate[String(p.date || '').slice(0, 10)] = p;
+                });
+                bandByDateByBank[bank.bank_name] = byDate;
+            });
+        }
+
+        // Product series grouped by bank for quick hover updates
+        var productByBank = {};
+        productOverlay.forEach(function (s) {
+            var rest = s.name.slice(3); // strip '[P]'
+            var pipe = rest.indexOf('|');
+            var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
+            if (!productByBank[bn]) productByBank[bn] = [];
+            productByBank[bn].push({ id: s.id, color: s.lineStyle.color });
+        });
+
+        var hoveredBank = '';
+        var selectedProductName = '';
+
+        function resolveHoverBank(seriesName) {
+            if (!seriesName) return '';
+            if (seriesName.endsWith(' ribbon')) return seriesName.slice(0, -7);
+            if (seriesName.endsWith(' mean')) return seriesName.slice(0, -5);
+            if (knownBanks[seriesName]) return seriesName;
+            return '';
+        }
+
+        function updateProductVisibility() {
+            if (!productOverlay.length) return;
+            var updates = [];
+            productOverlay.forEach(function (s) {
+                var rest = s.name.slice(3);
+                var pipe = rest.indexOf('|');
+                var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
+                var show = bn === hoveredBank;
+                var isSelected = s.name === selectedProductName;
+                updates.push({
+                    id: s.id,
+                    lineStyle: {
+                        color: s.lineStyle.color,
+                        width: isSelected ? 2.5 : 1.2,
+                        opacity: isSelected ? 0.85 : (show ? 0.5 : 0),
+                    },
+                    silent: !show,
+                });
+            });
+            chart.setOption({ series: updates });
+        }
+
+        // Custom tooltip for bands mode
+        var tooltipConfig;
+        if (isBandsMode) {
+            tooltipConfig = {
+                trigger: 'axis',
+                axisPointer: { type: 'line' },
+                confine: true,
+                formatter: function (params) {
+                    if (!params || !params.length) return '';
+                    var date = params[0].axisValue || '';
+                    var parts = ['<b>' + date + '</b>'];
+                    params.forEach(function (p) {
+                        if ((p.seriesName === 'RBA' || p.seriesName === 'CPI') && p.value && p.value[1] != null) {
+                            parts.push('<span style="color:' + p.color + ';">\u25A0</span> ' + p.seriesName + ': ' + Number(p.value[1]).toFixed(2) + '%');
+                        }
+                    });
+                    if (plotPayload.series) {
+                        plotPayload.series.forEach(function (bank, bi) {
+                            var point = bandByDateByBank[bank.bank_name] && bandByDateByBank[bank.bank_name][date];
+                            if (!point) return;
+                            var c = options.bankColor(bank.bank_name, bi);
+                            parts.push('<span style="color:' + c + ';">\u25A0</span> <b>' + bank.bank_name + '</b>: ' +
+                                Number(point.min_rate).toFixed(2) + ' \u2013 ' + Number(point.max_rate).toFixed(2) + '% (avg ' + Number(point.mean_rate).toFixed(2) + '%)');
+                            if (hoveredBank === bank.bank_name) {
+                                params.forEach(function (p) {
+                                    if (p.seriesName && p.seriesName.indexOf('[P]' + bank.bank_name + '|') === 0 && p.value && p.value[1] != null) {
+                                        var prodName = p.seriesName.slice(3 + bank.bank_name.length + 1);
+                                        var sel = p.seriesName === selectedProductName;
+                                        parts.push('&nbsp;&nbsp;\u00b7 ' + (sel ? '<b>' : '') + prodName + ': ' + Number(p.value[1]).toFixed(2) + '%' + (sel ? '</b>' : ''));
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    return parts.join('<br>');
+                },
+            };
+        } else {
+            tooltipConfig = { trigger: 'axis', axisPointer: { type: 'line' } };
+        }
 
         chart.setOption({
             animation: false,
             grid: { top: 18, right: 18, bottom: 56, left: 48, containLabel: true },
-            tooltip: { trigger: 'axis', axisPointer: { type: 'line' } },
+            tooltip: tooltipConfig,
             legend: { show: false },
             xAxis: {
                 type: 'category',
@@ -423,6 +590,42 @@
             ],
             series: series,
         });
+
+        // Wire up ribbon hover/click interactivity
+        if (isBandsMode && productOverlay.length) {
+            chart.on('mouseover', function (params) {
+                var bank = resolveHoverBank(params.seriesName);
+                if (!bank || bank === hoveredBank) return;
+                hoveredBank = bank;
+                updateProductVisibility();
+            });
+            chart.on('globalout', function () {
+                if (selectedProductName) return;
+                hoveredBank = '';
+                updateProductVisibility();
+            });
+            chart.on('click', function (params) {
+                var name = params.seriesName || '';
+                if (name.indexOf('[P]') === 0) {
+                    if (selectedProductName === name) {
+                        selectedProductName = '';
+                    } else {
+                        selectedProductName = name;
+                    }
+                    var rest = name.slice(3);
+                    var pipe = rest.indexOf('|');
+                    hoveredBank = pipe >= 0 ? rest.slice(0, pipe) : rest;
+                    updateProductVisibility();
+                } else {
+                    var bank = resolveHoverBank(name);
+                    if (selectedProductName) {
+                        selectedProductName = '';
+                        hoveredBank = bank || '';
+                        updateProductVisibility();
+                    }
+                }
+            });
+        }
 
         return {
             mount: mount,

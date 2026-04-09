@@ -259,6 +259,7 @@
                 reportViewKind: 'economicReport',
                 bankList: extractBankNames(allSeries),
                 plotPayload: plotPayload,
+                allSeries: allSeries,
                 range: {
                     reportRange: reportRange,
                     dataMin: dataMinPlot,

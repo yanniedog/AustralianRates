@@ -278,6 +278,7 @@
                 reportViewKind: 'termDepositReport',
                 bankList: extractBankNames((model && (model.allSeries || model.visibleSeries)) || []),
                 plotPayload: plotPayload,
+                allSeries: (model && (model.allSeries || model.visibleSeries)) || [],
                 range: {
                     reportRange: reportRange,
                     dataMin: dataMinPlot,
