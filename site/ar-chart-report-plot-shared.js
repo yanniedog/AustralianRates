@@ -713,6 +713,8 @@
         }
 
         var chart = echarts.init(mount, null, { renderer: 'canvas' });
+        /** Ribbons + overlays use left % axis (index 0); grid also has yAxis 1 (e.g. moves count). */
+        var ribbonAxisFinder = { gridIndex: 0, xAxisIndex: 0, yAxisIndex: 0 };
         var dates = buildDateRange(range.viewStart, range.ctxMax);
         var prep = M.prepareRbaCpiForReport(options.rbaHistory, options.cpiData, range.viewStart, range.ctxMax);
         var rbaDaily = M.fillForwardDaily(prep.rbaData.points, 'date', 'rate', range.chartStart, range.ctxMax);
@@ -1052,7 +1054,7 @@
                     var d = dates[di];
                     var v = prod.byDate[d];
                     if (v == null) return;
-                    var pix = chart.convertToPixel({ gridIndex: 0 }, [d, v]);
+                    var pix = chart.convertToPixel(ribbonAxisFinder, [d, v]);
                     if (!pix || pix.length < 2 || !Number.isFinite(pix[0]) || !Number.isFinite(pix[1])) return;
                     if (first) {
                         ctx.moveTo(pix[0], pix[1]);
@@ -1090,7 +1092,7 @@
         }
 
         function ribbonCanvasPickProduct(offsetX, offsetY) {
-            var data = chart.convertFromPixel({ gridIndex: 0 }, [offsetX, offsetY]);
+            var data = chart.convertFromPixel(ribbonAxisFinder, [offsetX, offsetY]);
             if (!data || data.length < 2) return null;
             var dateStr = resolveDateFromAxisValue(data[0]);
             var pbPick = ribbonPanelBank();
@@ -1102,7 +1104,7 @@
             prods.forEach(function (prod) {
                 var v = prod.byDate[dateStr];
                 if (v == null) return;
-                var pix = chart.convertToPixel({ gridIndex: 0 }, [dateStr, v]);
+                var pix = chart.convertToPixel(ribbonAxisFinder, [dateStr, v]);
                 if (!pix || pix.length < 2) return;
                 var dx = pix[0] - offsetX;
                 var dy = pix[1] - offsetY;
@@ -1118,7 +1120,7 @@
 
         function overlayPickProduct(offsetX, offsetY) {
             if (!ribbonPanelBank() || !productOverlay.length) return null;
-            var data = chart.convertFromPixel({ gridIndex: 0 }, [offsetX, offsetY]);
+            var data = chart.convertFromPixel(ribbonAxisFinder, [offsetX, offsetY]);
             if (!data || data.length < 2) return null;
             var dateStr = resolveDateFromAxisValue(data[0]);
             if (!dateStr) return null;
@@ -1138,7 +1140,7 @@
                     }
                 });
                 if (yAt == null || !Number.isFinite(yAt)) return;
-                var pix = chart.convertToPixel({ gridIndex: 0 }, [dateStr, yAt]);
+                var pix = chart.convertToPixel(ribbonAxisFinder, [dateStr, yAt]);
                 if (!pix || pix.length < 2) return;
                 var dx = pix[0] - offsetX;
                 var dy = pix[1] - offsetY;
@@ -1196,8 +1198,10 @@
             var focusRaw = String(hoveredBankName || '').trim();
             var focusKey = focusRaw ? normRibbonBankName(focusRaw) : '';
             var updates = [];
+            var activeCount = 0;
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
+                if (active) activeCount++;
                 var c0 = options.bankColor(bank.bank_name, index);
                 var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
@@ -1213,13 +1217,16 @@
                 var fillPeak = active ? fp : fp * sc;
                 var mw = Math.max(0, Number(rs.mean_width) || 0);
                 var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
+                var fillAreaStyle = active
+                    ? ribbonFlowGradientFill(strokeC, fillEnd, fillPeak)
+                    : { color: hexToRgba(strokeC, Math.min(1, Math.max(0.16, (fillEnd + fillPeak) * 0.85))) };
                 updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
                     id: 'ribbon_fill_' + index,
                     z: zb + 0.01,
                     zlevel: zlv,
                     lineStyle: { color: strokeC, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
-                    areaStyle: ribbonFlowGradientFill(strokeC, fillEnd, fillPeak),
+                    areaStyle: fillAreaStyle,
                 });
                 updates.push({ id: 'ribbon_max_' + index, z: zb + 0.02, zlevel: zlv, lineStyle: edgeLine });
                 updates.push({
@@ -1459,7 +1466,6 @@
 
         if (isBandsMode) {
             var zr = chart.getZr();
-            var _agentPickMissAt = 0;
             function ribbonZrXY(ev) {
                 var ox = typeof ev.offsetX === 'number' ? ev.offsetX : (ev.zrX != null ? ev.zrX : 0);
                 var oy = typeof ev.offsetY === 'number' ? ev.offsetY : (ev.zrY != null ? ev.zrY : 0);
@@ -1467,32 +1473,12 @@
             }
             function onRibbonZrMouseMove(ev) {
                 var xy = ribbonZrXY(ev);
-                var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
+                var data = chart.convertFromPixel(ribbonAxisFinder, xy);
                 if (!data || data.length < 2) return;
                 var dateStr = resolveDateFromAxisValue(data[0]);
                 if (dateStr) lastPointerDate = dateStr;
                 var yVal = data[1];
                 var next = pickBankFromRibbonBand(dateStr, yVal);
-                // #region agent log
-                if (!next && dateStr && Number.isFinite(yVal)) {
-                    var _tp = Date.now();
-                    if (_tp - _agentPickMissAt >= 600) {
-                        _agentPickMissAt = _tp;
-                        fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
-                            body: JSON.stringify({
-                                sessionId: 'f5b4c8',
-                                hypothesisId: 'H7',
-                                location: 'ar-chart-report-plot-shared.js:pickBankFromRibbonBand',
-                                message: 'empty band pick with grid coords',
-                                data: { dateStr: dateStr, yVal: yVal, knownBankCount: Object.keys(knownBanks).length },
-                                timestamp: _tp,
-                            }),
-                        }).catch(function () {});
-                    }
-                }
-                // #endregion
                 var bankChanged = next !== hoveredBank;
                 if (bankChanged) {
                     hoveredBank = next;
@@ -1528,7 +1514,7 @@
             }
             function onRibbonZrClick(ev) {
                 var xy = ribbonZrXY(ev);
-                var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
+                var data = chart.convertFromPixel(ribbonAxisFinder, xy);
                 if (!data || data.length < 2) return;
                 var dateStr = resolveDateFromAxisValue(data[0]);
                 var yVal = data[1];
