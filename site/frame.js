@@ -2,6 +2,8 @@
     'use strict';
 
     var GITHUB_REPO = 'yanniedog/AustralianRates';
+    var GITHUB_REPO_URL = 'https://github.com/' + GITHUB_REPO;
+    var GITHUB_SPONSORS_URL = 'https://github.com/sponsors/yanniedog';
     var sc = (window.AR && window.AR.sectionConfig) ? window.AR.sectionConfig : {};
     var SECTION_API_BASE = window.location.origin + (sc.apiPath || '/api/home-loan-rates');
     var utils = (window.AR && window.AR.utils) ? window.AR.utils : {};
@@ -356,13 +358,24 @@
         var refreshTitle = context.admin
             ? 'Reload and bypass cached assets (keeps admin session)'
             : 'Clear site cache and reload to get the latest version';
+        var prefix = [];
+        if (!context.admin && !context.legal && !context.notFound) {
+            prefix.push(
+                '<a href="' + esc(GITHUB_REPO_URL) + '" class="icon-btn secondary buttonish site-action-btn site-action-github" target="_blank" rel="noopener" aria-label="GitHub repository" title="GitHub repository">' +
+                    iconOnly('github', 'GitHub', 'site-action-icon') +
+                '</a>',
+                '<a href="' + esc(GITHUB_SPONSORS_URL) + '" class="icon-btn secondary buttonish site-action-btn site-action-donate" target="_blank" rel="noopener" aria-label="Support this project" title="Support this project">' +
+                    iconOnly('heart', 'Donate', 'site-action-icon') +
+                '</a>'
+            );
+        }
         var actions = [
             '<button type="button" class="icon-btn secondary site-action-btn site-action-theme" data-theme-toggle data-theme-label="Theme" aria-label="Toggle theme"></button>',
             '<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>',
             '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>',
         ];
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
-        return '<div class="site-header-actions">' + actions.join('') + '</div>';
+        return '<div class="site-header-actions">' + prefix.join('') + actions.join('') + '</div>';
     }
 
     function buildHeader() {
@@ -456,7 +469,8 @@
                 '<div class="site-footer-meta">' +
                     '<strong>AustralianRates</strong>' +
                     '<a href="' + esc(getLegalHref('about')) + '">About</a>' +
-                    '<a href="https://github.com/' + GITHUB_REPO + '" target="_blank" rel="noopener">Source</a>' +
+                    '<a href="' + esc(GITHUB_REPO_URL) + '" target="_blank" rel="noopener">GitHub</a>' +
+                    '<a href="' + esc(GITHUB_SPONSORS_URL) + '" target="_blank" rel="noopener">Donate</a>' +
                     '<a href="' + esc(getLegalHref('contact')) + '">Contact</a>' +
                     '<a href="' + esc(getLegalHref('privacy')) + '">Privacy</a>' +
                     '<a href="' + esc(getLegalHref('terms')) + '">Terms</a>' +
@@ -556,7 +570,7 @@
 
     function renderCommitStatus(el, info) {
         var deployText = info.deploySha
-            ? '<a href="https://github.com/' + GITHUB_REPO + '/commit/' + esc(info.deploySha) + '" target="_blank" rel="noopener">deploy ' + esc(info.deployShort) + '</a>'
+            ? '<a href="' + esc(GITHUB_REPO_URL + '/commit/' + info.deploySha) + '" target="_blank" rel="noopener">deploy ' + esc(info.deployShort) + '</a>'
             : 'deploy ?';
         var buildText = info.buildTime ? ('build ' + esc(formatDate(info.buildTime))) : 'build ?';
         el.innerHTML = [esc(info.status), deployText, buildText].join(' | ');
