@@ -120,6 +120,13 @@ body.ar-admin.has-admin-sidebar .admin-shell {
     line-height: 1.5;
 }
 
+.admin-settings-group-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ar-text);
+    margin: 14px 0 4px;
+}
+
 .admin-nav-card-copy,
 .admin-subtitle,
 .admin-status-line,

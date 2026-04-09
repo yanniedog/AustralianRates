@@ -239,19 +239,38 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n))
 }
 
+/** Accepts finite numbers and numeric strings (e.g. hand-edited JSON in app_config). */
+function numLike(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string') {
+    const t = v.trim()
+    if (t === '') return null
+    const n = Number(t)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
 function num01(v: unknown, fallback: number): number {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
-  return clamp(v, 0, 1)
+  const n = numLike(v)
+  if (n === null) return fallback
+  return clamp(n, 0, 1)
 }
 
 function numNonNeg(v: unknown, fallback: number, hi: number): number {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
-  return clamp(v, 0, hi)
+  const n = numLike(v)
+  if (n === null) return fallback
+  return clamp(n, 0, hi)
 }
 
 export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null | undefined): ChartRibbonStyle {
   const d = DEFAULT_CHART_RIBBON_STYLE
   if (!raw || typeof raw !== 'object') return { ...d }
+  let active_z = numNonNeg(raw.active_z, d.active_z, 120)
+  let inactive_z = numNonNeg(raw.inactive_z, d.inactive_z, 80)
+  if (inactive_z >= active_z) {
+    inactive_z = Math.max(0, active_z - 1)
+  }
   return {
     edge_width: numNonNeg(raw.edge_width, d.edge_width, 12),
     edge_opacity: num01(raw.edge_opacity, d.edge_opacity),
@@ -267,8 +286,8 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     product_line_width_hover: numNonNeg(raw.product_line_width_hover, d.product_line_width_hover, 6),
     product_line_width_selected: numNonNeg(raw.product_line_width_selected, d.product_line_width_selected, 8),
     others_grey_mix: num01(raw.others_grey_mix, d.others_grey_mix),
-    active_z: numNonNeg(raw.active_z, d.active_z, 120),
-    inactive_z: numNonNeg(raw.inactive_z, d.inactive_z, 80),
+    active_z,
+    inactive_z,
   }
 }
 

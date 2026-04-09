@@ -94,4 +94,15 @@ describe('chart-site-ui', () => {
     expect(normalizeChartRibbonStyleForPut('').ok).toBe(false)
     expect(normalizeChartRibbonStyleForPut('{').ok).toBe(false)
   })
+
+  it('mergeChartRibbonStylePartial coerces numeric strings and fixes inactive_z >= active_z', () => {
+    const merged = mergeChartRibbonStylePartial({
+      edge_opacity: '0.5',
+      active_z: 20,
+      inactive_z: 25,
+    } as Record<string, unknown>)
+    expect(merged.edge_opacity).toBe(0.5)
+    expect(merged.active_z).toBe(20)
+    expect(merged.inactive_z).toBe(19)
+  })
 })

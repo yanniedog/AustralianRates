@@ -101,6 +101,61 @@
         return Math.floor(parsed);
     }
 
+    function mergeRibbonStyleClient(raw) {
+        var d = DEFAULT_RIBBON_STYLE;
+        function cloneDefaults() {
+            return {
+                edge_width: d.edge_width,
+                edge_opacity: d.edge_opacity,
+                edge_opacity_others: d.edge_opacity_others,
+                fill_opacity_end: d.fill_opacity_end,
+                fill_opacity_peak: d.fill_opacity_peak,
+                fill_opacity_others_scale: d.fill_opacity_others_scale,
+                mean_width: d.mean_width,
+                mean_opacity: d.mean_opacity,
+                mean_opacity_others: d.mean_opacity_others,
+                product_line_opacity_hover: d.product_line_opacity_hover,
+                product_line_opacity_selected: d.product_line_opacity_selected,
+                product_line_width_hover: d.product_line_width_hover,
+                product_line_width_selected: d.product_line_width_selected,
+                others_grey_mix: d.others_grey_mix,
+                active_z: d.active_z,
+                inactive_z: d.inactive_z,
+            };
+        }
+        if (!raw || typeof raw !== 'object') return cloneDefaults();
+        function pick(key, lo, hi, fallback) {
+            var v = raw[key];
+            var n = typeof v === 'number' ? v : (v != null && String(v).trim() !== '' ? Number(String(v).trim()) : NaN);
+            if (!Number.isFinite(n)) return fallback;
+            return Math.min(hi, Math.max(lo, n));
+        }
+        function pick01(key, fallback) {
+            return pick(key, 0, 1, fallback);
+        }
+        var active_z = pick('active_z', 4, 120, d.active_z);
+        var inactive_z = pick('inactive_z', 0, 80, d.inactive_z);
+        if (inactive_z >= active_z) inactive_z = Math.max(0, active_z - 1);
+        return {
+            edge_width: pick('edge_width', 0, 12, d.edge_width),
+            edge_opacity: pick01('edge_opacity', d.edge_opacity),
+            edge_opacity_others: pick01('edge_opacity_others', d.edge_opacity_others),
+            fill_opacity_end: pick01('fill_opacity_end', d.fill_opacity_end),
+            fill_opacity_peak: pick01('fill_opacity_peak', d.fill_opacity_peak),
+            fill_opacity_others_scale: pick01('fill_opacity_others_scale', d.fill_opacity_others_scale),
+            mean_width: pick('mean_width', 0, 8, d.mean_width),
+            mean_opacity: pick01('mean_opacity', d.mean_opacity),
+            mean_opacity_others: pick01('mean_opacity_others', d.mean_opacity_others),
+            product_line_opacity_hover: pick01('product_line_opacity_hover', d.product_line_opacity_hover),
+            product_line_opacity_selected: pick01('product_line_opacity_selected', d.product_line_opacity_selected),
+            product_line_width_hover: pick('product_line_width_hover', 0, 6, d.product_line_width_hover),
+            product_line_width_selected: pick('product_line_width_selected', 0, 8, d.product_line_width_selected),
+            others_grey_mix: pick01('others_grey_mix', d.others_grey_mix),
+            active_z: active_z,
+            inactive_z: inactive_z,
+        };
+    }
+
     function getChartRibbonStyleResolved() {
         if (cached.chartRibbonStyle && typeof cached.chartRibbonStyle === 'object') return cached.chartRibbonStyle;
         return DEFAULT_RIBBON_STYLE;
@@ -127,7 +182,7 @@
         cached.chartMaxProducts = normalizeChartMaxProducts(body.chart_max_products);
         cached.chartMaxProductsMode = String(body.chart_max_products_mode || 'default').trim().toLowerCase() || 'default';
         cached.chartRibbonStyle = (body.chart_ribbon_style && typeof body.chart_ribbon_style === 'object')
-            ? body.chart_ribbon_style
+            ? mergeRibbonStyleClient(body.chart_ribbon_style)
             : null;
         applyAll();
     }

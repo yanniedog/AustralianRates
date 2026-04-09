@@ -30,7 +30,7 @@
         <div class="admin-message" id="msg"></div>
         <section class="admin-card" id="chart-legend-section">
             <h2>Chart legend opacity</h2>
-            <p class="admin-hint">Set independent opacity for desktop and mobile floating legends on Home Loans, Savings, Term Deposits, and Economic Data charts. Both fall back to the legacy default of 75% until you save.</p>
+            <p class="admin-hint">Controls how see-through the floating legend panel is (not the chart itself). Desktop uses viewport width &gt; 767px; mobile uses &le; 767px. If you only set the legacy single value elsewhere, both devices inherit that until you save overrides here. Stored as a decimal in <code>app_config</code>; public pages read it from <code>GET /site-ui</code> (short CDN cache).</p>
             <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
                 <label for="chart-legend-opacity-desktop-pct">Desktop</label>
                 <input type="range" id="chart-legend-opacity-desktop-pct" min="5" max="100" step="1" value="75" style="min-width:180px;">
@@ -49,7 +49,7 @@
         </section>
         <section class="admin-card" id="chart-legend-text-section">
             <h2>Chart legend text brightness</h2>
-            <p class="admin-hint">Adjust desktop and mobile legend text brightness independently. 100% is neutral.</p>
+            <p class="admin-hint">Multiplies label colours inside the floating legend only. 100% leaves palette as designed; below 100% softens text, above brightens it (clamped server-side). Same desktop/mobile split as opacity.</p>
             <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
                 <label for="chart-legend-text-brightness-desktop-pct">Desktop</label>
                 <input type="range" id="chart-legend-text-brightness-desktop-pct" min="50" max="160" step="1" value="100" style="min-width:180px;">
@@ -68,7 +68,7 @@
         </section>
         <section class="admin-card" id="chart-product-limit-section">
             <h2>Chart product limit</h2>
-            <p class="admin-hint">Set a global ceiling for products or series shown on public charts. Use unlimited to render all rows for the currently displayed chart window.</p>
+            <p class="admin-hint">Upper bound on how many product series the public chart code will draw for the current window (Home Loans, Savings, Term Deposits). <strong>Unlimited</strong> removes the cap so all in-range products can render (heavier on large windows). Does not change API payloads, only client rendering.</p>
             <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
                 <label for="chart-max-products-value">Maximum visible products</label>
                 <input type="number" id="chart-max-products-value" min="1" max="1000" step="1" value="40" style="width:120px;">
@@ -84,33 +84,43 @@
             <p class="admin-hint" id="chart-max-products-stored" style="margin-top:8px;opacity:0.75;"></p>
         </section>
         <section class="admin-card" id="chart-ribbon-style-section">
-            <h2>Rate report ribbon (bands)</h2>
-            <p class="admin-hint">Styling for Savings / Term deposits / Home loans ribbon view. Opacity fields are 0&ndash;100%. Widths are px. Z-order: higher draws on top when a bank is hovered.</p>
+            <h2>Rate report ribbon (bands mode)</h2>
+            <p class="admin-hint">Used only when a rate report chart is in <strong>Ribbon</strong> view (Home Loans, Savings, Term Deposits). The chart shows each lender as a min&ndash;max rate band plus optional per-product lines after you select a lender. Saving writes one JSON object to <code>app_config.chart_ribbon_style</code>; the API merges missing keys with built-in defaults, clamps out-of-range values, and serves the result on <code>GET /site-ui</code> (about one minute cache). After saving, hard-refresh a public report page if you do not see a change immediately.</p>
+            <p class="admin-settings-group-title">Band outline (top and bottom edge of each lender band)</p>
+            <p class="admin-hint">Edge width and opacity apply to the band boundary lines. &ldquo;Others&rdquo; rows apply while another lender is highlighted or selected so non-focused banks stay subdued.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;">
-                <label>Edge width <input type="number" id="ribbon-edge-w" min="0" max="12" step="0.5" value="2" style="width:4em;"></label>
-                <label>Edge op % <input type="number" id="ribbon-edge-op" min="0" max="100" value="100" style="width:4em;"></label>
-                <label>Edge op others % <input type="number" id="ribbon-edge-op-o" min="0" max="100" value="14" style="width:4em;"></label>
+                <label>Edge width (px) <input type="number" id="ribbon-edge-w" min="0" max="12" step="0.5" value="2" style="width:4em;" title="Stroke width for min/max band lines"></label>
+                <label>Edge opacity % <input type="number" id="ribbon-edge-op" min="0" max="100" value="100" style="width:4em;" title="Band edge opacity for focused lender"></label>
+                <label>Edge opacity others % <input type="number" id="ribbon-edge-op-o" min="0" max="100" value="14" style="width:4em;" title="Band edge opacity for non-focused lenders"></label>
             </div>
+            <p class="admin-settings-group-title">Band fill (area between min and max)</p>
+            <p class="admin-hint">Fill is drawn with a horizontal gradient: <strong>end</strong> is the left/right fade, <strong>peak</strong> is the brighter centre. <strong>Others scale</strong> multiplies both fill opacities for banks that are not in focus.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
                 <label>Fill end % <input type="number" id="ribbon-fill-end" min="0" max="100" value="22" style="width:4em;"></label>
                 <label>Fill peak % <input type="number" id="ribbon-fill-peak" min="0" max="100" value="48" style="width:4em;"></label>
                 <label>Fill others scale % <input type="number" id="ribbon-fill-scale-o" min="0" max="100" value="22" style="width:4em;"></label>
             </div>
+            <p class="admin-settings-group-title">Mean line (average rate within the band)</p>
+            <p class="admin-hint">Optional centre line through each lender band. Set width to 0 to hide. Separate opacities for focused vs other lenders.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
-                <label>Mean width <input type="number" id="ribbon-mean-w" min="0" max="8" step="0.25" value="1.25" style="width:4em;"></label>
-                <label>Mean op % <input type="number" id="ribbon-mean-op" min="0" max="100" value="100" style="width:4em;"></label>
-                <label>Mean op others % <input type="number" id="ribbon-mean-op-o" min="0" max="100" value="18" style="width:4em;"></label>
+                <label>Mean width (px) <input type="number" id="ribbon-mean-w" min="0" max="8" step="0.25" value="1.25" style="width:4em;"></label>
+                <label>Mean opacity % <input type="number" id="ribbon-mean-op" min="0" max="100" value="100" style="width:4em;"></label>
+                <label>Mean opacity others % <input type="number" id="ribbon-mean-op-o" min="0" max="100" value="18" style="width:4em;"></label>
             </div>
+            <p class="admin-settings-group-title">Product lines (after a lender is selected)</p>
+            <p class="admin-hint">Individual product rate traces: stroke width and alpha for hover vs click-selected product. Higher z-order banks draw on top; these lines sit above the band stack.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
-                <label>Prod line hover op % <input type="number" id="ribbon-pl-op-h" min="0" max="100" value="50" style="width:4em;"></label>
-                <label>Prod line sel op % <input type="number" id="ribbon-pl-op-s" min="0" max="100" value="85" style="width:4em;"></label>
-                <label>Prod w hover <input type="number" id="ribbon-pl-w-h" min="0" max="6" step="0.1" value="1.2" style="width:4em;"></label>
-                <label>Prod w sel <input type="number" id="ribbon-pl-w-s" min="0" max="8" step="0.1" value="2.5" style="width:4em;"></label>
+                <label>Product line opacity hover % <input type="number" id="ribbon-pl-op-h" min="0" max="100" value="50" style="width:4em;"></label>
+                <label>Product line opacity selected % <input type="number" id="ribbon-pl-op-s" min="0" max="100" value="85" style="width:4em;"></label>
+                <label>Product width hover (px) <input type="number" id="ribbon-pl-w-h" min="0" max="6" step="0.1" value="1.2" style="width:4em;"></label>
+                <label>Product width selected (px) <input type="number" id="ribbon-pl-w-s" min="0" max="8" step="0.1" value="2.5" style="width:4em;"></label>
             </div>
+            <p class="admin-settings-group-title">Focus and stacking</p>
+            <p class="admin-hint"><strong>Others grey mix</strong> pushes non-focused bank colours toward neutral grey (0% = keep hue, 100% = fully greyed). <strong>Active z</strong> / <strong>Inactive z</strong> set ECharts z-order for focused vs other lenders; inactive is forced below active on save if needed.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
                 <label>Others grey mix % <input type="number" id="ribbon-grey-mix" min="0" max="100" value="62" style="width:4em;"></label>
-                <label>Active z <input type="number" id="ribbon-z-a" min="4" max="120" step="1" value="48" style="width:4em;"></label>
-                <label>Inactive z <input type="number" id="ribbon-z-i" min="0" max="80" step="1" value="2" style="width:4em;"></label>
+                <label>Active z-index <input type="number" id="ribbon-z-a" min="4" max="120" step="1" value="48" style="width:4em;"></label>
+                <label>Inactive z-index <input type="number" id="ribbon-z-i" min="0" max="80" step="1" value="2" style="width:4em;"></label>
             </div>
             <div class="rate-check-row" style="margin-top:10px;">
                 <button type="button" id="chart-ribbon-save-btn" class="primary">Save ribbon style</button>
@@ -170,6 +180,16 @@
             var chartMaxProductsUnlimitedEl = document.getElementById('chart-max-products-unlimited');
             var chartMaxProductsStoredEl = document.getElementById('chart-max-products-stored');
             var chartRibbonStoredEl = document.getElementById('chart-ribbon-stored');
+
+            function assertAdminJsonOk(d, fallbackMsg) {
+                if (!d || d.ok !== true) {
+                    throw new Error(
+                        d && d.error && d.error.message
+                            ? d.error.message
+                            : (fallbackMsg || 'Request failed')
+                    );
+                }
+            }
 
             function pct100(x) {
                 return Math.round(Math.max(0, Math.min(1, Number(x) || 0)) * 100);
@@ -322,16 +342,26 @@
                     if (chartRibbonRow && chartRibbonRow.value) {
                         try {
                             applyRibbonToForm(JSON.parse(String(chartRibbonRow.value)));
+                            if (chartRibbonStoredEl) {
+                                chartRibbonStoredEl.textContent =
+                                    'Stored in app_config (updated ' + String(chartRibbonRow.updated_at || '') + '). '
+                                    + 'Server merges partial JSON with defaults and clamps values on save; public clients load via GET /site-ui (~60s cache).';
+                            }
                         } catch (_e) {
                             applyRibbonToForm(RIBBON_DEFAULT);
+                            if (chartRibbonStoredEl) {
+                                chartRibbonStoredEl.textContent =
+                                    'Invalid JSON in app_config (updated ' + String(chartRibbonRow.updated_at || '') + '). '
+                                    + 'Form shows defaults; click Save ribbon style to overwrite with valid JSON.';
+                            }
                         }
                     } else {
                         applyRibbonToForm(RIBBON_DEFAULT);
-                    }
-                    if (chartRibbonStoredEl) {
-                        chartRibbonStoredEl.textContent = chartRibbonRow
-                            ? ('Stored JSON (updated ' + String(chartRibbonRow.updated_at || '') + ').')
-                            : 'No row stored; public site uses API defaults until you save.';
+                        if (chartRibbonStoredEl) {
+                            chartRibbonStoredEl.textContent =
+                                'No row stored; public site uses API built-in defaults until you save. '
+                                + 'GET /site-ui returns the same defaults until a value exists.';
+                        }
                     }
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load config', true); });
             }
@@ -407,7 +437,8 @@
                         body: JSON.stringify({ key: MOBILE_KEY }),
                     }).then(function (r) { return r.json(); })
                 ])
-                    .then(function () {
+                    .then(function (rows) {
+                        rows.forEach(function (d) { assertAdminJsonOk(d, 'Reset failed'); });
                         showMsg('Reset to defaults.', false);
                         if (desktopRangeEl) desktopRangeEl.value = '75';
                         if (mobileRangeEl) mobileRangeEl.value = '75';
@@ -431,7 +462,8 @@
                         body: JSON.stringify({ key: TEXT_MOBILE_KEY }),
                     }).then(function (r) { return r.json(); })
                 ])
-                    .then(function () {
+                    .then(function (rows) {
+                        rows.forEach(function (d) { assertAdminJsonOk(d, 'Reset failed'); });
                         if (textDesktopRangeEl) textDesktopRangeEl.value = '100';
                         if (textMobileRangeEl) textMobileRangeEl.value = '100';
                         syncOutput();
@@ -465,7 +497,8 @@
                     body: JSON.stringify({ key: CHART_RIBBON_STYLE_KEY }),
                 })
                     .then(function (r) { return r.json(); })
-                    .then(function () {
+                    .then(function (d) {
+                        assertAdminJsonOk(d, 'Reset failed');
                         applyRibbonToForm(RIBBON_DEFAULT);
                         showMsg('Ribbon style reset.', false);
                         loadFromConfig();
@@ -481,7 +514,8 @@
                     body: JSON.stringify({ key: CHART_MAX_PRODUCTS_KEY }),
                 })
                     .then(function (r) { return r.json(); })
-                    .then(function () {
+                    .then(function (d) {
+                        assertAdminJsonOk(d, 'Reset failed');
                         if (chartMaxProductsUnlimitedEl) chartMaxProductsUnlimitedEl.checked = true;
                         if (chartMaxProductsValueEl) chartMaxProductsValueEl.value = '40';
                         syncChartMaxProductsUi();
