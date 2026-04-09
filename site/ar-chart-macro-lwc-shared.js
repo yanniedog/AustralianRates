@@ -372,6 +372,16 @@
                 setViewMode(section, 'focus', bn.full);
                 onReRender();
             });
+            if (vm.mode === 'bands' && typeof opts.onRibbonBankChipPointerEnter === 'function') {
+                chip.addEventListener('pointerenter', function () {
+                    opts.onRibbonBankChipPointerEnter(bn.full);
+                });
+            }
+            if (vm.mode === 'bands' && typeof opts.onRibbonBankChipPointerLeave === 'function') {
+                chip.addEventListener('pointerleave', function () {
+                    opts.onRibbonBankChipPointerLeave(bn.full);
+                });
+            }
             tray.appendChild(chip);
         });
 

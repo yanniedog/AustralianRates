@@ -650,7 +650,11 @@
         var range = options.range;
         var section = options.section;
         var bankList = options.bankList || [];
-        var ribbonChromeHandlers = { onChipClick: function () {} };
+        var ribbonChromeHandlers = {
+            onChipClick: function () {},
+            onChipPointerEnter: function () {},
+            onChipPointerLeave: function () {},
+        };
         var ribbonTrayRoot = null;
         var ribbonHoverLabelEl = null;
 
@@ -668,6 +672,12 @@
         if (options.vm && options.vm.mode === 'bands') {
             viewBarOpts.onRibbonBankChipClick = function (full) {
                 ribbonChromeHandlers.onChipClick(full);
+            };
+            viewBarOpts.onRibbonBankChipPointerEnter = function (full) {
+                ribbonChromeHandlers.onChipPointerEnter(full);
+            };
+            viewBarOpts.onRibbonBankChipPointerLeave = function (full) {
+                ribbonChromeHandlers.onChipPointerLeave(full);
             };
         }
         var viewBar = M.createReportViewModeBar(viewBarOpts);
@@ -802,6 +812,7 @@
 
         var hoveredBank = '';
         var ribbonProductBank = '';
+        var ribbonTrayHoverBank = '';
         var selectedProductName = '';
         var lastPointerDate = '';
         var ribbonChartHoverProductKey = '';
@@ -829,7 +840,13 @@
                 .toLowerCase();
         }
 
+        function ribbonPanelBank() {
+            return String(ribbonTrayHoverBank || ribbonProductBank || '').trim();
+        }
+
         function ribbonChartHighlightBank() {
+            var tray = String(ribbonTrayHoverBank || '').trim();
+            if (tray) return tray;
             var sel = String(ribbonProductBank || '').trim();
             if (sel) return sel;
             return String(hoveredBank || '').trim();
@@ -892,21 +909,21 @@
 
         function syncRibbonTrayUi() {
             if (!ribbonTrayRoot) return;
-            var dimRef = ribbonProductBank ? ribbonProductBank : (hoveredBank || '');
+            var dimRef = ribbonChartHighlightBank();
             var dimKey = dimRef ? normRibbonBankName(dimRef) : '';
-            var hbKey = hoveredBank ? normRibbonBankName(hoveredBank) : '';
+            var hlKey = normRibbonBankName(ribbonTrayHoverBank || hoveredBank);
             var selKey = ribbonProductBank ? normRibbonBankName(ribbonProductBank) : '';
             var chips = ribbonTrayRoot.querySelectorAll('.lwc-focus-bank-chip');
             for (var i = 0; i < chips.length; i++) {
                 var ch = chips[i];
                 var full = String(ch.title || '').trim();
                 var fk = normRibbonBankName(full);
-                ch.classList.toggle('is-ribbon-hover', !!hbKey && fk === hbKey);
+                ch.classList.toggle('is-ribbon-hover', !!hlKey && fk === hlKey);
                 ch.classList.toggle('is-ribbon-selected', !!selKey && fk === selKey);
                 ch.classList.toggle('is-ribbon-dim', !!dimKey && fk !== dimKey);
             }
             if (ribbonHoverLabelEl) {
-                var txt = hoveredBank || ribbonProductBank || '';
+                var txt = ribbonChartHighlightBank();
                 ribbonHoverLabelEl.textContent = txt;
                 ribbonHoverLabelEl.style.display = txt ? 'inline' : 'none';
             }
@@ -968,7 +985,8 @@
                 var rest = s.name.slice(3);
                 var pipe = rest.indexOf('|');
                 var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                var showBank = ribbonProductBank && normRibbonBankName(bn) === normRibbonBankName(ribbonProductBank);
+                var pb = ribbonPanelBank();
+                var showBank = pb && normRibbonBankName(bn) === normRibbonBankName(pb);
                 var match = productLineVisible(s.name);
                 var show = showBank && match;
                 var isSelected = s.name === selectedProductName;
@@ -1018,8 +1036,9 @@
             syncRibbonCanvasSize();
             var ctx = ribbonCanvasCtx;
             ctx.clearRect(0, 0, ribbonCanvas.width, ribbonCanvas.height);
-            if (!ribbonProductBank) return;
-            var prods = ribbonCanvasModel.byBank[ribbonProductBank];
+            var pb = ribbonPanelBank();
+            if (!pb) return;
+            var prods = ribbonCanvasModel.byBank[pb];
             if (!prods || !prods.length) return;
             var idxs = ribbonLodIndices;
             prods.forEach(function (prod) {
@@ -1072,8 +1091,9 @@
             var data = chart.convertFromPixel({ gridIndex: 0 }, [offsetX, offsetY]);
             if (!data || data.length < 2) return null;
             var dateStr = resolveDateFromAxisValue(data[0]);
-            if (!dateStr || !ribbonProductBank) return null;
-            var prods = ribbonCanvasModel.byBank[ribbonProductBank];
+            var pbPick = ribbonPanelBank();
+            if (!dateStr || !pbPick) return null;
+            var prods = ribbonCanvasModel.byBank[pbPick];
             if (!prods) return null;
             var best = null;
             var bestDist = Infinity;
@@ -1095,18 +1115,19 @@
         }
 
         function overlayPickProduct(offsetX, offsetY) {
-            if (!ribbonProductBank || !productOverlay.length) return null;
+            if (!ribbonPanelBank() || !productOverlay.length) return null;
             var data = chart.convertFromPixel({ gridIndex: 0 }, [offsetX, offsetY]);
             if (!data || data.length < 2) return null;
             var dateStr = resolveDateFromAxisValue(data[0]);
             if (!dateStr) return null;
             var best = null;
             var bestDist = Infinity;
+            var pbOv = ribbonPanelBank();
             productOverlay.forEach(function (s) {
                 var rest = s.name.slice(3);
                 var pipe = rest.indexOf('|');
                 var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                if (bn !== ribbonProductBank) return;
+                if (normRibbonBankName(bn) !== normRibbonBankName(pbOv)) return;
                 var yAt = null;
                 (s.data || []).forEach(function (pt) {
                     if (!pt || pt.length < 2) return;
@@ -1314,7 +1335,8 @@
             var ib = options.infoBox;
             if (!ib || typeof ib.show !== 'function') return;
             if (selectedProductName) return;
-            if (!ribbonProductBank) {
+            var pbPanel = ribbonPanelBank();
+            if (!pbPanel) {
                 hideRibbonInfoBox();
                 return;
             }
@@ -1323,12 +1345,12 @@
                 hideRibbonInfoBox();
                 return;
             }
-            if (ribbonTreeBank !== ribbonProductBank || ribbonTreeAnchorYmd !== anchor) {
+            if (ribbonTreeBank !== pbPanel || ribbonTreeAnchorYmd !== anchor) {
                 ribbonExpandedPaths = {};
-                ribbonTreeBank = ribbonProductBank;
+                ribbonTreeBank = pbPanel;
                 ribbonTreeAnchorYmd = anchor;
             }
-            var plist = ribbonCanvasModel.byBank[ribbonProductBank] || [];
+            var plist = ribbonCanvasModel.byBank[pbPanel] || [];
             var prodsAtAnchor = [];
             var sec = String(section || '');
             plist.forEach(function (prod) {
@@ -1356,7 +1378,7 @@
             var n = prodsAtAnchor.length;
             ib.show({
                 heading: fmtReportDateYmd(anchor),
-                meta: ribbonProductBank + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : '') + ' \u00b7 click row to expand tier',
+                meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : '') + ' \u00b7 click row to expand tier',
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
@@ -1452,7 +1474,8 @@
                 }
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 var prevPh = ribbonChartHoverProductKey;
-                if (ribbonProductBank && !selectedProductName && next === ribbonProductBank) {
+                var pbMove = ribbonPanelBank();
+                if (pbMove && !selectedProductName && next && normRibbonBankName(next) === normRibbonBankName(pbMove)) {
                     var pickH = useRibbonCanvas ? ribbonCanvasPickProduct(xy[0], xy[1]) : overlayPickProduct(xy[0], xy[1]);
                     ribbonChartHoverProductKey = pickH && pickH.prod ? pickH.prod.key : '';
                 } else {
@@ -1468,7 +1491,7 @@
             }
             function onRibbonZrGlobalOut() {
                 hoveredBank = '';
-                lastPointerDate = '';
+                if (!ribbonTrayHoverBank) lastPointerDate = '';
                 ribbonChartHoverProductKey = '';
                 syncRibbonTrayUi();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
@@ -1485,7 +1508,7 @@
                 var yVal = data[1];
                 var tapBank = pickBankFromRibbonBand(dateStr, yVal);
 
-                if (useRibbonCanvas && ribbonProductBank && tapBank === ribbonProductBank) {
+                if (useRibbonCanvas && ribbonPanelBank() && tapBank && normRibbonBankName(tapBank) === normRibbonBankName(ribbonPanelBank())) {
                     var pick = ribbonCanvasPickProduct(xy[0], xy[1]);
                     if (pick) {
                         ribbonChartHoverProductKey = '';
@@ -1494,6 +1517,8 @@
                             hideRibbonInfoBox();
                             refreshRibbonUnderChartPanel();
                         } else {
+                            ribbonTrayHoverBank = '';
+                            ribbonProductBank = tapBank;
                             selectedProductName = pick.prod.key;
                             showRibbonInfoBox(pick);
                         }
@@ -1508,6 +1533,7 @@
 
                 if (tapBank) {
                     if (dateStr) lastPointerDate = dateStr;
+                    ribbonTrayHoverBank = '';
                     ribbonProductBank = tapBank;
                     hoveredBank = tapBank;
                     selectedProductName = '';
@@ -1522,6 +1548,7 @@
                 }
 
                 ribbonProductBank = '';
+                ribbonTrayHoverBank = '';
                 selectedProductName = '';
                 ribbonChartHoverProductKey = '';
                 hideRibbonInfoBox();
@@ -1535,12 +1562,37 @@
             ribbonChromeHandlers.onChipClick = function (fullName) {
                 var bn = String(fullName || '').trim();
                 if (!bn) return;
+                ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;
                 hoveredBank = bn;
                 lastPointerDate = dates.length ? dates[dates.length - 1] : '';
                 selectedProductName = '';
                 ribbonChartHoverProductKey = '';
                 hideRibbonInfoBox();
+                applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                updateProductVisibility();
+                refreshRibbonUnderChartPanel();
+                scheduleRibbonRedraw();
+                syncRibbonTrayUi();
+            };
+
+            ribbonChromeHandlers.onChipPointerEnter = function (fullName) {
+                if (selectedProductName) return;
+                var bn = String(fullName || '').trim();
+                if (!bn) return;
+                ribbonTrayHoverBank = bn;
+                if (!lastPointerDate && dates.length) lastPointerDate = dates[dates.length - 1];
+                applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                updateProductVisibility();
+                refreshRibbonUnderChartPanel();
+                scheduleRibbonRedraw();
+                syncRibbonTrayUi();
+            };
+            ribbonChromeHandlers.onChipPointerLeave = function (fullName) {
+                if (selectedProductName) return;
+                var bn = String(fullName || '').trim();
+                if (normRibbonBankName(ribbonTrayHoverBank) !== normRibbonBankName(bn)) return;
+                ribbonTrayHoverBank = '';
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
@@ -1593,11 +1645,12 @@
                 chart.on('click', function (params) {
                     var name = params.seriesName || '';
                     if (name.indexOf('[P]') !== 0) return;
-                    if (!ribbonProductBank) return;
+                    var pbClk = ribbonPanelBank();
+                    if (!pbClk) return;
                     var rest = name.slice(3);
                     var pipe = rest.indexOf('|');
                     var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                    if (bn !== ribbonProductBank) return;
+                    if (normRibbonBankName(bn) !== normRibbonBankName(pbClk)) return;
                     var pn = pipe >= 0 ? rest.slice(pipe + 1) : '';
                     var rate = params.value && params.value[1] != null ? Number(params.value[1]) : null;
                     var dateStr = params.value && params.value[0] != null ? String(params.value[0]).slice(0, 10) : '';
@@ -1608,6 +1661,8 @@
                         refreshRibbonUnderChartPanel();
                     } else {
                         selectedProductName = name;
+                        ribbonTrayHoverBank = '';
+                        ribbonProductBank = bn;
                         hoveredBank = bn;
                         if (options.infoBox && typeof options.infoBox.show === 'function' && rate != null && Number.isFinite(rate)) {
                             var baseHex = options.bankColor(bn, bankColorIndexForName(bn));
