@@ -1,4 +1,4 @@
-import { upsertCpiData } from '../db/cpi-data'
+import { upsertCpiDataBatch } from '../db/cpi-data'
 import { parseDelimitedText, parseFlexibleDate, parseNumber } from '../economic/parser-utils'
 import type { EnvBindings } from '../types'
 import {
@@ -167,13 +167,14 @@ export async function collectCpiFromRbaG1(
     if (response.ok) {
       const points = parseMeasuresCpiHtml(await response.text())
       if (points.length > 0) {
-        for (const p of points) {
-          await upsertCpiData(db, {
+        await upsertCpiDataBatch(
+          db,
+          points.map((p) => ({
             quarterDate: p.quarterDate,
             annualChange: p.annualChange,
             sourceUrl: RBA_MEASURES_CPI_URL,
-          })
-        }
+          })),
+        )
         return { ok: true, upserted: points.length, sourceUrl: RBA_MEASURES_CPI_URL }
       }
     }
@@ -199,13 +200,14 @@ export async function collectCpiFromRbaG1(
     } else {
       const points = parseCpiCsv(csv)
       if (points.length > 0) {
-        for (const p of points) {
-          await upsertCpiData(db, {
+        await upsertCpiDataBatch(
+          db,
+          points.map((p) => ({
             quarterDate: p.quarterDate,
             annualChange: p.annualChange,
             sourceUrl: RBA_G1_DATA_URL,
-          })
-        }
+          })),
+        )
         return { ok: true, upserted: points.length, sourceUrl: RBA_G1_DATA_URL }
       }
       csvFailure = 'g1 reason=no_parseable_points'

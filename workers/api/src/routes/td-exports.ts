@@ -133,7 +133,7 @@ async function buildTdArtifact(
             representation: 'day' as const,
             fallbackReason: null,
             rows: await collectPaginatedExportRows((page, size) =>
-              queryTdRatesPaginated(env.DB, {
+              queryTdRatesPaginated(rd, {
                 page,
                 size,
                 startDate: filters.startDate,

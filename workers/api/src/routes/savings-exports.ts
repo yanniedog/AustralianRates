@@ -134,7 +134,7 @@ async function buildSavingsArtifact(
             representation: 'day' as const,
             fallbackReason: null,
             rows: await collectPaginatedExportRows((page, size) =>
-              querySavingsRatesPaginated(env.DB, {
+              querySavingsRatesPaginated(rd, {
                 page,
                 size,
                 startDate: filters.startDate,

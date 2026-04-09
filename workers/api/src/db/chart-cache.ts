@@ -437,32 +437,6 @@ export async function readD1ChartCache(
   }
 }
 
-async function writeLegacyD1ChartCache(
-  db: D1Database,
-  section: ChartCacheSection,
-  representation: 'day' | 'change',
-  payloadJson: string,
-  rowCount: number,
-  builtAt: string,
-): Promise<void> {
-  try {
-    await db
-      .prepare(
-        `INSERT INTO ${LEGACY_CACHE_TABLE} (section, representation, payload_json, row_count, built_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT (section, representation) DO UPDATE SET
-           payload_json = excluded.payload_json,
-           row_count = excluded.row_count,
-           built_at = excluded.built_at`,
-      )
-      .bind(section, representation, payloadJson, rowCount, builtAt)
-      .run()
-  } catch (e) {
-    if (isNoSuchTableError(e, LEGACY_CACHE_TABLE)) return
-    throw e
-  }
-}
-
 /** Write precomputed result to D1 (upsert). No-op if table does not exist (migration 0047 not applied). */
 export async function writeD1ChartCache(
   db: D1Database,
@@ -490,9 +464,7 @@ export async function writeD1ChartCache(
   } catch (e) {
     if (!isNoSuchTableError(e, CACHE_TABLE)) throw e
   }
-  if (scope === 'default') {
-    await writeLegacyD1ChartCache(db, section, representation, payloadJson, result.rows.length, builtAt)
-  }
+  // Legacy `chart_pivot_cache` is no longer written (duplicate storage + writes); read path still falls back for old rows.
 }
 
 /** Stable cache key for KV from section, representation, and sorted params. */

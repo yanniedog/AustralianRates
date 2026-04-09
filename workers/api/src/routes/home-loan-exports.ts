@@ -149,7 +149,7 @@ async function buildHomeLoanArtifact(
             representation: 'day' as const,
             fallbackReason: null,
             rows: await collectPaginatedExportRows((page, size) =>
-              queryRatesPaginated(env.DB, {
+              queryRatesPaginated(rd, {
                 page,
                 size,
                 startDate: filters.startDate,

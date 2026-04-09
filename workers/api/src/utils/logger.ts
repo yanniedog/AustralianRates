@@ -20,7 +20,10 @@ let _db: D1Database | null = null
 const _buffer: PersistedLogEntry[] = []
 const _pendingWrites = new Set<Promise<void>>()
 const MAX_BUFFER = 200
+/** Full detail for warn/error (admin triage). */
 const MAX_CONTEXT_CHARS = 8000
+/** Info/debug: smaller persisted JSON reduces D1 rows size and bandwidth to log viewers. */
+const MAX_CONTEXT_CHARS_INFO = 2000
 
 export function initLogger(db: D1Database): void {
   _db = db
@@ -70,6 +73,10 @@ export function extractTraceback(rawContext: unknown): string | null {
   return null
 }
 
+function maxContextPersistChars(level: LogLevel): number {
+  return level === 'warn' || level === 'error' ? MAX_CONTEXT_CHARS : MAX_CONTEXT_CHARS_INFO
+}
+
 export function normalizeLogEntryForStorage(entry: LogEntry): PersistedLogEntry {
   const errMeta = errorMetadata(entry.error)
   const traceback = entry.traceback || errMeta?.stack || fallbackTraceback(entry.level, entry.source, entry.message)
@@ -88,7 +95,11 @@ export function normalizeLogEntryForStorage(entry: LogEntry): PersistedLogEntry 
     contextToPersist = enrichedContext
   }
 
-  const serializedContext = serializeContext(contextToPersist)
+  let serializedContext = serializeContext(contextToPersist)
+  const ctxCap = maxContextPersistChars(entry.level)
+  if (serializedContext && serializedContext.length > ctxCap) {
+    serializedContext = serializedContext.slice(0, ctxCap)
+  }
   return {
     level: entry.level,
     source: entry.source,
@@ -112,6 +123,7 @@ function formatConsole(entry: PersistedLogEntry): string {
 
 async function persist(entry: PersistedLogEntry): Promise<void> {
   if (!_db) return
+  const ctxCap = maxContextPersistChars(entry.level)
   try {
     await _db
       .prepare(
@@ -123,7 +135,7 @@ async function persist(entry: PersistedLogEntry): Promise<void> {
         entry.source,
         entry.message.slice(0, 2000),
         entry.code ? entry.code.slice(0, 100) : null,
-        entry.context ? entry.context.slice(0, MAX_CONTEXT_CHARS) : null,
+        entry.context ? entry.context.slice(0, ctxCap) : null,
         entry.runId ?? null,
         entry.lenderCode ?? null,
       )
@@ -140,7 +152,7 @@ async function persist(entry: PersistedLogEntry): Promise<void> {
           entry.level,
           entry.source,
           entry.message.slice(0, 2000),
-          entry.context ? entry.context.slice(0, MAX_CONTEXT_CHARS) : null,
+          entry.context ? entry.context.slice(0, ctxCap) : null,
           entry.runId ?? null,
           entry.lenderCode ?? null,
         )
