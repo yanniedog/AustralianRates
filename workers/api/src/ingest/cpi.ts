@@ -1,5 +1,5 @@
 import { upsertCpiData } from '../db/cpi-data'
-import { parseDelimitedText, parseFlexibleDate } from '../economic/parser-utils'
+import { parseDelimitedText, parseFlexibleDate, parseNumber } from '../economic/parser-utils'
 import type { EnvBindings } from '../types'
 import {
   FetchWithTimeoutError,
@@ -84,8 +84,8 @@ export function parseCpiCsv(csv: string): CpiPoint[] {
     if (row.length < 2) continue
     const quarterDate = parseG1QuarterDate(String(row[0] || ''))
     if (!quarterDate) continue
-    const annualChange = Number(String(row[yearEndedColIndex] || '').trim())
-    if (!Number.isFinite(annualChange)) continue
+    const annualChange = parseNumber(row[yearEndedColIndex])
+    if (annualChange == null) continue
     points.push({ quarterDate, annualChange })
   }
 
@@ -127,8 +127,8 @@ export function parseMeasuresCpiHtml(html: string): CpiPoint[] {
     if (!startMonth) continue
     const tdMatch = row.match(/<td[^>]*>([\s\S]*?)<\/td>/)
     if (!tdMatch) continue
-    const annualChange = Number(tdMatch[1].replace(/<[^>]+>/g, '').trim())
-    if (!Number.isFinite(annualChange)) continue
+    const annualChange = parseNumber(tdMatch[1].replace(/<[^>]+>/g, '').trim())
+    if (annualChange == null) continue
     const [firstYear, secondYear] = fiscalYear.split('/')
     const calYear = quarterAbbr === 'mar' || quarterAbbr === 'jun' ? secondYear : firstYear
     points.push({ quarterDate: `${calYear}-${startMonth}-01`, annualChange })

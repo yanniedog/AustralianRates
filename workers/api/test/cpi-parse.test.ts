@@ -54,6 +54,17 @@ describe('parseCpiCsv', () => {
       '2025-10-01',
     ])
   })
+
+  it('does not coerce an empty year-ended cell to 0 (sparse G1 rows)', () => {
+    const csv = [
+      'Title,Consumer price index,Year-ended inflation',
+      'Series ID,GCPIAG,GCPIAGYP',
+      '30/06/1922,1.93',
+      '30/06/1923,1.98,2.3',
+    ].join('\n')
+    const points = parseCpiCsv(csv)
+    expect(points).toEqual([{ quarterDate: '1923-04-01', annualChange: 2.3 }])
+  })
 })
 
 describe('parseMeasuresCpiHtml', () => {
@@ -131,6 +142,14 @@ describe('parseMeasuresCpiHtml', () => {
   it('skips rows with non-finite rate values', () => {
     const html = makeYearEndedTable(
       yearHeader('2025/2026') + dataRow('Sep', 'NaN') + dataRow('Dec', 3.6),
+    )
+    const points = parseMeasuresCpiHtml(html)
+    expect(points).toEqual([{ quarterDate: '2025-10-01', annualChange: 3.6 }])
+  })
+
+  it('skips empty All groups cells instead of treating as 0', () => {
+    const html = makeYearEndedTable(
+      yearHeader('2025/2026') + dataRow('Sep', '') + dataRow('Dec', 3.6),
     )
     const points = parseMeasuresCpiHtml(html)
     expect(points).toEqual([{ quarterDate: '2025-10-01', annualChange: 3.6 }])
