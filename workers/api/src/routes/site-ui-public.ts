@@ -7,6 +7,7 @@ import {
   CHART_LEGEND_TEXT_BRIGHTNESS_KEY,
   CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY,
   CHART_MAX_PRODUCTS_KEY,
+  CHART_RIBBON_STYLE_KEY,
 } from '../constants'
 import { getAppConfig } from '../db/app-config'
 import { getReadDb } from '../db/read-db'
@@ -16,6 +17,7 @@ import {
   resolveChartLegendTextBrightnessSetFromDb,
   resolveChartMaxProductsFromDb,
   resolveChartMaxProductsModeFromDb,
+  resolveChartRibbonStyleFromDb,
 } from '../utils/chart-site-ui'
 import { withPublicCache } from '../utils/http'
 
@@ -24,7 +26,16 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
   routes.get('/site-ui', async (c) => {
     withPublicCache(c, 60)
     const db = getReadDb(c.env)
-    const [legacyRaw, desktopRaw, mobileRaw, brightnessLegacyRaw, brightnessDesktopRaw, brightnessMobileRaw, chartMaxProductsRaw] = await Promise.all([
+    const [
+      legacyRaw,
+      desktopRaw,
+      mobileRaw,
+      brightnessLegacyRaw,
+      brightnessDesktopRaw,
+      brightnessMobileRaw,
+      chartMaxProductsRaw,
+      chartRibbonStyleRaw,
+    ] = await Promise.all([
       getAppConfig(db, CHART_LEGEND_OPACITY_KEY),
       getAppConfig(db, CHART_LEGEND_OPACITY_DESKTOP_KEY),
       getAppConfig(db, CHART_LEGEND_OPACITY_MOBILE_KEY),
@@ -32,6 +43,7 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
       getAppConfig(db, CHART_LEGEND_TEXT_BRIGHTNESS_DESKTOP_KEY),
       getAppConfig(db, CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY),
       getAppConfig(db, CHART_MAX_PRODUCTS_KEY),
+      getAppConfig(db, CHART_RIBBON_STYLE_KEY),
     ])
     const opacities = resolveChartLegendOpacitySetFromDb({
       legacyRaw,
@@ -45,6 +57,7 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
     })
     const chartMaxProducts = resolveChartMaxProductsFromDb(chartMaxProductsRaw)
     const chartMaxProductsMode = resolveChartMaxProductsModeFromDb(chartMaxProductsRaw)
+    const chartRibbonStyle = resolveChartRibbonStyleFromDb(chartRibbonStyleRaw)
     return c.json({
       ok: true,
       chart_legend_opacity: opacities.desktop,
@@ -55,6 +68,7 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
       chart_legend_text_brightness_mobile: textBrightness.mobile,
       chart_max_products: chartMaxProducts,
       chart_max_products_mode: chartMaxProductsMode,
+      chart_ribbon_style: chartRibbonStyle,
     })
   })
 }

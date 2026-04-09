@@ -195,3 +195,114 @@ export function normalizeChartMaxProductsForPut(
   }
   return { ok: true, value: String(Math.floor(parsed)) }
 }
+
+/** Public Rate Report ribbon (ECharts bands mode) appearance; exposed via GET /site-ui. */
+export type ChartRibbonStyle = {
+  edge_width: number
+  edge_opacity: number
+  edge_opacity_others: number
+  fill_opacity_end: number
+  fill_opacity_peak: number
+  fill_opacity_others_scale: number
+  mean_width: number
+  mean_opacity: number
+  mean_opacity_others: number
+  product_line_opacity_hover: number
+  product_line_opacity_selected: number
+  product_line_width_hover: number
+  product_line_width_selected: number
+  others_grey_mix: number
+  active_z: number
+  inactive_z: number
+}
+
+export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
+  edge_width: 2,
+  edge_opacity: 1,
+  edge_opacity_others: 0.14,
+  fill_opacity_end: 0.22,
+  fill_opacity_peak: 0.48,
+  fill_opacity_others_scale: 0.22,
+  mean_width: 1.25,
+  mean_opacity: 1,
+  mean_opacity_others: 0.18,
+  product_line_opacity_hover: 0.5,
+  product_line_opacity_selected: 0.85,
+  product_line_width_hover: 1.2,
+  product_line_width_selected: 2.5,
+  others_grey_mix: 0.62,
+  active_z: 48,
+  inactive_z: 2,
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n))
+}
+
+function num01(v: unknown, fallback: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
+  return clamp(v, 0, 1)
+}
+
+function numNonNeg(v: unknown, fallback: number, hi: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
+  return clamp(v, 0, hi)
+}
+
+export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null | undefined): ChartRibbonStyle {
+  const d = DEFAULT_CHART_RIBBON_STYLE
+  if (!raw || typeof raw !== 'object') return { ...d }
+  return {
+    edge_width: numNonNeg(raw.edge_width, d.edge_width, 12),
+    edge_opacity: num01(raw.edge_opacity, d.edge_opacity),
+    edge_opacity_others: num01(raw.edge_opacity_others, d.edge_opacity_others),
+    fill_opacity_end: num01(raw.fill_opacity_end, d.fill_opacity_end),
+    fill_opacity_peak: num01(raw.fill_opacity_peak, d.fill_opacity_peak),
+    fill_opacity_others_scale: num01(raw.fill_opacity_others_scale, d.fill_opacity_others_scale),
+    mean_width: numNonNeg(raw.mean_width, d.mean_width, 8),
+    mean_opacity: num01(raw.mean_opacity, d.mean_opacity),
+    mean_opacity_others: num01(raw.mean_opacity_others, d.mean_opacity_others),
+    product_line_opacity_hover: num01(raw.product_line_opacity_hover, d.product_line_opacity_hover),
+    product_line_opacity_selected: num01(raw.product_line_opacity_selected, d.product_line_opacity_selected),
+    product_line_width_hover: numNonNeg(raw.product_line_width_hover, d.product_line_width_hover, 6),
+    product_line_width_selected: numNonNeg(raw.product_line_width_selected, d.product_line_width_selected, 8),
+    others_grey_mix: num01(raw.others_grey_mix, d.others_grey_mix),
+    active_z: numNonNeg(raw.active_z, d.active_z, 120),
+    inactive_z: numNonNeg(raw.inactive_z, d.inactive_z, 80),
+  }
+}
+
+export function resolveChartRibbonStyleFromDb(raw: string | null): ChartRibbonStyle {
+  if (raw == null || String(raw).trim() === '') return { ...DEFAULT_CHART_RIBBON_STYLE }
+  try {
+    const parsed = JSON.parse(String(raw)) as unknown
+    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_CHART_RIBBON_STYLE }
+    return mergeChartRibbonStylePartial(parsed as Record<string, unknown>)
+  } catch {
+    return { ...DEFAULT_CHART_RIBBON_STYLE }
+  }
+}
+
+export function normalizeChartRibbonStyleForPut(
+  raw: unknown,
+  keyLabel = 'chart_ribbon_style',
+): { ok: true; value: string } | { ok: false; error: string } {
+  if (raw == null || (typeof raw === 'string' && String(raw).trim() === '')) {
+    return { ok: false, error: `${keyLabel}: provide a JSON object (use Reset in admin for defaults).` }
+  }
+  let obj: unknown
+  if (typeof raw === 'string') {
+    try {
+      obj = JSON.parse(raw) as unknown
+    } catch {
+      return { ok: false, error: `${labelText(keyLabel)} must be valid JSON.` }
+    }
+  } else {
+    obj = raw
+  }
+  if (!obj || typeof obj !== 'object') {
+    return { ok: false, error: `${labelText(keyLabel)} must be a JSON object.` }
+  }
+  const merged = mergeChartRibbonStylePartial(obj as Record<string, unknown>)
+  return { ok: true, value: JSON.stringify(merged) }
+}

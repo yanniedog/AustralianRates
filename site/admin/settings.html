@@ -83,6 +83,41 @@
             </div>
             <p class="admin-hint" id="chart-max-products-stored" style="margin-top:8px;opacity:0.75;"></p>
         </section>
+        <section class="admin-card" id="chart-ribbon-style-section">
+            <h2>Rate report ribbon (bands)</h2>
+            <p class="admin-hint">Styling for Savings / Term deposits / Home loans ribbon view. Opacity fields are 0&ndash;100%. Widths are px. Z-order: higher draws on top when a bank is hovered.</p>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;">
+                <label>Edge width <input type="number" id="ribbon-edge-w" min="0" max="12" step="0.5" value="2" style="width:4em;"></label>
+                <label>Edge op % <input type="number" id="ribbon-edge-op" min="0" max="100" value="100" style="width:4em;"></label>
+                <label>Edge op others % <input type="number" id="ribbon-edge-op-o" min="0" max="100" value="14" style="width:4em;"></label>
+            </div>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label>Fill end % <input type="number" id="ribbon-fill-end" min="0" max="100" value="22" style="width:4em;"></label>
+                <label>Fill peak % <input type="number" id="ribbon-fill-peak" min="0" max="100" value="48" style="width:4em;"></label>
+                <label>Fill others scale % <input type="number" id="ribbon-fill-scale-o" min="0" max="100" value="22" style="width:4em;"></label>
+            </div>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label>Mean width <input type="number" id="ribbon-mean-w" min="0" max="8" step="0.25" value="1.25" style="width:4em;"></label>
+                <label>Mean op % <input type="number" id="ribbon-mean-op" min="0" max="100" value="100" style="width:4em;"></label>
+                <label>Mean op others % <input type="number" id="ribbon-mean-op-o" min="0" max="100" value="18" style="width:4em;"></label>
+            </div>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label>Prod line hover op % <input type="number" id="ribbon-pl-op-h" min="0" max="100" value="50" style="width:4em;"></label>
+                <label>Prod line sel op % <input type="number" id="ribbon-pl-op-s" min="0" max="100" value="85" style="width:4em;"></label>
+                <label>Prod w hover <input type="number" id="ribbon-pl-w-h" min="0" max="6" step="0.1" value="1.2" style="width:4em;"></label>
+                <label>Prod w sel <input type="number" id="ribbon-pl-w-s" min="0" max="8" step="0.1" value="2.5" style="width:4em;"></label>
+            </div>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label>Others grey mix % <input type="number" id="ribbon-grey-mix" min="0" max="100" value="62" style="width:4em;"></label>
+                <label>Active z <input type="number" id="ribbon-z-a" min="4" max="120" step="1" value="48" style="width:4em;"></label>
+                <label>Inactive z <input type="number" id="ribbon-z-i" min="0" max="80" step="1" value="2" style="width:4em;"></label>
+            </div>
+            <div class="rate-check-row" style="margin-top:10px;">
+                <button type="button" id="chart-ribbon-save-btn" class="primary">Save ribbon style</button>
+                <button type="button" id="chart-ribbon-reset-btn" class="secondary">Remove stored (defaults)</button>
+            </div>
+            <p class="admin-hint" id="chart-ribbon-stored" style="margin-top:8px;opacity:0.75;"></p>
+        </section>
     </main>
     <script src="admin-portal.js?v=e6678ffa5b"></script>
     <script src="admin-sidebar.js?v=6114d7314a"></script>
@@ -101,6 +136,25 @@
             var TEXT_LEGACY_KEY = 'chart_legend_text_brightness';
             var CHART_MAX_PRODUCTS_KEY = 'chart_max_products';
             var CHART_MAX_PRODUCTS_UNLIMITED = 'unlimited';
+            var CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style';
+            var RIBBON_DEFAULT = {
+                edge_width: 2,
+                edge_opacity: 1,
+                edge_opacity_others: 0.14,
+                fill_opacity_end: 0.22,
+                fill_opacity_peak: 0.48,
+                fill_opacity_others_scale: 0.22,
+                mean_width: 1.25,
+                mean_opacity: 1,
+                mean_opacity_others: 0.18,
+                product_line_opacity_hover: 0.5,
+                product_line_opacity_selected: 0.85,
+                product_line_width_hover: 1.2,
+                product_line_width_selected: 2.5,
+                others_grey_mix: 0.62,
+                active_z: 48,
+                inactive_z: 2
+            };
             var msgEl = document.getElementById('msg');
             var desktopRangeEl = document.getElementById('chart-legend-opacity-desktop-pct');
             var desktopOutEl = document.getElementById('chart-legend-opacity-desktop-out');
@@ -115,6 +169,63 @@
             var chartMaxProductsValueEl = document.getElementById('chart-max-products-value');
             var chartMaxProductsUnlimitedEl = document.getElementById('chart-max-products-unlimited');
             var chartMaxProductsStoredEl = document.getElementById('chart-max-products-stored');
+            var chartRibbonStoredEl = document.getElementById('chart-ribbon-stored');
+
+            function pct100(x) {
+                return Math.round(Math.max(0, Math.min(1, Number(x) || 0)) * 100);
+            }
+            function applyRibbonToForm(o) {
+                var d = o && typeof o === 'object' ? o : RIBBON_DEFAULT;
+                function v(id, val) {
+                    var el = document.getElementById(id);
+                    if (el) el.value = String(val);
+                }
+                v('ribbon-edge-w', d.edge_width);
+                v('ribbon-edge-op', pct100(d.edge_opacity));
+                v('ribbon-edge-op-o', pct100(d.edge_opacity_others));
+                v('ribbon-fill-end', pct100(d.fill_opacity_end));
+                v('ribbon-fill-peak', pct100(d.fill_opacity_peak));
+                v('ribbon-fill-scale-o', pct100(d.fill_opacity_others_scale));
+                v('ribbon-mean-w', d.mean_width);
+                v('ribbon-mean-op', pct100(d.mean_opacity));
+                v('ribbon-mean-op-o', pct100(d.mean_opacity_others));
+                v('ribbon-pl-op-h', pct100(d.product_line_opacity_hover));
+                v('ribbon-pl-op-s', pct100(d.product_line_opacity_selected));
+                v('ribbon-pl-w-h', d.product_line_width_hover);
+                v('ribbon-pl-w-s', d.product_line_width_selected);
+                v('ribbon-grey-mix', pct100(d.others_grey_mix));
+                v('ribbon-z-a', d.active_z);
+                v('ribbon-z-i', d.inactive_z);
+            }
+            function collectRibbonObject() {
+                function n(id, fallback) {
+                    var el = document.getElementById(id);
+                    var t = el ? String(el.value || '').trim() : '';
+                    var x = Number(t);
+                    return Number.isFinite(x) ? x : fallback;
+                }
+                function p(id, fallbackPct) {
+                    return Math.max(0, Math.min(100, n(id, fallbackPct))) / 100;
+                }
+                return {
+                    edge_width: Math.max(0, Math.min(12, n('ribbon-edge-w', 2))),
+                    edge_opacity: p('ribbon-edge-op', 100),
+                    edge_opacity_others: p('ribbon-edge-op-o', 14),
+                    fill_opacity_end: p('ribbon-fill-end', 22),
+                    fill_opacity_peak: p('ribbon-fill-peak', 48),
+                    fill_opacity_others_scale: p('ribbon-fill-scale-o', 22),
+                    mean_width: Math.max(0, Math.min(8, n('ribbon-mean-w', 1.25))),
+                    mean_opacity: p('ribbon-mean-op', 100),
+                    mean_opacity_others: p('ribbon-mean-op-o', 18),
+                    product_line_opacity_hover: p('ribbon-pl-op-h', 50),
+                    product_line_opacity_selected: p('ribbon-pl-op-s', 85),
+                    product_line_width_hover: Math.max(0, Math.min(8, n('ribbon-pl-w-h', 1.2))),
+                    product_line_width_selected: Math.max(0, Math.min(8, n('ribbon-pl-w-s', 2.5))),
+                    others_grey_mix: p('ribbon-grey-mix', 62),
+                    active_z: Math.max(4, Math.min(120, Math.floor(n('ribbon-z-a', 48)))),
+                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2))))
+                };
+            }
 
             function showMsg(text, isError) {
                 msgEl.textContent = text;
@@ -164,6 +275,7 @@
                     var textMobileRow = null;
                     var textLegacyRow = null;
                     var chartMaxProductsRow = null;
+                    var chartRibbonRow = null;
                     d.config.forEach(function (r) {
                         if (r.key === DESKTOP_KEY) desktopRow = r;
                         if (r.key === MOBILE_KEY) mobileRow = r;
@@ -172,6 +284,7 @@
                         if (r.key === TEXT_MOBILE_KEY) textMobileRow = r;
                         if (r.key === TEXT_LEGACY_KEY) textLegacyRow = r;
                         if (r.key === CHART_MAX_PRODUCTS_KEY) chartMaxProductsRow = r;
+                        if (r.key === CHART_RIBBON_STYLE_KEY) chartRibbonRow = r;
                     });
                     var fallbackPct = pctFromStored(legacyRow ? legacyRow.value : '');
                     var fallbackTextPct = pctFromStoredBrightness(textLegacyRow ? textLegacyRow.value : '');
@@ -205,6 +318,20 @@
                         chartMaxProductsStoredEl.textContent = chartMaxProductsRow
                             ? ('Stored value: ' + String(chartMaxProductsRow.value) + ' (updated ' + String(chartMaxProductsRow.updated_at || '') + ').')
                             : 'No explicit admin cap stored. Public charts use their built-in defaults.';
+                    }
+                    if (chartRibbonRow && chartRibbonRow.value) {
+                        try {
+                            applyRibbonToForm(JSON.parse(String(chartRibbonRow.value)));
+                        } catch (_e) {
+                            applyRibbonToForm(RIBBON_DEFAULT);
+                        }
+                    } else {
+                        applyRibbonToForm(RIBBON_DEFAULT);
+                    }
+                    if (chartRibbonStoredEl) {
+                        chartRibbonStoredEl.textContent = chartRibbonRow
+                            ? ('Stored JSON (updated ' + String(chartRibbonRow.updated_at || '') + ').')
+                            : 'No row stored; public site uses API defaults until you save.';
                     }
                 }).catch(function (e) { showMsg(e && e.message ? e.message : 'Failed to load config', true); });
             }
@@ -314,6 +441,38 @@
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
             }
 
+            function saveChartRibbonStyle() {
+                var payload = collectRibbonObject();
+                portal.fetchAdmin('/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: CHART_RIBBON_STYLE_KEY, value: JSON.stringify(payload) }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Save failed');
+                        showMsg('Saved ribbon style. Allow up to one minute for cached /site-ui to refresh.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            }
+
+            function resetChartRibbonStyle() {
+                if (!confirm('Remove stored ribbon style? The public site will use built-in defaults.')) return;
+                portal.fetchAdmin('/config', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: CHART_RIBBON_STYLE_KEY }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function () {
+                        applyRibbonToForm(RIBBON_DEFAULT);
+                        showMsg('Ribbon style reset.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
+            }
+
             function resetChartMaxProducts() {
                 if (!confirm('Remove the stored chart product cap and return to the built-in chart defaults?')) return;
                 portal.fetchAdmin('/config', {
@@ -349,6 +508,10 @@
             if (chartMaxProductsSaveBtn) chartMaxProductsSaveBtn.addEventListener('click', saveChartMaxProducts);
             var chartMaxProductsResetBtn = document.getElementById('chart-max-products-reset-btn');
             if (chartMaxProductsResetBtn) chartMaxProductsResetBtn.addEventListener('click', resetChartMaxProducts);
+            var chartRibbonSaveBtn = document.getElementById('chart-ribbon-save-btn');
+            if (chartRibbonSaveBtn) chartRibbonSaveBtn.addEventListener('click', saveChartRibbonStyle);
+            var chartRibbonResetBtn = document.getElementById('chart-ribbon-reset-btn');
+            if (chartRibbonResetBtn) chartRibbonResetBtn.addEventListener('click', resetChartRibbonStyle);
 
             loadFromConfig();
         })();

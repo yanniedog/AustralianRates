@@ -50,12 +50,61 @@
         return { r: r, g: g, b: b };
     }
 
-    /** Horizontal light band (along time) so filled ribbons read a bit like Sankey flows, not flat slabs. */
-    function ribbonSankeyFlowAreaFill(hex) {
+    function mixHexWithGrey(hex, t) {
+        var u = Math.max(0, Math.min(1, Number(t) || 0));
+        var rgb = parseHexRgb(hex);
+        var sr = 148;
+        var sg = 163;
+        var sb = 184;
+        var r = Math.round(rgb.r + (sr - rgb.r) * u);
+        var g = Math.round(rgb.g + (sg - rgb.g) * u);
+        var b = Math.round(rgb.b + (sb - rgb.b) * u);
+        function h2(n) {
+            var s = Math.max(0, Math.min(255, n)).toString(16);
+            return s.length < 2 ? '0' + s : s;
+        }
+        return '#' + h2(r) + h2(g) + h2(b);
+    }
+
+    function fmtReportDateYmd(ymd) {
+        var s = String(ymd || '').slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        var p = s.split('-');
+        var m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return m[+p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0];
+    }
+
+    function getRibbonStyleResolved() {
+        var ui = window.AR && window.AR.chartSiteUi;
+        if (ui && typeof ui.getChartRibbonStyle === 'function') return ui.getChartRibbonStyle();
+        return {
+            edge_width: 2,
+            edge_opacity: 1,
+            edge_opacity_others: 0.14,
+            fill_opacity_end: 0.22,
+            fill_opacity_peak: 0.48,
+            fill_opacity_others_scale: 0.22,
+            mean_width: 1.25,
+            mean_opacity: 1,
+            mean_opacity_others: 0.18,
+            product_line_opacity_hover: 0.5,
+            product_line_opacity_selected: 0.85,
+            product_line_width_hover: 1.2,
+            product_line_width_selected: 2.5,
+            others_grey_mix: 0.62,
+            active_z: 48,
+            inactive_z: 2,
+        };
+    }
+
+    /** Horizontal light band (along time) so filled ribbons read as soft tubes, not flat slabs. */
+    function ribbonFlowGradientFill(hex, endAlpha, peakAlpha) {
         var rgb = parseHexRgb(hex);
         var r = rgb.r;
         var g = rgb.g;
         var b = rgb.b;
+        var lo = Math.max(0, Math.min(1, Number(endAlpha) || 0));
+        var pk = Math.max(0, Math.min(1, Number(peakAlpha) || 0));
         return {
             type: 'linear',
             x: 0,
@@ -63,10 +112,10 @@
             x2: 1,
             y2: 0,
             colorStops: [
-                { offset: 0, color: 'rgba(' + r + ',' + g + ',' + b + ',0.28)' },
-                { offset: 0.42, color: 'rgba(' + r + ',' + g + ',' + b + ',0.58)' },
-                { offset: 0.58, color: 'rgba(' + r + ',' + g + ',' + b + ',0.58)' },
-                { offset: 1, color: 'rgba(' + r + ',' + g + ',' + b + ',0.28)' },
+                { offset: 0, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
+                { offset: 0.42, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 0.58, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 1, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
             ],
         };
     }
@@ -85,14 +134,6 @@
         }
         if (out[out.length - 1] !== dateCount - 1) out.push(dateCount - 1);
         return out;
-    }
-
-    /**
-     * Ribbon touch: tap reveals products for the bank whose inner band contains the tap (same inner band as hover).
-     * Mouse: move within the inner band to reveal; edge of ribbon stays masked.
-     */
-    function ribbonTouchNote() {
-        return 'Ribbon: move the pointer over the middle of a bank\u2019s band to show products; tap inside the band on touch.';
     }
 
     /** When report-plot bands/moves payload has no points, use visible series dates so the chart window matches the main data. */
@@ -176,6 +217,7 @@
         var dates = opts.dates;
         var plotPayload = opts.plotPayload;
         var bankColor = opts.bankColor;
+        var rs = opts.ribbonStyle || getRibbonStyleResolved();
         var out = [];
         (plotPayload && plotPayload.series || []).forEach(function (series, index) {
             var color = bankColor(series.bank_name, index);
@@ -201,8 +243,16 @@
                 return [date, point != null ? Number(point.max_rate) : null];
             });
             var stackKey = 'band_' + series.bank_name;
-            var flowEdge = { color: color, width: 2, opacity: 1, cap: 'round', join: 'round' };
-            // Lower edge: sets the base of the ribbon (transparent fill, min line at full opacity)
+            var ew = Math.max(0, Number(rs.edge_width) || 0);
+            var eo = Math.max(0, Math.min(1, Number(rs.edge_opacity)));
+            var flowEdge = {
+                color: color,
+                width: ew > 0 ? ew : 0.01,
+                opacity: ew > 0 ? eo : 0,
+                cap: 'round',
+                join: 'round',
+            };
+            var zBase = Math.max(0, Number(rs.inactive_z) || 2) + index * 0.02;
             out.push({
                 id: 'ribbon_min_' + index,
                 name: series.bank_name,
@@ -215,9 +265,10 @@
                 lineStyle: flowEdge,
                 areaStyle: { opacity: 0 },
                 data: minData,
-                z: 2,
+                z: zBase,
             });
-            // Upper delta: fills the ribbon between min and max rate (Sankey-like flow shading along time)
+            var fillEnd = Math.max(0, Math.min(1, Number(rs.fill_opacity_end)));
+            var fillPeak = Math.max(0, Math.min(1, Number(rs.fill_opacity_peak)));
             out.push({
                 id: 'ribbon_fill_' + index,
                 name: series.bank_name + ' ribbon',
@@ -227,12 +278,11 @@
                 smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.5, opacity: 0.35, cap: 'round', join: 'round' },
-                areaStyle: ribbonSankeyFlowAreaFill(color),
+                lineStyle: { color: color, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
+                areaStyle: ribbonFlowGradientFill(color, fillEnd, fillPeak),
                 data: deltaData,
-                z: 2,
+                z: zBase + 0.01,
             });
-            // Max boundary: full-opacity bank colour (explicit top edge)
             out.push({
                 id: 'ribbon_max_' + index,
                 name: series.bank_name + ' max',
@@ -243,9 +293,10 @@
                 connectNulls: true,
                 lineStyle: flowEdge,
                 data: maxData,
-                z: 3,
+                z: zBase + 0.02,
             });
-            // Mean line: solid, full bank colour
+            var mw = Math.max(0, Number(rs.mean_width) || 0);
+            var mo = Math.max(0, Math.min(1, Number(rs.mean_opacity)));
             out.push({
                 id: 'ribbon_mean_' + index,
                 name: series.bank_name + ' mean',
@@ -254,9 +305,15 @@
                 smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.25, opacity: 1, cap: 'round', join: 'round' },
+                lineStyle: {
+                    color: color,
+                    width: mw > 0 ? mw : 0.01,
+                    opacity: mw > 0 ? mo : 0,
+                    cap: 'round',
+                    join: 'round',
+                },
                 data: meanData,
-                z: 4,
+                z: zBase + 0.03,
             });
         });
         return out;
@@ -595,12 +652,14 @@
         var ribbonLodIndices = null;
         var ribbonRaf = null;
         var zrRibbonSubs = [];
+        var siteUiRibbonListener = null;
 
         if (isBandsMode) {
             series = series.concat(buildBandSeries({
                 dates: dates,
                 plotPayload: plotPayload,
                 bankColor: options.bankColor,
+                ribbonStyle: getRibbonStyleResolved(),
             }));
             ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor);
             useRibbonCanvas = ribbonCanvasModel.count > RIBBON_ECHARTS_PRODUCT_CAP;
@@ -625,6 +684,7 @@
 
         var hoveredBank = '';
         var selectedProductName = '';
+        var lastPointerDate = '';
 
         function resolveDateFromAxisValue(xRaw) {
             if (xRaw == null) return '';
@@ -683,6 +743,11 @@
                 return;
             }
             if (!productOverlay.length) return;
+            var rs = getRibbonStyleResolved();
+            var oh = Math.max(0, Math.min(1, Number(rs.product_line_opacity_hover)));
+            var os = Math.max(0, Math.min(1, Number(rs.product_line_opacity_selected)));
+            var wh = Math.max(0, Number(rs.product_line_width_hover) || 1.2);
+            var ws = Math.max(0, Number(rs.product_line_width_selected) || 2.5);
             var updates = [];
             productOverlay.forEach(function (s) {
                 var rest = s.name.slice(3);
@@ -694,8 +759,8 @@
                 updates.push({
                     id: s.id,
                     lineStyle: {
-                        color: hexToRgba(base, isSelected ? 0.85 : 0.5),
-                        width: isSelected ? 2.5 : 1.2,
+                        color: hexToRgba(base, isSelected ? os : oh),
+                        width: isSelected ? ws : wh,
                         opacity: show ? 1 : 0,
                         cap: 'round',
                         join: 'round',
@@ -762,8 +827,13 @@
                 if (first) return;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                ctx.strokeStyle = hexToRgba(prod.baseHex, isSel ? 0.85 : 0.5);
-                ctx.lineWidth = isSel ? 2.5 : 1.2;
+                var rsC = getRibbonStyleResolved();
+                var oh = Math.max(0, Math.min(1, Number(rsC.product_line_opacity_hover)));
+                var os = Math.max(0, Math.min(1, Number(rsC.product_line_opacity_selected)));
+                var wh = Math.max(0, Number(rsC.product_line_width_hover) || 1.2);
+                var ws = Math.max(0, Number(rsC.product_line_width_selected) || 2.5);
+                ctx.strokeStyle = hexToRgba(prod.baseHex, isSel ? os : oh);
+                ctx.lineWidth = isSel ? ws : wh;
                 ctx.stroke();
             });
         }
@@ -807,7 +877,7 @@
             var ib = options.infoBox;
             if (!ib || typeof ib.show !== 'function' || !pick) return;
             ib.show({
-                heading: pick.date,
+                heading: fmtReportDateYmd(pick.date),
                 meta: M.selectionMetaText ? M.selectionMetaText({
                     selectionYmd: pick.date,
                     rate: pick.rate,
@@ -829,6 +899,87 @@
             if (ib && typeof ib.hide === 'function') ib.hide();
         }
 
+        function applyRibbonBankHighlightState(hoveredBankName) {
+            if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
+            var rs = getRibbonStyleResolved();
+            var updates = [];
+            plotPayload.series.forEach(function (bank, index) {
+                var active = !hoveredBankName || bank.bank_name === hoveredBankName;
+                var c0 = options.bankColor(bank.bank_name, index);
+                var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
+                var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
+                var zb = zRoot + index * 0.08;
+                var ew = Math.max(0, Number(rs.edge_width) || 0);
+                var eo = Math.max(0, Math.min(1, Number(active ? rs.edge_opacity : rs.edge_opacity_others)));
+                var edgeLine = { color: strokeC, width: ew > 0 ? ew : 0.01, opacity: ew > 0 ? eo : 0, cap: 'round', join: 'round' };
+                var fe = Math.max(0, Math.min(1, Number(rs.fill_opacity_end)));
+                var fp = Math.max(0, Math.min(1, Number(rs.fill_opacity_peak)));
+                var sc = Math.max(0, Math.min(1, Number(rs.fill_opacity_others_scale)));
+                var fillEnd = active ? fe : fe * sc;
+                var fillPeak = active ? fp : fp * sc;
+                var mw = Math.max(0, Number(rs.mean_width) || 0);
+                var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
+                updates.push({ id: 'ribbon_min_' + index, z: zb, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
+                updates.push({
+                    id: 'ribbon_fill_' + index,
+                    z: zb + 0.01,
+                    lineStyle: { color: strokeC, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
+                    areaStyle: ribbonFlowGradientFill(strokeC, fillEnd, fillPeak),
+                });
+                updates.push({ id: 'ribbon_max_' + index, z: zb + 0.02, lineStyle: edgeLine });
+                updates.push({
+                    id: 'ribbon_mean_' + index,
+                    z: zb + 0.03,
+                    lineStyle: {
+                        color: strokeC,
+                        width: mw > 0 ? mw : 0.01,
+                        opacity: mw > 0 ? mo : 0,
+                        cap: 'round',
+                        join: 'round',
+                    },
+                });
+            });
+            try {
+                chart.setOption({ series: updates }, false, true);
+            } catch (_e) {}
+        }
+
+        function refreshRibbonUnderChartPanel() {
+            var ib = options.infoBox;
+            if (!ib || typeof ib.show !== 'function') return;
+            if (selectedProductName) return;
+            if (!hoveredBank || !lastPointerDate) {
+                hideRibbonInfoBox();
+                return;
+            }
+            var plist = ribbonCanvasModel.byBank[hoveredBank] || [];
+            var items = [];
+            var sec = String(section || '');
+            plist.forEach(function (prod) {
+                var v = prod.byDate[lastPointerDate];
+                if (v == null || !Number.isFinite(v) || v <= 0) return;
+                if (sec === 'savings' && v < 1.0) return;
+                items.push({
+                    bankName: prod.bankName,
+                    productName: prod.productName,
+                    rate: v,
+                    color: prod.baseHex,
+                    selectionKey: prod.key,
+                    subtitle: '',
+                });
+            });
+            items.sort(function (a, b) { return b.rate - a.rate; });
+            if (!items.length) {
+                hideRibbonInfoBox();
+                return;
+            }
+            ib.show({
+                heading: fmtReportDateYmd(lastPointerDate),
+                meta: hoveredBank + ' \u00b7 ' + items.length + ' product' + (items.length !== 1 ? 's' : ''),
+                items: items,
+            });
+        }
+
         function bankColorIndexForName(bn) {
             var want = String(bn || '').trim();
             for (var i = 0; i < bankList.length; i++) {
@@ -839,56 +990,9 @@
             return 0;
         }
 
-        // Custom tooltip for bands mode
-        var tooltipConfig;
-        if (isBandsMode) {
-            tooltipConfig = {
-                trigger: 'axis',
-                axisPointer: { type: 'line' },
-                confine: true,
-                formatter: function (params) {
-                    if (!params || !params.length) return '';
-                    var date = params[0].axisValue || '';
-                    var parts = ['<b>' + date + '</b>'];
-                    params.forEach(function (p) {
-                        if ((p.seriesName === 'RBA' || p.seriesName === 'CPI') && p.value && p.value[1] != null) {
-                            parts.push('<span style="color:' + p.color + ';">\u25A0</span> ' + p.seriesName + ': ' + Number(p.value[1]).toFixed(2) + '%');
-                        }
-                    });
-                    if (plotPayload.series) {
-                        plotPayload.series.forEach(function (bank, bi) {
-                            var point = bandByDateByBank[bank.bank_name] && bandByDateByBank[bank.bank_name][date];
-                            if (!point) return;
-                            var c = options.bankColor(bank.bank_name, bi);
-                            parts.push('<span style="color:' + c + ';">\u25A0</span> <b>' + bank.bank_name + '</b>: ' +
-                                Number(point.min_rate).toFixed(2) + ' \u2013 ' + Number(point.max_rate).toFixed(2) + '% (avg ' + Number(point.mean_rate).toFixed(2) + '%)');
-                            if (hoveredBank === bank.bank_name) {
-                                if (useRibbonCanvas) {
-                                    var plist = ribbonCanvasModel.byBank[hoveredBank] || [];
-                                    plist.forEach(function (prod) {
-                                        var v = prod.byDate[date];
-                                        if (v == null) return;
-                                        var sel = prod.key === selectedProductName;
-                                        parts.push('&nbsp;&nbsp;\u00b7 ' + (sel ? '<b>' : '') + prod.productName + ': ' + Number(v).toFixed(2) + '%' + (sel ? '</b>' : ''));
-                                    });
-                                } else {
-                                    params.forEach(function (p) {
-                                        if (p.seriesName && p.seriesName.indexOf('[P]' + bank.bank_name + '|') === 0 && p.value && p.value[1] != null) {
-                                            var prodName = p.seriesName.slice(3 + bank.bank_name.length + 1);
-                                            var sel = p.seriesName === selectedProductName;
-                                            parts.push('&nbsp;&nbsp;\u00b7 ' + (sel ? '<b>' : '') + prodName + ': ' + Number(p.value[1]).toFixed(2) + '%' + (sel ? '</b>' : ''));
-                                        }
-                                    });
-                                }
-                            }
-                        });
-                    }
-                    return parts.join('<br>');
-                },
-            };
-        } else {
-            tooltipConfig = { trigger: 'axis', axisPointer: { type: 'line' } };
-        }
+        var tooltipConfig = isBandsMode
+            ? { show: false }
+            : { trigger: 'axis', axisPointer: { type: 'line' } };
 
         if (options.infoBox && options.infoBox.el) {
             wrapper.appendChild(options.infoBox.el);
@@ -929,6 +1033,10 @@
             series: series,
         });
 
+        if (isBandsMode) {
+            applyRibbonBankHighlightState('');
+        }
+
         if (isBandsMode && useRibbonCanvas) {
             ribbonCanvas = document.createElement('canvas');
             ribbonCanvas.className = 'lwc-ribbon-products-canvas';
@@ -936,10 +1044,9 @@
             ribbonCanvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:4;';
             mount.appendChild(ribbonCanvas);
             ribbonCanvasCtx = ribbonCanvas.getContext('2d');
-            mount.setAttribute('title', ribbonTouchNote());
         }
 
-        if (isBandsMode && (productOverlay.length || useRibbonCanvas)) {
+        if (isBandsMode) {
             var zr = chart.getZr();
             function ribbonZrXY(ev) {
                 var ox = typeof ev.offsetX === 'number' ? ev.offsetX : (ev.zrX != null ? ev.zrX : 0);
@@ -951,17 +1058,23 @@
                 var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
                 if (!data || data.length < 2) return;
                 var dateStr = resolveDateFromAxisValue(data[0]);
+                if (dateStr) lastPointerDate = dateStr;
                 var yVal = data[1];
                 var next = pickBankFromInnerBand(dateStr, yVal);
                 if (next !== hoveredBank) {
                     hoveredBank = next;
+                    applyRibbonBankHighlightState(hoveredBank);
                     updateProductVisibility();
                 }
+                refreshRibbonUnderChartPanel();
             }
             function onRibbonZrGlobalOut() {
                 if (selectedProductName) return;
                 hoveredBank = '';
+                lastPointerDate = '';
+                applyRibbonBankHighlightState('');
                 updateProductVisibility();
+                refreshRibbonUnderChartPanel();
             }
             function onRibbonZrClick(ev) {
                 if (!useRibbonCanvas) return;
@@ -980,6 +1093,7 @@
                         selectedProductName = pick.prod.key;
                         showRibbonInfoBox(pick);
                     }
+                    applyRibbonBankHighlightState(hoveredBank);
                     scheduleRibbonRedraw();
                     return;
                 }
@@ -987,6 +1101,7 @@
                     selectedProductName = '';
                     hideRibbonInfoBox();
                     hoveredBank = tapBank || hoveredBank;
+                    applyRibbonBankHighlightState(hoveredBank);
                     scheduleRibbonRedraw();
                 }
             }
@@ -997,7 +1112,7 @@
             zrRibbonSubs.push({ type: 'globalout', fn: onRibbonZrGlobalOut });
             zrRibbonSubs.push({ type: 'click', fn: onRibbonZrClick });
 
-            if (!useRibbonCanvas) {
+            if (!useRibbonCanvas && productOverlay.length) {
                 chart.on('click', function (params) {
                     var name = params.seriesName || '';
                     if (name.indexOf('[P]') === 0) {
@@ -1016,7 +1131,7 @@
                             if (options.infoBox && typeof options.infoBox.show === 'function' && rate != null && Number.isFinite(rate)) {
                                 var baseHex = options.bankColor(bn, bankColorIndexForName(bn));
                                 options.infoBox.show({
-                                    heading: dateStr,
+                                    heading: fmtReportDateYmd(dateStr),
                                     meta: M.selectionMetaText ? M.selectionMetaText({
                                         selectionYmd: dateStr,
                                         rate: rate,
@@ -1033,6 +1148,7 @@
                                 });
                             }
                         }
+                        applyRibbonBankHighlightState(hoveredBank);
                         updateProductVisibility();
                     } else {
                         var bank = resolveHoverBank(name);
@@ -1040,6 +1156,7 @@
                             selectedProductName = '';
                             hideRibbonInfoBox();
                             hoveredBank = bank || '';
+                            applyRibbonBankHighlightState(hoveredBank);
                             updateProductVisibility();
                         }
                     }
@@ -1047,11 +1164,19 @@
             }
 
             chart.on('finished', function () {
+                applyRibbonBankHighlightState(hoveredBank);
                 if (useRibbonCanvas) {
                     recomputeRibbonLod();
                     scheduleRibbonRedraw();
                 }
             });
+
+            siteUiRibbonListener = function () {
+                applyRibbonBankHighlightState(hoveredBank);
+                updateProductVisibility();
+                scheduleRibbonRedraw();
+            };
+            window.addEventListener('ar:site-ui-settings', siteUiRibbonListener);
         }
 
         return {
@@ -1059,6 +1184,7 @@
             chart: {
                 resize: function (width, height) {
                     chart.resize({ width: width, height: height });
+                    if (isBandsMode) applyRibbonBankHighlightState(hoveredBank);
                     if (useRibbonCanvas) {
                         recomputeRibbonLod();
                         scheduleRibbonRedraw();
@@ -1080,6 +1206,10 @@
                     } catch (_) {}
                 }
                 zrRibbonSubs = [];
+                if (siteUiRibbonListener) {
+                    try { window.removeEventListener('ar:site-ui-settings', siteUiRibbonListener); } catch (_) {}
+                    siteUiRibbonListener = null;
+                }
                 try { chart.dispose(); } catch (_) {}
                 if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
             },

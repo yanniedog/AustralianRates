@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_CHART_RIBBON_STYLE,
+  mergeChartRibbonStylePartial,
   normalizeChartLegendOpacityForPut,
   normalizeChartMaxProductsForPut,
+  normalizeChartRibbonStyleForPut,
   resolveChartLegendOpacityFromDb,
   resolveChartLegendOpacitySetFromDb,
   resolveChartMaxProductsFromDb,
   resolveChartMaxProductsModeFromDb,
+  resolveChartRibbonStyleFromDb,
 } from '../src/utils/chart-site-ui'
 
 describe('chart-site-ui', () => {
@@ -71,5 +75,23 @@ describe('chart-site-ui', () => {
     expect(normalizeChartMaxProductsForPut('0').ok).toBe(false)
     expect(normalizeChartMaxProductsForPut('1001').ok).toBe(false)
     expect(normalizeChartMaxProductsForPut('abc').ok).toBe(false)
+  })
+
+  it('resolves and normalizes chart ribbon style JSON', () => {
+    expect(resolveChartRibbonStyleFromDb(null)).toEqual(DEFAULT_CHART_RIBBON_STYLE)
+    expect(resolveChartRibbonStyleFromDb('not json')).toEqual(DEFAULT_CHART_RIBBON_STYLE)
+    const partial = { edge_width: 0, fill_opacity_peak: 0.99 }
+    const merged = mergeChartRibbonStylePartial(partial)
+    expect(merged.edge_width).toBe(0)
+    expect(merged.fill_opacity_peak).toBe(0.99)
+    expect(merged.mean_width).toBe(DEFAULT_CHART_RIBBON_STYLE.mean_width)
+
+    const put = normalizeChartRibbonStyleForPut(JSON.stringify(partial))
+    expect(put.ok).toBe(true)
+    if (put.ok) {
+      expect(JSON.parse(put.value).edge_width).toBe(0)
+    }
+    expect(normalizeChartRibbonStyleForPut('').ok).toBe(false)
+    expect(normalizeChartRibbonStyleForPut('{').ok).toBe(false)
   })
 })

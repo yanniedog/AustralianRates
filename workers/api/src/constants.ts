@@ -50,6 +50,8 @@ export const CHART_MAX_PRODUCTS_KEY = 'chart_max_products'
 export const CHART_MAX_PRODUCTS_UNLIMITED = 'unlimited'
 export const CHART_MAX_PRODUCTS_MIN = 1
 export const CHART_MAX_PRODUCTS_MAX = 1000
+/** JSON object (string in app_config) for public Rate Report ribbon (bands) styling. */
+export const CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style'
 export const INGEST_PAUSE_MODE_KEY = 'ingest_pause_mode'
 export const INGEST_PAUSE_REASON_KEY = 'ingest_pause_reason'
 export const INGEST_PAUSE_MODES = ['active', 'repair_pause'] as const

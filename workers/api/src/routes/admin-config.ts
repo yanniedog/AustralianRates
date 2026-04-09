@@ -8,6 +8,7 @@ import {
   CHART_LEGEND_TEXT_BRIGHTNESS_KEY,
   CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY,
   CHART_MAX_PRODUCTS_KEY,
+  CHART_RIBBON_STYLE_KEY,
   INGEST_PAUSE_MODE_KEY,
   INGEST_PAUSE_MODES,
   MIN_RATE_CHECK_INTERVAL_MINUTES,
@@ -17,6 +18,7 @@ import {
   normalizeChartLegendOpacityForPut,
   normalizeChartLegendTextBrightnessForPut,
   normalizeChartMaxProductsForPut,
+  normalizeChartRibbonStyleForPut,
 } from '../utils/chart-site-ui'
 import type { AppContext, EnvBindings } from '../types'
 import { jsonError } from '../utils/http'
@@ -135,6 +137,14 @@ adminConfigRoutes.put('/config', async (c) => {
 
   if (key === CHART_MAX_PRODUCTS_KEY) {
     const normalized = normalizeChartMaxProductsForPut(value, key)
+    if (!normalized.ok) {
+      return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
+    }
+    value = normalized.value
+  }
+
+  if (key === CHART_RIBBON_STYLE_KEY) {
+    const normalized = normalizeChartRibbonStyleForPut(value, key)
     if (!normalized.ok) {
       return jsonError(c, 400, 'BAD_REQUEST', normalized.error)
     }

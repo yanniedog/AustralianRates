@@ -66,6 +66,31 @@ type SectionConfig = {
   refreshSql: string
 }
 
+function rateBoundsForReportSection(section: ReportPlotSection): { min: number; max: number } {
+  switch (section) {
+    case 'home_loans':
+      return { min: HOME_MIN_PUBLIC_RATE, max: HOME_MAX_PUBLIC_RATE }
+    case 'savings':
+      return { min: SAVINGS_MIN_PUBLIC_RATE, max: SAVINGS_MAX_PUBLIC_RATE }
+    case 'term_deposits':
+      return { min: TD_MIN_PUBLIC_RATE, max: TD_MAX_PUBLIC_RATE }
+    default:
+      return { min: 0, max: 100 }
+  }
+}
+
+function isValidBandPoint(
+  lo: number,
+  hi: number,
+  mean: number,
+  bounds: { min: number; max: number },
+): boolean {
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || !Number.isFinite(mean)) return false
+  if (lo > hi + 1e-9) return false
+  if (lo < bounds.min - 1e-9 || hi > bounds.max + 1e-9) return false
+  return true
+}
+
 const TD_TERM_PREFERENCE = [12, 6, 24, 3, 18, 36, 9, 2, 1]
 
 export const reportPlotTestState = {
@@ -488,6 +513,7 @@ async function queryBandSeries(
   db: D1Database,
   table: string,
   where: WhereClause,
+  section: ReportPlotSection,
 ): Promise<ReportBandSeries[]> {
   const result = await db
     .prepare(
@@ -511,15 +537,20 @@ async function queryBandSeries(
       mean_rate: number
     }>()
 
+  const bounds = rateBoundsForReportSection(section)
   const byBank = new Map<string, ReportBandSeries>()
   for (const row of result.results || []) {
     const bankName = String(row.bank_name || '').trim()
     if (!bankName) continue
+    const lo = Number(row.min_rate)
+    const hi = Number(row.max_rate)
+    const mean = Number(row.mean_rate)
+    if (!isValidBandPoint(lo, hi, mean, bounds)) continue
     const point: ReportBandPoint = {
       date: String(row.date || ''),
-      min_rate: Number(row.min_rate || 0),
-      max_rate: Number(row.max_rate || 0),
-      mean_rate: Number(row.mean_rate || 0),
+      min_rate: lo,
+      max_rate: hi,
+      mean_rate: mean,
     }
     if (!byBank.has(bankName)) {
       byBank.set(bankName, {
@@ -557,7 +588,7 @@ export async function queryReportPlotPayload(
     return payload
   }
 
-  const series = await queryBandSeries(db, config.deltaTable, where)
+  const series = await queryBandSeries(db, config.deltaTable, where, section)
   const payload: ReportBandsPayload = {
     mode,
     meta: meta(section, mode, filters, resolvedTermMonths),

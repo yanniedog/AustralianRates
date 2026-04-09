@@ -8,6 +8,24 @@
 
     var DEFAULT = 0.75;
     var DEFAULT_TEXT_BRIGHTNESS = 1;
+    var DEFAULT_RIBBON_STYLE = {
+        edge_width: 2,
+        edge_opacity: 1,
+        edge_opacity_others: 0.14,
+        fill_opacity_end: 0.22,
+        fill_opacity_peak: 0.48,
+        fill_opacity_others_scale: 0.22,
+        mean_width: 1.25,
+        mean_opacity: 1,
+        mean_opacity_others: 0.18,
+        product_line_opacity_hover: 0.5,
+        product_line_opacity_selected: 0.85,
+        product_line_width_hover: 1.2,
+        product_line_width_selected: 2.5,
+        others_grey_mix: 0.62,
+        active_z: 48,
+        inactive_z: 2
+    };
     var cached = {
         desktop: DEFAULT,
         mobile: DEFAULT,
@@ -16,7 +34,8 @@
         textBrightnessMobile: DEFAULT_TEXT_BRIGHTNESS,
         textBrightnessResolved: DEFAULT_TEXT_BRIGHTNESS,
         chartMaxProducts: null,
-        chartMaxProductsMode: 'default'
+        chartMaxProductsMode: 'default',
+        chartRibbonStyle: null
     };
     var legends = [];
     var mobileMedia = null;
@@ -46,6 +65,7 @@
                     chart_legend_text_brightness_mobile: cached.textBrightnessMobile,
                     chart_max_products: cached.chartMaxProducts,
                     chart_max_products_mode: cached.chartMaxProductsMode,
+                    chart_ribbon_style: getChartRibbonStyleResolved(),
                     device_mode: resolveIsMobile() ? 'mobile' : 'desktop'
                 }
             }));
@@ -81,6 +101,11 @@
         return Math.floor(parsed);
     }
 
+    function getChartRibbonStyleResolved() {
+        if (cached.chartRibbonStyle && typeof cached.chartRibbonStyle === 'object') return cached.chartRibbonStyle;
+        return DEFAULT_RIBBON_STYLE;
+    }
+
     function ingestPayload(body) {
         if (!body || body.ok !== true) return;
         var desktop = validOpacity(body.chart_legend_opacity_desktop)
@@ -101,6 +126,9 @@
         cached.textBrightnessMobile = textBrightnessMobile;
         cached.chartMaxProducts = normalizeChartMaxProducts(body.chart_max_products);
         cached.chartMaxProductsMode = String(body.chart_max_products_mode || 'default').trim().toLowerCase() || 'default';
+        cached.chartRibbonStyle = (body.chart_ribbon_style && typeof body.chart_ribbon_style === 'object')
+            ? body.chart_ribbon_style
+            : null;
         applyAll();
     }
 
@@ -168,6 +196,9 @@
         },
         getChartMaxProductsMode: function () {
             return cached.chartMaxProductsMode;
+        },
+        getChartRibbonStyle: function () {
+            return getChartRibbonStyleResolved();
         },
         registerReportLegend: function (el) {
             if (!el) return;
