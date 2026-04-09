@@ -36,6 +36,44 @@
         return 'rgba(' + r + ',' + g + ',' + b + ',' + String(alpha) + ')';
     }
 
+    function parseHexRgb(hex) {
+        var h = String(hex || '').trim();
+        if (h.charAt(0) === '#') h = h.slice(1);
+        if (h.length === 3) {
+            h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+        }
+        if (h.length !== 6) return { r: 100, g: 116, b: 139 };
+        var r = parseInt(h.slice(0, 2), 16);
+        var g = parseInt(h.slice(2, 4), 16);
+        var b = parseInt(h.slice(4, 6), 16);
+        if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return { r: 100, g: 116, b: 139 };
+        return { r: r, g: g, b: b };
+    }
+
+    /** Horizontal light band (along time) so filled ribbons read a bit like Sankey flows, not flat slabs. */
+    function ribbonSankeyFlowAreaFill(hex) {
+        var rgb = parseHexRgb(hex);
+        var r = rgb.r;
+        var g = rgb.g;
+        var b = rgb.b;
+        return {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 1,
+            y2: 0,
+            colorStops: [
+                { offset: 0, color: 'rgba(' + r + ',' + g + ',' + b + ',0.28)' },
+                { offset: 0.42, color: 'rgba(' + r + ',' + g + ',' + b + ',0.58)' },
+                { offset: 0.58, color: 'rgba(' + r + ',' + g + ',' + b + ',0.58)' },
+                { offset: 1, color: 'rgba(' + r + ',' + g + ',' + b + ',0.28)' },
+            ],
+        };
+    }
+
+    /** Spline-like edges (superficial Sankey-style); keep identical on stacked pair. */
+    var RIBBON_SANKEY_SMOOTH = 0.42;
+
     function computeRibbonLodIndices(dateCount, maxCols) {
         if (!Number.isFinite(dateCount) || dateCount <= 1) return null;
         var cap = Math.max(32, Math.floor(maxCols) + 2);
@@ -163,6 +201,7 @@
                 return [date, point != null ? Number(point.max_rate) : null];
             });
             var stackKey = 'band_' + series.bank_name;
+            var flowEdge = { color: color, width: 2, opacity: 1, cap: 'round', join: 'round' };
             // Lower edge: sets the base of the ribbon (transparent fill, min line at full opacity)
             out.push({
                 id: 'ribbon_min_' + index,
@@ -170,24 +209,26 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.5, opacity: 1 },
+                lineStyle: flowEdge,
                 areaStyle: { opacity: 0 },
                 data: minData,
                 z: 2,
             });
-            // Upper delta: fills the ribbon between min and max rate (50% transparent bank colour)
+            // Upper delta: fills the ribbon between min and max rate (Sankey-like flow shading along time)
             out.push({
                 id: 'ribbon_fill_' + index,
                 name: series.bank_name + ' ribbon',
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.5, opacity: 1 },
-                areaStyle: { color: color, opacity: 0.5 },
+                lineStyle: { color: color, width: 1.5, opacity: 0.35, cap: 'round', join: 'round' },
+                areaStyle: ribbonSankeyFlowAreaFill(color),
                 data: deltaData,
                 z: 2,
             });
@@ -197,9 +238,10 @@
                 name: series.bank_name + ' max',
                 type: 'line',
                 yAxisIndex: 0,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.5, opacity: 1 },
+                lineStyle: flowEdge,
                 data: maxData,
                 z: 3,
             });
@@ -209,9 +251,10 @@
                 name: series.bank_name + ' mean',
                 type: 'line',
                 yAxisIndex: 0,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.5, opacity: 1 },
+                lineStyle: { color: color, width: 1.25, opacity: 1, cap: 'round', join: 'round' },
                 data: meanData,
                 z: 4,
             });
@@ -250,9 +293,10 @@
                 name: '[P]' + bn + '|' + pn,
                 type: 'line',
                 yAxisIndex: 0,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: hexToRgba(baseHex, 0.5), width: 1.2, opacity: 0 },
+                lineStyle: { color: hexToRgba(baseHex, 0.5), width: 1.2, opacity: 0, cap: 'round', join: 'round' },
                 silent: true,
                 data: data,
                 z: 5,
@@ -653,6 +697,8 @@
                         color: hexToRgba(base, isSelected ? 0.85 : 0.5),
                         width: isSelected ? 2.5 : 1.2,
                         opacity: show ? 1 : 0,
+                        cap: 'round',
+                        join: 'round',
                     },
                     silent: !show,
                 });
@@ -714,6 +760,7 @@
                     for (var di = 0; di < dates.length; di++) plotAt(di);
                 }
                 if (first) return;
+                ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = hexToRgba(prod.baseHex, isSel ? 0.85 : 0.5);
                 ctx.lineWidth = isSel ? 2.5 : 1.2;
