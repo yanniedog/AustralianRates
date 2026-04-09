@@ -1456,7 +1456,6 @@
 
         if (isBandsMode) {
             var zr = chart.getZr();
-            var _agentRibbonLogAt = 0;
             function ribbonZrXY(ev) {
                 var ox = typeof ev.offsetX === 'number' ? ev.offsetX : (ev.zrX != null ? ev.zrX : 0);
                 var oy = typeof ev.offsetY === 'number' ? ev.offsetY : (ev.zrY != null ? ev.zrY : 0);
@@ -1475,32 +1474,7 @@
                     hoveredBank = next;
                     updateProductVisibility();
                 }
-                var _ribbonFocus = ribbonChartHighlightBank();
-                // #region agent log
-                var _arl = Date.now();
-                if (_arl - _agentRibbonLogAt >= 450) {
-                    _agentRibbonLogAt = _arl;
-                    fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
-                        body: JSON.stringify({
-                            sessionId: 'f5b4c8',
-                            hypothesisId: 'H6',
-                            location: 'ar-chart-report-plot-shared.js:onRibbonZrMouseMove',
-                            message: 'ribbon focus',
-                            data: {
-                                bandPick: String(next || ''),
-                                hoveredBank: String(hoveredBank || ''),
-                                trayHover: String(ribbonTrayHoverBank || ''),
-                                productBank: String(ribbonProductBank || ''),
-                                resolvedFocus: String(_ribbonFocus || ''),
-                            },
-                            timestamp: _arl,
-                        }),
-                    }).catch(function () {});
-                }
-                // #endregion
-                applyRibbonBankHighlightState(_ribbonFocus);
+                applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 var prevPh = ribbonChartHoverProductKey;
                 var pbMove = ribbonPanelBank();
                 if (pbMove && !selectedProductName && next && normRibbonBankName(next) === normRibbonBankName(pbMove)) {
