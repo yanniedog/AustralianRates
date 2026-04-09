@@ -107,20 +107,33 @@ async function gotoPublic(page, url) {
     await page.waitForTimeout(2500);
 }
 
-async function waitForExplorerTableReady(page, timeout = 25000) {
+async function waitForExplorerTableReady(page, timeout = 40000) {
     // Chart is the default tab; the table lives in a hidden panel until Table is selected.
-    await page.locator('#tab-explorer').click({ timeout: 15000 }).catch(() => {});
-    await page.waitForFunction(() => {
-        const panel = document.getElementById('panel-explorer');
-        return !!(panel && !panel.hidden);
-    }, null, { timeout: 10000 }).catch(() => {});
-    await page.waitForFunction(() => {
+    async function openExplorerPanel() {
+        await page.locator('#tab-explorer').scrollIntoViewIfNeeded().catch(() => {});
+        await page.locator('#tab-explorer').click({ timeout: 15000 }).catch(() => {});
+        await page.waitForFunction(() => {
+            const panel = document.getElementById('panel-explorer');
+            return !!(panel && !panel.hidden);
+        }, null, { timeout: 15000 }).catch(() => null);
+    }
+
+    const tableReady = () => {
         const table = document.getElementById('rate-table');
         if (!table) return false;
         if (table.querySelectorAll('.tabulator-row').length > 0) return true;
         const placeholder = table.querySelector('.tabulator-placeholder');
         return !!(placeholder && String(placeholder.textContent || '').trim().length > 0);
-    }, null, { timeout });
+    };
+
+    await openExplorerPanel();
+    try {
+        await page.waitForFunction(tableReady, null, { timeout });
+    } catch {
+        await openExplorerPanel();
+        await page.waitForTimeout(400);
+        await page.waitForFunction(tableReady, null, { timeout });
+    }
 }
 
 async function waitForMobileRailVisible(page, timeout = 15000) {
