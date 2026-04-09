@@ -252,6 +252,8 @@
             var viewStartPlot = reportRange === 'All'
                 ? dataMinPlot
                 : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
+            var tBandsSav = th();
+            var infoBoxBandsSav = createInfoBox(tBandsSav);
             return reportPlot.render({
                 container: container,
                 section: section,
@@ -267,12 +269,13 @@
                     viewStart: viewStartPlot,
                     chartStart: viewStartPlot,
                 },
-                theme: th(),
+                theme: tBandsSav,
                 rbaHistory: rbaHistory,
                 cpiData: cpiData,
                 economicOverlaySeries: economicOverlaySeries,
                 bankColor: bankColor,
                 noteText: '',
+                infoBox: infoBoxBandsSav,
                 onReRender: function () {
                     render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
                 },

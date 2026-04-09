@@ -271,6 +271,8 @@
             var resolvedTermLabel = plotPayload && plotPayload.meta && plotPayload.meta.resolved_term_months != null
                 ? String(plotPayload.meta.resolved_term_months) + '-Month Term'
                 : '';
+            var tBandsTd = th();
+            var infoBoxBandsTd = createInfoBox(tBandsTd);
             return reportPlot.render({
                 container: container,
                 section: section,
@@ -286,12 +288,13 @@
                     viewStart: viewStartPlot,
                     chartStart: viewStartPlot,
                 },
-                theme: th(),
+                theme: tBandsTd,
                 rbaHistory: rbaHistory,
                 cpiData: cpiData,
                 economicOverlaySeries: economicOverlaySeries,
                 bankColor: bankColor,
                 noteText: resolvedTermLabel,
+                infoBox: infoBoxBandsTd,
                 onReRender: function () {
                     render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
                 },

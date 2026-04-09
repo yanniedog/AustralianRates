@@ -18,6 +18,45 @@
         return dates;
     }
 
+    /** Above this count, product polylines use a batched canvas overlay (LOD) instead of one ECharts series each. */
+    var RIBBON_ECHARTS_PRODUCT_CAP = 200;
+
+    function hexToRgba(hex, alpha) {
+        var h = String(hex || '').trim();
+        if (h.indexOf('rgba(') === 0 || h.indexOf('rgb(') === 0) return h;
+        if (h.charAt(0) === '#') h = h.slice(1);
+        if (h.length === 3) {
+            h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+        }
+        if (h.length !== 6) return 'rgba(100,116,139,' + String(alpha) + ')';
+        var r = parseInt(h.slice(0, 2), 16);
+        var g = parseInt(h.slice(2, 4), 16);
+        var b = parseInt(h.slice(4, 6), 16);
+        if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return 'rgba(100,116,139,' + String(alpha) + ')';
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + String(alpha) + ')';
+    }
+
+    function computeRibbonLodIndices(dateCount, maxCols) {
+        if (!Number.isFinite(dateCount) || dateCount <= 1) return null;
+        var cap = Math.max(32, Math.floor(maxCols) + 2);
+        if (dateCount <= cap) return null;
+        var out = [];
+        var step = dateCount / cap;
+        for (var i = 0; i < dateCount; i += Math.max(1, Math.floor(step))) {
+            out.push(Math.min(dateCount - 1, Math.floor(i)));
+        }
+        if (out[out.length - 1] !== dateCount - 1) out.push(dateCount - 1);
+        return out;
+    }
+
+    /**
+     * Ribbon touch: tap reveals products for the bank whose inner band contains the tap (same inner band as hover).
+     * Mouse: move within the inner band to reveal; edge of ribbon stays masked.
+     */
+    function ribbonTouchNote() {
+        return 'Ribbon: move the pointer over the middle of a bank\u2019s band to show products; tap inside the band on touch.';
+    }
+
     /** When report-plot bands/moves payload has no points, use visible series dates so the chart window matches the main data. */
     function fallbackSeriesDateBoundsFromModel(model) {
         var all = model && (model.allSeries || model.visibleSeries) || [];
@@ -119,6 +158,10 @@
                 var point = byDate[date];
                 return [date, point != null && Number.isFinite(Number(point.mean_rate)) ? Number(point.mean_rate) : null];
             });
+            var maxData = dates.map(function (date) {
+                var point = byDate[date];
+                return [date, point != null ? Number(point.max_rate) : null];
+            });
             var stackKey = 'band_' + series.bank_name;
             // Lower edge: sets the base of the ribbon (transparent fill, min line at full opacity)
             out.push({
@@ -148,7 +191,19 @@
                 data: deltaData,
                 z: 2,
             });
-            // Mean line
+            // Max boundary: full-opacity bank colour (explicit top edge)
+            out.push({
+                id: 'ribbon_max_' + index,
+                name: series.bank_name + ' max',
+                type: 'line',
+                yAxisIndex: 0,
+                symbol: 'none',
+                connectNulls: true,
+                lineStyle: { color: color, width: 1.5, opacity: 1 },
+                data: maxData,
+                z: 3,
+            });
+            // Mean line: solid, full bank colour
             out.push({
                 id: 'ribbon_mean_' + index,
                 name: series.bank_name + ' mean',
@@ -156,15 +211,15 @@
                 yAxisIndex: 0,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.5, type: 'dashed', opacity: 0.85 },
+                lineStyle: { color: color, width: 1.5, opacity: 1 },
                 data: meanData,
-                z: 3,
+                z: 4,
             });
         });
         return out;
     }
 
-    /** Build hidden product overlay lines for ribbon hover reveal. */
+    /** Build hidden product overlay lines for ribbon hover reveal (ECharts path when product count <= cap). */
     function buildProductOverlay(dates, allSeries, bankColor) {
         var out = [];
         if (!allSeries || !allSeries.length) return out;
@@ -175,7 +230,7 @@
             if (!bn) return;
             var bk = bn.toLowerCase();
             if (bankIndexMap[bk] == null) { bankIndexMap[bk] = bankCount++; }
-            var color = bankColor(bn, bankIndexMap[bk]);
+            var baseHex = bankColor(bn, bankIndexMap[bk]);
             var pn = String(s.productName || 'Unknown');
             var byDate = {};
             (s.points || []).forEach(function (p) {
@@ -197,13 +252,54 @@
                 yAxisIndex: 0,
                 symbol: 'none',
                 connectNulls: true,
-                lineStyle: { color: color, width: 1.2, opacity: 0 },
+                lineStyle: { color: hexToRgba(baseHex, 0.5), width: 1.2, opacity: 0 },
                 silent: true,
                 data: data,
-                z: 4,
+                z: 5,
+                _ribbonBaseHex: baseHex,
             });
         });
         return out;
+    }
+
+    /** Flat list + per-bank groups for ribbon canvas overlay and hit-testing. */
+    function buildRibbonCanvasProductModel(dates, allSeries, bankColor) {
+        var flat = [];
+        var byBank = {};
+        if (!allSeries || !allSeries.length) return { flat: flat, byBank: byBank, count: 0 };
+        var bankIndexMap = {};
+        var bankCount = 0;
+        allSeries.forEach(function (s) {
+            var bn = String(s.bankName || '').trim();
+            if (!bn) return;
+            var bk = bn.toLowerCase();
+            if (bankIndexMap[bk] == null) { bankIndexMap[bk] = bankCount++; }
+            var baseHex = bankColor(bn, bankIndexMap[bk]);
+            var pn = String(s.productName || 'Unknown');
+            var byDate = {};
+            (s.points || []).forEach(function (p) {
+                var d = String(p.date || '').slice(0, 10);
+                var v = Number(p.value);
+                if (d && Number.isFinite(v)) byDate[d] = v;
+            });
+            var hasData = false;
+            for (var di = 0; di < dates.length; di++) {
+                if (byDate[dates[di]] != null) { hasData = true; break; }
+            }
+            if (!hasData) return;
+            var key = '[P]' + bn + '|' + pn;
+            var entry = {
+                key: key,
+                bankName: bn,
+                productName: pn,
+                baseHex: baseHex,
+                byDate: byDate,
+            };
+            flat.push(entry);
+            if (!byBank[bn]) byBank[bn] = [];
+            byBank[bn].push(entry);
+        });
+        return { flat: flat, byBank: byBank, count: flat.length };
     }
 
     function createMovesStrip(options) {
@@ -448,17 +544,28 @@
 
         var productOverlay = [];
         var isBandsMode = plotPayload && plotPayload.mode === 'bands';
+        var ribbonCanvasModel = { flat: [], byBank: {}, count: 0 };
+        var useRibbonCanvas = false;
+        var ribbonCanvas = null;
+        var ribbonCanvasCtx = null;
+        var ribbonLodIndices = null;
+        var ribbonRaf = null;
+        var zrRibbonSubs = [];
+
         if (isBandsMode) {
             series = series.concat(buildBandSeries({
                 dates: dates,
                 plotPayload: plotPayload,
                 bankColor: options.bankColor,
             }));
-            productOverlay = buildProductOverlay(dates, options.allSeries || [], options.bankColor);
-            series = series.concat(productOverlay);
+            ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor);
+            useRibbonCanvas = ribbonCanvasModel.count > RIBBON_ECHARTS_PRODUCT_CAP;
+            if (!useRibbonCanvas) {
+                productOverlay = buildProductOverlay(dates, options.allSeries || [], options.bankColor);
+                series = series.concat(productOverlay);
+            }
         }
 
-        // Pre-build lookup structures for ribbon tooltip and hover
         var bandByDateByBank = {};
         var knownBanks = {};
         if (isBandsMode && plotPayload.series) {
@@ -472,28 +579,65 @@
             });
         }
 
-        // Product series grouped by bank for quick hover updates
-        var productByBank = {};
-        productOverlay.forEach(function (s) {
-            var rest = s.name.slice(3); // strip '[P]'
-            var pipe = rest.indexOf('|');
-            var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-            if (!productByBank[bn]) productByBank[bn] = [];
-            productByBank[bn].push({ id: s.id, color: s.lineStyle.color });
-        });
-
         var hoveredBank = '';
         var selectedProductName = '';
+
+        function resolveDateFromAxisValue(xRaw) {
+            if (xRaw == null) return '';
+            if (typeof xRaw === 'number' && Number.isFinite(xRaw)) {
+                var i = Math.round(xRaw);
+                if (i >= 0 && i < dates.length) return dates[i];
+            }
+            var s = String(xRaw).slice(0, 10);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s) && dates.indexOf(s) >= 0) return s;
+            return '';
+        }
+
+        function bankInInnerBandAtDate(bankName, yVal, dateStr) {
+            var p = bandByDateByBank[bankName] && bandByDateByBank[bankName][dateStr];
+            if (!p) return false;
+            var lo = Number(p.min_rate);
+            var hi = Number(p.max_rate);
+            if (!Number.isFinite(lo) || !Number.isFinite(hi) || !Number.isFinite(yVal)) return false;
+            var span = hi - lo;
+            var margin = span > 1e-9 ? span * 0.15 : 0.02;
+            var innerLo = lo + margin;
+            var innerHi = hi - margin;
+            if (innerLo >= innerHi) {
+                innerLo = lo;
+                innerHi = hi;
+            }
+            return yVal >= innerLo && yVal <= innerHi;
+        }
+
+        function pickBankFromInnerBand(dateStr, yVal) {
+            if (!dateStr) return '';
+            var candidates = [];
+            Object.keys(knownBanks).forEach(function (bn) {
+                if (bankInInnerBandAtDate(bn, yVal, dateStr)) {
+                    var p = bandByDateByBank[bn][dateStr];
+                    var w = Number(p.max_rate) - Number(p.min_rate);
+                    candidates.push({ bn: bn, w: Number.isFinite(w) ? w : 0 });
+                }
+            });
+            candidates.sort(function (a, b) { return a.w - b.w; });
+            return candidates.length ? candidates[0].bn : '';
+        }
 
         function resolveHoverBank(seriesName) {
             if (!seriesName) return '';
             if (seriesName.endsWith(' ribbon')) return seriesName.slice(0, -7);
             if (seriesName.endsWith(' mean')) return seriesName.slice(0, -5);
+            if (seriesName.endsWith(' max')) return seriesName.slice(0, -4);
             if (knownBanks[seriesName]) return seriesName;
             return '';
         }
 
         function updateProductVisibility() {
+            if (useRibbonCanvas) {
+                scheduleRibbonRedraw();
+                return;
+            }
             if (!productOverlay.length) return;
             var updates = [];
             productOverlay.forEach(function (s) {
@@ -502,17 +646,150 @@
                 var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
                 var show = bn === hoveredBank;
                 var isSelected = s.name === selectedProductName;
+                var base = s._ribbonBaseHex || '#64748b';
                 updates.push({
                     id: s.id,
                     lineStyle: {
-                        color: s.lineStyle.color,
+                        color: hexToRgba(base, isSelected ? 0.85 : 0.5),
                         width: isSelected ? 2.5 : 1.2,
-                        opacity: isSelected ? 0.85 : (show ? 0.5 : 0),
+                        opacity: show ? 1 : 0,
                     },
                     silent: !show,
                 });
             });
             chart.setOption({ series: updates });
+        }
+
+        function syncRibbonCanvasSize() {
+            if (!ribbonCanvas) return;
+            var w = mount.clientWidth || 0;
+            var h = mount.clientHeight || 0;
+            var dpr = window.devicePixelRatio || 1;
+            ribbonCanvas.style.width = w + 'px';
+            ribbonCanvas.style.height = h + 'px';
+            ribbonCanvas.width = Math.max(1, Math.floor(w * dpr));
+            ribbonCanvas.height = Math.max(1, Math.floor(h * dpr));
+            if (ribbonCanvasCtx) ribbonCanvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function recomputeRibbonLod() {
+            if (!useRibbonCanvas || !dates.length) {
+                ribbonLodIndices = null;
+                return;
+            }
+            var w = mount.clientWidth || 800;
+            var approxCols = Math.max(100, Math.floor(w * 0.85));
+            ribbonLodIndices = computeRibbonLodIndices(dates.length, approxCols);
+        }
+
+        function redrawRibbonCanvas() {
+            if (!useRibbonCanvas || !ribbonCanvasCtx) return;
+            syncRibbonCanvasSize();
+            var ctx = ribbonCanvasCtx;
+            ctx.clearRect(0, 0, ribbonCanvas.width, ribbonCanvas.height);
+            if (!hoveredBank) return;
+            var prods = ribbonCanvasModel.byBank[hoveredBank];
+            if (!prods || !prods.length) return;
+            var idxs = ribbonLodIndices;
+            prods.forEach(function (prod) {
+                var isSel = prod.key === selectedProductName;
+                ctx.beginPath();
+                var first = true;
+                function plotAt(di) {
+                    var d = dates[di];
+                    var v = prod.byDate[d];
+                    if (v == null) return;
+                    var pix = chart.convertToPixel({ gridIndex: 0 }, [d, v]);
+                    if (!pix || pix.length < 2 || !Number.isFinite(pix[0]) || !Number.isFinite(pix[1])) return;
+                    if (first) {
+                        ctx.moveTo(pix[0], pix[1]);
+                        first = false;
+                    } else {
+                        ctx.lineTo(pix[0], pix[1]);
+                    }
+                }
+                if (idxs && idxs.length) {
+                    for (var ii = 0; ii < idxs.length; ii++) plotAt(idxs[ii]);
+                } else {
+                    for (var di = 0; di < dates.length; di++) plotAt(di);
+                }
+                if (first) return;
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = hexToRgba(prod.baseHex, isSel ? 0.85 : 0.5);
+                ctx.lineWidth = isSel ? 2.5 : 1.2;
+                ctx.stroke();
+            });
+        }
+
+        function scheduleRibbonRedraw() {
+            if (!useRibbonCanvas) return;
+            if (ribbonRaf != null) return;
+            ribbonRaf = window.requestAnimationFrame(function () {
+                ribbonRaf = null;
+                redrawRibbonCanvas();
+            });
+        }
+
+        function ribbonCanvasPickProduct(offsetX, offsetY) {
+            var data = chart.convertFromPixel({ gridIndex: 0 }, [offsetX, offsetY]);
+            if (!data || data.length < 2) return null;
+            var dateStr = resolveDateFromAxisValue(data[0]);
+            if (!dateStr || !hoveredBank) return null;
+            var prods = ribbonCanvasModel.byBank[hoveredBank];
+            if (!prods) return null;
+            var best = null;
+            var bestDist = Infinity;
+            prods.forEach(function (prod) {
+                var v = prod.byDate[dateStr];
+                if (v == null) return;
+                var pix = chart.convertToPixel({ gridIndex: 0 }, [dateStr, v]);
+                if (!pix || pix.length < 2) return;
+                var dx = pix[0] - offsetX;
+                var dy = pix[1] - offsetY;
+                var dist = dx * dx + dy * dy;
+                if (dist < bestDist && Math.abs(dx) < 28) {
+                    bestDist = dist;
+                    best = { prod: prod, rate: v, date: dateStr };
+                }
+            });
+            if (best && bestDist < 1600) return best;
+            return null;
+        }
+
+        function showRibbonInfoBox(pick) {
+            var ib = options.infoBox;
+            if (!ib || typeof ib.show !== 'function' || !pick) return;
+            ib.show({
+                heading: pick.date,
+                meta: M.selectionMetaText ? M.selectionMetaText({
+                    selectionYmd: pick.date,
+                    rate: pick.rate,
+                    entries: [{ bankName: pick.prod.bankName, productName: pick.prod.productName, rate: pick.rate, color: pick.prod.baseHex, selectionKey: pick.prod.key, subtitle: '' }],
+                }) : '',
+                items: [{
+                    bankName: pick.prod.bankName,
+                    productName: pick.prod.productName,
+                    rate: pick.rate,
+                    color: pick.prod.baseHex,
+                    selectionKey: pick.prod.key,
+                    subtitle: '',
+                }],
+            });
+        }
+
+        function hideRibbonInfoBox() {
+            var ib = options.infoBox;
+            if (ib && typeof ib.hide === 'function') ib.hide();
+        }
+
+        function bankColorIndexForName(bn) {
+            var want = String(bn || '').trim();
+            for (var i = 0; i < bankList.length; i++) {
+                var entry = bankList[i];
+                var full = typeof entry === 'string' ? entry : (entry && entry.full);
+                if (String(full || '').trim() === want) return i;
+            }
+            return 0;
         }
 
         // Custom tooltip for bands mode
@@ -539,13 +816,23 @@
                             parts.push('<span style="color:' + c + ';">\u25A0</span> <b>' + bank.bank_name + '</b>: ' +
                                 Number(point.min_rate).toFixed(2) + ' \u2013 ' + Number(point.max_rate).toFixed(2) + '% (avg ' + Number(point.mean_rate).toFixed(2) + '%)');
                             if (hoveredBank === bank.bank_name) {
-                                params.forEach(function (p) {
-                                    if (p.seriesName && p.seriesName.indexOf('[P]' + bank.bank_name + '|') === 0 && p.value && p.value[1] != null) {
-                                        var prodName = p.seriesName.slice(3 + bank.bank_name.length + 1);
-                                        var sel = p.seriesName === selectedProductName;
-                                        parts.push('&nbsp;&nbsp;\u00b7 ' + (sel ? '<b>' : '') + prodName + ': ' + Number(p.value[1]).toFixed(2) + '%' + (sel ? '</b>' : ''));
-                                    }
-                                });
+                                if (useRibbonCanvas) {
+                                    var plist = ribbonCanvasModel.byBank[hoveredBank] || [];
+                                    plist.forEach(function (prod) {
+                                        var v = prod.byDate[date];
+                                        if (v == null) return;
+                                        var sel = prod.key === selectedProductName;
+                                        parts.push('&nbsp;&nbsp;\u00b7 ' + (sel ? '<b>' : '') + prod.productName + ': ' + Number(v).toFixed(2) + '%' + (sel ? '</b>' : ''));
+                                    });
+                                } else {
+                                    params.forEach(function (p) {
+                                        if (p.seriesName && p.seriesName.indexOf('[P]' + bank.bank_name + '|') === 0 && p.value && p.value[1] != null) {
+                                            var prodName = p.seriesName.slice(3 + bank.bank_name.length + 1);
+                                            var sel = p.seriesName === selectedProductName;
+                                            parts.push('&nbsp;&nbsp;\u00b7 ' + (sel ? '<b>' : '') + prodName + ': ' + Number(p.value[1]).toFixed(2) + '%' + (sel ? '</b>' : ''));
+                                        }
+                                    });
+                                }
                             }
                         });
                     }
@@ -554,6 +841,10 @@
             };
         } else {
             tooltipConfig = { trigger: 'axis', axisPointer: { type: 'line' } };
+        }
+
+        if (options.infoBox && options.infoBox.el) {
+            wrapper.appendChild(options.infoBox.el);
         }
 
         chart.setOption({
@@ -591,38 +882,127 @@
             series: series,
         });
 
-        // Wire up ribbon hover/click interactivity
-        if (isBandsMode && productOverlay.length) {
-            chart.on('mouseover', function (params) {
-                var bank = resolveHoverBank(params.seriesName);
-                if (!bank || bank === hoveredBank) return;
-                hoveredBank = bank;
-                updateProductVisibility();
-            });
-            chart.on('globalout', function () {
+        if (isBandsMode && useRibbonCanvas) {
+            ribbonCanvas = document.createElement('canvas');
+            ribbonCanvas.className = 'lwc-ribbon-products-canvas';
+            ribbonCanvas.setAttribute('aria-hidden', 'true');
+            ribbonCanvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:4;';
+            mount.appendChild(ribbonCanvas);
+            ribbonCanvasCtx = ribbonCanvas.getContext('2d');
+            mount.setAttribute('title', ribbonTouchNote());
+        }
+
+        if (isBandsMode && (productOverlay.length || useRibbonCanvas)) {
+            var zr = chart.getZr();
+            function ribbonZrXY(ev) {
+                var ox = typeof ev.offsetX === 'number' ? ev.offsetX : (ev.zrX != null ? ev.zrX : 0);
+                var oy = typeof ev.offsetY === 'number' ? ev.offsetY : (ev.zrY != null ? ev.zrY : 0);
+                return [ox, oy];
+            }
+            function onRibbonZrMouseMove(ev) {
+                var xy = ribbonZrXY(ev);
+                var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
+                if (!data || data.length < 2) return;
+                var dateStr = resolveDateFromAxisValue(data[0]);
+                var yVal = data[1];
+                var next = pickBankFromInnerBand(dateStr, yVal);
+                if (next !== hoveredBank) {
+                    hoveredBank = next;
+                    updateProductVisibility();
+                }
+            }
+            function onRibbonZrGlobalOut() {
                 if (selectedProductName) return;
                 hoveredBank = '';
                 updateProductVisibility();
-            });
-            chart.on('click', function (params) {
-                var name = params.seriesName || '';
-                if (name.indexOf('[P]') === 0) {
-                    if (selectedProductName === name) {
+            }
+            function onRibbonZrClick(ev) {
+                if (!useRibbonCanvas) return;
+                var xy = ribbonZrXY(ev);
+                var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
+                var dateStr = data && data.length >= 2 ? resolveDateFromAxisValue(data[0]) : '';
+                var yVal = data && data.length >= 2 ? data[1] : NaN;
+                var tapBank = pickBankFromInnerBand(dateStr, yVal);
+                if (tapBank) hoveredBank = tapBank;
+                var pick = ribbonCanvasPickProduct(xy[0], xy[1]);
+                if (pick) {
+                    if (selectedProductName === pick.prod.key) {
                         selectedProductName = '';
+                        hideRibbonInfoBox();
                     } else {
-                        selectedProductName = name;
+                        selectedProductName = pick.prod.key;
+                        showRibbonInfoBox(pick);
                     }
-                    var rest = name.slice(3);
-                    var pipe = rest.indexOf('|');
-                    hoveredBank = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                    updateProductVisibility();
-                } else {
-                    var bank = resolveHoverBank(name);
-                    if (selectedProductName) {
-                        selectedProductName = '';
-                        hoveredBank = bank || '';
+                    scheduleRibbonRedraw();
+                    return;
+                }
+                if (selectedProductName) {
+                    selectedProductName = '';
+                    hideRibbonInfoBox();
+                    hoveredBank = tapBank || hoveredBank;
+                    scheduleRibbonRedraw();
+                }
+            }
+            zr.on('mousemove', onRibbonZrMouseMove);
+            zr.on('globalout', onRibbonZrGlobalOut);
+            zr.on('click', onRibbonZrClick);
+            zrRibbonSubs.push({ type: 'mousemove', fn: onRibbonZrMouseMove });
+            zrRibbonSubs.push({ type: 'globalout', fn: onRibbonZrGlobalOut });
+            zrRibbonSubs.push({ type: 'click', fn: onRibbonZrClick });
+
+            if (!useRibbonCanvas) {
+                chart.on('click', function (params) {
+                    var name = params.seriesName || '';
+                    if (name.indexOf('[P]') === 0) {
+                        var rest = name.slice(3);
+                        var pipe = rest.indexOf('|');
+                        var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
+                        var pn = pipe >= 0 ? rest.slice(pipe + 1) : '';
+                        var rate = params.value && params.value[1] != null ? Number(params.value[1]) : null;
+                        var dateStr = params.value && params.value[0] != null ? String(params.value[0]).slice(0, 10) : '';
+                        if (selectedProductName === name) {
+                            selectedProductName = '';
+                            hideRibbonInfoBox();
+                        } else {
+                            selectedProductName = name;
+                            hoveredBank = bn;
+                            if (options.infoBox && typeof options.infoBox.show === 'function' && rate != null && Number.isFinite(rate)) {
+                                var baseHex = options.bankColor(bn, bankColorIndexForName(bn));
+                                options.infoBox.show({
+                                    heading: dateStr,
+                                    meta: M.selectionMetaText ? M.selectionMetaText({
+                                        selectionYmd: dateStr,
+                                        rate: rate,
+                                        entries: [{ bankName: bn, productName: pn, rate: rate, color: baseHex, selectionKey: name, subtitle: '' }],
+                                    }) : '',
+                                    items: [{
+                                        bankName: bn,
+                                        productName: pn,
+                                        rate: rate,
+                                        color: baseHex,
+                                        selectionKey: name,
+                                        subtitle: '',
+                                    }],
+                                });
+                            }
+                        }
                         updateProductVisibility();
+                    } else {
+                        var bank = resolveHoverBank(name);
+                        if (selectedProductName) {
+                            selectedProductName = '';
+                            hideRibbonInfoBox();
+                            hoveredBank = bank || '';
+                            updateProductVisibility();
+                        }
                     }
+                });
+            }
+
+            chart.on('finished', function () {
+                if (useRibbonCanvas) {
+                    recomputeRibbonLod();
+                    scheduleRibbonRedraw();
                 }
             });
         }
@@ -632,11 +1012,28 @@
             chart: {
                 resize: function (width, height) {
                     chart.resize({ width: width, height: height });
+                    if (useRibbonCanvas) {
+                        recomputeRibbonLod();
+                        scheduleRibbonRedraw();
+                    }
                 },
             },
             kind: options.reportViewKind || 'report-plot',
             dispose: function () {
-                chart.dispose();
+                if (ribbonRaf != null) {
+                    try { window.cancelAnimationFrame(ribbonRaf); } catch (_) {}
+                    ribbonRaf = null;
+                }
+                if (zrRibbonSubs.length) {
+                    try {
+                        var zr2 = chart.getZr();
+                        zrRibbonSubs.forEach(function (sub) {
+                            try { zr2.off(sub.type, sub.fn); } catch (_) {}
+                        });
+                    } catch (_) {}
+                }
+                zrRibbonSubs = [];
+                try { chart.dispose(); } catch (_) {}
                 if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
             },
         };

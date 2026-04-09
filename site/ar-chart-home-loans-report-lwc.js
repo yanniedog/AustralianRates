@@ -285,6 +285,8 @@
             var viewStartPlot = reportRange === 'All'
                 ? dataMinPlot
                 : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
+            var tBands = theme();
+            var infoBoxBands = createInfoBox(tBands);
             return reportPlot.render({
                 container: container,
                 section: section,
@@ -300,12 +302,13 @@
                     viewStart: viewStartPlot,
                     chartStart: viewStartPlot,
                 },
-                theme: theme(),
+                theme: tBands,
                 rbaHistory: rbaHistory,
                 cpiData: cpiData,
                 economicOverlaySeries: economicOverlaySeries,
                 bankColor: bankColor,
                 noteText: contextLabel(),
+                infoBox: infoBoxBands,
                 onReRender: function () {
                     render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
                 },
