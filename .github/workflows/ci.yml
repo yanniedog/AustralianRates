@@ -39,23 +39,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck API
-        run: npm run typecheck:api
-
-      - name: Typecheck repo scripts
-        run: npm run typecheck:scripts
-
-      - name: Typecheck mobile-site-qa worker
-        run: npm run typecheck:mobile-site-qa
+      # Three tsc runs are independent; parallel saves wall time vs serial (~2× on 2-core runners).
+      - name: Typecheck (API, scripts, mobile-site-qa in parallel)
+        run: |
+          ec=0
+          npm run typecheck:api & p1=$!
+          npm run typecheck:scripts & p2=$!
+          npm run typecheck:mobile-site-qa & p3=$!
+          wait $p1 || ec=1
+          wait $p2 || ec=1
+          wait $p3 || ec=1
+          exit $ec
 
       - name: Build (assets, vendor bundle, prototype, site version)
         run: npm run build
 
-      - name: Test archive worker
-        run: npm run test:archive
-
-      - name: Test API worker
-        run: npm run test:api
+      # Archive uses vitest-pool-workers; API unit tests are plain Vitest — safe to overlap.
+      - name: Test archive + API unit tests (parallel)
+        run: |
+          ec=0
+          npm run test:archive & p1=$!
+          npm run test:api & p2=$!
+          wait $p1 || ec=1
+          wait $p2 || ec=1
+          exit $ec
 
       - name: API integration tests
         run: npm run test:integration -w workers/api
