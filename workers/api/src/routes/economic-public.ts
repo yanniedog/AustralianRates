@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { getEconomicObservationsForSeries, getEconomicStatusMap, expandEconomicObservationsDaily } from '../db/economic-series'
 import { ECONOMIC_PRESETS, ECONOMIC_SERIES_DEFINITIONS, getEconomicPreset, getEconomicSeriesDefinition, groupEconomicSeriesByCategory } from '../economic/registry'
+import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import { registerDebugLogRoutes } from './debug-log'
@@ -90,7 +91,7 @@ economicPublicRoutes.get('/health', async (c) => {
 
 economicPublicRoutes.get('/catalog', async (c) => {
   withPublicCache(c, 3600)
-  const statusMap = await getEconomicStatusMap(c.env.DB)
+  const statusMap = await getEconomicStatusMap(getReadDb(c))
   const categories = groupEconomicSeriesByCategory().map((category) => ({
     id: category.id,
     label: category.label,
@@ -133,12 +134,12 @@ economicPublicRoutes.get('/series', async (c) => {
   }
   const { startDate, endDate } = clampDateRange(requestedStartDate, requestedEndDate)
 
-  const statusMap = await getEconomicStatusMap(c.env.DB, ids)
+  const statusMap = await getEconomicStatusMap(getReadDb(c), ids)
   const series = await Promise.all(
     ids.map(async (id) => {
       const definition = getEconomicSeriesDefinition(id)
       if (!definition) return null
-      const observations = await getEconomicObservationsForSeries(c.env.DB, id, startDate, endDate)
+      const observations = await getEconomicObservationsForSeries(getReadDb(c), id, startDate, endDate)
       const expanded = expandEconomicObservationsDaily(observations, startDate, endDate)
       return {
         id: definition.id,

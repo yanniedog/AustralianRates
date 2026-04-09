@@ -77,7 +77,7 @@ registerSiteUiPublicRoute(tdPublicRoutes)
 
 tdPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)
-  const overview = await getLandingOverview(c.env.DB, 'term_deposits')
+  const overview = await getLandingOverview(getReadDb(c), 'term_deposits')
   return c.json({ ok: true, ...overview })
 })
 
@@ -88,20 +88,20 @@ tdPublicRoutes.get('/health', (c) => {
 
 tdPublicRoutes.get('/staleness', async (c) => {
   withPublicCache(c, 60)
-  const staleness = await getTdStaleness(c.env.DB)
+  const staleness = await getTdStaleness(getReadDb(c))
   const staleLenders = staleness.filter((l) => l.stale)
   return c.json({ ok: true, stale_count: staleLenders.length, lenders: staleness })
 })
 
 tdPublicRoutes.get('/quality/diagnostics', async (c) => {
-  const diagnostics = await getTdQualityDiagnostics(c.env.DB)
+  const diagnostics = await getTdQualityDiagnostics(getReadDb(c))
   return c.json({ ok: true, diagnostics })
 })
 
 tdPublicRoutes.get('/executive-summary', async (c) => {
   withPublicCache(c, 120)
   const requestedWindowDays = Number(c.req.query('window_days') || 30)
-  const report = await queryExecutiveSummaryReport(c.env.DB, {
+  const report = await queryExecutiveSummaryReport(getReadDb(c), {
     windowDays: requestedWindowDays,
   })
   return c.json({
@@ -116,8 +116,8 @@ tdPublicRoutes.get('/changes', async (c) => {
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
   const [changeResult, integrity] = await Promise.all([
-    queryChangesWithFallback(c.env.DB, getReadDb(c.env), 'term_deposits', { limit, offset }, queryTdRateChanges),
-    queryIntegritySafely('term_deposits', () => queryTdRateChangeIntegrity(c.env.DB)),
+    queryChangesWithFallback(getReadDb(c), getReadDb(c), 'term_deposits', { limit, offset }, queryTdRateChanges),
+    queryIntegritySafely('term_deposits', () => queryTdRateChangeIntegrity(getReadDb(c))),
   ])
   return c.json({
     ok: true,
@@ -177,7 +177,7 @@ tdPublicRoutes.get('/filters', async (c) => {
     return cachedResponse
   }
 
-  const filters = await getTdFilters(c.env.DB)
+  const filters = await getTdFilters(getReadDb(c))
   const response = c.json({ ok: true, filters })
   storePublicReadCache(c, cacheKey, response)
   return response
@@ -197,7 +197,7 @@ tdPublicRoutes.get('/rates', async (c) => {
   const includeRemoved = parseIncludeRemoved(q.include_removed)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
-  const result = await queryTdRatesPaginated(c.env.DB, {
+  const result = await queryTdRatesPaginated(getReadDb(c), {
     page: Number(q.page || 1),
     size: Number(q.size || 50),
     startDate: q.start_date,
@@ -268,10 +268,10 @@ tdPublicRoutes.get('/latest', async (c) => {
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   let dbCountMs = 0
   const [rows, total] = await Promise.all([
-    queryLatestTdRates(c.env.DB, filters, latestTiming),
+    queryLatestTdRates(getReadDb(c), filters, latestTiming),
     (async () => {
       const countStartedAt = Date.now()
-      const value = await queryLatestTdRatesCount(c.env.DB, filters)
+      const value = await queryLatestTdRatesCount(getReadDb(c), filters)
       dbCountMs = Date.now() - countStartedAt
       return value
     })(),
@@ -318,7 +318,7 @@ tdPublicRoutes.get('/latest-all', async (c) => {
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
-  const rows = await queryLatestAllTdRates(c.env.DB, {
+  const rows = await queryLatestAllTdRates(getReadDb(c), {
     bank: q.bank,
     banks,
     termMonths: q.term_months,
@@ -373,7 +373,7 @@ tdPublicRoutes.get('/timeseries', async (c) => {
   }
 
   const result = await queryTdRepresentationTimeseriesResolved(
-    { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    { canonicalDb: getReadDb(c), analyticsDb: getReadDb(c) },
     representation,
     {
     bank: q.bank,
@@ -419,7 +419,7 @@ tdPublicRoutes.get('/timeseries', async (c) => {
 
 tdPublicRoutes.get('/coverage', async (c) => {
   withPublicCache(c, 60)
-  const coverage = await getLenderDatasetCoverage(c.env.DB, 'term_deposits', {
+  const coverage = await getLenderDatasetCoverage(getReadDb(c), 'term_deposits', {
     lenderCode: c.req.query('lender_code') || undefined,
     collectionDate: c.req.query('collection_date') || undefined,
     limit: Number(c.req.query('limit') || 200),
@@ -446,7 +446,7 @@ tdPublicRoutes.get('/export', async (c) => {
   const includeRemoved = parseIncludeRemoved(q.include_removed)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
-  const { data, total, source_mix } = await queryTdForExport(c.env.DB, {
+  const { data, total, source_mix } = await queryTdForExport(getReadDb(c), {
     startDate: q.start_date,
     endDate: q.end_date,
     bank: q.bank,
@@ -503,7 +503,7 @@ tdPublicRoutes.get('/export.csv', async (c) => {
     if (!productKey && !seriesKey) {
       return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries CSV export.')
     }
-  const rows = await queryTdTimeseries(c.env.DB, {
+  const rows = await queryTdTimeseries(getReadDb(c), {
       bank: q.bank,
       banks: parseCsvList(q.banks),
       productKey,
@@ -535,7 +535,7 @@ tdPublicRoutes.get('/export.csv', async (c) => {
     return c.body(toCsv(rows as Array<Record<string, unknown>>))
   }
 
-  const rows = await queryLatestTdRates(c.env.DB, {
+  const rows = await queryLatestTdRates(getReadDb(c), {
     bank: q.bank,
     banks: parseCsvList(q.banks),
     termMonths: q.term_months,

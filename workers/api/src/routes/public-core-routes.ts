@@ -17,7 +17,7 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
     withPublicCache(c, 60)
     const section = (c.req.query('section') || 'home_loans').trim() as 'home_loans' | 'savings' | 'term_deposits'
     const valid = section === 'home_loans' || section === 'savings' || section === 'term_deposits'
-    const overview = await getLandingOverview(c.env.DB, valid ? section : 'home_loans')
+    const overview = await getLandingOverview(getReadDb(c), valid ? section : 'home_loans')
     return c.json({ ok: true, ...overview })
   })
 
@@ -52,7 +52,7 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
 
   publicRoutes.get('/staleness', async (c) => {
     withPublicCache(c, 60)
-    const staleness = await getLenderStaleness(c.env.DB)
+    const staleness = await getLenderStaleness(getReadDb(c))
     const staleLenders = staleness.filter((l) => l.stale)
     return c.json({
       ok: true,
@@ -62,7 +62,7 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
   })
 
   publicRoutes.get('/quality/diagnostics', async (c) => {
-    const diagnostics = await getQualityDiagnostics(c.env.DB)
+    const diagnostics = await getQualityDiagnostics(getReadDb(c))
     return c.json({
       ok: true,
       diagnostics,
@@ -72,7 +72,7 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
   publicRoutes.get('/executive-summary', async (c) => {
     withPublicCache(c, 120)
     const requestedWindowDays = Number(c.req.query('window_days') || 30)
-    const report = await queryExecutiveSummaryReport(c.env.DB, {
+    const report = await queryExecutiveSummaryReport(getReadDb(c), {
       windowDays: requestedWindowDays,
     })
     return c.json({
@@ -87,8 +87,8 @@ export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
     const limit = Number(q.limit || 200)
     const offset = Number(q.offset || 0)
     const [changeResult, integrity] = await Promise.all([
-      queryChangesWithFallback(c.env.DB, getReadDb(c.env), 'home_loans', { limit, offset }, queryHomeLoanRateChanges),
-      queryIntegritySafely('home_loans', () => queryHomeLoanRateChangeIntegrity(c.env.DB)),
+      queryChangesWithFallback(getReadDb(c), getReadDb(c), 'home_loans', { limit, offset }, queryHomeLoanRateChanges),
+      queryIntegritySafely('home_loans', () => queryHomeLoanRateChangeIntegrity(getReadDb(c))),
     ])
     return c.json({
       ok: true,

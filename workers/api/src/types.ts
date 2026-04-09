@@ -275,6 +275,8 @@ export type AppContext = {
   Bindings: EnvBindings
   Variables: {
     adminAuthState?: AdminAuthState
+    /** Lazy D1 read session (replica-capable); see `getReadDb`. */
+    readD1?: D1Database
   }
 }
 

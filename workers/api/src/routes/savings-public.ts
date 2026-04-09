@@ -77,7 +77,7 @@ registerSiteUiPublicRoute(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)
-  const overview = await getLandingOverview(c.env.DB, 'savings')
+  const overview = await getLandingOverview(getReadDb(c), 'savings')
   return c.json({ ok: true, ...overview })
 })
 
@@ -88,20 +88,20 @@ savingsPublicRoutes.get('/health', (c) => {
 
 savingsPublicRoutes.get('/staleness', async (c) => {
   withPublicCache(c, 60)
-  const staleness = await getSavingsStaleness(c.env.DB)
+  const staleness = await getSavingsStaleness(getReadDb(c))
   const staleLenders = staleness.filter((l) => l.stale)
   return c.json({ ok: true, stale_count: staleLenders.length, lenders: staleness })
 })
 
 savingsPublicRoutes.get('/quality/diagnostics', async (c) => {
-  const diagnostics = await getSavingsQualityDiagnostics(c.env.DB)
+  const diagnostics = await getSavingsQualityDiagnostics(getReadDb(c))
   return c.json({ ok: true, diagnostics })
 })
 
 savingsPublicRoutes.get('/executive-summary', async (c) => {
   withPublicCache(c, 120)
   const requestedWindowDays = Number(c.req.query('window_days') || 30)
-  const report = await queryExecutiveSummaryReport(c.env.DB, {
+  const report = await queryExecutiveSummaryReport(getReadDb(c), {
     windowDays: requestedWindowDays,
   })
   return c.json({
@@ -116,8 +116,8 @@ savingsPublicRoutes.get('/changes', async (c) => {
   const limit = Number(q.limit || 200)
   const offset = Number(q.offset || 0)
   const [changeResult, integrity] = await Promise.all([
-    queryChangesWithFallback(c.env.DB, getReadDb(c.env), 'savings', { limit, offset }, querySavingsRateChanges),
-    queryIntegritySafely('savings', () => querySavingsRateChangeIntegrity(c.env.DB)),
+    queryChangesWithFallback(getReadDb(c), getReadDb(c), 'savings', { limit, offset }, querySavingsRateChanges),
+    queryIntegritySafely('savings', () => querySavingsRateChangeIntegrity(getReadDb(c))),
   ])
   return c.json({
     ok: true,
@@ -177,7 +177,7 @@ savingsPublicRoutes.get('/filters', async (c) => {
     return cachedResponse
   }
 
-  const filters = await getSavingsFilters(c.env.DB)
+  const filters = await getSavingsFilters(getReadDb(c))
   const response = c.json({ ok: true, filters })
   storePublicReadCache(c, cacheKey, response)
   return response
@@ -197,7 +197,7 @@ savingsPublicRoutes.get('/rates', async (c) => {
   const includeRemoved = parseIncludeRemoved(q.include_removed)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
-  const result = await querySavingsRatesPaginated(c.env.DB, {
+  const result = await querySavingsRatesPaginated(getReadDb(c), {
     page: Number(q.page || 1),
     size: Number(q.size || 50),
     startDate: q.start_date,
@@ -268,10 +268,10 @@ savingsPublicRoutes.get('/latest', async (c) => {
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   let dbCountMs = 0
   const [rows, total] = await Promise.all([
-    queryLatestSavingsRates(c.env.DB, filters, latestTiming),
+    queryLatestSavingsRates(getReadDb(c), filters, latestTiming),
     (async () => {
       const countStartedAt = Date.now()
-      const value = await queryLatestSavingsRatesCount(c.env.DB, filters)
+      const value = await queryLatestSavingsRatesCount(getReadDb(c), filters)
       dbCountMs = Date.now() - countStartedAt
       return value
     })(),
@@ -318,7 +318,7 @@ savingsPublicRoutes.get('/latest-all', async (c) => {
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
-  const rows = await queryLatestAllSavingsRates(c.env.DB, {
+  const rows = await queryLatestAllSavingsRates(getReadDb(c), {
     bank: q.bank,
     banks,
     accountType: q.account_type,
@@ -372,7 +372,7 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
   }
 
   const result = await querySavingsRepresentationTimeseriesResolved(
-    { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    { canonicalDb: getReadDb(c), analyticsDb: getReadDb(c) },
     representation,
     {
     bank: q.bank,
@@ -418,7 +418,7 @@ savingsPublicRoutes.get('/timeseries', async (c) => {
 
 savingsPublicRoutes.get('/coverage', async (c) => {
   withPublicCache(c, 60)
-  const coverage = await getLenderDatasetCoverage(c.env.DB, 'savings', {
+  const coverage = await getLenderDatasetCoverage(getReadDb(c), 'savings', {
     lenderCode: c.req.query('lender_code') || undefined,
     collectionDate: c.req.query('collection_date') || undefined,
     limit: Number(c.req.query('limit') || 200),
@@ -445,7 +445,7 @@ savingsPublicRoutes.get('/export', async (c) => {
   const includeRemoved = parseIncludeRemoved(q.include_removed)
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(q.exclude_compare_edge_cases)
 
-  const { data, total, source_mix } = await querySavingsForExport(c.env.DB, {
+  const { data, total, source_mix } = await querySavingsForExport(getReadDb(c), {
     startDate: q.start_date,
     endDate: q.end_date,
     bank: q.bank,
@@ -501,7 +501,7 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
     if (!productKey) {
       return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries CSV export.')
     }
-  const rows = await querySavingsTimeseries(c.env.DB, {
+  const rows = await querySavingsTimeseries(getReadDb(c), {
       bank: q.bank,
       banks: parseCsvList(q.banks),
       productKey,
@@ -533,7 +533,7 @@ savingsPublicRoutes.get('/export.csv', async (c) => {
     return c.body(toCsv(rows as Array<Record<string, unknown>>))
   }
 
-  const rows = await queryLatestSavingsRates(c.env.DB, {
+  const rows = await queryLatestSavingsRates(getReadDb(c), {
     bank: q.bank,
     banks: parseCsvList(q.banks),
     accountType: q.account_type,

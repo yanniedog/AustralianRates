@@ -113,7 +113,7 @@ publicRoutes.get('/filters', async (c) => {
     return cachedResponse
   }
 
-  const filters = await getFilters(c.env.DB)
+  const filters = await getFilters(getReadDb(c))
   const response = c.json({
     ok: true,
     filters,
@@ -162,7 +162,7 @@ publicRoutes.get('/rates', async (c) => {
 
   let result: Awaited<ReturnType<typeof queryRatesPaginated>>
   try {
-    result = await queryRatesPaginated(c.env.DB, filters)
+    result = await queryRatesPaginated(getReadDb(c), filters)
   } catch (err) {
     return handlePublicReadFailure(
       c,
@@ -209,7 +209,7 @@ publicRoutes.get('/export', async (c) => {
 
   let result: Awaited<ReturnType<typeof queryRatesForExport>>
   try {
-    result = await queryRatesForExport(c.env.DB, {
+    result = await queryRatesForExport(getReadDb(c), {
       startDate: query.start_date,
       endDate: query.end_date,
       bank: query.bank,
@@ -305,10 +305,10 @@ publicRoutes.get('/latest', async (c) => {
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
   let dbCountMs = 0
   const [rows, total] = await Promise.all([
-    queryLatestRates(c.env.DB, filters, latestTiming),
+    queryLatestRates(getReadDb(c), filters, latestTiming),
     (async () => {
       const countStartedAt = Date.now()
-      const value = await queryLatestRatesCount(c.env.DB, filters)
+      const value = await queryLatestRatesCount(getReadDb(c), filters)
       dbCountMs = Date.now() - countStartedAt
       return value
     })(),
@@ -362,7 +362,7 @@ publicRoutes.get('/latest-all', async (c) => {
   const excludeCompareEdgeCases = parseExcludeCompareEdgeCases(query.exclude_compare_edge_cases)
 
   const latestTiming: { dbMainMs?: number; detailHydrateMs?: number } = {}
-  const rows = await queryLatestAllRates(c.env.DB, {
+  const rows = await queryLatestAllRates(getReadDb(c), {
     bank: query.bank,
     banks,
     securityPurpose: query.security_purpose,
@@ -425,7 +425,7 @@ publicRoutes.get('/timeseries', async (c) => {
   }
 
   const result = await queryHomeLoanRepresentationTimeseriesResolved(
-    { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) },
+    { canonicalDb: getReadDb(c), analyticsDb: getReadDb(c) },
     representation,
     {
     bank: query.bank,
@@ -475,7 +475,7 @@ publicRoutes.get('/timeseries', async (c) => {
 
 publicRoutes.get('/coverage', async (c) => {
   withPublicCache(c, 60)
-  const coverage = await getLenderDatasetCoverage(c.env.DB, 'home_loans', {
+  const coverage = await getLenderDatasetCoverage(getReadDb(c), 'home_loans', {
     lenderCode: c.req.query('lender_code') || undefined,
     collectionDate: c.req.query('collection_date') || undefined,
     limit: Number(c.req.query('limit') || 200),
@@ -521,7 +521,7 @@ publicRoutes.get('/export.csv', async (c) => {
     if (!productKey) {
       return jsonError(c, 400, 'INVALID_REQUEST', 'product_key or series_key is required for timeseries CSV export.')
     }
-    const rows = await queryTimeseries(c.env.DB, {
+    const rows = await queryTimeseries(getReadDb(c), {
       bank: query.bank,
       banks: parseCsvList(query.banks),
       productKey,
@@ -554,7 +554,7 @@ publicRoutes.get('/export.csv', async (c) => {
     return c.body(toCsv(rows as Array<Record<string, unknown>>))
   }
 
-  const rows = await queryLatestRates(c.env.DB, {
+  const rows = await queryLatestRates(getReadDb(c), {
     bank: query.bank,
     banks: parseCsvList(query.banks),
     securityPurpose: query.security_purpose,
