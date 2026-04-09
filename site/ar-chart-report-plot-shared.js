@@ -219,7 +219,6 @@
         var bankColor = opts.bankColor;
         var rs = opts.ribbonStyle || getRibbonStyleResolved();
         var out = [];
-        var bandDbgRows = [];
         (plotPayload && plotPayload.series || []).forEach(function (series, index) {
             var color = bankColor(series.bank_name, index);
             var byDate = {};
@@ -316,55 +315,7 @@
                 data: meanData,
                 z: zBase + 0.03,
             });
-            var gapDays = 0;
-            var zeroBandwidthDays = 0;
-            var populatedDays = 0;
-            var minLo = Infinity;
-            var maxHi = -Infinity;
-            dates.forEach(function (date) {
-                var point = byDate[date];
-                if (point == null) {
-                    gapDays++;
-                    return;
-                }
-                populatedDays++;
-                var lo = Number(point.min_rate);
-                var hi = Number(point.max_rate);
-                if (Number.isFinite(lo)) minLo = Math.min(minLo, lo);
-                if (Number.isFinite(hi)) maxHi = Math.max(maxHi, hi);
-                if (Math.max(0, hi - lo) < 1e-6) zeroBandwidthDays++;
-            });
-            bandDbgRows.push({
-                bank: String(series.bank_name || ''),
-                gapDays: gapDays,
-                zeroBandwidthDays: zeroBandwidthDays,
-                populatedDays: populatedDays,
-                minRateInBand: minLo === Infinity ? null : minLo,
-                maxRateInBand: maxHi === -Infinity ? null : maxHi,
-            });
         });
-        // #region agent log
-        if (bandDbgRows.length) {
-            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'eab487' },
-                body: JSON.stringify({
-                    sessionId: 'eab487',
-                    runId: 'pre',
-                    hypothesisId: 'H1-H4',
-                    location: 'ar-chart-report-plot-shared.js:buildBandSeries',
-                    message: 'ribbon band stats per bank',
-                    data: {
-                        datesLen: dates.length,
-                        ribbonSmooth: RIBBON_SANKEY_SMOOTH,
-                        connectNulls: true,
-                        banks: bandDbgRows,
-                    },
-                    timestamp: Date.now(),
-                }),
-            }).catch(function () {});
-        }
-        // #endregion
         return out;
     }
 
@@ -903,61 +854,6 @@
             return '';
         }
 
-        /** Debug: highlight bank used for ribbon z-order / grey (H1: product bank may override chart hover). */
-        var _dbgRibbonHoverLogAt = 0;
-        function dbgRibbonPointerState(hypothesisId, extra) {
-            var now = Date.now();
-            if (now - _dbgRibbonHoverLogAt < 280) return;
-            _dbgRibbonHoverLogAt = now;
-            var resolved = ribbonChartHighlightBank();
-            var bandPick = extra && extra.bandPick != null ? extra.bandPick : '';
-            // #region agent log
-            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
-                body: JSON.stringify({
-                    sessionId: 'f5b4c8',
-                    hypothesisId: hypothesisId || 'H1',
-                    location: 'ar-chart-report-plot-shared.js:dbgRibbonPointerState',
-                    message: 'ribbon highlight state',
-                    data: {
-                        tray: String(ribbonTrayHoverBank || ''),
-                        productBank: String(ribbonProductBank || ''),
-                        hoveredBank: String(hoveredBank || ''),
-                        bandPick: String(bandPick || ''),
-                        resolvedHighlight: String(resolved || ''),
-                        mismatchBandVsResolved: !!(bandPick && resolved && normRibbonBankName(bandPick) !== normRibbonBankName(resolved)),
-                    },
-                    timestamp: now,
-                }),
-            }).catch(function () {});
-            // #endregion
-        }
-
-        var _dbgApplyRibbonPrevFocus = '\u0000';
-        function dbgApplyRibbonFocus(focusKey, bankCount, activeCount) {
-            if (focusKey === _dbgApplyRibbonPrevFocus) return;
-            _dbgApplyRibbonPrevFocus = focusKey;
-            // #region agent log
-            fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
-                body: JSON.stringify({
-                    sessionId: 'f5b4c8',
-                    hypothesisId: 'H3',
-                    location: 'ar-chart-report-plot-shared.js:applyRibbonBankHighlightState',
-                    message: 'apply ribbon focus',
-                    data: {
-                        focusKey: String(focusKey || ''),
-                        bankCount: bankCount,
-                        activeCount: activeCount,
-                    },
-                    timestamp: Date.now(),
-                }),
-            }).catch(function () {});
-            // #endregion
-        }
-
         function ribbonLineFilterKeys() {
             if (selectedProductName) return null;
             var list = ribbonListHoverKeys;
@@ -1300,10 +1196,8 @@
             var focusRaw = String(hoveredBankName || '').trim();
             var focusKey = focusRaw ? normRibbonBankName(focusRaw) : '';
             var updates = [];
-            var activeCount = 0;
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
-                if (active) activeCount++;
                 var c0 = options.bankColor(bank.bank_name, index);
                 var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
@@ -1338,7 +1232,6 @@
                     },
                 });
             });
-            dbgApplyRibbonFocus(focusKey, plotPayload.series.length, activeCount);
             try {
                 chart.setOption({ series: updates }, { lazyUpdate: false, silent: true });
             } catch (_e) {}
@@ -1563,7 +1456,6 @@
 
         if (isBandsMode) {
             var zr = chart.getZr();
-            var _dbgConvertMissAt = 0;
             function ribbonZrXY(ev) {
                 var ox = typeof ev.offsetX === 'number' ? ev.offsetX : (ev.zrX != null ? ev.zrX : 0);
                 var oy = typeof ev.offsetY === 'number' ? ev.offsetY : (ev.zrY != null ? ev.zrY : 0);
@@ -1572,27 +1464,7 @@
             function onRibbonZrMouseMove(ev) {
                 var xy = ribbonZrXY(ev);
                 var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
-                if (!data || data.length < 2) {
-                    // #region agent log
-                    var tMiss = Date.now();
-                    if (tMiss - _dbgConvertMissAt >= 400) {
-                        _dbgConvertMissAt = tMiss;
-                        fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
-                            body: JSON.stringify({
-                                sessionId: 'f5b4c8',
-                                hypothesisId: 'H5',
-                                location: 'ar-chart-report-plot-shared.js:onRibbonZrMouseMove',
-                                message: 'convertFromPixel empty',
-                                data: { xy: xy },
-                                timestamp: tMiss,
-                            }),
-                        }).catch(function () {});
-                    }
-                    // #endregion
-                    return;
-                }
+                if (!data || data.length < 2) return;
                 var dateStr = resolveDateFromAxisValue(data[0]);
                 if (dateStr) lastPointerDate = dateStr;
                 var yVal = data[1];
@@ -1602,7 +1474,6 @@
                     hoveredBank = next;
                     updateProductVisibility();
                 }
-                dbgRibbonPointerState('H1', { bandPick: next });
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 var prevPh = ribbonChartHoverProductKey;
                 var pbMove = ribbonPanelBank();
