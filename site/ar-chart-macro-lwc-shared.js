@@ -1023,7 +1023,8 @@
             el: el,
             show: function (input) {
                 var items = Array.isArray(input && input.items) ? input.items : [];
-                if (!items.length) {
+                var hasRenderBody = input && typeof input.renderBody === 'function';
+                if (!hasRenderBody && !items.length) {
                     el.style.display = 'none';
                     return;
                 }
@@ -1044,6 +1045,17 @@
                     : 'font-size:10px;color:' + t.muted + ';margin-bottom:6px;';
                 var heading = input && input.heading ? '<div style="' + hStyle + '">' + escHtml(input.heading) + '</div>' : '';
                 var meta = input && input.meta ? '<div style="' + mStyle + '">' + escHtml(input.meta) + '</div>' : '';
+                body.innerHTML = heading + meta;
+                if (hasRenderBody) {
+                    var treeRoot = document.createElement('div');
+                    treeRoot.className = 'ar-report-infobox-ribbon-tree';
+                    body.appendChild(treeRoot);
+                    try {
+                        input.renderBody(treeRoot);
+                    } catch (_e) {}
+                    el.style.display = 'block';
+                    return;
+                }
                 var rows;
                 if (compact) {
                     rows = items.map(function (item) {
@@ -1081,7 +1093,7 @@
                             + '</div>';
                     }).join('');
                 }
-                body.innerHTML = heading + meta + rows;
+                body.innerHTML = body.innerHTML + rows;
                 el.style.display = 'block';
             },
             hide: function () { el.style.display = 'none'; },

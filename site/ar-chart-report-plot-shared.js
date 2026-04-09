@@ -319,6 +319,98 @@
         return out;
     }
 
+    function ribbonTierFieldsForSection(sec) {
+        var s = String(sec || '');
+        if (s === 'home-loans') {
+            return ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set'];
+        }
+        if (s === 'savings') {
+            return ['account_type', 'rate_type', 'deposit_tier', 'feature_set'];
+        }
+        if (s === 'term-deposits') {
+            return ['term_months', 'deposit_tier', 'interest_payment', 'rate_structure', 'feature_set'];
+        }
+        return ['security_purpose', 'repayment_type', 'rate_structure'];
+    }
+
+    function formatRibbonTierValue(row, field) {
+        if (!row || typeof row !== 'object') return '';
+        var cfg = window.AR && window.AR.chartConfig;
+        if (cfg && typeof cfg.formatFieldValue === 'function') {
+            var out = cfg.formatFieldValue(field, row[field], row);
+            if (out != null && String(out).trim() !== '' && String(out) !== '-') return String(out).trim();
+        }
+        if (row[field] != null && String(row[field]).trim() !== '') return String(row[field]).trim();
+        return '';
+    }
+
+    function ribbonFieldLabel(field) {
+        var cfg = window.AR && window.AR.chartConfig;
+        if (cfg && typeof cfg.fieldLabel === 'function') return cfg.fieldLabel(field);
+        return String(field || '').replace(/_/g, ' ');
+    }
+
+    function buildRibbonTierTree(prods, tierFields, fieldIdx) {
+        if (!prods || prods.length === 0) return { kind: 'empty' };
+        if (prods.length === 1 || fieldIdx >= (tierFields || []).length) {
+            return { kind: 'leaves', products: prods.slice() };
+        }
+        var field = tierFields[fieldIdx];
+        var groups = {};
+        prods.forEach(function (p) {
+            var raw = formatRibbonTierValue(p.row || {}, field);
+            var key = raw || '\u2014';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(p);
+        });
+        var labels = Object.keys(groups).sort(function (a, b) { return a.localeCompare(b); });
+        if (labels.length === 1) {
+            return buildRibbonTierTree(groups[labels[0]], tierFields, fieldIdx + 1);
+        }
+        return {
+            kind: 'branch',
+            field: field,
+            groups: labels.map(function (lab) {
+                return { label: lab, child: buildRibbonTierTree(groups[lab], tierFields, fieldIdx + 1) };
+            }),
+        };
+    }
+
+    function maxRibbonNodeRate(node, anchorYmd) {
+        if (!node || node.kind === 'empty') return null;
+        if (node.kind === 'leaves') {
+            var m = -Infinity;
+            node.products.forEach(function (p) {
+                var v = p.byDate[anchorYmd];
+                if (v != null && Number.isFinite(v) && v > m) m = v;
+            });
+            return Number.isFinite(m) ? m : null;
+        }
+        var m2 = -Infinity;
+        (node.groups || []).forEach(function (g) {
+            var r = maxRibbonNodeRate(g.child, anchorYmd);
+            if (r != null && r > m2) m2 = r;
+        });
+        return Number.isFinite(m2) ? m2 : null;
+    }
+
+    function collectRibbonNodeKeys(node) {
+        var out = [];
+        collectRibbonNodeKeysInto(node, out);
+        return out;
+    }
+
+    function collectRibbonNodeKeysInto(node, out) {
+        if (!node || node.kind === 'empty') return;
+        if (node.kind === 'leaves') {
+            node.products.forEach(function (p) { out.push(p.key); });
+            return;
+        }
+        (node.groups || []).forEach(function (g) {
+            collectRibbonNodeKeysInto(g.child, out);
+        });
+    }
+
     /** Build hidden product overlay lines for ribbon hover reveal (ECharts path when product count <= cap). */
     function buildProductOverlay(dates, allSeries, bankColor) {
         var out = [];
@@ -389,12 +481,18 @@
             }
             if (!hasData) return;
             var key = '[P]' + bn + '|' + pn;
+            var row = (s.latestRow && typeof s.latestRow === 'object') ? s.latestRow : {};
+            if (!row || Object.keys(row).length === 0) {
+                var lp = (s.points && s.points.length) ? s.points[s.points.length - 1] : null;
+                if (lp && lp.row && typeof lp.row === 'object') row = lp.row;
+            }
             var entry = {
                 key: key,
                 bankName: bn,
                 productName: pn,
                 baseHex: baseHex,
                 byDate: byDate,
+                row: row,
             };
             flat.push(entry);
             if (!byBank[bn]) byBank[bn] = [];
@@ -707,15 +805,50 @@
         var selectedProductName = '';
         var lastPointerDate = '';
         var ribbonChartHoverProductKey = '';
-        var ribbonListHoverKey = '';
+        var ribbonListHoverKeys = null;
+        var ribbonHoverScopeMap = {};
+        var ribbonHoverScopeSeq = 0;
+        var ribbonExpandedPaths = {};
+        var ribbonTreeAnchorYmd = '';
+
+        function clearRibbonHoverScopes() {
+            ribbonHoverScopeMap = {};
+            ribbonHoverScopeSeq = 0;
+        }
+
+        function registerRibbonHoverScope(keys) {
+            var id = String(++ribbonHoverScopeSeq);
+            ribbonHoverScopeMap[id] = keys.slice();
+            return id;
+        }
 
         function ribbonChartHighlightBank() {
             return ribbonProductBank ? ribbonProductBank : (hoveredBank || '');
         }
 
-        function ribbonHoveredProductKey() {
-            if (selectedProductName) return '';
-            return ribbonListHoverKey || ribbonChartHoverProductKey || '';
+        function ribbonLineFilterKeys() {
+            if (selectedProductName) return null;
+            var list = ribbonListHoverKeys;
+            var chart = ribbonChartHoverProductKey;
+            if (list && list.length) {
+                if (chart) {
+                    if (list.indexOf(chart) >= 0) return [chart];
+                    return [chart];
+                }
+                return list.slice();
+            }
+            if (chart) return [chart];
+            return null;
+        }
+
+        function productLineVisible(prodKey) {
+            if (selectedProductName) return true;
+            var fk = ribbonLineFilterKeys();
+            if (fk === null) return true;
+            for (var i = 0; i < fk.length; i++) {
+                if (fk[i] === prodKey) return true;
+            }
+            return false;
         }
 
         function resolveDateFromAxisValue(xRaw) {
@@ -775,6 +908,23 @@
                 var row = rows[i];
                 row.classList.toggle('is-ribbon-chart-sync', !!k && row.getAttribute('data-ribbon-prod-key') === k);
             }
+            var scopes = ib.el.querySelectorAll('[data-ribbon-scope]');
+            for (var j = 0; j < scopes.length; j++) {
+                var el = scopes[j];
+                if (el.classList.contains('ar-report-infobox-row') && el.hasAttribute('data-ribbon-prod-key')) continue;
+                var sid = el.getAttribute('data-ribbon-scope');
+                var ks = ribbonHoverScopeMap[sid];
+                var hit = false;
+                if (k && ks && ks.length) {
+                    for (var x = 0; x < ks.length; x++) {
+                        if (ks[x] === k) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                el.classList.toggle('is-ribbon-chart-sync', hit);
+            }
         }
 
         function resolveHoverBank(seriesName) {
@@ -797,14 +947,13 @@
             var os = Math.max(0, Math.min(1, Number(rs.product_line_opacity_selected)));
             var wh = Math.max(0, Number(rs.product_line_width_hover) || 1.2);
             var ws = Math.max(0, Number(rs.product_line_width_selected) || 2.5);
-            var filterK = ribbonHoveredProductKey();
             var updates = [];
             productOverlay.forEach(function (s) {
                 var rest = s.name.slice(3);
                 var pipe = rest.indexOf('|');
                 var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
                 var showBank = ribbonProductBank && bn === ribbonProductBank;
-                var match = !filterK || s.name === filterK;
+                var match = productLineVisible(s.name);
                 var show = showBank && match;
                 var isSelected = s.name === selectedProductName;
                 var base = s._ribbonBaseHex || '#64748b';
@@ -854,9 +1003,8 @@
             var prods = ribbonCanvasModel.byBank[ribbonProductBank];
             if (!prods || !prods.length) return;
             var idxs = ribbonLodIndices;
-            var fk = ribbonHoveredProductKey();
             prods.forEach(function (prod) {
-                if (fk && prod.key !== fk) return;
+                if (!productLineVisible(prod.key)) return;
                 var isSel = prod.key === selectedProductName;
                 ctx.beginPath();
                 var first = true;
@@ -995,7 +1143,7 @@
         }
 
         function hideRibbonInfoBox() {
-            ribbonListHoverKey = '';
+            ribbonListHoverKeys = null;
             var ib = options.infoBox;
             if (ib && typeof ib.hide === 'function') ib.hide();
         }
@@ -1045,6 +1193,102 @@
             } catch (_e) {}
         }
 
+        var ribbonTreeBank = '';
+
+        function renderRibbonTreeDom(container, node, path, depth, anchorYmd, secStr) {
+            if (!node || node.kind === 'empty') return;
+            if (node.kind === 'leaves') {
+                var leaves = node.products.slice().sort(function (a, b) {
+                    var va = a.byDate[anchorYmd];
+                    var vb = b.byDate[anchorYmd];
+                    return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
+                });
+                leaves.forEach(function (p) {
+                    var v = p.byDate[anchorYmd];
+                    if (v == null || !Number.isFinite(v) || v <= 0) return;
+                    if (secStr === 'savings' && v < 1.0) return;
+                    var scopeId = registerRibbonHoverScope([p.key]);
+                    var row = document.createElement('div');
+                    row.className = 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row';
+                    row.style.cssText = 'display:flex;align-items:baseline;gap:5px;padding:1px 0;border-top:1px solid rgba(148,163,184,0.12);font-size:10px;line-height:1.2;min-width:0;cursor:default;padding-left:' + (4 + depth * 10) + 'px;';
+                    row.setAttribute('data-ribbon-scope', scopeId);
+                    row.setAttribute('data-ribbon-prod-key', p.key);
+                    var sw = document.createElement('span');
+                    sw.style.cssText = 'width:6px;height:6px;border-radius:1px;flex-shrink:0;margin-top:2px;background:' + String(p.baseHex || '#666').replace(/[<>"']/g, '') + ';';
+                    var mid = document.createElement('span');
+                    mid.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                    var bn = document.createElement('span');
+                    bn.style.fontWeight = '600';
+                    bn.textContent = p.bankName || 'Unknown';
+                    var dot = document.createElement('span');
+                    dot.style.opacity = '0.4';
+                    dot.textContent = ' \u00b7 ';
+                    var pn = document.createElement('span');
+                    pn.textContent = p.productName || '';
+                    mid.appendChild(bn);
+                    mid.appendChild(dot);
+                    mid.appendChild(pn);
+                    var rateEl = document.createElement('span');
+                    rateEl.style.cssText = 'font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;';
+                    rateEl.textContent = v.toFixed(2) + '%';
+                    row.appendChild(sw);
+                    row.appendChild(mid);
+                    row.appendChild(rateEl);
+                    container.appendChild(row);
+                });
+                return;
+            }
+            (node.groups || []).forEach(function (g, idx) {
+                var subPath = path ? path + '>' + idx : String(idx);
+                var expanded = !!ribbonExpandedPaths[subPath];
+                var keys = collectRibbonNodeKeys(g.child);
+                if (!keys.length) return;
+                var scopeId = registerRibbonHoverScope(keys);
+                var mr = maxRibbonNodeRate(g.child, anchorYmd);
+                var brow = document.createElement('div');
+                brow.className = 'ar-report-infobox-trow ar-report-infobox-trow--branch';
+                brow.style.cssText = 'display:flex;align-items:baseline;gap:5px;padding:2px 0;border-top:1px solid rgba(148,163,184,0.12);font-size:10px;line-height:1.2;min-width:0;cursor:pointer;padding-left:' + (2 + depth * 10) + 'px;';
+                brow.setAttribute('data-ribbon-scope', scopeId);
+                brow.setAttribute('role', 'button');
+                brow.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                brow.tabIndex = 0;
+                var twist = document.createElement('span');
+                twist.className = 'ar-report-infobox-twist';
+                twist.style.cssText = 'flex-shrink:0;width:1em;font-size:9px;opacity:0.75;user-select:none;';
+                twist.textContent = expanded ? '\u25be' : '\u25b8';
+                var lab = document.createElement('span');
+                lab.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;';
+                lab.textContent = ribbonFieldLabel(node.field) + ': ' + g.label;
+                var rateSpan = document.createElement('span');
+                rateSpan.style.cssText = 'font-variant-numeric:tabular-nums;opacity:0.9;flex-shrink:0;';
+                rateSpan.textContent = mr != null && Number.isFinite(mr) ? mr.toFixed(2) + '%' : '';
+                brow.appendChild(twist);
+                brow.appendChild(lab);
+                brow.appendChild(rateSpan);
+                function toggleBranch() {
+                    ribbonExpandedPaths[subPath] = !expanded;
+                    refreshRibbonUnderChartPanel();
+                }
+                brow.addEventListener('click', function (ev) {
+                    ev.preventDefault();
+                    toggleBranch();
+                });
+                brow.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        toggleBranch();
+                    }
+                });
+                container.appendChild(brow);
+                if (expanded) {
+                    var nest = document.createElement('div');
+                    nest.className = 'ar-report-infobox-tnest';
+                    renderRibbonTreeDom(nest, g.child, subPath, depth + 1, anchorYmd, secStr);
+                    container.appendChild(nest);
+                }
+            });
+        }
+
         function refreshRibbonUnderChartPanel() {
             var ib = options.infoBox;
             if (!ib || typeof ib.show !== 'function') return;
@@ -1058,32 +1302,44 @@
                 hideRibbonInfoBox();
                 return;
             }
+            if (ribbonTreeBank !== ribbonProductBank || ribbonTreeAnchorYmd !== anchor) {
+                ribbonExpandedPaths = {};
+                ribbonTreeBank = ribbonProductBank;
+                ribbonTreeAnchorYmd = anchor;
+            }
             var plist = ribbonCanvasModel.byBank[ribbonProductBank] || [];
-            var items = [];
+            var prodsAtAnchor = [];
             var sec = String(section || '');
             plist.forEach(function (prod) {
                 var v = prod.byDate[anchor];
                 if (v == null || !Number.isFinite(v) || v <= 0) return;
                 if (sec === 'savings' && v < 1.0) return;
-                items.push({
-                    bankName: prod.bankName,
-                    productName: prod.productName,
-                    rate: v,
-                    color: prod.baseHex,
-                    selectionKey: prod.key,
-                    subtitle: '',
-                });
+                prodsAtAnchor.push(prod);
             });
-            items.sort(function (a, b) { return b.rate - a.rate; });
-            if (!items.length) {
+            prodsAtAnchor.sort(function (a, b) {
+                var va = a.byDate[anchor];
+                var vb = b.byDate[anchor];
+                return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
+            });
+            if (!prodsAtAnchor.length) {
                 hideRibbonInfoBox();
                 return;
             }
+            clearRibbonHoverScopes();
+            var tierFields = ribbonTierFieldsForSection(sec);
+            var tree = buildRibbonTierTree(prodsAtAnchor, tierFields, 0);
+            if (!tree || tree.kind === 'empty') {
+                hideRibbonInfoBox();
+                return;
+            }
+            var n = prodsAtAnchor.length;
             ib.show({
                 heading: fmtReportDateYmd(anchor),
-                meta: ribbonProductBank + ' \u00b7 ' + items.length + ' product' + (items.length !== 1 ? 's' : ''),
+                meta: ribbonProductBank + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : '') + ' \u00b7 click row to expand tier',
                 compact: true,
-                items: items,
+                renderBody: function (wrap) {
+                    renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
+                },
             });
         }
 
@@ -1279,26 +1535,27 @@
                     try { ibEl.removeEventListener('mouseout', ibEl._arRibbonListOut); } catch (_e2) {}
                 }
                 ibEl._arRibbonListOver = function (ev) {
-                    var row = ev.target.closest('[data-ribbon-prod-key]');
+                    var row = ev.target.closest('[data-ribbon-scope]');
                     if (!row || !ibEl.contains(row)) return;
-                    var k = row.getAttribute('data-ribbon-prod-key') || '';
-                    if (!k || ribbonListHoverKey === k) return;
-                    ribbonListHoverKey = k;
+                    var sid = row.getAttribute('data-ribbon-scope');
+                    var keys = sid ? ribbonHoverScopeMap[sid] : null;
+                    if (!keys || !keys.length) return;
+                    ribbonListHoverKeys = keys.slice();
                     updateProductVisibility();
                     scheduleRibbonRedraw();
                 };
                 ibEl._arRibbonListOut = function (ev) {
                     var toEl = ev.relatedTarget;
                     if (toEl && ibEl.contains(toEl)) return;
-                    if (!ribbonListHoverKey) return;
-                    ribbonListHoverKey = '';
+                    if (!ribbonListHoverKeys) return;
+                    ribbonListHoverKeys = null;
                     updateProductVisibility();
                     scheduleRibbonRedraw();
                 };
                 ibEl.addEventListener('mouseover', ibEl._arRibbonListOver);
                 ibEl.addEventListener('mouseout', ibEl._arRibbonListOut);
                 ibEl._arOnClose = function () {
-                    ribbonListHoverKey = '';
+                    ribbonListHoverKeys = null;
                     updateProductVisibility();
                     scheduleRibbonRedraw();
                 };

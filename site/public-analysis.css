@@ -1490,6 +1490,14 @@ body.ar-public .ar-report-infobox--compact .ar-report-infobox-row.is-ribbon-char
     background: color-mix(in srgb, var(--ar-accent) 14%, transparent);
 }
 
+body.ar-public .ar-report-infobox-trow--branch:hover {
+    background: color-mix(in srgb, var(--ar-accent) 7%, transparent);
+}
+
+body.ar-public .ar-report-infobox-trow--branch.is-ribbon-chart-sync {
+    background: color-mix(in srgb, var(--ar-accent) 12%, transparent);
+}
+
 body.ar-public .lwc-focus-bank-chip:focus-visible {
     outline: 2px solid var(--ar-accent);
     outline-offset: 1px;
