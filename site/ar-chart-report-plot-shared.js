@@ -1599,13 +1599,19 @@
                 syncRibbonTrayUi();
             }
 
+            function ribbonAnchorYmdOrLast() {
+                var cur = String(lastPointerDate || '').slice(0, 10);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(cur) && dates.indexOf(cur) >= 0) return cur;
+                return dates.length ? dates[dates.length - 1] : '';
+            }
+
             ribbonChromeHandlers.onChipClick = function (fullName) {
                 var bn = String(fullName || '').trim();
                 if (!bn) return;
                 ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;
                 hoveredBank = bn;
-                lastPointerDate = dates.length ? dates[dates.length - 1] : '';
+                lastPointerDate = ribbonAnchorYmdOrLast();
                 selectedProductName = '';
                 ribbonChartHoverProductKey = '';
                 hideRibbonInfoBox();

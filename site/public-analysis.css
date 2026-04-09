@@ -1551,17 +1551,20 @@ body.ar-public .lwc-focus-bank-chip:focus-visible {
     outline-offset: 1px;
 }
 
+/* Logos sit inside the chip <button>; without this, pointerenter/leave target the img and skip chip handlers. */
 body.ar-public .lwc-focus-bank-chip-logo {
     display: block;
     width: 18px;
     height: 18px;
     object-fit: contain;
     border-radius: 2px;
+    pointer-events: none;
 }
 
 body.ar-public .lwc-focus-bank-chip-fallback {
     font: 700 0.62rem/1 "Space Grotesk", system-ui, sans-serif;
     color: var(--ar-text);
+    pointer-events: none;
 }
 
 body.ar-public .lwc-report-moves-strip {
