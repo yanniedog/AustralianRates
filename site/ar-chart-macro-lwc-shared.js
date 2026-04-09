@@ -995,14 +995,27 @@
         };
     }
 
+    function escAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
     function createReportSelectionInfoBox(t) {
         var el = document.createElement('div');
+        el.className = 'ar-report-infobox';
         el.style.cssText = 'display:none;padding:8px 10px;font:11px/1.5 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:6px;margin-top:4px;flex-shrink:0;position:relative;max-height:240px;overflow:auto;';
         var close = document.createElement('button');
         close.type = 'button';
         close.innerHTML = '&times;';
         close.style.cssText = 'position:absolute;top:3px;right:7px;background:none;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:0.45;padding:0;line-height:1;';
-        close.addEventListener('click', function () { el.style.display = 'none'; });
+        close.addEventListener('click', function () {
+            el.style.display = 'none';
+            if (typeof el._arOnClose === 'function') {
+                try { el._arOnClose(); } catch (_e) {}
+            }
+        });
         el.appendChild(close);
         var body = document.createElement('div');
         el.appendChild(body);
@@ -1014,26 +1027,60 @@
                     el.style.display = 'none';
                     return;
                 }
-                var heading = input && input.heading ? '<div style="font-weight:700;margin-bottom:4px;padding-right:16px;">' + escHtml(input.heading) + '</div>' : '';
-                var meta = input && input.meta ? '<div style="font-size:10px;color:' + t.muted + ';margin-bottom:6px;">' + escHtml(input.meta) + '</div>' : '';
-                var rows = items.map(function (item) {
-                    var titleBits = [
-                        '<span style="width:8px;height:8px;border-radius:2px;background:' + escHtml(item.color || '#666') + ';flex-shrink:0;display:inline-block;"></span>',
-                        '<span style="font-weight:600;">' + escHtml(item.bankName || 'Unknown') + '</span>',
-                    ];
-                    if (item.productName) {
-                        titleBits.push('<span style="opacity:0.35;">\u00b7</span>');
-                        titleBits.push('<span>' + escHtml(item.productName) + '</span>');
-                    }
-                    var metaBits = [];
-                    if (item.rate != null && Number.isFinite(Number(item.rate))) metaBits.push(Number(item.rate).toFixed(2) + '%');
-                    if (item.subtitle) metaBits.push(String(item.subtitle));
-                    return ''
-                        + '<div style="display:grid;gap:2px;padding:5px 0;border-top:1px solid rgba(148,163,184,0.16);">'
-                        +   '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + titleBits.join('') + '</div>'
-                        +   '<div style="font-size:10px;color:' + t.muted + ';padding-left:14px;">' + escHtml(metaBits.join(' \u00b7 ')) + '</div>'
-                        + '</div>';
-                }).join('');
+                var compact = !!(input && input.compact);
+                el.classList.toggle('ar-report-infobox--compact', compact);
+                if (compact) {
+                    el.style.padding = '4px 6px';
+                    el.style.maxHeight = 'min(42vh, 280px)';
+                } else {
+                    el.style.padding = '8px 10px';
+                    el.style.maxHeight = '240px';
+                }
+                var hStyle = compact
+                    ? 'font-weight:700;margin-bottom:2px;padding-right:16px;font-size:11px;line-height:1.2;'
+                    : 'font-weight:700;margin-bottom:4px;padding-right:16px;';
+                var mStyle = compact
+                    ? 'font-size:9px;color:' + t.muted + ';margin-bottom:3px;line-height:1.2;'
+                    : 'font-size:10px;color:' + t.muted + ';margin-bottom:6px;';
+                var heading = input && input.heading ? '<div style="' + hStyle + '">' + escHtml(input.heading) + '</div>' : '';
+                var meta = input && input.meta ? '<div style="' + mStyle + '">' + escHtml(input.meta) + '</div>' : '';
+                var rows;
+                if (compact) {
+                    rows = items.map(function (item) {
+                        var rate = item.rate != null && Number.isFinite(Number(item.rate)) ? Number(item.rate).toFixed(2) + '%' : '';
+                        var sk = item.selectionKey != null ? String(item.selectionKey) : '';
+                        var sub = item.subtitle ? '<span style="opacity:0.5;">' + escHtml(String(item.subtitle)) + '</span>' : '';
+                        return ''
+                            + '<div class="ar-report-infobox-row" data-ribbon-prod-key="' + escAttr(sk) + '" style="display:flex;align-items:baseline;gap:5px;padding:1px 0;border-top:1px solid rgba(148,163,184,0.12);font-size:10px;line-height:1.2;min-width:0;cursor:default;">'
+                            +   '<span style="width:6px;height:6px;border-radius:1px;background:' + escHtml(item.color || '#666') + ';flex-shrink:0;margin-top:2px;"></span>'
+                            +   '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+                            +     '<span style="font-weight:600;">' + escHtml(item.bankName || 'Unknown') + '</span>'
+                            +     (item.productName ? '<span style="opacity:0.4;"> \u00b7 </span><span>' + escHtml(item.productName) + '</span>' : '')
+                            +     (sub ? '<span style="opacity:0.4;"> \u00b7 </span>' + sub : '')
+                            +   '</span>'
+                            +   '<span style="font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;">' + escHtml(rate) + '</span>'
+                            + '</div>';
+                    }).join('');
+                } else {
+                    rows = items.map(function (item) {
+                        var titleBits = [
+                            '<span style="width:8px;height:8px;border-radius:2px;background:' + escHtml(item.color || '#666') + ';flex-shrink:0;display:inline-block;"></span>',
+                            '<span style="font-weight:600;">' + escHtml(item.bankName || 'Unknown') + '</span>',
+                        ];
+                        if (item.productName) {
+                            titleBits.push('<span style="opacity:0.35;">\u00b7</span>');
+                            titleBits.push('<span>' + escHtml(item.productName) + '</span>');
+                        }
+                        var metaBits = [];
+                        if (item.rate != null && Number.isFinite(Number(item.rate))) metaBits.push(Number(item.rate).toFixed(2) + '%');
+                        if (item.subtitle) metaBits.push(String(item.subtitle));
+                        return ''
+                            + '<div style="display:grid;gap:2px;padding:5px 0;border-top:1px solid rgba(148,163,184,0.16);">'
+                            +   '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + titleBits.join('') + '</div>'
+                            +   '<div style="font-size:10px;color:' + t.muted + ';padding-left:14px;">' + escHtml(metaBits.join(' \u00b7 ')) + '</div>'
+                            + '</div>';
+                    }).join('');
+                }
                 body.innerHTML = heading + meta + rows;
                 el.style.display = 'block';
             },

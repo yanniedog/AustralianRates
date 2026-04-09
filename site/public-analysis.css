@@ -1482,6 +1482,14 @@ body.ar-public .lwc-ribbon-hover-bank-label {
     flex-shrink: 1;
 }
 
+body.ar-public .ar-report-infobox--compact .ar-report-infobox-row:hover {
+    background: color-mix(in srgb, var(--ar-accent) 8%, transparent);
+}
+
+body.ar-public .ar-report-infobox--compact .ar-report-infobox-row.is-ribbon-chart-sync {
+    background: color-mix(in srgb, var(--ar-accent) 14%, transparent);
+}
+
 body.ar-public .lwc-focus-bank-chip:focus-visible {
     outline: 2px solid var(--ar-accent);
     outline-offset: 1px;
