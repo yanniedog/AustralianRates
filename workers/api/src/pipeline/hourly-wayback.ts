@@ -17,6 +17,13 @@ import { parseIntegerEnv } from '../utils/time'
 
 const COVERAGE_LOWER_BOUND_DATE = '1996-01-01'
 
+/**
+ * Scheduled “Wayback coverage” walks **backward one calendar day per tick per dataset** (mortgage, savings,
+ * term_deposits), enqueueing a **historical pull** so the queue can scrape **Internet Archive** snapshots
+ * for that day (`wayback_html`). It extends time-series **before** the CDR era; it is **not** the live
+ * daily rate check (that is the 6-hour `handleScheduledDaily` / `triggerDailyRun` path).
+ */
+
 function hourlyBucketFromScheduledTime(scheduledTime: number): string {
   const iso = Number.isFinite(scheduledTime) ? new Date(scheduledTime).toISOString() : new Date().toISOString()
   return iso.slice(0, 13)
@@ -37,6 +44,32 @@ export async function handleScheduledHourlyWayback(event: ScheduledController, e
   const owner = `hourly-wayback:${bucket}:${crypto.randomUUID().slice(0, 8)}`
   const lockKey = `hourly-wayback:${bucket}`
   const lockTtlSeconds = parseIntegerEnv(env.LOCK_TTL_SECONDS, DEFAULT_LOCK_TTL_SECONDS)
+
+  await ensureDatasetCoverageRows(env.DB)
+  const [firstCoverageByDataset, rows] = await Promise.all([
+    getGlobalDatasetFirstCoverageDates(env.DB),
+    getDatasetCoverageProgressRows(env.DB),
+  ])
+  const rowMap = new Map(rows.map((row) => [row.dataset_key, row]))
+
+  const allBackfillComplete = COVERAGE_DATASETS.every(
+    (dataset) => rowMap.get(dataset)?.status === 'completed_lower_bound',
+  )
+  if (allBackfillComplete) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'wayback_backfill_complete',
+      tick_type: 'hourly_wayback_coverage',
+      hour_bucket: bucket,
+      lower_bound_date: COVERAGE_LOWER_BOUND_DATE,
+      datasets: COVERAGE_DATASETS.map((dataset) => ({
+        dataset,
+        status: 'completed_lower_bound' as const,
+        cursor_date: rowMap.get(dataset)?.cursor_date ?? null,
+      })),
+    }
+  }
 
   const lock = await acquireRunLock(env, {
     key: lockKey,
@@ -62,18 +95,21 @@ export async function handleScheduledHourlyWayback(event: ScheduledController, e
   }
 
   try {
-    await ensureDatasetCoverageRows(env.DB)
-    const [firstCoverageByDataset, rows] = await Promise.all([
-      getGlobalDatasetFirstCoverageDates(env.DB),
-      getDatasetCoverageProgressRows(env.DB),
-    ])
-    const rowMap = new Map(rows.map((row) => [row.dataset_key, row]))
     const datasetResults: Array<Record<string, unknown>> = []
 
     for (const dataset of COVERAGE_DATASETS) {
       const firstCoverageDate = firstCoverageByDataset[dataset]
       const row = rowMap.get(dataset)
       const existingCursor = row?.cursor_date ?? null
+
+      if (row?.status === 'completed_lower_bound') {
+        datasetResults.push({
+          dataset,
+          status: 'completed_lower_bound',
+          cursor_date: row.cursor_date,
+        })
+        continue
+      }
 
       if (!firstCoverageDate) {
         await setDatasetCoverageState(env.DB, {
