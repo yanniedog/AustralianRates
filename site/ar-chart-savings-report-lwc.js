@@ -254,12 +254,15 @@
                 : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
             var tBandsSav = th();
             var infoBoxBandsSav = createInfoBox(tBandsSav);
+            var bandsTraySav =
+                reportPlot.bankTrayEntriesFromBandsPayload &&
+                reportPlot.bankTrayEntriesFromBandsPayload(plotPayload, bankShort);
             return reportPlot.render({
                 container: container,
                 section: section,
                 vm: vm,
                 reportViewKind: 'economicReport',
-                bankList: extractBankNames(allSeries),
+                bankList: bandsTraySav != null ? bandsTraySav : extractBankNames(allSeries),
                 plotPayload: plotPayload,
                 allSeries: allSeries,
                 range: {

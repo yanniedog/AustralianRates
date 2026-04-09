@@ -287,12 +287,15 @@
                 : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
             var tBands = theme();
             var infoBoxBands = createInfoBox(tBands);
+            var bandsTrayBanks =
+                reportPlot.bankTrayEntriesFromBandsPayload &&
+                reportPlot.bankTrayEntriesFromBandsPayload(plotPayload, bankShort);
             return reportPlot.render({
                 container: container,
                 section: section,
                 vm: vm,
                 reportViewKind: 'homeLoanReport',
-                bankList: extractBankNames(model),
+                bankList: bandsTrayBanks != null ? bandsTrayBanks : extractBankNames(model),
                 plotPayload: plotPayload,
                 allSeries: (model && (model.allSeries || model.visibleSeries)) || [],
                 range: {

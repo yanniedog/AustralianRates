@@ -176,6 +176,32 @@
         return { minDate: minDate, maxDate: maxDate };
     }
 
+    /**
+     * Logo tray entries for bands mode: same bank_name strings as plotPayload.series (required for ribbon focus).
+     * Returns null if not applicable; caller should fall back to product-derived bank names.
+     */
+    function bankTrayEntriesFromBandsPayload(plotPayload, bankShortFn) {
+        if (!plotPayload || plotPayload.mode !== 'bands' || !plotPayload.series || !plotPayload.series.length) {
+            return null;
+        }
+        var seen = {};
+        var list = [];
+        plotPayload.series.forEach(function (s) {
+            var bn = String(s.bank_name || '').trim();
+            if (!bn) return;
+            var k = bn.toLowerCase();
+            if (seen[k]) return;
+            seen[k] = true;
+            var short =
+                bankShortFn && typeof bankShortFn === 'function' ? bankShortFn(bn) : String(bn).slice(0, 3);
+            list.push({ full: bn, short: short });
+        });
+        list.sort(function (a, b) {
+            return a.short.localeCompare(b.short);
+        });
+        return list;
+    }
+
     function buildMovesSeries(section, dates, plotPayload, theme) {
         var byDate = {};
         (plotPayload && plotPayload.points || []).forEach(function (point) {
@@ -867,6 +893,29 @@
                 .toLowerCase();
         }
 
+        /** Normalized key only if name matches a bands series; else '' (all ribbons stay active — avoids all-grey when focus string is orphan). */
+        function resolveBandsFocusKey(nameRaw) {
+            var raw = String(nameRaw || '').trim();
+            if (!raw || !plotPayload || !plotPayload.series || !plotPayload.series.length) return '';
+            var want = normRibbonBankName(raw);
+            for (var i = 0; i < plotPayload.series.length; i++) {
+                if (normRibbonBankName(plotPayload.series[i].bank_name) === want) return want;
+            }
+            return '';
+        }
+
+        /** Map UI/chip string to plotPayload bank_name spelling when possible (canvas byBank + series ids). */
+        function canonicalBandsBankFromUi(nameRaw) {
+            var raw = String(nameRaw || '').trim();
+            if (!raw || !plotPayload || !plotPayload.series) return raw;
+            var want = normRibbonBankName(raw);
+            for (var i = 0; i < plotPayload.series.length; i++) {
+                var bn = String(plotPayload.series[i].bank_name || '').trim();
+                if (normRibbonBankName(bn) === want) return bn;
+            }
+            return raw;
+        }
+
         function ribbonPanelBank() {
             return String(ribbonTrayHoverBank || ribbonProductBank || '').trim();
         }
@@ -1219,12 +1268,10 @@
         function applyRibbonBankHighlightState(hoveredBankName) {
             if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
             var rs = getRibbonStyleResolved();
-            var focusKey = String(hoveredBankName || '').trim() ? normRibbonBankName(String(hoveredBankName || '').trim()) : '';
+            var focusKey = resolveBandsFocusKey(hoveredBankName);
             var updates = [];
-            var activeCount = 0;
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
-                if (active) activeCount++;
                 var c0 = options.bankColor(bank.bank_name, index);
                 var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
@@ -1606,7 +1653,7 @@
             }
 
             ribbonChromeHandlers.onChipClick = function (fullName) {
-                var bn = String(fullName || '').trim();
+                var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (!bn) return;
                 ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;
@@ -1624,7 +1671,7 @@
 
             ribbonChromeHandlers.onChipPointerEnter = function (fullName) {
                 if (selectedProductName) return;
-                var bn = String(fullName || '').trim();
+                var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (!bn) return;
                 hoveredBank = '';
                 ribbonTrayHoverBank = bn;
@@ -1637,7 +1684,7 @@
             };
             ribbonChromeHandlers.onChipPointerLeave = function (fullName) {
                 if (selectedProductName) return;
-                var bn = String(fullName || '').trim();
+                var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (normRibbonBankName(ribbonTrayHoverBank) !== normRibbonBankName(bn)) return;
                 ribbonTrayHoverBank = '';
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
@@ -1811,6 +1858,7 @@
         attachLwcMovesPane: attachLwcMovesPane,
         payloadDateRange: payloadDateRange,
         fallbackSeriesDateBoundsFromModel: fallbackSeriesDateBoundsFromModel,
+        bankTrayEntriesFromBandsPayload: bankTrayEntriesFromBandsPayload,
         render: render,
     };
 })();

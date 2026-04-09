@@ -273,12 +273,18 @@
                 : '';
             var tBandsTd = th();
             var infoBoxBandsTd = createInfoBox(tBandsTd);
+            var bandsTrayTd =
+                reportPlot.bankTrayEntriesFromBandsPayload &&
+                reportPlot.bankTrayEntriesFromBandsPayload(plotPayload, bankShort);
             return reportPlot.render({
                 container: container,
                 section: section,
                 vm: vm,
                 reportViewKind: 'termDepositReport',
-                bankList: extractBankNames((model && (model.allSeries || model.visibleSeries)) || []),
+                bankList:
+                    bandsTrayTd != null
+                        ? bandsTrayTd
+                        : extractBankNames((model && (model.allSeries || model.visibleSeries)) || []),
                 plotPayload: plotPayload,
                 allSeries: (model && (model.allSeries || model.visibleSeries)) || [],
                 range: {
