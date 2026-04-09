@@ -237,6 +237,67 @@ async function verifyReportModes(page, section, failures, labelPrefix) {
     }
 }
 
+/** Ribbon mode: inactive lender chips get is-ribbon-dim; active bank stays full opacity (see ar-chart-report-plot-shared.js). */
+async function verifyRibbonTrayHighlight(page, failures, labelPrefix) {
+    await switchReportModeWithoutAnalyticsFetch(page, 'bands');
+    await page.waitForTimeout(400);
+
+    const traySel = '.lwc-focus-bank-tray .lwc-focus-bank-chip';
+    const chipCount = await page.locator(traySel).count();
+    if (chipCount < 2) {
+        return;
+    }
+
+    const neutral = page.locator('.site-header .site-brand').first();
+    const chips = page.locator(traySel);
+
+    async function readRibbonChipClasses() {
+        return page.evaluate(() => {
+            const list = Array.from(document.querySelectorAll('.lwc-focus-bank-tray .lwc-focus-bank-chip'));
+            return {
+                n: list.length,
+                dim: list.filter((c) => c.classList.contains('is-ribbon-dim')).length,
+                firstDim: list[0] ? list[0].classList.contains('is-ribbon-dim') : true,
+                firstRibbonSel: list[0] ? list[0].classList.contains('is-ribbon-selected') : false,
+            };
+        });
+    }
+
+    await neutral.hover({ timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    let state = await readRibbonChipClasses();
+    if (state.dim !== 0) {
+        failures.push(`${labelPrefix}: baseline expected 0 is-ribbon-dim chips, got ${state.dim}`);
+    }
+
+    await chips.nth(0).hover({ timeout: 15000 });
+    await page.waitForTimeout(350);
+    state = await readRibbonChipClasses();
+    if (state.dim !== state.n - 1) {
+        failures.push(`${labelPrefix}: hover chip 0 expected ${state.n - 1} is-ribbon-dim, got ${state.dim}`);
+    }
+    if (state.firstDim) {
+        failures.push(`${labelPrefix}: hovered first chip should not have is-ribbon-dim`);
+    }
+
+    await neutral.hover({ timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(350);
+    state = await readRibbonChipClasses();
+    if (state.dim !== 0) {
+        failures.push(`${labelPrefix}: after unhover expected 0 is-ribbon-dim, got ${state.dim} (pointer should not hold ribbon focus)`);
+    }
+
+    await chips.nth(0).click({ timeout: 15000 });
+    await page.waitForTimeout(400);
+    state = await readRibbonChipClasses();
+    if (state.dim !== state.n - 1) {
+        failures.push(`${labelPrefix}: after click chip 0 expected ${state.n - 1} is-ribbon-dim, got ${state.dim}`);
+    }
+    if (!state.firstRibbonSel) {
+        failures.push(`${labelPrefix}: clicked first chip should have is-ribbon-selected`);
+    }
+}
+
 async function verifyHistoryPane(page, failures, label) {
     const hasHistory = await page.locator('#tab-history').count().catch(() => 0);
     if (!hasHistory) return;
@@ -262,6 +323,7 @@ async function verifyDesktopSection(page, section, failures) {
     let metrics = await collectChartMetrics(page);
     verifyChartState(metrics, failures, `${section.name} default report`, section.defaultView);
     await verifyReportModes(page, section, failures, `${section.name} report`);
+    await verifyRibbonTrayHighlight(page, failures, `${section.name} ribbon tray`);
 
     for (const view of section.extraViews) {
         const requestCount = await switchViewWithoutRatesFetch(page, view);
@@ -283,6 +345,7 @@ async function verifyMobileSection(browser, section, failures) {
         if (!metrics.pageFits) failures.push(`${section.name} mobile: page has horizontal overflow`);
         verifyChartState(metrics, failures, `${section.name} mobile default report`, section.defaultView);
         await verifyReportModes(page, section, failures, `${section.name} mobile report`);
+        await verifyRibbonTrayHighlight(page, failures, `${section.name} mobile ribbon tray`);
 
         const firstExtra = section.extraViews[0];
         if (!firstExtra) return;
