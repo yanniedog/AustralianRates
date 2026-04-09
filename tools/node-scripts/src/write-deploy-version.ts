@@ -71,6 +71,43 @@ function resolveSiteAssetFile(siteDir: string, htmlFilePath: string, rawUrl: str
   return resolved;
 }
 
+const LOCAL_ASSET_IN_HTML_RE =
+  /\b(href|src)="([^"]+\.(?:css|js))((?:\?[^"#]*)?)((?:#[^"]*)?)"/gi;
+
+function parseVQuery(queryWithQ: string): string | null {
+  if (!queryWithQ || queryWithQ[0] !== '?') return null;
+  return new URLSearchParams(queryWithQ.slice(1)).get('v');
+}
+
+/** Fail fast: every local .css/.js in site HTML must have ?v= first 10 hex of SHA-256(file). */
+export function verifyHtmlAssetStamps(siteDir: string, repoRootForMessages: string): string[] {
+  const errors: string[] = [];
+  const htmlFiles = collectFiles(siteDir, '.html');
+
+  for (const filePath of htmlFiles) {
+    const html = fs.readFileSync(filePath, 'utf8');
+    LOCAL_ASSET_IN_HTML_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = LOCAL_ASSET_IN_HTML_RE.exec(html)) !== null) {
+      const rawPath = m[2];
+      const queryPart = m[3] || '';
+      if (!isLocalAssetUrl(rawPath)) continue;
+      const abs = resolveSiteAssetFile(siteDir, filePath, rawPath);
+      const relHtml = path.relative(repoRootForMessages, filePath);
+      if (!abs) {
+        errors.push(`${relHtml}: could not resolve ${rawPath}`);
+        continue;
+      }
+      const expected = shortContentHash(abs);
+      const got = parseVQuery(queryPart);
+      if (got !== expected) {
+        errors.push(`${relHtml}: ${rawPath} ?v= expected ${expected}, got ${got ?? '(missing)'}`);
+      }
+    }
+  }
+  return errors;
+}
+
 /** Per-file content hash on ?v=; HTML only changes when referenced .css/.js bytes change. */
 export function stampLocalAssetUrls(
   html: string,
@@ -80,17 +117,17 @@ export function stampLocalAssetUrls(
 ): string {
   const safeFallback = sanitizeVersionToken(fallbackVersion) || 'dev';
   const errors: string[] = [];
-  const next = html.replace(/\b(href|src)="([^"]+\.(?:css|js))(?:\?[^"#]*)?(#[^"]*)?"/gi, (full, attr, rawUrl, hash = '') => {
+  const next = html.replace(LOCAL_ASSET_IN_HTML_RE, (full, attr, rawUrl, _q, frag = '') => {
     if (!isLocalAssetUrl(rawUrl)) {
       return full;
     }
     const abs = resolveSiteAssetFile(siteDir, htmlFilePath, rawUrl);
     if (!abs) {
       errors.push(`${rawUrl} (from ${path.relative(repoRoot, htmlFilePath)})`);
-      return `${attr}="${rawUrl}?v=${safeFallback}${hash}"`;
+      return `${attr}="${rawUrl}?v=${safeFallback}${frag}"`;
     }
     const v = shortContentHash(abs);
-    return `${attr}="${rawUrl}?v=${v}${hash}"`;
+    return `${attr}="${rawUrl}?v=${v}${frag}"`;
   });
   if (errors.length > 0) {
     console.error('write-deploy-version.ts: could not resolve local asset(s):');
@@ -145,6 +182,18 @@ function sanitizeVersionToken(value: string): string {
 }
 
 function main() {
+  if (process.argv.includes('--check')) {
+    const errors = verifyHtmlAssetStamps(outDir, repoRoot);
+    if (errors.length > 0) {
+      console.error('[check:site-asset-stamps] HTML ?v= does not match file content:');
+      for (const e of errors) console.error(' ', e);
+      console.error('Fix: npm run stamp:site-assets  (or npm run build)');
+      process.exit(1);
+    }
+    console.log('[check:site-asset-stamps] PASS: local .js/.css ?v= match content hashes');
+    return;
+  }
+
   fs.writeFileSync(outPath, JSON.stringify(payload, null, 0) + '\n', 'utf8');
   const { total, updated } = rewriteHtmlAssets(outDir, assetVersion);
   console.log('Wrote', outPath, shortCommit || '(no commit)');

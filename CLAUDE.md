@@ -3,6 +3,7 @@ You are working in a repo that uses npm and may deploy to Cloudflare.
 Always:
 - Read AGENTS.md and CLAUDE.md if they exist; follow their commands.
 - Before calling work done or pushing, run the project verify command (here: npm run verify). Fix all failures. Do not disable lint or skip tests unless I explicitly agree.
+- Site cache busting: do not hand-edit `?v=` on local `.js`/`.css` in HTML. After changing files under `site/`, run `npm run stamp:site-assets` (or `npm run build`). `npm run verify` runs `check:site-asset-stamps` before `build` so stale query strings fail fast.
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
