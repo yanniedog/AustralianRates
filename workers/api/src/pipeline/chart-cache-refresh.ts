@@ -184,10 +184,22 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
         try {
           const result =
             section === 'home_loans'
-              ? await collectHomeLoanAnalyticsRowsResolved(dbs, rep, { ...filters, disableRowCap: true })
+              ? await collectHomeLoanAnalyticsRowsResolved(dbs, rep, {
+                  ...filters,
+                  disableRowCap: true,
+                  chartInternalRefresh: true,
+                })
               : section === 'savings'
-                ? await collectSavingsAnalyticsRowsResolved(dbs, rep, { ...filters, disableRowCap: true })
-                : await collectTdAnalyticsRowsResolved(dbs, rep, { ...filters, disableRowCap: true })
+                ? await collectSavingsAnalyticsRowsResolved(dbs, rep, {
+                    ...filters,
+                    disableRowCap: true,
+                    chartInternalRefresh: true,
+                  })
+                : await collectTdAnalyticsRowsResolved(dbs, rep, {
+                    ...filters,
+                    disableRowCap: true,
+                    chartInternalRefresh: true,
+                  })
           await writeD1ChartCache(db, section, rep, cacheScope, result)
           refreshed++
         } catch (e) {

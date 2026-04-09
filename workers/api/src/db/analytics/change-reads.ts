@@ -39,6 +39,8 @@ type CommonInput = {
   /** Newest-first SQL order for chunked reads; default asc for normal pagination. */
   rowSort?: 'asc' | 'desc'
   disableRowCap?: boolean
+  /** When true (chart cache cron only), allow a higher D1 fetch cap so precomputed payloads stay complete. */
+  chartInternalRefresh?: boolean
   excludeCompareEdgeCases?: boolean
 }
 
