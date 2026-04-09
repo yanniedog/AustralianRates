@@ -243,6 +243,7 @@
     function normalizeViewMode(mode) {
         var value = String(mode || '').trim().toLowerCase();
         if (value === 'moves') return 'bank';
+        if (value === 'bank') return 'bank';
         if (value === 'bands') return 'bands';
         if (value === 'products') return 'products';
         if (value === 'focus') return 'focus';

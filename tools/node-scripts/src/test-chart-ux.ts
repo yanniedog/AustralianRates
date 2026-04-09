@@ -123,7 +123,9 @@ async function switchReportModeWithoutAnalyticsFetch(page, mode) {
         await page.evaluate((nextMode) => {
             const target = String(nextMode || '').trim().toLowerCase();
             const buttons = Array.from(document.querySelectorAll('.lwc-report-viewmode-tab'));
-            const buttonLabel = target === 'bank' ? 'best' : target;
+            // UI tab is "Ribbon" (mode bands), not "bands". Bank/best uses the dropdown, not a tab.
+            const buttonLabel =
+                target === 'bank' ? 'best' : target === 'bands' ? 'ribbon' : target;
             const buttonMatch = buttons.find((button) => String(button.textContent || '').trim().toLowerCase() === buttonLabel);
             if (buttonMatch instanceof HTMLElement) {
                 buttonMatch.click();
