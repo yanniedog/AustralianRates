@@ -1,4 +1,4 @@
-import { getReadDb } from '../db/read-db'
+import { getReadDbFromEnv } from '../db/read-db'
 import {
   buildPrecomputedChartScope,
   buildPrecomputedChartScopeForPreset,
@@ -160,8 +160,8 @@ async function scopeFilters(
 /** Refresh scoped chart request caches for all sections and representations. Called by cron every 15 min. */
 export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
   const db = env.DB
-  const analyticsDb = getReadDb(env)
-  const dbs = { canonicalDb: db, analyticsDb }
+  const rd = getReadDbFromEnv(env)
+  const dbs = { canonicalDb: rd, analyticsDb: rd }
   const errors: string[] = []
   let refreshed = 0
 
@@ -178,7 +178,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
 
   for (const section of SECTIONS) {
     for (const spec of precomputedScopeSpecs(section)) {
-      const filters = await scopeFilters(db, section, spec)
+      const filters = await scopeFilters(rd, section, spec)
       const cacheScope = spec.cacheScope
       for (const rep of REPRESENTATIONS) {
         try {
@@ -201,7 +201,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
       }
       for (const mode of REPORT_PLOT_MODES) {
         try {
-          const payload = await queryReportPlotPayload(db, section, mode, filters)
+          const payload = await queryReportPlotPayload(rd, section, mode, filters)
           await writeD1ReportPlotCache(db, section, mode, cacheScope, payload)
           refreshed++
         } catch (e) {

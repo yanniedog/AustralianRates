@@ -15,7 +15,7 @@ function d1ForReads(env: Pick<EnvBindings, 'DB' | 'READ_DB'>): D1Database {
   if (env.READ_DB) return env.READ_DB
   const db = env.DB as D1WithSession
   if (typeof db.withSession === 'function') {
-    return db.withSession() as D1Database
+    return db.withSession() as unknown as D1Database
   }
   return env.DB
 }

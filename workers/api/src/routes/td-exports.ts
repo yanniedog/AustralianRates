@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono'
 import { type ExportFormat, type ExportScope } from '../db/export-jobs'
 import { queryTdRatesPaginated } from '../db/td-queries'
-import { getReadDb } from '../db/read-db'
+import { getReadDbFromEnv } from '../db/read-db'
 import type { AppContext } from '../types'
 import { collectTdAnalyticsRowsResolved, queryTdRepresentationTimeseriesResolved } from './analytics-data'
 import { registerExportRoutes, runDatasetExportJob } from './export-route-registration'
@@ -75,7 +75,8 @@ async function buildTdArtifact(
   let rowCount = 0
   const representation = filters.representation ?? 'day'
   let effectiveRepresentation = representation
-  const dbs = { canonicalDb: env.DB, analyticsDb: getReadDb(env) }
+  const rd = getReadDbFromEnv(env)
+  const dbs = { canonicalDb: rd, analyticsDb: rd }
 
   if (scope === 'timeseries') {
     if (!filters.productKey && !filters.seriesKey) {

@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import { queryTdChartData } from '../../db/chart-data/term-deposits'
 import { ChartDataRequestError } from '../../db/chart-data/errors'
+import { getReadDb } from '../../db/read-db'
 import type { AppContext } from '../../types'
 import { jsonError } from '../../utils/http'
 import { parseOptionalNumber } from '../public-query'
@@ -20,7 +21,7 @@ export function registerTdChartDataRoute(routes: Hono<AppContext>): void {
       assertDateRange(startDate, endDate)
 
       const termMonths = parseNumberQuery(c.req.query('termMonths'), 'termMonths')
-      const response = await queryTdChartData(c.env.DB, {
+      const response = await queryTdChartData(getReadDb(c), {
         lenders,
         termMonths,
         interestPayment: String(c.req.query('interestPayment') || '').trim() || undefined,

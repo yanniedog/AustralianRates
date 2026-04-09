@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { getReadDb } from '../db/read-db'
 import { getPublicRunProgress } from '../db/run-progress'
 import type { AppContext } from '../types'
 import { jsonError } from '../utils/http'
@@ -9,7 +10,7 @@ export async function handlePublicRunStatus(c: Context<AppContext>) {
     return jsonError(c, 400, 'INVALID_REQUEST', 'runId is required.')
   }
 
-  const run = await getPublicRunProgress(c.env.DB, runId)
+  const run = await getPublicRunProgress(getReadDb(c), runId)
   if (!run) {
     return jsonError(c, 404, 'RUN_NOT_FOUND', 'Run not found.')
   }

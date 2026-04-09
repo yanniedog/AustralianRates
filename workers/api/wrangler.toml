@@ -2,6 +2,10 @@ name = "australianrates-api"
 main = "src/index.ts"
 compatibility_date = "2026-02-20"
 
+# Run Worker closer to D1 / upstream where measured latency wins (fetch handlers only).
+[placement]
+mode = "smart"
+
 [[routes]]
 pattern = "www.australianrates.com/api/home-loan-rates/*"
 zone_name = "australianrates.com"

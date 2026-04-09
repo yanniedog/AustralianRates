@@ -78,7 +78,8 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   merged: QueryRecord,
 ) {
   const requestedRepresentation = parseAnalyticsRepresentation(merged.representation)
-  const dbs = { canonicalDb: c.env.DB, analyticsDb: getReadDb(c.env) }
+  const db = getReadDb(c)
+  const dbs = { canonicalDb: db, analyticsDb: db }
   const baseFilters = options.buildFilters(merged)
   const resolvedFilters = clampAnalyticsFiltersToToday(
     (

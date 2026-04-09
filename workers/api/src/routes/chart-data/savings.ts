@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import { querySavingsChartData } from '../../db/chart-data/savings'
 import { ChartDataRequestError } from '../../db/chart-data/errors'
+import { getReadDb } from '../../db/read-db'
 import type { AppContext } from '../../types'
 import { jsonError } from '../../utils/http'
 import { parseOptionalNumber } from '../public-query'
@@ -14,7 +15,7 @@ export function registerSavingsChartDataRoute(routes: Hono<AppContext>): void {
       const endDate = parseOptionalDateQuery(c.req.query('endDate'), 'endDate')
       assertDateRange(startDate, endDate)
 
-      const response = await querySavingsChartData(c.env.DB, {
+      const response = await querySavingsChartData(getReadDb(c), {
         lenders,
         accountType: String(c.req.query('accountType') || '').trim() || undefined,
         rateType: String(c.req.query('rateType') || '').trim() || undefined,

@@ -25,7 +25,7 @@ import { withPublicCache } from '../utils/http'
 export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
   routes.get('/site-ui', async (c) => {
     withPublicCache(c, 60)
-    const db = getReadDb(c.env)
+    const db = getReadDb(c)
     const [
       legacyRaw,
       desktopRaw,

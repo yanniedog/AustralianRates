@@ -3,6 +3,7 @@ import {
   resolveChartDateRangeFromDb,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { getReadDb } from '../db/read-db'
 import { getCachedOrComputeReportPlot } from '../db/report-plot-cache'
 import { queryReportPlotPayload } from '../db/report-plot'
 import type { ReportPlotMode } from '../db/report-plot-types'
@@ -80,7 +81,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
     (
       baseFilters.startDate && baseFilters.endDate
         ? baseFilters
-        : (await resolveChartDateRangeFromDb(c.env.DB, options.section, baseFilters, {
+        : (await resolveChartDateRangeFromDb(getReadDb(c), options.section, baseFilters, {
           window: baseFilters.chartWindow ?? null,
         }))
     ) as TFilters,
@@ -91,7 +92,7 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
     options.section,
     mode,
     toQueryParams(merged),
-    () => queryReportPlotPayload(c.env.DB, options.section, mode, resolvedFilters),
+    () => queryReportPlotPayload(getReadDb(c), options.section, mode, resolvedFilters),
   )
 
   withPublicCache(c, REPORT_PLOT_CACHE_MAX_AGE)

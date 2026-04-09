@@ -55,7 +55,8 @@ export const CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style'
 export const INGEST_PAUSE_MODE_KEY = 'ingest_pause_mode'
 export const INGEST_PAUSE_REASON_KEY = 'ingest_pause_reason'
 export const INGEST_PAUSE_MODES = ['active', 'repair_pause'] as const
-export const DEFAULT_PUBLIC_CACHE_SECONDS = 120
+/** Aligns with chart/KV cache windows; CDN + Cache API serve stale while Worker recomputes. */
+export const DEFAULT_PUBLIC_CACHE_SECONDS = 300
 /** D1 batch size for public GET /export (full dataset built from chunked SELECTs). */
 export const PUBLIC_EXPORT_FETCH_CHUNK_SIZE = 1000
 /** Upper bound when the client passes an explicit export `limit` query param. */

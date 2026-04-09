@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import { queryHomeLoanChartData } from '../../db/chart-data/home-loans'
 import { ChartDataRequestError } from '../../db/chart-data/errors'
+import { getReadDb } from '../../db/read-db'
 import type { AppContext } from '../../types'
 import { jsonError } from '../../utils/http'
 import {
@@ -32,7 +33,7 @@ export function registerHomeLoanChartDataRoute(routes: Hono<AppContext>): void {
       if (offset == null) throw new ChartDataRequestError(400, 'INVALID_OFFSET', 'offset is required.')
       assertDateRange(startDate, endDate)
 
-      const response = await queryHomeLoanChartData(c.env.DB, {
+      const response = await queryHomeLoanChartData(getReadDb(c), {
         lenders,
         lvr,
         repaymentType,
