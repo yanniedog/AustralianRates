@@ -1291,9 +1291,27 @@
                 var fillPeak = active ? fp : fp * sc;
                 var mw = Math.max(0, Number(rs.mean_width) || 0);
                 var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
-                var fillAreaStyle = active
-                    ? ribbonFlowGradientFill(strokeC, fillEnd, fillPeak)
-                    : { color: hexToRgba(strokeC, Math.min(1, Math.max(0.16, (fillEnd + fillPeak) * 0.85))) };
+                var fillAreaStyle;
+                if (active) {
+                    if (focusKey && fillEnd <= 0 && fillPeak <= 0) {
+                        var focusFill = hexToRgba(strokeC, 0.24);
+                        fillAreaStyle = {
+                            type: 'linear',
+                            x: 0,
+                            y: 0,
+                            x2: 1,
+                            y2: 0,
+                            colorStops: [
+                                { offset: 0, color: focusFill },
+                                { offset: 1, color: focusFill },
+                            ],
+                        };
+                    } else {
+                        fillAreaStyle = ribbonFlowGradientFill(strokeC, fillEnd, fillPeak);
+                    }
+                } else {
+                    fillAreaStyle = { color: hexToRgba(strokeC, Math.min(1, Math.max(0.16, (fillEnd + fillPeak) * 0.85))) };
+                }
                 updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
                     id: 'ribbon_fill_' + index,
