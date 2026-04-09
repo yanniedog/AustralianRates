@@ -1,5 +1,6 @@
 import { ensureAppConfigTable, getIngestPauseConfig, setAppConfig } from '../db/app-config'
 import {
+  MELBOURNE_TARGET_HOUR,
   RATE_CHECK_LAST_RUN_ISO_KEY,
 } from '../constants'
 import { triggerDailyRun } from './bootstrap-jobs'
@@ -12,7 +13,7 @@ import { runLenderUniverseAudit } from './lender-universe-audit'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
-import { getMelbourneNowParts } from '../utils/time'
+import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { buildScheduledRunId } from '../utils/idempotency'
 
 function compactErrorSample(values: string[], max = 3): string[] {
@@ -20,6 +21,22 @@ function compactErrorSample(values: string[], max = 3): string[] {
 }
 
 export async function handleScheduledDaily(event: ScheduledController, env: EnvBindings) {
+  const scheduledMs = Number.isFinite(event.scheduledTime) ? event.scheduledTime : Date.now()
+  const melbourneParts = getMelbourneNowParts(
+    new Date(scheduledMs),
+    env.MELBOURNE_TIMEZONE || 'Australia/Melbourne',
+  )
+  const targetHour = Math.max(0, Math.min(23, parseIntegerEnv(env.MELBOURNE_TARGET_HOUR, MELBOURNE_TARGET_HOUR)))
+  if (melbourneParts.hour !== targetHour) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'not_melbourne_target_hour',
+      melbourne: melbourneParts,
+      intervalMinutes: 0,
+    }
+  }
+
   try {
     await ensureAppConfigTable(env.DB)
   } catch (error) {
@@ -35,12 +52,9 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     }
   }
 
-  const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
   const collectionDate = melbourneParts.date
 
-  const cronIso = Number.isFinite(event.scheduledTime)
-    ? new Date(event.scheduledTime).toISOString()
-    : new Date().toISOString()
+  const cronIso = new Date(scheduledMs).toISOString()
 
   let reconciliation: Awaited<ReturnType<typeof runLifecycleReconciliation>> | null = null
   let coverageAudit: Awaited<ReturnType<typeof runCoverageGapAudit>> | null = null

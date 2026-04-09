@@ -2,6 +2,7 @@ import {
   DAILY_BACKUP_CRON_EXPRESSION,
   DAILY_SCHEDULE_CRON_EXPRESSION,
   HISTORICAL_QUALITY_DAILY_CRON_EXPRESSION,
+  HOURLY_MAINTENANCE_CRON_EXPRESSION,
   INTEGRITY_AUDIT_CRON_EXPRESSION,
   MONTHLY_EXPORT_CRON_EXPRESSION,
   SITE_HEALTH_CRON_EXPRESSION,
@@ -26,7 +27,7 @@ import { runScheduledHistoricalQualitySnapshot } from './historical-quality-sche
 type CronEvent = ScheduledController & { cron?: string }
 export type ScheduledTask =
   | 'daily'
-  | 'hourly_wayback'
+  | 'hourly_maintenance'
   | 'site_health'
   | 'monthly_export'
   | 'integrity_audit'
@@ -39,7 +40,10 @@ export function scheduledTasksForCron(cron: string): ScheduledTask[] {
     return ['daily']
   }
   if (normalizedCron === SITE_HEALTH_CRON_EXPRESSION) {
-    return ['hourly_wayback', 'site_health']
+    return ['site_health']
+  }
+  if (normalizedCron === HOURLY_MAINTENANCE_CRON_EXPRESSION) {
+    return ['hourly_maintenance']
   }
   if (normalizedCron === MONTHLY_EXPORT_CRON_EXPRESSION) {
     return ['monthly_export']
@@ -114,6 +118,56 @@ async function runSiteHealthCron(env: EnvBindings) {
     overall_ok: result.overallOk,
     failures: result.failures.length,
     reconciliation,
+  }
+}
+
+async function runHourlyMaintenanceCron(
+  event: ScheduledController,
+  env: EnvBindings,
+  scheduledIso: string,
+  cron: string,
+) {
+  const melbourneParts = getMelbourneNowParts(
+    new Date(Number.isFinite(event.scheduledTime) ? event.scheduledTime : Date.now()),
+    env.MELBOURNE_TIMEZONE || 'Australia/Melbourne',
+  )
+  const [coverageResult, chartCacheResult, rbaResult] = await Promise.allSettled([
+    handleScheduledHourlyWayback(event, env),
+    refreshChartPivotCache(env),
+    collectRbaCashRateForDate(env.DB, melbourneParts.date, env),
+  ])
+
+  if (rbaResult.status === 'rejected') {
+    log.warn('scheduler', 'RBA cash rate collection failed in hourly maintenance cron', {
+      code: 'rba_collection_failed',
+      context: (rbaResult.reason as Error)?.message ?? String(rbaResult.reason),
+    })
+  }
+
+  if (coverageResult.status === 'rejected') {
+    const failureContext = JSON.stringify({
+      scheduled_time: scheduledIso,
+      cron,
+      coverage_error: (coverageResult.reason as Error)?.message || String(coverageResult.reason),
+    })
+    log.error('scheduler', 'Hourly maintenance (wayback) failed', {
+      error: coverageResult.reason,
+      context: failureContext,
+    })
+    throw new Error(`scheduled_dispatch_failed:${failureContext}`)
+  }
+
+  if (chartCacheResult.status === 'rejected') {
+    log.warn('scheduler', 'Chart cache refresh failed (non-fatal)', {
+      code: 'chart_cache_refresh_rejected',
+      context: (chartCacheResult.reason as Error)?.message ?? String(chartCacheResult.reason),
+    })
+  }
+
+  return {
+    hourly_wayback: coverageResult.value,
+    chart_cache: chartCacheResult.status === 'fulfilled' ? chartCacheResult.value : undefined,
+    rba: rbaResult.status === 'fulfilled' ? rbaResult.value : undefined,
   }
 }
 
@@ -228,72 +282,37 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     }
   }
 
-  if (tasks.includes('site_health')) {
-    log.info('scheduler', `Dispatching coverage + site health + chart cache cron (${cron})`, {
+  if (tasks.includes('hourly_maintenance')) {
+    log.info('scheduler', `Dispatching hourly maintenance cron (${cron})`, {
       context: `scheduled_time=${scheduledIso}`,
     })
-
-    const melbourneParts = getMelbourneNowParts(new Date(), env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
-    const [coverageResult, siteHealthResult, chartCacheResult, rbaResult] = await Promise.allSettled([
-      handleScheduledHourlyWayback(event, env),
-      runSiteHealthCron(env),
-      refreshChartPivotCache(env),
-      collectRbaCashRateForDate(env.DB, melbourneParts.date, env),
-    ])
-
-    if (rbaResult.status === 'rejected') {
-      log.warn('scheduler', 'RBA cash rate collection failed in site health cron', {
-        code: 'rba_collection_failed',
-        context: (rbaResult.reason as Error)?.message ?? String(rbaResult.reason),
-      })
-    }
-
-    if (coverageResult.status === 'rejected' || siteHealthResult.status === 'rejected') {
-      const failureContext = JSON.stringify({
-        scheduled_time: scheduledIso,
-        cron,
-        coverage_error:
-          coverageResult.status === 'rejected'
-            ? (coverageResult.reason as Error)?.message || String(coverageResult.reason)
-            : null,
-        site_health_error:
-          siteHealthResult.status === 'rejected'
-            ? (siteHealthResult.reason as Error)?.message || String(siteHealthResult.reason)
-            : null,
-      })
-      log.error('scheduler', 'Coverage + site health cron dispatch failed', {
-        error:
-          coverageResult.status === 'rejected'
-            ? coverageResult.reason
-            : siteHealthResult.status === 'rejected'
-              ? siteHealthResult.reason
-              : undefined,
-        context: failureContext,
-      })
-      throw new Error(`scheduled_dispatch_failed:${failureContext}`)
-    }
-    if (chartCacheResult.status === 'rejected') {
-      log.warn('scheduler', 'Chart cache refresh failed (non-fatal)', {
-        code: 'chart_cache_refresh_rejected',
-        context: (chartCacheResult.reason as Error)?.message ?? String(chartCacheResult.reason),
-      })
-    }
-
+    const maintenance = await runHourlyMaintenanceCron(event, env, scheduledIso, cron)
     return {
       ok: true,
       skipped: false,
-      kind: 'coverage_and_site_health',
+      kind: 'hourly_maintenance',
       replay_dispatch: replayDispatch,
-      hourly_wayback: coverageResult.value,
-      site_health: siteHealthResult.value,
-      chart_cache: chartCacheResult.status === 'fulfilled' ? chartCacheResult.value : undefined,
-      rba: rbaResult.status === 'fulfilled' ? rbaResult.value : undefined,
+      ...maintenance,
+    }
+  }
+
+  if (tasks.includes('site_health')) {
+    log.info('scheduler', `Dispatching site health cron (${cron})`, {
+      context: `scheduled_time=${scheduledIso}`,
+    })
+    const siteHealthResult = await runSiteHealthCron(env)
+    return {
+      ok: true,
+      skipped: false,
+      kind: 'site_health',
+      replay_dispatch: replayDispatch,
+      site_health: siteHealthResult,
     }
   }
 
   log.warn('scheduler', `Skipping unknown cron expression: ${cron}`, {
     code: 'unknown_cron_expression',
-    context: `scheduled_time=${scheduledIso} expected_daily=${DAILY_SCHEDULE_CRON_EXPRESSION}`,
+    context: `scheduled_time=${scheduledIso} expected_daily=${DAILY_SCHEDULE_CRON_EXPRESSION} expected_hourly_maint=${HOURLY_MAINTENANCE_CRON_EXPRESSION}`,
   })
   return {
     ok: true,

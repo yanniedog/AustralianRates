@@ -92,8 +92,8 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Rate check every 6 hours; wayback/site health every 15 min; monthly DB export 23:59 last day of month; data integrity audit 04:00 UTC daily; daily backup 09:00 UTC; historical quality daily snapshot 23:59 Melbourne/Hobart via DST-safe dual UTC hours.
-crons = ["0 */6 * * *", "*/15 * * * *", "59 23 * * *", "0 4 * * *", "0 9 * * *", "59 12,13 * * *"]
+# Daily ingest: 19:00 and 20:00 UTC (DST-safe bracket for Melbourne 06:00); handler gates on MELBOURNE_TARGET_HOUR. Site health only every 15 min. Hourly: wayback + chart cache + RBA cash for Melbourne date. Monthly export 23:59 UTC last day; integrity 04:00 UTC; backup 09:00 UTC; historical quality 23:59 Melbourne via 12,13 UTC.
+crons = ["0 19,20 * * *", "*/15 * * * *", "0 * * * *", "59 23 * * *", "0 4 * * *", "0 9 * * *", "59 12,13 * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"

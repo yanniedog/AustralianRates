@@ -1,6 +1,7 @@
 import {
   DAILY_SCHEDULE_CRON_EXPRESSION,
   DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
+  HOURLY_MAINTENANCE_CRON_EXPRESSION,
   MIN_RATE_CHECK_INTERVAL_MINUTES,
   SITE_HEALTH_CRON_EXPRESSION,
 } from '../constants'
@@ -37,6 +38,7 @@ export type AdminRealtimeSnapshot = {
     cron_expression: string
     daily_cron_expression: string
     hourly_cron_expression: string
+    maintenance_cron_expression: string
     default_interval_minutes: number
     effective_min_interval_minutes: number
   }
@@ -110,6 +112,7 @@ export async function getAdminRealtimeSnapshot(
       cron_expression: DAILY_SCHEDULE_CRON_EXPRESSION,
       daily_cron_expression: DAILY_SCHEDULE_CRON_EXPRESSION,
       hourly_cron_expression: SITE_HEALTH_CRON_EXPRESSION,
+      maintenance_cron_expression: HOURLY_MAINTENANCE_CRON_EXPRESSION,
       default_interval_minutes: DEFAULT_RATE_CHECK_INTERVAL_MINUTES,
       effective_min_interval_minutes: MIN_RATE_CHECK_INTERVAL_MINUTES,
     },

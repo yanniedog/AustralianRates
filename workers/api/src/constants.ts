@@ -17,8 +17,11 @@ export const TD_API_BASE_PATH = '/api/term-deposit-rates'
 export const ECONOMIC_API_BASE_PATH = '/api/economic-data'
 export const MELBOURNE_TIMEZONE = 'Australia/Melbourne'
 export const MELBOURNE_TARGET_HOUR = 6
-export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 */6 * * *'
+/** Dual UTC hours bracket Melbourne 06:00 across AEDT/AEST; `handleScheduledDaily` gates on local hour === MELBOURNE_TARGET_HOUR. */
+export const DAILY_SCHEDULE_CRON_EXPRESSION = '0 19,20 * * *'
 export const SITE_HEALTH_CRON_EXPRESSION = '*/15 * * * *'
+/** Top-of-hour UTC: Wayback backfill, chart pivot cache refresh, same-day RBA cash tick (not full daily ingest). */
+export const HOURLY_MAINTENANCE_CRON_EXPRESSION = '0 * * * *'
 /** 23:59 daily; handler runs monthly export only on the last day of each month. */
 export const MONTHLY_EXPORT_CRON_EXPRESSION = '59 23 * * *'
 /** 04:00 UTC daily; data integrity audit for admin UI. */

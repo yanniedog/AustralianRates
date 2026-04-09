@@ -3,6 +3,7 @@ import {
   DAILY_BACKUP_CRON_EXPRESSION,
   DAILY_SCHEDULE_CRON_EXPRESSION,
   HISTORICAL_QUALITY_DAILY_CRON_EXPRESSION,
+  HOURLY_MAINTENANCE_CRON_EXPRESSION,
   INTEGRITY_AUDIT_CRON_EXPRESSION,
   SITE_HEALTH_CRON_EXPRESSION,
 } from '../src/constants'
@@ -14,8 +15,12 @@ describe('scheduledTasksForCron', () => {
     expect(scheduledTasksForCron(DAILY_SCHEDULE_CRON_EXPRESSION)).toEqual(['daily'])
   })
 
-  it('routes the quarter-hour cron to both coverage backfill and site health', () => {
-    expect(scheduledTasksForCron(SITE_HEALTH_CRON_EXPRESSION)).toEqual(['hourly_wayback', 'site_health'])
+  it('routes the quarter-hour cron to site health only', () => {
+    expect(scheduledTasksForCron(SITE_HEALTH_CRON_EXPRESSION)).toEqual(['site_health'])
+  })
+
+  it('routes the hourly UTC cron to wayback + chart + RBA maintenance', () => {
+    expect(scheduledTasksForCron(HOURLY_MAINTENANCE_CRON_EXPRESSION)).toEqual(['hourly_maintenance'])
   })
 
   it('routes the daily 04:00 UTC cron to integrity audit', () => {
