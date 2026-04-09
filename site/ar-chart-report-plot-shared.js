@@ -213,6 +213,13 @@
         ];
     }
 
+    /** Avoid Number(null)===0 / Number('')===0 in chart data (misleading ribbon dips). */
+    function finiteRateOrNull(v) {
+        if (v == null || v === '') return null;
+        var n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    }
+
     function buildBandSeries(opts) {
         var dates = opts.dates;
         var plotPayload = opts.plotPayload;
@@ -227,20 +234,23 @@
             });
             var minData = dates.map(function (date) {
                 var point = byDate[date];
-                return [date, point != null ? Number(point.min_rate) : null];
+                return [date, point == null ? null : finiteRateOrNull(point.min_rate)];
             });
             var deltaData = dates.map(function (date) {
                 var point = byDate[date];
                 if (point == null) return [date, null];
-                return [date, Math.max(0, Number(point.max_rate) - Number(point.min_rate))];
+                var lo = finiteRateOrNull(point.min_rate);
+                var hi = finiteRateOrNull(point.max_rate);
+                if (lo == null || hi == null || hi < lo) return [date, null];
+                return [date, Math.max(0, hi - lo)];
             });
             var meanData = dates.map(function (date) {
                 var point = byDate[date];
-                return [date, point != null && Number.isFinite(Number(point.mean_rate)) ? Number(point.mean_rate) : null];
+                return [date, point == null ? null : finiteRateOrNull(point.mean_rate)];
             });
             var maxData = dates.map(function (date) {
                 var point = byDate[date];
-                return [date, point != null ? Number(point.max_rate) : null];
+                return [date, point == null ? null : finiteRateOrNull(point.max_rate)];
             });
             var stackKey = 'band_' + series.bank_name;
             var ew = Math.max(0, Number(rs.edge_width) || 0);
@@ -733,7 +743,7 @@
                 lineStyle: { color: theme.rba, width: 2, type: 'dashed' },
                 data: dates.map(function (date) {
                     var point = rbaDaily.find(function (entry) { return entry.date === date; });
-                    return [date, point ? Number(point.value) : null];
+                    return [date, point ? finiteRateOrNull(point.value) : null];
                 }),
             },
             {
@@ -745,7 +755,7 @@
                 lineStyle: { color: theme.cpi, width: 2, type: 'dashed' },
                 data: dates.map(function (date) {
                     var point = cpiDaily.find(function (entry) { return entry.date === date; });
-                    return [date, point ? Number(point.value) : null];
+                    return [date, point ? finiteRateOrNull(point.value) : null];
                 }),
             },
             {
@@ -806,7 +816,12 @@
                 knownBanks[bank.bank_name] = true;
                 var byDate = {};
                 (bank.points || []).forEach(function (p) {
-                    byDate[String(p.date || '').slice(0, 10)] = p;
+                    var d = String(p.date || '').slice(0, 10);
+                    if (!d) return;
+                    var lo = finiteRateOrNull(p.min_rate);
+                    var hi = finiteRateOrNull(p.max_rate);
+                    if (lo == null || hi == null || hi < lo) return;
+                    byDate[d] = p;
                 });
                 bandByDateByBank[bank.bank_name] = byDate;
             });
@@ -900,9 +915,9 @@
             Object.keys(knownBanks).forEach(function (bn) {
                 var p = bandByDateByBank[bn] && bandByDateByBank[bn][dateStr];
                 if (!p) return;
-                var lo = Number(p.min_rate);
-                var hi = Number(p.max_rate);
-                if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+                var lo = finiteRateOrNull(p.min_rate);
+                var hi = finiteRateOrNull(p.max_rate);
+                if (lo == null || hi == null || hi < lo) return;
                 if (yVal >= lo && yVal <= hi) {
                     var w = hi - lo;
                     candidates.push({ bn: bn, w: Number.isFinite(w) ? w : 0 });
