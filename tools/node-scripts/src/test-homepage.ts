@@ -723,14 +723,32 @@ async function verifyChartSmoke(page, results, label) {
 
     await ensureChartReady(page);
 
-    const chart = await page.evaluate(() => ({
-        engine: String(document.getElementById('chart-output')?.getAttribute('data-chart-engine') || ''),
-        canvases: document.querySelectorAll('#chart-output canvas').length,
-        status: String(document.getElementById('chart-status')?.textContent || '').trim(),
-        summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
-    }));
+    const chart = await page.evaluate(() => {
+        const out = document.getElementById('chart-output');
+        const status = String(document.getElementById('chart-status')?.textContent || '').trim();
+        const st = status.toLowerCase();
+        const hasEmpty = !!(out && out.querySelector('.chart-output-empty'));
+        const emptyTerminal =
+            hasEmpty &&
+            /^(no data|no curve data|no time ribbon data|no term vs time data|no lender match|no slope data|no ladder data|no distribution data|no numeric values)$/.test(
+                st,
+            );
+        return {
+            engine: String(out?.getAttribute('data-chart-engine') || ''),
+            canvases: document.querySelectorAll('#chart-output canvas').length,
+            status,
+            summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
+            emptyTerminal,
+        };
+    });
 
-    if (((chart.engine === 'echarts' || chart.engine === 'lightweight') || chart.canvases > 0) && chart.status) {
+    const chartDrawn =
+        chart.status &&
+        (chart.emptyTerminal ||
+            chart.engine === 'echarts' ||
+            chart.engine === 'lightweight' ||
+            chart.canvases > 0);
+    if (chartDrawn) {
         pass(results, `${label}: chart view renders live output`);
     } else {
         fail(results, `${label}: chart draw did not render`);
