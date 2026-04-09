@@ -1366,6 +1366,9 @@ body.ar-public .lwc-report-viewmode-select:focus-visible {
 }
 
 body.ar-public .lwc-focus-bank-tray-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     flex: 1 1 240px;
     min-width: 0;
     margin: 0;
@@ -1449,6 +1452,34 @@ body.ar-public .lwc-focus-bank-chip.is-selected {
     opacity: 1;
     border-color: color-mix(in srgb, var(--ar-accent) 50%, var(--ar-line-strong));
     background: color-mix(in srgb, var(--ar-accent-soft) 40%, var(--ar-surface-2));
+}
+
+body.ar-public .lwc-focus-bank-chip.is-ribbon-hover {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--ar-accent) 42%, var(--ar-line-strong));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-accent) 35%, transparent);
+}
+
+body.ar-public .lwc-focus-bank-chip.is-ribbon-selected {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--ar-accent) 55%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-accent-soft) 48%, var(--ar-surface-2));
+}
+
+body.ar-public .lwc-focus-bank-chip.is-ribbon-dim {
+    opacity: 0.22;
+}
+
+body.ar-public .lwc-ribbon-hover-bank-label {
+    margin-left: 8px;
+    font: 600 0.7rem/1.2 "Space Grotesk", system-ui, sans-serif;
+    color: var(--ar-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(200px, 28vw);
+    align-self: center;
+    flex-shrink: 1;
 }
 
 body.ar-public .lwc-focus-bank-chip:focus-visible {

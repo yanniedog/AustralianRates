@@ -365,6 +365,10 @@
             }
 
             chip.addEventListener('click', function () {
+                if (vm.mode === 'bands' && typeof opts.onRibbonBankChipClick === 'function') {
+                    opts.onRibbonBankChipClick(bn.full);
+                    return;
+                }
                 setViewMode(section, 'focus', bn.full);
                 onReRender();
             });

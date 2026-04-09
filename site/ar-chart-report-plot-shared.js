@@ -552,18 +552,38 @@
         var range = options.range;
         var section = options.section;
         var bankList = options.bankList || [];
+        var ribbonChromeHandlers = { onChipClick: function () {} };
+        var ribbonTrayRoot = null;
+        var ribbonHoverLabelEl = null;
 
         container.innerHTML = '';
         var wrapper = document.createElement('div');
         wrapper.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;';
         container.appendChild(wrapper);
 
-        wrapper.appendChild(M.createReportViewModeBar({
+        var viewBarOpts = {
             section: section,
             vm: options.vm,
             bankList: bankList,
             onReRender: options.onReRender,
-        }));
+        };
+        if (options.vm && options.vm.mode === 'bands') {
+            viewBarOpts.onRibbonBankChipClick = function (full) {
+                ribbonChromeHandlers.onChipClick(full);
+            };
+        }
+        var viewBar = M.createReportViewModeBar(viewBarOpts);
+        wrapper.appendChild(viewBar);
+        if (options.vm && options.vm.mode === 'bands') {
+            ribbonTrayRoot = viewBar.querySelector('.lwc-focus-bank-tray');
+            var trayWrapEl = viewBar.querySelector('.lwc-focus-bank-tray-wrap');
+            if (trayWrapEl) {
+                ribbonHoverLabelEl = document.createElement('span');
+                ribbonHoverLabelEl.className = 'lwc-ribbon-hover-bank-label';
+                ribbonHoverLabelEl.setAttribute('aria-live', 'polite');
+                trayWrapEl.appendChild(ribbonHoverLabelEl);
+            }
+        }
         wrapper.appendChild(M.createReportRangeBar({
             section: section,
             range: range.reportRange,
@@ -683,6 +703,7 @@
         }
 
         var hoveredBank = '';
+        var ribbonProductBank = '';
         var selectedProductName = '';
         var lastPointerDate = '';
 
@@ -697,35 +718,45 @@
             return '';
         }
 
-        function bankInInnerBandAtDate(bankName, yVal, dateStr) {
-            var p = bandByDateByBank[bankName] && bandByDateByBank[bankName][dateStr];
-            if (!p) return false;
-            var lo = Number(p.min_rate);
-            var hi = Number(p.max_rate);
-            if (!Number.isFinite(lo) || !Number.isFinite(hi) || !Number.isFinite(yVal)) return false;
-            var span = hi - lo;
-            var margin = span > 1e-9 ? span * 0.15 : 0.02;
-            var innerLo = lo + margin;
-            var innerHi = hi - margin;
-            if (innerLo >= innerHi) {
-                innerLo = lo;
-                innerHi = hi;
-            }
-            return yVal >= innerLo && yVal <= innerHi;
-        }
-
-        function pickBankFromInnerBand(dateStr, yVal) {
-            if (!dateStr) return '';
+        /** Bank under pointer: full min–max band at date (narrowest band wins if overlapping). */
+        function pickBankFromRibbonBand(dateStr, yVal) {
+            if (!dateStr || !Number.isFinite(yVal)) return '';
             var candidates = [];
             Object.keys(knownBanks).forEach(function (bn) {
-                if (bankInInnerBandAtDate(bn, yVal, dateStr)) {
-                    var p = bandByDateByBank[bn][dateStr];
-                    var w = Number(p.max_rate) - Number(p.min_rate);
+                var p = bandByDateByBank[bn] && bandByDateByBank[bn][dateStr];
+                if (!p) return;
+                var lo = Number(p.min_rate);
+                var hi = Number(p.max_rate);
+                if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+                if (yVal >= lo && yVal <= hi) {
+                    var w = hi - lo;
                     candidates.push({ bn: bn, w: Number.isFinite(w) ? w : 0 });
                 }
             });
             candidates.sort(function (a, b) { return a.w - b.w; });
             return candidates.length ? candidates[0].bn : '';
+        }
+
+        function ribbonDimTarget() {
+            return hoveredBank || ribbonProductBank || '';
+        }
+
+        function syncRibbonTrayUi() {
+            if (!ribbonTrayRoot) return;
+            var focus = ribbonDimTarget();
+            var chips = ribbonTrayRoot.querySelectorAll('.lwc-focus-bank-chip');
+            for (var i = 0; i < chips.length; i++) {
+                var ch = chips[i];
+                var full = String(ch.title || '').trim();
+                ch.classList.toggle('is-ribbon-hover', !!hoveredBank && full === hoveredBank);
+                ch.classList.toggle('is-ribbon-selected', !!ribbonProductBank && full === ribbonProductBank);
+                ch.classList.toggle('is-ribbon-dim', !!focus && full !== focus);
+            }
+            if (ribbonHoverLabelEl) {
+                var txt = ribbonDimTarget();
+                ribbonHoverLabelEl.textContent = txt;
+                ribbonHoverLabelEl.style.display = txt ? 'inline' : 'none';
+            }
         }
 
         function resolveHoverBank(seriesName) {
@@ -753,7 +784,7 @@
                 var rest = s.name.slice(3);
                 var pipe = rest.indexOf('|');
                 var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                var show = bn === hoveredBank;
+                var show = ribbonProductBank && bn === ribbonProductBank;
                 var isSelected = s.name === selectedProductName;
                 var base = s._ribbonBaseHex || '#64748b';
                 updates.push({
@@ -798,8 +829,8 @@
             syncRibbonCanvasSize();
             var ctx = ribbonCanvasCtx;
             ctx.clearRect(0, 0, ribbonCanvas.width, ribbonCanvas.height);
-            if (!hoveredBank) return;
-            var prods = ribbonCanvasModel.byBank[hoveredBank];
+            if (!ribbonProductBank) return;
+            var prods = ribbonCanvasModel.byBank[ribbonProductBank];
             if (!prods || !prods.length) return;
             var idxs = ribbonLodIndices;
             prods.forEach(function (prod) {
@@ -851,8 +882,8 @@
             var data = chart.convertFromPixel({ gridIndex: 0 }, [offsetX, offsetY]);
             if (!data || data.length < 2) return null;
             var dateStr = resolveDateFromAxisValue(data[0]);
-            if (!dateStr || !hoveredBank) return null;
-            var prods = ribbonCanvasModel.byBank[hoveredBank];
+            if (!dateStr || !ribbonProductBank) return null;
+            var prods = ribbonCanvasModel.byBank[ribbonProductBank];
             if (!prods) return null;
             var best = null;
             var bestDist = Infinity;
@@ -948,15 +979,20 @@
             var ib = options.infoBox;
             if (!ib || typeof ib.show !== 'function') return;
             if (selectedProductName) return;
-            if (!hoveredBank || !lastPointerDate) {
+            if (!ribbonProductBank) {
                 hideRibbonInfoBox();
                 return;
             }
-            var plist = ribbonCanvasModel.byBank[hoveredBank] || [];
+            var anchor = lastPointerDate || (dates.length ? dates[dates.length - 1] : '');
+            if (!anchor) {
+                hideRibbonInfoBox();
+                return;
+            }
+            var plist = ribbonCanvasModel.byBank[ribbonProductBank] || [];
             var items = [];
             var sec = String(section || '');
             plist.forEach(function (prod) {
-                var v = prod.byDate[lastPointerDate];
+                var v = prod.byDate[anchor];
                 if (v == null || !Number.isFinite(v) || v <= 0) return;
                 if (sec === 'savings' && v < 1.0) return;
                 items.push({
@@ -974,8 +1010,8 @@
                 return;
             }
             ib.show({
-                heading: fmtReportDateYmd(lastPointerDate),
-                meta: hoveredBank + ' \u00b7 ' + items.length + ' product' + (items.length !== 1 ? 's' : ''),
+                heading: fmtReportDateYmd(anchor),
+                meta: ribbonProductBank + ' \u00b7 ' + items.length + ' product' + (items.length !== 1 ? 's' : ''),
                 items: items,
             });
         }
@@ -1034,7 +1070,7 @@
         });
 
         if (isBandsMode) {
-            applyRibbonBankHighlightState('');
+            applyRibbonBankHighlightState(ribbonDimTarget());
         }
 
         if (isBandsMode && useRibbonCanvas) {
@@ -1060,51 +1096,87 @@
                 var dateStr = resolveDateFromAxisValue(data[0]);
                 if (dateStr) lastPointerDate = dateStr;
                 var yVal = data[1];
-                var next = pickBankFromInnerBand(dateStr, yVal);
+                var next = pickBankFromRibbonBand(dateStr, yVal);
                 if (next !== hoveredBank) {
                     hoveredBank = next;
-                    applyRibbonBankHighlightState(hoveredBank);
+                    applyRibbonBankHighlightState(ribbonDimTarget());
                     updateProductVisibility();
                 }
+                syncRibbonTrayUi();
                 refreshRibbonUnderChartPanel();
             }
             function onRibbonZrGlobalOut() {
-                if (selectedProductName) return;
                 hoveredBank = '';
                 lastPointerDate = '';
-                applyRibbonBankHighlightState('');
+                syncRibbonTrayUi();
+                applyRibbonBankHighlightState(ribbonDimTarget());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
             }
             function onRibbonZrClick(ev) {
-                if (!useRibbonCanvas) return;
                 var xy = ribbonZrXY(ev);
                 var data = chart.convertFromPixel({ gridIndex: 0 }, xy);
-                var dateStr = data && data.length >= 2 ? resolveDateFromAxisValue(data[0]) : '';
-                var yVal = data && data.length >= 2 ? data[1] : NaN;
-                var tapBank = pickBankFromInnerBand(dateStr, yVal);
-                if (tapBank) hoveredBank = tapBank;
-                var pick = ribbonCanvasPickProduct(xy[0], xy[1]);
-                if (pick) {
-                    if (selectedProductName === pick.prod.key) {
-                        selectedProductName = '';
-                        hideRibbonInfoBox();
-                    } else {
-                        selectedProductName = pick.prod.key;
-                        showRibbonInfoBox(pick);
+                if (!data || data.length < 2) return;
+                var dateStr = resolveDateFromAxisValue(data[0]);
+                var yVal = data[1];
+                var tapBank = pickBankFromRibbonBand(dateStr, yVal);
+
+                if (useRibbonCanvas && ribbonProductBank && tapBank === ribbonProductBank) {
+                    var pick = ribbonCanvasPickProduct(xy[0], xy[1]);
+                    if (pick) {
+                        if (selectedProductName === pick.prod.key) {
+                            selectedProductName = '';
+                            hideRibbonInfoBox();
+                            refreshRibbonUnderChartPanel();
+                        } else {
+                            selectedProductName = pick.prod.key;
+                            showRibbonInfoBox(pick);
+                        }
+                        applyRibbonBankHighlightState(ribbonDimTarget());
+                        scheduleRibbonRedraw();
+                        syncRibbonTrayUi();
+                        return;
                     }
-                    applyRibbonBankHighlightState(hoveredBank);
-                    scheduleRibbonRedraw();
-                    return;
                 }
-                if (selectedProductName) {
+
+                if (tapBank) {
+                    if (dateStr) lastPointerDate = dateStr;
+                    ribbonProductBank = tapBank;
+                    hoveredBank = tapBank;
                     selectedProductName = '';
                     hideRibbonInfoBox();
-                    hoveredBank = tapBank || hoveredBank;
-                    applyRibbonBankHighlightState(hoveredBank);
+                    applyRibbonBankHighlightState(ribbonDimTarget());
+                    updateProductVisibility();
+                    refreshRibbonUnderChartPanel();
                     scheduleRibbonRedraw();
+                    syncRibbonTrayUi();
+                    return;
                 }
+
+                ribbonProductBank = '';
+                selectedProductName = '';
+                hideRibbonInfoBox();
+                applyRibbonBankHighlightState(ribbonDimTarget());
+                updateProductVisibility();
+                refreshRibbonUnderChartPanel();
+                scheduleRibbonRedraw();
+                syncRibbonTrayUi();
             }
+
+            ribbonChromeHandlers.onChipClick = function (fullName) {
+                var bn = String(fullName || '').trim();
+                if (!bn) return;
+                ribbonProductBank = bn;
+                hoveredBank = bn;
+                lastPointerDate = dates.length ? dates[dates.length - 1] : '';
+                selectedProductName = '';
+                hideRibbonInfoBox();
+                applyRibbonBankHighlightState(ribbonDimTarget());
+                updateProductVisibility();
+                refreshRibbonUnderChartPanel();
+                scheduleRibbonRedraw();
+                syncRibbonTrayUi();
+            };
             zr.on('mousemove', onRibbonZrMouseMove);
             zr.on('globalout', onRibbonZrGlobalOut);
             zr.on('click', onRibbonZrClick);
@@ -1115,56 +1187,49 @@
             if (!useRibbonCanvas && productOverlay.length) {
                 chart.on('click', function (params) {
                     var name = params.seriesName || '';
-                    if (name.indexOf('[P]') === 0) {
-                        var rest = name.slice(3);
-                        var pipe = rest.indexOf('|');
-                        var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                        var pn = pipe >= 0 ? rest.slice(pipe + 1) : '';
-                        var rate = params.value && params.value[1] != null ? Number(params.value[1]) : null;
-                        var dateStr = params.value && params.value[0] != null ? String(params.value[0]).slice(0, 10) : '';
-                        if (selectedProductName === name) {
-                            selectedProductName = '';
-                            hideRibbonInfoBox();
-                        } else {
-                            selectedProductName = name;
-                            hoveredBank = bn;
-                            if (options.infoBox && typeof options.infoBox.show === 'function' && rate != null && Number.isFinite(rate)) {
-                                var baseHex = options.bankColor(bn, bankColorIndexForName(bn));
-                                options.infoBox.show({
-                                    heading: fmtReportDateYmd(dateStr),
-                                    meta: M.selectionMetaText ? M.selectionMetaText({
-                                        selectionYmd: dateStr,
-                                        rate: rate,
-                                        entries: [{ bankName: bn, productName: pn, rate: rate, color: baseHex, selectionKey: name, subtitle: '' }],
-                                    }) : '',
-                                    items: [{
-                                        bankName: bn,
-                                        productName: pn,
-                                        rate: rate,
-                                        color: baseHex,
-                                        selectionKey: name,
-                                        subtitle: '',
-                                    }],
-                                });
-                            }
-                        }
-                        applyRibbonBankHighlightState(hoveredBank);
-                        updateProductVisibility();
+                    if (name.indexOf('[P]') !== 0) return;
+                    if (!ribbonProductBank) return;
+                    var rest = name.slice(3);
+                    var pipe = rest.indexOf('|');
+                    var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
+                    if (bn !== ribbonProductBank) return;
+                    var pn = pipe >= 0 ? rest.slice(pipe + 1) : '';
+                    var rate = params.value && params.value[1] != null ? Number(params.value[1]) : null;
+                    var dateStr = params.value && params.value[0] != null ? String(params.value[0]).slice(0, 10) : '';
+                    if (selectedProductName === name) {
+                        selectedProductName = '';
+                        hideRibbonInfoBox();
+                        refreshRibbonUnderChartPanel();
                     } else {
-                        var bank = resolveHoverBank(name);
-                        if (selectedProductName) {
-                            selectedProductName = '';
-                            hideRibbonInfoBox();
-                            hoveredBank = bank || '';
-                            applyRibbonBankHighlightState(hoveredBank);
-                            updateProductVisibility();
+                        selectedProductName = name;
+                        hoveredBank = bn;
+                        if (options.infoBox && typeof options.infoBox.show === 'function' && rate != null && Number.isFinite(rate)) {
+                            var baseHex = options.bankColor(bn, bankColorIndexForName(bn));
+                            options.infoBox.show({
+                                heading: fmtReportDateYmd(dateStr),
+                                meta: M.selectionMetaText ? M.selectionMetaText({
+                                    selectionYmd: dateStr,
+                                    rate: rate,
+                                    entries: [{ bankName: bn, productName: pn, rate: rate, color: baseHex, selectionKey: name, subtitle: '' }],
+                                }) : '',
+                                items: [{
+                                    bankName: bn,
+                                    productName: pn,
+                                    rate: rate,
+                                    color: baseHex,
+                                    selectionKey: name,
+                                    subtitle: '',
+                                }],
+                            });
                         }
                     }
+                    applyRibbonBankHighlightState(ribbonDimTarget());
+                    updateProductVisibility();
                 });
             }
 
             chart.on('finished', function () {
-                applyRibbonBankHighlightState(hoveredBank);
+                applyRibbonBankHighlightState(ribbonDimTarget());
                 if (useRibbonCanvas) {
                     recomputeRibbonLod();
                     scheduleRibbonRedraw();
@@ -1172,11 +1237,13 @@
             });
 
             siteUiRibbonListener = function () {
-                applyRibbonBankHighlightState(hoveredBank);
+                applyRibbonBankHighlightState(ribbonDimTarget());
                 updateProductVisibility();
                 scheduleRibbonRedraw();
+                syncRibbonTrayUi();
             };
             window.addEventListener('ar:site-ui-settings', siteUiRibbonListener);
+            syncRibbonTrayUi();
         }
 
         return {
@@ -1184,7 +1251,7 @@
             chart: {
                 resize: function (width, height) {
                     chart.resize({ width: width, height: height });
-                    if (isBandsMode) applyRibbonBankHighlightState(hoveredBank);
+                    if (isBandsMode) applyRibbonBankHighlightState(ribbonDimTarget());
                     if (useRibbonCanvas) {
                         recomputeRibbonLod();
                         scheduleRibbonRedraw();
