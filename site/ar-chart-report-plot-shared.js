@@ -871,14 +871,11 @@
             return String(ribbonTrayHoverBank || ribbonProductBank || '').trim();
         }
 
+        /** Bank whose ribbons stay full-colour: tray hover or pinned chip first; chart hover only when no panel focus. */
         function ribbonChartHighlightBank() {
-            var hov = String(hoveredBank || '').trim();
-            if (hov) return hov;
-            var tray = String(ribbonTrayHoverBank || '').trim();
-            if (tray) return tray;
-            var sel = String(ribbonProductBank || '').trim();
-            if (sel) return sel;
-            return '';
+            var panel = ribbonPanelBank();
+            if (panel) return panel;
+            return String(hoveredBank || '').trim();
         }
 
         function ribbonLineFilterKeys() {
@@ -940,7 +937,9 @@
             if (!ribbonTrayRoot) return;
             var dimRef = ribbonChartHighlightBank();
             var dimKey = dimRef ? normRibbonBankName(dimRef) : '';
-            var hlKey = normRibbonBankName(ribbonTrayHoverBank || hoveredBank);
+            var hlKey = normRibbonBankName(
+                ribbonTrayHoverBank || (ribbonProductBank ? '' : hoveredBank)
+            );
             var selKey = ribbonProductBank ? normRibbonBankName(ribbonProductBank) : '';
             var chips = ribbonTrayRoot.querySelectorAll('.lwc-focus-bank-chip');
             for (var i = 0; i < chips.length; i++) {
