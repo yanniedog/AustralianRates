@@ -823,6 +823,7 @@
         var ribbonHoverScopeSeq = 0;
         var ribbonExpandedPaths = {};
         var ribbonTreeAnchorYmd = '';
+        var _orphanFocusLogAt = 0;
 
         function clearRibbonHoverScopes() {
             ribbonHoverScopeMap = {};
@@ -838,6 +839,7 @@
         function normRibbonBankName(n) {
             return String(n || '')
                 .trim()
+                .replace(/[\u00A0\u2000-\u200B\uFEFF]/g, ' ')
                 .replace(/\s+/g, ' ')
                 .toLowerCase();
         }
@@ -1197,6 +1199,53 @@
             var rs = getRibbonStyleResolved();
             var focusRaw = String(hoveredBankName || '').trim();
             var focusKey = focusRaw ? normRibbonBankName(focusRaw) : '';
+            if (focusKey) {
+                var resolvedKey = '';
+                var si = 0;
+                for (si = 0; si < plotPayload.series.length; si++) {
+                    if (normRibbonBankName(plotPayload.series[si].bank_name) === focusKey) {
+                        resolvedKey = focusKey;
+                        break;
+                    }
+                }
+                if (!resolvedKey && focusKey.length >= 3) {
+                    var fuzzyKeys = [];
+                    for (var sj = 0; sj < plotPayload.series.length; sj++) {
+                        var bn = normRibbonBankName(plotPayload.series[sj].bank_name);
+                        if (bn.indexOf(focusKey) >= 0 || focusKey.indexOf(bn) >= 0) fuzzyKeys.push(bn);
+                    }
+                    var seen = {};
+                    var uniq = [];
+                    fuzzyKeys.forEach(function (k) {
+                        if (!seen[k]) {
+                            seen[k] = true;
+                            uniq.push(k);
+                        }
+                    });
+                    if (uniq.length === 1) resolvedKey = uniq[0];
+                }
+                focusKey = resolvedKey;
+            }
+            // #region agent log
+            if (focusRaw && !focusKey) {
+                var _orf = Date.now();
+                if (_orf - _orphanFocusLogAt > 800) {
+                    _orphanFocusLogAt = _orf;
+                    fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f5b4c8' },
+                        body: JSON.stringify({
+                            sessionId: 'f5b4c8',
+                            hypothesisId: 'H9-orphan-focus',
+                            location: 'ar-chart-report-plot-shared.js:applyRibbonBankHighlightState',
+                            message: 'highlight name did not resolve to a band series',
+                            data: { focusRaw: String(focusRaw).slice(0, 120), seriesCount: plotPayload.series.length },
+                            timestamp: _orf,
+                        }),
+                    }).catch(function () {});
+                }
+            }
+            // #endregion
             var updates = [];
             var activeCount = 0;
             plotPayload.series.forEach(function (bank, index) {
@@ -1217,9 +1266,7 @@
                 var fillPeak = active ? fp : fp * sc;
                 var mw = Math.max(0, Number(rs.mean_width) || 0);
                 var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
-                var fillAreaStyle = active
-                    ? ribbonFlowGradientFill(strokeC, fillEnd, fillPeak)
-                    : { color: hexToRgba(strokeC, Math.min(1, Math.max(0.16, (fillEnd + fillPeak) * 0.85))) };
+                var fillAreaStyle = ribbonFlowGradientFill(strokeC, fillEnd, fillPeak);
                 updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
                     id: 'ribbon_fill_' + index,
