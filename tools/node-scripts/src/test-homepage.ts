@@ -186,10 +186,22 @@ async function verifyNoscriptFromBatch(batchPromise, label, results) {
 }
 
 async function gotoPublic(page, url) {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
-    await page.waitForSelector('#main-content', { timeout: SEL_TIMEOUT_MS });
-    await page.waitForSelector('.site-header .site-brand', { timeout: SEL_TIMEOUT_MS });
-    await page.waitForTimeout(POST_NAV_SETTLE_MS);
+    const maxAttempts = Number(process.env.TEST_GOTO_RETRIES || 2);
+    let lastErr;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
+            await page.waitForSelector('#main-content', { state: 'attached', timeout: SEL_TIMEOUT_MS });
+            await page.waitForSelector('.site-header .site-brand', { state: 'visible', timeout: SEL_TIMEOUT_MS });
+            await page.waitForTimeout(POST_NAV_SETTLE_MS);
+            return;
+        } catch (err) {
+            lastErr = err;
+            if (attempt + 1 >= maxAttempts) break;
+            await page.waitForTimeout(500);
+        }
+    }
+    throw lastErr;
 }
 
 async function waitForExplorerTableReady(page, timeout = EXPLORER_TABLE_TIMEOUT_MS) {
