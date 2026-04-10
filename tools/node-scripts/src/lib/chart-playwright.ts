@@ -27,7 +27,7 @@ export async function waitForChartReady(page: Page, timeout = 18_000): Promise<v
       status,
     )
   }, null, { timeout })
-  await page.waitForTimeout(1200)
+  await page.waitForTimeout(650)
 }
 
 export async function ensureChartReady(page: Page, timeout = 18_000): Promise<void> {

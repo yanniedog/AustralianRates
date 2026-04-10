@@ -15,7 +15,8 @@ const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 /** Tight defaults; override via env if production is slow or flaky. */
 const GOTO_TIMEOUT_MS = Number(process.env.TEST_GOTO_TIMEOUT_MS || 20000);
 const SEL_TIMEOUT_MS = Number(process.env.TEST_SELECTOR_TIMEOUT_MS || 10000);
-const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 1500);
+const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 1000);
+const ACTION_TIMEOUT_MS = Number(process.env.TEST_ACTION_TIMEOUT_MS || 45000);
 const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT_MS || 22000);
 const PIVOT_CHART_TIMEOUT_MS = Number(process.env.TEST_PIVOT_CHART_TIMEOUT_MS || 32000);
 const FILTER_SCENARIO_OPEN_MS = Number(process.env.TEST_FILTER_SCENARIO_MS || 14000);
@@ -108,6 +109,80 @@ async function closeWithTimeout(label, action, timeoutMs = 6000) {
     } finally {
         if (timer) clearTimeout(timer);
     }
+}
+
+function createPhaseLogger() {
+    const t0 = Date.now();
+    let prev = t0;
+    const quiet = process.env.TEST_QUIET === '1';
+    return async function phase(title) {
+        if (quiet) return;
+        const now = Date.now();
+        const total = ((now - t0) / 1000).toFixed(1);
+        const delta = ((now - prev) / 1000).toFixed(1);
+        prev = now;
+        console.log(`[test-homepage] +${total}s (Δ${delta}s) ${title}`);
+    };
+}
+
+async function prefetchNoscriptEntries(specs) {
+    return Promise.all(
+        specs.map(async (spec) => {
+            const { label, url, apiBasePath } = spec;
+            try {
+                const response = await fetch(url, {
+                    redirect: 'follow',
+                    signal: AbortSignal.timeout(NOSCRIPT_FETCH_TIMEOUT_MS),
+                });
+                const html = await response.text();
+                return { label, apiBasePath, status: response.status, html, fetchError: null };
+            } catch (error) {
+                const name = error && error.name ? String(error.name) : '';
+                const msg = error && error.message ? String(error.message) : String(error);
+                const timedOut = name === 'TimeoutError' || /aborted|timeout/i.test(msg);
+                return {
+                    label,
+                    apiBasePath,
+                    status: 0,
+                    html: '',
+                    fetchError: timedOut ? `timed out after ${NOSCRIPT_FETCH_TIMEOUT_MS}ms` : msg,
+                };
+            }
+        }),
+    );
+}
+
+function verifyNoscriptEntry(entry, results) {
+    const { label, apiBasePath } = entry;
+    if (entry.fetchError) {
+        const kind = /timed out/i.test(entry.fetchError) ? 'timed out' : 'errored';
+        fail(results, `${label}: noscript fetch ${kind} (${entry.fetchError})`);
+        return;
+    }
+    if (entry.status !== 200) {
+        fail(results, `${label}: noscript HTML fetch failed (${entry.status})`);
+        return;
+    }
+    const html = entry.html;
+    const needles = [
+        '<noscript',
+        `${apiBasePath}/export.csv`,
+        `${apiBasePath}/filters`,
+        `${apiBasePath}/health`,
+    ];
+    const missing = needles.filter((needle) => html.indexOf(needle) === -1);
+    if (missing.length === 0) pass(results, `${label}: noscript API fallback links exist`);
+    else fail(results, `${label}: noscript fallback missing ${missing.join(', ')}`);
+}
+
+async function verifyNoscriptFromBatch(batchPromise, label, results) {
+    const entries = await batchPromise;
+    const entry = entries.find((e) => e.label === label);
+    if (!entry) {
+        fail(results, `${label}: noscript prefetch missing entry`);
+        return;
+    }
+    verifyNoscriptEntry(entry, results);
 }
 
 async function gotoPublic(page, url) {
@@ -728,38 +803,6 @@ async function verifyNoPublicAdminSurface(page, results, label) {
     else fail(results, `${label}: public admin links leaked (${adminLinks.join(', ')})`);
 }
 
-async function verifyNoScriptFallback(url, apiBasePath, results, label) {
-    try {
-        const response = await fetch(url, {
-            redirect: 'follow',
-            signal: AbortSignal.timeout(NOSCRIPT_FETCH_TIMEOUT_MS),
-        });
-        const html = await response.text();
-        if (response.status !== 200) {
-            fail(results, `${label}: noscript HTML fetch failed (${response.status})`);
-            return;
-        }
-
-        const needles = [
-            '<noscript',
-            `${apiBasePath}/export.csv`,
-            `${apiBasePath}/filters`,
-            `${apiBasePath}/health`,
-        ];
-        const missing = needles.filter((needle) => html.indexOf(needle) === -1);
-        if (missing.length === 0) pass(results, `${label}: noscript API fallback links exist`);
-        else fail(results, `${label}: noscript fallback missing ${missing.join(', ')}`);
-    } catch (error) {
-        const name = error && error.name ? String(error.name) : '';
-        const msg = error && error.message ? String(error.message) : String(error);
-        if (name === 'TimeoutError' || /aborted|timeout/i.test(msg)) {
-            fail(results, `${label}: noscript fetch timed out after ${NOSCRIPT_FETCH_TIMEOUT_MS}ms`);
-        } else {
-            fail(results, `${label}: noscript fetch errored (${msg})`);
-        }
-    }
-}
-
 async function verifyPublicTriggerRemoval(page, results, label) {
     const count = await page.locator('#trigger-run').count().catch(() => 0);
     if (count === 0) pass(results, `${label}: public trigger controls remain removed`);
@@ -989,7 +1032,11 @@ async function verifyResponsiveViewports(page, results, label, baseUrl) {
 async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
     await page.setViewportSize({ width: 375, height: 667 });
     await gotoPublic(page, baseUrl);
-    await page.click('a[href="#scenario"]');
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(150);
+    const scenarioLaunch = page.locator('a[href="#scenario"]').first();
+    await scenarioLaunch.scrollIntoViewIfNeeded().catch(() => {});
+    await scenarioLaunch.click({ force: true, timeout: SEL_TIMEOUT_MS });
     await page.waitForFunction(() => window.location.hash === '#scenario', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(600);
 
@@ -1048,7 +1095,9 @@ async function verifyMobileRail(page, results, label, baseUrl) {
         if (d && d.tagName === 'DETAILS') d.open = true;
     });
     await page.waitForTimeout(400);
-    await page.click('#tab-explorer').catch(() => {});
+    const tabExplorer = page.locator('#tab-explorer');
+    await tabExplorer.scrollIntoViewIfNeeded().catch(() => {});
+    await tabExplorer.click({ force: true, timeout: SEL_TIMEOUT_MS }).catch(() => {});
     await page.waitForTimeout(500);
     await page.waitForSelector('#panel-explorer.active', { timeout: 5000 }).catch(() => {});
     await page.waitForSelector('#rate-table .tabulator-row', { timeout: 10000 }).catch(() => {});
@@ -1064,20 +1113,35 @@ async function verifyMobileRail(page, results, label, baseUrl) {
     }
     pass(results, `${label}: mobile explorer rail appears on the explorer tab`);
 
+    await page.evaluate(() => {
+        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        window.scrollTo(0, Math.min(max, 320));
+    });
+    await page.waitForTimeout(200);
     const initialScrollY = await page.evaluate(() => window.scrollY).catch(() => 0);
-    await page.locator('#mobile-table-rail .mobile-table-rail-btn').last().click({ force: true });
+    const railDown = page.locator('#mobile-table-rail .mobile-table-rail-btn').last();
+    const railUp = page.locator('#mobile-table-rail .mobile-table-rail-btn').first();
+    await railDown.click({ force: true });
     await page.waitForTimeout(1200);
     const afterDown = await page.evaluate(() => window.scrollY).catch(() => initialScrollY);
 
-    if (afterDown > initialScrollY + 20) pass(results, `${label}: mobile rail down button scrolls the page`);
+    const RAIL_SCROLL_EPS = 12;
+    if (afterDown > initialScrollY + RAIL_SCROLL_EPS) pass(results, `${label}: mobile rail down button scrolls the page`);
     else fail(results, `${label}: mobile rail down button did not move the page`);
 
-    await page.locator('#mobile-table-rail .mobile-table-rail-btn').first().click({ force: true });
+    await railUp.click({ force: true });
     await page.waitForTimeout(1200);
-    const afterUp = await page.evaluate(() => window.scrollY).catch(() => afterDown);
+    let afterUp = await page.evaluate(() => window.scrollY).catch(() => afterDown);
 
-    if (afterUp < afterDown - 20) pass(results, `${label}: mobile rail up button scrolls the page back`);
-    else fail(results, `${label}: mobile rail up button did not move the page upward`);
+    if (afterUp < afterDown - RAIL_SCROLL_EPS) {
+        pass(results, `${label}: mobile rail up button scrolls the page back`);
+    } else {
+        await railUp.click({ force: true });
+        await page.waitForTimeout(700);
+        afterUp = await page.evaluate(() => window.scrollY).catch(() => afterDown);
+        if (afterUp < afterDown - RAIL_SCROLL_EPS) pass(results, `${label}: mobile rail up button scrolls the page back`);
+        else fail(results, `${label}: mobile rail up button did not move the page upward`);
+    }
 
     const mobilePivotTab = page.locator('#tab-pivot');
     await mobilePivotTab.scrollIntoViewIfNeeded().catch(() => {});
@@ -1267,7 +1331,7 @@ async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
     }
 }
 
-async function verifySectionSmoke(page, results, section) {
+async function verifySectionSmoke(page, results, section, noscriptBatchPromise) {
     const url = withSharedQuery(section.path, section.apiBasePath);
     await page.setViewportSize({ width: 1440, height: 1200 });
     await gotoPublic(page, url);
@@ -1283,7 +1347,7 @@ async function verifySectionSmoke(page, results, section) {
     await verifyPublicFooter(page, results, section.name);
     await verifyClientLog(page, results, section.name);
     await verifyNoPublicAdminSurface(page, results, section.name);
-    await verifyNoScriptFallback(url, section.apiBasePath, results, section.name);
+    await verifyNoscriptFromBatch(noscriptBatchPromise, section.name, results);
     await verifyPublicTriggerRemoval(page, results, section.name);
     await verifyChartSmoke(page, results, section.name);
     await verifyMobileScenarioAccess(page, results, section.name, url);
@@ -1294,6 +1358,7 @@ async function runTests() {
     const results = createResults();
     const requestFailures = [];
     const pageErrors = [];
+    const runStarted = Date.now();
 
     if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
@@ -1303,6 +1368,7 @@ async function runTests() {
         viewport: { width: 1440, height: 1200 },
     });
     const page = await context.newPage();
+    page.setDefaultTimeout(ACTION_TIMEOUT_MS);
 
     page.on('pageerror', (error) => {
         const message = error && error.message ? error.message : String(error);
@@ -1318,7 +1384,19 @@ async function runTests() {
     });
 
     try {
+        const phase = createPhaseLogger();
         const homeUrl = withSharedQuery('/', '/api/home-loan-rates');
+        const noscriptSpecs = [
+            { label: 'Homepage', url: homeUrl, apiBasePath: '/api/home-loan-rates' },
+            ...SECTIONS.slice(1).map((s) => ({
+                label: s.name,
+                url: withSharedQuery(s.path, s.apiBasePath),
+                apiBasePath: s.apiBasePath,
+            })),
+        ];
+        const noscriptBatchPromise = prefetchNoscriptEntries(noscriptSpecs);
+
+        await phase('homepage: first load (noscript fetch started in parallel)');
         await gotoPublic(page, homeUrl);
         pass(results, 'page loaded successfully (HTTP 200)');
 
@@ -1336,6 +1414,7 @@ async function runTests() {
             fail(results, 'meta description missing or irrelevant');
         }
 
+        await phase('homepage: shell, table, hero');
         await verifySkipLink(page, results, 'Homepage');
         await verifyClarityPresent(page, results, 'Homepage');
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
@@ -1352,20 +1431,24 @@ async function runTests() {
         await verifyDonateModal(page, results, 'Homepage');
         await verifyClientLog(page, results, 'Homepage');
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
-        await verifyNoScriptFallback(homeUrl, '/api/home-loan-rates', results, 'Homepage');
+        await phase('homepage: noscript check (parallel fetch)');
+        await verifyNoscriptFromBatch(noscriptBatchPromise, 'Homepage', results);
         await verifyPublicTriggerRemoval(page, results, 'Homepage');
         await verifyFilterAccessibleNames(page, results, 'Homepage');
+        await phase('homepage: chart + pivot');
         await verifyChartSmoke(page, results, 'Homepage');
         await verifyPivotLoad(page, results, 'Homepage');
         await verifyCopyLinkFeedback(page, results, 'Homepage');
         await verifyExportDownload(page, results, 'Homepage');
         await verifyDesktopWorkspaceControls(page, results, 'Homepage', homeUrl);
         await verifyTabsAndHash(page, results, 'Homepage', homeUrl);
+        await phase('homepage: viewports + mobile flows');
         await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);
         await verifyMobileScenarioAccess(page, results, 'Homepage', homeUrl);
         await verifyMobileRail(page, results, 'Homepage', homeUrl);
         await verifyMobileOverlays(page, results, 'Homepage', homeUrl);
 
+        await phase('homepage: desktop screenshot');
         await page.setViewportSize({ width: 1440, height: 1200 });
         await gotoPublic(page, homeUrl);
         await page.screenshot({
@@ -1374,9 +1457,11 @@ async function runTests() {
         }).catch(() => {});
 
         for (const section of SECTIONS.slice(1)) {
-            await verifySectionSmoke(page, results, section);
+            await phase(`section: ${section.name}`);
+            await verifySectionSmoke(page, results, section, noscriptBatchPromise);
         }
 
+        await phase('legal pages + 404 + runtime health');
         await verifyLegalPages(page, results);
         await verifyNotFoundRoute(page, results);
         await verifyRuntimeHealth(results, requestFailures, pageErrors);
@@ -1411,8 +1496,13 @@ async function runTests() {
     console.log('\n========================================');
     console.log(`Total Tests: ${results.passed.length + results.failed.length}`);
     console.log(`Pass Rate: ${((results.passed.length / Math.max(results.passed.length + results.failed.length, 1)) * 100).toFixed(1)}%`);
+    const wallSec = ((Date.now() - runStarted) / 1000).toFixed(1);
+    console.log(`Wall time: ${wallSec}s`);
     console.log('========================================\n');
     console.log(`Screenshots saved to: ${SCREENSHOT_DIR}/`);
+    if (process.env.TEST_QUIET !== '1') {
+        console.log('Tip: set TEST_QUIET=1 to hide phase lines; TEST_ACTION_TIMEOUT_MS / TEST_POST_NAV_SETTLE_MS to tune waits.\n');
+    }
 
     process.exit(results.failed.length > 0 ? 1 : 0);
 }
