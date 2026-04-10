@@ -1,5 +1,7 @@
 # Concurrent agents and pull requests
 
+**Repo default for assistants (Cursor, Codex, Claude):** use this PR workflow unless the user explicitly asks otherwise—see root `AGENTS.md` (“Default git workflow”) and `.cursor/rules/git-pr-workflow-default.mdc`.
+
 Use **one Git branch per agent (or per task)**. Open a **pull request (PR)** into `main` for each branch. That keeps work isolated until you deliberately merge, and this repo’s **GitHub Actions CI** already runs on every PR (`ci.yml`).
 
 ## What a PR is (minimal mental model)

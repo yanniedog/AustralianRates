@@ -8,17 +8,13 @@ alwaysApply: true
 When fixing issues that affect production (www.australianrates.com), follow this loop until the problem is **definitely** fixed. **You must never ask the user to do reproduction steps** — perform all verification yourself.
 
 1. **Make repairs** – Apply the necessary code or config changes in the repo.
-2. **Commit and push** – On `main`: stage changes, commit with a clear message, then push to `main`:
-   - `git checkout main` (if not already on main; merge or rebase as needed)
-   - `git add` relevant files
-   - `git commit -m "clear message"`
-   - `git push origin main`
-3. **Wait for deploy** – After pushing, wait a few seconds (e.g. 5–15) for Cloudflare Pages and/or Workers to finish deploying. Do not skip this step.
+2. **Commit and push** – **Default:** follow **`git-pr-workflow-default.mdc`**: branch off `main`, commit on `agent/…` / `feat/…` / `fix/…`, push branch, open PR to `main`, merge when CI is green. **Only** if the user explicitly requested a **direct `main` hotfix**: on `main`, `git add`, `git commit`, `git push origin main`.
+3. **Wait for deploy** – After the change is **on `main`** (merged PR or direct push), wait for Cloudflare Pages and/or Workers to finish deploying. Do not skip this step.
 4. **Verify on production** – Check that your changes work on the live site. Do this **autonomously** (never ask the user to reproduce):
    - From repo root run: `npm run test:homepage` (frontend/Pages).
    - Run `npm run test:api` and `npm run test:archive` for worker tests when relevant.
    - Use `node diagnose-api.js` if API health needs checking against production.
    - Optionally fetch key URLs (e.g. homepage, /savings/, /term-deposits/, API health) and assert expected status or content.
-5. **Loop** – If any check fails, fix the cause, commit again, push, wait for deploy, then re-run verification. Do **not** stop until all checks pass.
+5. **Loop** – If any check fails, fix on the **feature branch**, push, re-run PR CI, merge when green, wait for deploy, then re-run production verification. Do **not** stop until all checks pass.
 
 Do not consider the task done until production verification passes. If you cannot run the production tests (e.g. no network or deploy not done), say so explicitly and note that the user should run the test commands after deploy.

@@ -10,6 +10,14 @@ These rules are mandatory and override any conflicting preference.
 
 **MUST ALWAYS** (any assistant, any chat about this repo): after making changes, **commit and push**; **confirm deployment and CI completed successfully** and fix any failures until green; then **confirm the intended result on https://www.australianrates.com** using the commands below—not push alone. Applies to **every** conversation unless the user explicitly waives commit, push, deploy, or production verification. Cursor rule: `.cursor/rules/every-chat-commit-deploy-verify-production.mdc`.
 
+### Default git workflow (Cursor, Codex, Claude)
+
+**Default:** land work via a **feature branch** and a **pull request into `main`** (not by pushing commits straight to `main`). Sync `main`, `git checkout -b agent/<slug>` (or `feat/…` / `fix/…`), commit, `git push -u origin HEAD`, open PR (`gh pr create --base main` or GitHub UI), fix until **PR CI** is green, merge when ready. Full steps: `docs/CONCURRENT_AGENT_WORKFLOW.md` and `.cursor/rules/git-pr-workflow-default.mdc`.
+
+The **production verification** steps below apply **after** the change is on **`main`** and hosting deploys have finished (merged PR or rare explicit `main` hotfix). A green PR alone is not the same as an updated **www.australianrates.com** until merge + deploy.
+
+**Exception:** the user **explicitly** requests a **direct `main` hotfix**—then push to `main` and still complete deployment confirmation and the checks below.
+
 1. Before claiming any deploy-related task is complete, run from repo root:
    - `npm run test:homepage`
    - `npm run test:api`

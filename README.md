@@ -25,7 +25,7 @@ Standalone Australian home loan rates project hosted on Cloudflare.
 - `workers/archive`: Archive/discovery worker (D1, R2, Queue)
 - `site`: Static dashboard deployed with Cloudflare Pages
 
-For **multiple agents or parallel tasks**, use one branch and one PR per stream of work; see [docs/CONCURRENT_AGENT_WORKFLOW.md](docs/CONCURRENT_AGENT_WORKFLOW.md).
+For **multiple agents or parallel tasks**, use one branch and one PR per stream of work; see [docs/CONCURRENT_AGENT_WORKFLOW.md](docs/CONCURRENT_AGENT_WORKFLOW.md). **Codex** (OpenAI): [CODEX.md](CODEX.md) points at the same default PR workflow and `AGENTS.md`.
 
 ## Product Features
 
