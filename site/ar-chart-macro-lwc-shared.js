@@ -240,16 +240,6 @@
         return byDateCell;
     }
 
-    function normalizeViewMode(mode) {
-        var value = String(mode || '').trim().toLowerCase();
-        if (value === 'moves') return 'bank';
-        if (value === 'bank') return 'bank';
-        if (value === 'bands') return 'bands';
-        if (value === 'products') return 'products';
-        if (value === 'focus') return 'focus';
-        return 'products';
-    }
-
     function preloadBankIcons(bankList) {
         var BB = window.AR.bankBrand;
         if (!BB || typeof BB.preloadIcons !== 'function') return;
@@ -258,58 +248,15 @@
         }));
     }
 
-    /**
-     * View mode bar: Ribbon | product dropdown (Products / Best) | horizontal bank logo tray (focus).
-     */
+    /** Horizontal bank logo tray for ribbon report charts (per-bank highlight / product drilldown). */
     function createReportViewModeBar(opts) {
-        var section = opts.section;
-        var vm = opts.vm;
         var bankList = opts.bankList || [];
-        var onReRender = opts.onReRender;
         preloadBankIcons(bankList);
 
         var bar = document.createElement('div');
         bar.className = 'lwc-report-viewmode';
         bar.setAttribute('role', 'toolbar');
-        bar.setAttribute('aria-label', 'Chart series view');
-
-        function mkTab(label, isActive, tabClass) {
-            var b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'lwc-report-viewmode-tab' + (isActive ? ' is-active' : '') + (tabClass ? ' ' + tabClass : '');
-            b.textContent = label;
-            return b;
-        }
-
-        var btnBands = mkTab('Ribbon', vm.mode === 'bands', 'lwc-report-viewmode-tab--first');
-        btnBands.addEventListener('click', function () {
-            setViewMode(section, 'bands');
-            onReRender();
-        });
-
-        var selectWrap = document.createElement('div');
-        selectWrap.className = 'lwc-report-viewmode-select-wrap' + (vm.mode !== 'bands' ? ' is-active' : '');
-
-        var select = document.createElement('select');
-        select.className = 'lwc-report-viewmode-select';
-        select.setAttribute('aria-label', 'Products view');
-
-        var productsOption = document.createElement('option');
-        productsOption.value = 'products';
-        productsOption.textContent = 'All products';
-        select.appendChild(productsOption);
-
-        var bestOption = document.createElement('option');
-        bestOption.value = 'bank';
-        bestOption.textContent = 'Best';
-        select.appendChild(bestOption);
-
-        select.value = vm.mode === 'products' || vm.mode === 'focus' ? 'products' : 'bank';
-        select.addEventListener('change', function () {
-            setViewMode(section, select.value === 'products' ? 'products' : 'bank');
-            onReRender();
-        });
-        selectWrap.appendChild(select);
+        bar.setAttribute('aria-label', 'Lender ribbon');
 
         var trayWrap = document.createElement('div');
         trayWrap.className = 'lwc-focus-bank-tray-wrap';
@@ -317,22 +264,7 @@
         var tray = document.createElement('div');
         tray.className = 'lwc-focus-bank-tray';
         tray.setAttribute('role', 'radiogroup');
-        tray.setAttribute('aria-label', 'Focus bank');
-
-        var clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className = 'lwc-focus-bank-clear';
-        clearBtn.textContent = '\u00d7';
-        clearBtn.title = 'Clear bank focus';
-        clearBtn.setAttribute('aria-label', 'Clear bank focus');
-        clearBtn.disabled = vm.mode !== 'focus';
-        clearBtn.addEventListener('click', function () {
-            if (vm.mode !== 'focus') return;
-            setViewMode(section, 'products');
-            onReRender();
-        });
-
-        tray.appendChild(clearBtn);
+        tray.setAttribute('aria-label', 'Lenders');
 
         var BB = window.AR.bankBrand;
         bankList.forEach(function (bn) {
@@ -340,11 +272,10 @@
             chip.type = 'button';
             chip.className = 'lwc-focus-bank-chip';
             chip.setAttribute('role', 'radio');
-            chip.setAttribute('aria-checked', vm.mode === 'focus' && bn.full === vm.focusBank ? 'true' : 'false');
+            chip.setAttribute('aria-checked', 'false');
             chip.title = bn.full;
             chip.setAttribute('data-ar-bank-full', bn.full);
-            chip.setAttribute('aria-label', 'Focus ' + bn.full);
-            if (vm.mode === 'focus' && bn.full === vm.focusBank) chip.classList.add('is-selected');
+            chip.setAttribute('aria-label', bn.full);
 
             var meta = BB && typeof BB.getMeta === 'function' ? BB.getMeta(bn.full) : { icon: '', short: bn.short };
             if (meta.icon) {
@@ -366,19 +297,14 @@
             }
 
             chip.addEventListener('click', function () {
-                if (vm.mode === 'bands' && typeof opts.onRibbonBankChipClick === 'function') {
-                    opts.onRibbonBankChipClick(bn.full);
-                    return;
-                }
-                setViewMode(section, 'focus', bn.full);
-                onReRender();
+                if (typeof opts.onRibbonBankChipClick === 'function') opts.onRibbonBankChipClick(bn.full);
             });
-            if (vm.mode === 'bands' && typeof opts.onRibbonBankChipPointerEnter === 'function') {
+            if (typeof opts.onRibbonBankChipPointerEnter === 'function') {
                 chip.addEventListener('pointerenter', function () {
                     opts.onRibbonBankChipPointerEnter(bn.full);
                 });
             }
-            if (vm.mode === 'bands' && typeof opts.onRibbonBankChipPointerLeave === 'function') {
+            if (typeof opts.onRibbonBankChipPointerLeave === 'function') {
                 chip.addEventListener('pointerleave', function () {
                     opts.onRibbonBankChipPointerLeave(bn.full);
                 });
@@ -387,8 +313,6 @@
         });
 
         trayWrap.appendChild(tray);
-        bar.appendChild(btnBands);
-        bar.appendChild(selectWrap);
         bar.appendChild(trayWrap);
         return bar;
     }
@@ -592,22 +516,13 @@
             '<span style="' + stAmt + 'color:' + c + ';">' + amt + '%</span>';
     }
 
-    // ── View mode state for report charts ────────────────────────────────────
-    var _viewModeBySection = {};
-
-    function getViewMode(section) {
-        var state = _viewModeBySection[section] || { mode: 'bands', focusBank: '' };
-        return {
-            mode: normalizeViewMode(state.mode),
-            focusBank: String(state.focusBank || ''),
-        };
+    // ── Report charts: ribbon (bands) only ───────────────────────────────────
+    function getViewMode(/* section */) {
+        return { mode: 'bands', focusBank: '' };
     }
 
-    function setViewMode(section, mode, focusBank) {
-        _viewModeBySection[section] = {
-            mode: normalizeViewMode(mode),
-            focusBank: focusBank || '',
-        };
+    function setViewMode(/* section, mode, focusBank */) {
+        /* no-op: legacy callers; ribbon is the only view */
     }
 
     function productColorVariant(baseHex, idx, total) {

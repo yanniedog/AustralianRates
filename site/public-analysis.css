@@ -1249,7 +1249,7 @@
     }
 }
 
-/* LWC macro report: view mode tabs + horizontal focus-bank logo tray */
+/* Rate report: horizontal lender logo tray (ribbon chart) */
 body.ar-public .lwc-report-viewmode {
     display: flex;
     align-items: center;

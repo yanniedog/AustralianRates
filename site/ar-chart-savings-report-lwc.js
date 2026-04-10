@@ -1,12 +1,5 @@
 /**
- * Savings Report chart — LightweightCharts (TradingView) implementation.
- *
- * View modes:
- *   'bank'     — Best savings rate per bank (one line per bank)
- *   'products' — Individual product lines across all banks (default)
- *   'focus'    — All products for a single selected bank
- *
- * Always shows RBA cash rate + CPI overlay lines.
+ * Savings rate report — ECharts ribbon (min–max bands per institution). RBA + CPI via chartReportPlot.
  */
 (function () {
     'use strict';
@@ -56,7 +49,6 @@
         'me bank':                        '#003b6f',
         'mystate bank':                   '#e05c00',
     };
-    var PALETTE = ['#4f8dfd','#27c27a','#f0b90b','#f97316','#8b5cf6','#ef4444','#14b8a6','#64748b','#a78bfa','#fb923c'];
 
     function bankShort(name) {
         var shared = window.AR && window.AR.chartMacroLwcShared;
@@ -66,7 +58,7 @@
     }
     function bankColor(name, idx) {
         var k = String(name || '').trim().toLowerCase();
-        return BANK_COLOR[k] || PALETTE[idx % PALETTE.length];
+        return BANK_COLOR[k] || ['#4f8dfd','#27c27a','#f0b90b','#f97316','#8b5cf6','#ef4444','#14b8a6','#64748b','#a78bfa','#fb923c'][idx % 10];
     }
 
     function isDark() {
@@ -93,106 +85,6 @@
 
     function todayYmd() { return new Date().toISOString().slice(0, 10); }
 
-    function subtractMonths(ymd, n) {
-        var d = new Date(ymd + 'T12:00:00Z');
-        d.setUTCMonth(d.getUTCMonth() - n);
-        return d.toISOString().slice(0, 10);
-    }
-
-    function fmtFull(ymd) {
-        var s = String(ymd || '').slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-        var p = s.split('-');
-        var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return m[+p[1] - 1] + ' ' + +p[2] + ', ' + p[0];
-    }
-
-    // ── Data: best-per-bank (max rate + winning product per date) ───────────
-    function buildBankSeries(visibleSeries) {
-        var M = window.AR.chartMacroLwcShared;
-        var byBank = {};
-        (visibleSeries || []).forEach(function (s) {
-            var bn = String(s.bankName || '').trim();
-            if (!bn) return;
-            var k = bn.toLowerCase();
-            var pn = String(s.productName || 'Unknown');
-            if (!byBank[k]) byBank[k] = { bankName: bn, byDate: {} };
-            (s.points || []).forEach(function (p) {
-                var d = String(p.date || '');
-                var v = Number(p.value);
-                if (!d || !Number.isFinite(v) || v < 1.0) return;
-                byBank[k].byDate[d] = M.mergeWinningDeposit(byBank[k].byDate[d], v, pn, p.row || null);
-            });
-        });
-        return Object.keys(byBank)
-            .map(function (k) {
-                var e = byBank[k];
-                var pts = Object.keys(e.byDate).sort().map(function (d) {
-                    var cell = e.byDate[d];
-                    return { date: d, value: cell.value, productName: cell.productName, row: cell.row || null };
-                });
-                return { bankName: e.bankName, points: pts, latest: pts.length ? pts[pts.length - 1].value : 0 };
-            })
-            .sort(function (a, b) { return b.latest - a.latest; })
-            .map(function (b, i) {
-                b.short = bankShort(b.bankName);
-                b.color = bankColor(b.bankName, i);
-                b.legendLabel = b.short;
-                b.section = 'savings';
-                b.selectionKey = String(b.bankName || '').trim().toLowerCase();
-                return b;
-            });
-    }
-
-    // ── Data: individual products ────────────────────────────────────────────
-    function buildProductSeries(allSeries, focusBank) {
-        var products = [];
-        var bankIdx = {};
-        var bankCount = {};
-        (allSeries || []).forEach(function (s) {
-            var bn = String(s.bankName || '').trim();
-            if (!bn) return;
-            var bk = bn.toLowerCase();
-            if (focusBank && bk !== String(focusBank).toLowerCase()) return;
-            var pts = (s.points || []).filter(function (p) {
-                var v = Number(p.value);
-                return p.date && Number.isFinite(v) && v >= 1.0;
-            }).map(function (p) {
-                return { date: String(p.date), value: Number(p.value), row: p.row || null };
-            });
-            if (!pts.length) return;
-            if (bankCount[bk] == null) { bankCount[bk] = 0; bankIdx[bk] = Object.keys(bankIdx).length; }
-            products.push({
-                bankName: bn,
-                productName: String(s.productName || 'Unknown'),
-                subtitle: s.subtitle || '',
-                latestRow: s.latestRow,
-                points: pts,
-                latest: pts[pts.length - 1].value,
-                _bk: bk,
-                _bkIdx: bankCount[bk]++,
-            });
-        });
-        products.sort(function (a, b) { return b.latest - a.latest; });
-        var M = window.AR.chartMacroLwcShared;
-        products.forEach(function (p, i) {
-            p.short = bankShort(p.bankName);
-            p.productShort = M.shortProductName(p.productName);
-            p.section = 'savings';
-            p.selectionKey = String((p.latestRow && p.latestRow.product_key) || (p.bankName + '|' + p.productName)).trim().toLowerCase();
-            if (focusBank) {
-                p.color = PALETTE[i % PALETTE.length];
-                p.legendLabel = p.productShort;
-            } else {
-                var base = bankColor(p.bankName, bankIdx[p._bk]);
-                p.color = M.productColorVariant(base, p._bkIdx, bankCount[p._bk]);
-                p.legendLabel = p.short + ' \u00b7 ' + p.productShort;
-            }
-        });
-        return products;
-    }
-
-    // ── Unique sorted bank names from allSeries ─────────────────────────────
     function extractBankNames(allSeries) {
         var seen = {};
         var list = [];
@@ -208,25 +100,23 @@
         return list;
     }
 
-    // ── Info box below chart ────────────────────────────────────────────────
     function createInfoBox(t) {
         var M = window.AR.chartMacroLwcShared;
         return M.createReportSelectionInfoBox(t);
     }
 
-    // ── Main render ─────────────────────────────────────────────────────────
     function render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries) {
-        var L = window.LightweightCharts;
-        if (!L || !container) return null;
-
+        if (!container) return null;
         var M = window.AR.chartMacroLwcShared;
         var reportPlot = window.AR.chartReportPlot;
-        var overlayModule = window.AR.chartEconomicOverlays || {};
         if (!M || typeof M.prepareRbaCpiForReport !== 'function') {
             throw new Error('chartMacroLwcShared not loaded');
         }
+        if (!reportPlot || typeof reportPlot.render !== 'function') {
+            container.textContent = 'Chart module unavailable.';
+            return null;
+        }
 
-        // Dispose previous chart on internal re-render (toggle change)
         if (container._reportDispose) {
             try { container._reportDispose(); } catch (_) {}
             container._reportDispose = null;
@@ -237,463 +127,63 @@
         var reportRange = M.getReportRange(section);
         var allSeries = (model && (model.allSeries || model.visibleSeries)) || [];
         container.setAttribute('data-report-view-mode', vm.mode);
-        if (vm.mode === 'bands' && reportPlot && typeof reportPlot.render === 'function') {
-            var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
-            var plotRange = reportPlot.payloadDateRange(plotPayload);
-            var fbRangeSav = reportPlot.fallbackSeriesDateBoundsFromModel
-                ? reportPlot.fallbackSeriesDateBoundsFromModel(model)
-                : { minDate: '', maxDate: '' };
-            var plotMin = plotRange.minDate || fbRangeSav.minDate || todayYmd();
-            var plotMax = plotRange.maxDate || fbRangeSav.maxDate || plotMin;
-            var dataMinPlot = reportRange === 'All'
-                ? (M.resolveReportDataMin(plotMin, rbaHistory, cpiData, economicOverlaySeries) || plotMin)
-                : plotMin;
-            var ctxMaxPlot = plotMax;
-            var viewStartPlot = reportRange === 'All'
-                ? dataMinPlot
-                : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
-            var tBandsSav = th();
-            var infoBoxBandsSav = createInfoBox(tBandsSav);
-            var bandsTraySav =
-                reportPlot.bankTrayEntriesFromBandsPayload &&
-                reportPlot.bankTrayEntriesFromBandsPayload(plotPayload, bankShort);
-            return reportPlot.render({
-                container: container,
-                section: section,
-                vm: vm,
-                reportViewKind: 'economicReport',
-                bankList: bandsTraySav != null ? bandsTraySav : extractBankNames(allSeries),
-                plotPayload: plotPayload,
-                allSeries: allSeries,
-                range: {
-                    reportRange: reportRange,
-                    dataMin: dataMinPlot,
-                    ctxMax: ctxMaxPlot,
-                    viewStart: viewStartPlot,
-                    chartStart: viewStartPlot,
-                },
-                theme: tBandsSav,
-                rbaHistory: rbaHistory,
-                cpiData: cpiData,
-                economicOverlaySeries: economicOverlaySeries,
-                bankColor: bankColor,
-                noteText: '',
-                infoBox: infoBoxBandsSav,
-                onReRender: function () {
-                    render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
-                },
-                onRangeChange: function () {
-                    if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
-                        window.AR.charts.drawChart();
-                    } else {
-                        render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
-                    }
-                },
-            });
-        }
-        var isProductMode = vm.mode === 'products' || vm.mode === 'focus';
 
-        // Build lines based on view mode
-        var lines;
-        if (vm.mode === 'products') {
-            lines = buildProductSeries(allSeries, null);
-        } else if (vm.mode === 'focus' && vm.focusBank) {
-            lines = buildProductSeries(allSeries, vm.focusBank);
-        } else {
-            lines = buildBankSeries(allSeries);
-        }
-
-        // Date range
-        var bankMin = null;
-        var bankMax = null;
-        lines.forEach(function (b) {
-            b.points.forEach(function (p) {
-                if (!bankMin || p.date < bankMin) bankMin = p.date;
-                if (!bankMax || p.date > bankMax) bankMax = p.date;
-            });
-        });
-        if (!bankMax) bankMax = todayYmd();
-        if (!bankMin) bankMin = bankMax;
-
-        var dataMin = reportRange === 'All'
-            ? (M.resolveReportDataMin(bankMin, rbaHistory, cpiData, economicOverlaySeries) || bankMin)
-            : bankMin;
-        var ctxMax = bankMax;
-        var viewStart = reportRange === 'All'
-            ? dataMin
-            : M.resolveReportRangeStart(bankMin, ctxMax, reportRange);
-        var windowStart = viewStart;
-
-        var prep = M.prepareRbaCpiForReport(rbaHistory, cpiData, windowStart, ctxMax);
-        var rbaData = prep.rbaData;
-        var cpiPts = prep.cpiPoints;
-        var chartStart = prep.chartStart || windowStart;
-        var overlayDefs = overlayModule.prepareWindowSeries
-            ? overlayModule.prepareWindowSeries(economicOverlaySeries || [], windowStart, ctxMax)
-            : [];
-
-        var compact = (container.clientWidth || 800) < 480;
-        var defaultMaxLines = vm.mode === 'focus' ? 50 : (vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : 100);
-        var maxLines = vm.mode === 'products' ? Number.MAX_SAFE_INTEGER : M.resolveChartProductLimit(defaultMaxLines);
-        var visiLines = lines.slice(0, Math.min(lines.length, maxLines));
-
-        // ── DOM: wrapper → toggle + mount + infoBox ─────────────────────────
-        container.innerHTML = '';
-        var wrapper = document.createElement('div');
-        wrapper.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;';
-        container.appendChild(wrapper);
-
-        var t = th();
-        var bankList = extractBankNames(allSeries);
-        var toggleBar = M.createReportViewModeBar({
+        var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
+        var plotRange = reportPlot.payloadDateRange(plotPayload);
+        var fbRangeSav = reportPlot.fallbackSeriesDateBoundsFromModel
+            ? reportPlot.fallbackSeriesDateBoundsFromModel(model)
+            : { minDate: '', maxDate: '' };
+        var plotMin = plotRange.minDate || fbRangeSav.minDate || todayYmd();
+        var plotMax = plotRange.maxDate || fbRangeSav.maxDate || plotMin;
+        var dataMinPlot = reportRange === 'All'
+            ? (M.resolveReportDataMin(plotMin, rbaHistory, cpiData, economicOverlaySeries) || plotMin)
+            : plotMin;
+        var ctxMaxPlot = plotMax;
+        var viewStartPlot = reportRange === 'All'
+            ? dataMinPlot
+            : M.resolveReportRangeStart(plotMin, ctxMaxPlot, reportRange);
+        var tBandsSav = th();
+        var infoBoxBandsSav = createInfoBox(tBandsSav);
+        var bandsTraySav =
+            reportPlot.bankTrayEntriesFromBandsPayload &&
+            reportPlot.bankTrayEntriesFromBandsPayload(plotPayload, bankShort);
+        var plotState = reportPlot.render({
+            container: container,
             section: section,
             vm: vm,
-            bankList: bankList,
+            reportViewKind: 'economicReport',
+            bankList: bandsTraySav != null ? bandsTraySav : extractBankNames(allSeries),
+            plotPayload: plotPayload,
+            allSeries: allSeries,
+            range: {
+                reportRange: reportRange,
+                dataMin: dataMinPlot,
+                ctxMax: ctxMaxPlot,
+                viewStart: viewStartPlot,
+                chartStart: viewStartPlot,
+            },
+            theme: tBandsSav,
+            rbaHistory: rbaHistory,
+            cpiData: cpiData,
+            economicOverlaySeries: economicOverlaySeries,
+            bankColor: bankColor,
+            noteText: '',
+            infoBox: infoBoxBandsSav,
             onReRender: function () {
                 render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
             },
-        });
-        wrapper.appendChild(toggleBar);
-        wrapper.appendChild(M.createReportRangeBar({
-            section: section,
-            range: reportRange,
-            minDate: dataMin,
-            maxDate: ctxMax,
-            onChange: function () {
+            onRangeChange: function () {
                 if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
                     window.AR.charts.drawChart();
                 } else {
                     render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
                 }
             },
-        }));
-
-        var mount = document.createElement('div');
-        mount.className = 'lwc-chart-mount lwc-chart-mount--econ-report';
-        mount.style.cssText = 'width:100%;flex:1;min-height:380px;position:relative;';
-        wrapper.appendChild(mount);
-
-        var infoBox = createInfoBox(t);
-        wrapper.appendChild(infoBox.el);
-
-        // ── LWC chart ───────────────────────────────────────────────────────
-        var LineStyle = L.LineStyle || { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3, SparseDotted: 4 };
-        var LineType  = L.LineType  || { Simple: 0, WithSteps: 1, Curved: 2 };
-
-        var chartOptions = M.reportChartOptions(L, t, overlayDefs.length > 0);
-        chartOptions.localization = {
-            priceFormatter: function (p) { return Number(p).toFixed(2) + '%'; },
-            timeFormatter: function (time) { return fmtFull(M.utcToYmd(time)); },
-        };
-        var chart = L.createChart(mount, chartOptions);
-
-        var movesPaneData = reportPlot && typeof reportPlot.prepareLwcMovesHistogram === 'function'
-            ? reportPlot.prepareLwcMovesHistogram(section, model && model.reportPlots ? model.reportPlots.moves : null, viewStart, ctxMax, t)
-            : null;
-        if (reportPlot && typeof reportPlot.attachLwcMovesPane === 'function') {
-            reportPlot.attachLwcMovesPane(chart, L, movesPaneData);
-        }
-
-        // ── CPI line ────────────────────────────────────────────────────────
-        var cpiSeriesApi = null;
-        if (cpiPts.length) {
-            cpiSeriesApi = chart.addSeries(L.LineSeries, {
-                color: t.cpi, lineWidth: 3, lineStyle: LineStyle.LargeDashed || LineStyle.Dashed, lineType: LineType.Simple,
-                title: '', priceLineVisible: false, lastValueVisible: false,
-                crosshairMarkerVisible: true, crosshairMarkerRadius: 4,
-            });
-            cpiSeriesApi.setData(
-                M.fillForwardDaily(cpiPts, 'date', 'value', chartStart, ctxMax)
-                    .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
-            );
-        }
-
-        // ── Rate lines ──────────────────────────────────────────────────────
-        var lineWidth = isProductMode && vm.mode !== 'focus' ? 1.5 : (compact ? 1.5 : 2);
-        var seriesApis = [];
-        visiLines.forEach(function (line) {
-            var allPts = line.points;
-            var carryPt = null;
-            for (var j = 0; j < allPts.length; j++) {
-                if (allPts[j].date <= windowStart) carryPt = allPts[j];
-                else break;
-            }
-            var rawPts = allPts.filter(function (p) { return p.date >= windowStart && p.date <= ctxMax; });
-            if (carryPt) {
-                rawPts = [{
-                    date: windowStart,
-                    value: carryPt.value,
-                    productName: carryPt.productName,
-                    row: carryPt.row || null,
-                }].concat(rawPts);
-            }
-            if (rawPts.length) {
-                var lastPt = rawPts[rawPts.length - 1];
-                if (lastPt.date < ctxMax) {
-                    rawPts = rawPts.concat([{
-                        date: ctxMax,
-                        value: lastPt.value,
-                        productName: lastPt.productName,
-                        row: lastPt.row || null,
-                    }]);
-                }
-            }
-            var data = rawPts.map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; });
-            var ser = chart.addSeries(L.LineSeries, {
-                color: line.color, lineWidth: lineWidth, lineType: LineType.Simple,
-                title: '', priceLineVisible: false, lastValueVisible: false,
-                crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
-            });
-            ser.setData(data);
-            seriesApis.push({
-                api: ser,
-                line: line,
-                lastValue: data.length ? data[data.length - 1].value : null,
-                stepPoints: rawPts,
-                baseColor: line.color,
-                baseLineWidth: lineWidth,
-                selectionKey: line.selectionKey,
-            });
         });
-
-        // ── RBA line ────────────────────────────────────────────────────────
-        var rbaSeriesApi = null;
-        if (rbaData.points.length) {
-            rbaSeriesApi = chart.addSeries(L.LineSeries, {
-                color: t.rba, lineWidth: 3, lineStyle: LineStyle.Dashed, lineType: LineType.Simple,
-                title: '', priceLineVisible: false, lastValueVisible: false,
-                crosshairMarkerVisible: true, crosshairMarkerRadius: 4,
-            });
-            rbaSeriesApi.setData(
-                M.fillForwardDaily(rbaData.points, 'date', 'rate', chartStart, ctxMax)
-                    .map(function (p) { return { time: M.ymdToUtc(p.date), value: p.value }; })
-            );
+        if (plotState && typeof plotState.dispose === 'function') {
+            container._reportDispose = plotState.dispose;
         }
-
-        // ── Economic overlays ───────────────────────────────────────────────
-        var overlaySeriesApis = [];
-        overlayDefs.forEach(function (series) {
-            var data = (series.points || []).map(function (point) {
-                if (!Number.isFinite(Number(point.normalized_value))) return { time: M.ymdToUtc(point.date) };
-                return { time: M.ymdToUtc(point.date), value: point.normalized_value };
-            });
-            if (!data.length) return;
-            var api = chart.addSeries(L.LineSeries, {
-                color: series.color, lineWidth: 2, lineStyle: LineStyle.Dashed, lineType: LineType.Simple,
-                title: '', priceLineVisible: false, lastValueVisible: false,
-                crosshairMarkerVisible: true, crosshairMarkerRadius: 3,
-                priceScaleId: 'left', priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
-            });
-            api.setData(data);
-            overlaySeriesApis.push({ api: api, def: series, lastValue: M.lastFiniteNormalizedOverlay(series.points) });
-        });
-
-        chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
-        M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
-            startYmd: viewStart,
-            endYmd: ctxMax,
-            lineColor: t.rba,
-            labelBg: t.ttBg,
-            labelColor: t.rba,
-        });
-
-        // ── Legend ──────────────────────────────────────────────────────────
-        var legendEl = document.createElement('div');
-        legendEl.style.cssText = 'position:absolute;top:8px;left:8px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 6px;font:9px/1.4 "Space Grotesk",system-ui,sans-serif;color:' + t.ttText + ';background:' + t.ttBg + ';border:1px solid ' + t.ttBorder + ';border-radius:4px;pointer-events:none;z-index:5;max-height:60%;overflow:hidden;';
-
-        var LEGEND_CAP = 15;
-
-        function buildLegendItems(entries, crosshairYmd) {
-            var sorted = entries.slice().sort(function (a, b) {
-                return (b.value != null ? b.value : -Infinity) - (a.value != null ? a.value : -Infinity);
-            });
-            var items = [];
-            var shown = 0;
-            sorted.forEach(function (entry) {
-                if (entry.value == null || shown >= LEGEND_CAP) return;
-                shown++;
-                var prevB = M.prevStepValue(entry.stepPoints, crosshairYmd || ctxMax, 'value');
-                var arrB = M.rateLegendArrowHtml(entry.value, prevB, 'deposit', t.good, t.bad);
-                var lblHtml = M.legendSliceLabelHtml(entry.line, entry.stepPoints, crosshairYmd, ctxMax);
-                items.push(
-                    '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
-                    '<span style="display:inline-block;width:14px;height:2px;background:' + entry.line.color + ';flex-shrink:0;border-radius:1px;"></span>' +
-                    '<span style="' + M.legendTextStyle('opacity:0.7;') + '">' + lblHtml + '</span>' +
-                    '<span style="' + M.legendTextStyle('font-variant-numeric:tabular-nums;font-weight:600;') + '">' + entry.value.toFixed(2) + '%' + arrB + '</span></span>'
-                );
-            });
-            if (sorted.length > LEGEND_CAP) {
-                items.push('<span style="' + M.legendTextStyle('opacity:0.35;font-size:8px;') + '">+' + (sorted.length - LEGEND_CAP) + ' more</span>');
-            }
-            return items;
-        }
-
-        function buildMacroItems(rbaVal, cpiVal, crosshairYmd) {
-            var items = [];
-            if (rbaVal != null) {
-                var prevR = M.prevStepValue(rbaData.points, crosshairYmd || ctxMax, 'rate');
-                var arrR = M.rateLegendArrowHtml(rbaVal, prevR, 'deposit', t.good, t.bad);
-                items.push(
-                    '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;margin-top:2px;padding-top:2px;border-top:1px solid rgba(148,163,184,0.15);">' +
-                    '<span style="display:inline-block;width:14px;height:2px;background:' + t.rba + ';flex-shrink:0;border-radius:1px;"></span>' +
-                    '<span style="' + M.legendTextStyle('color:' + t.rba + ';opacity:0.8;') + '">RBA</span>' +
-                    '<span style="' + M.legendTextStyle('color:' + t.rba + ';font-variant-numeric:tabular-nums;font-weight:600;') + '">' + rbaVal.toFixed(2) + '%' + arrR + '</span></span>'
-                );
-            }
-            if (cpiVal != null) {
-                var prevC = M.prevStepValue(cpiPts, crosshairYmd || ctxMax, 'value');
-                var arrC = M.rateLegendArrowHtml(Number(cpiVal), prevC, 'deposit', t.good, t.bad, 1);
-                items.push(
-                    '<span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">' +
-                    '<span style="display:inline-block;width:14px;height:0;border-top:2px dashed ' + t.cpi + ';flex-shrink:0;"></span>' +
-                    '<span style="' + M.legendTextStyle('color:' + t.cpi + ';opacity:0.8;') + '">CPI</span>' +
-                    '<span style="' + M.legendTextStyle('color:' + t.cpi + ';font-variant-numeric:tabular-nums;font-weight:600;') + '">' + Number(cpiVal).toFixed(1) + '%' + arrC + '</span></span>'
-                );
-            }
-            return items;
-        }
-
-        function buildEconomicOverlayLegendItems(param) {
-            var items = [];
-            overlaySeriesApis.forEach(function (entry) {
-                var val = entry.lastValue;
-                if (param && param.seriesData && entry.api) {
-                    var sd = param.seriesData.get(entry.api);
-                    val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
-                }
-                var row = M.economicOverlayLegendItemHtml(entry.def.color, entry.def.shortLabel || entry.def.label, val);
-                if (row) items.push(row);
-            });
-            return items;
-        }
-
-        function refreshLegend(bankItems, rbaVal, cpiVal, crosshairYmd, param) {
-            var parts = [];
-            if (crosshairYmd) {
-                parts.push('<span style="' + M.legendTextStyle('font-size:8px;color:' + t.muted + ';white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;') + '">' + fmtFull(crosshairYmd) + '</span>');
-            }
-            parts = parts.concat(buildLegendItems(bankItems, crosshairYmd));
-            parts = parts.concat(buildMacroItems(rbaVal, cpiVal, crosshairYmd));
-            var econItems = buildEconomicOverlayLegendItems(param || null);
-            if (econItems.length) {
-                parts.push('<span aria-hidden="true" style="display:block;width:100%;height:0;margin-top:3px;margin-bottom:1px;border-top:1px solid rgba(148,163,184,0.2);"></span>');
-                parts = parts.concat(econItems);
-            }
-            legendEl.innerHTML = parts.join('');
-        }
-
-        // Default legend
-        var defaultEntries = seriesApis.map(function (si) { return { line: si.line, value: si.lastValue, stepPoints: si.stepPoints }; });
-        var defaultRba = (rbaSeriesApi && rbaData.points.length) ? rbaData.points[rbaData.points.length - 1].rate : null;
-        var defaultCpi = (cpiSeriesApi && cpiPts.length) ? cpiPts[cpiPts.length - 1].value : null;
-        refreshLegend(defaultEntries, defaultRba, defaultCpi, null, null);
-        var defaultLegendHTML = legendEl.innerHTML;
-        mount.appendChild(legendEl);
-        if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.registerReportLegend === 'function') {
-            window.AR.chartSiteUi.registerReportLegend(legendEl);
-        } else {
-            legendEl.style.opacity = '0.75';
-        }
-
-        // ── Crosshair ───────────────────────────────────────────────────────
-        function refreshSelectionInfo(param) {
-            var cluster = M.findOverlappingSelectionEntries(seriesApis, param);
-            if (!cluster || !cluster.entries.length) {
-                M.clearSeriesSelectionState(seriesApis);
-                infoBox.hide();
-                return null;
-            }
-            M.applySeriesSelectionState(seriesApis, cluster.entries.map(function (entry) { return entry.selectionKey; }));
-            infoBox.show({
-                heading: fmtFull(cluster.selectionYmd),
-                meta: M.selectionMetaText(cluster),
-                items: cluster.entries,
-            });
-            return cluster;
-        }
-
-        mount.addEventListener('mouseleave', function () {
-            legendEl.innerHTML = defaultLegendHTML;
-            M.clearSeriesSelectionState(seriesApis);
-            infoBox.hide();
-        });
-
-        chart.subscribeCrosshairMove(function (param) {
-            if (!param || !param.point || !param.time) {
-                legendEl.innerHTML = defaultLegendHTML;
-                return;
-            }
-            var time = M.utcToYmd(param.time);
-            var cpiVal = M.cpiAtDate(cpiPts, time);
-            var rbaVal = null;
-            if (rbaSeriesApi) {
-                var rd = param.seriesData && param.seriesData.get(rbaSeriesApi);
-                if (rd && Number.isFinite(rd.value)) rbaVal = rd.value;
-            }
-            var bankItems = [];
-            seriesApis.forEach(function (si) {
-                var sd = param.seriesData && param.seriesData.get(si.api);
-                var val = (sd && Number.isFinite(sd.value)) ? sd.value : null;
-                if (val != null) bankItems.push({ line: si.line, value: val, stepPoints: si.stepPoints });
-            });
-            var hasEconOverlay = false;
-            overlaySeriesApis.forEach(function (e) {
-                var sd = param.seriesData && param.seriesData.get(e.api);
-                if (sd && Number.isFinite(sd.value)) hasEconOverlay = true;
-            });
-            if (!bankItems.length && rbaVal == null && cpiVal == null && !hasEconOverlay) {
-                legendEl.innerHTML = defaultLegendHTML;
-                return;
-            }
-            refreshLegend(bankItems, rbaVal, cpiVal, time, param);
-        });
-
-        // ── Click → info box ────────────────────────────────────────────────
-        chart.subscribeClick(function (param) {
-            refreshSelectionInfo(param);
-        });
-
-        // ── Resize ──────────────────────────────────────────────────────────
-        var disposed = false;
-        var ro = new ResizeObserver(function (entries) {
-            if (disposed) return;
-            var entry = entries[0];
-            if (!entry) return;
-            var rw = Number(entry.contentRect.width);
-            var rh = Number(entry.contentRect.height);
-            if (!Number.isFinite(rw) || rw < 1 || !Number.isFinite(rh) || rh < 1) return;
-            try {
-                chart.resize(rw, Math.max(200, rh));
-                chart.timeScale().setVisibleRange({ from: M.ymdToUtc(viewStart), to: M.ymdToUtc(ctxMax) });
-                M.renderRbaDecisionLines(mount, chart, rbaData.decisions || [], {
-                    startYmd: viewStart,
-                    endYmd: ctxMax,
-                    lineColor: t.rba,
-                    labelBg: t.ttBg,
-                    labelColor: t.rba,
-                });
-            } catch (_e) {}
-        });
-        ro.observe(mount);
-        var state = {
-            chart: chart,
-            mount: mount,
-            kind: 'economicReport',
-            dispose: function () {
-                if (disposed) return;
-                disposed = true;
-                try { ro.disconnect(); } catch (_) {}
-                try {
-                    if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.unregisterReportLegend === 'function') {
-                        window.AR.chartSiteUi.unregisterReportLegend(legendEl);
-                    }
-                } catch (_) {}
-                try { chart.remove(); } catch (_) {}
-                container._reportDispose = null;
-            },
-        };
-        container._reportDispose = state.dispose;
-        return state;
+        return plotState;
     }
 
     window.AR.chartSavingsReportLwc = { render: render };
