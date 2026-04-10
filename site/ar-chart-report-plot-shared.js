@@ -1679,10 +1679,55 @@
                         });
                     }
                 }
+                if (bankChanged || ribbonChartHoverProductKey !== prevPh) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
+                        body: JSON.stringify({
+                            sessionId: '12e0b4',
+                            hypothesisId: 'H3',
+                            location: 'ar-chart-report-plot-shared.js:onRibbonZrMouseMove',
+                            message: 'band or product hover delta',
+                            data: {
+                                prevBandBank: chartLogClip(prevBandBank, 32),
+                                nextBand: chartLogClip(next, 32),
+                                lastPointerDate: String(lastPointerDate || ''),
+                                ribbonTrayHoverBank: String(ribbonTrayHoverBank || ''),
+                                ribbonProductBank: String(ribbonProductBank || ''),
+                                ribbonChartHoverProductKey: String(ribbonChartHoverProductKey || ''),
+                                prevProductKey: String(prevPh || ''),
+                            },
+                            timestamp: Date.now(),
+                        }),
+                    }).catch(function () {});
+                    // #endregion
+                }
                 syncRibbonTrayUi();
                 refreshRibbonUnderChartPanel();
             }
             function onRibbonZrGlobalOut() {
+                // #region agent log
+                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
+                    body: JSON.stringify({
+                        sessionId: '12e0b4',
+                        hypothesisId: 'H1',
+                        location: 'ar-chart-report-plot-shared.js:onRibbonZrGlobalOut',
+                        message: 'globalout before state clear',
+                        data: {
+                            hoveredBank: String(hoveredBank || ''),
+                            ribbonTrayHoverBank: String(ribbonTrayHoverBank || ''),
+                            ribbonProductBank: String(ribbonProductBank || ''),
+                            lastPointerDate: String(lastPointerDate || ''),
+                            ribbonChartHoverProductKey: String(ribbonChartHoverProductKey || ''),
+                            willClearLastDate: !ribbonTrayHoverBank,
+                        },
+                        timestamp: Date.now(),
+                    }),
+                }).catch(function () {});
+                // #endregion
                 clientLog('info', 'Chart ribbon pointer leave chart', { section: String(section || '') });
                 hoveredBank = '';
                 if (!ribbonTrayHoverBank) lastPointerDate = '';
@@ -1804,6 +1849,26 @@
                 if (selectedProductName) return;
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (!bn) return;
+                // #region agent log
+                var _lpdBefore = String(lastPointerDate || '');
+                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
+                    body: JSON.stringify({
+                        sessionId: '12e0b4',
+                        hypothesisId: 'H1',
+                        location: 'ar-chart-report-plot-shared.js:onChipPointerEnter',
+                        message: 'tray enter',
+                        data: {
+                            bank: chartLogClip(bn, 32),
+                            lastPointerDateBefore: _lpdBefore,
+                            willDefaultDateToEnd: !_lpdBefore && dates.length > 0,
+                            rangeEnd: dates.length ? dates[dates.length - 1] : '',
+                        },
+                        timestamp: Date.now(),
+                    }),
+                }).catch(function () {});
+                // #endregion
                 hoveredBank = '';
                 ribbonTrayHoverBank = bn;
                 if (!lastPointerDate && dates.length) lastPointerDate = dates[dates.length - 1];
@@ -1821,6 +1886,25 @@
                 if (selectedProductName) return;
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (normRibbonBankName(ribbonTrayHoverBank) !== normRibbonBankName(bn)) return;
+                // #region agent log
+                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
+                    body: JSON.stringify({
+                        sessionId: '12e0b4',
+                        hypothesisId: 'H2',
+                        location: 'ar-chart-report-plot-shared.js:onChipPointerLeave',
+                        message: 'tray leave',
+                        data: {
+                            bank: chartLogClip(bn, 32),
+                            lastPointerDate: String(lastPointerDate || ''),
+                            hoveredBank: String(hoveredBank || ''),
+                            ribbonProductBank: String(ribbonProductBank || ''),
+                        },
+                        timestamp: Date.now(),
+                    }),
+                }).catch(function () {});
+                // #endregion
                 ribbonTrayHoverBank = '';
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
