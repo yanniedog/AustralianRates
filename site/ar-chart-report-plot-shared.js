@@ -924,15 +924,13 @@
             return String(ribbonTrayHoverBank || ribbonProductBank || '').trim();
         }
 
-        /** Bank whose ribbons stay full-colour: tray hover or pinned chip first; chart hover only when no panel focus. */
+        /** Bank whose ribbons stay full-colour: tray hover or pinned chip only; chart mouseover never dims peers. */
         function ribbonChartHighlightBank() {
-            var panel = ribbonPanelBank();
-            if (panel) return panel;
-            return String(hoveredBank || '').trim();
+            return ribbonPanelBank();
         }
 
         function ribbonLineFilterKeys() {
-            if (selectedProductName) return null;
+            if (selectedProductName) return [selectedProductName];
             var list = ribbonListHoverKeys;
             var chart = ribbonChartHoverProductKey;
             if (list && list.length) {
@@ -943,11 +941,10 @@
                 return list.slice();
             }
             if (chart) return [chart];
-            return null;
+            return [];
         }
 
         function productLineVisible(prodKey) {
-            if (selectedProductName) return true;
             var fk = ribbonLineFilterKeys();
             if (fk === null) return true;
             for (var i = 0; i < fk.length; i++) {
