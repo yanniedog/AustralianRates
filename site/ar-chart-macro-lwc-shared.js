@@ -325,18 +325,25 @@
         { value: 'All', label: 'All' },
     ];
     var _reportRangeBySection = {};
+    var DEFAULT_REPORT_RANGE_BY_SECTION = {
+        'term-deposits': '30D',
+    };
+
+    function defaultReportRange(section) {
+        return DEFAULT_REPORT_RANGE_BY_SECTION[section] || '90D';
+    }
 
     function getReportRange(section) {
-        return _reportRangeBySection[section] || '90D';
+        return _reportRangeBySection[section] || defaultReportRange(section);
     }
 
     function setReportRange(section, range) {
-        var next = String(range || '90D');
+        var next = String(range || defaultReportRange(section));
         var known = false;
         REPORT_RANGE_OPTIONS.forEach(function (option) {
             if (option.value === next) known = true;
         });
-        _reportRangeBySection[section] = known ? next : '90D';
+        _reportRangeBySection[section] = known ? next : defaultReportRange(section);
     }
 
     function formatRangeAnchor(ymd) {
