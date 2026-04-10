@@ -381,22 +381,45 @@
         };
     }
 
-    function maxRibbonNodeRate(node, anchorYmd) {
+    function ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr) {
+        var v = p.byDate[anchorYmd];
+        if (v == null || !Number.isFinite(v) || v <= 0) return null;
+        if (secStr === 'savings' && v < 1.0) return null;
+        return v;
+    }
+
+    /** Min/max rates under a tier node at anchor date (same inclusion rules as hierarchy leaf rows). */
+    function minMaxRibbonNodeRates(node, anchorYmd, secStr) {
         if (!node || node.kind === 'empty') return null;
         if (node.kind === 'leaves') {
-            var m = -Infinity;
+            var minV = Infinity;
+            var maxV = -Infinity;
             node.products.forEach(function (p) {
-                var v = p.byDate[anchorYmd];
-                if (v != null && Number.isFinite(v) && v > m) m = v;
+                var v = ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr);
+                if (v == null) return;
+                if (v < minV) minV = v;
+                if (v > maxV) maxV = v;
             });
-            return Number.isFinite(m) ? m : null;
+            if (!Number.isFinite(minV) || !Number.isFinite(maxV)) return null;
+            return { min: minV, max: maxV };
         }
-        var m2 = -Infinity;
+        var minA = Infinity;
+        var maxA = -Infinity;
         (node.groups || []).forEach(function (g) {
-            var r = maxRibbonNodeRate(g.child, anchorYmd);
-            if (r != null && r > m2) m2 = r;
+            var mm = minMaxRibbonNodeRates(g.child, anchorYmd, secStr);
+            if (!mm) return;
+            if (mm.min < minA) minA = mm.min;
+            if (mm.max > maxA) maxA = mm.max;
         });
-        return Number.isFinite(m2) ? m2 : null;
+        if (!Number.isFinite(minA) || !Number.isFinite(maxA)) return null;
+        return { min: minA, max: maxA };
+    }
+
+    function formatRibbonTierRateRange(mm) {
+        if (!mm || !Number.isFinite(mm.min) || !Number.isFinite(mm.max)) return '';
+        var a = mm.min.toFixed(2);
+        var b = mm.max.toFixed(2);
+        return a === b ? a + '%' : a + '%\u2013' + b + '%';
     }
 
     function collectRibbonNodeKeys(node) {
@@ -1342,9 +1365,8 @@
                     return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
                 });
                 leaves.forEach(function (p) {
-                    var v = p.byDate[anchorYmd];
-                    if (v == null || !Number.isFinite(v) || v <= 0) return;
-                    if (secStr === 'savings' && v < 1.0) return;
+                    var v = ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr);
+                    if (v == null) return;
                     var scopeId = registerRibbonHoverScope([p.key]);
                     var row = document.createElement('div');
                     row.className = 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row';
@@ -1382,7 +1404,7 @@
                 var keys = collectRibbonNodeKeys(g.child);
                 if (!keys.length) return;
                 var scopeId = registerRibbonHoverScope(keys);
-                var mr = maxRibbonNodeRate(g.child, anchorYmd);
+                var mm = minMaxRibbonNodeRates(g.child, anchorYmd, secStr);
                 var branchLabel = ribbonFieldLabel(node.field) + ': ' + g.label;
                 var brow = document.createElement('div');
                 brow.className = 'ar-report-infobox-trow ar-report-infobox-trow--branch';
@@ -1403,7 +1425,7 @@
                 lab.textContent = branchLabel;
                 var rateSpan = document.createElement('span');
                 rateSpan.style.cssText = 'font-variant-numeric:tabular-nums;opacity:0.9;flex-shrink:0;';
-                rateSpan.textContent = mr != null && Number.isFinite(mr) ? mr.toFixed(2) + '%' : '';
+                rateSpan.textContent = formatRibbonTierRateRange(mm);
                 brow.appendChild(twist);
                 brow.appendChild(lab);
                 brow.appendChild(rateSpan);
