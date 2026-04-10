@@ -20,6 +20,8 @@ const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT
 const PIVOT_CHART_TIMEOUT_MS = Number(process.env.TEST_PIVOT_CHART_TIMEOUT_MS || 32000);
 const FILTER_SCENARIO_OPEN_MS = Number(process.env.TEST_FILTER_SCENARIO_MS || 14000);
 const FILTER_PADS_MS = Number(process.env.TEST_FILTER_PADS_MS || 18000);
+/** Node fetch for noscript HTML has no browser-style limits; cap wait to avoid indefinite hangs. */
+const NOSCRIPT_FETCH_TIMEOUT_MS = Number(process.env.TEST_NOSCRIPT_FETCH_TIMEOUT_MS || 25000);
 const REQUIRED_HEADERS = ['Found at', 'Headline Rate', 'Bank', 'Product Code', 'Rate Confirmed', 'URLs'];
 const HOME_ONLY_HEADERS = ['Comparison Rate'];
 const VIEWPORTS = [
@@ -728,7 +730,10 @@ async function verifyNoPublicAdminSurface(page, results, label) {
 
 async function verifyNoScriptFallback(url, apiBasePath, results, label) {
     try {
-        const response = await fetch(url, { redirect: 'follow' });
+        const response = await fetch(url, {
+            redirect: 'follow',
+            signal: AbortSignal.timeout(NOSCRIPT_FETCH_TIMEOUT_MS),
+        });
         const html = await response.text();
         if (response.status !== 200) {
             fail(results, `${label}: noscript HTML fetch failed (${response.status})`);
@@ -745,7 +750,13 @@ async function verifyNoScriptFallback(url, apiBasePath, results, label) {
         if (missing.length === 0) pass(results, `${label}: noscript API fallback links exist`);
         else fail(results, `${label}: noscript fallback missing ${missing.join(', ')}`);
     } catch (error) {
-        fail(results, `${label}: noscript fetch errored (${error.message})`);
+        const name = error && error.name ? String(error.name) : '';
+        const msg = error && error.message ? String(error.message) : String(error);
+        if (name === 'TimeoutError' || /aborted|timeout/i.test(msg)) {
+            fail(results, `${label}: noscript fetch timed out after ${NOSCRIPT_FETCH_TIMEOUT_MS}ms`);
+        } else {
+            fail(results, `${label}: noscript fetch errored (${msg})`);
+        }
     }
 }
 
