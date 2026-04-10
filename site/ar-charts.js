@@ -576,6 +576,9 @@
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
+        if ((section === 'savings' || section === 'term-deposits') && !String(params.min_rate || '').trim()) {
+            params.min_rate = '0.01';
+        }
         var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         if (currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport') {
