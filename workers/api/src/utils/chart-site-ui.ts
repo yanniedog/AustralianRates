@@ -203,6 +203,10 @@ export type ChartRibbonStyle = {
   edge_opacity_others: number
   fill_opacity_end: number
   fill_opacity_peak: number
+  focus_fill_opacity_end: number
+  focus_fill_opacity_peak: number
+  selected_fill_opacity_end: number
+  selected_fill_opacity_peak: number
   fill_opacity_others_scale: number
   mean_width: number
   mean_opacity: number
@@ -222,6 +226,10 @@ export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
   edge_opacity_others: 0.14,
   fill_opacity_end: 0.22,
   fill_opacity_peak: 0.48,
+  focus_fill_opacity_end: 0.3,
+  focus_fill_opacity_peak: 0.62,
+  selected_fill_opacity_end: 0.34,
+  selected_fill_opacity_peak: 0.72,
   fill_opacity_others_scale: 0.22,
   mean_width: 1.25,
   mean_opacity: 1,
@@ -277,6 +285,10 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     edge_opacity_others: num01(raw.edge_opacity_others, d.edge_opacity_others),
     fill_opacity_end: num01(raw.fill_opacity_end, d.fill_opacity_end),
     fill_opacity_peak: num01(raw.fill_opacity_peak, d.fill_opacity_peak),
+    focus_fill_opacity_end: num01(raw.focus_fill_opacity_end, d.focus_fill_opacity_end),
+    focus_fill_opacity_peak: num01(raw.focus_fill_opacity_peak, d.focus_fill_opacity_peak),
+    selected_fill_opacity_end: num01(raw.selected_fill_opacity_end, d.selected_fill_opacity_end),
+    selected_fill_opacity_peak: num01(raw.selected_fill_opacity_peak, d.selected_fill_opacity_peak),
     fill_opacity_others_scale: num01(raw.fill_opacity_others_scale, d.fill_opacity_others_scale),
     mean_width: numNonNeg(raw.mean_width, d.mean_width, 8),
     mean_opacity: num01(raw.mean_opacity, d.mean_opacity),

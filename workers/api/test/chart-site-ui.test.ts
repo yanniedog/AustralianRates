@@ -80,16 +80,19 @@ describe('chart-site-ui', () => {
   it('resolves and normalizes chart ribbon style JSON', () => {
     expect(resolveChartRibbonStyleFromDb(null)).toEqual(DEFAULT_CHART_RIBBON_STYLE)
     expect(resolveChartRibbonStyleFromDb('not json')).toEqual(DEFAULT_CHART_RIBBON_STYLE)
-    const partial = { edge_width: 0, fill_opacity_peak: 0.99 }
+    const partial = { edge_width: 0, fill_opacity_peak: 0.99, selected_fill_opacity_peak: 0.88 }
     const merged = mergeChartRibbonStylePartial(partial)
     expect(merged.edge_width).toBe(0)
     expect(merged.fill_opacity_peak).toBe(0.99)
+    expect(merged.selected_fill_opacity_peak).toBe(0.88)
+    expect(merged.focus_fill_opacity_peak).toBe(DEFAULT_CHART_RIBBON_STYLE.focus_fill_opacity_peak)
     expect(merged.mean_width).toBe(DEFAULT_CHART_RIBBON_STYLE.mean_width)
 
     const put = normalizeChartRibbonStyleForPut(JSON.stringify(partial))
     expect(put.ok).toBe(true)
     if (put.ok) {
       expect(JSON.parse(put.value).edge_width).toBe(0)
+      expect(JSON.parse(put.value).selected_fill_opacity_peak).toBe(0.88)
     }
     expect(normalizeChartRibbonStyleForPut('').ok).toBe(false)
     expect(normalizeChartRibbonStyleForPut('{').ok).toBe(false)

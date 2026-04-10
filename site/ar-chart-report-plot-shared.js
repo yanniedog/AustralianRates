@@ -83,6 +83,10 @@
             edge_opacity_others: 0.14,
             fill_opacity_end: 0.22,
             fill_opacity_peak: 0.48,
+            focus_fill_opacity_end: 0.3,
+            focus_fill_opacity_peak: 0.62,
+            selected_fill_opacity_end: 0.34,
+            selected_fill_opacity_peak: 0.72,
             fill_opacity_others_scale: 0.22,
             mean_width: 1.25,
             mean_opacity: 1,
@@ -999,9 +1003,12 @@
                 var fk = normRibbonBankName(
                     canonicalBandsBankFromUi(String(ch.getAttribute('data-ar-bank-full') || ch.title || '').trim())
                 );
-                ch.classList.toggle('is-ribbon-hover', !!hlKey && fk === hlKey);
-                ch.classList.toggle('is-ribbon-selected', !!selKey && fk === selKey);
+                var isHover = !!hlKey && fk === hlKey;
+                var isSelected = !!selKey && fk === selKey;
+                ch.classList.toggle('is-ribbon-hover', isHover);
+                ch.classList.toggle('is-ribbon-selected', isSelected);
                 ch.classList.toggle('is-ribbon-dim', !!dimKey && fk !== dimKey);
+                ch.setAttribute('aria-checked', isSelected ? 'true' : 'false');
             }
             if (ribbonHoverLabelEl) {
                 var txt = ribbonChartHighlightBank();
@@ -1276,6 +1283,7 @@
             var updates = [];
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
+                var selected = active && focusKey && ribbonProductBank && normRibbonBankName(bank.bank_name) === resolveBandsFocusKey(ribbonProductBank);
                 var c0 = options.bankColor(bank.bank_name, index);
                 var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
@@ -1284,11 +1292,20 @@
                 var ew = Math.max(0, Number(rs.edge_width) || 0);
                 var eo = Math.max(0, Math.min(1, Number(active ? rs.edge_opacity : rs.edge_opacity_others)));
                 var edgeLine = { color: strokeC, width: ew > 0 ? ew : 0.01, opacity: ew > 0 ? eo : 0, cap: 'round', join: 'round' };
-                var fe = Math.max(0, Math.min(1, Number(rs.fill_opacity_end)));
-                var fp = Math.max(0, Math.min(1, Number(rs.fill_opacity_peak)));
+                function alpha(key, fallback) {
+                    var n = Number(rs[key]);
+                    if (!Number.isFinite(n)) return fallback;
+                    return Math.max(0, Math.min(1, n));
+                }
+                var fe = alpha('fill_opacity_end', 0.22);
+                var fp = alpha('fill_opacity_peak', 0.48);
+                var ffe = alpha('focus_fill_opacity_end', fe);
+                var ffp = alpha('focus_fill_opacity_peak', fp);
+                var sfe = alpha('selected_fill_opacity_end', ffe);
+                var sfp = alpha('selected_fill_opacity_peak', ffp);
                 var sc = Math.max(0, Math.min(1, Number(rs.fill_opacity_others_scale)));
-                var fillEnd = active ? fe : fe * sc;
-                var fillPeak = active ? fp : fp * sc;
+                var fillEnd = active ? (selected ? sfe : (focusKey ? ffe : fe)) : fe * sc;
+                var fillPeak = active ? (selected ? sfp : (focusKey ? ffp : fp)) : fp * sc;
                 var mw = Math.max(0, Number(rs.mean_width) || 0);
                 var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
                 var fillAreaStyle;
