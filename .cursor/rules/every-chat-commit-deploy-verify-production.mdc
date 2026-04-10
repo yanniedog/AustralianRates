@@ -9,17 +9,18 @@ For **every** conversation about this project that changes the repository (code,
 
 **Waivers:** Only if the user **explicitly** instructs you not to commit, push, deploy, or verify production for that task.
 
-## 1. Commit and push
+## 1. Commit, push, and PR (default)
 
-- Stage the right files, commit with a clear message, push to the remote (follow AGENTS.md for `main` vs feature branch and PR flow).
-- Do not leave uncommitted or unpushed project changes when the task implied shipping or fixing production unless waived.
+- **Default:** follow **`git-pr-workflow-default.mdc`**: feature branch off `main`, commit, push branch, **open a PR to `main`**, merge when PR CI is green—then production deploys from `main`.
+- **Exception:** direct `git push origin main` only if the user explicitly asked for a **`main` hotfix**.
+- Do not leave uncommitted or unpushed work when the task implied shipping unless waived. If a PR cannot be merged from this environment, leave it open with the **PR URL** and state what remains after the user merges.
 
 ## 2. Confirm deployment and CI succeeded
 
 A successful `git push` is **not** sufficient proof.
 
 - Wait for **Cloudflare Pages** (site) and/or **Workers** (API, archive) deploys to finish when this change triggers them.
-- Resolve **any CI or deploy failures** (GitHub Actions, pre-push checks, Cloudflare build/deploy errors): fix, recommit, repush, and re-check until green.
+- Resolve **any CI or deploy failures** (GitHub Actions on the **PR** and/or `main`, pre-push checks, Cloudflare build/deploy errors): fix on the branch, recommit, repush, and re-check until green.
 - Use available tooling (e.g. `gh run watch` / Actions UI, Cloudflare dashboard, or project scripts). If something cannot be confirmed from this environment, state what was verified and what could not be.
 
 ## 3. Confirm the intended result on production

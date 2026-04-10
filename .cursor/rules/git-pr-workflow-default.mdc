@@ -1,0 +1,28 @@
+---
+description: "Default git workflow: feature branch + PR to main (Cursor, Codex, Claude)"
+alwaysApply: true
+---
+
+# Default Git Workflow: Feature Branch + PR to `main`
+
+For **any** change that touches the repository, assistants (**Cursor**, **Codex**, **Claude / Claude Code**) use this workflow **by default**. Full detail: `docs/CONCURRENT_AGENT_WORKFLOW.md`.
+
+## Required pattern
+
+1. Sync `main`: `git fetch origin`, `git checkout main`, `git pull origin main`.
+2. Create a dedicated branch: `git checkout -b agent/<short-slug>` (or `feat/…`, `fix/…`). One branch per task or parallel agent stream.
+3. Commit **only** on that branch.
+4. Push: `git push -u origin HEAD`.
+5. Open a **pull request into `main`** (`gh pr create --base main` with title/body, or GitHub UI).
+6. Keep pushing commits to the same branch until **PR CI** (`.github/workflows/ci.yml`) is **green**.
+7. **Merge** when ready and green: e.g. `gh pr merge` with `--squash` or `--merge` (team preference); use `--auto` so GitHub merges when checks pass if available. If this environment cannot merge, leave the PR open and give the **PR URL**; the human merges.
+8. **Production closeout** (`AGENTS.md`, `every-chat-commit-deploy-verify-production.mdc`) runs **after** the change is on `main` and Cloudflare deploys have finished—not after the feature-branch push alone.
+
+## Exceptions (narrow)
+
+- The user **explicitly** asks to push **directly to `main`** (e.g. emergency hotfix): do that and still complete production closeout after deploy.
+- The user **already** has you on a named feature branch for the task: commit there, push, open/update the PR; merge/rebase from `origin/main` if the branch is stale.
+
+## Do not
+
+- Do not treat `git push` to a feature branch as “shipped” for **www.australianrates.com** until the PR is merged to `main` and hosting deploys complete (unless verifying **Pages preview** URLs only).

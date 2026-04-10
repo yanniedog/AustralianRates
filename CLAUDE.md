@@ -8,7 +8,8 @@ Always:
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
-- Prefer feature branches and PRs for non-trivial work; merge when CI is green. Use `gh` for PRs/checks when available.
+- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → merge when **PR CI** is green. See `docs/CONCURRENT_AGENT_WORKFLOW.md`, repo `AGENTS.md` (“Default git workflow”), and Cursor `.cursor/rules/git-pr-workflow-default.mdc`. Use `gh pr create`, `gh pr checks watch`, `gh pr merge` (e.g. `--auto --squash`) when available.
+- **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
 
 Deployed app:
 - Do not claim the UI is correct based only on localhost if the app uses Cloudflare D1/KV/Workers or similar. End UI-facing tasks with a Verification block: URL (Preview if available), 3-7 concrete things to check, and what might regress.
