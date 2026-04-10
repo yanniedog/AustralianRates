@@ -83,10 +83,10 @@
             edge_opacity_others: 0.14,
             fill_opacity_end: 0.22,
             fill_opacity_peak: 0.48,
-            focus_fill_opacity_end: 1,
-            focus_fill_opacity_peak: 1,
-            selected_fill_opacity_end: 1,
-            selected_fill_opacity_peak: 1,
+            focus_fill_opacity_end: 0.34,
+            focus_fill_opacity_peak: 0.70,
+            selected_fill_opacity_end: 0.44,
+            selected_fill_opacity_peak: 0.82,
             fill_opacity_others_scale: 0.22,
             mean_width: 1.25,
             mean_opacity: 1,
@@ -1327,7 +1327,7 @@
                         fillAreaStyle = ribbonFlowGradientFill(strokeC, fillEnd, fillPeak);
                     }
                 } else {
-                    fillAreaStyle = { color: hexToRgba(strokeC, Math.min(1, Math.max(0.16, (fillEnd + fillPeak) * 0.85))) };
+                    fillAreaStyle = { color: hexToRgba(strokeC, Math.min(1, Math.max(0, (fillEnd + fillPeak) * 0.85))) };
                 }
                 updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
