@@ -3,7 +3,7 @@ import { queryHomeLoanAnalyticsRows, querySavingsAnalyticsRows, queryTdAnalytics
 import { analyticsProjectionReady } from '../db/analytics/readiness'
 import { queryRatesPaginated, queryTimeseries } from '../db/queries'
 import { querySavingsRatesPaginated, querySavingsTimeseries } from '../db/savings-queries'
-import { queryTdRatesPaginated, queryTdTimeseries } from '../db/td-queries'
+import { queryTdTimeseries } from '../db/td-queries'
 import type { AnalyticsRepresentation } from './analytics-route-utils'
 import {
   CHART_SERIES_RESPONSE_CAP,
@@ -240,34 +240,13 @@ async function collectTdCanonicalRows(
   filters: TdAnalyticsInput,
 ): Promise<Array<Record<string, unknown>>> {
   const maxRaw = resolveChartSeriesFetchCap(filters)
-  return collectPaginatedRatesCapped(
-    async (page, size) => {
-      const result = await queryTdRatesPaginated(dbs.canonicalDb, {
-        page,
-        size,
-        sort: 'collection_date',
-        dir: 'desc',
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        bank: filters.bank,
-        banks: filters.banks,
-        termMonths: filters.termMonths,
-        depositTier: filters.depositTier,
-        balanceMin: filters.balanceMin,
-        balanceMax: filters.balanceMax,
-        interestPayment: filters.interestPayment,
-        minRate: filters.minRate,
-        maxRate: filters.maxRate,
-        includeRemoved: filters.includeRemoved,
-        excludeCompareEdgeCases: filters.excludeCompareEdgeCases,
-        mode: filters.mode,
-        sourceMode: filters.sourceMode,
-      })
-      return { rows: result.data as Array<Record<string, unknown>>, lastPage: result.last_page }
-    },
-    { pageSize: 1000, maxRows: maxRaw },
+  return collectByOffset(
+    (limit, offset) =>
+      queryTdTimeseries(dbs.canonicalDb, { ...filters, limit, offset, rowSort: 'desc' }),
+    5000,
+    maxRaw,
   )
-    .then((rows) => rows.slice().reverse())
+    .then((rows) => rows.reverse())
     .then((rows) => dedupeAnalyticsRows(rows, [
     'series_key',
     'product_key',

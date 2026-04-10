@@ -12,7 +12,7 @@ import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './rep
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
 const REPORT_PLOT_PAYLOAD_VERSION = 1
-const D1_CACHE_FRESH_MINUTES = 20
+const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
   payload_json: string

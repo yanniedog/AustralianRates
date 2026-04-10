@@ -30,7 +30,7 @@ const LEGACY_CACHE_TABLE = 'chart_pivot_cache'
 /** Bump when chart row selection semantics change so legacy D1 payloads are ignored. */
 const CHART_PIVOT_PAYLOAD_VERSION = 2
 /** D1 cache row considered fresh if built within this many minutes. */
-const D1_CACHE_FRESH_MINUTES = 20
+const D1_CACHE_FRESH_MINUTES = 90
 /**
  * D1 has practical limits on row/value sizes; large JSON payloads can fail with SQLITE_TOOBIG.
  * We store JSON directly when small, otherwise store gzip(base64(JSON)) with a prefix.

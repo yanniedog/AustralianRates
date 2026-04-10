@@ -44,7 +44,7 @@ async function waitForExplorerReady(page) {
         if (table.querySelectorAll('.tabulator-row').length > 0) return true;
         const placeholder = table.querySelector('.tabulator-placeholder');
         return !!(placeholder && String(placeholder.textContent || '').trim().length > 0);
-    }, null, { timeout: 45000 });
+    }, null, { timeout: 20000 });
 }
 
 async function gotoSection(page, section) {
@@ -60,7 +60,7 @@ async function gotoSection(page, section) {
 async function drawChart(page) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-            await ensureChartReady(page, 120000);
+            await ensureChartReady(page, 25000);
             return;
         } catch (error) {
             if (attempt === 2) {
@@ -100,7 +100,7 @@ async function switchViewWithoutRatesFetch(page, view) {
             const rv = output.getAttribute('data-chart-render-view');
             if (String(rv || '') !== String(nextView || '')) return false;
             return output.getAttribute('data-chart-rendered') === 'true';
-        }, view, { timeout: 45000 });
+        }, view, { timeout: 20000 });
         await page.waitForTimeout(800);
     } finally {
         page.context().off('request', handler);
@@ -144,7 +144,7 @@ async function switchReportModeWithoutAnalyticsFetch(page, mode) {
             const err = String((document.getElementById('chart-error') || {}).textContent || '').trim();
             if (err) return false;
             return String(output.getAttribute('data-report-view-mode') || '') === String(nextMode || '');
-        }, mode, { timeout: 45000 });
+        }, mode, { timeout: 20000 });
         await page.waitForTimeout(800);
     } finally {
         page.context().off('request', handler);

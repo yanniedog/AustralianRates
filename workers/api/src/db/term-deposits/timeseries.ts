@@ -54,9 +54,10 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
   if (input.startDate) { where.push('h.collection_date >= ?'); binds.push(input.startDate) }
   if (input.endDate) { where.push('h.collection_date <= ?'); binds.push(input.endDate) }
 
-  const limit = safeLimit(input.limit, 500, 2000)
+  const limit = safeLimit(input.limit, 500, 5000)
   const offset = Math.max(0, Math.floor(Number(input.offset) || 0))
   binds.push(limit, offset)
+  const sortOrder = input.rowSort === 'desc' ? 'DESC' : 'ASC'
 
   const sql = `
     SELECT
@@ -102,7 +103,7 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
       ON pps.dataset_kind = 'term_deposits'
       AND pps.series_key = h.series_key
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY h.collection_date ASC, h.parsed_at ASC
+    ORDER BY h.collection_date ${sortOrder}, h.parsed_at ${sortOrder}
     LIMIT ? OFFSET ?
   `
   const result = await db.prepare(sql).bind(...binds).all<Record<string, unknown>>()

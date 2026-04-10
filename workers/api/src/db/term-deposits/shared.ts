@@ -80,6 +80,7 @@ export type TdTimeseriesFilters = {
   endDate?: string
   limit?: number
   offset?: number
+  rowSort?: 'asc' | 'desc'
 }
 
 export const SORT_COLUMNS: Record<string, string> = {

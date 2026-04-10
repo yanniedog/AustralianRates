@@ -7,6 +7,7 @@
     var network = window.AR.network || {};
     var apiBase = config.apiBase || '';
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
+    var CHART_REQUEST_TIMEOUT_MS = 12000;
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -680,7 +681,7 @@
         if (requestJson) {
             return requestJson(policy.url, {
                 requestLabel: 'Chart history',
-                timeoutMs: 90000,
+                timeoutMs: CHART_REQUEST_TIMEOUT_MS,
                 retryCount: 0,
                 cache: policy.fetchCache,
                 skipCacheBust: policy.skipCacheBust,
@@ -718,7 +719,7 @@
         if (requestJson) {
             return requestJson(policy.url, {
                 requestLabel: 'Report plot ' + String(mode || 'moves'),
-                timeoutMs: 90000,
+                timeoutMs: CHART_REQUEST_TIMEOUT_MS,
                 retryCount: 0,
                 cache: policy.fetchCache,
                 skipCacheBust: policy.skipCacheBust,

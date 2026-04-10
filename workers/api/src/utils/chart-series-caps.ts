@@ -4,13 +4,13 @@
  */
 
 /** Max rows in the JSON `rows` / grouped payload when not using disableRowCap (public default). */
-export const CHART_SERIES_RESPONSE_CAP = 350_000
+export const CHART_SERIES_RESPONSE_CAP = 120_000
 
 /** Raw rows to read: default public chart (no chart_window). */
-export const CHART_SERIES_FETCH_PUBLIC = 500_000
+export const CHART_SERIES_FETCH_PUBLIC = 160_000
 
 /** Raw rows to read when chart_window is set (disableRowCap on slice only). */
-export const CHART_SERIES_FETCH_WINDOW = 1_000_000
+export const CHART_SERIES_FETCH_WINDOW = 120_000
 
 /** Cron chart-cache refresh: bounded but higher so precomputed slices stay complete. */
 export const CHART_SERIES_FETCH_REFRESH = 2_500_000

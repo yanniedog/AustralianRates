@@ -1,6 +1,6 @@
 import type { Page } from 'playwright'
 
-export async function waitForChartReady(page: Page, timeout = 90_000): Promise<void> {
+export async function waitForChartReady(page: Page, timeout = 25_000): Promise<void> {
   await page.waitForFunction(() => {
     const output = document.getElementById('chart-output')
     if (!output) return false
@@ -30,7 +30,7 @@ export async function waitForChartReady(page: Page, timeout = 90_000): Promise<v
   await page.waitForTimeout(1200)
 }
 
-export async function ensureChartReady(page: Page, timeout = 90_000): Promise<void> {
+export async function ensureChartReady(page: Page, timeout = 25_000): Promise<void> {
   const button = page.locator('#draw-chart')
   const visible = await button.isVisible().catch(() => false)
   if (visible) {

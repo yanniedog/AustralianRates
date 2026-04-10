@@ -64,7 +64,7 @@ async function main() {
         await page.waitForSelector('#main-content', { timeout: 15000 });
         await page.waitForTimeout(2000);
 
-        await ensureChartReady(page, 90000);
+        await ensureChartReady(page, 25000);
         const before = await page.evaluate(readHoverFeedback);
 
         const chartEl = await page.$('#chart-output');
