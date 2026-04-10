@@ -504,6 +504,47 @@ export function buildPrecomputedChartParams(
   return { chart_window: scope.slice('window:'.length) }
 }
 
+function scopeWindow(scope: ChartCacheScope): ChartWindow | null {
+  if (scope.startsWith(`${CONSUMER_DEFAULT_SCOPE}:window:`)) {
+    return parseChartWindow(scope.slice(`${CONSUMER_DEFAULT_SCOPE}:window:`.length))
+  }
+  if (scope.startsWith('window:')) return parseChartWindow(scope.slice('window:'.length))
+  return null
+}
+
+function widerFallbackScopes(scope: ChartCacheScope): ChartCacheScope[] {
+  const window = scopeWindow(scope)
+  if (!window || window === 'ALL') return []
+  const windowIndex = PRECOMPUTED_CHART_WINDOWS.indexOf(window)
+  if (windowIndex < 0) return []
+  const prefix = scope.startsWith(`${CONSUMER_DEFAULT_SCOPE}:window:`)
+    ? `${CONSUMER_DEFAULT_SCOPE}:window:`
+    : 'window:'
+  return PRECOMPUTED_CHART_WINDOWS
+    .slice(windowIndex + 1)
+    .map((w) => `${prefix}${w}` as ChartCacheScope)
+    .concat(scope.startsWith(`${CONSUMER_DEFAULT_SCOPE}:window:`) ? CONSUMER_DEFAULT_SCOPE : 'default')
+}
+
+function filterRowsToScopeWindow(
+  rows: Array<Record<string, unknown>>,
+  scope: ChartCacheScope,
+): Array<Record<string, unknown>> {
+  const window = scopeWindow(scope)
+  if (!window || window === 'ALL' || rows.length === 0) return rows
+  const dates = rows
+    .map((row) => String(row.collection_date || '').slice(0, 10))
+    .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .sort()
+  if (dates.length === 0) return rows
+  const endDate = dates[dates.length - 1]
+  const startDate = resolveChartWindowStart(dates[0], endDate, window)
+  return rows.filter((row) => {
+    const date = String(row.collection_date || '').slice(0, 10)
+    return !date || (date >= startDate && date <= endDate)
+  })
+}
+
 export type ChartAnalyticsPayload = {
   rows: Array<Record<string, unknown>>
   representation: 'day' | 'change'
@@ -555,6 +596,25 @@ export async function getCachedOrCompute(
         fallbackReason: d1Cached.fallbackReason,
       } satisfies ChartAnalyticsPayload
       await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      return {
+        ...d1Payload,
+        fromCache: 'd1',
+      }
+    }
+    for (const fallbackScope of widerFallbackScopes(cacheScope)) {
+      const fallbackCached = await readD1ChartCache(env.DB, section, representation, fallbackScope)
+      if (!fallbackCached) continue
+      const d1Payload = {
+        rows: filterRowsToScopeWindow(fallbackCached.rows, cacheScope),
+        representation: fallbackCached.representation,
+        fallbackReason: fallbackCached.fallbackReason,
+      } satisfies ChartAnalyticsPayload
+      await writeChartPayloadToKv(env.CHART_CACHE_KV, key, d1Payload)
+      try {
+        await writeD1ChartCache(env.DB, section, representation, cacheScope, d1Payload)
+      } catch {
+        /* ignore D1 cache write failure on fallback hydration */
+      }
       return {
         ...d1Payload,
         fromCache: 'd1',
