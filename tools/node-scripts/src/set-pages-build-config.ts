@@ -5,11 +5,54 @@ import { loadRepoEnv } from './lib/env';
 const PROJECT_NAME = 'australianrates';
 const BUILD_COMMAND = 'npm run build';
 const BUILD_OUTPUT_DIR = 'site';
+const BUILD_CACHING = true;
 
 loadRepoEnv(process.cwd());
 
 const accountId = getCloudflareAccountId();
-const apiToken = pickCloudflareToken(['CLOUDFLARE_PAGES_TOKEN', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_GENERAL_TOKEN', 'CF_API_TOKEN']);
+const apiToken = pickCloudflareToken([
+  'CLOUDFLARE_PAGES_TOKEN',
+  'CLOUDFLARE_API_TOKEN',
+  'CLOUDFLARE_GENERAL_TOKEN',
+  'CLOUDFLARE_FULL_ACCESS_TOKEN',
+  'CF_API_TOKEN',
+]);
+
+function buildConfig(project: any, includeBuildCaching: boolean): Record<string, unknown> {
+  return {
+    build_command: BUILD_COMMAND,
+    destination_dir: BUILD_OUTPUT_DIR,
+    root_dir: project.build_config?.root_dir ?? '',
+    ...(includeBuildCaching ? { build_caching: BUILD_CACHING } : {}),
+  };
+}
+
+async function patchProjectBuildConfig(pathname: string, project: any, token: string): Promise<void> {
+  const patchBody = {
+    build_config: buildConfig(project, true),
+  };
+
+  await requestCloudflareJson({
+    token,
+    method: 'PATCH',
+    path: pathname,
+    body: patchBody,
+  }).catch(async (error) => {
+    const message = (error as Error).message;
+    if (!message.toLowerCase().includes('build_caching')) {
+      throw error;
+    }
+    console.warn('Build caching is not accepted by this Cloudflare API response; updating build command/output only.');
+    await requestCloudflareJson({
+      token,
+      method: 'PATCH',
+      path: pathname,
+      body: {
+        build_config: buildConfig(project, false),
+      },
+    });
+  });
+}
 
 async function main(): Promise<void> {
   if (!apiToken) {
@@ -35,8 +78,12 @@ async function main(): Promise<void> {
 
   const project = (getResult as any).result;
   const currentBuild = project.build_config || {};
-  if (currentBuild.build_command === BUILD_COMMAND && (currentBuild.destination_dir === BUILD_OUTPUT_DIR || currentBuild.build_output_dir === BUILD_OUTPUT_DIR)) {
-    console.log('Build config already set: build_command=%s, output=%s', BUILD_COMMAND, BUILD_OUTPUT_DIR);
+  const buildCommandMatches = currentBuild.build_command === BUILD_COMMAND;
+  const buildOutputMatches = currentBuild.destination_dir === BUILD_OUTPUT_DIR || currentBuild.build_output_dir === BUILD_OUTPUT_DIR;
+  const buildCachingMatches = currentBuild.build_caching === BUILD_CACHING;
+
+  if (buildCommandMatches && buildOutputMatches && buildCachingMatches) {
+    console.log('Build config already set: build_command=%s, output=%s, build_caching=%s', BUILD_COMMAND, BUILD_OUTPUT_DIR, BUILD_CACHING);
     console.log('Triggering a deployment so the next build includes version.json...');
     const deployPath = `/accounts/${accountId}/pages/projects/${PROJECT_NAME}/deployments`;
     const deployResult = await requestCloudflareJson<any>({
@@ -52,20 +99,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log('Updating build config: build_command=%s, destination_dir=%s', BUILD_COMMAND, BUILD_OUTPUT_DIR);
-  const patchBody = {
-    build_config: {
-      build_command: BUILD_COMMAND,
-      destination_dir: BUILD_OUTPUT_DIR,
-      root_dir: project.build_config?.root_dir ?? '',
-    },
-  };
-  await requestCloudflareJson({
-    token: apiToken,
-    method: 'PATCH',
-    path: pathname,
-    body: patchBody,
-  }).catch((error) => {
+  console.log(
+    'Updating build config: build_command=%s, destination_dir=%s, build_caching=%s',
+    BUILD_COMMAND,
+    BUILD_OUTPUT_DIR,
+    BUILD_CACHING,
+  );
+  await patchProjectBuildConfig(pathname, project, apiToken).catch((error) => {
     console.error('PATCH project failed:', (error as Error).message);
     process.exit(1);
   });

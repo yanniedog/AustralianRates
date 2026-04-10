@@ -9,23 +9,139 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Only cancel superseded runs for pull requests; rapid pushes to main should not mark prior runs "cancelled".
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NPM_CONFIG_FUND: "false"
+  NPM_CONFIG_AUDIT: "false"
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  ci:
+  changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      site: ${{ steps.diff.outputs.site }}
+      api: ${{ steps.diff.outputs.api }}
+      archive: ${{ steps.diff.outputs.archive }}
+      tools: ${{ steps.diff.outputs.tools }}
+      deps_or_ci: ${{ steps.diff.outputs.deps_or_ci }}
+      full: ${{ steps.diff.outputs.full }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          site=false
+          api=false
+          archive=false
+          tools=false
+          deps_or_ci=false
+          full=false
+
+          set_all() {
+            site=true
+            api=true
+            archive=true
+            tools=true
+            deps_or_ci=true
+            full=true
+          }
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            set_all
+          else
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              base="$PR_BASE"
+              head="$PR_HEAD"
+            else
+              base="$PUSH_BEFORE"
+              head="$PUSH_AFTER"
+            fi
+
+            if [[ -z "${base:-}" || -z "${head:-}" || "$base" =~ ^0+$ ]]; then
+              set_all
+            elif ! git cat-file -e "$base^{commit}" || ! git cat-file -e "$head^{commit}"; then
+              set_all
+            else
+              mapfile -t files < <(git diff --name-only "$base" "$head")
+              if [[ ${#files[@]} -eq 0 ]]; then
+                set_all
+              else
+                for file in "${files[@]}"; do
+                  case "$file" in
+                    site/*|prototypes/lightweight-charts/*|scripts/build-lightweight-vendor.mjs|write-deploy-version.js|tools/node-scripts/src/write-deploy-version.ts|scripts/check-public-assets.js|tools/node-scripts/src/scripts/check-public-assets.ts|scripts/check-clarity-installation.js|tools/node-scripts/src/scripts/check-clarity-installation.ts)
+                      site=true
+                      ;;
+                  esac
+
+                  case "$file" in
+                    workers/api/*|packages/shared/*)
+                      api=true
+                      ;;
+                  esac
+
+                  case "$file" in
+                    workers/archive/*)
+                      archive=true
+                      ;;
+                  esac
+
+                  case "$file" in
+                    tools/node-scripts/*|scripts/*|*.js|*.mjs|*.cjs|*.ts)
+                      tools=true
+                      ;;
+                  esac
+
+                  case "$file" in
+                    .github/workflows/*|package.json|package-lock.json|*/package.json|tsconfig*.json|*/tsconfig*.json|vitest*.config.*|*/vitest*.config.*)
+                      deps_or_ci=true
+                      ;;
+                  esac
+                done
+
+                if [[ "$deps_or_ci" == "true" ]]; then
+                  set_all
+                fi
+              fi
+            fi
+          fi
+
+          {
+            echo "site=$site"
+            echo "api=$api"
+            echo "archive=$archive"
+            echo "tools=$tools"
+            echo "deps_or_ci=$deps_or_ci"
+            echo "full=$full"
+          } >> "$GITHUB_OUTPUT"
+
+          printf 'site=%s api=%s archive=%s tools=%s deps_or_ci=%s full=%s\n' "$site" "$api" "$archive" "$tools" "$deps_or_ci" "$full"
+
+  site_build:
+    needs: changes
+    if: needs.changes.outputs.site == 'true' || needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,32 +153,144 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline
 
-      # Three tsc runs are independent; parallel saves wall time vs serial (~2× on 2-core runners).
-      - name: Typecheck (API, scripts, mobile-site-qa in parallel)
-        run: |
-          ec=0
-          npm run typecheck:api & p1=$!
-          npm run typecheck:scripts & p2=$!
-          npm run typecheck:mobile-site-qa & p3=$!
-          wait $p1 || ec=1
-          wait $p2 || ec=1
-          wait $p3 || ec=1
-          exit $ec
-
-      - name: Build (assets, vendor bundle, prototype, site version)
+      - name: Build site assets
         run: npm run build
 
-      # Archive uses vitest-pool-workers; API unit tests are plain Vitest — safe to overlap.
-      - name: Test archive + API unit tests (parallel)
+  typecheck:
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.tools == 'true' || needs.changes.outputs.site == 'true' || needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Typecheck selected projects
         run: |
           ec=0
-          npm run test:archive & p1=$!
-          npm run test:api & p2=$!
-          wait $p1 || ec=1
-          wait $p2 || ec=1
-          exit $ec
+
+          if [[ "${{ needs.changes.outputs.api }}" == "true" || "${{ needs.changes.outputs.full }}" == "true" ]]; then
+            npm run typecheck:api & p_api=$!
+          else
+            p_api=
+          fi
+
+          if [[ "${{ needs.changes.outputs.tools }}" == "true" || "${{ needs.changes.outputs.full }}" == "true" ]]; then
+            npm run typecheck:scripts & p_scripts=$!
+          else
+            p_scripts=
+          fi
+
+          if [[ "${{ needs.changes.outputs.site }}" == "true" || "${{ needs.changes.outputs.full }}" == "true" ]]; then
+            npm run typecheck:mobile-site-qa & p_mobile=$!
+          else
+            p_mobile=
+          fi
+
+          [[ -z "$p_api" ]] || wait "$p_api" || ec=1
+          [[ -z "$p_scripts" ]] || wait "$p_scripts" || ec=1
+          [[ -z "$p_mobile" ]] || wait "$p_mobile" || ec=1
+          exit "$ec"
+
+  unit_tests:
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.archive == 'true' || needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Test selected workers
+        run: |
+          ec=0
+
+          if [[ "${{ needs.changes.outputs.archive }}" == "true" || "${{ needs.changes.outputs.full }}" == "true" ]]; then
+            npm run test:archive & p_archive=$!
+          else
+            p_archive=
+          fi
+
+          if [[ "${{ needs.changes.outputs.api }}" == "true" || "${{ needs.changes.outputs.full }}" == "true" ]]; then
+            npm run test:api & p_api=$!
+          else
+            p_api=
+          fi
+
+          [[ -z "$p_archive" ]] || wait "$p_archive" || ec=1
+          [[ -z "$p_api" ]] || wait "$p_api" || ec=1
+          exit "$ec"
+
+  api_integration:
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
 
       - name: API integration tests
         run: npm run test:integration -w workers/api
+
+  ci_result:
+    name: ci_result
+    needs:
+      - changes
+      - site_build
+      - typecheck
+      - unit_tests
+      - api_integration
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check required job results
+        run: |
+          set -euo pipefail
+          failed=false
+
+          for job in changes site_build typecheck unit_tests api_integration; do
+            result="$(jq -r --arg job "$job" '.[$job].result' <<< '${{ toJson(needs) }}')"
+            echo "$job: $result"
+            case "$result" in
+              success|skipped)
+                ;;
+              *)
+                failed=true
+                ;;
+            esac
+          done
+
+          if [[ "$failed" == "true" ]]; then
+            exit 1
+          fi
