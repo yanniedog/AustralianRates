@@ -2,6 +2,30 @@
     'use strict';
     window.AR = window.AR || {};
 
+    function chartClientLog() {
+        var u = window.AR && window.AR.utils;
+        return u && typeof u.clientLog === 'function' ? u.clientLog : function () {};
+    }
+
+    /** Shorten long strings for session log lines. */
+    function chartLogClip(s, maxLen) {
+        var t = String(s == null ? '' : s);
+        var n = Number(maxLen);
+        if (!Number.isFinite(n) || n < 8) n = 72;
+        return t.length <= n ? t : t.slice(0, n - 1) + '\u2026';
+    }
+
+    /** [P]Bank|Product -> { bank, product } for compact log detail. */
+    function chartLogProductParts(selectionKey) {
+        var s = String(selectionKey || '');
+        if (s.indexOf('[P]') === 0) s = s.slice(3);
+        var pipe = s.indexOf('|');
+        if (pipe >= 0) {
+            return { bank: chartLogClip(s.slice(0, pipe), 40), product: chartLogClip(s.slice(pipe + 1), 56) };
+        }
+        return { bank: '', product: chartLogClip(s, 56) };
+    }
+
     function isHomeLoan(section) {
         return String(section || '') === 'home-loans';
     }
@@ -697,6 +721,10 @@
         var range = options.range;
         var section = options.section;
         var bankList = options.bankList || [];
+        var clientLog = chartClientLog();
+        var lastRibbonScrubLogAt = 0;
+        var lastRibbonVisualSig = '';
+        var lastSiteUiRibbonLogAt = 0;
         var ribbonChromeHandlers = {
             onChipClick: function () {},
             onChipPointerEnter: function () {},
@@ -1277,6 +1305,22 @@
             if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
             var rs = getRibbonStyleResolved();
             var focusKey = resolveBandsFocusKey(hoveredBankName);
+            var visualSig =
+                String(focusKey || '') +
+                '|' +
+                normRibbonBankName(ribbonProductBank) +
+                '|' +
+                normRibbonBankName(ribbonTrayHoverBank);
+            if (visualSig !== lastRibbonVisualSig) {
+                lastRibbonVisualSig = visualSig;
+                clientLog('info', 'Chart ribbon foreground/colour', {
+                    section: String(section || ''),
+                    focusBank: focusKey || null,
+                    pinnedBank: ribbonProductBank ? chartLogClip(ribbonProductBank, 48) : null,
+                    trayHoverBank: ribbonTrayHoverBank ? chartLogClip(ribbonTrayHoverBank, 48) : null,
+                    productLines: useRibbonCanvas ? 'canvas' : 'echarts',
+                });
+            }
             var updates = [];
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
@@ -1430,7 +1474,13 @@
                 brow.appendChild(lab);
                 brow.appendChild(rateSpan);
                 function toggleBranch() {
-                    ribbonExpandedPaths[subPath] = !expanded;
+                    var nextOpen = !expanded;
+                    ribbonExpandedPaths[subPath] = nextOpen;
+                    clientLog('info', nextOpen ? 'Chart product hierarchy expand' : 'Chart product hierarchy collapse', {
+                        section: String(section || ''),
+                        path: chartLogClip(subPath, 40),
+                        label: chartLogClip(branchLabel, 72),
+                    });
                     refreshRibbonUnderChartPanel();
                 }
                 brow.addEventListener('click', function (ev) {
@@ -1562,6 +1612,28 @@
             series: series,
         });
 
+        if (!isBandsMode) {
+            var reportAxisPtrLogAt = 0;
+            chart.on('updateAxisPointer', function (ev) {
+                var tPtr = Date.now();
+                if (tPtr - reportAxisPtrLogAt < 320) return;
+                reportAxisPtrLogAt = tPtr;
+                var ax0 = ev && ev.axesInfo && ev.axesInfo[0];
+                if (!ax0) return;
+                var vRaw = ax0.value;
+                var vOut = vRaw;
+                if (Array.isArray(vRaw)) vOut = vRaw.slice(0, 4);
+                else if (vRaw != null && typeof vRaw === 'object') vOut = '[axis value]';
+                clientLog('info', 'Chart report axis pointer', {
+                    section: String(section || ''),
+                    mode: plotPayload && plotPayload.mode,
+                    axisDim: ax0.axisDim,
+                    axisIndex: ax0.axisIndex,
+                    value: vOut,
+                });
+            });
+        }
+
         if (isBandsMode) {
             applyRibbonBankHighlightState(ribbonChartHighlightBank());
         }
@@ -1586,6 +1658,8 @@
                 var xy = ribbonZrXY(ev);
                 var data = chart.convertFromPixel(ribbonAxisFinder, xy);
                 if (!data || data.length < 2) return;
+                var prevPointerDate = lastPointerDate;
+                var prevBandBank = hoveredBank;
                 var dateStr = resolveDateFromAxisValue(data[0]);
                 if (dateStr) lastPointerDate = dateStr;
                 var yVal = data[1];
@@ -1609,10 +1683,51 @@
                     scheduleRibbonRedraw();
                     syncInfoboxRowHighlight();
                 }
+                if (bankChanged) {
+                    clientLog('info', 'Chart ribbon band hover', {
+                        section: String(section || ''),
+                        bandBank: next ? chartLogClip(next, 48) : null,
+                        date: dateStr || null,
+                        focusPanel: pbMove ? chartLogClip(pbMove, 48) : null,
+                    });
+                }
+                if (ribbonChartHoverProductKey !== prevPh) {
+                    if (ribbonChartHoverProductKey) {
+                        var pp = chartLogProductParts(ribbonChartHoverProductKey);
+                        clientLog('info', 'Chart ribbon product line hover', {
+                            section: String(section || ''),
+                            bank: pp.bank || null,
+                            product: pp.product || null,
+                            date: dateStr || null,
+                            overlay: useRibbonCanvas ? 'canvas' : 'echarts',
+                        });
+                    } else if (prevPh) {
+                        clientLog('info', 'Chart ribbon product line hover clear', { section: String(section || '') });
+                    }
+                }
+                var dateChanged = !!dateStr && dateStr !== prevPointerDate;
+                if (
+                    dateChanged &&
+                    !bankChanged &&
+                    ribbonChartHoverProductKey === prevPh &&
+                    prevBandBank === next &&
+                    (next || pbMove)
+                ) {
+                    var tScr = Date.now();
+                    if (tScr - lastRibbonScrubLogAt >= 450) {
+                        lastRibbonScrubLogAt = tScr;
+                        clientLog('info', 'Chart ribbon date scrub', {
+                            section: String(section || ''),
+                            date: dateStr,
+                            bandBank: next ? chartLogClip(next, 48) : null,
+                        });
+                    }
+                }
                 syncRibbonTrayUi();
                 refreshRibbonUnderChartPanel();
             }
             function onRibbonZrGlobalOut() {
+                clientLog('info', 'Chart ribbon pointer leave chart', { section: String(section || '') });
                 hoveredBank = '';
                 if (!ribbonTrayHoverBank) lastPointerDate = '';
                 ribbonChartHoverProductKey = '';
@@ -1639,11 +1754,24 @@
                             selectedProductName = '';
                             hideRibbonInfoBox();
                             refreshRibbonUnderChartPanel();
+                            clientLog('info', 'Chart ribbon product line deselect', {
+                                section: String(section || ''),
+                                overlay: 'canvas',
+                            });
                         } else {
                             ribbonTrayHoverBank = '';
                             ribbonProductBank = tapBank;
                             selectedProductName = pick.prod.key;
                             showRibbonInfoBox(pick);
+                            var psel = chartLogProductParts(pick.prod.key);
+                            clientLog('info', 'Chart ribbon product line select', {
+                                section: String(section || ''),
+                                bank: psel.bank,
+                                product: psel.product,
+                                date: dateStr || null,
+                                rate: Number.isFinite(pick.rate) ? Math.round(pick.rate * 100) / 100 : null,
+                                overlay: 'canvas',
+                            });
                         }
                         applyRibbonBankHighlightState(ribbonChartHighlightBank());
                         updateProductVisibility();
@@ -1667,6 +1795,11 @@
                     refreshRibbonUnderChartPanel();
                     scheduleRibbonRedraw();
                     syncRibbonTrayUi();
+                    clientLog('info', 'Chart ribbon bank pin (chart click)', {
+                        section: String(section || ''),
+                        bank: chartLogClip(tapBank, 48),
+                        date: dateStr || null,
+                    });
                     return;
                 }
 
@@ -1680,6 +1813,7 @@
                 refreshRibbonUnderChartPanel();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                clientLog('info', 'Chart ribbon bank pin clear', { section: String(section || '') });
             }
 
             function ribbonAnchorYmdOrLast() {
@@ -1703,6 +1837,11 @@
                 refreshRibbonUnderChartPanel();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                clientLog('info', 'Chart lender tray chip click', {
+                    section: String(section || ''),
+                    bank: chartLogClip(bn, 48),
+                    anchorDate: lastPointerDate || null,
+                });
             };
 
             ribbonChromeHandlers.onChipPointerEnter = function (fullName) {
@@ -1717,6 +1856,10 @@
                 refreshRibbonUnderChartPanel();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                clientLog('info', 'Chart lender tray logo hover', {
+                    section: String(section || ''),
+                    bank: chartLogClip(bn, 48),
+                });
             };
             ribbonChromeHandlers.onChipPointerLeave = function (fullName) {
                 if (selectedProductName) return;
@@ -1728,6 +1871,10 @@
                 refreshRibbonUnderChartPanel();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                clientLog('info', 'Chart lender tray logo hover end', {
+                    section: String(section || ''),
+                    bank: chartLogClip(bn, 48),
+                });
             };
 
             (function attachRibbonInfoboxProductHover() {
@@ -1746,14 +1893,24 @@
                     ribbonListHoverKeys = keys.slice();
                     updateProductVisibility();
                     scheduleRibbonRedraw();
+                    var rowIsLeaf = row.classList && row.classList.contains('ar-report-infobox-trow--leaf');
+                    var preview = keys.length === 1 ? chartLogProductParts(keys[0]) : null;
+                    clientLog('info', rowIsLeaf ? 'Chart infobox product row hover' : 'Chart infobox tier row hover', {
+                        section: String(section || ''),
+                        keys: keys.length,
+                        bank: preview ? preview.bank : null,
+                        product: preview ? preview.product : null,
+                    });
                 };
                 ibEl._arRibbonListOut = function (ev) {
                     var toEl = ev.relatedTarget;
                     if (toEl && ibEl.contains(toEl)) return;
                     if (!ribbonListHoverKeys) return;
+                    var n = ribbonListHoverKeys.length;
                     ribbonListHoverKeys = null;
                     updateProductVisibility();
                     scheduleRibbonRedraw();
+                    clientLog('info', 'Chart infobox row hover clear', { section: String(section || ''), keys: n });
                 };
                 ibEl.addEventListener('mouseover', ibEl._arRibbonListOver);
                 ibEl.addEventListener('mouseout', ibEl._arRibbonListOut);
@@ -1789,6 +1946,10 @@
                         selectedProductName = '';
                         hideRibbonInfoBox();
                         refreshRibbonUnderChartPanel();
+                        clientLog('info', 'Chart ribbon product line deselect', {
+                            section: String(section || ''),
+                            overlay: 'echarts',
+                        });
                     } else {
                         selectedProductName = name;
                         ribbonTrayHoverBank = '';
@@ -1814,6 +1975,15 @@
                                 }],
                             });
                         }
+                        var pe = chartLogProductParts(name);
+                        clientLog('info', 'Chart ribbon product line select', {
+                            section: String(section || ''),
+                            bank: pe.bank,
+                            product: pe.product,
+                            date: dateStr || null,
+                            rate: Number.isFinite(rate) ? Math.round(rate * 100) / 100 : null,
+                            overlay: 'echarts',
+                        });
                     }
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
@@ -1830,6 +2000,11 @@
             });
 
             siteUiRibbonListener = function () {
+                var tu = Date.now();
+                if (tu - lastSiteUiRibbonLogAt >= 800) {
+                    lastSiteUiRibbonLogAt = tu;
+                    clientLog('info', 'Chart ribbon style refresh (site UI)', { section: String(section || '') });
+                }
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 scheduleRibbonRedraw();

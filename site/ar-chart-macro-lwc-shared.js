@@ -418,6 +418,8 @@
             button.addEventListener('click', function () {
                 setReportRange(section, option.value);
                 if (typeof onChange === 'function') onChange(option.value);
+                var cl = window.AR && window.AR.utils && typeof window.AR.utils.clientLog === 'function' ? window.AR.utils.clientLog : function () {};
+                cl('info', 'Chart report range', { section: String(section || ''), range: option.value });
             });
             row.appendChild(button);
         });
