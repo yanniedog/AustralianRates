@@ -25,6 +25,8 @@ Standalone Australian home loan rates project hosted on Cloudflare.
 - `workers/archive`: Archive/discovery worker (D1, R2, Queue)
 - `site`: Static dashboard deployed with Cloudflare Pages
 
+For **multiple agents or parallel tasks**, use one branch and one PR per stream of work; see [docs/CONCURRENT_AGENT_WORKFLOW.md](docs/CONCURRENT_AGENT_WORKFLOW.md).
+
 ## Product Features
 
 - Daily mortgage rate ingestion for major Australian lenders (CDR-first, web fallback).
