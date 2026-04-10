@@ -864,19 +864,23 @@ async function verifyChartSmoke(page, results, label) {
             );
         return {
             engine: String(out?.getAttribute('data-chart-engine') || ''),
+            dataRendered: out?.getAttribute('data-chart-rendered') === 'true',
             canvases: document.querySelectorAll('#chart-output canvas').length,
+            svgs: document.querySelectorAll('#chart-output svg').length,
             status,
             summary: String(document.getElementById('chart-summary')?.textContent || '').trim(),
             emptyTerminal,
         };
     });
 
-    const chartDrawn =
-        chart.status &&
-        (chart.emptyTerminal ||
-            chart.engine === 'echarts' ||
-            chart.engine === 'lightweight' ||
-            chart.canvases > 0);
+    // Keep in sync with waitForChartReady: SVG / data-chart-rendered count as rendered even if status is briefly empty.
+    const hasVisualChart =
+        chart.engine === 'echarts' ||
+        chart.engine === 'lightweight' ||
+        chart.dataRendered ||
+        chart.canvases > 0 ||
+        chart.svgs > 0;
+    const chartDrawn = chart.emptyTerminal || hasVisualChart;
     if (chartDrawn) {
         pass(results, `${label}: chart view renders live output`);
     } else {
