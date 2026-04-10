@@ -1722,7 +1722,7 @@
                             ribbonProductBank: String(ribbonProductBank || ''),
                             lastPointerDate: String(lastPointerDate || ''),
                             ribbonChartHoverProductKey: String(ribbonChartHoverProductKey || ''),
-                            willClearLastDate: !ribbonTrayHoverBank,
+                            lastPointerDateClearedOnGlobalout: false,
                         },
                         timestamp: Date.now(),
                     }),
@@ -1730,7 +1730,8 @@
                 // #endregion
                 clientLog('info', 'Chart ribbon pointer leave chart', { section: String(section || '') });
                 hoveredBank = '';
-                if (!ribbonTrayHoverBank) lastPointerDate = '';
+                // Preserve lastPointerDate: globalout fires before tray pointerenter on chart→logo moves;
+                // clearing here forced tray hover to default anchor to range end.
                 ribbonChartHoverProductKey = '';
                 syncRibbonTrayUi();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
