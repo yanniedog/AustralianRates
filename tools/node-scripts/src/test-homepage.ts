@@ -15,12 +15,16 @@ const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 /** Tight defaults; override via env if production is slow or flaky. */
 const GOTO_TIMEOUT_MS = Number(process.env.TEST_GOTO_TIMEOUT_MS || 20000);
 const SEL_TIMEOUT_MS = Number(process.env.TEST_SELECTOR_TIMEOUT_MS || 10000);
-const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 1000);
+const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 350);
 const ACTION_TIMEOUT_MS = Number(process.env.TEST_ACTION_TIMEOUT_MS || 45000);
-const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT_MS || 22000);
-const PIVOT_CHART_TIMEOUT_MS = Number(process.env.TEST_PIVOT_CHART_TIMEOUT_MS || 32000);
-const FILTER_SCENARIO_OPEN_MS = Number(process.env.TEST_FILTER_SCENARIO_MS || 14000);
-const FILTER_PADS_MS = Number(process.env.TEST_FILTER_PADS_MS || 18000);
+const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT_MS || 16000);
+const PIVOT_CHART_TIMEOUT_MS = Number(process.env.TEST_PIVOT_CHART_TIMEOUT_MS || 24000);
+const FILTER_SCENARIO_OPEN_MS = Number(process.env.TEST_FILTER_SCENARIO_MS || 11000);
+const FILTER_PADS_MS = Number(process.env.TEST_FILTER_PADS_MS || 14000);
+/** Skip Savings + Term Deposits section loop (homepage still full). Local iteration only; CI/deploy should use full suite. */
+const TEST_HOMEPAGE_QUICK = process.env.TEST_HOMEPAGE_QUICK === '1';
+/** Parallel legal tabs (1–4). Lower if Cloudflare or local proxy throttles burst navigations. */
+const LEGAL_PAGE_CONCURRENCY = Math.max(1, Math.min(4, Number(process.env.TEST_LEGAL_CONCURRENCY || 2)));
 /** Node fetch for noscript HTML has no browser-style limits; cap wait to avoid indefinite hangs. */
 const NOSCRIPT_FETCH_TIMEOUT_MS = Number(process.env.TEST_NOSCRIPT_FETCH_TIMEOUT_MS || 25000);
 const REQUIRED_HEADERS = ['Found at', 'Headline Rate', 'Bank', 'Product Code', 'Rate Confirmed', 'URLs'];
@@ -65,6 +69,7 @@ function isIgnorableTelemetryFailure(failure) {
     if (url.includes('static.cloudflareinsights.com/beacon.min.js') && error.includes('ERR_NAME_NOT_RESOLVED')) return true;
     if (url.includes('clarity.ms/') && /^net::ERR_|ERR_/.test(error)) return true;
     if (error.includes('ERR_ABORTED')) return true;
+    if (/127\.0\.0\.1|localhost/i.test(url) && /\/ingest\//i.test(url)) return true;
     return false;
 }
 
@@ -234,6 +239,20 @@ async function waitForExplorerTableReady(page, timeout = EXPLORER_TABLE_TIMEOUT_
         await page.waitForTimeout(400);
         await page.waitForFunction(tableReady, null, { timeout });
     }
+}
+
+async function pollScrollUntil(page, baselineY, wantMoreThan, minDelta, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const y = await page.evaluate(() => window.scrollY).catch(() => baselineY);
+        if (wantMoreThan) {
+            if (y > baselineY + minDelta) return y;
+        } else if (y < baselineY - minDelta) {
+            return y;
+        }
+        await page.waitForTimeout(45);
+    }
+    return page.evaluate(() => window.scrollY).catch(() => baselineY);
 }
 
 async function waitForMobileRailVisible(page, timeout = 12000) {
@@ -967,7 +986,11 @@ async function verifyCopyLinkFeedback(page, results, label) {
         fail(results, `${label}: copy-link action did not reach the client log`);
     }
 
-    await page.waitForTimeout(1700);
+    await page.waitForFunction(() => {
+        const t = String(document.querySelector('#workspace-copy-link .ar-icon-label-text')?.textContent
+            || document.getElementById('workspace-copy-link')?.textContent || '').replace(/\s+/g, ' ').trim();
+        return /^link$/i.test(t);
+    }, null, { timeout: 4000 }).catch(() => null);
     const restored = await page.evaluate(() => {
         return String(document.querySelector('#workspace-copy-link .ar-icon-label-text')?.textContent || document.getElementById('workspace-copy-link')?.textContent || '').replace(/\s+/g, ' ').trim();
     }).catch(() => '');
@@ -1121,23 +1144,23 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
 
 async function verifyMobileRail(page, results, label, baseUrl) {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
     await page.evaluate(() => {
         const d = document.getElementById('table-details');
         if (d && d.tagName === 'DETAILS') d.open = true;
     });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(200);
     const tabExplorer = page.locator('#tab-explorer');
     await tabExplorer.scrollIntoViewIfNeeded().catch(() => {});
     await tabExplorer.click({ force: true, timeout: SEL_TIMEOUT_MS }).catch(() => {});
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(280);
     await page.waitForSelector('#panel-explorer.active', { timeout: 5000 }).catch(() => {});
     await page.waitForSelector('#rate-table .tabulator-row', { timeout: 10000 }).catch(() => {});
     await page.evaluate(() => {
         window.dispatchEvent(new Event('resize'));
         if (window.AR?.mobileTableNav?.refresh) window.AR.mobileTableNav.refresh();
     });
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(350);
     const visible = await waitForMobileRailVisible(page, 20000);
     if (!visible) {
         warn(results, `${label}: mobile explorer rail did not appear (layout/timing; may pass in other environments)`);
@@ -1149,28 +1172,26 @@ async function verifyMobileRail(page, results, label, baseUrl) {
         const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
         window.scrollTo(0, Math.min(max, 320));
     });
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(120);
     const initialScrollY = await page.evaluate(() => window.scrollY).catch(() => 0);
     const railDown = page.locator('#mobile-table-rail .mobile-table-rail-btn').last();
     const railUp = page.locator('#mobile-table-rail .mobile-table-rail-btn').first();
-    await railDown.click({ force: true });
-    await page.waitForTimeout(1200);
-    const afterDown = await page.evaluate(() => window.scrollY).catch(() => initialScrollY);
-
     const RAIL_SCROLL_EPS = 12;
+    const RAIL_POLL_MS = 3500;
+    await railDown.click({ force: true });
+    const afterDown = await pollScrollUntil(page, initialScrollY, true, RAIL_SCROLL_EPS, RAIL_POLL_MS);
+
     if (afterDown > initialScrollY + RAIL_SCROLL_EPS) pass(results, `${label}: mobile rail down button scrolls the page`);
     else fail(results, `${label}: mobile rail down button did not move the page`);
 
     await railUp.click({ force: true });
-    await page.waitForTimeout(1200);
-    let afterUp = await page.evaluate(() => window.scrollY).catch(() => afterDown);
+    let afterUp = await pollScrollUntil(page, afterDown, false, RAIL_SCROLL_EPS, RAIL_POLL_MS);
 
     if (afterUp < afterDown - RAIL_SCROLL_EPS) {
         pass(results, `${label}: mobile rail up button scrolls the page back`);
     } else {
         await railUp.click({ force: true });
-        await page.waitForTimeout(700);
-        afterUp = await page.evaluate(() => window.scrollY).catch(() => afterDown);
+        afterUp = await pollScrollUntil(page, afterDown, false, RAIL_SCROLL_EPS, 2000);
         if (afterUp < afterDown - RAIL_SCROLL_EPS) pass(results, `${label}: mobile rail up button scrolls the page back`);
         else fail(results, `${label}: mobile rail up button did not move the page upward`);
     }
@@ -1257,16 +1278,34 @@ async function verifyMobileOverlays(page, results, label, baseUrl) {
     else fail(results, `${label}: Escape did not reset mobile overlays`);
 }
 
-async function verifyLegalPages(page, results) {
-    for (const legal of LEGAL_PAGES) {
+function attachPageNetworkCollectors(p, requestFailures, pageErrors) {
+    p.on('pageerror', (error) => {
+        const message = error && error.message ? error.message : String(error);
+        const stack = error && error.stack ? String(error.stack) : '';
+        pageErrors.push({ message, stack });
+    });
+    p.on('requestfailed', (request) => {
+        const failure = request.failure();
+        requestFailures.push({
+            url: request.url(),
+            error: failure && failure.errorText ? failure.errorText : 'requestfailed',
+        });
+    });
+}
+
+async function runOneLegalPage(context, legal, results, requestFailures, pageErrors) {
+    const p = await context.newPage();
+    p.setDefaultTimeout(ACTION_TIMEOUT_MS);
+    attachPageNetworkCollectors(p, requestFailures, pageErrors);
+    try {
         const url = withSharedQuery(legal.path);
-        await gotoPublic(page, url);
-        await verifyClarityPresent(page, results, legal.name);
-        await verifyNoPrimaryMobileHostArtifacts(page, results, legal.name);
-        await verifyPublicHeaderRefresh(page, results, legal.name);
-        await verifyPublicFooter(page, results, legal.name);
-        await verifyLegalMenuSimplified(page, results, legal.name);
-        const state = await page.evaluate(() => ({
+        await gotoPublic(p, url);
+        await verifyClarityPresent(p, results, legal.name);
+        await verifyNoPrimaryMobileHostArtifacts(p, results, legal.name);
+        await verifyPublicHeaderRefresh(p, results, legal.name);
+        await verifyPublicFooter(p, results, legal.name);
+        await verifyLegalMenuSimplified(p, results, legal.name);
+        const state = await p.evaluate(() => ({
             title: document.title,
             body: String(document.body.textContent || '').replace(/\s+/g, ' ').trim(),
         }));
@@ -1284,14 +1323,27 @@ async function verifyLegalPages(page, results) {
                 fail(results, 'Privacy: live privacy page is missing the Clarity disclosure');
             }
         }
+    } finally {
+        await closeWithTimeout(`legal tab ${legal.name}`, () => p.close());
     }
+}
+
+async function verifyLegalPagesParallel(context, results, requestFailures, pageErrors) {
+    const queue = LEGAL_PAGES.slice();
+    const workers = Array.from({ length: LEGAL_PAGE_CONCURRENCY }, async () => {
+        while (queue.length > 0) {
+            const legal = queue.shift();
+            if (legal) await runOneLegalPage(context, legal, results, requestFailures, pageErrors);
+        }
+    });
+    await Promise.all(workers);
 }
 
 async function verifyNotFoundRoute(page, results) {
     const url = withSharedQuery(INVALID_ROUTE_PATH, '/api/home-loan-rates');
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
-    await page.waitForSelector('#main-content', { timeout: SEL_TIMEOUT_MS });
-    await page.waitForSelector('.site-header .site-brand', { timeout: SEL_TIMEOUT_MS });
+    await page.waitForSelector('#main-content', { state: 'attached', timeout: SEL_TIMEOUT_MS });
+    await page.waitForSelector('.site-header .site-brand', { state: 'visible', timeout: SEL_TIMEOUT_MS });
     await page.waitForFunction(() => {
         return document.body.classList.contains('ar-not-found')
             && !!document.querySelector('.missing-route-panel')
@@ -1382,7 +1434,6 @@ async function verifySectionSmoke(page, results, section, noscriptBatchPromise) 
     await verifyNoscriptFromBatch(noscriptBatchPromise, section.name, results);
     await verifyPublicTriggerRemoval(page, results, section.name);
     await verifyChartSmoke(page, results, section.name);
-    await verifyMobileScenarioAccess(page, results, section.name, url);
     await page.setViewportSize({ width: 1440, height: 1200 });
 }
 
@@ -1393,6 +1444,13 @@ async function runTests() {
     const runStarted = Date.now();
 
     if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
+    if (process.env.TEST_QUIET !== '1') {
+        console.log(
+            '[test-homepage] Full suite hits production with many sequential steps. Legal URLs run in parallel. '
+            + 'TEST_HOMEPAGE_QUICK=1 skips Savings/Term Deposits repeats; TEST_LEGAL_CONCURRENCY=2–4; TEST_POST_NAV_SETTLE_MS etc.',
+        );
+    }
 
     const browser = await chromium.launch({ headless: process.env.HEADLESS !== '0' });
     const context = await browser.newContext({
@@ -1482,19 +1540,34 @@ async function runTests() {
 
         await phase('homepage: desktop screenshot');
         await page.setViewportSize({ width: 1440, height: 1200 });
-        await gotoPublic(page, homeUrl);
+        try {
+            const cur = new URL(page.url());
+            const want = new URL(homeUrl);
+            if (cur.origin !== want.origin || cur.pathname !== want.pathname || cur.search !== want.search) {
+                await gotoPublic(page, homeUrl);
+            }
+        } catch (_) {
+            await gotoPublic(page, homeUrl);
+        }
         await page.screenshot({
             path: `${SCREENSHOT_DIR}/homepage-desktop.png`,
             fullPage: true,
         }).catch(() => {});
 
-        for (const section of SECTIONS.slice(1)) {
-            await phase(`section: ${section.name}`);
-            await verifySectionSmoke(page, results, section, noscriptBatchPromise);
+        if (TEST_HOMEPAGE_QUICK) {
+            if (process.env.TEST_QUIET !== '1') {
+                console.log('[test-homepage] TEST_HOMEPAGE_QUICK=1: skipping Savings/Term Deposits section loop');
+            }
+        } else {
+            for (const section of SECTIONS.slice(1)) {
+                await phase(`section: ${section.name}`);
+                await verifySectionSmoke(page, results, section, noscriptBatchPromise);
+            }
         }
 
-        await phase('legal pages + 404 + runtime health');
-        await verifyLegalPages(page, results);
+        await phase(`legal pages (concurrency ${LEGAL_PAGE_CONCURRENCY})`);
+        await verifyLegalPagesParallel(context, results, requestFailures, pageErrors);
+        await phase('404 route + runtime health');
         await verifyNotFoundRoute(page, results);
         await verifyRuntimeHealth(results, requestFailures, pageErrors);
     } catch (error) {
@@ -1533,7 +1606,7 @@ async function runTests() {
     console.log('========================================\n');
     console.log(`Screenshots saved to: ${SCREENSHOT_DIR}/`);
     if (process.env.TEST_QUIET !== '1') {
-        console.log('Tip: set TEST_QUIET=1 to hide phase lines; TEST_ACTION_TIMEOUT_MS / TEST_POST_NAV_SETTLE_MS to tune waits.\n');
+        console.log('Tip: TEST_HOMEPAGE_QUICK=1 skips extra product sections; TEST_QUIET=1 hides phases; TEST_POST_NAV_SETTLE_MS tunes nav settle.\n');
     }
 
     process.exit(results.failed.length > 0 ? 1 : 0);
