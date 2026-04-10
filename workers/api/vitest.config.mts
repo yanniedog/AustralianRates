@@ -12,5 +12,10 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     exclude: ['test/integration/**', '**/node_modules/**'],
+    testTimeout: 10_000,
+    hookTimeout: 8_000,
+    teardownTimeout: 5_000,
+    maxWorkers: 8,
+    fileParallelism: true,
   },
 })

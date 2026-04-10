@@ -12,6 +12,14 @@ const isProductionUrl = /^https:\/\/www\.australianrates\.com\/?/i.test(TEST_URL
 const INVALID_ROUTE_PATH = '/does-not-exist';
 const CLARITY_PROJECT_ID = 'vt4vtenviy';
 const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
+/** Tight defaults; override via env if production is slow or flaky. */
+const GOTO_TIMEOUT_MS = Number(process.env.TEST_GOTO_TIMEOUT_MS || 20000);
+const SEL_TIMEOUT_MS = Number(process.env.TEST_SELECTOR_TIMEOUT_MS || 10000);
+const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 1500);
+const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT_MS || 22000);
+const PIVOT_CHART_TIMEOUT_MS = Number(process.env.TEST_PIVOT_CHART_TIMEOUT_MS || 32000);
+const FILTER_SCENARIO_OPEN_MS = Number(process.env.TEST_FILTER_SCENARIO_MS || 14000);
+const FILTER_PADS_MS = Number(process.env.TEST_FILTER_PADS_MS || 18000);
 const REQUIRED_HEADERS = ['Found at', 'Headline Rate', 'Bank', 'Product Code', 'Rate Confirmed', 'URLs'];
 const HOME_ONLY_HEADERS = ['Comparison Rate'];
 const VIEWPORTS = [
@@ -77,7 +85,7 @@ function warn(results, message) {
     results.warnings.push(`WARN ${message}`);
 }
 
-async function closeWithTimeout(label, action, timeoutMs = 10000) {
+async function closeWithTimeout(label, action, timeoutMs = 6000) {
     let timer;
     try {
         const outcome = await Promise.race([
@@ -101,21 +109,21 @@ async function closeWithTimeout(label, action, timeoutMs = 10000) {
 }
 
 async function gotoPublic(page, url) {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForSelector('#main-content', { timeout: 15000 });
-    await page.waitForSelector('.site-header .site-brand', { timeout: 15000 });
-    await page.waitForTimeout(2500);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
+    await page.waitForSelector('#main-content', { timeout: SEL_TIMEOUT_MS });
+    await page.waitForSelector('.site-header .site-brand', { timeout: SEL_TIMEOUT_MS });
+    await page.waitForTimeout(POST_NAV_SETTLE_MS);
 }
 
-async function waitForExplorerTableReady(page, timeout = 40000) {
+async function waitForExplorerTableReady(page, timeout = EXPLORER_TABLE_TIMEOUT_MS) {
     // Chart is the default tab; the table lives in a hidden panel until Table is selected.
     async function openExplorerPanel() {
         await page.locator('#tab-explorer').scrollIntoViewIfNeeded().catch(() => {});
-        await page.locator('#tab-explorer').click({ timeout: 15000 }).catch(() => {});
+        await page.locator('#tab-explorer').click({ timeout: SEL_TIMEOUT_MS }).catch(() => {});
         await page.waitForFunction(() => {
             const panel = document.getElementById('panel-explorer');
             return !!(panel && !panel.hidden);
-        }, null, { timeout: 15000 }).catch(() => null);
+        }, null, { timeout: SEL_TIMEOUT_MS }).catch(() => null);
     }
 
     const tableReady = () => {
@@ -136,7 +144,7 @@ async function waitForExplorerTableReady(page, timeout = 40000) {
     }
 }
 
-async function waitForMobileRailVisible(page, timeout = 15000) {
+async function waitForMobileRailVisible(page, timeout = 12000) {
     const started = Date.now();
     while ((Date.now() - started) < timeout) {
         const visible = await page.evaluate(() => {
@@ -816,7 +824,7 @@ async function verifyPivotLoad(page, results, label) {
     await page.click('#load-pivot');
     await page.waitForFunction(() => {
         return !!document.querySelector('#pivot-output .pvtUi');
-    }, null, { timeout: 45000 }).catch(() => null);
+    }, null, { timeout: PIVOT_CHART_TIMEOUT_MS }).catch(() => null);
 
     const pivotReady = await page.evaluate(() => {
         return {
@@ -895,9 +903,9 @@ async function verifyFilterAccessibleNames(page, results, label) {
         const slice = document.getElementById('scenario');
         if (slice && slice.tagName === 'DETAILS') slice.open = true;
     });
-    await page.waitForSelector('#scenario[open]', { timeout: 20000 });
-    await page.waitForSelector('#filter-bank-search', { state: 'visible', timeout: 15000 });
-    await page.waitForSelector('#filter-security-pads .filter-pad-btn', { timeout: 25000 });
+    await page.waitForSelector('#scenario[open]', { timeout: FILTER_SCENARIO_OPEN_MS });
+    await page.waitForSelector('#filter-bank-search', { state: 'visible', timeout: SEL_TIMEOUT_MS });
+    await page.waitForSelector('#filter-security-pads .filter-pad-btn', { timeout: FILTER_PADS_MS });
 
     const checks = [
         { name: 'bank search', locator: page.locator('#filter-bank-search'), reject: 'All All' },
@@ -1174,14 +1182,14 @@ async function verifyLegalPages(page, results) {
 
 async function verifyNotFoundRoute(page, results) {
     const url = withSharedQuery(INVALID_ROUTE_PATH, '/api/home-loan-rates');
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForSelector('#main-content', { timeout: 15000 });
-    await page.waitForSelector('.site-header .site-brand', { timeout: 15000 });
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
+    await page.waitForSelector('#main-content', { timeout: SEL_TIMEOUT_MS });
+    await page.waitForSelector('.site-header .site-brand', { timeout: SEL_TIMEOUT_MS });
     await page.waitForFunction(() => {
         return document.body.classList.contains('ar-not-found')
             && !!document.querySelector('.missing-route-panel')
             && String(document.title || '').trim() === 'Page not found | AustralianRates';
-    }, null, { timeout: 15000 }).catch(() => null);
+    }, null, { timeout: SEL_TIMEOUT_MS }).catch(() => null);
 
     const state = await page.evaluate(() => ({
         title: String(document.title || '').trim(),
