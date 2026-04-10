@@ -98,10 +98,10 @@
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
                 <label>Base fill end % <input type="number" id="ribbon-fill-end" min="0" max="100" value="22" style="width:4em;"></label>
                 <label>Base fill peak % <input type="number" id="ribbon-fill-peak" min="0" max="100" value="48" style="width:4em;"></label>
-                <label>Focus fill end % <input type="number" id="ribbon-focus-fill-end" min="0" max="100" value="30" style="width:4em;"></label>
-                <label>Focus fill peak % <input type="number" id="ribbon-focus-fill-peak" min="0" max="100" value="62" style="width:4em;"></label>
-                <label>Selected fill end % <input type="number" id="ribbon-selected-fill-end" min="0" max="100" value="34" style="width:4em;"></label>
-                <label>Selected fill peak % <input type="number" id="ribbon-selected-fill-peak" min="0" max="100" value="72" style="width:4em;"></label>
+                <label>Focus fill end % <input type="number" id="ribbon-focus-fill-end" min="0" max="100" value="100" style="width:4em;"></label>
+                <label>Focus fill peak % <input type="number" id="ribbon-focus-fill-peak" min="0" max="100" value="100" style="width:4em;"></label>
+                <label>Selected fill end % <input type="number" id="ribbon-selected-fill-end" min="0" max="100" value="100" style="width:4em;"></label>
+                <label>Selected fill peak % <input type="number" id="ribbon-selected-fill-peak" min="0" max="100" value="100" style="width:4em;"></label>
                 <label>Fill others scale % <input type="number" id="ribbon-fill-scale-o" min="0" max="100" value="22" style="width:4em;"></label>
             </div>
             <p class="admin-settings-group-title">Mean line (average rate within the band)</p>
@@ -157,10 +157,10 @@
                 edge_opacity_others: 0.14,
                 fill_opacity_end: 0.22,
                 fill_opacity_peak: 0.48,
-                focus_fill_opacity_end: 0.3,
-                focus_fill_opacity_peak: 0.62,
-                selected_fill_opacity_end: 0.34,
-                selected_fill_opacity_peak: 0.72,
+                focus_fill_opacity_end: 1,
+                focus_fill_opacity_peak: 1,
+                selected_fill_opacity_end: 1,
+                selected_fill_opacity_peak: 1,
                 fill_opacity_others_scale: 0.22,
                 mean_width: 1.25,
                 mean_opacity: 1,
@@ -245,10 +245,10 @@
                     edge_opacity_others: p('ribbon-edge-op-o', 14),
                     fill_opacity_end: p('ribbon-fill-end', 22),
                     fill_opacity_peak: p('ribbon-fill-peak', 48),
-                    focus_fill_opacity_end: p('ribbon-focus-fill-end', 30),
-                    focus_fill_opacity_peak: p('ribbon-focus-fill-peak', 62),
-                    selected_fill_opacity_end: p('ribbon-selected-fill-end', 34),
-                    selected_fill_opacity_peak: p('ribbon-selected-fill-peak', 72),
+                    focus_fill_opacity_end: p('ribbon-focus-fill-end', 100),
+                    focus_fill_opacity_peak: p('ribbon-focus-fill-peak', 100),
+                    selected_fill_opacity_end: p('ribbon-selected-fill-end', 100),
+                    selected_fill_opacity_peak: p('ribbon-selected-fill-peak', 100),
                     fill_opacity_others_scale: p('ribbon-fill-scale-o', 22),
                     mean_width: Math.max(0, Math.min(8, n('ribbon-mean-w', 1.25))),
                     mean_opacity: p('ribbon-mean-op', 100),
