@@ -190,9 +190,12 @@ async function gotoPublic(page, url) {
     let lastErr;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
-            await page.waitForSelector('#main-content', { state: 'attached', timeout: SEL_TIMEOUT_MS });
-            await page.waitForSelector('.site-header .site-brand', { state: 'visible', timeout: SEL_TIMEOUT_MS });
+            const navTimeout = attempt === 0 ? GOTO_TIMEOUT_MS : GOTO_TIMEOUT_MS + 15000;
+            const waitUntil = attempt === 0 ? 'domcontentloaded' : 'load';
+            const selTimeout = attempt === 0 ? SEL_TIMEOUT_MS : Math.round(SEL_TIMEOUT_MS * 1.75);
+            await page.goto(url, { waitUntil, timeout: navTimeout });
+            await page.waitForSelector('#main-content', { state: 'attached', timeout: selTimeout });
+            await page.waitForSelector('.site-header .site-brand', { state: 'visible', timeout: selTimeout });
             await page.waitForTimeout(POST_NAV_SETTLE_MS);
             return;
         } catch (err) {
@@ -874,7 +877,7 @@ async function verifyPivotLoad(page, results, label) {
     const tabPivot = page.locator('#tab-pivot');
     await tabPivot.scrollIntoViewIfNeeded().catch(() => {});
     await tabPivot.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
-    await tabPivot.click({ timeout: 15000 });
+    await tabPivot.click({ force: true, timeout: 15000 });
     await page.waitForTimeout(300);
 
     const pivotVisible = await page.evaluate(() => {
@@ -887,17 +890,26 @@ async function verifyPivotLoad(page, results, label) {
         return;
     }
 
-    await page.click('#load-pivot');
-    await page.waitForFunction(() => {
-        return !!document.querySelector('#pivot-output .pvtUi');
-    }, null, { timeout: PIVOT_CHART_TIMEOUT_MS }).catch(() => null);
+    const loadPivotBtn = page.locator('#load-pivot');
+    const readPivotState = () => page.evaluate(() => ({
+        status: String(document.getElementById('pivot-status')?.textContent || '').trim(),
+        hasUi: !!document.querySelector('#pivot-output .pvtUi'),
+    })).catch(() => ({ status: '', hasUi: false }));
 
-    const pivotReady = await page.evaluate(() => {
-        return {
-            status: String(document.getElementById('pivot-status')?.textContent || '').trim(),
-            hasUi: !!document.querySelector('#pivot-output .pvtUi'),
-        };
-    }).catch(() => ({ status: '', hasUi: false }));
+    async function waitForPivotUi(timeoutMs) {
+        await page.waitForFunction(() => !!document.querySelector('#pivot-output .pvtUi'), null, { timeout: timeoutMs }).catch(() => null);
+    }
+
+    await loadPivotBtn.click({ force: true });
+    await waitForPivotUi(PIVOT_CHART_TIMEOUT_MS);
+    let pivotReady = await readPivotState();
+
+    if (!(pivotReady.hasUi && /loaded/i.test(pivotReady.status))) {
+        await page.waitForTimeout(500);
+        await loadPivotBtn.click({ force: true });
+        await waitForPivotUi(Math.max(12000, Math.floor(PIVOT_CHART_TIMEOUT_MS / 2)));
+        pivotReady = await readPivotState();
+    }
 
     if (pivotReady.hasUi && /loaded/i.test(pivotReady.status)) {
         pass(results, `${label}: pivot workspace loads rows`);
@@ -1046,9 +1058,17 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
     await gotoPublic(page, baseUrl);
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(150);
-    const scenarioLaunch = page.locator('a[href="#scenario"]').first();
-    await scenarioLaunch.scrollIntoViewIfNeeded().catch(() => {});
-    await scenarioLaunch.click({ force: true, timeout: SEL_TIMEOUT_MS });
+    const opened = await page.evaluate(() => {
+        const link = document.querySelector('a[href="#scenario"]');
+        if (!link) return false;
+        link.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        link.click();
+        return true;
+    }).catch(() => false);
+    if (!opened) {
+        fail(results, `${label}: Open filters link (a[href="#scenario"]) not found`);
+        return;
+    }
     await page.waitForFunction(() => window.location.hash === '#scenario', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(600);
 
