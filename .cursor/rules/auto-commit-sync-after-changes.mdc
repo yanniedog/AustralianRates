@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Auto Commit and Sync After Changes
 
-Whenever you make code or config changes in this Cursor chat, you must **commit and sync** before considering the task complete.
+Whenever you make code or config changes in this Cursor chat, you must **commit and sync** before considering the task complete. **Production closeout** (confirm deploy/CI, verify https://www.australianrates.com) is **mandatory** for every such chat unless waived—see **`every-chat-commit-deploy-verify-production.mdc`**.
 
 1. **After edits** – Once you have modified files in the repo:
    - Stage the changed files: `git add` (relevant paths or `.` as appropriate).

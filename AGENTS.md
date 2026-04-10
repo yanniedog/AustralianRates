@@ -6,6 +6,10 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 
 These rules are mandatory and override any conflicting preference.
 
+### Mandatory closeout (every chat with repo changes)
+
+**MUST ALWAYS** (any assistant, any chat about this repo): after making changes, **commit and push**; **confirm deployment and CI completed successfully** and fix any failures until green; then **confirm the intended result on https://www.australianrates.com** using the commands below—not push alone. Applies to **every** conversation unless the user explicitly waives commit, push, deploy, or production verification. Cursor rule: `.cursor/rules/every-chat-commit-deploy-verify-production.mdc`.
+
 1. Before claiming any deploy-related task is complete, run from repo root:
    - `npm run test:homepage`
    - `npm run test:api`
@@ -21,6 +25,10 @@ These rules are mandatory and override any conflicting preference.
 4. Deploy or production-impacting changes are not complete unless all required checks pass or the user explicitly instructs to skip checks.
 5. Never present assumptions as verification.
    - If a check was not run, state it was not run.
+6. Reinforces the mandatory closeout above: commit and push; confirm deployment completed successfully; fix any CI/deployment issues; confirm the intended result on https://www.australianrates.com before claiming the task is complete.
+   - Applies to every chat about this project unless the user explicitly instructs the assistant not to commit, push, deploy, or verify production.
+   - If deployment is triggered by Cloudflare Pages on git push, confirm the Pages deployment completed rather than treating the push itself as proof.
+   - If the API or archive Worker is affected, deploy the affected Worker with the repo deployment command and verify the production endpoint/result.
 
 ## Production and Hosting
 
