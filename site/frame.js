@@ -703,7 +703,7 @@
         if (donateSheet) return donateSheet;
         donateSheet = document.createElement('div');
         donateSheet.id = 'site-donate-sheet';
-        donateSheet.className = 'site-help-sheet';
+        donateSheet.className = 'site-help-sheet site-donate-sheet';
         donateSheet.hidden = true;
         donateSheet.addEventListener('click', function (event) {
             if (event.target && event.target.closest && event.target.closest('[data-donate-close]')) {
