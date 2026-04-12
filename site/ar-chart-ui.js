@@ -466,6 +466,7 @@
 
     function renderSeriesRail(model, selectionState) {
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
+        els.chartSeriesList.removeAttribute('data-preview-only');
         var fields = getChartFields();
         var pal = chartConfig.palette();
         var marketOk = model && model.market && model.market.categories && model.market.categories.length;
@@ -874,6 +875,7 @@
 
         if (els.chartSeriesList) {
             els.chartSeriesList.addEventListener('click', function (event) {
+                if (els.chartSeriesList.getAttribute('data-preview-only') === 'true') return;
                 var button = event.target && event.target.closest ? event.target.closest('[data-series-key]') : null;
                 if (!button) return;
                 if (handlers && typeof handlers.onSeriesToggle === 'function') {

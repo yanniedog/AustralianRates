@@ -11,6 +11,8 @@
     // take much longer on larger public datasets.
     var CHART_SERIES_TIMEOUT_MS = 65000;
     var CHART_REPORT_TIMEOUT_MS = 12000;
+    var CHART_PREVIEW_TIMEOUT_MS = 12000;
+    var CHART_PREVIEW_ROWS_LIMIT = 5000;
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -747,6 +749,50 @@
         });
     }
 
+    function fetchLatestPreviewRows(params) {
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            queryParams[key] = params[key];
+        });
+        delete queryParams.representation;
+        delete queryParams.sort;
+        delete queryParams.dir;
+        delete queryParams.chart_window;
+        delete queryParams.start_date;
+        delete queryParams.end_date;
+        queryParams.limit = String(CHART_PREVIEW_ROWS_LIMIT);
+        var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
+        if (requestJson) {
+            return requestJson(policy.url, {
+                requestLabel: 'Current products',
+                timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
+                retryCount: 0,
+                cache: policy.fetchCache,
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
+            }).then(function (result) {
+                var body = result && result.data ? result.data : result;
+                return Array.isArray(body && body.rows) ? body.rows : [];
+            }).catch(function (err) {
+                throw err;
+            });
+        }
+        var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
+            ? window.AR.network.prepareRequestUrl(policy.url, {
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
+            })
+            : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
+                ? window.AR.network.appendCacheBust(policy.url)
+                : policy.url);
+        return fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest-all');
+            return response.json();
+        }).then(function (body) {
+            return Array.isArray(body && body.rows) ? body.rows : [];
+        });
+    }
+
     function expandGroupedRows(payload) {
         if (!payload || !Array.isArray(payload.groups)) return [];
         var rows = [];
@@ -858,6 +904,7 @@
         buildChartModel: buildChartModel,
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
+        fetchLatestPreviewRows: fetchLatestPreviewRows,
         fetchReportPlot: fetchReportPlot,
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,

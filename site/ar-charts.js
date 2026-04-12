@@ -49,12 +49,14 @@
         tdCurveFrames: [],
         economicOverlayIds: [],
         economicOverlaySeries: [],
+        previewRows: [],
         reportPlots: { moves: null, bands: null },
         mainChart: null,
         detailChart: null,
         lwcMain: null,
         lwcDetail: null,
         lwcNeedsRedraw: false,
+        loadSerial: 0,
         renderGen: 0,
         pendingReload: false,
         statusLine: freshStatusLineState(),
@@ -595,7 +597,13 @@
         return view === 'economicReport' || view === 'homeLoanReport' || view === 'termDepositReport';
     }
 
-    function buildReportPreviewModel(reportPlots) {
+    function buildReportPreviewModel(reportPlots, currentFields) {
+        var previewRows = Array.isArray(chartState.previewRows) ? chartState.previewRows : [];
+        if (previewRows.length && chartData.buildChartModel) {
+            var previewModel = chartData.buildChartModel(previewRows, currentFields || fields(), chartState);
+            previewModel.reportPlots = reportPlots || { moves: null, bands: null };
+            return previewModel;
+        }
         var bands = reportPlots && reportPlots.bands && Array.isArray(reportPlots.bands.series)
             ? reportPlots.bands.series
             : [];
@@ -634,9 +642,11 @@
         if (els.chartOutput) els.chartOutput.innerHTML = '';
         if (els.chartDetailOutput) els.chartDetailOutput.innerHTML = '';
 
+        var previewModel = buildReportPreviewModel(chartState.reportPlots, currentFields);
+        var hasPreviewRows = Array.isArray(chartState.previewRows) && chartState.previewRows.length > 0;
         chartState.lwcMain = renderer(
             els.chartOutput,
-            buildReportPreviewModel(chartState.reportPlots),
+            previewModel,
             currentFields,
             chartState.rbaHistory,
             chartState.cpiHistory,
@@ -655,11 +665,17 @@
 
         observeChartContainers();
         if (chartUi.clearErrorState) chartUi.clearErrorState();
-        if (chartUi.renderSummary) chartUi.renderSummary(null, currentFields, null, false);
-        if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, chartState);
-        if (chartUi.renderSpotlight) chartUi.renderSpotlight(null, currentFields);
-        if (chartSummary && chartSummary.clear) chartSummary.clear('Detailed summary loading.');
-        if (chartUi.setStatus) chartUi.setStatus('LIVE ' + currentFields.view + ' | overview ready');
+        if (chartUi.renderSummary) chartUi.renderSummary(hasPreviewRows ? previewModel : null, currentFields, null, false);
+        if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(hasPreviewRows ? previewModel : null, chartState);
+        if (hasPreviewRows && els.chartSeriesList) {
+            els.chartSeriesList.setAttribute('data-preview-only', 'true');
+        }
+        if (chartUi.renderSpotlight) chartUi.renderSpotlight(hasPreviewRows ? previewModel : null, currentFields);
+        if (chartSummary && chartSummary.render && hasPreviewRows) chartSummary.render(previewModel, currentFields);
+        else if (chartSummary && chartSummary.clear) chartSummary.clear('Detailed summary loading.');
+        if (chartUi.setStatus) {
+            chartUi.setStatus('LIVE ' + currentFields.view + (hasPreviewRows ? ' | overview ready | current products' : ' | overview ready'));
+        }
         tabState.chartDrawn = true;
         scheduleResizeCharts();
         return true;
@@ -672,6 +688,8 @@
             return chartLoadPromise;
         }
         chartState.pendingReload = false;
+        chartState.loadSerial += 1;
+        var loadSerial = chartState.loadSerial;
         disposeCharts();
         resetStatusLine();
         chartState.fallbackReason = '';
@@ -680,6 +698,7 @@
         chartState.truncated = false;
         chartState.reportPlots = { moves: null, bands: null };
         chartState.economicOverlaySeries = [];
+        chartState.previewRows = [];
         chartState.rbaHistory = [];
         chartState.cpiHistory = [];
         resetSelection();
@@ -716,6 +735,19 @@
             ]).catch(function () {
                 return [[], []];
             });
+            var previewRowsPromise = wantsReportPlots && chartData.fetchLatestPreviewRows
+                ? chartData.fetchLatestPreviewRows(baseParams).then(function (rows) {
+                    chartState.previewRows = Array.isArray(rows) ? rows : [];
+                    return chartState.previewRows;
+                }).catch(function (error) {
+                    chartState.previewRows = [];
+                    clientLog('warn', 'Preview rows fetch failed', {
+                        message: String(error && error.message || 'Preview rows fetch failed'),
+                        view: currentView,
+                    });
+                    return [];
+                })
+                : Promise.resolve([]);
 
             var rowsPromise = chartData.fetchAllRateRows(baseParams, function (progress) {
                 if (chartUi.setStatus) {
@@ -731,6 +763,20 @@
                     );
                 }
             });
+            if (wantsReportPlots) {
+                previewRowsPromise.then(function () {
+                    if (!reportPreviewRendered) return;
+                    if (!chartState.previewRows.length) return;
+                    if (chartState.rows.length) return;
+                    if (chartState.loadSerial !== loadSerial) return;
+                    renderReportPreview(currentFields).catch(function (previewError) {
+                        clientLog('warn', 'Report preview update failed', {
+                            message: String(previewError && previewError.message || 'Report preview update failed'),
+                            view: currentView,
+                        });
+                    });
+                });
+            }
             if (wantsReportPlots) {
                 chartState.reportPlots = await reportPlotPromise;
                 var _previewHistory = await historyPromise;
