@@ -88,6 +88,23 @@ Chart type only affects **Curve** view. For other views, propose new encodings (
 
 ---
 
+## Browser-agent MCP (live chart and UI verification)
+
+Code review alone is not enough to judge chart readability, colour, tooltips, density, mobile breakpoints, or theme switching. When the task is **reviewing or validating visualisation on the live site** (especially **Home Loans**, **Savings**, **Term Deposits**), use the **browser-agent** MCP as the **primary** tool whenever it is enabled.
+
+| Item | Detail |
+|------|--------|
+| MCP server (Cursor) | **`browser_agent_cursor`** — `.cursor/mcp.json`; sibling repo **`../browser-agent`**. |
+| `session_create` | **`projectId`: `australianrates`** and **`manifestPath`** to this repo’s **`browser-agent.manifest.json`** (path relative to browser-agent cwd, e.g. `../australianrates/browser-agent.manifest.json`). |
+| Host | **`https://www.australianrates.com`** for production checks. |
+| What to exercise | Open each relevant section; switch **chart view** (Curve, Leaders, Compare, Movement, Distribution), **Y/X/group**, **curve style** (line/ribbon/box), **density**, and **light/dark** if exposed; capture **viewport and full-page `screenshot`s** at desktop, tablet, and mobile emulation; use **`console_capture`** / **`network_capture`** if charts fail to load. |
+| Tool order | Same as **`../browser-agent/cursor-adapter.md`**: `session_create` → `trace_start` → actions → screenshots → failure bundle → `trace_stop` → `session_close`. Keep **`correlationId`** in write-ups. |
+| Blocked actions | Manifest may disallow **`download`**; rely on screenshots and network evidence. |
+
+If browser-agent is **unavailable**, state that limitation and fall back to **`npm run audit:visual`** or scoped manual checks — do not assert pixel-perfect or interaction behaviour without live capture.
+
+---
+
 ## Output format when giving recommendations
 
 1. **Section:** HL / Savings / TD (or "all").
