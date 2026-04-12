@@ -1,0 +1,93 @@
+name: PR auto-merge
+
+# Enables squash auto-merge on eligible PRs into main so merges complete when CI passes
+# without each agent running `gh pr merge --auto`. Requires repo settings: Allow auto-merge,
+# branch protection requiring the ci_result check. See docs/CONCURRENT_AGENT_WORKFLOW.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  enable-auto-merge:
+    name: Enable squash auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'agent/') ||
+       startsWith(github.event.pull_request.head.ref, 'feat/') ||
+       startsWith(github.event.pull_request.head.ref, 'fix/'))
+    steps:
+      - name: Enable auto-merge (squash)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pullNumber = context.payload.pull_request.number;
+
+            const prQuery = `
+              query($owner: String!, $repo: String!, $n: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $n) {
+                    id
+                    state
+                    autoMergeRequest {
+                      enabled
+                    }
+                  }
+                }
+              }
+            `;
+
+            const { repository } = await github.graphql(prQuery, {
+              owner,
+              repo,
+              n: pullNumber,
+            });
+
+            const pr = repository?.pullRequest;
+            if (!pr) {
+              core.setFailed(`Could not load pull request #${pullNumber}`);
+              return;
+            }
+            if (pr.state !== 'OPEN') {
+              core.info(`PR #${pullNumber} is not open; skipping`);
+              return;
+            }
+            if (pr.autoMergeRequest?.enabled) {
+              core.info('Auto-merge already enabled');
+              return;
+            }
+
+            const mutation = `
+              mutation($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $pullRequestId,
+                  mergeMethod: SQUASH
+                }) {
+                  pullRequest {
+                    autoMergeRequest {
+                      enabled
+                      mergeMethod
+                    }
+                  }
+                }
+              }
+            `;
+
+            try {
+              await github.graphql(mutation, { pullRequestId: pr.id });
+              core.info('Enabled squash auto-merge for this PR');
+            } catch (e) {
+              core.warning(
+                `Could not enable auto-merge (conflicts, branch protection, or repo settings): ${e instanceof Error ? e.message : String(e)}`,
+              );
+            }

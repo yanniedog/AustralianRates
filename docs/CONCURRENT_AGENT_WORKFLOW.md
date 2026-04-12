@@ -4,6 +4,29 @@
 
 Use **one Git branch per agent (or per task)**. Open a **pull request (PR)** into `main` for each branch. That keeps work isolated until you deliberately merge, and this repo’s **GitHub Actions CI** already runs on every PR (`ci.yml`).
 
+## GitHub repository settings (one-time, owner)
+
+These settings live in the GitHub web UI and are **not** stored in the repo. They are required for **automatic squash merge** after CI passes.
+
+1. **Settings → General → Pull requests**
+   - Turn on **Allow auto-merge**.
+   - Turn on **Automatically delete head branches** (removes the remote branch after the PR merges).
+
+2. **Settings → Rules → Rulesets** (or **Branches → Branch protection rules**, depending on org layout) for **`main`**
+   - Require status checks to pass before merging.
+   - Add required check: **`ci_result`** (the aggregate job in `.github/workflows/ci.yml`).
+   - Do **not** require pull request reviews if you want merges to complete without a human approval click (this repo’s automation assumes **CI-only** gating).
+
+Without **Allow auto-merge** and a **required `ci_result`**, the workflow below cannot complete merges by itself.
+
+## Automation: auto-merge and branch cleanup
+
+For **non-draft** pull requests **into `main`** whose head branch starts with **`agent/`**, **`feat/`**, or **`fix/`** (same-repo only, not forks), `.github/workflows/pr-auto-merge.yml` enables **squash auto-merge** on `opened`, `reopened`, `synchronize`, and `ready_for_review`. When **`ci_result`** is green and the PR is mergeable, GitHub merges the PR and, if configured above, **deletes the head branch**. **`main`** stays the single integration branch and source of truth for production.
+
+- **CI failing:** auto-merge does not complete; fix the branch and push; CI re-runs.
+- **Merge conflicts:** resolve by merging or rebasing **`origin/main`** into the PR branch, then push.
+- **Draft PRs:** not opted into auto-merge until marked ready for review.
+
 ## What a PR is (minimal mental model)
 
 - **Branch:** a parallel copy of the repo history. Commits on branch B do not change branch A until you merge.
@@ -25,8 +48,8 @@ So multiple agents “do not clash” in Git until the same **lines in the same 
    - `git push -u origin agent/chart-tooltips`
 4. **Open a PR** targeting `main` (GitHub website: “Compare & pull request”, or CLI):
    - `gh pr create --base main --title "..." --body "..."`
-5. **Wait for CI green** on the PR (required jobs in `.github/workflows/ci.yml`).
-6. **Merge** when you are satisfied (`gh pr merge` or the Merge button). Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
+5. **Wait for CI green** on the PR (required jobs in `.github/workflows/ci.yml`). For **`agent/`**, **`feat/`**, and **`fix/`** branches, **auto-merge (squash)** is enabled by GitHub Actions when the PR is not a draft; no manual merge step is required once **`ci_result`** passes and repo settings above are in place.
+6. Optionally **`gh pr merge --auto --squash`** after create if you need auto-merge before the workflow runs; otherwise rely on **`pr-auto-merge.yml`**. Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
 
 ## Reducing clashes between agents
 
@@ -42,7 +65,7 @@ Interpretation matters:
 |--------------|----------------------------------------|
 | **Frontend (`site/`, build, stamps)** | **Cloudflare Pages preview deployments:** if your Pages project builds previews for non-production branches, each push to the feature branch produces a **`*.pages.dev` (or project preview) URL**. Use that URL to exercise the static UI. This repo’s frontend **defaults to calling the production API** from the browser, so preview UIs often still hit `https://www.australianrates.com` for data unless you change API base for local/preview testing (see `README` / test env vars). That is usually desirable for “how does this UI behave against real data?” |
 | **API or archive Workers** | PR CI runs **unit/integration** checks; **production API behaviour** only changes after **`npm run deploy:api`** / **`npm run deploy:archive`** (or your pipeline) against the real Worker. There is no second public production API in-repo; staging Workers are optional and would be a separate Wrangler environment/name if you add them. |
-| **Full stack together** | After merge to `main` and normal deploy, run the repo’s production verification commands from root (see `AGENTS.md`). |
+| **Full stack together** | After merge to `main` and normal deploy, run the repo’s production verification commands from root (see `AGENTS.md`). **GitHub Actions does not replace** `npm run test:homepage` against production where Cloudflare bot challenges block headless runners; run those checks from a real machine after deploy. |
 
 So: **parallel frontend experiments** map well to **branch + PR + Pages preview**. **Parallel API experiments** are validated in CI on the PR; true production impact still follows your deploy discipline after merge.
 
@@ -79,6 +102,8 @@ Each worktree is an independent checkout; pushes still go to the same remote.
 ## Summary
 
 - **One branch per agent/task, one PR each into `main`.**
-- **CI already guards PRs** in this repo.
+- **CI already guards PRs** in this repo; **`ci_result`** should be a required check on **`main`** for auto-merge to finish.
+- **Auto-merge (squash) + delete head branch** (when configured on GitHub) reduce leftover open PRs and remote branches for **`agent/`**, **`feat/`**, **`fix/`** PRs.
 - **Preview the static site** via Cloudflare Pages branch previews when enabled; **production** remains `https://www.australianrates.com` after `main` deploys.
 - **Merge + update other branches from `main`** to roll work together safely.
+- **Post-merge:** agents still run production verification from the repo root (`AGENTS.md`); CI green is not a substitute for live-site checks where Playwright cannot pass in the cloud.
