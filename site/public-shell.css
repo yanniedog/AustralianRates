@@ -537,6 +537,10 @@ body.is-resizing-panels * {
 }
 
 .site-help-sheet {
+    z-index: 110;
+}
+
+.site-donate-sheet {
     z-index: 220;
 }
 
