@@ -507,10 +507,17 @@
     .site-header-segment {
         scroll-snap-type: x proximity;
         overscroll-behavior-x: contain;
+        min-width: 0;
+        width: 100%;
+        padding-inline-end: 8px;
     }
 
     .site-header-segment-link {
         scroll-snap-align: start;
+        flex: 0 0 auto;
+        width: max-content;
+        max-width: none;
+        white-space: nowrap;
     }
 
     /* Prevent pull-to-refresh interfering with vertical scroll areas */
@@ -578,6 +585,15 @@
     .chip-strip {
         padding: 4px 10px;
         gap: 4px;
+    }
+
+    .site-header-segment {
+        gap: 3px;
+    }
+
+    .site-header-segment-link {
+        padding: 0 8px;
+        font-size: 0.68rem;
     }
 }
 

@@ -1172,6 +1172,22 @@
             }
         }
 
+        function setRibbonAnchorDate(dateStr) {
+            var ymd = String(dateStr || '').slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+            if (dates.indexOf(ymd) < 0) return false;
+            lastPointerDate = ymd;
+            return true;
+        }
+
+        function syncRibbonPinnedPanelState() {
+            applyRibbonBankHighlightState(ribbonChartHighlightBank());
+            updateProductVisibility();
+            refreshRibbonUnderChartPanel();
+            scheduleRibbonRedraw();
+            syncRibbonTrayUi();
+        }
+
         function resolveHoverBank(seriesName) {
             if (!seriesName) return '';
             if (seriesName.endsWith(' ribbon')) return seriesName.slice(0, -7);
@@ -1310,6 +1326,7 @@
             if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
             var rs = getRibbonStyleResolved();
             var focusKey = resolveBandsFocusKey(hoveredBankName);
+            var idleRibbon = !focusKey && !ribbonProductBank && !ribbonTrayHoverBank;
             var visualSig =
                 String(focusKey || '') +
                 '|' +
@@ -1331,12 +1348,17 @@
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
                 var selected = active && focusKey && ribbonProductBank && normRibbonBankName(bank.bank_name) === resolveBandsFocusKey(ribbonProductBank);
                 var c0 = options.bankColor(bank.bank_name, index);
-                var strokeC = active ? c0 : mixHexWithGrey(c0, rs.others_grey_mix);
+                var inactiveGreyMix = focusKey ? Math.max(Number(rs.others_grey_mix) || 0, 0.74) : rs.others_grey_mix;
+                var strokeC = active
+                    ? (idleRibbon ? mixHexWithGrey(c0, 0.18) : c0)
+                    : mixHexWithGrey(c0, inactiveGreyMix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
                 var zb = zRoot + index * 0.08;
                 var zlv = focusKey ? (active ? 2 : 0) : 0;
                 var ew = Math.max(0, Number(rs.edge_width) || 0);
                 var eo = Math.max(0, Math.min(1, Number(active ? rs.edge_opacity : rs.edge_opacity_others)));
+                if (idleRibbon && active) eo *= 0.72;
+                if (focusKey && !active) eo *= 0.72;
                 var edgeLine = { color: strokeC, width: ew > 0 ? ew : 0.01, opacity: ew > 0 ? eo : 0, cap: 'round', join: 'round' };
                 function alpha(key, fallback) {
                     var n = Number(rs[key]);
@@ -1350,10 +1372,13 @@
                 var sfe = alpha('selected_fill_opacity_end', ffe);
                 var sfp = alpha('selected_fill_opacity_peak', ffp);
                 var sc = Math.max(0, Math.min(1, Number(rs.fill_opacity_others_scale)));
-                var fillEnd = active ? (selected ? sfe : (focusKey ? ffe : fe)) : fe * sc;
-                var fillPeak = active ? (selected ? sfp : (focusKey ? ffp : fp)) : fp * sc;
+                if (focusKey) sc = Math.min(sc, 0.14);
+                var idleFillScale = idleRibbon ? 0.62 : 1;
+                var fillEnd = active ? (selected ? sfe : (focusKey ? ffe : fe * idleFillScale)) : fe * sc;
+                var fillPeak = active ? (selected ? sfp : (focusKey ? ffp : fp * idleFillScale)) : fp * sc;
                 var mw = Math.max(0, Number(rs.mean_width) || 0);
                 var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
+                if (idleRibbon && active) mo *= 0.72;
                 var fillAreaStyle;
                 if (active) {
                     if (focusKey && fillEnd <= 0 && fillPeak <= 0) {
@@ -1806,53 +1831,41 @@
                 var dateStr = resolveDateFromAxisValue(data[0]);
                 var yVal = data[1];
                 var tapBank = pickBankFromRibbonBand(dateStr, yVal);
+                var pinnedBank = canonicalBandsBankFromUi(String(ribbonProductBank || '').trim());
+                var anchorChanged = setRibbonAnchorDate(dateStr);
 
                 if (tapBank) {
-                    if (
-                        ribbonProductBank &&
-                        normRibbonBankName(tapBank) === normRibbonBankName(ribbonProductBank)
-                    ) {
-                        ribbonProductBank = '';
-                        ribbonTrayHoverBank = '';
-                        hoveredBank = '';
-                        hideRibbonInfoBox();
-                        applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                        updateProductVisibility();
-                        refreshRibbonUnderChartPanel();
-                        scheduleRibbonRedraw();
-                        syncRibbonTrayUi();
-                        clientLog('info', 'Chart ribbon bank pin clear (repeat click)', {
-                            section: String(section || ''),
-                            bank: chartLogClip(tapBank, 48),
-                        });
-                        return;
-                    }
-                    if (dateStr) lastPointerDate = dateStr;
                     ribbonTrayHoverBank = '';
                     ribbonProductBank = tapBank;
                     hoveredBank = tapBank;
-                    hideRibbonInfoBox();
-                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                    updateProductVisibility();
-                    refreshRibbonUnderChartPanel();
-                    scheduleRibbonRedraw();
-                    syncRibbonTrayUi();
-                    clientLog('info', 'Chart ribbon bank pin (chart click)', {
+                    syncRibbonPinnedPanelState();
+                    clientLog('info',
+                        pinnedBank && normRibbonBankName(pinnedBank) === normRibbonBankName(tapBank)
+                            ? 'Chart ribbon anchor update (pinned bank)'
+                            : 'Chart ribbon bank pin (chart click)',
+                        {
                         section: String(section || ''),
                         bank: chartLogClip(tapBank, 48),
-                        date: dateStr || null,
+                        date: anchorChanged ? lastPointerDate : null,
                     });
                     return;
                 }
 
-                ribbonProductBank = '';
+                if (pinnedBank && anchorChanged) {
+                    ribbonTrayHoverBank = '';
+                    hoveredBank = pinnedBank;
+                    syncRibbonPinnedPanelState();
+                    clientLog('info', 'Chart ribbon anchor update', {
+                        section: String(section || ''),
+                        bank: chartLogClip(pinnedBank, 48),
+                        date: lastPointerDate || null,
+                    });
+                    return;
+                }
+
                 ribbonTrayHoverBank = '';
-                hideRibbonInfoBox();
-                applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                updateProductVisibility();
-                refreshRibbonUnderChartPanel();
-                scheduleRibbonRedraw();
-                syncRibbonTrayUi();
+                hoveredBank = '';
+                syncRibbonPinnedPanelState();
                 clientLog('info', 'Chart ribbon bank pin clear', { section: String(section || '') });
             }
 
@@ -1887,13 +1900,8 @@
                 ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;
                 hoveredBank = bn;
-                lastPointerDate = ribbonAnchorYmdOrLast();
-                hideRibbonInfoBox();
-                applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                updateProductVisibility();
-                refreshRibbonUnderChartPanel();
-                scheduleRibbonRedraw();
-                syncRibbonTrayUi();
+                setRibbonAnchorDate(ribbonAnchorYmdOrLast());
+                syncRibbonPinnedPanelState();
                 window.requestAnimationFrame(function () {
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     if (useRibbonCanvas) scheduleRibbonRedraw();
