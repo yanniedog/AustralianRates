@@ -13,6 +13,7 @@
         collection_date: 'Date',
         bank_name: 'Bank',
         product_key: 'Product',
+        product_id: 'Product ID',
         product_name: 'Product',
         interest_rate: 'Interest rate',
         comparison_rate: 'Comparison rate',

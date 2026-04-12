@@ -430,15 +430,15 @@
     function ribbonTierFieldsForSection(sec) {
         var s = String(sec || '');
         if (s === 'home-loans') {
-            return ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set'];
+            return ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set', 'product_name', 'product_id'];
         }
         if (s === 'savings') {
-            return ['account_type', 'rate_type', 'deposit_tier', 'feature_set'];
+            return ['account_type', 'rate_type', 'deposit_tier', 'feature_set', 'product_name', 'product_id'];
         }
         if (s === 'term-deposits') {
-            return ['term_months', 'deposit_tier', 'interest_payment', 'rate_structure', 'feature_set'];
+            return ['term_months', 'deposit_tier', 'interest_payment', 'rate_structure', 'feature_set', 'product_name', 'product_id'];
         }
-        return ['security_purpose', 'repayment_type', 'rate_structure'];
+        return ['security_purpose', 'repayment_type', 'rate_structure', 'product_name', 'product_id'];
     }
 
     function formatRibbonTierValue(row, field) {
@@ -542,6 +542,25 @@
         });
     }
 
+    function ribbonProductSeriesKey(series, bankName, productName, row) {
+        var latestRow = row;
+        if ((!latestRow || typeof latestRow !== 'object' || Object.keys(latestRow).length === 0) && series && typeof series === 'object') {
+            latestRow = (series.latestRow && typeof series.latestRow === 'object') ? series.latestRow : null;
+            if ((!latestRow || Object.keys(latestRow).length === 0) && Array.isArray(series.points) && series.points.length) {
+                var lastPoint = series.points[series.points.length - 1];
+                if (lastPoint && lastPoint.row && typeof lastPoint.row === 'object') latestRow = lastPoint.row;
+            }
+        }
+        var rawKey = latestRow && (
+            latestRow.product_key ||
+            latestRow.series_key ||
+            latestRow.product_id
+        );
+        if (rawKey != null && String(rawKey).trim() !== '') return '[P]' + String(rawKey).trim();
+        if (series && series.key != null && String(series.key).trim() !== '') return '[P]' + String(series.key).trim();
+        return '[P]' + String(bankName || '').trim() + '|' + String(productName || 'Unknown').trim();
+    }
+
     /** Build hidden product overlay lines for ribbon hover reveal (ECharts path when product count <= cap). */
     function buildProductOverlay(dates, allSeries, bankColor) {
         var out = [];
@@ -568,9 +587,11 @@
                 return [date, null];
             });
             if (!hasData) return;
+            var row = (s.latestRow && typeof s.latestRow === 'object') ? s.latestRow : {};
+            var prodKey = ribbonProductSeriesKey(s, bn, pn, row);
             out.push({
                 id: 'ribbon_prod_' + out.length,
-                name: '[P]' + bn + '|' + pn,
+                name: prodKey,
                 type: 'line',
                 yAxisIndex: 0,
                 smooth: false,
@@ -611,12 +632,12 @@
                 if (byDate[dates[di]] != null) { hasData = true; break; }
             }
             if (!hasData) return;
-            var key = '[P]' + bn + '|' + pn;
             var row = (s.latestRow && typeof s.latestRow === 'object') ? s.latestRow : {};
             if (!row || Object.keys(row).length === 0) {
                 var lp = (s.points && s.points.length) ? s.points[s.points.length - 1] : null;
                 if (lp && lp.row && typeof lp.row === 'object') row = lp.row;
             }
+            var key = ribbonProductSeriesKey(s, bn, pn, row);
             var entry = {
                 key: key,
                 bankName: bn,
