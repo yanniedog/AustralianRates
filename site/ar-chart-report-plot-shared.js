@@ -148,6 +148,28 @@
         };
     }
 
+    /**
+     * ECharts merges nested areaStyle objects across setOption calls.
+     * Clear mutually-exclusive fields so ribbons do not retain stale flat or
+     * gradient fill state after switching focus repeatedly.
+     */
+    function ribbonAreaStyleMerged(next) {
+        var out = {
+            type: null,
+            x: null,
+            y: null,
+            x2: null,
+            y2: null,
+            colorStops: null,
+            color: null,
+        };
+        if (!next || typeof next !== 'object') return out;
+        Object.keys(next).forEach(function (key) {
+            out[key] = next[key];
+        });
+        return out;
+    }
+
     /** Spline-like edges (superficial Sankey-style); keep identical on stacked pair. */
     var RIBBON_SANKEY_SMOOTH = 0.42;
 
@@ -1383,7 +1405,7 @@
                 if (active) {
                     if (focusKey && fillEnd <= 0 && fillPeak <= 0) {
                         var focusFill = hexToRgba(strokeC, 0.24);
-                        fillAreaStyle = {
+                        fillAreaStyle = ribbonAreaStyleMerged({
                             type: 'linear',
                             x: 0,
                             y: 0,
@@ -1393,12 +1415,14 @@
                                 { offset: 0, color: focusFill },
                                 { offset: 1, color: focusFill },
                             ],
-                        };
+                        });
                     } else {
-                        fillAreaStyle = ribbonFlowGradientFill(strokeC, fillEnd, fillPeak);
+                        fillAreaStyle = ribbonAreaStyleMerged(ribbonFlowGradientFill(strokeC, fillEnd, fillPeak));
                     }
                 } else {
-                    fillAreaStyle = { color: hexToRgba(strokeC, Math.min(1, Math.max(0, (fillEnd + fillPeak) * 0.85))) };
+                    fillAreaStyle = ribbonAreaStyleMerged({
+                        color: hexToRgba(strokeC, Math.min(1, Math.max(0, (fillEnd + fillPeak) * 0.85))),
+                    });
                 }
                 updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
