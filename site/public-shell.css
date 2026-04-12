@@ -534,6 +534,13 @@ body.is-resizing-panels * {
 .site-menu-drawer {
     position: fixed;
     inset: 0;
+}
+
+.site-help-sheet {
+    z-index: 220;
+}
+
+.site-menu-drawer {
     z-index: 110;
 }
 

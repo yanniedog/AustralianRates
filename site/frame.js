@@ -762,7 +762,7 @@
         sheet.hidden = false;
         document.body.classList.add('has-donate-open');
         syncOverlayState();
-        var focusTarget = sheet.querySelector('[data-donate-close]') || sheet.querySelector('#site-donate-title');
+        var focusTarget = sheet.querySelector('button[data-donate-close]') || sheet.querySelector('#site-donate-title');
         if (focusTarget && typeof focusTarget.focus === 'function') {
             window.setTimeout(function () {
                 focusTarget.focus();
