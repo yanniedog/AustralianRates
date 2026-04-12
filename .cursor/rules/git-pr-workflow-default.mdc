@@ -14,9 +14,8 @@ For **any** change that touches the repository, assistants (**Cursor**, **Codex*
 3. Commit **only** on that branch.
 4. Push: `git push -u origin HEAD`.
 5. Open a **pull request into `main`** (`gh pr create --base main` with title/body, or GitHub UI).
-6. Keep pushing commits to the same branch until **PR CI** (`.github/workflows/ci.yml`) is **green**.
-7. **Merge** when ready and green: e.g. `gh pr merge` with `--squash` or `--merge` (team preference); use `--auto` so GitHub merges when checks pass if available. If this environment cannot merge, leave the PR open and give the **PR URL**; the human merges.
-8. **Production closeout** (`AGENTS.md`, `every-chat-commit-deploy-verify-production.mdc`) runs **after** the change is on `main` and Cloudflare deploys have finished—not after the feature-branch push alone.
+6. Keep pushing commits to the same branch until **PR CI** (`.github/workflows/ci.yml`) is **green**. For **`agent/*`**, **`feat/*`**, and **`fix/*`**, **`.github/workflows/pr-auto-merge.yml`** enables **squash auto-merge** on the PR (when not a draft); once **`ci_result`** is required on **`main`** and **Allow auto-merge** is on in GitHub repo settings, the PR merges without a manual merge step. If auto-merge cannot be enabled (conflicts, missing settings), fix forward or use `gh pr merge --squash` / leave the **PR URL** for the human.
+7. **Production closeout** (`AGENTS.md`, `every-chat-commit-deploy-verify-production.mdc`) runs **after** the change is on `main` and Cloudflare deploys have finished—not after the feature-branch push alone. **Do not** treat CI alone as live-site sign-off: `npm run test:homepage` against production may not be runnable in GitHub-hosted runners (bot challenge); run production checks from a capable environment after deploy.
 
 ## Exceptions (narrow)
 

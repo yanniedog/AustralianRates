@@ -12,7 +12,7 @@ These rules are mandatory and override any conflicting preference.
 
 ### Default git workflow (Cursor, Codex, Claude)
 
-**Default:** land work via a **feature branch** and a **pull request into `main`** (not by pushing commits straight to `main`). Sync `main`, `git checkout -b agent/<slug>` (or `feat/…` / `fix/…`), commit, `git push -u origin HEAD`, open PR (`gh pr create --base main` or GitHub UI), fix until **PR CI** is green, merge when ready. Full steps: `docs/CONCURRENT_AGENT_WORKFLOW.md` and `.cursor/rules/git-pr-workflow-default.mdc`.
+**Default:** land work via a **feature branch** and a **pull request into `main`** (not by pushing commits straight to `main`). Sync `main`, `git checkout -b agent/<slug>` (or `feat/…` / `fix/…`), commit, `git push -u origin HEAD`, open PR (`gh pr create --base main` or GitHub UI), fix until **PR CI** is green. For branches named **`agent/*`**, **`feat/*`**, or **`fix/*`**, GitHub Actions (`.github/workflows/pr-auto-merge.yml`) enables **squash auto-merge** when the PR is not a draft; after **`ci_result`** passes and the repo has **Allow auto-merge** plus required **`ci_result`** on **`main`** (see `docs/CONCURRENT_AGENT_WORKFLOW.md`), GitHub merges without a separate merge click, and **delete head branch** (if enabled on the repo) clears the remote branch. Full steps: `docs/CONCURRENT_AGENT_WORKFLOW.md` and `.cursor/rules/git-pr-workflow-default.mdc`.
 
 The **production verification** steps below apply **after** the change is on **`main`** and hosting deploys have finished (merged PR or rare explicit `main` hotfix). A green PR alone is not the same as an updated **www.australianrates.com** until merge + deploy.
 
