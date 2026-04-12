@@ -836,8 +836,8 @@
             : [];
 
         var bandsReportEarly = plotPayload && plotPayload.mode === 'bands';
-        var showRbaMacroLine = false;
-        var showCpiMacroLine = false;
+        var showRbaMacroLine = bandsReportEarly ? !!(container._ribbonMacroRba) : false;
+        var showCpiMacroLine = bandsReportEarly ? !!(container._ribbonMacroCpi) : false;
         var bandsOnlyYExtent = bandsReportEarly ? computeBandsRateExtentFromPayload(plotPayload, dates) : null;
         var rbaLineShown = !bandsReportEarly || showRbaMacroLine;
         var cpiLineShown = !bandsReportEarly || showCpiMacroLine;
@@ -1063,7 +1063,6 @@
 
         function productLineVisible(prodKey) {
             var fk = ribbonLineFilterKeys();
-            if (fk === null) return true;
             for (var i = 0; i < fk.length; i++) {
                 if (fk[i] === prodKey) return true;
             }
@@ -1286,6 +1285,9 @@
         function hideRibbonInfoBox() {
             ribbonListHoverKeys = null;
             ribbonListHoverPath = '';
+            ribbonExpandedPaths = {};
+            ribbonTreeBank = '';
+            ribbonTreeAnchorYmd = '';
             var ib = options.infoBox;
             if (ib && typeof ib.hide === 'function') ib.hide();
         }
@@ -1506,11 +1508,12 @@
                 hideRibbonInfoBox();
                 return;
             }
-            if (ribbonTreeBank !== pbPanel || ribbonTreeAnchorYmd !== anchor) {
+            if (ribbonTreeBank !== pbPanel) {
                 ribbonExpandedPaths = {};
+                ribbonTreeHadBranches = false;
                 ribbonTreeBank = pbPanel;
-                ribbonTreeAnchorYmd = anchor;
             }
+            ribbonTreeAnchorYmd = anchor;
             var plist = ribbonCanvasModel.byBank[pbPanel] || [];
             var prodsAtAnchor = [];
             var sec = String(section || '');
@@ -1635,6 +1638,9 @@
                 if (!merged) merged = bandsOnlyYExtent;
                 chart.setOption(
                     {
+                        animation: true,
+                        animationDuration: 220,
+                        animationEasing: 'cubicOut',
                         yAxis: [{ min: merged.min, max: merged.max, scale: false }],
                         series: [
                             { name: 'RBA', lineStyle: { opacity: showRbaMacroLine ? 1 : 0 }, silent: !showRbaMacroLine },
@@ -1647,16 +1653,19 @@
             }
             rbaMacroBtn.addEventListener('click', function () {
                 showRbaMacroLine = !showRbaMacroLine;
+                container._ribbonMacroRba = showRbaMacroLine;
                 syncMacroBtnStyle(rbaMacroBtn, showRbaMacroLine);
                 applyRibbonMacroDisplay();
             });
             cpiMacroBtn.addEventListener('click', function () {
                 showCpiMacroLine = !showCpiMacroLine;
+                container._ribbonMacroCpi = showCpiMacroLine;
                 syncMacroBtnStyle(cpiMacroBtn, showCpiMacroLine);
                 applyRibbonMacroDisplay();
             });
-            syncMacroBtnStyle(rbaMacroBtn, false);
-            syncMacroBtnStyle(cpiMacroBtn, false);
+            syncMacroBtnStyle(rbaMacroBtn, showRbaMacroLine);
+            syncMacroBtnStyle(cpiMacroBtn, showCpiMacroLine);
+            if (showRbaMacroLine || showCpiMacroLine) applyRibbonMacroDisplay();
             var macroLab = document.createElement('span');
             macroLab.style.cssText = 'opacity:0.75;margin-right:2px;';
             macroLab.textContent = 'Macro';
