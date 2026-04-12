@@ -79,6 +79,22 @@ When changing retention or adding a second log stream, update migrations and ret
 
 ---
 
+## Browser-agent MCP (client and admin UI reproduction)
+
+Use the **browser-agent** MCP when you need to **reproduce front-end or admin behaviour** that feeds logs: session log links, **`/debug-log`** posts, failed fetches, console errors, or admin pages (`site/admin/`). It complements **`fetch-production-logs.js`** and the logs API (which show server-side **`global_log`** rows).
+
+| Item | Detail |
+|------|--------|
+| MCP server (Cursor) | **`browser_agent_cursor`** — `.cursor/mcp.json`; install/run sibling **`../browser-agent`** (`npm install`, `npx playwright install`). |
+| `session_create` | **`projectId`: `australianrates`**, **`manifestPath`** → **`browser-agent.manifest.json`** (e.g. `../australianrates/browser-agent.manifest.json` from browser-agent cwd). |
+| Typical flow | `trace_start` → navigate to the page under investigation → reproduce the action → **`console_capture`** and **`network_capture`** on failure → **`screenshot`** / **`snapshot_dom`** → `trace_stop` → `session_close`. Include **`correlationId`** in triage notes. |
+| Auth admin routes | Do not put secrets in chat; if admin UI testing needs a token, use env-backed local setup per **`AGENTS.md`** / **`.env.example`**, not hard-coded values. |
+| Blocked **`download`** | Prefer screenshots and network payloads if manifest blocks downloads. |
+
+If MCP is **unavailable**, rely on fresh **`fetch-production-logs.js`** output and **`npm run test:homepage`** / manual steps, and say that browser-side reproduction was not automated.
+
+---
+
 ## Agents: use logfiles when debugging
 
 Cursor and Codex agents **should try to access the production logfiles** whenever they are debugging code anywhere on the site (front end, API, archive worker, pipelines, or Cloudflare). Logs often contain the exact error, traceback, and context that explain a failure.

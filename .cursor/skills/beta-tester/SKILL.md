@@ -10,6 +10,23 @@ Run a human-style, exhaustive website review. Build a coverage inventory first, 
 
 Read [references/checklists.md](references/checklists.md) before starting the walkthrough. Read [references/report-template.md](references/report-template.md) when writing the output.
 
+## Browser-agent MCP (primary for live QA)
+
+When auditing **Australian Rates** (or any site where this repo’s MCP is enabled), use the **browser-agent** MCP as the **primary** way to traverse pages, exercise flows, and capture evidence. Do not substitute HTML fetch or static guesses for verified layout, interactions, or responsive behaviour when the MCP is available.
+
+| Item | Detail |
+|------|--------|
+| MCP server (Cursor) | **`browser_agent_cursor`** — see repo `.cursor/mcp.json` (`cwd` → sibling `../browser-agent`; fix path if your checkout layout differs, then reload MCP). |
+| One-time setup | In `../browser-agent`: `npm install`, `npx playwright install` (add Firefox/WebKit if you run cross-engine checks). |
+| Policy | Repo root **`browser-agent.manifest.json`**: `projectId` **`australianrates`**, allowlisted hosts. In **`session_create`**, pass **`manifestPath`** readable from the browser-agent process cwd (e.g. `../australianrates/browser-agent.manifest.json` when cwd is `browser-agent`). |
+| Production URL | **`https://www.australianrates.com`** for verification per project rules. |
+| Tool order | `session_create` → `trace_start` → `navigate` / `click` / `scroll` / `wait_for` / … → milestone **`screenshot`** → on failures **`screenshot`**, **`snapshot_dom`**, **`network_capture`**, **`console_capture`** → **`trace_stop`** → **`session_close`**. Preserve **`correlationId`** in the report. |
+| Prompts / contract | Sibling **`../browser-agent/cursor-adapter.md`**, **`../browser-agent/ux-browser-runbook.md`**, **`../browser-agent/cursor-ux-skill.md`**. |
+| Manifest guard | This project’s manifest may **`block` the `download` tool**; use screenshots and network captures for file/evidence needs. |
+| Smoke test | From **australianrates** repo root: **`npm run browser-agent`** (expects `../browser-agent/server.js`). |
+
+**If browser-agent is unavailable** (MCP off, sibling repo missing, or headless environment): say so explicitly in the coverage summary and fall back to **`npm run test:homepage`**, **`npm run audit:visual`**, or HTML-only fetch — and do **not** claim full interactive or visual coverage.
+
 ## Audit Workflow
 
 1. Define the target.
