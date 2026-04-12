@@ -1866,7 +1866,7 @@
                 ribbonTrayHoverBank = '';
                 hoveredBank = '';
                 syncRibbonPinnedPanelState();
-                clientLog('info', 'Chart ribbon bank pin clear', { section: String(section || '') });
+                clientLog('info', 'Chart ribbon hover clear', { section: String(section || '') });
             }
 
             function ribbonAnchorYmdOrLast() {
