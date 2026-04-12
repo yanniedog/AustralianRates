@@ -112,7 +112,7 @@
             selected_fill_opacity_end: 0.44,
             selected_fill_opacity_peak: 0.82,
             fill_opacity_others_scale: 0.22,
-            mean_width: 1.25,
+            mean_width: 1.6,
             mean_opacity: 1,
             mean_opacity_others: 0.18,
             product_line_opacity_hover: 0.5,
@@ -125,7 +125,7 @@
         };
     }
 
-    /** Horizontal light band (along time) so filled ribbons read as soft tubes, not flat slabs. */
+    /** Vertical gradient so filled ribbon reads as a soft tube in cross-section (bright core, faded edges). */
     function ribbonFlowGradientFill(hex, endAlpha, peakAlpha) {
         var rgb = parseHexRgb(hex);
         var r = rgb.r;
@@ -137,13 +137,13 @@
             type: 'linear',
             x: 0,
             y: 0,
-            x2: 1,
-            y2: 0,
+            x2: 0,
+            y2: 1,
             colorStops: [
-                { offset: 0, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
-                { offset: 0.42, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
-                { offset: 0.58, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
-                { offset: 1, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
+                { offset: 0,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
+                { offset: 0.28, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 0.72, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 1,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
             ],
         };
     }
@@ -344,7 +344,7 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
-                smooth: false,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: flowEdge,
@@ -360,7 +360,7 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
-                smooth: false,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: { color: color, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
@@ -373,7 +373,7 @@
                 name: series.bank_name + ' max',
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: false,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: flowEdge,
@@ -387,13 +387,14 @@
                 name: series.bank_name + ' mean',
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: false,
+                smooth: RIBBON_SANKEY_SMOOTH,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: {
                     color: color,
                     width: mw > 0 ? mw : 0.01,
                     opacity: mw > 0 ? mo : 0,
+                    type: [6, 4],
                     cap: 'round',
                     join: 'round',
                 },
@@ -1124,9 +1125,22 @@
                 ch.setAttribute('aria-checked', isSelected ? 'true' : 'false');
             }
             if (ribbonHoverLabelEl) {
-                var txt = ribbonChartHighlightBank();
-                ribbonHoverLabelEl.textContent = txt;
-                ribbonHoverLabelEl.style.display = txt ? 'inline' : 'none';
+                var _hb = ribbonChartHighlightBank();
+                var _txt = _hb;
+                if (_hb && lastPointerDate) {
+                    var _bp = bandByDateByBank[_hb] && bandByDateByBank[_hb][lastPointerDate];
+                    if (_bp) {
+                        var _rlo = positiveRibbonRateOrNull(_bp.min_rate);
+                        var _rhi = positiveRibbonRateOrNull(_bp.max_rate);
+                        if (_rlo != null && _rhi != null) {
+                            _txt = _hb + ' \u00b7 ' + (_rlo !== _rhi
+                                ? _rlo.toFixed(2) + '\u2013' + _rhi.toFixed(2)
+                                : _rlo.toFixed(2)) + '%';
+                        }
+                    }
+                }
+                ribbonHoverLabelEl.textContent = _txt;
+                ribbonHoverLabelEl.style.display = _txt ? 'inline' : 'none';
             }
         }
 
@@ -1541,9 +1555,20 @@
             }
             ribbonTreeHadBranches = tree.kind !== 'leaves';
             var n = prodsAtAnchor.length;
+            var ibBandPt = bandByDateByBank[pbPanel] && bandByDateByBank[pbPanel][anchor];
+            var ibRateStr = '';
+            if (ibBandPt) {
+                var ibLo = positiveRibbonRateOrNull(ibBandPt.min_rate);
+                var ibHi = positiveRibbonRateOrNull(ibBandPt.max_rate);
+                if (ibLo != null && ibHi != null) {
+                    ibRateStr = ibLo !== ibHi
+                        ? ibLo.toFixed(2) + '\u2013' + ibHi.toFixed(2) + '%'
+                        : ibLo.toFixed(2) + '%';
+                }
+            }
             ib.show({
-                heading: fmtReportDateYmd(anchor),
-                meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : '') + ' \u00b7 focus bank above \u00b7 click tier rows to expand or collapse',
+                heading: fmtReportDateYmd(anchor) + (ibRateStr ? '  \u00b7  ' + ibRateStr : ''),
+                meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : ''),
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
@@ -1552,7 +1577,19 @@
         }
 
         var tooltipConfig = isBandsMode
-            ? { show: false }
+            ? {
+                show: true,
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'line',
+                    lineStyle: {
+                        color: theme.crosshairLine || 'rgba(99,179,237,0.40)',
+                        width: 1,
+                        type: 'dashed',
+                    },
+                },
+                formatter: function () { return null; },
+              }
             : { trigger: 'axis', axisPointer: { type: 'line' } };
 
         if (options.infoBox && options.infoBox.el) {
@@ -1606,22 +1643,17 @@
         if (isBandsMode) {
             var macroRow = document.createElement('div');
             macroRow.className = 'lwc-report-macro-bar';
-            macroRow.style.cssText =
-                'display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:2px 0 6px;font-size:11px;opacity:0.92;';
             function mkMacroBtn(label) {
                 var b = document.createElement('button');
                 b.type = 'button';
                 b.textContent = label;
                 b.className = 'lwc-report-macro-toggle';
-                b.style.cssText =
-                    'padding:2px 8px;border-radius:4px;border:1px solid rgba(148,163,184,0.45);background:transparent;color:inherit;font:inherit;cursor:pointer;';
                 b.setAttribute('aria-pressed', 'false');
                 return b;
             }
             function syncMacroBtnStyle(btn, on) {
                 btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-                btn.style.opacity = on ? '1' : '0.55';
-                btn.style.borderColor = on ? 'rgba(234,179,8,0.5)' : 'rgba(148,163,184,0.45)';
+                btn.classList.toggle('is-active', !!on);
             }
             var rbaMacroBtn = mkMacroBtn('RBA');
             var cpiMacroBtn = mkMacroBtn('CPI');
@@ -1667,7 +1699,7 @@
             syncMacroBtnStyle(cpiMacroBtn, showCpiMacroLine);
             if (showRbaMacroLine || showCpiMacroLine) applyRibbonMacroDisplay();
             var macroLab = document.createElement('span');
-            macroLab.style.cssText = 'opacity:0.75;margin-right:2px;';
+            macroLab.className = 'lwc-report-macro-label';
             macroLab.textContent = 'Macro';
             macroRow.appendChild(macroLab);
             macroRow.appendChild(rbaMacroBtn);

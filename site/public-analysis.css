@@ -1471,7 +1471,52 @@ body.ar-public .lwc-focus-bank-chip.is-ribbon-selected {
 }
 
 body.ar-public .lwc-focus-bank-chip.is-ribbon-dim {
-    opacity: 0.22;
+    opacity: 0.28;
+}
+
+/* Ribbon chart: macro overlay toggle bar */
+body.ar-public .lwc-report-macro-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 2px 0 6px;
+    font-size: 11px;
+}
+
+body.ar-public .lwc-report-macro-label {
+    opacity: 0.7;
+    margin-right: 2px;
+}
+
+body.ar-public .lwc-report-macro-toggle {
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(148, 163, 184, 0.40);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    opacity: 0.52;
+    transition: opacity 0.14s, border-color 0.14s;
+}
+
+body.ar-public .lwc-report-macro-toggle:hover {
+    opacity: 0.82;
+}
+
+body.ar-public .lwc-report-macro-toggle.is-active {
+    opacity: 1;
+    border-color: rgba(234, 179, 8, 0.55);
+}
+
+body.ar-public .lwc-report-macro-toggle.is-active:hover {
+    opacity: 0.9;
+}
+
+body.ar-public .lwc-report-macro-toggle:focus-visible {
+    outline: 2px solid var(--ar-accent);
+    outline-offset: 1px;
 }
 
 body.ar-public .lwc-ribbon-hover-bank-label {
