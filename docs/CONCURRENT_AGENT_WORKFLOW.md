@@ -27,6 +27,8 @@ For **non-draft** pull requests **into `main`** whose head branch starts with **
 - **Merge conflicts:** resolve by merging or rebasing **`origin/main`** into the PR branch, then push.
 - **Draft PRs:** not opted into auto-merge until marked ready for review.
 
+**Stale remote heads (squash merge):** `.github/workflows/stale-branch-cleanup.yml` runs **weekly** (and can be run manually via **Actions → Stale branch cleanup → Run workflow**). It deletes remote branches named **`agent/*`**, **`feat/*`**, or **`fix/*`** only when there is **no open PR** on that head and **at least one merged PR** used that head—so it clears leftover tips after squash merge without removing branches that never had a merge. It does **not** delete other branch names (for example ad-hoc `chore/` work without a merged PR is untouched unless you rename to match those prefixes).
+
 ## What a PR is (minimal mental model)
 
 - **Branch:** a parallel copy of the repo history. Commits on branch B do not change branch A until you merge.
@@ -104,6 +106,7 @@ Each worktree is an independent checkout; pushes still go to the same remote.
 - **One branch per agent/task, one PR each into `main`.**
 - **CI already guards PRs** in this repo; **`ci_result`** should be a required check on **`main`** for auto-merge to finish.
 - **Auto-merge (squash) + delete head branch** (when configured on GitHub) reduce leftover open PRs and remote branches for **`agent/`**, **`feat/`**, **`fix/`** PRs.
+- **Weekly `stale-branch-cleanup.yml`** catches remote **`agent/`** / **`feat/`** / **`fix/`** heads left behind after merged PRs if automatic deletion was off.
 - **Preview the static site** via Cloudflare Pages branch previews when enabled; **production** remains `https://www.australianrates.com` after `main` deploys.
 - **Merge + update other branches from `main`** to roll work together safely.
 - **Post-merge:** agents still run production verification from the repo root (`AGENTS.md`); CI green is not a substitute for live-site checks where Playwright cannot pass in the cloud.

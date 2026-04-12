@@ -1,0 +1,94 @@
+# Removes remote heads under agent/, feat/, fix/ that still exist after a merged PR
+# (common with squash merge when "delete head branch" was off or failed). Skips branches
+# with an open PR or with no merged PR for that head (does not delete unpushed-PR WIP).
+
+name: Stale branch cleanup
+
+on:
+  schedule:
+    - cron: "38 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  cleanup:
+    name: Delete merged agent/feat/fix heads
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Remove stale convention branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prefixes = ["agent/", "feat/", "fix/"];
+
+            const branches = await github.paginate(github.rest.repos.listBranches, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            const candidates = branches.filter((b) => {
+              const n = b.name;
+              if (n === "main" || n === "master") return false;
+              return prefixes.some((p) => n.startsWith(p));
+            });
+
+            let deleted = 0;
+            let skipped = 0;
+
+            for (const branch of candidates) {
+              const name = branch.name;
+              const head = `${owner}:${name}`;
+
+              const { data: openPulls } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: "open",
+                head,
+                per_page: 5,
+              });
+              if (openPulls.length > 0) {
+                core.info(`Skip ${name}: open PR`);
+                skipped++;
+                continue;
+              }
+
+              const { data: allPulls } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: "all",
+                head,
+                per_page: 50,
+              });
+              const merged = allPulls.filter((p) => p.merged_at);
+              if (merged.length === 0) {
+                core.info(`Skip ${name}: no merged PR for this head`);
+                skipped++;
+                continue;
+              }
+
+              try {
+                await github.rest.git.deleteRef({
+                  owner,
+                  repo,
+                  ref: `heads/${name}`,
+                });
+                core.info(`Deleted stale branch: ${name}`);
+                deleted++;
+              } catch (e) {
+                core.warning(
+                  `Failed to delete ${name}: ${e instanceof Error ? e.message : String(e)}`,
+                );
+              }
+            }
+
+            core.info(`Stale branch cleanup: deleted=${deleted}, skipped=${skipped}`);
