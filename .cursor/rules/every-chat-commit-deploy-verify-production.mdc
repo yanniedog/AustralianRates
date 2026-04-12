@@ -26,7 +26,7 @@ A successful `git push` is **not** sufficient proof.
 ## 3. Confirm the intended result on production
 
 - Verify on **https://www.australianrates.com**. Do not treat localhost alone as acceptance for user-visible or API behaviour tied to Cloudflare.
-- From repo root, run the checks in **AGENTS.md** for the scope of the change: at minimum **`npm run test:homepage`** when the site or user-facing behaviour is involved; **`npm run test:api`** / **`npm run test:archive`** when the corresponding worker is involved; use **`npm run verify`** or **`npm run doctor:verify`** when full sign-off is appropriate.
+- From repo root, run the checks in **AGENTS.md** for the scope of the change: default to **`npm run verify:prod -- --scope=auto --depth=smoke`**. Use **`npm run verify:prod -- --scope=full --depth=full`** for shared/tooling/workflow/verification changes or explicit full sign-off. Use **`npm run doctor`** / **`npm run doctor:verify`** for incident triage or explicit holistic verification.
 - If a check fails: fix, commit, push, wait for deploy, verify again. Loop until pass or the user waives.
 
 ## 4. Final response evidence

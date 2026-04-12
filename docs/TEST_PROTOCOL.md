@@ -37,8 +37,8 @@ Configuration:
 
 Scripts:
 
-- `npm run test:homepage`
-- `npm run verify:prod-hosting`
+- `npm run verify:prod -- --scope=site --depth=smoke`
+- `npm run verify:prod -- --scope=site --depth=full`
 - `npm run check:public-assets`
 
 ## 2. Interaction checks
@@ -55,7 +55,12 @@ Scripts:
 | Footer links per section | Legal links visible on home/savings/term | Assert links on each section page |
 | Home-loan disclosure | Comparison-rate caveat is visible | Assert `$150,000` + `25 year` disclosure text is present |
 
-Script: `npm run test:homepage`
+Scripts:
+
+- `npm run test:homepage` for the default homepage smoke
+- `npm run test:homepage:pivot` for pivot-only coverage
+- `npm run test:homepage:mobile` for mobile-only coverage
+- `npm run test:homepage:full` for the broader browser suite
 
 ## 3. API response checks
 
@@ -74,8 +79,8 @@ Checks:
 
 Scripts:
 
+- `npm run diagnose:api:smoke`
 - `npm run diagnose:api`
-- `npm run verify:prod-hosting`
 
 ## 4. Accessibility baseline
 
@@ -108,10 +113,10 @@ Explicitly out of scope in this audit command:
 
 ## One-page checklist
 
-1. Run `npm run test:homepage`.
+1. Run `npm run verify:prod -- --scope=auto --depth=smoke`.
 2. Run `npm run test:admin-portal` with `ADMIN_TEST_TOKEN` or `ADMIN_API_TOKEN` set.
-3. Run `npm run diagnose:api`.
-4. Run `npm run verify:prod-hosting`.
+3. Run `npm run verify:prod -- --scope=full --depth=full` when you changed shared/tooling/workflow/verification code or want full sign-off.
+4. Run `npm run diagnose:api` or `npm run doctor` only when you need deeper production triage.
 5. Optionally run `npm run test:site`.
 6. Review screenshots under `test-screenshots/`.
 7. Validate keyboard navigation and visible focus.
@@ -120,9 +125,15 @@ Explicitly out of scope in this audit command:
 
 | Command | Description |
 |---------|-------------|
-| `npm run test:homepage` | Playwright UI checks (layout, interactions, legal links, noscript presence checks). |
+| `npm run verify:prod -- --scope=auto --depth=smoke` | Default targeted production verification for the current change set. |
+| `npm run verify:prod -- --scope=full --depth=full` | Full production verification for shared/tooling/workflow or explicit full sign-off. |
+| `npm run test:homepage` | Fast Playwright smoke for the homepage shell, explorer, chart, and runtime health. |
+| `npm run test:homepage:pivot` | Dedicated pivot browser suite. |
+| `npm run test:homepage:mobile` | Dedicated mobile browser suite. |
+| `npm run test:homepage:full` | Smoke + pivot + mobile + extra public section browser coverage. |
 | `npm run test:admin-portal` | Playwright admin read-only audit (auth, redirects, non-mutating page/component checks, runtime/network error checks). |
-| `npm run diagnose:api` | API diagnostics and performance checks across all datasets, including `latest-all`. |
+| `npm run diagnose:api:smoke` | Fast production API smoke checks for deploy sign-off. |
+| `npm run diagnose:api` | Deep API diagnostics and performance checks across all datasets. |
 | `npm run verify:prod-hosting` | DNS, TLS, homepage, and API health verification for both apex and `www` production hosts. |
 | `npm run check:public-assets` | Fails if public section pages include disallowed external script/style URLs or miss required vendored assets. |
 | `npm run test:site` | Runs homepage then API diagnostics. |

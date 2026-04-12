@@ -4,7 +4,23 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '.claude/**'
+      - '.cursor/**'
+      - 'artifacts/**'
+      - 'docs/**'
+      - 'logs/**'
+      - 'test-screenshots/**'
+      - '**/*.md'
   pull_request:
+    paths-ignore:
+      - '.claude/**'
+      - '.cursor/**'
+      - 'artifacts/**'
+      - 'docs/**'
+      - 'logs/**'
+      - 'test-screenshots/**'
+      - '**/*.md'
   workflow_dispatch:
 
 concurrency:
@@ -107,7 +123,7 @@ jobs:
                   esac
 
                   case "$file" in
-                    tools/node-scripts/*|scripts/*|*.js|*.mjs|*.cjs|*.ts)
+                    tools/node-scripts/*|scripts/*|browser-agent-launch.js|create-full-access-token.js|create-pages-token.js|diagnose-api.js|diagnose-pages.js|doctor.js|fetch-production-logs.js|fetch-status-debug-bundle.js|run-admin-status-checks.js|test-admin-portal.js|test-chart-ux.js|test-homepage.js|test-layout-display-integrity.js|test-logs-api.js|test-table-error-detect.js|test-theme-contrast.js|validate-db-after-migration.js|verify-macquarie-td-e2e.js|verify-ubank-savings-gap.mjs|visual-audit.js)
                       tools=true
                       ;;
                   esac
@@ -241,9 +257,37 @@ jobs:
           [[ -z "$p_api" ]] || wait "$p_api" || ec=1
           exit "$ec"
 
+  verify_prod_tools:
+    needs: changes
+    if: needs.changes.outputs.tools == 'true' || needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Verify production tool resolver tests
+        run: npm run test:verify-prod
+
   api_integration:
     needs: changes
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.full == 'true'
+    if: |
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        github.event_name == 'workflow_dispatch' ||
+        needs.changes.outputs.full == 'true'
+      ) && (
+        needs.changes.outputs.api == 'true' || needs.changes.outputs.full == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -269,6 +313,7 @@ jobs:
       - site_build
       - typecheck
       - unit_tests
+      - verify_prod_tools
       - api_integration
     if: always()
     runs-on: ubuntu-latest
@@ -279,7 +324,7 @@ jobs:
           set -euo pipefail
           failed=false
 
-          for job in changes site_build typecheck unit_tests api_integration; do
+          for job in changes site_build typecheck unit_tests verify_prod_tools api_integration; do
             result="$(jq -r --arg job "$job" '.[$job].result' <<< '${{ toJson(needs) }}')"
             echo "$job: $result"
             case "$result" in

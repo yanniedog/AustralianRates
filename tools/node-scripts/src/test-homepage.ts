@@ -22,7 +22,12 @@ const PIVOT_CHART_TIMEOUT_MS = Number(process.env.TEST_PIVOT_CHART_TIMEOUT_MS ||
 const FILTER_SCENARIO_OPEN_MS = Number(process.env.TEST_FILTER_SCENARIO_MS || 11000);
 const FILTER_PADS_MS = Number(process.env.TEST_FILTER_PADS_MS || 14000);
 /** Skip Savings + Term Deposits section loop (homepage still full). Local iteration only; CI/deploy should use full suite. */
-const TEST_HOMEPAGE_QUICK = process.env.TEST_HOMEPAGE_QUICK === '1';
+const VALID_SUITES = new Set(['smoke', 'pivot', 'mobile', 'sections']);
+const TEST_SUITE = (() => {
+    const arg = process.argv.find((value) => String(value || '').startsWith('--suite='));
+    const parsed = String(arg || '--suite=smoke').slice('--suite='.length).trim().toLowerCase();
+    return VALID_SUITES.has(parsed) ? parsed : 'smoke';
+})();
 /** Parallel legal tabs (1–4). Lower if Cloudflare or local proxy throttles burst navigations. */
 const LEGAL_PAGE_CONCURRENCY = Math.max(1, Math.min(4, Number(process.env.TEST_LEGAL_CONCURRENCY || 2)));
 /** Node fetch for noscript HTML has no browser-style limits; cap wait to avoid indefinite hangs. */
@@ -1212,10 +1217,6 @@ async function verifyMobileRail(page, results, label, baseUrl) {
     if (hiddenOnPivot) pass(results, `${label}: mobile rail hides outside the explorer tab`);
     else fail(results, `${label}: mobile rail stayed visible on pivot`);
 
-    await page.screenshot({
-        path: `${SCREENSHOT_DIR}/mobile-homepage.png`,
-        fullPage: true,
-    }).catch(() => {});
 }
 
 async function verifyMobileOverlays(page, results, label, baseUrl) {
@@ -1398,7 +1399,7 @@ async function verifyRuntimeHealth(results, requestFailures, pageErrors) {
     const nonIgnorableFailures = requestFailures.filter((failure) => !isIgnorableTelemetryFailure(failure));
     const telemetryFailures = requestFailures.length - nonIgnorableFailures.length;
 
-    if (telemetryFailures > 0) pass(results, `ignored ${telemetryFailures} telemetry request failure(s) from Clarity or Cloudflare Insights`);
+    if (telemetryFailures > 0) warn(results, `ignored ${telemetryFailures} telemetry request failure(s) from Clarity or Cloudflare Insights`);
     if (nonIgnorableFailures.length > 0) {
         fail(results, `non-ignorable request failures: ${nonIgnorableFailures.map((failure) => failure.url).join(', ')}`);
     } else {
@@ -1441,6 +1442,46 @@ async function verifySectionSmoke(page, results, section, noscriptBatchPromise) 
     await page.setViewportSize({ width: 1440, height: 1200 });
 }
 
+async function runPivotSuite(page, results, phase, homeUrl) {
+    const pivotUrl = `${homeUrl}#pivot`;
+    await phase('homepage pivot: load');
+    await gotoPublic(page, pivotUrl);
+
+    const restoredPivot = await page.evaluate(() => {
+        const panel = document.getElementById('panel-pivot');
+        return window.location.hash === '#pivot' && !!(panel && !panel.hidden && panel.classList.contains('active'));
+    }).catch(() => false);
+
+    if (restoredPivot) pass(results, 'Homepage: #pivot deep link restores the pivot tab');
+    else fail(results, 'Homepage: #pivot deep link did not restore the pivot tab');
+
+    await verifyPivotLoad(page, results, 'Homepage');
+}
+
+async function runMobileSuite(page, results, phase, homeUrl) {
+    await phase('homepage mobile: load');
+    await gotoPublic(page, homeUrl);
+    await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);
+    await verifyMobileScenarioAccess(page, results, 'Homepage', homeUrl);
+    await verifyMobileRail(page, results, 'Homepage', homeUrl);
+    await verifyMobileOverlays(page, results, 'Homepage', homeUrl);
+}
+
+async function runSectionsSuite(page, results, phase) {
+    const noscriptBatchPromise = prefetchNoscriptEntries(
+        SECTIONS.slice(1).map((section) => ({
+            label: section.name,
+            url: withSharedQuery(section.path, section.apiBasePath),
+            apiBasePath: section.apiBasePath,
+        })),
+    );
+
+    for (const section of SECTIONS.slice(1)) {
+        await phase(`section suite: ${section.name}`);
+        await verifySectionSmoke(page, results, section, noscriptBatchPromise);
+    }
+}
+
 async function runTests() {
     const results = createResults();
     const requestFailures = [];
@@ -1480,13 +1521,23 @@ async function runTests() {
     try {
         const phase = createPhaseLogger();
         const homeUrl = withSharedQuery('/', '/api/home-loan-rates');
+        if (TEST_SUITE === 'pivot') {
+            await runPivotSuite(page, results, phase, homeUrl);
+            await verifyRuntimeHealth(results, requestFailures, pageErrors);
+            throw new Error('__suite_complete__');
+        }
+        if (TEST_SUITE === 'mobile') {
+            await runMobileSuite(page, results, phase, homeUrl);
+            await verifyRuntimeHealth(results, requestFailures, pageErrors);
+            throw new Error('__suite_complete__');
+        }
+        if (TEST_SUITE === 'sections') {
+            await runSectionsSuite(page, results, phase);
+            await verifyRuntimeHealth(results, requestFailures, pageErrors);
+            throw new Error('__suite_complete__');
+        }
         const noscriptSpecs = [
             { label: 'Homepage', url: homeUrl, apiBasePath: '/api/home-loan-rates' },
-            ...SECTIONS.slice(1).map((s) => ({
-                label: s.name,
-                url: withSharedQuery(s.path, s.apiBasePath),
-                apiBasePath: s.apiBasePath,
-            })),
         ];
         const noscriptBatchPromise = prefetchNoscriptEntries(noscriptSpecs);
 
@@ -1509,7 +1560,6 @@ async function runTests() {
         }
 
         await phase('homepage: shell, table, hero');
-        await verifySkipLink(page, results, 'Homepage');
         await verifyClarityPresent(page, results, 'Homepage');
         await verifyHeader(page, results, 'Homepage', 'Home Loans');
         await verifyNoPrimaryMobileHostArtifacts(page, results, 'Homepage');
@@ -1517,76 +1567,38 @@ async function runTests() {
         await verifyWorkspaceShell(page, results, 'Homepage', '/');
         await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
-        await verifyHeroStats(page, results, 'Homepage');
         await verifyStartupSettled(page, results, 'Homepage');
-        await verifyDefaultUrlState(page, results, 'Homepage');
-        await verifyBankBadgeLogos(page, results, 'Homepage');
         await verifyPublicFooter(page, results, 'Homepage');
-        await verifyDonateModal(page, results, 'Homepage');
-        await verifyClientLog(page, results, 'Homepage');
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
         await phase('homepage: noscript check (parallel fetch)');
         await verifyNoscriptFromBatch(noscriptBatchPromise, 'Homepage', results);
         await verifyPublicTriggerRemoval(page, results, 'Homepage');
-        await verifyFilterAccessibleNames(page, results, 'Homepage');
-        await phase('homepage: chart + pivot');
+        await phase('homepage: chart');
         await verifyChartSmoke(page, results, 'Homepage');
-        await verifyPivotLoad(page, results, 'Homepage');
-        await verifyCopyLinkFeedback(page, results, 'Homepage');
-        await verifyExportDownload(page, results, 'Homepage');
-        await verifyDesktopWorkspaceControls(page, results, 'Homepage', homeUrl);
-        await verifyTabsAndHash(page, results, 'Homepage', homeUrl);
-        await phase('homepage: viewports + mobile flows');
-        await verifyResponsiveViewports(page, results, 'Homepage', homeUrl);
-        await verifyMobileScenarioAccess(page, results, 'Homepage', homeUrl);
-        await verifyMobileRail(page, results, 'Homepage', homeUrl);
-        await verifyMobileOverlays(page, results, 'Homepage', homeUrl);
-
-        await phase('homepage: desktop screenshot');
-        await page.setViewportSize({ width: 1440, height: 1200 });
-        try {
-            const cur = new URL(page.url());
-            const want = new URL(homeUrl);
-            if (cur.origin !== want.origin || cur.pathname !== want.pathname || cur.search !== want.search) {
-                await gotoPublic(page, homeUrl);
-            }
-        } catch (_) {
-            await gotoPublic(page, homeUrl);
-        }
-        await page.screenshot({
-            path: `${SCREENSHOT_DIR}/homepage-desktop.png`,
-            fullPage: true,
-        }).catch(() => {});
-
-        if (TEST_HOMEPAGE_QUICK) {
-            if (process.env.TEST_QUIET !== '1') {
-                console.log('[test-homepage] TEST_HOMEPAGE_QUICK=1: skipping Savings/Term Deposits section loop');
-            }
-        } else {
-            for (const section of SECTIONS.slice(1)) {
-                await phase(`section: ${section.name}`);
-                await verifySectionSmoke(page, results, section, noscriptBatchPromise);
-            }
-        }
-
-        await phase(`legal pages (concurrency ${LEGAL_PAGE_CONCURRENCY})`);
-        await verifyLegalPagesParallel(context, results, requestFailures, pageErrors);
         await phase('404 route + runtime health');
         await verifyNotFoundRoute(page, results);
         await verifyRuntimeHealth(results, requestFailures, pageErrors);
     } catch (error) {
-        fail(results, `fatal error during testing: ${error.message}`);
-        await page.screenshot({
-            path: `${SCREENSHOT_DIR}/homepage-error.png`,
-            fullPage: true,
-        }).catch(() => {});
+        if (error && error.message !== '__suite_complete__') {
+            fail(results, `fatal error during testing: ${error.message}`);
+            await page.screenshot({
+                path: `${SCREENSHOT_DIR}/homepage-error.png`,
+                fullPage: true,
+            }).catch(() => {});
+        }
     } finally {
+        if (results.failed.length > 0) {
+            await page.screenshot({
+                path: `${SCREENSHOT_DIR}/homepage-${TEST_SUITE}-failure.png`,
+                fullPage: true,
+            }).catch(() => {});
+        }
         await closeWithTimeout('Playwright context', () => context.close());
         await closeWithTimeout('Playwright browser', () => browser.close());
     }
 
     console.log('\n========================================');
-    console.log('TEST RESULTS SUMMARY');
+    console.log(`TEST RESULTS SUMMARY (${TEST_SUITE})`);
     console.log('========================================\n');
 
     console.log(`PASSED: ${results.passed.length} tests`);
@@ -1608,10 +1620,7 @@ async function runTests() {
     const wallSec = ((Date.now() - runStarted) / 1000).toFixed(1);
     console.log(`Wall time: ${wallSec}s`);
     console.log('========================================\n');
-    console.log(`Screenshots saved to: ${SCREENSHOT_DIR}/`);
-    if (process.env.TEST_QUIET !== '1') {
-        console.log('Tip: TEST_HOMEPAGE_QUICK=1 skips extra product sections; TEST_QUIET=1 hides phases; TEST_POST_NAV_SETTLE_MS tunes nav settle.\n');
-    }
+    console.log(`Failure artifacts directory: ${SCREENSHOT_DIR}/`);
 
     process.exit(results.failed.length > 0 ? 1 : 0);
 }

@@ -8,4 +8,4 @@ Match **Cursor** and **Claude** instructions: **feature branch** off `main`, **p
 
 **Exception:** direct **`main`** push only if the user explicitly requests a hotfix on `main`.
 
-**After merge to `main`:** confirm Cloudflare deploys, then run production checks from **`AGENTS.md`** (e.g. `npm run test:homepage`, worker tests, `npm run verify` as appropriate).
+**After merge to `main`:** confirm Cloudflare deploys, then run the targeted production checks from **`AGENTS.md`**: default to `npm run verify:prod -- --scope=auto --depth=smoke`, and use `npm run verify:prod -- --scope=full --depth=full` for shared/tooling/workflow changes or explicit full sign-off.

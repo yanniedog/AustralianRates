@@ -1,14 +1,18 @@
 /**
  * Multi-section API diagnostics and lightweight benchmark.
  *
+ * Flags: --smoke: deploy-signoff smoke only (health, filters, latest/latest-all contracts).
  * Flags: --quick (or DOCTOR_QUICK=1): fewer bench reps, no warmup, subset of bench paths.
  */
 
 const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const ORIGIN = new URL(DEFAULT_TEST_URL).origin;
+const SMOKE = process.argv.includes('--smoke');
 const QUICK =
+  !SMOKE && (
   process.argv.includes('--quick') ||
-  ['1', 'true', 'yes'].includes(String(process.env.DOCTOR_QUICK || '').trim().toLowerCase());
+  ['1', 'true', 'yes'].includes(String(process.env.DOCTOR_QUICK || '').trim().toLowerCase())
+  );
 const BENCH_N = QUICK
   ? Math.max(2, Math.floor(Number(process.env.DIAG_BENCH_N_QUICK || 3)))
   : Math.max(3, Math.floor(Number(process.env.DIAG_BENCH_N || 20)));
@@ -110,13 +114,11 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     out.checks.push({ name, status: r.status, ms: r.durationMs });
   };
 
-  const [health, filters, rates, latest, latestAll, exportJson] = await Promise.all([
+  const [health, filters, latest, latestAll] = await Promise.all([
     requestJson(`${base}/health`),
     requestJson(`${base}/filters`),
-    requestJson(`${base}/rates?page=1&size=1&source_mode=all`),
     requestJson(`${base}/latest?limit=5&source_mode=all`),
     requestJson(`${base}/latest-all?limit=50&source_mode=all`),
-    requestJson(`${base}/export?format=json&source_mode=all`),
   ]);
 
   pushCheck('health', health);
@@ -124,10 +126,6 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
 
   pushCheck('filters', filters);
   if (filters.status !== 200) out.failures.push(`filters status ${filters.status}`);
-
-  pushCheck('rates', rates);
-  if (rates.status !== 200 || !rates.json) out.failures.push(`rates status ${rates.status}`);
-  const ratesShape = inferRowsAndTotal(rates.json);
 
   pushCheck('latest', latest);
   if (latest.status !== 200 || !latest.json) out.failures.push(`latest status ${latest.status}`);
@@ -144,6 +142,24 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   if (latestAll.status === 200 && !Array.isArray(latestAllShape.rows)) {
     out.failures.push('latest-all rows is not an array');
   }
+
+  if (SMOKE) {
+    if (latestAll.status === 200 && latestAllShape.rows.length > 0) {
+      const first = latestAllShape.rows[0] as Record<string, unknown>;
+      if (!first || !first.collection_date) out.failures.push('latest-all shape missing collection_date');
+      if (!first || !first.product_key) out.failures.push('latest-all shape missing product_key');
+    }
+    return out;
+  }
+
+  const [rates, exportJson] = await Promise.all([
+    requestJson(`${base}/rates?page=1&size=1&source_mode=all`),
+    requestJson(`${base}/export?format=json&source_mode=all`),
+  ]);
+
+  pushCheck('rates', rates);
+  if (rates.status !== 200 || !rates.json) out.failures.push(`rates status ${rates.status}`);
+  const ratesShape = inferRowsAndTotal(rates.json);
 
   const productKey = (latestShape.rows[0] && latestShape.rows[0].product_key) || null;
   if (productKey) {
@@ -236,6 +252,7 @@ async function main(): Promise<void> {
   console.log('AustralianRates API Diagnostics');
   console.log('========================================');
   console.log(`Origin: ${ORIGIN}`);
+  console.log(`Smoke mode: ${SMOKE}`);
   console.log(`Quick mode: ${QUICK}`);
   console.log(`Bench repetitions: ${BENCH_N}`);
   console.log(`Bench warmup requests per endpoint: ${BENCH_WARMUP_N}`);
