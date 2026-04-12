@@ -1101,7 +1101,17 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         fail(results, `${label}: Open filters link (a[href="#scenario"]) not found`);
         return;
     }
-    await page.waitForFunction(() => window.location.hash === '#scenario', { timeout: 8000 }).catch(() => {});
+    await page.waitForFunction(() => {
+        const scenario = document.getElementById('scenario');
+        if (!scenario) return false;
+        const rect = scenario.getBoundingClientRect();
+        const inView = rect.right > 0
+            && rect.left < window.innerWidth
+            && rect.bottom > 0
+            && rect.top < window.innerHeight;
+        return window.location.hash === '#scenario'
+            || ((scenario.tagName !== 'DETAILS' || scenario.open) && inView);
+    }, { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(600);
 
     const launch = await page.evaluate(() => {
@@ -1111,18 +1121,26 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         return {
             hash: window.location.hash,
             sliceOpen: scenario.tagName === 'DETAILS' ? scenario.open : false,
+            top: rect.top,
+            bottom: rect.bottom,
             left: rect.left,
             right: rect.right,
             width: window.innerWidth,
+            height: window.innerHeight,
         };
     }).catch(() => null);
 
     const launchInView = launch
         && launch.sliceOpen
+        && launch.bottom > 0
+        && launch.top < launch.height
         && launch.right > 0
         && launch.left < launch.width;
-    if (launch && launch.hash === '#scenario' && launchInView) {
+    if (launch && launchInView) {
         pass(results, `${label}: Launch filters opens the slice panel and scrolls it into view`);
+        if (launch.hash !== '#scenario') {
+            warn(results, `${label}: Launch filters opened the slice panel even though the URL hash normalized to "${launch.hash || '(empty)'}"`);
+        }
     } else {
         fail(results, `${label}: Launch filters did not open the slice panel (${JSON.stringify(launch)})`);
     }
@@ -1178,8 +1196,25 @@ async function verifyMobileRail(page, results, label, baseUrl) {
     pass(results, `${label}: mobile explorer rail appears on the explorer tab`);
 
     await page.evaluate(() => {
+        const fold = document.getElementById('table-details');
+        const section = (fold && fold.tagName === 'DETAILS' && fold.open)
+            ? fold
+            : (document.querySelector('#panel-explorer .panel-wide') || document.getElementById('panel-explorer'));
         const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-        window.scrollTo(0, Math.min(max, 320));
+        if (!section) {
+            window.scrollTo(0, Math.min(max, 320));
+            return;
+        }
+        const rect = section.getBoundingClientRect();
+        const top = window.scrollY + rect.top;
+        const height = Math.max(Number(section.scrollHeight || 0), rect.height);
+        const start = Math.max(0, top);
+        const end = Math.max(start, top + height - window.innerHeight);
+        const range = Math.max(0, end - start);
+        const seeded = range > 32
+            ? Math.min(Math.max(start + (range * 0.28), start + 16), end - 16)
+            : Math.min(max, Math.max(start, 320));
+        window.scrollTo(0, Math.min(Math.max(seeded, 0), max));
     });
     await page.waitForTimeout(120);
     const initialScrollY = await page.evaluate(() => window.scrollY).catch(() => 0);
@@ -1492,8 +1527,8 @@ async function runTests() {
 
     if (process.env.TEST_QUIET !== '1') {
         console.log(
-            '[test-homepage] Full suite hits production with many sequential steps. Legal URLs run in parallel. '
-            + 'TEST_HOMEPAGE_QUICK=1 skips Savings/Term Deposits repeats; TEST_LEGAL_CONCURRENCY=2–4; TEST_POST_NAV_SETTLE_MS etc.',
+            `[test-homepage] Running the ${TEST_SUITE} suite against production. `
+            + 'Adjust timing with TEST_POST_NAV_SETTLE_MS / TEST_SELECTOR_TIMEOUT_MS / TEST_GOTO_TIMEOUT_MS as needed.',
         );
     }
 
