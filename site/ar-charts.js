@@ -591,6 +591,80 @@
         return params;
     }
 
+    function isReportView(view) {
+        return view === 'economicReport' || view === 'homeLoanReport' || view === 'termDepositReport';
+    }
+
+    function buildReportPreviewModel(reportPlots) {
+        var bands = reportPlots && reportPlots.bands && Array.isArray(reportPlots.bands.series)
+            ? reportPlots.bands.series
+            : [];
+        return {
+            visibleSeries: [],
+            allSeries: [],
+            selectedKeys: [],
+            lenderRanking: {
+                entries: [],
+                activeEntry: null,
+            },
+            meta: {
+                visibleLenders: bands.length,
+                totalLenders: bands.length,
+                visibleSeries: 0,
+                totalSeries: 0,
+            },
+            reportPlots: reportPlots || { moves: null, bands: null },
+        };
+    }
+
+    async function renderReportPreview(currentFields) {
+        if (!els.chartOutput || !currentFields || !isReportView(currentFields.view)) return false;
+        if (!chartState.reportPlots || !chartState.reportPlots.bands) return false;
+        if (!chartLightweight || typeof chartLightweight.ensureLoaded !== 'function') return false;
+
+        var renderer = currentFields.view === 'economicReport'
+            ? chartLightweight.renderEconomicReport
+            : currentFields.view === 'termDepositReport'
+                ? chartLightweight.renderTermDepositReport
+                : chartLightweight.renderHomeLoanReport;
+        if (typeof renderer !== 'function') return false;
+
+        await chartLightweight.ensureLoaded();
+        disposeCharts();
+        if (els.chartOutput) els.chartOutput.innerHTML = '';
+        if (els.chartDetailOutput) els.chartDetailOutput.innerHTML = '';
+
+        chartState.lwcMain = renderer(
+            els.chartOutput,
+            buildReportPreviewModel(chartState.reportPlots),
+            currentFields,
+            chartState.rbaHistory,
+            chartState.cpiHistory,
+            chartState.economicOverlaySeries
+        );
+        chartState.lwcDetail = null;
+
+        if (els.chartOutput) {
+            els.chartOutput.setAttribute('data-chart-engine', 'lightweight');
+            els.chartOutput.setAttribute('data-chart-render-view', currentFields.view);
+            els.chartOutput.setAttribute('data-chart-rendered', 'true');
+        }
+        if (els.chartDetailOutput) {
+            els.chartDetailOutput.setAttribute('data-chart-engine', 'lightweight');
+        }
+
+        observeChartContainers();
+        if (chartUi.clearErrorState) chartUi.clearErrorState();
+        if (chartUi.renderSummary) chartUi.renderSummary(null, currentFields, null, false);
+        if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(null, chartState);
+        if (chartUi.renderSpotlight) chartUi.renderSpotlight(null, currentFields);
+        if (chartSummary && chartSummary.clear) chartSummary.clear('Detailed summary loading.');
+        if (chartUi.setStatus) chartUi.setStatus('LIVE ' + currentFields.view + ' | overview ready');
+        tabState.chartDrawn = true;
+        scheduleResizeCharts();
+        return true;
+    }
+
     async function drawChart() {
         if (!els.chartOutput) return;
         if (chartLoadPromise) {
@@ -601,14 +675,24 @@
         disposeCharts();
         resetStatusLine();
         chartState.fallbackReason = '';
+        chartState.rows = [];
+        chartState.totalRows = 0;
+        chartState.truncated = false;
+        chartState.reportPlots = { moves: null, bands: null };
+        chartState.economicOverlaySeries = [];
+        chartState.rbaHistory = [];
+        chartState.cpiHistory = [];
+        resetSelection();
         if (chartUi.clearErrorState) chartUi.clearErrorState();
         if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
         chartLoadPromise = (async function () {
             var baseParams = buildBaseParams();
-            var currentView = fields().view;
-            var wantsReportPlots = currentView === 'economicReport' || currentView === 'homeLoanReport' || currentView === 'termDepositReport';
+            var currentFields = fields();
+            var currentView = currentFields.view;
+            var wantsReportPlots = isReportView(currentView);
+            var reportPreviewRendered = false;
             var reportPlotPromise = wantsReportPlots && chartData.fetchReportPlot
                 ? Promise.all([
                     chartData.fetchReportPlot('moves', baseParams),
@@ -626,12 +710,59 @@
                     return { moves: null, bands: null };
                 })
                 : Promise.resolve({ moves: null, bands: null });
+            var historyPromise = Promise.all([
+                chartData.fetchRbaHistory ? chartData.fetchRbaHistory() : Promise.resolve([]),
+                chartData.fetchCpiHistory ? chartData.fetchCpiHistory() : Promise.resolve([]),
+            ]).catch(function () {
+                return [[], []];
+            });
 
-            var payload = await chartData.fetchAllRateRows(baseParams, function (progress) {
+            var rowsPromise = chartData.fetchAllRateRows(baseParams, function (progress) {
                 if (chartUi.setStatus) {
-                    chartUi.setStatus('LOAD ' + progress.loaded.toLocaleString() + '/' + progress.total.toLocaleString() + ' ' + progress.page + '/' + progress.lastPage);
+                    chartUi.setStatus(
+                        (reportPreviewRendered ? 'HYDRATE ' : 'LOAD ')
+                        + progress.loaded.toLocaleString()
+                        + '/'
+                        + progress.total.toLocaleString()
+                        + ' '
+                        + progress.page
+                        + '/'
+                        + progress.lastPage
+                    );
                 }
             });
+            if (wantsReportPlots) {
+                chartState.reportPlots = await reportPlotPromise;
+                var _previewHistory = await historyPromise;
+                chartState.rbaHistory = _previewHistory[0];
+                chartState.cpiHistory = _previewHistory[1];
+                try {
+                    reportPreviewRendered = await renderReportPreview(currentFields);
+                } catch (previewError) {
+                    clientLog('warn', 'Report preview render failed', {
+                        message: String(previewError && previewError.message || 'Report preview render failed'),
+                        view: currentView,
+                    });
+                }
+            }
+
+            var payload;
+            try {
+                payload = await rowsPromise;
+            } catch (rowsError) {
+                if (reportPreviewRendered) {
+                    chartState.fallbackReason = 'series-timeout';
+                    clientLog('warn', 'Chart detail hydration failed', {
+                        message: String(rowsError && rowsError.message || 'Chart detail hydration failed'),
+                        view: currentView,
+                        code: rowsError && rowsError.code,
+                    });
+                    if (chartSummary && chartSummary.clear) chartSummary.clear('Detailed summary unavailable.');
+                    if (chartUi.setStatus) chartUi.setStatus('LIVE ' + currentView + ' | overview ready | detail unavailable');
+                    return;
+                }
+                throw rowsError;
+            }
 
             chartState.rows = payload.rows || [];
             chartState.totalRows = Number(payload.total || chartState.rows.length || 0);
@@ -645,22 +776,16 @@
             chartState.tdCurveFrameIndex = null;
             chartState.economicOverlayIds = fields().economicOverlayIds ? fields().economicOverlayIds.slice() : [];
             chartState.economicOverlaySeries = [];
-            chartState.reportPlots = await reportPlotPromise;
+            if (!wantsReportPlots) {
+                chartState.reportPlots = await reportPlotPromise;
+            }
             if (els.chartRepresentation && payload.representation && els.chartRepresentation.value !== payload.representation) {
                 els.chartRepresentation.value = payload.representation;
             }
             resetSelection();
-            try {
-                var _fetched = await Promise.all([
-                    chartData.fetchRbaHistory ? chartData.fetchRbaHistory() : Promise.resolve([]),
-                    chartData.fetchCpiHistory ? chartData.fetchCpiHistory() : Promise.resolve([]),
-                ]);
-                chartState.rbaHistory = _fetched[0];
-                chartState.cpiHistory = _fetched[1];
-            } catch (e) {
-                chartState.rbaHistory = [];
-                chartState.cpiHistory = [];
-            }
+            var _fetched = await historyPromise;
+            chartState.rbaHistory = _fetched[0];
+            chartState.cpiHistory = _fetched[1];
             try {
                 if (chartState.economicOverlayIds.length && economicOverlays.fetchSeries) {
                     var range = rowsDateRange(chartState.rows);

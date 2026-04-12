@@ -184,5 +184,5 @@
         return plotState;
     }
 
-    window.AR.chartTermDepositsReportLwc = { render: render };
+    window.AR.chartTermDepositReportLwc = { render: render };
 })();
