@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Remove stale convention branches
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const owner = context.repo.owner;
