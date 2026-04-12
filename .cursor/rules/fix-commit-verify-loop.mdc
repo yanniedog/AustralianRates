@@ -11,9 +11,9 @@ When fixing issues that affect production (www.australianrates.com), follow this
 2. **Commit and push** – **Default:** follow **`git-pr-workflow-default.mdc`**: branch off `main`, commit on `agent/…` / `feat/…` / `fix/…`, push branch, open PR to `main`, merge when CI is green. **Only** if the user explicitly requested a **direct `main` hotfix**: on `main`, `git add`, `git commit`, `git push origin main`.
 3. **Wait for deploy** – After the change is **on `main`** (merged PR or direct push), wait for Cloudflare Pages and/or Workers to finish deploying. Do not skip this step.
 4. **Verify on production** – Check that your changes work on the live site. Do this **autonomously** (never ask the user to reproduce):
-   - From repo root run: `npm run test:homepage` (frontend/Pages).
-   - Run `npm run test:api` and `npm run test:archive` for worker tests when relevant.
-   - Use `node diagnose-api.js` if API health needs checking against production.
+   - From repo root run: `npm run verify:prod -- --scope=auto --depth=smoke`.
+   - For shared/tooling/workflow/verification changes or explicit full sign-off, run: `npm run verify:prod -- --scope=full --depth=full`.
+   - Use `node diagnose-api.js` or `npm run doctor` if deeper production triage is needed.
    - Optionally fetch key URLs (e.g. homepage, /savings/, /term-deposits/, API health) and assert expected status or content.
 5. **Loop** – If any check fails, fix on the **feature branch**, push, re-run PR CI, merge when green, wait for deploy, then re-run production verification. Do **not** stop until all checks pass.
 

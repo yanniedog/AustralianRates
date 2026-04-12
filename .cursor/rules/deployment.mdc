@@ -17,11 +17,14 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 
 | Purpose | Command | Notes |
 |--------|---------|------|
-| Test homepage (production URL) | `npm run test:homepage` | From repo root. Uses Playwright. |
+| Verify production (targeted default) | `npm run verify:prod -- --scope=auto --depth=smoke` | From repo root. Auto-selects the relevant smoke checks. |
+| Verify production (full) | `npm run verify:prod -- --scope=full --depth=full` | From repo root. Runs the broader verification set. |
+| Test homepage smoke (production URL) | `npm run test:homepage` | From repo root. Uses Playwright smoke for `/`. |
 | Test API worker | `npm run test:api` | From repo root (vitest in workers/api). |
 | Test archive worker | `npm run test:archive` | From repo root (vitest in workers/archive). |
 | Typecheck API | `npm run typecheck:api` | From repo root. |
-| Diagnose API (production) | `node diagnose-api.js` | From repo root. Optional base URL. |
+| Diagnose API smoke (production) | `npm run diagnose:api:smoke` | From repo root. Fast deploy-signoff API checks. |
+| Diagnose API deep (production) | `node diagnose-api.js` | From repo root. Optional base URL. |
 | Deploy API | `npm run deploy:api` | Wrangler deploy for workers/api. |
 | Deploy archive | `npm run deploy:archive` | Wrangler deploy for workers/archive. |
 
@@ -39,8 +42,8 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 ## Deployment Verification Checklist
 
 - All relevant tests pass before deploy:
-  - `npm run test:api` and `npm run test:archive` pass.
-  - `npm run test:homepage` passes (production URL).
+  - Default deploy sign-off: `npm run verify:prod -- --scope=auto --depth=smoke`.
+  - Full sign-off for shared/tooling/workflow/verification changes: `npm run verify:prod -- --scope=full --depth=full`.
 - No console errors on production (www.australianrates.com).
 - Critical flows: homepage loads, API health/endpoints respond, archive workers (if used) respond.
 - D1 migrations applied when changing API or archive schema.

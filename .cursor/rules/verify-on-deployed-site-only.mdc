@@ -11,7 +11,7 @@ All verification and testing for this project must be done **only** against the 
 
 - **Test and verify ONLY via:** https://www.australianrates.com (production).
 - **Do NOT** run or rely on local dev servers, localhost, or local builds for acceptance or verification of front-end or full-stack behaviour.
-- Use `npm run test:homepage` (Playwright vs production URL), `node diagnose-api.js` (production API), and production URLs when checking that fixes or features work.
+- Use `npm run verify:prod -- --scope=auto --depth=smoke` for default production verification, `npm run verify:prod -- --scope=full --depth=full` for full sign-off, and `node diagnose-api.js` when you need deeper production API triage.
 - Local dev (`npm run dev:api`, `wrangler pages dev`, etc.) is for development only; it must not be used as the source of truth for “does it work”.
 
 ## Rationale

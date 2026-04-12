@@ -19,9 +19,8 @@ The **production verification** steps below apply **after** the change is on **`
 **Exception:** the user **explicitly** requests a **direct `main` hotfix**—then push to `main` and still complete deployment confirmation and the checks below.
 
 1. Before claiming any deploy-related task is complete, run from repo root:
-   - `npm run test:homepage`
-   - `npm run test:api`
-   - `npm run test:archive`
+   - `npm run verify:prod -- --scope=auto --depth=smoke`
+   - For shared/tooling/workflow/verification changes or explicit full sign-off: `npm run verify:prod -- --scope=full --depth=full`
 2. If any command exits non-zero:
    - Do not mark the task complete.
    - Fix the failure, redeploy the affected subproject, and rerun the failing test(s).
@@ -47,12 +46,18 @@ The **production verification** steps below apply **after** the change is on **`
 
 | Purpose | Command | Notes |
 |--------|---------|------|
-| Test homepage (production URL) | `npm run test:homepage` | From repo root. Playwright. |
+| Verify production (targeted default) | `npm run verify:prod -- --scope=auto --depth=smoke` | From repo root. Auto-selects site/API/archive smoke checks from current changes or last commit. |
+| Verify production (full) | `npm run verify:prod -- --scope=full --depth=full` | From repo root. Runs the broad verification set. |
+| Test homepage smoke (production URL) | `npm run test:homepage` | From repo root. Playwright smoke for `/` only. |
+| Test homepage pivot | `npm run test:homepage:pivot` | From repo root. Dedicated pivot browser suite. |
+| Test homepage mobile | `npm run test:homepage:mobile` | From repo root. Dedicated mobile browser suite. |
+| Test homepage full | `npm run test:homepage:full` | From repo root. Smoke + pivot + mobile + extra public sections. |
 | Start browser-agent MCP (stdio) | `npm run browser-agent` | From repo root. Requires sibling repo `../browser-agent`. Cursor normally spawns this via `.cursor/mcp.json`; use this for manual smoke tests. |
 | Test API worker | `npm run test:api` | From repo root. |
 | Test archive worker | `npm run test:archive` | From repo root. |
 | Typecheck API | `npm run typecheck:api` | From repo root. |
-| Diagnose API (production) | `node diagnose-api.js` | From repo root. Optional base URL. |
+| Diagnose API smoke (production) | `npm run diagnose:api:smoke` | From repo root. Fast deploy-signoff API checks. |
+| Diagnose API deep (production) | `node diagnose-api.js` | From repo root. Deeper triage and benchmark command. |
 | Deploy API | `npm run deploy:api` | Wrangler deploy for workers/api. |
 | Deploy archive | `npm run deploy:archive` | Wrangler deploy for workers/archive. |
 
@@ -69,7 +74,8 @@ The **production verification** steps below apply **after** the change is on **`
 
 ## Deployment Verification Checklist
 
-- All relevant tests pass before deploy: `npm run test:api`, `npm run test:archive`, `npm run test:homepage`.
+- Default deploy sign-off uses `npm run verify:prod -- --scope=auto --depth=smoke`.
+- Use `npm run verify:prod -- --scope=full --depth=full` for shared/tooling/workflow/verification changes or explicit full sign-off.
 - No console errors on production (www.australianrates.com).
 - Critical flows: homepage loads, API health/endpoints respond.
 - D1 migrations applied when changing API or archive schema.
@@ -148,7 +154,9 @@ This project is data-first. That is a hard presentation rule.
 
 - `npm run test:api` and `npm run test:archive` run vitest unit/integration tests (no network or Cloudflare account needed).
 - `npm run typecheck:api` runs TypeScript type checking on the API worker.
-- `npm run test:homepage` runs Playwright E2E tests against the **production** URL and requires network access.
+- `npm run test:homepage` runs the fast Playwright smoke suite against the **production** URL and requires network access.
+- `npm run test:homepage:full` runs the broader browser coverage and is intended for explicit full verification, not default deploy sign-off.
+- `npm run diagnose:api:smoke` runs the fast production API smoke suite; `npm run diagnose:api` is the deeper manual/incident command.
 - Playwright needs Chromium installed (`npx playwright install --with-deps chromium`).
 
 ### Browser-agent MCP (interactive UX audits)
@@ -159,7 +167,7 @@ For **agent-driven** UX (navigate/click/screenshot/trace) with the canonical too
 2. **Cursor:** Project file `.cursor/mcp.json` registers MCP alias **`browser_agent_cursor`** (stdio server). If `${workspaceFolder}/../browser-agent` is wrong on your machine, fix `cwd`/`args` to your `browser-agent` checkout. Reload MCP after changes.
 3. **Policy manifest:** Repo root **`browser-agent.manifest.json`** — allowlist hosts and `projectId` **`australianrates`**. When calling `session_create`, set `manifestPath` to a path readable from the browser-agent process cwd (e.g. `../australianrates/browser-agent.manifest.json` when cwd is `browser-agent`).
 4. **Tool order:** Follow [browser-agent `cursor-adapter.md`](../browser-agent/cursor-adapter.md): `session_create` → `trace_start` → actions → milestone screenshots → on failure bundle → `trace_stop` → `session_close`. Use **`/ux_cursor`** prompt pack in `../browser-agent/cursor-ux-skill.md` and shared steps in `../browser-agent/ux-browser-runbook.md`.
-5. **Verification:** Prefer production-only checks per workspace rules (`npm run test:homepage`, etc.). Browser-agent complements them; it does not replace them for deploy sign-off.
+5. **Verification:** Prefer production-only checks per workspace rules (`npm run verify:prod -- --scope=auto --depth=smoke`, etc.). Browser-agent complements them; it does not replace them for deploy sign-off.
 
 ### Debugging and production logfiles
 
@@ -173,7 +181,7 @@ When debugging code anywhere on the site (front end, API worker, archive worker,
 - **Stats:** `GET .../admin/logs/system/stats` (same auth) for row count and latest timestamp.
 - **Actionable issues:** `GET .../admin/logs/system/actionable` (same auth) for grouped operational issues.
 - **Status debug bundle (E2E triage):** `GET https://www.australianrates.com/api/home-loan-rates/admin/diagnostics/status-debug-bundle` (same Bearer auth) returns one JSON document aggregating health history, problem logs (optional `since`, `log_limit`, `log_hours_before_health`), CDR audit, coverage gaps, lender universe, replay queue, probe fetch-events, diagnostics backlog, optional inlined probe payloads (`include_probe_payloads=1`, capped), and a `remediation.hints` array with suggested `POST`/`GET` paths and bodies pointing at existing admin routes (suggestions only). Narrow with `sections=health,logs,...`. From repo root: `npm run fetch-status-debug-bundle` or `node fetch-status-debug-bundle.js --out=bundle.json`. The admin **Status** page includes **Download debug bundle (JSON)** and **Copy debug bundle curl**.
-- **Doctor (one-shot production prelude):** `npm run doctor` runs **`diagnose-api`** (all three rate APIs, benchmarks, **`/analytics/series`** per dataset, home-loan **`site-ui`**, **`cpi/history`**, **`rba/history`**), then **`diagnose-pages`** (HTML smoke for `/`, `/savings/`, `/term-deposits/`, legal pages), then admin log **stats** + **actionable** with **`--fail-on-actionable`** (exits **1** if actionable lists issue groups). Then a **full** `status-debug-bundle` fetch to **`status-debug-bundle-latest.json`** (gitignored), a **compact scorecard** (PASS/FAIL per step plus bundle metrics), and the bundle **DB / structural CDR gate** (unless waived). **`--dump-bundle-diagnostics`** prints the large `status_page_diagnostics` / `diagnostics` / `integrity_audit` JSON (default is scorecard-only to reduce noise). **`--quick`** or **`DOCTOR_QUICK=1`** shortens `diagnose-api` benchmarks. **`--with-hosting`** runs **`npm run verify:prod-hosting`** (DNS/TLS/Pages). Optional **`ARCHIVE_ORIGIN`**: `GET …/api/health` on the archive worker (warn-only unless **`--strict-archive`**). Other flags: **`--skip-bundle`**, **`--tolerate-actionable`**, **`--tolerate-bundle-db`**. Log **stats** `count` is total rows in the error log store, not “new failures.” **`npm run doctor:holistic`** is `doctor --with-hosting`. After fixes + deploy: **`npm run doctor:verify`** runs doctor plus `test:api`, `test:archive`, and `test:homepage` against production. Cursor: **/doctor** command and `.cursor/skills/doctor/SKILL.md`.
+- **Doctor (one-shot production prelude):** `npm run doctor` remains the deeper production triage path: **`diagnose-api`** (all three rate APIs, benchmarks, **`/analytics/series`** per dataset, home-loan **`site-ui`**, **`cpi/history`**, **`rba/history`**), **`diagnose-pages`**, admin log **stats** + **actionable**, full **`status-debug-bundle`**, and the bundle **DB / structural CDR gate**. Use it for incidents or explicit holistic verification, not as the default deploy sign-off command. **`npm run doctor:verify`** now runs `doctor`, then `test:api`, `test:archive`, and `test:homepage:full`.
 
 Ensure `.env` contains `ADMIN_API_TOKEN` (or `ADMIN_API_TOKENS`) so that scripts and agents can fetch logs. If a variable is missing, add it (see `.env.example` for names and comments).
 
