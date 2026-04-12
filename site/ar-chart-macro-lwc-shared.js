@@ -967,17 +967,17 @@
                 el.classList.toggle('ar-report-infobox--compact', compact);
                 el.classList.toggle('ar-report-infobox--ribbon-tree', !!(compact && hasRenderBody));
                 if (compact) {
-                    el.style.padding = hasRenderBody ? '6px 8px 8px' : '4px 6px';
-                    el.style.maxHeight = 'min(42vh, 280px)';
+                    el.style.padding = hasRenderBody ? '8px 10px 10px' : '4px 6px';
+                    el.style.maxHeight = hasRenderBody ? 'min(46vh, 320px)' : 'min(42vh, 280px)';
                 } else {
                     el.style.padding = '8px 10px';
                     el.style.maxHeight = '240px';
                 }
                 var hStyle = compact
-                    ? 'font-weight:700;margin-bottom:2px;padding-right:16px;font-size:11px;line-height:1.2;'
+                    ? 'font-weight:700;margin-bottom:' + (hasRenderBody ? '4px' : '2px') + ';padding-right:16px;font-size:' + (hasRenderBody ? '12px' : '11px') + ';line-height:1.2;'
                     : 'font-weight:700;margin-bottom:4px;padding-right:16px;';
                 var mStyle = compact
-                    ? 'font-size:' + (hasRenderBody ? '10px' : '9px') + ';color:' + t.muted + ';margin-bottom:' + (hasRenderBody ? '5px' : '3px') + ';line-height:1.3;'
+                    ? 'font-size:' + (hasRenderBody ? '10px' : '9px') + ';color:' + t.muted + ';margin-bottom:' + (hasRenderBody ? '8px' : '3px') + ';line-height:1.3;'
                     : 'font-size:10px;color:' + t.muted + ';margin-bottom:6px;';
                 var heading = input && input.heading ? '<div style="' + hStyle + '">' + escHtml(input.heading) + '</div>' : '';
                 var meta = input && input.meta ? '<div style="' + mStyle + '">' + escHtml(input.meta) + '</div>' : '';
