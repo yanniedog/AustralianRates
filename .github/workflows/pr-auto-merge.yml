@@ -40,7 +40,8 @@ jobs:
                     id
                     state
                     autoMergeRequest {
-                      enabled
+                      enabledAt
+                      mergeMethod
                     }
                   }
                 }
@@ -62,7 +63,7 @@ jobs:
               core.info(`PR #${pullNumber} is not open; skipping`);
               return;
             }
-            if (pr.autoMergeRequest?.enabled) {
+            if (pr.autoMergeRequest?.enabledAt) {
               core.info('Auto-merge already enabled');
               return;
             }
@@ -75,7 +76,7 @@ jobs:
                 }) {
                   pullRequest {
                     autoMergeRequest {
-                      enabled
+                      enabledAt
                       mergeMethod
                     }
                   }
