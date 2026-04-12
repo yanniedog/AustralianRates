@@ -7,7 +7,10 @@
     var network = window.AR.network || {};
     var apiBase = config.apiBase || '';
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
-    var CHART_REQUEST_TIMEOUT_MS = 12000;
+    // Report plots should stay fast; full day-series requests can legitimately
+    // take much longer on larger public datasets.
+    var CHART_SERIES_TIMEOUT_MS = 65000;
+    var CHART_REPORT_TIMEOUT_MS = 12000;
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -681,7 +684,7 @@
         if (requestJson) {
             return requestJson(policy.url, {
                 requestLabel: 'Chart history',
-                timeoutMs: CHART_REQUEST_TIMEOUT_MS,
+                timeoutMs: CHART_SERIES_TIMEOUT_MS,
                 retryCount: 0,
                 cache: policy.fetchCache,
                 skipCacheBust: policy.skipCacheBust,
@@ -719,7 +722,7 @@
         if (requestJson) {
             return requestJson(policy.url, {
                 requestLabel: 'Report plot ' + String(mode || 'moves'),
-                timeoutMs: CHART_REQUEST_TIMEOUT_MS,
+                timeoutMs: CHART_REPORT_TIMEOUT_MS,
                 retryCount: 0,
                 cache: policy.fetchCache,
                 skipCacheBust: policy.skipCacheBust,
