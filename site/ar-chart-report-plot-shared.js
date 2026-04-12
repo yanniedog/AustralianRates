@@ -215,6 +215,86 @@
         return n;
     }
 
+    /** Min/max % for band ribbons only (ignores macro overlays). */
+    function computeBandsRateExtentFromPayload(plotPayload, dates) {
+        var lo = Infinity;
+        var hi = -Infinity;
+        (plotPayload && plotPayload.series ? plotPayload.series : []).forEach(function (bank) {
+            (bank.points || []).forEach(function (p) {
+                var a = positiveRibbonRateOrNull(p.min_rate);
+                var b = positiveRibbonRateOrNull(p.max_rate);
+                var m = positiveRibbonRateOrNull(p.mean_rate);
+                if (a != null) {
+                    lo = Math.min(lo, a);
+                    hi = Math.max(hi, a);
+                }
+                if (b != null) {
+                    lo = Math.min(lo, b);
+                    hi = Math.max(hi, b);
+                }
+                if (m != null) {
+                    lo = Math.min(lo, m);
+                    hi = Math.max(hi, m);
+                }
+            });
+        });
+        if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
+            lo = 0;
+            hi = 8;
+        }
+        if (hi <= lo) hi = lo + 0.5;
+        var span = hi - lo;
+        var pad = Math.max(span * 0.06, 0.08);
+        return { min: lo - pad, max: hi + pad };
+    }
+
+    function extentFromDailyRows(dates, rows, valueKey) {
+        var lo = Infinity;
+        var hi = -Infinity;
+        var vk = valueKey || 'value';
+        (dates || []).forEach(function (d) {
+            var row = (rows || []).find(function (e) {
+                return e && String(e.date).slice(0, 10) === d;
+            });
+            if (!row) return;
+            var v = finiteRateOrNull(row[vk]);
+            if (v == null) return;
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+        });
+        if (!Number.isFinite(lo)) return null;
+        return { min: lo, max: hi };
+    }
+
+    function mergeRateExtents(a, b) {
+        if (!a) return b;
+        if (!b) return a;
+        return { min: Math.min(a.min, b.min), max: Math.max(a.max, b.max) };
+    }
+
+    function padExtent(ext) {
+        if (!ext) return null;
+        var span = ext.max - ext.min;
+        var pad = Math.max(span * 0.06, 0.08);
+        return { min: ext.min - pad, max: ext.max + pad };
+    }
+
+    /** One-category-wide vertical strips at RBA cash-rate change dates (in view). */
+    function buildRbaChangeMarkAreaPairs(dates, decisions, viewStartYmd, ctxMaxYmd) {
+        var vs = String(viewStartYmd || '').slice(0, 10);
+        var ve = String(ctxMaxYmd || '').slice(0, 10);
+        var out = [];
+        (decisions || []).forEach(function (row) {
+            var d = String(row.date || '').slice(0, 10);
+            if (!d || d < vs || d > ve) return;
+            var ix = dates.indexOf(d);
+            if (ix < 0) return;
+            var d2 = ix + 1 < dates.length ? dates[ix + 1] : d;
+            out.push([{ xAxis: d }, { xAxis: d2 }]);
+        });
+        return out;
+    }
+
     function buildBandSeries(opts) {
         var dates = opts.dates;
         var plotPayload = opts.plotPayload;
@@ -755,6 +835,21 @@
             ? overlayModule.prepareWindowSeries(options.economicOverlaySeries || [], range.viewStart, range.ctxMax)
             : [];
 
+        var bandsReportEarly = plotPayload && plotPayload.mode === 'bands';
+        var showRbaMacroLine = bandsReportEarly ? !!(container._ribbonMacroRba) : false;
+        var showCpiMacroLine = bandsReportEarly ? !!(container._ribbonMacroCpi) : false;
+        var bandsOnlyYExtent = bandsReportEarly ? computeBandsRateExtentFromPayload(plotPayload, dates) : null;
+        var rbaLineShown = !bandsReportEarly || showRbaMacroLine;
+        var cpiLineShown = !bandsReportEarly || showCpiMacroLine;
+
+        var rbaDecisionsWindow = (prep.rbaData.decisions || []).filter(function (row) {
+            var d = String(row.date || '').slice(0, 10);
+            return d && d >= String(range.viewStart || '').slice(0, 10) && d <= String(range.ctxMax || '').slice(0, 10);
+        });
+        var rbaChangeMarkPairs = bandsReportEarly
+            ? buildRbaChangeMarkAreaPairs(dates, rbaDecisionsWindow, range.viewStart, range.ctxMax)
+            : [];
+
         var series = [
             {
                 name: 'RBA',
@@ -762,11 +857,12 @@
                 yAxisIndex: 0,
                 symbol: 'none',
                 step: 'end',
-                lineStyle: { color: theme.rba, width: 2, type: 'dashed' },
+                lineStyle: { color: theme.rba, width: 2, type: 'dashed', opacity: rbaLineShown ? 1 : 0 },
                 data: dates.map(function (date) {
                     var point = rbaDaily.find(function (entry) { return entry.date === date; });
                     return [date, point ? finiteRateOrNull(point.value) : null];
                 }),
+                silent: !rbaLineShown,
             },
             {
                 name: 'CPI',
@@ -774,13 +870,32 @@
                 yAxisIndex: 0,
                 symbol: 'none',
                 step: 'end',
-                lineStyle: { color: theme.cpi, width: 2, type: 'dashed' },
+                lineStyle: { color: theme.cpi, width: 2, type: 'dashed', opacity: cpiLineShown ? 1 : 0 },
                 data: dates.map(function (date) {
                     var point = cpiDaily.find(function (entry) { return entry.date === date; });
                     return [date, point ? finiteRateOrNull(point.value) : null];
                 }),
+                silent: !cpiLineShown,
             },
         ];
+        if (bandsReportEarly && rbaChangeMarkPairs.length) {
+            series.push({
+                name: 'RBA change',
+                type: 'line',
+                yAxisIndex: 0,
+                symbol: 'none',
+                silent: true,
+                lineStyle: { width: 0, opacity: 0 },
+                data: dates.map(function (d) {
+                    return [d, bandsOnlyYExtent ? bandsOnlyYExtent.min : 0];
+                }),
+                markArea: {
+                    silent: true,
+                    itemStyle: { color: 'rgba(234, 179, 8, 0.14)' },
+                    data: rbaChangeMarkPairs,
+                },
+            });
+        }
         if (plotPayload && plotPayload.mode === 'moves') {
             series.push({
                 name: 'Baseline',
@@ -854,14 +969,39 @@
         var hoveredBank = '';
         var ribbonProductBank = '';
         var ribbonTrayHoverBank = '';
-        var selectedProductName = '';
         var lastPointerDate = '';
-        var ribbonChartHoverProductKey = '';
         var ribbonListHoverKeys = null;
         var ribbonHoverScopeMap = {};
         var ribbonHoverScopeSeq = 0;
         var ribbonExpandedPaths = {};
         var ribbonTreeAnchorYmd = '';
+        var ribbonListHoverPath = '';
+
+        function deepestExpandedRibbonPath() {
+            var best = '';
+            var bestDepth = -1;
+            Object.keys(ribbonExpandedPaths).forEach(function (p) {
+                if (!ribbonExpandedPaths[p]) return;
+                var depth = p ? p.split('>').length : 0;
+                if (depth > bestDepth) {
+                    bestDepth = depth;
+                    best = p;
+                }
+            });
+            return best;
+        }
+
+        var ribbonTreeHadBranches = false;
+
+        function ribbonPathAllowsProductLines(rowPath) {
+            var rp = String(rowPath || '');
+            var deep = deepestExpandedRibbonPath();
+            if (!deep) {
+                if (!ribbonTreeHadBranches) return true;
+                return false;
+            }
+            return rp === deep || rp.indexOf(deep + '>') === 0;
+        }
 
         function clearRibbonHoverScopes() {
             ribbonHoverScopeMap = {};
@@ -915,23 +1055,14 @@
         }
 
         function ribbonLineFilterKeys() {
-            if (selectedProductName) return [selectedProductName];
             var list = ribbonListHoverKeys;
-            var chart = ribbonChartHoverProductKey;
-            if (list && list.length) {
-                if (chart) {
-                    if (list.indexOf(chart) >= 0) return [chart];
-                    return [chart];
-                }
-                return list.slice();
-            }
-            if (chart) return [chart];
-            return [];
+            if (!list || !list.length) return [];
+            if (!ribbonPathAllowsProductLines(String(ribbonListHoverPath || ''))) return [];
+            return list.slice();
         }
 
         function productLineVisible(prodKey) {
             var fk = ribbonLineFilterKeys();
-            if (fk === null) return true;
             for (var i = 0; i < fk.length; i++) {
                 if (fk[i] === prodKey) return true;
             }
@@ -1002,7 +1133,7 @@
         function syncInfoboxRowHighlight() {
             var ib = options.infoBox;
             if (!ib || !ib.el) return;
-            var k = ribbonChartHoverProductKey;
+            var k = ribbonListHoverKeys && ribbonListHoverKeys.length === 1 ? ribbonListHoverKeys[0] : '';
             var rows = ib.el.querySelectorAll('.ar-report-infobox-row[data-ribbon-prod-key]');
             for (var i = 0; i < rows.length; i++) {
                 var row = rows[i];
@@ -1047,9 +1178,7 @@
             if (!productOverlay.length) return;
             var rs = getRibbonStyleResolved();
             var oh = Math.max(0, Math.min(1, Number(rs.product_line_opacity_hover)));
-            var os = Math.max(0, Math.min(1, Number(rs.product_line_opacity_selected)));
             var wh = Math.max(0, Number(rs.product_line_width_hover) || 1.2);
-            var ws = Math.max(0, Number(rs.product_line_width_selected) || 2.5);
             var updates = [];
             productOverlay.forEach(function (s) {
                 var rest = s.name.slice(3);
@@ -1059,18 +1188,17 @@
                 var showBank = pb && normRibbonBankName(bn) === normRibbonBankName(pb);
                 var match = productLineVisible(s.name);
                 var show = showBank && match;
-                var isSelected = s.name === selectedProductName;
                 var base = s._ribbonBaseHex || '#64748b';
                 updates.push({
                     id: s.id,
                     lineStyle: {
-                        color: hexToRgba(base, isSelected ? os : oh),
-                        width: isSelected ? ws : wh,
+                        color: hexToRgba(base, oh),
+                        width: wh,
                         opacity: show ? 1 : 0,
                         cap: 'round',
                         join: 'round',
                     },
-                    silent: !show,
+                    silent: true,
                 });
             });
             chart.setOption({ series: updates }, { lazyUpdate: false, silent: true });
@@ -1113,7 +1241,6 @@
             var idxs = ribbonLodIndices;
             prods.forEach(function (prod) {
                 if (!productLineVisible(prod.key)) return;
-                var isSel = prod.key === selectedProductName;
                 ctx.beginPath();
                 var first = true;
                 function plotAt(di) {
@@ -1139,11 +1266,9 @@
                 ctx.lineJoin = 'round';
                 var rsC = getRibbonStyleResolved();
                 var oh = Math.max(0, Math.min(1, Number(rsC.product_line_opacity_hover)));
-                var os = Math.max(0, Math.min(1, Number(rsC.product_line_opacity_selected)));
                 var wh = Math.max(0, Number(rsC.product_line_width_hover) || 1.2);
-                var ws = Math.max(0, Number(rsC.product_line_width_selected) || 2.5);
-                ctx.strokeStyle = hexToRgba(prod.baseHex, isSel ? os : oh);
-                ctx.lineWidth = isSel ? ws : wh;
+                ctx.strokeStyle = hexToRgba(prod.baseHex, oh);
+                ctx.lineWidth = wh;
                 ctx.stroke();
             });
         }
@@ -1157,103 +1282,12 @@
             });
         }
 
-        function ribbonCanvasPickProduct(offsetX, offsetY) {
-            var data = chart.convertFromPixel(ribbonAxisFinder, [offsetX, offsetY]);
-            if (!data || data.length < 2) return null;
-            var dateStr = resolveDateFromAxisValue(data[0]);
-            var pbPick = ribbonPanelBank();
-            if (!dateStr || !pbPick) return null;
-            var prods = ribbonCanvasModel.byBank[pbPick];
-            if (!prods) return null;
-            var best = null;
-            var bestDist = Infinity;
-            prods.forEach(function (prod) {
-                var v = prod.byDate[dateStr];
-                if (v == null) return;
-                var pix = chart.convertToPixel(ribbonAxisFinder, [dateStr, v]);
-                if (!pix || pix.length < 2) return;
-                var dx = pix[0] - offsetX;
-                var dy = pix[1] - offsetY;
-                var dist = dx * dx + dy * dy;
-                if (dist < bestDist && Math.abs(dx) < 28) {
-                    bestDist = dist;
-                    best = { prod: prod, rate: v, date: dateStr };
-                }
-            });
-            if (best && bestDist < 1600) return best;
-            return null;
-        }
-
-        function overlayPickProduct(offsetX, offsetY) {
-            if (!ribbonPanelBank() || !productOverlay.length) return null;
-            var data = chart.convertFromPixel(ribbonAxisFinder, [offsetX, offsetY]);
-            if (!data || data.length < 2) return null;
-            var dateStr = resolveDateFromAxisValue(data[0]);
-            if (!dateStr) return null;
-            var best = null;
-            var bestDist = Infinity;
-            var pbOv = ribbonPanelBank();
-            productOverlay.forEach(function (s) {
-                var rest = s.name.slice(3);
-                var pipe = rest.indexOf('|');
-                var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                if (normRibbonBankName(bn) !== normRibbonBankName(pbOv)) return;
-                var yAt = null;
-                (s.data || []).forEach(function (pt) {
-                    if (!pt || pt.length < 2) return;
-                    if (String(pt[0]).slice(0, 10) === dateStr && pt[1] != null) {
-                        yAt = Number(pt[1]);
-                    }
-                });
-                if (yAt == null || !Number.isFinite(yAt)) return;
-                var pix = chart.convertToPixel(ribbonAxisFinder, [dateStr, yAt]);
-                if (!pix || pix.length < 2) return;
-                var dx = pix[0] - offsetX;
-                var dy = pix[1] - offsetY;
-                var dist = dx * dx + dy * dy;
-                if (dist < bestDist && Math.abs(dx) < 28) {
-                    bestDist = dist;
-                    var pn = pipe >= 0 ? rest.slice(pipe + 1) : '';
-                    best = {
-                        prod: {
-                            key: s.name,
-                            bankName: bn,
-                            productName: pn,
-                            baseHex: s._ribbonBaseHex || '#64748b',
-                        },
-                        rate: yAt,
-                        date: dateStr,
-                    };
-                }
-            });
-            if (best && bestDist < 1600) return best;
-            return null;
-        }
-
-        function showRibbonInfoBox(pick) {
-            var ib = options.infoBox;
-            if (!ib || typeof ib.show !== 'function' || !pick) return;
-            ib.show({
-                heading: fmtReportDateYmd(pick.date),
-                meta: M.selectionMetaText ? M.selectionMetaText({
-                    selectionYmd: pick.date,
-                    rate: pick.rate,
-                    entries: [{ bankName: pick.prod.bankName, productName: pick.prod.productName, rate: pick.rate, color: pick.prod.baseHex, selectionKey: pick.prod.key, subtitle: '' }],
-                }) : '',
-                compact: true,
-                items: [{
-                    bankName: pick.prod.bankName,
-                    productName: pick.prod.productName,
-                    rate: pick.rate,
-                    color: pick.prod.baseHex,
-                    selectionKey: pick.prod.key,
-                    subtitle: '',
-                }],
-            });
-        }
-
         function hideRibbonInfoBox() {
             ribbonListHoverKeys = null;
+            ribbonListHoverPath = '';
+            ribbonExpandedPaths = {};
+            ribbonTreeBank = '';
+            ribbonTreeAnchorYmd = '';
             var ib = options.infoBox;
             if (ib && typeof ib.hide === 'function') ib.hide();
         }
@@ -1372,6 +1406,7 @@
                     row.className = 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row';
                     row.style.cssText = 'display:flex;align-items:baseline;gap:6px;padding:2px 0;border-top:1px solid rgba(148,163,184,0.18);font-size:11px;line-height:1.25;min-width:0;cursor:default;padding-left:' + (6 + depth * 12) + 'px;';
                     row.setAttribute('data-ribbon-scope', scopeId);
+                    row.setAttribute('data-ribbon-tree-path', String(path || ''));
                     row.setAttribute('data-ribbon-prod-key', p.key);
                     var sw = document.createElement('span');
                     sw.style.cssText = 'width:6px;height:6px;border-radius:1px;flex-shrink:0;margin-top:2px;background:' + String(p.baseHex || '#666').replace(/[<>"']/g, '') + ';';
@@ -1410,6 +1445,7 @@
                 brow.className = 'ar-report-infobox-trow ar-report-infobox-trow--branch';
                 brow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;border-top:1px solid rgba(148,163,184,0.2);font-size:11px;line-height:1.25;min-width:0;cursor:pointer;padding-left:' + (4 + depth * 12) + 'px;';
                 brow.setAttribute('data-ribbon-scope', scopeId);
+                brow.setAttribute('data-ribbon-tree-path', subPath);
                 brow.setAttribute('role', 'button');
                 brow.setAttribute('aria-expanded', expanded ? 'true' : 'false');
                 brow.setAttribute('aria-label', (expanded ? 'Collapse tier, ' : 'Expand tier, ') + branchLabel);
@@ -1462,7 +1498,6 @@
         function refreshRibbonUnderChartPanel() {
             var ib = options.infoBox;
             if (!ib || typeof ib.show !== 'function') return;
-            if (selectedProductName) return;
             var pbPanel = ribbonPanelBank();
             if (!pbPanel) {
                 hideRibbonInfoBox();
@@ -1473,11 +1508,12 @@
                 hideRibbonInfoBox();
                 return;
             }
-            if (ribbonTreeBank !== pbPanel || ribbonTreeAnchorYmd !== anchor) {
+            if (ribbonTreeBank !== pbPanel) {
                 ribbonExpandedPaths = {};
+                ribbonTreeHadBranches = false;
                 ribbonTreeBank = pbPanel;
-                ribbonTreeAnchorYmd = anchor;
             }
+            ribbonTreeAnchorYmd = anchor;
             var plist = ribbonCanvasModel.byBank[pbPanel] || [];
             var prodsAtAnchor = [];
             var sec = String(section || '');
@@ -1503,6 +1539,7 @@
                 hideRibbonInfoBox();
                 return;
             }
+            ribbonTreeHadBranches = tree.kind !== 'leaves';
             var n = prodsAtAnchor.length;
             ib.show({
                 heading: fmtReportDateYmd(anchor),
@@ -1512,16 +1549,6 @@
                     renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
                 },
             });
-        }
-
-        function bankColorIndexForName(bn) {
-            var want = String(bn || '').trim();
-            for (var i = 0; i < bankList.length; i++) {
-                var entry = bankList[i];
-                var full = typeof entry === 'string' ? entry : (entry && entry.full);
-                if (String(full || '').trim() === want) return i;
-            }
-            return 0;
         }
 
         var tooltipConfig = isBandsMode
@@ -1545,14 +1572,22 @@
                 splitLine: { show: false },
             },
             yAxis: [
-                {
-                    type: 'value',
-                    name: '%',
-                    position: 'left',
-                    axisLine: { lineStyle: { color: theme.axis } },
-                    axisLabel: { color: theme.muted },
-                    splitLine: { lineStyle: { color: theme.grid } },
-                },
+                (function () {
+                    var y0 = {
+                        type: 'value',
+                        name: '%',
+                        position: 'left',
+                        axisLine: { lineStyle: { color: theme.axis } },
+                        axisLabel: { color: theme.muted },
+                        splitLine: { lineStyle: { color: theme.grid } },
+                    };
+                    if (bandsOnlyYExtent) {
+                        y0.min = bandsOnlyYExtent.min;
+                        y0.max = bandsOnlyYExtent.max;
+                        y0.scale = false;
+                    }
+                    return y0;
+                })(),
                 {
                     type: 'value',
                     show: !!(plotPayload && plotPayload.mode === 'moves'),
@@ -1567,6 +1602,78 @@
             ],
             series: series,
         });
+
+        if (isBandsMode) {
+            var macroRow = document.createElement('div');
+            macroRow.className = 'lwc-report-macro-bar';
+            macroRow.style.cssText =
+                'display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:2px 0 6px;font-size:11px;opacity:0.92;';
+            function mkMacroBtn(label) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = label;
+                b.className = 'lwc-report-macro-toggle';
+                b.style.cssText =
+                    'padding:2px 8px;border-radius:4px;border:1px solid rgba(148,163,184,0.45);background:transparent;color:inherit;font:inherit;cursor:pointer;';
+                b.setAttribute('aria-pressed', 'false');
+                return b;
+            }
+            function syncMacroBtnStyle(btn, on) {
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                btn.style.opacity = on ? '1' : '0.55';
+                btn.style.borderColor = on ? 'rgba(234,179,8,0.5)' : 'rgba(148,163,184,0.45)';
+            }
+            var rbaMacroBtn = mkMacroBtn('RBA');
+            var cpiMacroBtn = mkMacroBtn('CPI');
+            function applyRibbonMacroDisplay() {
+                var merged = bandsOnlyYExtent;
+                if (showRbaMacroLine) {
+                    merged = mergeRateExtents(merged, extentFromDailyRows(dates, rbaDaily, 'value'));
+                }
+                if (showCpiMacroLine) {
+                    merged = mergeRateExtents(merged, extentFromDailyRows(dates, cpiDaily, 'value'));
+                }
+                if (showRbaMacroLine || showCpiMacroLine) merged = merged ? padExtent(merged) : bandsOnlyYExtent;
+                else merged = bandsOnlyYExtent;
+                if (!merged) merged = bandsOnlyYExtent;
+                chart.setOption(
+                    {
+                        animation: true,
+                        animationDuration: 220,
+                        animationEasing: 'cubicOut',
+                        yAxis: [{ min: merged.min, max: merged.max, scale: false }],
+                        series: [
+                            { name: 'RBA', lineStyle: { opacity: showRbaMacroLine ? 1 : 0 }, silent: !showRbaMacroLine },
+                            { name: 'CPI', lineStyle: { opacity: showCpiMacroLine ? 1 : 0 }, silent: !showCpiMacroLine },
+                        ],
+                    },
+                    { lazyUpdate: false, silent: true }
+                );
+                if (useRibbonCanvas) scheduleRibbonRedraw();
+            }
+            rbaMacroBtn.addEventListener('click', function () {
+                showRbaMacroLine = !showRbaMacroLine;
+                container._ribbonMacroRba = showRbaMacroLine;
+                syncMacroBtnStyle(rbaMacroBtn, showRbaMacroLine);
+                applyRibbonMacroDisplay();
+            });
+            cpiMacroBtn.addEventListener('click', function () {
+                showCpiMacroLine = !showCpiMacroLine;
+                container._ribbonMacroCpi = showCpiMacroLine;
+                syncMacroBtnStyle(cpiMacroBtn, showCpiMacroLine);
+                applyRibbonMacroDisplay();
+            });
+            syncMacroBtnStyle(rbaMacroBtn, showRbaMacroLine);
+            syncMacroBtnStyle(cpiMacroBtn, showCpiMacroLine);
+            if (showRbaMacroLine || showCpiMacroLine) applyRibbonMacroDisplay();
+            var macroLab = document.createElement('span');
+            macroLab.style.cssText = 'opacity:0.75;margin-right:2px;';
+            macroLab.textContent = 'Macro';
+            macroRow.appendChild(macroLab);
+            macroRow.appendChild(rbaMacroBtn);
+            macroRow.appendChild(cpiMacroBtn);
+            wrapper.insertBefore(macroRow, mount);
+        }
 
         if (!isBandsMode) {
             var reportAxisPtrLogAt = 0;
@@ -1626,19 +1733,7 @@
                     updateProductVisibility();
                 }
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                var prevPh = ribbonChartHoverProductKey;
                 var pbMove = ribbonPanelBank();
-                if (pbMove && !selectedProductName && next && normRibbonBankName(next) === normRibbonBankName(pbMove)) {
-                    var pickH = useRibbonCanvas ? ribbonCanvasPickProduct(xy[0], xy[1]) : overlayPickProduct(xy[0], xy[1]);
-                    ribbonChartHoverProductKey = pickH && pickH.prod ? pickH.prod.key : '';
-                } else {
-                    ribbonChartHoverProductKey = '';
-                }
-                if (ribbonChartHoverProductKey !== prevPh) {
-                    updateProductVisibility();
-                    scheduleRibbonRedraw();
-                    syncInfoboxRowHighlight();
-                }
                 if (bankChanged) {
                     clientLog('info', 'Chart ribbon band hover', {
                         section: String(section || ''),
@@ -1647,28 +1742,8 @@
                         focusPanel: pbMove ? chartLogClip(pbMove, 48) : null,
                     });
                 }
-                if (ribbonChartHoverProductKey !== prevPh) {
-                    if (ribbonChartHoverProductKey) {
-                        var pp = chartLogProductParts(ribbonChartHoverProductKey);
-                        clientLog('info', 'Chart ribbon product line hover', {
-                            section: String(section || ''),
-                            bank: pp.bank || null,
-                            product: pp.product || null,
-                            date: dateStr || null,
-                            overlay: useRibbonCanvas ? 'canvas' : 'echarts',
-                        });
-                    } else if (prevPh) {
-                        clientLog('info', 'Chart ribbon product line hover clear', { section: String(section || '') });
-                    }
-                }
                 var dateChanged = !!dateStr && dateStr !== prevPointerDate;
-                if (
-                    dateChanged &&
-                    !bankChanged &&
-                    ribbonChartHoverProductKey === prevPh &&
-                    prevBandBank === next &&
-                    (next || pbMove)
-                ) {
+                if (dateChanged && !bankChanged && prevBandBank === next && (next || pbMove)) {
                     var tScr = Date.now();
                     if (tScr - lastRibbonScrubLogAt >= 450) {
                         lastRibbonScrubLogAt = tScr;
@@ -1679,60 +1754,12 @@
                         });
                     }
                 }
-                if (bankChanged || ribbonChartHoverProductKey !== prevPh) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
-                        body: JSON.stringify({
-                            sessionId: '12e0b4',
-                            hypothesisId: 'H3',
-                            location: 'ar-chart-report-plot-shared.js:onRibbonZrMouseMove',
-                            message: 'band or product hover delta',
-                            data: {
-                                prevBandBank: chartLogClip(prevBandBank, 32),
-                                nextBand: chartLogClip(next, 32),
-                                lastPointerDate: String(lastPointerDate || ''),
-                                ribbonTrayHoverBank: String(ribbonTrayHoverBank || ''),
-                                ribbonProductBank: String(ribbonProductBank || ''),
-                                ribbonChartHoverProductKey: String(ribbonChartHoverProductKey || ''),
-                                prevProductKey: String(prevPh || ''),
-                            },
-                            timestamp: Date.now(),
-                        }),
-                    }).catch(function () {});
-                    // #endregion
-                }
                 syncRibbonTrayUi();
                 refreshRibbonUnderChartPanel();
             }
             function onRibbonZrGlobalOut() {
-                // #region agent log
-                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
-                    body: JSON.stringify({
-                        sessionId: '12e0b4',
-                        hypothesisId: 'H1',
-                        location: 'ar-chart-report-plot-shared.js:onRibbonZrGlobalOut',
-                        message: 'globalout before state clear',
-                        data: {
-                            hoveredBank: String(hoveredBank || ''),
-                            ribbonTrayHoverBank: String(ribbonTrayHoverBank || ''),
-                            ribbonProductBank: String(ribbonProductBank || ''),
-                            lastPointerDate: String(lastPointerDate || ''),
-                            ribbonChartHoverProductKey: String(ribbonChartHoverProductKey || ''),
-                            lastPointerDateClearedOnGlobalout: false,
-                        },
-                        timestamp: Date.now(),
-                    }),
-                }).catch(function () {});
-                // #endregion
                 clientLog('info', 'Chart ribbon pointer leave chart', { section: String(section || '') });
                 hoveredBank = '';
-                // Preserve lastPointerDate on globalout: clearing here races chart→logo (globalout before
-                // tray pointerenter) and forced tray hover to default anchor to range end.
-                ribbonChartHoverProductKey = '';
                 syncRibbonTrayUi();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
@@ -1748,49 +1775,30 @@
                 var yVal = data[1];
                 var tapBank = pickBankFromRibbonBand(dateStr, yVal);
 
-                if (useRibbonCanvas && ribbonPanelBank() && tapBank && normRibbonBankName(tapBank) === normRibbonBankName(ribbonPanelBank())) {
-                    var pick = ribbonCanvasPickProduct(xy[0], xy[1]);
-                    if (pick) {
-                        ribbonChartHoverProductKey = '';
-                        if (selectedProductName === pick.prod.key) {
-                            selectedProductName = '';
-                            hideRibbonInfoBox();
-                            refreshRibbonUnderChartPanel();
-                            clientLog('info', 'Chart ribbon product line deselect', {
-                                section: String(section || ''),
-                                overlay: 'canvas',
-                            });
-                        } else {
-                            ribbonTrayHoverBank = '';
-                            ribbonProductBank = tapBank;
-                            selectedProductName = pick.prod.key;
-                            showRibbonInfoBox(pick);
-                            var psel = chartLogProductParts(pick.prod.key);
-                            clientLog('info', 'Chart ribbon product line select', {
-                                section: String(section || ''),
-                                bank: psel.bank,
-                                product: psel.product,
-                                date: dateStr || null,
-                                rate: Number.isFinite(pick.rate) ? Math.round(pick.rate * 100) / 100 : null,
-                                overlay: 'canvas',
-                            });
-                        }
+                if (tapBank) {
+                    if (
+                        ribbonProductBank &&
+                        normRibbonBankName(tapBank) === normRibbonBankName(ribbonProductBank)
+                    ) {
+                        ribbonProductBank = '';
+                        ribbonTrayHoverBank = '';
+                        hoveredBank = '';
+                        hideRibbonInfoBox();
                         applyRibbonBankHighlightState(ribbonChartHighlightBank());
                         updateProductVisibility();
+                        refreshRibbonUnderChartPanel();
                         scheduleRibbonRedraw();
-                        syncInfoboxRowHighlight();
                         syncRibbonTrayUi();
+                        clientLog('info', 'Chart ribbon bank pin clear (repeat click)', {
+                            section: String(section || ''),
+                            bank: chartLogClip(tapBank, 48),
+                        });
                         return;
                     }
-                }
-
-                if (tapBank) {
                     if (dateStr) lastPointerDate = dateStr;
                     ribbonTrayHoverBank = '';
                     ribbonProductBank = tapBank;
                     hoveredBank = tapBank;
-                    selectedProductName = '';
-                    ribbonChartHoverProductKey = '';
                     hideRibbonInfoBox();
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
@@ -1807,8 +1815,6 @@
 
                 ribbonProductBank = '';
                 ribbonTrayHoverBank = '';
-                selectedProductName = '';
-                ribbonChartHoverProductKey = '';
                 hideRibbonInfoBox();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
@@ -1827,18 +1833,39 @@
             ribbonChromeHandlers.onChipClick = function (fullName) {
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (!bn) return;
+                if (
+                    ribbonProductBank &&
+                    normRibbonBankName(bn) === normRibbonBankName(ribbonProductBank)
+                ) {
+                    ribbonTrayHoverBank = '';
+                    ribbonProductBank = '';
+                    hoveredBank = '';
+                    hideRibbonInfoBox();
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    updateProductVisibility();
+                    refreshRibbonUnderChartPanel();
+                    scheduleRibbonRedraw();
+                    syncRibbonTrayUi();
+                    clientLog('info', 'Chart lender tray chip deselect', {
+                        section: String(section || ''),
+                        bank: chartLogClip(bn, 48),
+                    });
+                    return;
+                }
                 ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;
                 hoveredBank = bn;
                 lastPointerDate = ribbonAnchorYmdOrLast();
-                selectedProductName = '';
-                ribbonChartHoverProductKey = '';
                 hideRibbonInfoBox();
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
                 refreshRibbonUnderChartPanel();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                window.requestAnimationFrame(function () {
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    if (useRibbonCanvas) scheduleRibbonRedraw();
+                });
                 clientLog('info', 'Chart lender tray chip click', {
                     section: String(section || ''),
                     bank: chartLogClip(bn, 48),
@@ -1847,29 +1874,8 @@
             };
 
             ribbonChromeHandlers.onChipPointerEnter = function (fullName) {
-                if (selectedProductName) return;
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (!bn) return;
-                // #region agent log
-                var _lpdBefore = String(lastPointerDate || '');
-                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
-                    body: JSON.stringify({
-                        sessionId: '12e0b4',
-                        hypothesisId: 'H1',
-                        location: 'ar-chart-report-plot-shared.js:onChipPointerEnter',
-                        message: 'tray enter',
-                        data: {
-                            bank: chartLogClip(bn, 32),
-                            lastPointerDateBefore: _lpdBefore,
-                            willDefaultDateToEnd: !_lpdBefore && dates.length > 0,
-                            rangeEnd: dates.length ? dates[dates.length - 1] : '',
-                        },
-                        timestamp: Date.now(),
-                    }),
-                }).catch(function () {});
-                // #endregion
                 hoveredBank = '';
                 ribbonTrayHoverBank = bn;
                 if (!lastPointerDate && dates.length) lastPointerDate = dates[dates.length - 1];
@@ -1878,34 +1884,18 @@
                 refreshRibbonUnderChartPanel();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
+                window.requestAnimationFrame(function () {
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    if (useRibbonCanvas) scheduleRibbonRedraw();
+                });
                 clientLog('info', 'Chart lender tray logo hover', {
                     section: String(section || ''),
                     bank: chartLogClip(bn, 48),
                 });
             };
             ribbonChromeHandlers.onChipPointerLeave = function (fullName) {
-                if (selectedProductName) return;
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (normRibbonBankName(ribbonTrayHoverBank) !== normRibbonBankName(bn)) return;
-                // #region agent log
-                fetch('http://127.0.0.1:7380/ingest/df577db5-7ea2-489d-bc70-cbe35041c6be', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '12e0b4' },
-                    body: JSON.stringify({
-                        sessionId: '12e0b4',
-                        hypothesisId: 'H2',
-                        location: 'ar-chart-report-plot-shared.js:onChipPointerLeave',
-                        message: 'tray leave',
-                        data: {
-                            bank: chartLogClip(bn, 32),
-                            lastPointerDate: String(lastPointerDate || ''),
-                            hoveredBank: String(hoveredBank || ''),
-                            ribbonProductBank: String(ribbonProductBank || ''),
-                        },
-                        timestamp: Date.now(),
-                    }),
-                }).catch(function () {});
-                // #endregion
                 ribbonTrayHoverBank = '';
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
@@ -1932,8 +1922,10 @@
                     var keys = sid ? ribbonHoverScopeMap[sid] : null;
                     if (!keys || !keys.length) return;
                     ribbonListHoverKeys = keys.slice();
+                    ribbonListHoverPath = String(row.getAttribute('data-ribbon-tree-path') || '');
                     updateProductVisibility();
                     scheduleRibbonRedraw();
+                    syncInfoboxRowHighlight();
                     var rowIsLeaf = row.classList && row.classList.contains('ar-report-infobox-trow--leaf');
                     var preview = keys.length === 1 ? chartLogProductParts(keys[0]) : null;
                     clientLog('info', rowIsLeaf ? 'Chart infobox product row hover' : 'Chart infobox tier row hover', {
@@ -1949,16 +1941,20 @@
                     if (!ribbonListHoverKeys) return;
                     var n = ribbonListHoverKeys.length;
                     ribbonListHoverKeys = null;
+                    ribbonListHoverPath = '';
                     updateProductVisibility();
                     scheduleRibbonRedraw();
+                    syncInfoboxRowHighlight();
                     clientLog('info', 'Chart infobox row hover clear', { section: String(section || ''), keys: n });
                 };
                 ibEl.addEventListener('mouseover', ibEl._arRibbonListOver);
                 ibEl.addEventListener('mouseout', ibEl._arRibbonListOut);
                 ibEl._arOnClose = function () {
                     ribbonListHoverKeys = null;
+                    ribbonListHoverPath = '';
                     updateProductVisibility();
                     scheduleRibbonRedraw();
+                    syncInfoboxRowHighlight();
                 };
             })();
 
@@ -1968,69 +1964,6 @@
             zrRibbonSubs.push({ type: 'mousemove', fn: onRibbonZrMouseMove });
             zrRibbonSubs.push({ type: 'globalout', fn: onRibbonZrGlobalOut });
             zrRibbonSubs.push({ type: 'click', fn: onRibbonZrClick });
-
-            if (!useRibbonCanvas && productOverlay.length) {
-                chart.on('click', function (params) {
-                    var name = params.seriesName || '';
-                    if (name.indexOf('[P]') !== 0) return;
-                    var pbClk = ribbonPanelBank();
-                    if (!pbClk) return;
-                    var rest = name.slice(3);
-                    var pipe = rest.indexOf('|');
-                    var bn = pipe >= 0 ? rest.slice(0, pipe) : rest;
-                    if (normRibbonBankName(bn) !== normRibbonBankName(pbClk)) return;
-                    var pn = pipe >= 0 ? rest.slice(pipe + 1) : '';
-                    var rate = params.value && params.value[1] != null ? Number(params.value[1]) : null;
-                    var dateStr = params.value && params.value[0] != null ? String(params.value[0]).slice(0, 10) : '';
-                    ribbonChartHoverProductKey = '';
-                    if (selectedProductName === name) {
-                        selectedProductName = '';
-                        hideRibbonInfoBox();
-                        refreshRibbonUnderChartPanel();
-                        clientLog('info', 'Chart ribbon product line deselect', {
-                            section: String(section || ''),
-                            overlay: 'echarts',
-                        });
-                    } else {
-                        selectedProductName = name;
-                        ribbonTrayHoverBank = '';
-                        ribbonProductBank = bn;
-                        hoveredBank = bn;
-                        if (options.infoBox && typeof options.infoBox.show === 'function' && rate != null && Number.isFinite(rate)) {
-                            var baseHex = options.bankColor(bn, bankColorIndexForName(bn));
-                            options.infoBox.show({
-                                heading: fmtReportDateYmd(dateStr),
-                                meta: M.selectionMetaText ? M.selectionMetaText({
-                                    selectionYmd: dateStr,
-                                    rate: rate,
-                                    entries: [{ bankName: bn, productName: pn, rate: rate, color: baseHex, selectionKey: name, subtitle: '' }],
-                                }) : '',
-                                compact: true,
-                                items: [{
-                                    bankName: bn,
-                                    productName: pn,
-                                    rate: rate,
-                                    color: baseHex,
-                                    selectionKey: name,
-                                    subtitle: '',
-                                }],
-                            });
-                        }
-                        var pe = chartLogProductParts(name);
-                        clientLog('info', 'Chart ribbon product line select', {
-                            section: String(section || ''),
-                            bank: pe.bank,
-                            product: pe.product,
-                            date: dateStr || null,
-                            rate: Number.isFinite(rate) ? Math.round(rate * 100) / 100 : null,
-                            overlay: 'echarts',
-                        });
-                    }
-                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                    updateProductVisibility();
-                    syncInfoboxRowHighlight();
-                });
-            }
 
             chart.on('finished', function () {
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
