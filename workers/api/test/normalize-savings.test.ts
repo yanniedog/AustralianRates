@@ -93,6 +93,12 @@ describe('validateNormalizedSavingsRow', () => {
     expect(verdict.ok).toBe(true)
   })
 
+  it('accepts legitimate save product names from live AMP CDR catalogs', () => {
+    const row = loadRealSavingsFixture()
+    expect(validateNormalizedSavingsRow({ ...row, productName: 'AMP Bank GO Save' }).ok).toBe(true)
+    expect(validateNormalizedSavingsRow({ ...row, productName: 'AMP Bank GO Business Save' }).ok).toBe(true)
+  })
+
   it('rejects savings rows below the minimum confidence for the quality flag', () => {
     const row = loadRealSavingsFixture()
     const verdict = validateNormalizedSavingsRow({ ...row, confidenceScore: 0.6 })

@@ -518,7 +518,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
     })
   }
 
-  if (finalizeDatasets.length === 0) {
+  if (totalAdditionalJobs === 0) {
     if (softFailNoSignals) {
       for (const dataset of selectedDatasets) {
         await finalizeLenderDatasetIfReady(env, {
