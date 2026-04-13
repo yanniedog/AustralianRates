@@ -22,6 +22,16 @@ function loadRealTdFixture(): NormalizedTdRow {
   return JSON.parse(readFileSync(path, 'utf8')) as NormalizedTdRow
 }
 
+function cdrDetailJson(productCategory: string, name: string, productId = 'test-product-id'): string {
+  return JSON.stringify({
+    data: {
+      productId,
+      name,
+      productCategory,
+    },
+  })
+}
+
 describe('validateNormalizedSavingsRow', () => {
   it('accepts a valid savings row from real-data fixture', () => {
     const verdict = validateNormalizedSavingsRow(loadRealSavingsFixture())
@@ -99,6 +109,16 @@ describe('validateNormalizedSavingsRow', () => {
     expect(validateNormalizedSavingsRow({ ...row, productName: 'AMP Bank GO Business Save' }).ok).toBe(true)
   })
 
+  it('accepts live CDR savings products whose names do not include savings keywords', () => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({
+      ...row,
+      productName: 'Westpac Choice',
+      cdrProductDetailJson: cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Westpac Choice'),
+    })
+    expect(verdict.ok).toBe(true)
+  })
+
   it('rejects savings rows below the minimum confidence for the quality flag', () => {
     const row = loadRealSavingsFixture()
     const verdict = validateNormalizedSavingsRow({ ...row, confidenceScore: 0.6 })
@@ -145,6 +165,16 @@ describe('validateNormalizedTdRow', () => {
     const verdict = validateNormalizedTdRow({ ...row, productName: 'Privacy disclaimer text' })
     expect(verdict.ok).toBe(false)
     expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
+  })
+
+  it('accepts live CDR term deposits whose names do not include term keywords', () => {
+    const row = loadRealTdFixture()
+    const verdict = validateNormalizedTdRow({
+      ...row,
+      productName: 'Business Investment Account',
+      cdrProductDetailJson: cdrDetailJson('TERM_DEPOSITS', 'Business Investment Account'),
+    })
+    expect(verdict.ok).toBe(true)
   })
 
   it('rejects TD rows below the minimum confidence for the quality flag', () => {

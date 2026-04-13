@@ -108,6 +108,39 @@ function isLikelyTdProductName(name: string): boolean {
   return tokens.some((x) => normalized.includes(x))
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function unwrapCdrDetailPayload(value: unknown): Record<string, unknown> | null {
+  if (!isRecord(value)) return null
+  if (isRecord(value.data)) return value.data
+  return value
+}
+
+function parseCdrProductCategory(json: string | null | undefined): string | null {
+  const text = String(json || '').trim()
+  if (!text) return null
+  try {
+    const parsed = JSON.parse(text) as unknown
+    const detail = unwrapCdrDetailPayload(parsed)
+    const category = String(detail?.productCategory ?? detail?.category ?? detail?.type ?? '').trim().toUpperCase()
+    return category || null
+  } catch {
+    return null
+  }
+}
+
+function hasExpectedCdrSavingsCategory(row: Pick<NormalizedSavingsRow, 'dataQualityFlag' | 'cdrProductDetailJson'>): boolean {
+  if (!lower(row.dataQualityFlag).startsWith('cdr_')) return false
+  return parseCdrProductCategory(row.cdrProductDetailJson) === 'TRANS_AND_SAVINGS_ACCOUNTS'
+}
+
+function hasExpectedCdrTdCategory(row: Pick<NormalizedTdRow, 'dataQualityFlag' | 'cdrProductDetailJson'>): boolean {
+  if (!lower(row.dataQualityFlag).startsWith('cdr_')) return false
+  return parseCdrProductCategory(row.cdrProductDetailJson) === 'TERM_DEPOSITS'
+}
+
 export function minConfidenceForFlag(flag: string): number {
   const normalized = lower(flag)
   if (normalized.startsWith('cdr_')) return 0.7
@@ -229,7 +262,7 @@ export function validateNormalizedSavingsRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isLikelySavingsProductName(row.productName)) {
+  if (!isLikelySavingsProductName(row.productName) && !hasExpectedCdrSavingsCategory(row)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
@@ -298,7 +331,7 @@ export function validateNormalizedTdRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isLikelyTdProductName(row.productName)) {
+  if (!isLikelyTdProductName(row.productName) && !hasExpectedCdrTdCategory(row)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
