@@ -237,11 +237,13 @@
 .terminal-filter-group,
 .terminal-more-filters {
     display: grid;
-    gap: 14px;
-    padding: 12px;
-    border: 1px solid var(--ar-line);
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--ar-line) 90%, transparent);
     border-radius: 14px;
-    background: color-mix(in srgb, var(--ar-surface-2) 84%, var(--ar-surface));
+    background: color-mix(in srgb, var(--ar-surface-2) 70%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
 }
 
 .terminal-filter-group-head {

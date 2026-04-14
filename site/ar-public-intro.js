@@ -28,38 +28,35 @@
 
     var SECTION_COPY = {
         'home-loans': sectionCopy({
-            sessionLabel: 'session::home-loans',
-            eyebrow: 'Official daily home loan rates',
-            title: 'Compare current home loan leaders.',
-            summary: 'Set your borrower scenario once, review the best current matches first, then use the chart and all-rates view for verification.',
+            eyebrow: 'Daily CDR data · major lenders',
+            title: 'Home loan rates, ranked.',
+            summary: '',
             liveCards: [
-                { id: 'updated', label: 'Updated', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
-                { id: 'leader', label: 'Lowest rate', value: 'SCANNING', note: 'The leading current product appears here once the slice is resolved.' },
-                { id: 'rows', label: 'Rows', value: 'SCANNING', note: 'All products in the current borrower slice.' }
+                { id: 'updated', label: 'Updated', value: '—', note: 'Latest collection date in the active slice.' },
+                { id: 'leader', label: 'Lowest rate', value: '—', note: 'Leading product in the current slice.' },
+                { id: 'rows', label: 'Products', value: '—', note: 'Total products in the current filter.' }
             ]
         }),
         savings: sectionCopy({
-            sessionLabel: 'session::savings',
-            eyebrow: 'Official daily savings rates',
-            title: 'Compare current savings leaders.',
-            summary: 'Set the account slice once, start with the strongest current yields, then verify bonus, base, and tier detail below.',
+            eyebrow: 'Daily CDR data · major lenders',
+            title: 'Savings rates, ranked.',
+            summary: '',
             liveCards: [
-                { id: 'updated', label: 'Updated', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
-                { id: 'leader', label: 'Top yield', value: 'SCANNING', note: 'The leading yield appears here once the slice is resolved.' },
-                { id: 'rows', label: 'Rows', value: 'SCANNING', note: 'All accounts in the current savings slice.' }
+                { id: 'updated', label: 'Updated', value: '—', note: 'Latest collection date in the active slice.' },
+                { id: 'leader', label: 'Top yield', value: '—', note: 'Leading yield in the current slice.' },
+                { id: 'rows', label: 'Products', value: '—', note: 'Total accounts in the current filter.' }
             ]
         }),
         'term-deposits': sectionCopy({
-            sessionLabel: 'session::term-deposits',
-            eyebrow: 'Official daily term deposit rates',
-            title: 'Compare term deposit yields by term.',
-            summary: 'Choose a term length first, review current leaders for that term, then open history and all-rates detail only when you need it.',
+            eyebrow: 'Daily CDR data · major lenders',
+            title: 'Term deposit yields, by term.',
+            summary: '',
             liveCards: [
-                { id: 'updated', label: 'Updated', value: 'SYNCING', note: 'Waiting for the newest collection date in the active slice.' },
-                { id: 'leader', label: 'Top yield', value: 'SCANNING', note: 'The leading term deposit appears here once the slice is resolved.' },
-                { id: 'rows', label: 'Rows', value: 'SCANNING', note: 'All products in the current term slice.' }
+                { id: 'updated', label: 'Updated', value: '—', note: 'Latest collection date in the active slice.' },
+                { id: 'leader', label: 'Top yield', value: '—', note: 'Leading product in the current slice.' },
+                { id: 'rows', label: 'Products', value: '—', note: 'Total products in the current filter.' }
             ],
-            quickPicksLabel: 'Popular terms',
+            quickPicksLabel: 'Term',
             quickPicks: [
                 { value: '3', label: '3m' },
                 { value: '6', label: '6m' },
@@ -118,14 +115,12 @@
     intro.innerHTML = ''
         + '<div class="market-intro-head">'
         + '  <div class="market-intro-copy">'
-        + '    <div class="market-intro-topline"><span class="market-intro-session-label">' + esc(copy.sessionLabel) + '</span><span class="market-intro-session-status">' + esc(copy.sessionStatus) + '</span></div>'
         + '    <p class="eyebrow">' + esc(copy.eyebrow) + '</p>'
         + '    <h1 class="market-intro-title">' + esc(copy.title) + '</h1>'
-        + '    <p class="market-intro-summary">' + esc(copy.summary) + '</p>'
         + '  </div>'
         + '  <div class="market-intro-actions">'
-        + '    ' + buttonLink(copy.primaryHref || '#compare-leaders', copy.primaryAction || 'Compare current leaders', 'primary')
-        + '    ' + buttonLink(copy.secondaryHref || '#compare-start', copy.secondaryAction || 'Adjust scenario', 'ghost')
+        + '    ' + buttonLink(copy.primaryHref || '#compare-leaders', copy.primaryAction || 'Compare leaders', 'primary')
+        + '    ' + buttonLink(copy.secondaryHref || '#compare-start', copy.secondaryAction || 'Adjust filters', 'ghost')
         + '  </div>'
         + '</div>'
         + '<div class="market-intro-body">'

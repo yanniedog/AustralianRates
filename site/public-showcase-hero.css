@@ -1,18 +1,21 @@
 body.ar-public .market-intro {
     display: grid;
-    gap: 10px;
-    margin-bottom: 14px;
-    padding: 14px 16px;
-    border: 1px solid var(--ar-line);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--ar-surface) 96%, var(--ar-surface-2));
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 80%, transparent);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--ar-surface) 82%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 5%, transparent);
 }
 
 body.ar-public .market-intro-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 14px;
-    align-items: end;
+    gap: 12px;
+    align-items: center;
 }
 
 body.ar-public .market-intro-copy {
@@ -30,34 +33,21 @@ body.ar-public .market-intro-nav {
 }
 
 body.ar-public .market-intro-session-label,
-body.ar-public .market-intro-session-status {
-    min-height: 28px;
-    padding: 0 10px;
-    border: 1px solid var(--ar-line);
-    border-radius: 999px;
-    background: var(--ar-surface-2);
-    color: var(--ar-text-muted);
-    font-family: var(--ar-font-mono);
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+body.ar-public .market-intro-session-status,
+body.ar-public .market-intro-topline {
+    display: none;
 }
 
 body.ar-public .market-intro-title {
     margin: 0;
-    max-width: 18ch;
-    font-size: clamp(1.4rem, 2.8vw, 1.95rem);
-    line-height: 1.06;
+    max-width: 24ch;
+    font-size: clamp(1.2rem, 2.4vw, 1.65rem);
+    line-height: 1.08;
     letter-spacing: -0.03em;
 }
 
 body.ar-public .market-intro-summary {
-    margin: 0;
-    max-width: 58ch;
-    color: var(--ar-text-soft);
-    font-size: 0.88rem;
-    line-height: 1.45;
+    display: none;
 }
 
 body.ar-public .market-intro-body {
@@ -76,12 +66,14 @@ body.ar-public .market-intro-live-grid {
 body.ar-public .market-intro-live-card {
     display: inline-flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
-    padding: 7px 10px;
-    border: 1px solid var(--ar-line);
+    padding: 5px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 70%, transparent);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--ar-surface-2) 84%, transparent);
+    background: color-mix(in srgb, var(--ar-surface-2) 60%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
 }
 
 body.ar-public .market-intro-live-label {
@@ -101,14 +93,17 @@ body.ar-public .market-intro-live-note {
 }
 
 body.ar-public .market-intro-nav-link {
-    min-height: 36px;
+    min-height: 34px;
     padding-inline: 12px;
     border-radius: 999px;
+    font-size: 0.8rem;
 }
 
 body.ar-public .market-intro-nav-link.is-active {
-    border-color: color-mix(in srgb, var(--ar-accent) 38%, transparent);
-    background: var(--ar-accent-soft);
+    border-color: color-mix(in srgb, var(--ar-accent) 44%, transparent);
+    background: color-mix(in srgb, var(--ar-accent-soft) 90%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
 }
 
 body.ar-public .market-intro-steps {
@@ -147,11 +142,17 @@ body.ar-public .market-intro-quick-pick.is-active {
 
 body.ar-public .market-intro-step {
     display: grid;
-    gap: 4px;
-    padding: 8px 10px;
-    border: 1px solid var(--ar-line);
+    gap: 2px;
+    padding: 7px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line) 80%, transparent);
     border-radius: 10px;
-    background: var(--ar-surface-2);
+    background: color-mix(in srgb, var(--ar-surface-2) 60%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+body.ar-public .market-intro-step p {
+    display: none;
 }
 
 body.ar-public .market-intro-step-index {
