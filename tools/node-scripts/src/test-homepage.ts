@@ -332,15 +332,15 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
             summary: !!document.getElementById('chart-summary'),
             ladder: !!document.getElementById('quick-compare-cards'),
             refresh: !!document.getElementById('refresh-page-btn'),
-            openFilters: Array.from(document.querySelectorAll('button,a')).some((el) => String(el.textContent || '').trim() === 'Open filters'),
-            seeChart: Array.from(document.querySelectorAll('button,a')).some((el) => String(el.textContent || '').trim() === 'See chart'),
+            compareCurrentLeaders: Array.from(document.querySelectorAll('button,a')).some((el) => String(el.textContent || '').trim() === 'Compare current leaders'),
+            adjustScenario: Array.from(document.querySelectorAll('button,a')).some((el) => String(el.textContent || '').trim() === 'Adjust scenario'),
         },
     }));
 
     if (shell.marketTerminal) pass(results, `${label}: market workspace renders`);
     else fail(results, `${label}: market workspace missing`);
 
-    if (!shell.hasObjectStringLeak && ((shell.introSteps.join(',') === '01,02,03') || (shell.controls.openFilters && shell.controls.seeChart))) {
+    if (!shell.hasObjectStringLeak && ((shell.introSteps.join(',') === '01,02,03') || (shell.controls.compareCurrentLeaders && shell.controls.adjustScenario))) {
         pass(results, `${label}: hero workspace affordances render without object-string leakage`);
     } else {
         fail(results, `${label}: hero workspace affordances are malformed (${shell.introSteps.join(', ') || 'missing'})`);
@@ -368,7 +368,7 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         }
     }
 
-    const expectedTabs = ['Chart', 'Table', 'Pivot'];
+    const expectedTabs = ['Compare', 'All rates', 'Advanced'];
     const actualTabs = shell.tabs.map((tab) => tab.label);
     if (expectedTabs.every((tab) => actualTabs.includes(tab)) && shell.tabs.every((tab) => tab.hasIcon)) {
         pass(results, `${label}: workspace tabs render with icon labels`);
