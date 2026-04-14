@@ -21,9 +21,9 @@ body.ar-public .filter-pad-btn {
     position: relative;
     width: auto;
     min-width: 0;
-    padding: 4px 9px;
+    padding: 4px 10px;
     border: 1px solid color-mix(in srgb, var(--ar-line-strong) 55%, transparent);
-    border-radius: 3px;
+    border-radius: 8px;
     background: color-mix(in srgb, var(--ar-surface-2) 50%, transparent);
     box-shadow: none;
     transition:
@@ -88,7 +88,7 @@ body.ar-public .filter-pad-empty {
     font-size: 0.74rem;
 }
 
-/* Bank option cards retain the original square pad style */
+/* Bank option cards — rounded, glass style */
 body.ar-public button.bank-option-card {
     position: relative;
     display: grid;
@@ -96,58 +96,39 @@ body.ar-public button.bank-option-card {
     justify-content: stretch;
     width: 100%;
     min-width: 0;
-    min-height: 104px;
-    padding: 18px 10px 10px;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
-    border-radius: 0;
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 98%, transparent), color-mix(in srgb, var(--ar-surface-3) 92%, transparent)) !important;
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 7%, transparent),
-        inset 0 0 0 1px color-mix(in srgb, var(--ar-showcase-ink) 22%, transparent);
+    min-height: 86px;
+    padding: 10px 10px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--ar-surface-2) 72%, transparent) !important;
+    box-shadow: none;
     transition:
         transform var(--ar-motion-fast) var(--ar-ease),
         border-color var(--ar-motion-fast) var(--ar-ease),
-        background-color var(--ar-motion-fast) var(--ar-ease),
+        background var(--ar-motion-fast) var(--ar-ease),
         box-shadow var(--ar-motion-fast) var(--ar-ease);
-}
-
-body.ar-public button.bank-option-card::before {
-    content: "";
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    width: 16px;
-    height: 4px;
-    background: color-mix(in srgb, var(--ar-line-strong) 92%, transparent);
-    transition: background-color var(--ar-motion-fast) var(--ar-ease);
 }
 
 body.ar-public button.bank-option-card:hover {
     transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--ar-showcase-spark) 38%, var(--ar-line-strong));
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-3) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 90%, transparent)) !important;
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 42%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-surface-3) 82%, transparent) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 body.ar-public button.bank-option-card.is-selected {
-    border-color: color-mix(in srgb, var(--ar-showcase-spark) 74%, white 4%);
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-spark) 18%, var(--ar-surface-2)), color-mix(in srgb, var(--ar-showcase-spark) 28%, var(--ar-surface-3))) !important;
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 68%, transparent);
+    background: color-mix(in srgb, var(--ar-showcase-spark) 16%, var(--ar-surface-2)) !important;
     box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 28%, transparent),
-        0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 16%, transparent);
-}
-
-body.ar-public button.bank-option-card.is-selected::before {
-    background: var(--ar-showcase-spark);
+        0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 20%, transparent),
+        0 4px 14px color-mix(in srgb, var(--ar-showcase-spark) 14%, transparent);
 }
 
 body.ar-public .bank-picker-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-    gap: 8px;
-    max-height: 344px;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    max-height: 320px;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -162,7 +143,7 @@ body.ar-public .bank-option-card .bank-badge {
 body.ar-public .bank-option-card .bank-badge-logo-wrap {
     width: 24px;
     height: 24px;
-    border-radius: 0;
+    border-radius: 8px;
 }
 
 body.ar-public .bank-option-card .bank-badge-copy {

@@ -14,24 +14,24 @@ body.ar-legal {
 
 :root[data-theme="dark"] body.ar-public,
 :root[data-theme="dark"] body.ar-legal {
-    --ar-bg: #060b12;
-    --ar-bg-elevated: #0b131d;
-    --ar-surface: rgba(10, 18, 28, 0.94);
-    --ar-surface-2: rgba(13, 22, 33, 0.96);
-    --ar-surface-3: rgba(16, 27, 40, 0.98);
-    --ar-surface-soft: rgba(5, 10, 16, 0.9);
-    --ar-text: #e9f4ff;
-    --ar-text-soft: #b3c8dc;
-    --ar-text-muted: #70859a;
-    --ar-line: rgba(202, 221, 240, 0.12);
-    --ar-line-strong: rgba(202, 221, 240, 0.21);
+    --ar-bg: #050910;
+    --ar-bg-elevated: #09111a;
+    --ar-surface: rgba(9, 16, 25, 0.82);
+    --ar-surface-2: rgba(12, 20, 31, 0.86);
+    --ar-surface-3: rgba(15, 24, 36, 0.90);
+    --ar-surface-soft: rgba(4, 8, 14, 0.78);
+    --ar-text: #ecf5ff;
+    --ar-text-soft: #b8ccde;
+    --ar-text-muted: #6e8499;
+    --ar-line: rgba(200, 220, 240, 0.10);
+    --ar-line-strong: rgba(200, 220, 240, 0.18);
     --ar-accent: #66f6cf;
     --ar-accent-hover: #3fddb6;
     --ar-accent-2: #f1b55d;
-    --ar-accent-soft: rgba(102, 246, 207, 0.12);
-    --ar-overlay: rgba(2, 5, 9, 0.76);
-    --ar-shadow: 0 24px 56px rgba(0, 0, 0, 0.32);
-    --ar-shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.18);
+    --ar-accent-soft: rgba(102, 246, 207, 0.11);
+    --ar-overlay: rgba(2, 4, 8, 0.80);
+    --ar-shadow: 0 28px 64px rgba(0, 0, 0, 0.44);
+    --ar-shadow-soft: 0 8px 28px rgba(0, 0, 0, 0.28);
 }
 
 :root[data-theme="light"] body.ar-public,
@@ -97,31 +97,36 @@ body.ar-legal::before {
 body.ar-public .bg-layer,
 body.ar-legal .bg-layer {
     background:
-        radial-gradient(ellipse 62% 38% at 16% 0, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 60%),
-        radial-gradient(ellipse 50% 32% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 62%, transparent), transparent 58%),
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 58%, #0a121b) 0%, #0a121b 54%, #060b12 100%);
+        radial-gradient(ellipse 72% 44% at 12% 0, color-mix(in srgb, var(--ar-accent) 14%, transparent), transparent 62%),
+        radial-gradient(ellipse 58% 36% at 88% 6%, color-mix(in srgb, var(--ar-showcase-glow) 72%, transparent), transparent 60%),
+        radial-gradient(ellipse 40% 28% at 50% 52%, color-mix(in srgb, var(--ar-showcase-spark) 6%, transparent), transparent 68%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-showcase-ink) 64%, #070d15) 0%, #070d15 48%, #04080f 100%);
 }
 
 :root[data-theme="light"] body.ar-public .bg-layer,
 :root[data-theme="light"] body.ar-legal .bg-layer {
     background:
-        radial-gradient(ellipse 62% 40% at 16% 0, color-mix(in srgb, var(--ar-accent) 12%, transparent), transparent 58%),
-        radial-gradient(ellipse 50% 36% at 84% 8%, color-mix(in srgb, var(--ar-showcase-glow) 80%, transparent), transparent 56%),
-        radial-gradient(ellipse 42% 22% at 50% 100%, color-mix(in srgb, var(--ar-showcase-spark) 10%, transparent), transparent 72%),
-        linear-gradient(180deg, color-mix(in srgb, var(--ar-bg) 98%, var(--ar-surface-soft)) 0%, var(--ar-bg-elevated) 54%, var(--ar-bg) 100%);
+        radial-gradient(ellipse 68% 44% at 14% 0, color-mix(in srgb, var(--ar-accent) 15%, transparent), transparent 60%),
+        radial-gradient(ellipse 54% 38% at 86% 6%, color-mix(in srgb, var(--ar-showcase-glow) 90%, transparent), transparent 58%),
+        radial-gradient(ellipse 46% 26% at 50% 100%, color-mix(in srgb, var(--ar-showcase-spark) 12%, transparent), transparent 74%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-bg) 96%, var(--ar-surface-soft)) 0%, var(--ar-bg-elevated) 52%, var(--ar-bg) 100%);
 }
 
 body.ar-public .site-header,
 body.ar-legal .site-header {
-    top: 12px;
+    top: 10px;
     z-index: 120;
-    width: min(var(--ar-shell-max), calc(100vw - 28px));
-    margin: 8px auto 0;
-    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
+    width: min(var(--ar-shell-max), calc(100vw - 24px));
+    margin: 6px auto 0;
+    border: 1px solid color-mix(in srgb, var(--ar-line-strong) 72%, transparent);
     border-radius: 18px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 96%, transparent), color-mix(in srgb, var(--ar-surface-2) 94%, transparent));
+    background: color-mix(in srgb, var(--ar-surface) 78%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    backdrop-filter: blur(24px) saturate(1.5);
     will-change: transform;
-    box-shadow: var(--ar-shadow-soft);
+    box-shadow:
+        var(--ar-shadow-soft),
+        inset 0 1px 0 color-mix(in srgb, var(--ar-text) 6%, transparent);
 }
 
 body.ar-public .site-header-inner,
@@ -195,16 +200,18 @@ body.ar-public .shell-public,
 body.ar-legal .shell {
     position: relative;
     z-index: 1;
-    padding-top: 40px;
-    padding-bottom: 60px;
+    padding-top: 24px;
+    padding-bottom: 48px;
 }
 
 body.ar-public .panel,
 body.ar-legal .panel {
     border-radius: 22px;
-    border-color: color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface) 98%, transparent), color-mix(in srgb, var(--ar-surface-2) 96%, transparent));
-    box-shadow: var(--ar-shadow-soft);
+    border-color: color-mix(in srgb, var(--ar-line-strong) 80%, transparent);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--ar-surface) 92%, transparent), color-mix(in srgb, var(--ar-surface-2) 88%, transparent));
+    box-shadow: var(--ar-shadow-soft), inset 0 1px 0 color-mix(in srgb, var(--ar-text) 5%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    backdrop-filter: blur(16px) saturate(1.4);
 }
 
 body.ar-public .site-footer,
