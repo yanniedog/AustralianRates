@@ -230,8 +230,8 @@
         if (pivot && pivot.invalidatePivot) {
             pivot.invalidatePivot({
                 message: tabState.activeTab === 'pivot'
-                    ? 'Pivot stale. Press Refresh pivot to reload.'
-                    : 'Pivot grid queued until you open the Pivot tab.',
+                    ? 'Advanced analysis is stale. Press Refresh analysis to reload.'
+                    : 'Advanced analysis is queued until you open the Advanced tab.',
             });
         } else if (tabState.pivotLoaded && els.pivotStatus) {
             els.pivotStatus.textContent = 'STALE';
@@ -334,14 +334,14 @@
             if (pivot && pivot.ensurePivotLoaded) {
                 pivot.ensurePivotLoaded({
                     reason: 'manual-refresh',
-                    statusMessage: 'Loading default pivot grid...',
-                    statusPrefix: 'Loading default pivot grid... ',
+                    statusMessage: 'Loading advanced analysis...',
+                    statusPrefix: 'Loading advanced analysis... ',
                 });
             } else if (pivot && pivot.loadPivotData) {
                 pivot.loadPivotData({
                     reason: 'manual-refresh',
-                    statusMessage: 'Loading default pivot grid...',
-                    statusPrefix: 'Loading default pivot grid... ',
+                    statusMessage: 'Loading advanced analysis...',
+                    statusPrefix: 'Loading advanced analysis... ',
                 });
             }
         });
@@ -351,16 +351,16 @@
             if (pivot && pivot.invalidatePivot) {
                 pivot.invalidatePivot({
                     message: tabState.activeTab === 'pivot'
-                        ? 'Pivot stale. Press Refresh pivot to reload.'
-                        : 'Pivot grid queued until you open the Pivot tab.',
+                        ? 'Advanced analysis is stale. Press Refresh analysis to reload.'
+                        : 'Advanced analysis is queued until you open the Advanced tab.',
                 });
             }
             if (tabState.activeTab === 'pivot' && pivot && pivot.loadPivotData) {
                 pivot.loadPivotData({
                     force: true,
                     reason: 'representation-change',
-                    statusMessage: 'Refreshing default pivot grid...',
-                    statusPrefix: 'Refreshing default pivot grid... ',
+                    statusMessage: 'Refreshing advanced analysis...',
+                    statusPrefix: 'Refreshing advanced analysis... ',
                 });
             }
         });

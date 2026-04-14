@@ -507,6 +507,10 @@ button.bank-option-card.is-selected .bank-badge-sub {
     gap: 10px;
 }
 
+.quick-compare-cards {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 .ladder-card,
 .exec-card {
     display: grid;
@@ -514,7 +518,8 @@ button.bank-option-card.is-selected .bank-badge-sub {
     padding: 12px;
     border: 1px solid var(--ar-line);
     border-radius: 12px;
-    background: var(--ar-surface-2);
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface) 92%, transparent));
 }
 
 .ladder-card-top,
@@ -527,7 +532,7 @@ button.bank-option-card.is-selected .bank-badge-sub {
 
 .ladder-rate {
     color: var(--ar-accent-2);
-    font-size: 1rem;
+    font-size: 1.08rem;
 }
 
 .ladder-bank,

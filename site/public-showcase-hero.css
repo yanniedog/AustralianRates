@@ -68,7 +68,7 @@ body.ar-public .market-intro-body {
 
 body.ar-public .market-intro-live-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
 }
 
@@ -88,7 +88,7 @@ body.ar-public .market-intro-live-label {
 }
 
 body.ar-public .market-intro-live-card strong {
-    font-size: 0.94rem;
+    font-size: 1rem;
     font-weight: 700;
 }
 
@@ -113,6 +113,32 @@ body.ar-public .market-intro-steps {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+}
+
+body.ar-public .market-intro-quick-picks {
+    display: grid;
+    gap: 8px;
+}
+
+body.ar-public .market-intro-quick-picks-label {
+    color: var(--ar-text-muted);
+    font-family: var(--ar-font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+body.ar-public .market-intro-quick-picks-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+body.ar-public .market-intro-quick-pick.is-active {
+    border-color: color-mix(in srgb, var(--ar-showcase-spark) 42%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-showcase-spark) 16%, var(--ar-accent-soft));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ar-showcase-spark) 24%, transparent);
 }
 
 body.ar-public .market-intro-step {
@@ -159,6 +185,10 @@ body.ar-public .market-intro-step p {
     }
 
     body.ar-public .market-intro-steps {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-public .market-intro-live-grid {
         grid-template-columns: 1fr;
     }
 }

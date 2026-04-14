@@ -141,9 +141,9 @@
     }
 
     var WORKSPACE_TABS = [
-        { id: 'chart', label: 'Chart', icon: 'chart', help: 'Interactive chart view.' },
-        { id: 'explorer', label: 'Table', icon: 'table', help: 'Live rates table.' },
-        { id: 'pivot', label: 'Pivot', icon: 'pivot', help: 'Pivot workspace for the active slice.' }
+        { id: 'chart', label: 'Compare', icon: 'chart', help: 'Summary-first comparison with current leaders and chart context.' },
+        { id: 'explorer', label: 'All rates', icon: 'table', help: 'Full live rates table for the current slice.' },
+        { id: 'pivot', label: 'Advanced', icon: 'pivot', help: 'Pivot workspace and deeper analysis for the active slice.' }
     ];
 
     var SHARED_ADVANCED_FIELDS = [
@@ -196,6 +196,21 @@
         'home-loans': {
             title: 'Home Loans',
             ladderTitle: 'Leading rates',
+            starterTitle: 'Set your borrower scenario',
+            starterSummary: 'Choose the main borrower settings here, then review current leaders before drilling into the full table.',
+            starterNote: 'More filters adds banks, date ranges, limits, and workspace controls without changing the active slice.',
+            compareHeading: 'Current home loan leaders',
+            compareSummary: 'Best current matches for the active borrower slice. Use these cards first, then inspect the chart for movement and the full table for verification.',
+            compareExplainer: 'Compare view keeps the scenario fixed while showing current leaders, recent history, and spotlight detail for the same slice.',
+            tableHeading: 'All matching home loan rates',
+            tableSummary: 'Every matching product in the active slice, with recent changes below.',
+            advancedHeading: 'Advanced home loan analysis',
+            advancedSummary: 'Use the pivot grid when you need to slice the current borrower scenario by lender, structure, LVR, or other attributes.',
+            advancedExamples: [
+                'Who leads within each LVR band?',
+                'How do variable and fixed products differ for this slice?',
+                'Which lenders keep appearing across the same scenario?'
+            ],
             statSecondaryLabel: 'Cash rate',
             statSecondaryIcon: 'stats',
             statSecondaryValue: '...',
@@ -246,6 +261,21 @@
         'savings': {
             title: 'Savings',
             ladderTitle: 'Yield leaders',
+            starterTitle: 'Set your savings scenario',
+            starterSummary: 'Choose the account rules here, then start with the current yield leaders before opening the full table.',
+            starterNote: 'More filters adds banks, dates, limits, and workspace controls without changing the active savings slice.',
+            compareHeading: 'Current savings leaders',
+            compareSummary: 'Strongest current yields for the active account slice. Use these cards first, then inspect history and conditions below.',
+            compareExplainer: 'Compare view is for current leaders plus movement. Use All rates to verify base, bonus, intro, and tier detail.',
+            tableHeading: 'All matching savings rates',
+            tableSummary: 'Every matching account in the active slice, with recent changes and table settings below.',
+            advancedHeading: 'Advanced savings analysis',
+            advancedSummary: 'Use the pivot grid when you need to break the current slice down by bank, rate type, account type, or tier.',
+            advancedExamples: [
+                'Which banks lead by rate type?',
+                'How does the active slice differ by deposit tier?',
+                'Which account types stay competitive over time?'
+            ],
             statSecondaryLabel: 'Series continuity',
             statSecondaryIcon: 'continuity',
             statSecondaryValue: '...',
@@ -288,6 +318,21 @@
         'term-deposits': {
             title: 'Term Deposits',
             ladderTitle: 'Yield leaders',
+            starterTitle: 'Start with a term',
+            starterSummary: 'Choose term length, deposit tier, and interest payment first. Then compare current leaders before opening full historical analysis.',
+            starterNote: 'More filters adds banks, dates, limits, and workspace controls without changing the selected term slice.',
+            compareHeading: 'Current term-deposit leaders',
+            compareSummary: 'Best current yields for the selected term and payment mode. Start here, then use the chart and full table only when you need more depth.',
+            compareExplainer: 'Compare view is anchored to the selected term so you can judge current leaders, recent movement, and nearby products without losing the same slice.',
+            tableHeading: 'All matching term-deposit rates',
+            tableSummary: 'Every matching term-deposit product in the active slice, with recent changes and payment detail below.',
+            advancedHeading: 'Advanced term-deposit analysis',
+            advancedSummary: 'Use the pivot grid when you need to compare terms, payment modes, tiers, and institutions within the same selected slice.',
+            advancedExamples: [
+                'Who leads at each term length?',
+                'How much does payment frequency change the visible yield?',
+                'Which terms stay competitive across the same banks?'
+            ],
             statSecondaryLabel: 'Series continuity',
             statSecondaryIcon: 'continuity',
             statSecondaryValue: '...',
@@ -506,10 +551,18 @@
 
     function filterDrawerMarkup(ui) {
         var scenarioSection = section !== 'economic-data' ? (
-            '<div class="filters-drawer-section filters-scenarios">' +
-                '<div class="terminal-filter-group-head"><strong>Scenario</strong></div>' +
+            '<section class="compare-start-card" id="compare-start">' +
+                '<div class="compare-start-head">' +
+                    '<div class="compare-start-copy">' +
+                        '<p class="compare-start-kicker">Start here</p>' +
+                        '<h2 class="compare-start-title">' + esc(ui.starterTitle || 'Set your scenario') + '</h2>' +
+                        '<p class="compare-start-summary">' + esc(ui.starterSummary || 'Choose the primary scenario first, then review leaders before drilling deeper.') + '</p>' +
+                    '</div>' +
+                    '<a class="buttonish ghost compare-start-jump" href="#compare-leaders">View leaders</a>' +
+                '</div>' +
                 '<div class="filters-scenarios-grid">' + drawerScenarioMarkup(ui) + '</div>' +
-            '</div>'
+                '<p class="compare-start-note">' + esc(ui.starterNote || 'More filters adds banks, dates, and workspace controls without changing the active slice.') + '</p>' +
+            '</section>'
         ) : '';
 
         var extraAdvancedFields = (ui.advancedFields || []).filter(function (f) {
@@ -520,9 +573,10 @@
         });
 
         return '' +
+            scenarioSection +
             '<details class="filters-drawer" id="scenario">' +
                 '<summary class="filters-drawer-summary">' +
-                    iconText('filter', 'Filters', 'control-chip-label') +
+                    iconText('filter', 'Scenario and more filters', 'control-chip-label') +
                     '<span id="filter-dirty-indicator" class="filter-dirty-dot" hidden></span>' +
                 '</summary>' +
                 '<div class="filters-drawer-body">' +
@@ -538,7 +592,6 @@
                             '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
                         '</div>' +
                     '</div>' +
-                    scenarioSection +
                     '<details class="filters-more">' +
                         '<summary class="filters-more-summary">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
                         '<div class="filters-more-body">' +
@@ -685,6 +738,22 @@
                         // ── Chart tab panel ──────────────────────────────────────
                         '<section id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="tab-chart">',
                             '<div class="chart-block">',
+                                '<section class="compare-summary-panel" id="compare-leaders" aria-label="' + esc(ui.compareHeading || 'Current leaders') + '">',
+                                    '<div class="compare-summary-head">',
+                                        '<div class="compare-summary-copy">',
+                                            '<p class="compare-summary-kicker">Current leaders</p>',
+                                            '<h2>' + esc(ui.compareHeading || 'Current leaders') + '</h2>',
+                                            '<p>' + esc(ui.compareSummary || 'Best current matches for the active slice.') + '</p>',
+                                        '</div>',
+                                    '</div>',
+                                    '<div id="quick-compare-cards" class="quick-compare-cards"><p class="quick-empty">Loading leaders</p></div>',
+                                '</section>',
+                                '<section class="compare-explainer" aria-label="Compare view guide">',
+                                    '<div class="compare-explainer-copy">',
+                                        '<p class="compare-summary-kicker">Compare view</p>',
+                                        '<p>' + esc(ui.compareExplainer || 'Use Compare to keep the active scenario fixed while reviewing current leaders, chart history, and spotlight detail.') + '</p>',
+                                    '</div>',
+                                '</section>',
                                 '<div class="chart-figure">',
                                     '<div class="chart-toolbar">',
                                         '<div class="chart-toolbar-stack">',
@@ -712,7 +781,6 @@
                                         '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
                                         '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
                                         '<div id="chart-point-details" class="chart-point-details" aria-live="polite"></div>',
-                                        '<div id="quick-compare-cards" class="quick-compare-cards" hidden></div>',
                                     '</div>',
                                     '<div class="terminal-chart-controls">',
                                         '<label class="terminal-field" data-help="Metric shown on the Y axis." data-help-label="Y axis">',
@@ -766,16 +834,16 @@
                         '<section id="panel-explorer" class="tab-panel" role="tabpanel" aria-labelledby="tab-explorer" hidden>',
                             '<div class="terminal-data-head">',
                                 '<div>',
-                                    panelIcon('table', 'Table'),
-                                    '<h2 id="explorer-overview-title">Loading table</h2>',
+                                    panelIcon('table', 'All rates'),
+                                    '<h2 id="explorer-overview-title">' + esc(ui.tableHeading || 'Loading all rates') + '</h2>',
                                 '</div>',
                                 '<div class="terminal-data-actions">',
                                     '<span id="explorer-overview-status" class="pill">Loading</span>',
-                                    '<button id="table-settings-btn" class="icon-btn secondary" type="button" aria-label="Table settings" data-help="Column visibility, removed rows, and move-column mode." data-help-label="Table settings">' + iconOnly('settings', 'Table settings') + '</button>',
+                                    '<button id="table-settings-btn" class="icon-btn secondary" type="button" aria-label="All-rates settings" data-help="Column visibility, removed rows, and move-column mode." data-help-label="All-rates settings">' + iconOnly('settings', 'All-rates settings') + '</button>',
                                     '<div id="table-settings-popover" class="table-settings-popover" hidden></div>',
                                 '</div>',
                             '</div>',
-                            '<p id="explorer-overview-text" class="hint">Waiting for live rates</p>',
+                            '<p id="explorer-overview-text" class="hint">' + esc(ui.tableSummary || 'Waiting for the full live slice.') + '</p>',
                             '<div id="rate-table" class="terminal-rate-table"></div>',
                             // Inline 24h rate changes
                             '<section class="rate-change-inline-section" aria-label="Recent rate changes">',
@@ -791,13 +859,25 @@
                         // ── Pivot tab panel ──────────────────────────────────────
                         '<section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>',
                             '<div id="pivot" class="pivot-panel">',
+                                '<section class="advanced-intro-panel" aria-label="' + esc(ui.advancedHeading || 'Advanced analysis') + '">',
+                                    '<div class="advanced-intro-copy">',
+                                        '<p class="compare-summary-kicker">Advanced analysis</p>',
+                                        '<h2>' + esc(ui.advancedHeading || 'Advanced analysis') + '</h2>',
+                                        '<p>' + esc(ui.advancedSummary || 'Use the pivot grid to break the current slice into deeper cuts.') + '</p>',
+                                    '</div>',
+                                    '<div class="advanced-intro-pills">' +
+                                        (ui.advancedExamples || []).map(function (example) {
+                                            return '<span class="chart-summary-pill is-config">' + esc(example) + '</span>';
+                                        }).join('') +
+                                    '</div>',
+                                '</section>',
                                 '<div class="pivot-controls">',
-                                    '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="Pivot basis">',
-                                        iconText('history', 'Pivot basis', 'field-code'),
+                                    '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="Analysis basis">',
+                                        iconText('history', 'Analysis basis', 'field-code'),
                                         '<select id="pivot-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
                                     '</label>',
-                                    '<button id="load-pivot" type="button" class="secondary" data-help="Reload rows into the pivot workspace." data-help-label="Refresh pivot">' + iconText('refresh', 'Refresh pivot', 'control-chip-label') + '</button>',
-                                    '<span id="pivot-status" class="hint">Open Pivot or press Refresh pivot to load rows.</span>',
+                                    '<button id="load-pivot" type="button" class="secondary" data-help="Reload rows into the advanced workspace." data-help-label="Refresh analysis">' + iconText('refresh', 'Refresh analysis', 'control-chip-label') + '</button>',
+                                    '<span id="pivot-status" class="hint">Open Advanced or press Refresh analysis to load rows.</span>',
                                 '</div>',
                                 '<div id="pivot-output"></div>',
                             '</div>',

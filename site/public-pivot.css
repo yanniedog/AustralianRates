@@ -3,6 +3,10 @@
     gap: 12px;
 }
 
+.advanced-intro-panel {
+    margin-bottom: 2px;
+}
+
 .pivot-controls {
     display: flex;
     align-items: center;
