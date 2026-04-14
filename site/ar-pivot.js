@@ -134,7 +134,7 @@
         tabState.pivotFingerprint = '';
         tabState.pivotLoading = false;
         if (opts.clearOutput && els.pivotOutput) els.pivotOutput.innerHTML = '';
-        if (!opts.skipStatus) setPivotStatus(opts.message || 'Refreshing default pivot grid...');
+        if (!opts.skipStatus) setPivotStatus(opts.message || 'Refreshing advanced analysis...');
     }
 
     function fetchAllRateRows(baseParams, onProgress) {
@@ -205,10 +205,10 @@
         }
 
         var requestToken = ++pivotRequestToken;
-        var statusPrefix = opts.statusPrefix || 'Loading default pivot grid... ';
+        var statusPrefix = opts.statusPrefix || 'Loading advanced analysis... ';
         pivotLoadFingerprint = fingerprint;
         tabState.pivotLoading = true;
-        setPivotStatus(opts.statusMessage || 'Loading default pivot grid...');
+        setPivotStatus(opts.statusMessage || 'Loading advanced analysis...');
         clientLog('info', 'Pivot load started', {
             reason: opts.reason || 'manual',
             section: window.AR.section || 'home-loans',
@@ -242,7 +242,7 @@
             setPivotStatus(
                 'Loaded ' + data.length.toLocaleString() + ' rows.' +
                 (payload.fallbackReason ? ' Daily fallback applied.' : '') +
-                ' Drag fields to refine the default grid.'
+                ' Drag fields to refine the current analysis.'
             );
 
             clientLog('info', 'Pivot load completed', {
@@ -258,11 +258,11 @@
             return { rows: data.length };
         }).catch(function (err) {
             if (requestToken !== pivotRequestToken) return { superseded: true };
-            setPivotStatus('Error loading pivot data: ' + describeError(err, 'Pivot rows could not be loaded.'));
+            setPivotStatus('Error loading advanced analysis: ' + describeError(err, 'Analysis rows could not be loaded.'));
             tabState.pivotLoaded = false;
             tabState.pivotFingerprint = '';
             clientLog('error', 'Pivot load failed', {
-                message: describeError(err, 'Pivot rows could not be loaded.'),
+                message: describeError(err, 'Analysis rows could not be loaded.'),
                 reason: opts.reason || 'manual',
             });
             return { error: true };
@@ -288,8 +288,8 @@
             loadPivotData({
                 force: !!opts.force,
                 reason: opts.reason || 'preload',
-                statusMessage: opts.statusMessage || 'Preparing default pivot grid...',
-                statusPrefix: opts.statusPrefix || 'Preparing default pivot grid... ',
+                statusMessage: opts.statusMessage || 'Preparing advanced analysis...',
+                statusPrefix: opts.statusPrefix || 'Preparing advanced analysis... ',
             });
         }, opts.immediate ? 0 : (typeof opts.delay === 'number' ? opts.delay : 700));
 
@@ -303,8 +303,8 @@
         return loadPivotData({
             force: !!opts.force,
             reason: opts.reason || 'ensure-visible',
-            statusMessage: opts.statusMessage || 'Loading default pivot grid...',
-            statusPrefix: opts.statusPrefix || 'Loading default pivot grid... ',
+            statusMessage: opts.statusMessage || 'Loading advanced analysis...',
+            statusPrefix: opts.statusPrefix || 'Loading advanced analysis... ',
         });
     }
 

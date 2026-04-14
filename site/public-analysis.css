@@ -12,6 +12,32 @@
     max-width: 100%;
 }
 
+.compare-summary-panel,
+.compare-explainer,
+.advanced-intro-panel {
+    display: grid;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--ar-line);
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--ar-surface-2) 92%, transparent), color-mix(in srgb, var(--ar-surface) 94%, transparent)),
+        radial-gradient(circle at top right, color-mix(in srgb, var(--ar-accent) 8%, transparent), transparent 38%);
+}
+
+.compare-summary-head,
+.compare-summary-copy,
+.compare-explainer-copy,
+.advanced-intro-copy,
+.advanced-intro-pills {
+    display: grid;
+    gap: 8px;
+}
+
+.advanced-intro-pills {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
 #chart.terminal-panel {
     min-width: 0;
     max-width: 100%;

@@ -34,7 +34,7 @@
                     '<span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span>' +
                 '</span>';
         };
-    var QUICK_COMPARE_LIMIT = 20;
+    var QUICK_COMPARE_LIMIT = 8;
     var ladderRows = [];
     var publicIntro = window.AR.publicIntro || null;
     var heroStatsReady = false;
@@ -256,7 +256,7 @@
     function renderQuickCompareCards(rows) {
         if (!els.quickCompareCards) return;
         if (!rows.length) {
-            els.quickCompareCards.innerHTML = '<p class="quick-empty">No match</p>';
+            els.quickCompareCards.innerHTML = '<p class="quick-empty">No leaders match this slice.</p>';
             return;
         }
         els.quickCompareCards.innerHTML = rows.map(ladderCard).join('');
@@ -278,7 +278,7 @@
 
     async function loadQuickCompare() {
         if (!els.quickCompareCards || !apiBase) {
-            if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
+            if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
             return;
         }
         try {
@@ -309,7 +309,7 @@
             clientLog('error', 'Quick compare load failed', {
                 message: describeError(err, 'Leaders rail is temporarily unavailable.'),
             });
-            if (els.quickCompareCards) els.quickCompareCards.innerHTML = '<p class="quick-empty">Unavailable</p>';
+            if (els.quickCompareCards) els.quickCompareCards.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
         }
     }
 
