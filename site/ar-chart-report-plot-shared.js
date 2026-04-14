@@ -98,6 +98,113 @@
         return m[+p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0];
     }
 
+    function ribbonBankShortName(bankName) {
+        var shared = window.AR && window.AR.chartMacroLwcShared;
+        if (shared && typeof shared.bankAcronym === 'function') return shared.bankAcronym(bankName);
+        return String(bankName || '').trim();
+    }
+
+    function ribbonRangeText(lo, hi) {
+        if (lo == null && hi == null) return '';
+        if (lo != null && hi != null) {
+            return lo !== hi ? lo.toFixed(2) + '\u2013' + hi.toFixed(2) + '%' : lo.toFixed(2) + '%';
+        }
+        var one = lo != null ? lo : hi;
+        return one != null ? one.toFixed(2) + '%' : '';
+    }
+
+    function ribbonSpreadBpText(lo, hi) {
+        if (lo == null || hi == null || hi < lo) return '';
+        return Math.round((hi - lo) * 100) + 'bp spread';
+    }
+
+    function latestRibbonPointForSeries(series, viewStart, ctxMax) {
+        var latest = null;
+        (series && series.points || []).forEach(function (point) {
+            var date = String(point.date || '').slice(0, 10);
+            if (!date) return;
+            if (viewStart && date < viewStart) return;
+            if (ctxMax && date > ctxMax) return;
+            var lo = positiveRibbonRateOrNull(point.min_rate);
+            var hi = positiveRibbonRateOrNull(point.max_rate);
+            var mean = positiveRibbonRateOrNull(point.mean_rate);
+            var score = mean != null ? mean : (lo != null && hi != null ? (lo + hi) / 2 : (lo != null ? lo : hi));
+            if (score == null) return;
+            if (!latest || date > latest.date) {
+                latest = {
+                    date: date,
+                    lo: lo,
+                    hi: hi,
+                    mean: mean,
+                    score: score,
+                };
+            }
+        });
+        return latest;
+    }
+
+    function buildRibbonBankSummaryData(plotPayload, allSeries, viewStart, ctxMax) {
+        var summaries = {};
+        var productCountByBank = {};
+        var contenders = [];
+        var latestDate = '';
+        var cfg = window.AR && window.AR.chartConfig;
+        var direction = cfg && typeof cfg.rankDirection === 'function'
+            ? cfg.rankDirection('interest_rate')
+            : 'asc';
+
+        (allSeries || []).forEach(function (series) {
+            var bankName = String(series && series.bankName || '').trim();
+            if (!bankName) return;
+            productCountByBank[bankName] = (productCountByBank[bankName] || 0) + 1;
+        });
+
+        (plotPayload && plotPayload.series || []).forEach(function (series) {
+            var bankName = String(series && series.bank_name || '').trim();
+            if (!bankName) return;
+            var latest = latestRibbonPointForSeries(series, viewStart, ctxMax);
+            if (!latest) return;
+            latestDate = latestDate && latestDate > latest.date ? latestDate : latest.date;
+            var products = productCountByBank[bankName] || 0;
+            var rangeText = ribbonRangeText(latest.lo, latest.hi);
+            summaries[bankName] = {
+                date: latest.date,
+                lo: latest.lo,
+                hi: latest.hi,
+                mean: latest.mean,
+                score: latest.score,
+                rangeText: rangeText,
+                metric: rangeText || (latest.mean != null ? latest.mean.toFixed(2) + '%' : ''),
+                meta: [
+                    latest.mean != null ? '\u03bc ' + latest.mean.toFixed(2) + '%' : '',
+                    ribbonSpreadBpText(latest.lo, latest.hi),
+                    products ? products + ' products' : '',
+                ].filter(Boolean).join(' \u00b7 '),
+                short: ribbonBankShortName(bankName),
+            };
+        });
+
+        Object.keys(summaries).forEach(function (bankName) {
+            var summary = summaries[bankName];
+            if (!summary || summary.date !== latestDate) return;
+            contenders.push({
+                bankName: bankName,
+                score: summary.score,
+            });
+        });
+
+        contenders.sort(function (left, right) {
+            if (left.score === right.score) return String(left.bankName || '').localeCompare(String(right.bankName || ''));
+            return direction === 'desc' ? right.score - left.score : left.score - right.score;
+        });
+
+        return {
+            summaries: summaries,
+            spotlightBank: contenders.length ? contenders[0].bankName : '',
+            spotlightDate: latestDate,
+        };
+    }
+
     function getRibbonStyleResolved() {
         var ui = window.AR && window.AR.chartSiteUi;
         if (ui && typeof ui.getChartRibbonStyle === 'function') return ui.getChartRibbonStyle();
@@ -170,8 +277,8 @@
         return out;
     }
 
-    /** Spline-like edges (superficial Sankey-style); keep identical on stacked pair. */
-    var RIBBON_SANKEY_SMOOTH = 0.42;
+    /** Rate changes happen in steps; avoid smoothed interpolation that invents intermediate values. */
+    var RIBBON_STEP_MODE = 'end';
 
     function computeRibbonLodIndices(dateCount, maxCols) {
         if (!Number.isFinite(dateCount) || dateCount <= 1) return null;
@@ -366,7 +473,8 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                step: RIBBON_STEP_MODE,
+                smooth: false,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: flowEdge,
@@ -382,7 +490,8 @@
                 type: 'line',
                 yAxisIndex: 0,
                 stack: stackKey,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                step: RIBBON_STEP_MODE,
+                smooth: false,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: { color: color, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
@@ -395,7 +504,8 @@
                 name: series.bank_name + ' max',
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                step: RIBBON_STEP_MODE,
+                smooth: false,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: flowEdge,
@@ -409,14 +519,15 @@
                 name: series.bank_name + ' mean',
                 type: 'line',
                 yAxisIndex: 0,
-                smooth: RIBBON_SANKEY_SMOOTH,
+                step: RIBBON_STEP_MODE,
+                smooth: false,
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: {
                     color: color,
                     width: mw > 0 ? mw : 0.01,
                     opacity: mw > 0 ? mo : 0,
-                    type: [6, 4],
+                    type: 'solid',
                     cap: 'round',
                     join: 'round',
                 },
@@ -802,6 +913,18 @@
         var range = options.range;
         var section = options.section;
         var bankList = options.bankList || [];
+        var ribbonSummaryData = plotPayload && plotPayload.mode === 'bands'
+            ? buildRibbonBankSummaryData(plotPayload, options.allSeries || [], range.viewStart, range.ctxMax)
+            : { summaries: {}, spotlightBank: '', spotlightDate: '' };
+        bankList = bankList.map(function (bank) {
+            var summary = ribbonSummaryData.summaries[String(bank && bank.full || '').trim()] || null;
+            return {
+                full: bank && bank.full ? bank.full : '',
+                short: bank && bank.short ? bank.short : '',
+                metric: summary ? summary.metric : '',
+                meta: summary ? summary.meta : '',
+            };
+        });
         var clientLog = chartClientLog();
         var lastRibbonScrubLogAt = 0;
         var lastRibbonVisualSig = '';
@@ -872,6 +995,9 @@
         /** Ribbons + overlays use left % axis (index 0); grid also has yAxis 1 (e.g. moves count). */
         var ribbonAxisFinder = { gridIndex: 0, xAxisIndex: 0, yAxisIndex: 0 };
         var dates = buildDateRange(range.viewStart, range.ctxMax);
+        var chartWidth = mount.clientWidth || container.clientWidth || window.innerWidth || 0;
+        var showRibbonEdgeLabels = chartWidth >= 1080;
+        var reportGridRight = showRibbonEdgeLabels ? 144 : (chartWidth >= 760 ? 28 : 18);
         var prep = M.prepareRbaCpiForReport(options.rbaHistory, options.cpiData, range.viewStart, range.ctxMax);
         var rbaDaily = M.fillForwardDaily(prep.rbaData.points, 'date', 'rate', range.chartStart, range.ctxMax);
         var cpiDaily = M.fillForwardDaily(prep.cpiPoints, 'date', 'value', range.chartStart, range.ctxMax);
@@ -1011,9 +1137,10 @@
         }
 
         var hoveredBank = '';
+        var ribbonAutoSpotlightBank = ribbonSummaryData.spotlightBank || '';
         var ribbonProductBank = '';
         var ribbonTrayHoverBank = '';
-        var lastPointerDate = '';
+        var lastPointerDate = ribbonSummaryData.spotlightDate || '';
         var ribbonListHoverKeys = null;
         var ribbonHoverScopeMap = {};
         var ribbonHoverScopeSeq = 0;
@@ -1089,13 +1216,32 @@
             return raw;
         }
 
+        function ribbonSummaryForBank(bankName) {
+            return ribbonSummaryData && ribbonSummaryData.summaries
+                ? ribbonSummaryData.summaries[String(bankName || '').trim()] || null
+                : null;
+        }
+
+        function ribbonHoverSummaryText(bankName) {
+            var bank = String(bankName || '').trim();
+            if (!bank) return '';
+            var summary = ribbonSummaryForBank(bank);
+            if (!summary) return bank;
+            return [
+                bank,
+                summary.metric || '',
+                summary.mean != null ? '\u03bc ' + summary.mean.toFixed(2) + '%' : '',
+                ribbonSpreadBpText(summary.lo, summary.hi),
+            ].filter(Boolean).join(' \u00b7 ');
+        }
+
         function ribbonPanelBank() {
             return String(ribbonTrayHoverBank || ribbonProductBank || '').trim();
         }
 
-        /** Bank whose ribbons stay full-colour: tray hover or pinned chip only; chart mouseover never dims peers. */
+        /** Bank whose corridor is foregrounded: explicit panel focus, then chart hover, then the best current lender. */
         function ribbonChartHighlightBank() {
-            return ribbonPanelBank();
+            return String(ribbonPanelBank() || hoveredBank || ribbonAutoSpotlightBank || '').trim();
         }
 
         function ribbonLineFilterKeys() {
@@ -1169,18 +1315,12 @@
             }
             if (ribbonHoverLabelEl) {
                 var _hb = ribbonChartHighlightBank();
-                var _txt = _hb;
-                if (_hb && lastPointerDate) {
-                    var _bp = bandByDateByBank[_hb] && bandByDateByBank[_hb][lastPointerDate];
-                    if (_bp) {
-                        var _rlo = positiveRibbonRateOrNull(_bp.min_rate);
-                        var _rhi = positiveRibbonRateOrNull(_bp.max_rate);
-                        if (_rlo != null && _rhi != null) {
-                            _txt = _hb + ' \u00b7 ' + (_rlo !== _rhi
-                                ? _rlo.toFixed(2) + '\u2013' + _rhi.toFixed(2)
-                                : _rlo.toFixed(2)) + '%';
-                        }
-                    }
+                var _txt = ribbonHoverSummaryText(_hb);
+                var _autoOnly = !ribbonProductBank && !ribbonTrayHoverBank && !hoveredBank;
+                if (_autoOnly && _hb && normRibbonBankName(_hb) === normRibbonBankName(ribbonAutoSpotlightBank)) {
+                    _txt = _txt ? 'Spotlight \u00b7 ' + _txt : '';
+                } else if (!_txt && ribbonAutoSpotlightBank) {
+                    _txt = 'Spotlight \u00b7 ' + ribbonHoverSummaryText(ribbonAutoSpotlightBank);
                 }
                 ribbonHoverLabelEl.textContent = _txt;
                 ribbonHoverLabelEl.style.display = _txt ? 'inline' : 'none';
@@ -1369,13 +1509,18 @@
             if (!isBandsMode || !plotPayload || !plotPayload.series || !plotPayload.series.length) return;
             var rs = getRibbonStyleResolved();
             var focusKey = resolveBandsFocusKey(hoveredBankName);
-            var idleRibbon = !focusKey && !ribbonProductBank && !ribbonTrayHoverBank;
+            var explicitFocus = !!(ribbonProductBank || ribbonTrayHoverBank || hoveredBank);
+            var autoSpotlight = !explicitFocus && !!focusKey && normRibbonBankName(ribbonAutoSpotlightBank) === focusKey;
             var visualSig =
                 String(focusKey || '') +
                 '|' +
                 normRibbonBankName(ribbonProductBank) +
                 '|' +
-                normRibbonBankName(ribbonTrayHoverBank);
+                normRibbonBankName(ribbonTrayHoverBank) +
+                '|' +
+                normRibbonBankName(hoveredBank) +
+                '|' +
+                normRibbonBankName(ribbonAutoSpotlightBank);
             if (visualSig !== lastRibbonVisualSig) {
                 lastRibbonVisualSig = visualSig;
                 clientLog('info', 'Chart ribbon foreground/colour', {
@@ -1390,18 +1535,22 @@
             plotPayload.series.forEach(function (bank, index) {
                 var active = !focusKey || normRibbonBankName(bank.bank_name) === focusKey;
                 var selected = active && focusKey && ribbonProductBank && normRibbonBankName(bank.bank_name) === resolveBandsFocusKey(ribbonProductBank);
+                var pointerFocus = active && hoveredBank && normRibbonBankName(bank.bank_name) === resolveBandsFocusKey(hoveredBank);
                 var c0 = options.bankColor(bank.bank_name, index);
-                var inactiveGreyMix = focusKey ? Math.max(Number(rs.others_grey_mix) || 0, 0.74) : rs.others_grey_mix;
+                var inactiveGreyMix = focusKey ? Math.max(Number(rs.others_grey_mix) || 0, 0.84) : rs.others_grey_mix;
                 var strokeC = active
-                    ? (idleRibbon ? mixHexWithGrey(c0, 0.18) : c0)
+                    ? (autoSpotlight ? mixHexWithGrey(c0, 0.06) : c0)
                     : mixHexWithGrey(c0, inactiveGreyMix);
                 var zRoot = active ? Number(rs.active_z) : Number(rs.inactive_z);
                 var zb = zRoot + index * 0.08;
                 var zlv = focusKey ? (active ? 2 : 0) : 0;
-                var ew = Math.max(0, Number(rs.edge_width) || 0);
-                var eo = Math.max(0, Math.min(1, Number(active ? rs.edge_opacity : rs.edge_opacity_others)));
-                if (idleRibbon && active) eo *= 0.72;
-                if (focusKey && !active) eo *= 0.72;
+                var ewBase = Math.max(0, Number(rs.edge_width) || 0);
+                var ew = active
+                    ? (selected ? ewBase + 0.6 : (pointerFocus || !autoSpotlight ? ewBase : Math.max(1, ewBase * 0.72)))
+                    : Math.max(0.75, ewBase * 0.62);
+                var eo = active
+                    ? (selected ? 1 : (pointerFocus || ribbonTrayHoverBank ? 0.9 : (autoSpotlight ? 0.34 : Math.max(0.72, Number(rs.edge_opacity) || 0))))
+                    : (focusKey ? 0.06 : Math.max(0.1, Math.min(0.22, Number(rs.edge_opacity_others) || 0)));
                 var edgeLine = { color: strokeC, width: ew > 0 ? ew : 0.01, opacity: ew > 0 ? eo : 0, cap: 'round', join: 'round' };
                 function alpha(key, fallback) {
                     var n = Number(rs[key]);
@@ -1414,14 +1563,20 @@
                 var ffp = alpha('focus_fill_opacity_peak', fp);
                 var sfe = alpha('selected_fill_opacity_end', ffe);
                 var sfp = alpha('selected_fill_opacity_peak', ffp);
-                var sc = Math.max(0, Math.min(1, Number(rs.fill_opacity_others_scale)));
-                if (focusKey) sc = Math.min(sc, 0.14);
-                var idleFillScale = idleRibbon ? 0.62 : 1;
-                var fillEnd = active ? (selected ? sfe : (focusKey ? ffe : fe * idleFillScale)) : fe * sc;
-                var fillPeak = active ? (selected ? sfp : (focusKey ? ffp : fp * idleFillScale)) : fp * sc;
-                var mw = Math.max(0, Number(rs.mean_width) || 0);
-                var mo = Math.max(0, Math.min(1, Number(active ? rs.mean_opacity : rs.mean_opacity_others)));
-                if (idleRibbon && active) mo *= 0.72;
+                var sc = focusKey ? 0.015 : Math.max(0, Math.min(1, Number(rs.fill_opacity_others_scale)));
+                var fillEnd = active
+                    ? (selected ? sfe : (pointerFocus || ribbonTrayHoverBank ? ffe * 0.92 : (autoSpotlight ? Math.min(0.14, ffe * 0.28) : Math.min(0.28, ffe * 0.5))))
+                    : fe * sc;
+                var fillPeak = active
+                    ? (selected ? sfp : (pointerFocus || ribbonTrayHoverBank ? ffp : (autoSpotlight ? Math.min(0.22, ffp * 0.3) : Math.min(0.38, ffp * 0.54))))
+                    : fp * sc;
+                var mwBase = Math.max(0, Number(rs.mean_width) || 0);
+                var mw = active
+                    ? (selected ? mwBase + 1.4 : (pointerFocus || !autoSpotlight ? mwBase + 0.55 : mwBase + 0.15))
+                    : Math.max(1.15, mwBase * 0.95);
+                var mo = active
+                    ? (selected ? 1 : (pointerFocus || ribbonTrayHoverBank ? 0.96 : (autoSpotlight ? 0.88 : Math.max(0.8, Number(rs.mean_opacity) || 0))))
+                    : (focusKey ? 0.24 : Math.max(0.3, Math.min(0.42, Number(rs.mean_opacity_others) || 0.3)));
                 var fillAreaStyle;
                 if (active) {
                     if (focusKey && fillEnd <= 0 && fillPeak <= 0) {
@@ -1442,9 +1597,13 @@
                     }
                 } else {
                     fillAreaStyle = ribbonAreaStyleMerged({
-                        color: hexToRgba(strokeC, Math.min(1, Math.max(0, (fillEnd + fillPeak) * 0.85))),
+                        color: hexToRgba(strokeC, Math.min(0.08, Math.max(0, (fillEnd + fillPeak) * 0.65))),
                     });
                 }
+                var summary = ribbonSummaryForBank(bank.bank_name);
+                var endLabelText = summary
+                    ? [summary.short || ribbonBankShortName(bank.bank_name), summary.metric || ''].filter(Boolean).join(' ')
+                    : ribbonBankShortName(bank.bank_name);
                 updates.push({ id: 'ribbon_min_' + index, z: zb, zlevel: zlv, lineStyle: edgeLine, areaStyle: { opacity: 0 } });
                 updates.push({
                     id: 'ribbon_fill_' + index,
@@ -1462,9 +1621,26 @@
                         color: strokeC,
                         width: mw > 0 ? mw : 0.01,
                         opacity: mw > 0 ? mo : 0,
+                        type: 'solid',
                         cap: 'round',
                         join: 'round',
                     },
+                    endLabel: showRibbonEdgeLabels && active && summary
+                        ? {
+                            show: true,
+                            formatter: function () { return endLabelText; },
+                            color: theme.ttText || '#e2e8f0',
+                            fontFamily: '"Space Grotesk",system-ui,sans-serif',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            backgroundColor: hexToRgba(strokeC, 0.18),
+                            borderColor: hexToRgba(strokeC, 0.42),
+                            borderWidth: 1,
+                            borderRadius: 999,
+                            padding: [4, 8],
+                            distance: 12,
+                        }
+                        : { show: false },
                 });
             });
             try {
@@ -1668,7 +1844,7 @@
 
         chart.setOption({
             animation: false,
-            grid: { top: 18, right: 18, bottom: 56, left: 48, containLabel: true },
+            grid: { top: 18, right: reportGridRight, bottom: 56, left: 48, containLabel: true },
             tooltip: tooltipConfig,
             legend: { show: false },
             xAxis: {
@@ -2078,6 +2254,10 @@
             chart: {
                 resize: function (width, height) {
                     chart.resize({ width: width, height: height });
+                    chartWidth = width || mount.clientWidth || container.clientWidth || window.innerWidth || chart.getWidth() || 0;
+                    showRibbonEdgeLabels = chartWidth >= 1080;
+                    reportGridRight = showRibbonEdgeLabels ? 144 : (chartWidth >= 760 ? 28 : 18);
+                    chart.setOption({ grid: { right: reportGridRight } }, { lazyUpdate: false, silent: true });
                     if (isBandsMode) applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     if (useRibbonCanvas) {
                         recomputeRibbonLod();

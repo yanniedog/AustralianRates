@@ -275,9 +275,14 @@
             chip.setAttribute('aria-checked', 'false');
             chip.title = bn.full;
             chip.setAttribute('data-ar-bank-full', bn.full);
-            chip.setAttribute('aria-label', bn.full);
+            chip.setAttribute('aria-label', [bn.full, bn.metric, bn.meta].filter(Boolean).join(', '));
 
             var meta = BB && typeof BB.getMeta === 'function' ? BB.getMeta(bn.full) : { icon: '', short: bn.short };
+            var body = document.createElement('span');
+            body.className = 'lwc-focus-bank-chip-body';
+
+            var brand = document.createElement('span');
+            brand.className = 'lwc-focus-bank-chip-brand';
             if (meta.icon) {
                 var img = document.createElement('img');
                 img.src = meta.icon;
@@ -288,13 +293,42 @@
                 img.loading = 'eager';
                 img.decoding = 'sync';
                 img.draggable = false;
-                chip.appendChild(img);
+                brand.appendChild(img);
             } else {
                 var fb = document.createElement('span');
                 fb.className = 'lwc-focus-bank-chip-fallback';
                 fb.textContent = (meta.short || bn.short || '?').charAt(0);
-                chip.appendChild(fb);
+                brand.appendChild(fb);
             }
+            body.appendChild(brand);
+
+            if (bn.short || bn.metric || bn.meta) {
+                var copy = document.createElement('span');
+                copy.className = 'lwc-focus-bank-chip-copy';
+
+                var name = document.createElement('span');
+                name.className = 'lwc-focus-bank-chip-name';
+                name.textContent = bn.short || meta.short || bn.full;
+                copy.appendChild(name);
+
+                if (bn.metric) {
+                    var metric = document.createElement('span');
+                    metric.className = 'lwc-focus-bank-chip-metric';
+                    metric.textContent = bn.metric;
+                    copy.appendChild(metric);
+                }
+
+                if (bn.meta) {
+                    var sub = document.createElement('span');
+                    sub.className = 'lwc-focus-bank-chip-sub';
+                    sub.textContent = bn.meta;
+                    copy.appendChild(sub);
+                }
+
+                body.appendChild(copy);
+            }
+
+            chip.appendChild(body);
 
             chip.addEventListener('click', function () {
                 if (typeof opts.onRibbonBankChipClick === 'function') opts.onRibbonBankChipClick(bn.full);
