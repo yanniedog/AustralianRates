@@ -34,7 +34,7 @@
                     '<span class="' + esc(textClassName || 'ar-icon-label-text') + '">' + esc(label) + '</span>' +
                 '</span>';
         };
-    var QUICK_COMPARE_LIMIT = 8;
+    var QUICK_COMPARE_LIMIT = 5;
     var ladderRows = [];
     var publicIntro = window.AR.publicIntro || null;
     var heroStatsReady = false;

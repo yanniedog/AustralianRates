@@ -1006,26 +1006,18 @@ body.ar-public .filters-drawer {
 
 body.ar-public .compare-start-card {
     display: grid;
-    gap: 12px;
-    padding: 16px;
+    gap: 10px;
+    padding: 12px 16px 10px;
     border-bottom: 1px solid var(--ar-line);
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--ar-surface-2) 92%, transparent), color-mix(in srgb, var(--ar-surface) 94%, transparent)),
-        radial-gradient(circle at top right, color-mix(in srgb, var(--ar-accent) 10%, transparent), transparent 40%);
+    background: transparent;
 }
 
 body.ar-public .compare-start-head {
     display: flex;
     justify-content: space-between;
-    align-items: start;
-    gap: 12px;
+    align-items: baseline;
+    gap: 10px;
     flex-wrap: wrap;
-}
-
-body.ar-public .compare-start-copy {
-    display: grid;
-    gap: 6px;
-    max-width: 72ch;
 }
 
 body.ar-public .compare-start-kicker,
@@ -1047,14 +1039,13 @@ body.ar-public .advanced-intro-panel h2 {
     line-height: 1.08;
 }
 
-body.ar-public .compare-start-summary,
 body.ar-public .compare-start-note,
 body.ar-public .compare-summary-copy > p:last-child,
-body.ar-public .compare-explainer-copy > p:last-child,
 body.ar-public .advanced-intro-copy > p:last-child {
     margin: 0;
     color: var(--ar-text-soft);
-    line-height: 1.5;
+    line-height: 1.35;
+    font-size: 0.8rem;
 }
 
 body.ar-public .filters-drawer > summary {
@@ -1415,7 +1406,7 @@ body.ar-public .chip-strip .chip-clear-all:focus-visible {
     }
 
     body.ar-public .compare-start-card {
-        padding: 14px 12px;
+        padding: 10px 12px 8px;
     }
 
     body.ar-public .tab-panel {
