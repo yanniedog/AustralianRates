@@ -108,6 +108,11 @@ function isLikelyTdProductName(name: string): boolean {
   return tokens.some((x) => normalized.includes(x))
 }
 
+const CDR_DEPOSIT_PRODUCT_CATEGORIES = {
+  savings: 'TRANS_AND_SAVINGS_ACCOUNTS',
+  termDeposits: 'TERM_DEPOSITS',
+} as const
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -119,7 +124,7 @@ function unwrapCdrDetailPayload(value: unknown): Record<string, unknown> | null 
 }
 
 function parseCdrProductCategory(json: string | null | undefined): string | null {
-  const text = String(json || '').trim()
+  const text = typeof json === 'string' ? json.trim() : ''
   if (!text) return null
   try {
     const parsed = JSON.parse(text) as unknown
@@ -131,14 +136,12 @@ function parseCdrProductCategory(json: string | null | undefined): string | null
   }
 }
 
-function hasExpectedCdrSavingsCategory(row: Pick<NormalizedSavingsRow, 'dataQualityFlag' | 'cdrProductDetailJson'>): boolean {
+function hasExpectedCdrDepositCategory(
+  row: { dataQualityFlag: string; cdrProductDetailJson?: string | null },
+  expectedCategory: (typeof CDR_DEPOSIT_PRODUCT_CATEGORIES)[keyof typeof CDR_DEPOSIT_PRODUCT_CATEGORIES],
+): boolean {
   if (!lower(row.dataQualityFlag).startsWith('cdr_')) return false
-  return parseCdrProductCategory(row.cdrProductDetailJson) === 'TRANS_AND_SAVINGS_ACCOUNTS'
-}
-
-function hasExpectedCdrTdCategory(row: Pick<NormalizedTdRow, 'dataQualityFlag' | 'cdrProductDetailJson'>): boolean {
-  if (!lower(row.dataQualityFlag).startsWith('cdr_')) return false
-  return parseCdrProductCategory(row.cdrProductDetailJson) === 'TERM_DEPOSITS'
+  return parseCdrProductCategory(row.cdrProductDetailJson) === expectedCategory
 }
 
 export function minConfidenceForFlag(flag: string): number {
@@ -262,7 +265,10 @@ export function validateNormalizedSavingsRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isLikelySavingsProductName(row.productName) && !hasExpectedCdrSavingsCategory(row)) {
+  if (hasBlockedProductText(row.productName)) {
+    return { ok: false, reason: 'invalid_product_name_semantics' }
+  }
+  if (!isLikelySavingsProductName(row.productName) && !hasExpectedCdrDepositCategory(row, CDR_DEPOSIT_PRODUCT_CATEGORIES.savings)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }
@@ -331,7 +337,10 @@ export function validateNormalizedTdRow(
   if (!row.productName?.trim() || row.productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isLikelyTdProductName(row.productName) && !hasExpectedCdrTdCategory(row)) {
+  if (hasBlockedProductText(row.productName)) {
+    return { ok: false, reason: 'invalid_product_name_semantics' }
+  }
+  if (!isLikelyTdProductName(row.productName) && !hasExpectedCdrDepositCategory(row, CDR_DEPOSIT_PRODUCT_CATEGORIES.termDeposits)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) return { ok: false, reason: 'invalid_source_url' }

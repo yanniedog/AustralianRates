@@ -22,7 +22,21 @@ function loadRealTdFixture(): NormalizedTdRow {
   return JSON.parse(readFileSync(path, 'utf8')) as NormalizedTdRow
 }
 
-function cdrDetailJson(productCategory: string, name: string, productId = 'test-product-id'): string {
+function cdrDetailJson(
+  productCategory: string,
+  name: string,
+  productId = 'test-product-id',
+  shape: 'dataProductCategory' | 'rootProductCategory' | 'rootCategory' | 'rootType' = 'dataProductCategory',
+): string {
+  if (shape === 'rootProductCategory') {
+    return JSON.stringify({ productId, name, productCategory })
+  }
+  if (shape === 'rootCategory') {
+    return JSON.stringify({ productId, name, category: productCategory })
+  }
+  if (shape === 'rootType') {
+    return JSON.stringify({ productId, name, type: productCategory })
+  }
   return JSON.stringify({
     data: {
       productId,
@@ -109,14 +123,42 @@ describe('validateNormalizedSavingsRow', () => {
     expect(validateNormalizedSavingsRow({ ...row, productName: 'AMP Bank GO Business Save' }).ok).toBe(true)
   })
 
-  it('accepts live CDR savings products whose names do not include savings keywords', () => {
+  it.each([
+    ['data.productCategory', cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Westpac Choice')],
+    ['root productCategory', cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Westpac Choice', 'test-product-id', 'rootProductCategory')],
+    ['root category', cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Westpac Choice', 'test-product-id', 'rootCategory')],
+    ['root type', cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Westpac Choice', 'test-product-id', 'rootType')],
+  ])('accepts live CDR savings products whose names do not include savings keywords from %s payloads', (_label, detailJson) => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({
+      ...row,
+      productName: 'Westpac Choice',
+      cdrProductDetailJson: detailJson,
+    })
+    expect(verdict.ok).toBe(true)
+  })
+
+  it('rejects non-CDR savings rows with CDR-like category metadata when the quality flag is not CDR-gated', () => {
     const row = loadRealSavingsFixture()
     const verdict = validateNormalizedSavingsRow({
       ...row,
       productName: 'Westpac Choice',
       cdrProductDetailJson: cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Westpac Choice'),
+      dataQualityFlag: 'legacy_import',
     })
-    expect(verdict.ok).toBe(true)
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
+  })
+
+  it('rejects blocked savings names even when CDR category metadata matches', () => {
+    const row = loadRealSavingsFixture()
+    const verdict = validateNormalizedSavingsRow({
+      ...row,
+      productName: 'Privacy disclaimer text',
+      cdrProductDetailJson: cdrDetailJson('TRANS_AND_SAVINGS_ACCOUNTS', 'Privacy disclaimer text'),
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
   })
 
   it('rejects savings rows below the minimum confidence for the quality flag', () => {
@@ -167,14 +209,30 @@ describe('validateNormalizedTdRow', () => {
     expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
   })
 
-  it('accepts live CDR term deposits whose names do not include term keywords', () => {
+  it.each([
+    ['data.productCategory', cdrDetailJson('TERM_DEPOSITS', 'Business Investment Account')],
+    ['root productCategory', cdrDetailJson('TERM_DEPOSITS', 'Business Investment Account', 'test-product-id', 'rootProductCategory')],
+    ['root category', cdrDetailJson('TERM_DEPOSITS', 'Business Investment Account', 'test-product-id', 'rootCategory')],
+    ['root type', cdrDetailJson('TERM_DEPOSITS', 'Business Investment Account', 'test-product-id', 'rootType')],
+  ])('accepts live CDR term deposits whose names do not include term keywords from %s payloads', (_label, detailJson) => {
     const row = loadRealTdFixture()
     const verdict = validateNormalizedTdRow({
       ...row,
       productName: 'Business Investment Account',
-      cdrProductDetailJson: cdrDetailJson('TERM_DEPOSITS', 'Business Investment Account'),
+      cdrProductDetailJson: detailJson,
     })
     expect(verdict.ok).toBe(true)
+  })
+
+  it('rejects blocked TD names even when CDR category metadata matches', () => {
+    const row = loadRealTdFixture()
+    const verdict = validateNormalizedTdRow({
+      ...row,
+      productName: 'Privacy disclaimer text',
+      cdrProductDetailJson: cdrDetailJson('TERM_DEPOSITS', 'Privacy disclaimer text'),
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('invalid_product_name_semantics')
   })
 
   it('rejects TD rows below the minimum confidence for the quality flag', () => {
