@@ -523,6 +523,18 @@ button.bank-option-card.is-selected .bank-badge-sub {
     background: color-mix(in srgb, var(--ar-surface-2) 94%, var(--ar-surface));
 }
 
+.ladder-card-meta {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.ladder-scenario {
+    color: var(--ar-text-soft);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .ladder-card-top,
 .ladder-card-bottom {
     display: flex;

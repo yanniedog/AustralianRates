@@ -35,10 +35,45 @@
                 '</span>';
         };
     var QUICK_COMPARE_LIMIT = 5;
+    var MORTGAGE_SAMPLE_SCENARIOS = [
+        {
+            label: 'OO P&I variable 80-85%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_80-85%' }
+        },
+        {
+            label: 'OO P&I variable 70-80%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_70-80%' }
+        },
+        {
+            label: 'OO P&I variable 60-70%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_60-70%' }
+        },
+        {
+            label: 'OO P&I variable <=60%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_=60%' }
+        },
+        {
+            label: 'OO P&I variable 85-90%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_85-90%' }
+        },
+        {
+            label: 'OO P&I variable 90-95%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_90-95%' }
+        },
+        {
+            label: 'OO P&I fixed 1y 80-85%',
+            params: { security_purpose: 'owner_occupied', repayment_type: 'principal_and_interest', rate_structure: 'fixed_1yr', lvr_tier: 'lvr_80-85%' }
+        },
+        {
+            label: 'Investment P&I variable 80-85%',
+            params: { security_purpose: 'investment', repayment_type: 'principal_and_interest', rate_structure: 'variable', lvr_tier: 'lvr_80-85%' }
+        }
+    ];
     var ladderRows = [];
     var publicIntro = window.AR.publicIntro || null;
     var heroStatsReady = false;
     var landingOverview = null;
+    var quickCompareRequestSeq = 0;
 
     function syncPublicIntro() {
         publicIntro = window.AR.publicIntro || publicIntro;
@@ -227,28 +262,31 @@
         });
     }
 
-    function ladderCard(row) {
-        var bankName = String(row.bank_name || '').trim() || '-';
+    function ladderCard(entry) {
+        var row = entry && entry.row ? entry.row : entry;
+        var scenarioLabel = entry && entry.scenarioLabel ? String(entry.scenarioLabel).trim() : '';
+        var bankName = String(row && row.bank_name || '').trim() || '-';
         var bank = bankBrand && typeof bankBrand.badge === 'function'
             ? bankBrand.badge(bankName, { compact: true })
             : esc(bankName);
-        var product = esc(row.product_name || '-');
-        var rate = pct(row.interest_rate);
+        var product = esc(row && row.product_name || (scenarioLabel ? 'No current match' : '-'));
+        var rate = row ? pct(row.interest_rate) : 'Unavailable';
         var detail = section === 'home-loans'
-            ? [row.security_purpose, row.repayment_type, row.rate_structure, row.lvr_tier].filter(Boolean).join(' · ')
+            ? [row && row.security_purpose, row && row.repayment_type, row && row.rate_structure, row && row.lvr_tier].filter(Boolean).join(' | ')
             : section === 'savings'
-                ? [row.account_type, row.rate_type, row.deposit_tier].filter(Boolean).join(' · ')
-                : [row.term_months ? row.term_months + 'm' : '', row.deposit_tier, row.interest_payment].filter(Boolean).join(' · ');
+                ? [row && row.account_type, row && row.rate_type, row && row.deposit_tier].filter(Boolean).join(' | ')
+                : [row && row.term_months ? row.term_months + 'm' : '', row && row.deposit_tier, row && row.interest_payment].filter(Boolean).join(' | ');
 
         return '' +
-            '<article class="ladder-card" data-bank="' + esc(bankName.toLowerCase()) + '" data-product="' + product.toLowerCase() + '">' +
+            '<article class="ladder-card" data-bank="' + esc(bankName.toLowerCase()) + '" data-product="' + product.toLowerCase() + '" data-scenario="' + esc(scenarioLabel.toLowerCase()) + '">' +
+                (scenarioLabel ? '<div class="ladder-card-meta"><span class="ladder-scenario">' + esc(scenarioLabel) + '</span></div>' : '') +
                 '<div class="ladder-card-top">' +
                     '<strong class="ladder-rate">' + esc(rate) + '</strong>' +
                     '<span class="ladder-bank">' + bank + '</span>' +
                 '</div>' +
                 '<div class="ladder-card-bottom">' +
                     '<span class="ladder-product">' + product + '</span>' +
-                    '<span class="ladder-detail">' + esc(detail || '-') + '</span>' +
+                    '<span class="ladder-detail">' + esc(detail || (scenarioLabel && !row ? 'No matching product in the current snapshot.' : '-')) + '</span>' +
                 '</div>' +
             '</article>';
     }
@@ -270,10 +308,64 @@
             return;
         }
         renderQuickCompareCards(ladderRows.filter(function (row) {
-            var bank = String(row.bank_name || '').toLowerCase();
-            var product = String(row.product_name || '').toLowerCase();
-            return bank.indexOf(needle) >= 0 || product.indexOf(needle) >= 0;
+            var source = row && row.row ? row.row : row;
+            var bank = String(source && source.bank_name || '').toLowerCase();
+            var product = String(source && source.product_name || '').toLowerCase();
+            var scenario = String(row && row.scenarioLabel || '').toLowerCase();
+            return bank.indexOf(needle) >= 0 || product.indexOf(needle) >= 0 || scenario.indexOf(needle) >= 0;
         }));
+    }
+
+    function getQuickCompareContext() {
+        var snapshot = filters && typeof filters.getStateSnapshot === 'function'
+            ? filters.getStateSnapshot()
+            : null;
+        return {
+            activeCount: Number(snapshot && snapshot.activeCount || 0),
+            params: buildFilterParams(),
+        };
+    }
+
+    function buildLatestUrl(params) {
+        return apiBase + '/latest?' + new URLSearchParams(params).toString();
+    }
+
+    async function requestLatestRows(params, requestLabel) {
+        var url = buildLatestUrl(params);
+        if (requestJson) {
+            return (await requestJson(url, {
+                requestLabel: requestLabel,
+                timeoutMs: requestTimeoutMs,
+                retryCount: 1,
+                retryDelayMs: 700,
+            })).data;
+        }
+        return await fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(url) : url), { cache: 'no-store' }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
+            return response.json();
+        });
+    }
+
+    async function loadHomeLoanScenarioRibbon(baseParams) {
+        var requests = MORTGAGE_SAMPLE_SCENARIOS.map(function (scenario) {
+            var params = {};
+            Object.keys(baseParams || {}).forEach(function (key) {
+                params[key] = baseParams[key];
+            });
+            Object.keys(scenario.params).forEach(function (key) {
+                params[key] = scenario.params[key];
+            });
+            params.limit = '1';
+            params.order_by = 'rate_asc';
+            return requestLatestRows(params, 'Leaders rail: ' + scenario.label).then(function (data) {
+                var rows = sortRows(Array.isArray(data && data.rows) ? data.rows : []);
+                return {
+                    scenarioLabel: scenario.label,
+                    row: rows[0] || null,
+                };
+            });
+        });
+        return Promise.all(requests);
     }
 
     async function loadQuickCompare() {
@@ -281,29 +373,32 @@
             if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
             return;
         }
+        var requestSeq = ++quickCompareRequestSeq;
         try {
-            var params = buildFilterParams();
-            params.limit = String(QUICK_COMPARE_LIMIT);
-            params.order_by = 'rate_desc';
-            var data = requestJson
-                ? (await requestJson(apiBase + '/latest?' + new URLSearchParams(params).toString(), {
-                    requestLabel: 'Leaders rail',
-                    timeoutMs: requestTimeoutMs,
-                    retryCount: 1,
-                    retryDelayMs: 700,
-                })).data
-                : await fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(apiBase + '/latest?' + new URLSearchParams(params).toString()) : apiBase + '/latest?' + new URLSearchParams(params).toString()), { cache: 'no-store' }).then(function (response) {
-                    if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest');
-                    return response.json();
-                });
-            ladderRows = sortRows(Array.isArray(data && data.rows) ? data.rows : []);
+            var context = getQuickCompareContext();
+            var params = context.params;
+            if (section === 'home-loans' && context.activeCount === 0) {
+                ladderRows = await loadHomeLoanScenarioRibbon(params);
+            } else {
+                params.limit = String(QUICK_COMPARE_LIMIT);
+                params.order_by = section === 'home-loans' ? 'rate_asc' : 'rate_desc';
+                var data = await requestLatestRows(params, 'Leaders rail');
+                ladderRows = sortRows(Array.isArray(data && data.rows) ? data.rows : []);
+            }
+            if (requestSeq !== quickCompareRequestSeq) return;
             applyLadderSearch();
             if (ladderRows.length > 0) {
-                var lead = ladderRows[0];
-                var leadBank = bankBrand && typeof bankBrand.shortLabel === 'function'
-                    ? bankBrand.shortLabel(lead.bank_name)
-                    : String(lead.bank_name || '').trim();
-                setIntroMetric('leader', pct(lead.interest_rate), (leadBank || 'Current leader') + ' in the active slice.');
+                var leadEntry = ladderRows[0];
+                var lead = leadEntry && leadEntry.row ? leadEntry.row : leadEntry;
+                if (lead) {
+                    var leadBank = bankBrand && typeof bankBrand.shortLabel === 'function'
+                        ? bankBrand.shortLabel(lead.bank_name)
+                        : String(lead.bank_name || '').trim();
+                    var leadNote = section === 'home-loans' && leadEntry && leadEntry.scenarioLabel
+                        ? leadEntry.scenarioLabel + ': ' + (leadBank || 'Current leader')
+                        : (leadBank || 'Current leader') + ' in the active slice.';
+                    setIntroMetric('leader', pct(lead.interest_rate), leadNote);
+                }
             }
         } catch (err) {
             clientLog('error', 'Quick compare load failed', {
