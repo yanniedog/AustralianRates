@@ -16,11 +16,15 @@
     var network = window.AR.network || {};
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
-    var buildFilterParams = filters && filters.buildFilterParams ? filters.buildFilterParams : function () { return {}; };
     var clientLog = utils.clientLog || function () {};
     var describeError = typeof network.describeError === 'function'
         ? network.describeError
         : function (error, fallback) { return String((error && error.message) || fallback || 'Request failed.'); };
+
+    function currentFilterParams() {
+        var liveFilters = window.AR && window.AR.filters ? window.AR.filters : filters;
+        return liveFilters && liveFilters.buildFilterParams ? liveFilters.buildFilterParams() : {};
+    }
 
     function freshStatusLineState() {
         return {
@@ -574,7 +578,7 @@
     }
 
     function buildBaseParams() {
-        var params = buildFilterParams() || {};
+        var params = currentFilterParams() || {};
         var currentFields = fields();
         params.sort = 'collection_date';
         params.dir = 'asc';
@@ -687,23 +691,33 @@
             chartState.pendingReload = true;
             return chartLoadPromise;
         }
+        var retainPreviousRender = !!(tabState.chartDrawn && els.chartOutput.getAttribute('data-chart-rendered') === 'true');
         chartState.pendingReload = false;
         chartState.loadSerial += 1;
         var loadSerial = chartState.loadSerial;
-        disposeCharts();
         resetStatusLine();
-        chartState.fallbackReason = '';
-        chartState.rows = [];
-        chartState.totalRows = 0;
-        chartState.truncated = false;
-        chartState.reportPlots = { moves: null, bands: null };
-        chartState.economicOverlaySeries = [];
-        chartState.previewRows = [];
-        chartState.rbaHistory = [];
-        chartState.cpiHistory = [];
-        resetSelection();
         if (chartUi.clearErrorState) chartUi.clearErrorState();
-        if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
+        if (!retainPreviousRender) {
+            disposeCharts();
+            chartState.fallbackReason = '';
+            chartState.rows = [];
+            chartState.totalRows = 0;
+            chartState.truncated = false;
+            chartState.reportPlots = { moves: null, bands: null };
+            chartState.economicOverlaySeries = [];
+            chartState.previewRows = [];
+            chartState.rbaHistory = [];
+            chartState.cpiHistory = [];
+            resetSelection();
+            if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
+        } else if (chartUi.setStatus) {
+            chartState.fallbackReason = '';
+            chartState.previewRows = [];
+            chartState.reportPlots = { moves: null, bands: null };
+            chartState.economicOverlaySeries = [];
+            chartState.stale = true;
+            chartUi.setStatus('SYNC');
+        }
         clientLog('info', 'Chart load started', { apiBase: config && config.apiBase ? config.apiBase : '' });
 
         chartLoadPromise = (async function () {
@@ -890,6 +904,12 @@
                         timestamp: Date.now(),
                     }),
                 }).catch(function () {});
+            }
+            if (retainPreviousRender) {
+                chartState.stale = true;
+                if (chartUi.setErrorState) chartUi.setErrorState(userMessage);
+                if (chartUi.setStatus) chartUi.setStatus('Refresh failed | previous chart retained');
+                return;
             }
             clearOutput('Error loading chart');
             if (chartUi.setErrorState) chartUi.setErrorState(userMessage);

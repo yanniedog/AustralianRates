@@ -582,15 +582,41 @@
     background: transparent;
 }
 
+.chart-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    align-items: stretch;
+    min-width: 0;
+}
+
+.chart-side-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    border-left: 1px solid var(--ar-line);
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
+}
+
+.chart-side-panel-head {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--ar-line);
+}
+
+.chart-side-summary {
+    justify-content: flex-start;
+}
+
 .chart-selection-rail {
     display: grid;
     gap: 10px;
     min-width: 0;
-    max-height: min(280px, 38vh);
+    min-height: 0;
     overflow: auto;
     padding: 12px 14px 16px;
-    border-top: 1px solid var(--ar-line);
-    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
+    border-top: 0;
+    background: transparent;
 }
 
 .terminal-chart-output,
@@ -762,8 +788,49 @@
     text-align: left;
 }
 
+.chart-series-group {
+    display: grid;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--ar-line) 88%, transparent);
+}
+
+.chart-series-group:first-child {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.chart-series-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 12px;
+    align-items: baseline;
+}
+
+.chart-series-group-title {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.chart-series-group-meta {
+    color: var(--ar-text-soft);
+    font-size: 0.72rem;
+}
+
+.chart-series-group-list {
+    display: grid;
+    gap: 8px;
+}
+
 .chart-series-card.is-reference {
     cursor: default;
+}
+
+.chart-series-card.is-compact {
+    gap: 8px;
+    padding: 10px 12px;
 }
 
 .chart-series-topline,
@@ -867,6 +934,21 @@
 .chart-spotlight-value {
     min-width: 0;
     max-width: 100%;
+}
+
+.chart-side-panel .chart-point-details {
+    padding-top: 2px;
+}
+
+@media (max-width: 980px) {
+    .chart-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .chart-side-panel {
+        border-left: 0;
+        border-top: 1px solid var(--ar-line);
+    }
 }
 
 .chart-point-link {
@@ -1207,6 +1289,15 @@
 
 /* Landscape mobile: maximise chart height, minimise chrome */
 @media (max-height: 760px) and (orientation: landscape) {
+    .chart-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .chart-side-panel {
+        border-left: 0;
+        border-top: 1px solid var(--ar-line);
+    }
+
     .terminal-chart-surface,
     .terminal-chart-output,
     #chart-output,
@@ -1236,6 +1327,15 @@
 }
 
 @media (max-width: 420px) {
+    .chart-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .chart-side-panel {
+        border-left: 0;
+        border-top: 1px solid var(--ar-line);
+    }
+
     .chart-toolbar {
         padding: 12px;
     }

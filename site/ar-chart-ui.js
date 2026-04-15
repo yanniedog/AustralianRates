@@ -434,7 +434,7 @@
     function railNote(fields, model) {
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
-        if (fields.view === 'homeLoanReport') return 'One product per bank';
+        if (fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport') return 'Products meeting current filters';
         if (fields.view === 'market' && model.market) return marketDimensionLabel(model.market) + ' curve';
         if (fields.view === 'slope' && model.slope) return 'Who moved';
         if (fields.view === 'ladder') return 'Rate ladder';
@@ -462,6 +462,73 @@
                     '<span class="chart-series-points">' + esc(options.metaRight) + '</span>' +
                 '</span>' +
             '</button>';
+    }
+
+    function railMetricDirection(fields) {
+        return chartConfig.rankDirection ? chartConfig.rankDirection(fields && fields.yField) : 'desc';
+    }
+
+    function railSeriesDelta(fields, series) {
+        if (!series || !Number.isFinite(Number(series.delta))) return 'No delta';
+        var delta = Number(series.delta);
+        if (railMetricDirection(fields) === 'asc' && delta > 0) {
+            return '+' + chartConfig.formatMetricValue(fields.yField, delta);
+        }
+        if (delta > 0) return '+' + chartConfig.formatMetricValue(fields.yField, delta);
+        return chartConfig.formatMetricValue(fields.yField, delta);
+    }
+
+    function seriesGroupMarkup(bankName, seriesList, fields, selectionState, pal, startIndex, showBankMeta) {
+        var items = Array.isArray(seriesList) ? seriesList : [];
+        if (!items.length) return '';
+        var groupMeta = showBankMeta ? (items.length + ' product' + (items.length === 1 ? '' : 's')) : '';
+        return '' +
+            '<section class="chart-series-group" role="group" aria-label="' + esc(bankName) + '">' +
+                '<div class="chart-series-group-head">' +
+                    '<p class="chart-series-group-title">' + esc(bankName) + '</p>' +
+                    (groupMeta ? '<span class="chart-series-group-meta">' + esc(groupMeta) + '</span>' : '') +
+                '</div>' +
+                '<div class="chart-series-group-list">' +
+                    items.map(function (series, seriesIndex) {
+                        var isSelected = selectionState && Array.isArray(selectionState.selectedSeriesKeys)
+                            ? selectionState.selectedSeriesKeys.indexOf(series.key) >= 0
+                            : false;
+                        var isSpotlight = selectionState && selectionState.spotlightSeriesKey === series.key;
+                        return seriesCardMarkup({
+                            key: series.key,
+                            title: series.productName || series.name,
+                            valueText: chartConfig.formatMetricValue(fields.yField, series.latestValue),
+                            caption: series.subtitle || 'Matching product',
+                            metaLeft: series.latestDate ? chartConfig.formatFieldValue('collection_date', series.latestDate, series.latestRow || null) : 'Latest',
+                            metaRight: railSeriesDelta(fields, series),
+                            isSelected: isSelected,
+                            isSpotlight: isSpotlight,
+                            color: pal[(startIndex + seriesIndex) % pal.length],
+                        }).replace('chart-series-card secondary', 'chart-series-card secondary is-compact');
+                    }).join('') +
+                '</div>' +
+            '</section>';
+    }
+
+    function hierarchicalSeriesRailMarkup(model, fields, selectionState, pal) {
+        var visibleSeries = Array.isArray(model && model.visibleSeries) ? model.visibleSeries : [];
+        if (!visibleSeries.length) return '';
+        var groups = [];
+        var byBank = {};
+        visibleSeries.forEach(function (series) {
+            var bankName = String(series && series.bankName || '').trim() || 'Unknown bank';
+            if (!byBank[bankName]) {
+                byBank[bankName] = [];
+                groups.push(bankName);
+            }
+            byBank[bankName].push(series);
+        });
+        var colorIndex = 0;
+        return groups.map(function (bankName) {
+            var markup = seriesGroupMarkup(bankName, byBank[bankName], fields, selectionState, pal, colorIndex, true);
+            colorIndex += byBank[bankName].length;
+            return markup;
+        }).join('') + economicOverlayReferenceCards(selectionState);
     }
 
     function renderSeriesRail(model, selectionState) {
@@ -557,43 +624,28 @@
             }).join('');
             return;
         }
-        if (fields.view === 'homeLoanReport' && model.lenderRanking && model.lenderRanking.entries.length) {
-            els.chartSeriesList.innerHTML = model.lenderRanking.entries.map(function (entry, index) {
-                var isSelected = selected.indexOf(entry.seriesKey) >= 0;
-                var isSpotlight = selectionState && selectionState.spotlightSeriesKey === entry.seriesKey;
-                return seriesCardMarkup({
-                    key: entry.seriesKey,
-                    title: chartConfig.formatFieldValue('bank_name', entry.bankName, entry.row || null),
-                    valueText: chartConfig.formatMetricValue(fields.yField, entry.value),
-                    caption: entry.productName || 'Selected comparison product',
-                    metaLeft: entry.latestDate ? chartConfig.formatFieldValue('collection_date', entry.latestDate, entry.row || null) : 'Latest',
-                    metaRight: entry.pointCount.toLocaleString() + ' pts',
-                    isSelected: isSelected,
-                    isSpotlight: isSpotlight,
-                    color: pal[index % pal.length],
-                });
-            }).join('') +
-            '<div class="chart-series-card secondary is-reference" style="--series-accent:#f59e0b;" role="listitem">' +
-                '<span class="chart-series-topline">' +
-                    '<span class="chart-series-name-wrap">' +
-                        '<span class="chart-series-swatch" aria-hidden="true"></span>' +
-                        '<span class="chart-series-name">RBA</span>' +
+        if ((fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport') && model.visibleSeries && model.visibleSeries.length) {
+            els.chartSeriesList.innerHTML = hierarchicalSeriesRailMarkup(model, fields, selectionState, pal) +
+                '<div class="chart-series-card secondary is-reference" style="--series-accent:#f59e0b;" role="listitem">' +
+                    '<span class="chart-series-topline">' +
+                        '<span class="chart-series-name-wrap">' +
+                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                            '<span class="chart-series-name">RBA</span>' +
+                        '</span>' +
+                        '<span class="chart-series-value">Reference</span>' +
                     '</span>' +
-                    '<span class="chart-series-value">Reference</span>' +
-                '</span>' +
-                '<span class="chart-series-caption">Cash rate is always shown</span>' +
-            '</div>' +
-            '<div class="chart-series-card secondary is-reference" style="--series-accent:#dc2626;" role="listitem">' +
-                '<span class="chart-series-topline">' +
-                    '<span class="chart-series-name-wrap">' +
-                        '<span class="chart-series-swatch" aria-hidden="true"></span>' +
-                        '<span class="chart-series-name">CPI</span>' +
+                    '<span class="chart-series-caption">Cash rate is always shown</span>' +
+                '</div>' +
+                '<div class="chart-series-card secondary is-reference" style="--series-accent:#dc2626;" role="listitem">' +
+                    '<span class="chart-series-topline">' +
+                        '<span class="chart-series-name-wrap">' +
+                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
+                            '<span class="chart-series-name">CPI</span>' +
+                        '</span>' +
+                        '<span class="chart-series-value">Reference</span>' +
                     '</span>' +
-                    '<span class="chart-series-value">Reference</span>' +
-                '</span>' +
-                '<span class="chart-series-caption">Annual inflation is always shown</span>' +
-            '</div>' +
-            economicOverlayReferenceCards(selectionState);
+                    '<span class="chart-series-caption">Annual inflation is always shown</span>' +
+                '</div>';
             return;
         }
         if (fields.view === 'market' && model.market) {
