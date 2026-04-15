@@ -13,6 +13,9 @@
     var CHART_REPORT_TIMEOUT_MS = 12000;
     var CHART_PREVIEW_TIMEOUT_MS = 12000;
     var CHART_PREVIEW_ROWS_LIMIT = 5000;
+    var CHART_RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
+    var chartResponseCache = {};
+    var inflightChartRequests = {};
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -101,17 +104,17 @@
         };
     }
 
-    function compareSeries(left, right) {
+    function compareSeriesByMetric(left, right, direction) {
         var leftValue = Number(left.latestValue);
         var rightValue = Number(right.latestValue);
-        if (Number.isFinite(rightValue) && Number.isFinite(leftValue) && rightValue !== leftValue) {
-            return rightValue - leftValue;
-        }
+        var metricSort = compareMetricValues(leftValue, rightValue, direction || 'desc');
+        if (metricSort !== 0) return metricSort;
         if (right.pointCount !== left.pointCount) return right.pointCount - left.pointCount;
         return String(left.name).localeCompare(String(right.name));
     }
 
     function buildSeriesCollection(rows, metricField) {
+        var direction = metricDirection(metricField);
         var groups = {};
         rows.forEach(function (row) {
             var value = numericValue(row, metricField);
@@ -135,7 +138,9 @@
             return finalizeSeries(groups[key]);
         }).filter(function (entry) {
             return entry.pointCount > 0;
-        }).sort(compareSeries);
+        }).sort(function (left, right) {
+            return compareSeriesByMetric(left, right, direction);
+        });
     }
 
     function metricDirection(field) {
@@ -153,7 +158,7 @@
         return 0;
     }
 
-    function buildVisibleSeries(allSeries, density, selectionState) {
+    function buildVisibleSeries(allSeries, density, selectionState, direction) {
         var visible = allSeries.slice(0, density.rowLimit);
         var requiredKeys = [];
         if (selectionState && selectionState.spotlightSeriesKey) {
@@ -182,7 +187,9 @@
             visible.splice(removableIndex, 1);
         }
 
-        return visible.sort(compareSeries).map(function (series, index) {
+        return visible.sort(function (left, right) {
+            return compareSeriesByMetric(left, right, direction || 'desc');
+        }).map(function (series, index) {
             series.colorIndex = index;
             return series;
         });
@@ -506,8 +513,9 @@
             });
         }
         var density = chartConfig.parseDensity(fields.density);
+        var direction = metricDirection(fields.yField);
         var allSeries = buildSeriesCollection(rows, fields.yField);
-        var visibleSeries = buildVisibleSeries(allSeries, density, selectionState);
+        var visibleSeries = buildVisibleSeries(allSeries, density, selectionState, direction);
         var lenderRanking = buildLenderRanking(allSeries, fields, density);
         var selectedKeys = effectiveSelection(visibleSeries, selectionState && selectionState.selectedSeriesKeys, density.compareLimit);
         var spotlight = spotlightEntry(visibleSeries, selectionState, selectedKeys);
@@ -676,6 +684,81 @@
         };
     }
 
+    function cacheKeyForPolicy(policy, requestKind) {
+        var base = (window.AR.network && window.AR.network.prepareRequestUrl)
+            ? window.AR.network.prepareRequestUrl(policy.url, {
+                skipCacheBust: true,
+                sortQuery: !!policy.sortQuery,
+            })
+            : policy.url;
+        return String(requestKind || 'request') + '::' + String(base || '');
+    }
+
+    function cloneCacheValue(value) {
+        if (value == null) return value;
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function readChartResponseCache(key) {
+        var entry = chartResponseCache[key];
+        if (!entry) return null;
+        if ((Date.now() - Number(entry.ts || 0)) > CHART_RESPONSE_CACHE_TTL_MS) {
+            delete chartResponseCache[key];
+            return null;
+        }
+        return cloneCacheValue(entry.data);
+    }
+
+    function writeChartResponseCache(key, data) {
+        chartResponseCache[key] = {
+            ts: Date.now(),
+            data: cloneCacheValue(data),
+        };
+        return data;
+    }
+
+    function fetchJsonWithPolicy(policy, requestKind, requestOptions, extractor) {
+        var key = cacheKeyForPolicy(policy, requestKind);
+        var cached = readChartResponseCache(key);
+        if (cached != null) return Promise.resolve(cached);
+        if (inflightChartRequests[key]) {
+            return inflightChartRequests[key].then(function (data) {
+                return cloneCacheValue(data);
+            });
+        }
+
+        var fetchPromise;
+        if (requestJson) {
+            fetchPromise = requestJson(policy.url, requestOptions).then(function (result) {
+                return extractor(result);
+            });
+        } else {
+            var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
+                ? window.AR.network.prepareRequestUrl(policy.url, {
+                    skipCacheBust: policy.skipCacheBust,
+                    sortQuery: policy.sortQuery,
+                })
+                : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
+                    ? window.AR.network.appendCacheBust(policy.url)
+                    : policy.url);
+            fetchPromise = fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status + ' for ' + requestKind);
+                return response.json();
+            }).then(extractor);
+        }
+
+        inflightChartRequests[key] = fetchPromise.then(function (data) {
+            writeChartResponseCache(key, data);
+            delete inflightChartRequests[key];
+            return cloneCacheValue(data);
+        }).catch(function (error) {
+            delete inflightChartRequests[key];
+            throw error;
+        });
+
+        return inflightChartRequests[key];
+    }
+
     function fetchAnalyticsRows(params) {
         var queryParams = {};
         Object.keys(params || {}).forEach(function (key) {
@@ -683,31 +766,15 @@
         });
         queryParams.compact = '1';
         var policy = buildRequestPolicy('/analytics/series', queryParams, 'series');
-        if (requestJson) {
-            return requestJson(policy.url, {
-                requestLabel: 'Chart history',
-                timeoutMs: CHART_SERIES_TIMEOUT_MS,
-                retryCount: 0,
-                cache: policy.fetchCache,
-                skipCacheBust: policy.skipCacheBust,
-                sortQuery: policy.sortQuery,
-            }).then(function (result) {
-                return result.data;
-            }).catch(function (err) {
-                throw err;
-            });
-        }
-        var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
-            ? window.AR.network.prepareRequestUrl(policy.url, {
-                skipCacheBust: policy.skipCacheBust,
-                sortQuery: policy.sortQuery,
-            })
-            : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
-                ? window.AR.network.appendCacheBust(policy.url)
-                : policy.url);
-        return fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/series');
-            return response.json();
+        return fetchJsonWithPolicy(policy, '/analytics/series', {
+            requestLabel: 'Chart history',
+            timeoutMs: CHART_SERIES_TIMEOUT_MS,
+            retryCount: 0,
+            cache: policy.fetchCache,
+            skipCacheBust: policy.skipCacheBust,
+            sortQuery: policy.sortQuery,
+        }, function (result) {
+            return result && result.data ? result.data : result;
         });
     }
 
@@ -721,31 +788,15 @@
         delete queryParams.dir;
         queryParams.mode = String(mode || 'moves');
         var policy = buildRequestPolicy('/analytics/report-plot', queryParams, 'report-plot');
-        if (requestJson) {
-            return requestJson(policy.url, {
-                requestLabel: 'Report plot ' + String(mode || 'moves'),
-                timeoutMs: CHART_REPORT_TIMEOUT_MS,
-                retryCount: 0,
-                cache: policy.fetchCache,
-                skipCacheBust: policy.skipCacheBust,
-                sortQuery: policy.sortQuery,
-            }).then(function (result) {
-                return result.data;
-            }).catch(function (err) {
-                throw err;
-            });
-        }
-        var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
-            ? window.AR.network.prepareRequestUrl(policy.url, {
-                skipCacheBust: policy.skipCacheBust,
-                sortQuery: policy.sortQuery,
-            })
-            : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
-                ? window.AR.network.appendCacheBust(policy.url)
-                : policy.url);
-        return fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /analytics/report-plot');
-            return response.json();
+        return fetchJsonWithPolicy(policy, '/analytics/report-plot', {
+            requestLabel: 'Report plot ' + String(mode || 'moves'),
+            timeoutMs: CHART_REPORT_TIMEOUT_MS,
+            retryCount: 0,
+            cache: policy.fetchCache,
+            skipCacheBust: policy.skipCacheBust,
+            sortQuery: policy.sortQuery,
+        }, function (result) {
+            return result && result.data ? result.data : result;
         });
     }
 
@@ -762,33 +813,15 @@
         delete queryParams.end_date;
         queryParams.limit = String(CHART_PREVIEW_ROWS_LIMIT);
         var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
-        if (requestJson) {
-            return requestJson(policy.url, {
-                requestLabel: 'Current products',
-                timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
-                retryCount: 0,
-                cache: policy.fetchCache,
-                skipCacheBust: policy.skipCacheBust,
-                sortQuery: policy.sortQuery,
-            }).then(function (result) {
-                var body = result && result.data ? result.data : result;
-                return Array.isArray(body && body.rows) ? body.rows : [];
-            }).catch(function (err) {
-                throw err;
-            });
-        }
-        var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
-            ? window.AR.network.prepareRequestUrl(policy.url, {
-                skipCacheBust: policy.skipCacheBust,
-                sortQuery: policy.sortQuery,
-            })
-            : ((window.AR.network && window.AR.network.appendCacheBust && !policy.skipCacheBust)
-                ? window.AR.network.appendCacheBust(policy.url)
-                : policy.url);
-        return fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status + ' for /latest-all');
-            return response.json();
-        }).then(function (body) {
+        return fetchJsonWithPolicy(policy, '/latest-all', {
+            requestLabel: 'Current products',
+            timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
+            retryCount: 0,
+            cache: policy.fetchCache,
+            skipCacheBust: policy.skipCacheBust,
+            sortQuery: policy.sortQuery,
+        }, function (result) {
+            var body = result && result.data ? result.data : result;
             return Array.isArray(body && body.rows) ? body.rows : [];
         });
     }

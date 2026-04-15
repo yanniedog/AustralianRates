@@ -122,8 +122,18 @@ body.ar-public .chart-figure .terminal-chart-surface {
     background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent));
 }
 
+body.ar-public .chart-side-panel {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 94%, transparent), color-mix(in srgb, var(--ar-surface-3) 88%, transparent));
+}
+
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
     body.ar-public .chart-figure .terminal-chart-surface {
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+    }
+
+    body.ar-public .chart-side-panel-head,
+    body.ar-public .chart-selection-rail {
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
     }
