@@ -8,6 +8,7 @@
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var clientLog = utils.clientLog || function () {};
+    var pendingPointerScroll = null;
     var TAB_MAP = {
         chart: { button: els.tabChart, panel: els.panelChart, hash: 'chart' },
         explorer: { button: els.tabExplorer, panel: els.panelExplorer, hash: 'table' },
@@ -55,8 +56,8 @@
     function activateTab(tabId, options) {
         var opts = options || {};
         var activeTab = normalizeTabId(tabId);
-        var scrollX = window.scrollX || window.pageXOffset || 0;
-        var scrollY = window.scrollY || window.pageYOffset || 0;
+        var scrollX = typeof opts.restoreScrollX === 'number' ? opts.restoreScrollX : (window.scrollX || window.pageXOffset || 0);
+        var scrollY = typeof opts.restoreScrollY === 'number' ? opts.restoreScrollY : (window.scrollY || window.pageYOffset || 0);
         tabState.activeTab = activeTab;
         if (state && typeof state.setActiveTab === 'function') state.setActiveTab(activeTab);
 
@@ -112,13 +113,25 @@
         }
 
         visibleButtons().forEach(function (button) {
+            button.addEventListener('pointerdown', function () {
+                pendingPointerScroll = {
+                    x: window.scrollX || window.pageXOffset || 0,
+                    y: window.scrollY || window.pageYOffset || 0,
+                };
+            });
             button.addEventListener('click', function () {
+                var restoreScroll = pendingPointerScroll;
+                pendingPointerScroll = null;
                 if (button.classList.contains('active')) return;
-                activateTab(button.id.replace('tab-', ''));
+                activateTab(button.id.replace('tab-', ''), restoreScroll ? {
+                    restoreScrollX: restoreScroll.x,
+                    restoreScrollY: restoreScroll.y,
+                } : null);
             });
             button.addEventListener('keydown', function (event) {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
+                    pendingPointerScroll = null;
                     if (button.classList.contains('active')) return;
                     activateTab(button.id.replace('tab-', ''));
                     return;
