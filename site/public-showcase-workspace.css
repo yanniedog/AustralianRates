@@ -510,6 +510,55 @@ body.ar-legal .legal-hero { animation: none; }
     }
 }
 
+@media (max-width: 420px) {
+    body.ar-section-term-deposits .market-intro {
+        gap: 6px;
+        margin-bottom: 8px;
+        padding: 10px;
+    }
+
+    body.ar-section-term-deposits .market-intro-head,
+    body.ar-section-term-deposits .market-intro-body {
+        gap: 6px;
+    }
+
+    body.ar-section-term-deposits .market-intro-title {
+        max-width: none;
+        font-size: clamp(1.3rem, 7vw, 1.55rem);
+        line-height: 1;
+    }
+
+    body.ar-section-term-deposits .market-intro-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    body.ar-section-term-deposits .market-intro-actions .buttonish {
+        min-height: 40px;
+        padding: 8px 10px;
+        font-size: 0.76rem;
+        line-height: 1.1;
+    }
+
+    body.ar-section-term-deposits .market-intro-live-grid {
+        gap: 6px;
+    }
+
+    body.ar-section-term-deposits .market-intro-live-card {
+        padding: 4px 8px;
+    }
+
+    body.ar-section-term-deposits .market-intro-live-label {
+        font-size: 0.68rem;
+    }
+
+    body.ar-section-term-deposits .market-intro-live-card strong {
+        font-size: 0.78rem;
+    }
+}
+
 /* Mobile: compact footer and status so chart can use more viewport */
 @media (max-width: 760px) {
     body.ar-public {
