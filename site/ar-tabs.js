@@ -113,11 +113,13 @@
 
         visibleButtons().forEach(function (button) {
             button.addEventListener('click', function () {
+                if (button.classList.contains('active')) return;
                 activateTab(button.id.replace('tab-', ''));
             });
             button.addEventListener('keydown', function (event) {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
+                    if (button.classList.contains('active')) return;
                     activateTab(button.id.replace('tab-', ''));
                     return;
                 }

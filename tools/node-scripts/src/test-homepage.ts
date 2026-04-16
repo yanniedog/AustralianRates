@@ -902,18 +902,23 @@ async function verifyPivotLoad(page, results, label) {
         if (d && d.tagName === 'DETAILS') d.open = true;
     });
     await page.waitForTimeout(400);
-    const tabPivot = page.locator('#tab-pivot');
-    await tabPivot.scrollIntoViewIfNeeded().catch(() => {});
-    await tabPivot.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
-    await tabPivot.click({ force: true, timeout: 15000 });
-    await page.waitForTimeout(300);
-
     const pivotVisible = await page.evaluate(() => {
         const panel = document.getElementById('panel-pivot');
         return !!(panel && !panel.hidden && panel.classList.contains('active'));
     }).catch(() => false);
 
     if (!pivotVisible) {
+        const tabPivot = page.locator('#tab-pivot');
+        await tabPivot.scrollIntoViewIfNeeded().catch(() => {});
+        await tabPivot.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+        await tabPivot.click({ force: true, timeout: 15000 });
+        await page.waitForTimeout(300);
+    }
+    const pivotVisibleAfterClick = await page.evaluate(() => {
+        const panel = document.getElementById('panel-pivot');
+        return !!(panel && !panel.hidden && panel.classList.contains('active'));
+    }).catch(() => false);
+    if (!pivotVisibleAfterClick) {
         fail(results, `${label}: pivot tab did not activate`);
         return;
     }
