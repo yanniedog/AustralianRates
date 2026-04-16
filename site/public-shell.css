@@ -948,9 +948,12 @@ body.ar-not-found .market-intro-actions {
 
     .site-help-panel,
     .site-menu-panel {
-        inset: auto var(--ar-shell-gutter) var(--ar-shell-gutter) var(--ar-shell-gutter);
+        top: calc(var(--ar-header-height) + 8px);
+        right: var(--ar-shell-gutter);
+        bottom: var(--ar-shell-gutter);
+        left: var(--ar-shell-gutter);
         width: auto;
-        max-height: calc(100dvh - calc(var(--ar-shell-gutter) * 2));
+        max-height: calc(100dvh - var(--ar-header-height) - var(--ar-shell-gutter) - 8px);
     }
 
     body.ar-not-found .shell-public {

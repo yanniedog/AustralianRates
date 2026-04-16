@@ -763,6 +763,7 @@
                 })
                 : Promise.resolve([]);
 
+            var rowsError = null;
             var rowsPromise = chartData.fetchAllRateRows(baseParams, function (progress) {
                 if (chartUi.setStatus) {
                     chartUi.setStatus(
@@ -776,6 +777,9 @@
                         + progress.lastPage
                     );
                 }
+            }).catch(function (error) {
+                rowsError = error;
+                return null;
             });
             if (wantsReportPlots) {
                 previewRowsPromise.then(function () {
@@ -806,10 +810,8 @@
                 }
             }
 
-            var payload;
-            try {
-                payload = await rowsPromise;
-            } catch (rowsError) {
+            var payload = await rowsPromise;
+            if (rowsError) {
                 if (reportPreviewRendered) {
                     chartState.fallbackReason = 'series-timeout';
                     clientLog('warn', 'Chart detail hydration failed', {

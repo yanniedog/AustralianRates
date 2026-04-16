@@ -18,7 +18,7 @@
         config.sessionStatus = 'live';
         config.primaryHref = config.primaryHref || '#compare-leaders';
         config.primaryAction = config.primaryAction || 'Compare current leaders';
-        config.secondaryHref = config.secondaryHref || '#compare-start';
+        config.secondaryHref = config.secondaryHref || '#scenario';
         config.secondaryAction = config.secondaryAction || 'Adjust scenario';
         config.liveCards = Array.isArray(config.liveCards) ? config.liveCards : [];
         config.quickPicksLabel = config.quickPicksLabel || '';
@@ -69,11 +69,12 @@
 
     function buttonLink(href, label, className) { return '<a class="buttonish ' + esc(className || 'secondary') + '" href="' + esc(href) + '">' + esc(label) + '</a>'; }
     function liveCardMarkup(card) {
+        var cardId = String(card && card.id ? card.id : 'metric');
         return ''
-            + '<span class="market-intro-live-card">'
+            + '<span class="market-intro-live-card market-intro-live-card-' + esc(cardId) + '">'
             + '  <span class="market-intro-live-label">' + esc(card.label || 'Metric') + '</span>'
-            + '  <strong id="market-intro-live-' + esc(card.id || 'metric') + '">' + esc(card.value || '...') + '</strong>'
-            + '  <span id="market-intro-live-' + esc(card.id || 'metric') + '-note" class="market-intro-live-note" hidden>' + esc(card.note || '') + '</span>'
+            + '  <strong id="market-intro-live-' + esc(cardId) + '">' + esc(card.value || '...') + '</strong>'
+            + '  <span id="market-intro-live-' + esc(cardId) + '-note" class="market-intro-live-note" hidden>' + esc(card.note || '') + '</span>'
             + '</span>';
     }
     function quickPickMarkup(pick) {
@@ -120,7 +121,7 @@
         + '  </div>'
         + '  <div class="market-intro-actions">'
         + '    ' + buttonLink(copy.primaryHref || '#compare-leaders', copy.primaryAction || 'Compare leaders', 'primary')
-        + '    ' + buttonLink(copy.secondaryHref || '#compare-start', copy.secondaryAction || 'Adjust filters', 'ghost')
+        + '    ' + buttonLink(copy.secondaryHref || '#scenario', copy.secondaryAction || 'Adjust filters', 'ghost')
         + '  </div>'
         + '</div>'
         + '<div class="market-intro-body">'
