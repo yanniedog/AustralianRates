@@ -194,6 +194,31 @@ body.ar-public .market-intro-step p {
     }
 }
 
+@media (max-width: 560px) {
+    body.ar-public .market-intro-live-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    body.ar-public .market-intro-live-card {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    body.ar-public .market-intro-live-card-updated {
+        grid-column: 1 / -1;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    body.ar-public .market-intro-live-card-updated strong {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}
+
 /* Landscape: compact hero, hide steps, keep it minimal */
 @media (max-height: 760px) and (orientation: landscape) {
     body.ar-public .market-intro {

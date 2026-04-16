@@ -769,7 +769,8 @@
         return fetchJsonWithPolicy(policy, '/analytics/series', {
             requestLabel: 'Chart history',
             timeoutMs: CHART_SERIES_TIMEOUT_MS,
-            retryCount: 0,
+            retryCount: 2,
+            retryDelayMs: 900,
             cache: policy.fetchCache,
             skipCacheBust: policy.skipCacheBust,
             sortQuery: policy.sortQuery,
