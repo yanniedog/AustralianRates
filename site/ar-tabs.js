@@ -28,20 +28,28 @@
     }
 
     function preserveViewportScroll(scrollX, scrollY) {
+        var maxDrift = 96;
+        var active = true;
         function restore() {
+            if (!active) return;
             var deltaX = Math.abs(window.scrollX - scrollX);
             var deltaY = Math.abs(window.scrollY - scrollY);
-            if ((deltaX > 1 || deltaY > 1) && deltaY <= 96) {
+            if ((deltaX > 1 || deltaY > 1) && deltaY <= maxDrift) {
                 window.scrollTo(scrollX, scrollY);
             }
         }
+        function handleScroll() {
+            restore();
+        }
+        window.addEventListener('scroll', handleScroll, { passive: true });
         window.requestAnimationFrame(function () {
             restore();
             window.requestAnimationFrame(restore);
         });
-        [120, 360, 720, 1100].forEach(function (delay) {
-            window.setTimeout(restore, delay);
-        });
+        window.setTimeout(function () {
+            active = false;
+            window.removeEventListener('scroll', handleScroll);
+        }, 4000);
     }
 
     function activateTab(tabId, options) {
