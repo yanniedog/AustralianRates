@@ -81,15 +81,6 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const db = getReadDb(c)
   const dbs = { canonicalDb: db, analyticsDb: db }
   const baseFilters = options.buildFilters(merged)
-  const resolvedFilters = clampAnalyticsFiltersToToday(
-    (
-      baseFilters.startDate && baseFilters.endDate
-        ? baseFilters
-        : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
-          window: baseFilters.chartWindow ?? null,
-        }))
-    ) as TFilters,
-  )
 
   const result = await getCachedOrCompute(
     c.env,
@@ -97,11 +88,24 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
     requestedRepresentation,
     toQueryParams(merged),
     () =>
-      options.collectRowsResolved(dbs, requestedRepresentation, resolvedFilters).then((rows) => ({
-        rows: rows.rows,
-        representation: rows.representation,
-        fallbackReason: rows.fallbackReason,
-      })),
+      Promise.resolve()
+        .then(async () => {
+          const resolvedFilters = clampAnalyticsFiltersToToday(
+            (
+              baseFilters.startDate && baseFilters.endDate
+                ? baseFilters
+                : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
+                  window: baseFilters.chartWindow ?? null,
+                }))
+            ) as TFilters,
+          )
+          return options.collectRowsResolved(dbs, requestedRepresentation, resolvedFilters)
+        })
+        .then((rows) => ({
+          rows: rows.rows,
+          representation: rows.representation,
+          fallbackReason: rows.fallbackReason,
+        })),
   )
   const compactRows = wantsCompactRows(merged) ? buildGroupedChartRows(result.rows) : null
 

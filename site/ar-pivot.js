@@ -148,8 +148,9 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(params),
                 requestLabel: 'Pivot rows',
-                timeoutMs: 20000,
-                retryCount: 0,
+                timeoutMs: 32000,
+                retryCount: 1,
+                retryDelayMs: 1200,
             }).then(function (result) { return result.data; })
             : fetch((window.AR.network && window.AR.network.appendCacheBust ? window.AR.network.appendCacheBust(apiBase + '/analytics/pivot') : apiBase + '/analytics/pivot'), {
                 method: 'POST',

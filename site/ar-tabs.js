@@ -27,9 +27,28 @@
         window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
     }
 
+    function preserveViewportScroll(scrollX, scrollY) {
+        function restore() {
+            var deltaX = Math.abs(window.scrollX - scrollX);
+            var deltaY = Math.abs(window.scrollY - scrollY);
+            if ((deltaX > 1 || deltaY > 1) && deltaY <= 96) {
+                window.scrollTo(scrollX, scrollY);
+            }
+        }
+        window.requestAnimationFrame(function () {
+            restore();
+            window.requestAnimationFrame(restore);
+        });
+        [120, 360, 720, 1100].forEach(function (delay) {
+            window.setTimeout(restore, delay);
+        });
+    }
+
     function activateTab(tabId, options) {
         var opts = options || {};
         var activeTab = normalizeTabId(tabId);
+        var scrollX = window.scrollX || window.pageXOffset || 0;
+        var scrollY = window.scrollY || window.pageYOffset || 0;
         tabState.activeTab = activeTab;
         if (state && typeof state.setActiveTab === 'function') state.setActiveTab(activeTab);
 
@@ -58,6 +77,8 @@
         if (!opts.skipFilterSync && window.AR.filters && window.AR.filters.syncUrlState) {
             window.AR.filters.syncUrlState();
         }
+
+        preserveViewportScroll(scrollX, scrollY);
     }
 
     function applyUiMode() {
