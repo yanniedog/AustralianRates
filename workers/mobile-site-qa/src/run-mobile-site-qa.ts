@@ -64,7 +64,10 @@ async function gotoStable(page: Page, url: string, workspace: boolean): Promise<
 }
 
 async function prepareWorkspaceChart(page: Page): Promise<void> {
-  await page.locator('#tab-chart').click({ timeout: 15_000 }).catch(() => {})
+  const chartActiveOnLoad = await page.locator('#tab-chart.active').count().then((n) => n > 0).catch(() => false)
+  if (!chartActiveOnLoad) {
+    await page.locator('#tab-chart').click({ timeout: 15_000 }).catch(() => {})
+  }
   await page.waitForTimeout(400)
   await page.locator('#tab-explorer').click({ timeout: 15_000 }).catch(() => {})
   await page.waitForFunction(
