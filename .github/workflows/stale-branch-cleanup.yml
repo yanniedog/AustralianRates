@@ -1,13 +1,21 @@
 # Removes remote heads under agent/, feat/, fix/ that still exist after a merged PR
 # (common with squash merge when "delete head branch" was off or failed). Skips branches
 # with an open PR or with no merged PR for that head (does not delete unpushed-PR WIP).
+# Also runs on every push to main so leftover heads are cleared quickly (keeps Git Graph tidy).
 
 name: Stale branch cleanup
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: "38 6 * * 1"
   workflow_dispatch:
+
+concurrency:
+  group: stale-branch-cleanup
+  cancel-in-progress: true
 
 permissions:
   contents: write

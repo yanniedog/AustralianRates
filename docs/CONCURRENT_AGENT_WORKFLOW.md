@@ -27,7 +27,16 @@ For **non-draft** pull requests **into `main`** whose head branch starts with **
 - **Merge conflicts:** resolve by merging or rebasing **`origin/main`** into the PR branch, then push.
 - **Draft PRs:** not opted into auto-merge until marked ready for review.
 
-**Stale remote heads (squash merge):** `.github/workflows/stale-branch-cleanup.yml` runs **weekly** (and can be run manually via **Actions → Stale branch cleanup → Run workflow**). It deletes remote branches named **`agent/*`**, **`feat/*`**, or **`fix/*`** only when there is **no open PR** on that head and **at least one merged PR** used that head—so it clears leftover tips after squash merge without removing branches that never had a merge. It does **not** delete other branch names (for example ad-hoc `chore/` work without a merged PR is untouched unless you rename to match those prefixes).
+**Stale remote heads (squash merge):** `.github/workflows/stale-branch-cleanup.yml` runs on **every push to `main`**, **weekly** on a schedule, and via **Actions → Stale branch cleanup → Run workflow**. It deletes remote branches named **`agent/*`**, **`feat/*`**, or **`fix/*`** only when there is **no open PR** on that head and **at least one merged PR** used that head—so it clears leftover tips after squash merge without removing branches that never had a merge. It does **not** delete other branch names (for example ad-hoc `chore/` work without a merged PR is untouched unless you rename to match those prefixes).
+
+## Keeping the Git graph readable (local clones)
+
+Squash merges keep **`main`** linear, but **VS Code Git Graph** (and similar tools) draw one row per **ref** still pointing at old SHAs. After merges, clean up **local** clutter so the graph matches reality:
+
+1. **GitHub (one-time):** enable **Automatically delete head branches** on merged PRs (see **GitHub repository settings (one-time, owner)** above). That removes the remote head immediately when GitHub merges the PR.
+2. **After your PR merges (or when the graph looks noisy):** from the repo root run **`npm run git:graph-hygiene`**. It sets **`fetch.prune=true`** for this clone (once), runs **`git fetch origin --prune`**, and deletes **local** branches whose upstream is **`[gone]`** (skipped for any branch checked out in a **worktree** or the current branch).
+3. **Delete your finished topic branch locally** if it still exists: **`git branch -d agent/your-topic`** (use **`-D`** only if you understand the branch is disposable).
+4. **Avoid duplicate “main” lines:** do not keep a second local branch at the same commit as **`main`** unless you need it (for example two **worktrees** cannot both check out **`main`**—prefer one worktree on **`main`** and another on a **new topic branch** from **`origin/main`**, or stay **detached** at **`origin/main`** instead of inventing alias branch names).
 
 ## What a PR is (minimal mental model)
 
@@ -106,7 +115,8 @@ Each worktree is an independent checkout; pushes still go to the same remote.
 - **One branch per agent/task, one PR each into `main`.**
 - **CI already guards PRs** in this repo; **`ci_result`** should be a required check on **`main`** for auto-merge to finish.
 - **Auto-merge (squash) + delete head branch** (when configured on GitHub) reduce leftover open PRs and remote branches for **`agent/`**, **`feat/`**, **`fix/`** PRs.
-- **Weekly `stale-branch-cleanup.yml`** catches remote **`agent/`** / **`feat/`** / **`fix/`** heads left behind after merged PRs if automatic deletion was off.
+- **`stale-branch-cleanup.yml`** runs on **pushes to `main`**, **weekly**, and manually; it catches remote **`agent/`** / **`feat/`** / **`fix/`** heads left behind after merged PRs if automatic deletion was off.
+- **`npm run git:graph-hygiene`** (after merges) trims **local** stale refs so Git Graph stays accurate.
 - **Preview the static site** via Cloudflare Pages branch previews when enabled; **production** remains `https://www.australianrates.com` after `main` deploys.
 - **Merge + update other branches from `main`** to roll work together safely.
 - **Post-merge:** agents still run production verification from the repo root (`AGENTS.md`); CI green is not a substitute for live-site checks where Playwright cannot pass in the cloud.
