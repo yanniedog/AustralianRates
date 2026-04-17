@@ -5,6 +5,7 @@ import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
 import { registerDebugLogRoutes } from './debug-log'
+import { registerDoctorSchedulePublicRoute } from './doctor-schedule-public'
 import { registerSiteUiPublicRoute } from './site-ui-public'
 
 const DEFAULT_LOOKBACK_YEARS = 5
@@ -77,6 +78,7 @@ export const economicPublicRoutes = new Hono<AppContext>()
 
 registerDebugLogRoutes(economicPublicRoutes)
 registerSiteUiPublicRoute(economicPublicRoutes)
+registerDoctorSchedulePublicRoute(economicPublicRoutes)
 
 economicPublicRoutes.get('/health', async (c) => {
   withPublicCache(c, 30)

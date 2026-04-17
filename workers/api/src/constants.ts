@@ -60,6 +60,10 @@ export const CHART_MAX_PRODUCTS_MIN = 1
 export const CHART_MAX_PRODUCTS_MAX = 1000
 /** JSON object (string in app_config) for public Rate Report ribbon (bands) styling. */
 export const CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style'
+/** JSON in app_config: `{"hour":0-23,"time_zone":"IANA"}`. Served at GET /doctor-schedule for scheduled CI. */
+export const DOCTOR_SCHEDULE_KEY = 'doctor_schedule'
+/** Default wall-clock hour in `time_zone` when no `doctor_schedule` row exists. */
+export const DEFAULT_DOCTOR_SCHEDULE_HOUR = 10
 export const INGEST_PAUSE_MODE_KEY = 'ingest_pause_mode'
 export const INGEST_PAUSE_REASON_KEY = 'ingest_pause_reason'
 export const INGEST_PAUSE_MODES = ['active', 'repair_pause'] as const

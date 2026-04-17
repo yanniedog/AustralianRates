@@ -55,6 +55,7 @@ import {
 import { registerCpiRoutes } from './cpi-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerSavingsChartDataRoute } from './chart-data/savings'
+import { registerDoctorSchedulePublicRoute } from './doctor-schedule-public'
 import { registerSiteUiPublicRoute } from './site-ui-public'
 import { registerDebugLogRoutes } from './debug-log'
 
@@ -74,6 +75,7 @@ registerRbaRoutes(savingsPublicRoutes)
 registerCpiRoutes(savingsPublicRoutes)
 registerSavingsChartDataRoute(savingsPublicRoutes)
 registerSiteUiPublicRoute(savingsPublicRoutes)
+registerDoctorSchedulePublicRoute(savingsPublicRoutes)
 
 savingsPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

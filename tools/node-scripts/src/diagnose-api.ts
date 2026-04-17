@@ -191,14 +191,24 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   }
 
   if (dataset.key === 'home-loans') {
-    const [siteUi, cpi, rba] = await Promise.all([
+    const [siteUi, doctorSchedule, cpi, rba] = await Promise.all([
       requestJson(`${base}/site-ui`),
+      requestJson(`${base}/doctor-schedule`),
       requestJson(`${base}/cpi/history`),
       requestJson(`${base}/rba/history`),
     ]);
     pushCheck('site-ui', siteUi);
     if (siteUi.status !== 200 || !siteUi.json || siteUi.json.ok !== true) {
       out.failures.push(`site-ui status ${siteUi.status} or ok!=true`);
+    }
+    pushCheck('doctor-schedule', doctorSchedule);
+    if (doctorSchedule.status !== 200 || !doctorSchedule.json || doctorSchedule.json.ok !== true) {
+      out.failures.push(`doctor-schedule status ${doctorSchedule.status} or ok!=true`);
+    } else {
+      const ds = doctorSchedule.json as Record<string, unknown>;
+      if (typeof ds.hour !== 'number' || typeof ds.time_zone !== 'string') {
+        out.failures.push('doctor-schedule missing numeric hour or string time_zone');
+      }
     }
     pushCheck('cpi/history', cpi);
     if (cpi.status !== 200 || !cpi.json || cpi.json.ok !== true) {
