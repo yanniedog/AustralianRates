@@ -39,7 +39,7 @@
             </div>
             <div class="rate-check-row" style="margin-top:10px;gap:12px;">
                 <button type="button" id="doctor-schedule-save-btn" class="primary">Save doctor schedule</button>
-                <button type="button" id="doctor-schedule-reset-btn" class="secondary">Reset to default (10, Melbourne)</button>
+                <button type="button" id="doctor-schedule-reset-btn" class="secondary">Reset to default (19:00 Melbourne)</button>
             </div>
             <p class="admin-hint" id="doctor-schedule-stored" style="margin-top:8px;opacity:0.75;"></p>
         </section>
@@ -392,7 +392,7 @@
                     ensureDoctorHourOptions();
                     initDoctorTzSelect();
                     if (doctorHourEl && doctorTzEl) {
-                        var dh = 10;
+                        var dh = 19;
                         var dtz = 'Australia/Melbourne';
                         if (doctorRow && doctorRow.value) {
                             try {
@@ -411,7 +411,7 @@
                         if (doctorStoredEl) {
                             doctorStoredEl.textContent = doctorRow
                                 ? ('Stored: hour ' + String(dh) + ', ' + dtz + ' (updated ' + String(doctorRow.updated_at || '') + ').')
-                                : 'Default: hour 10, Australia/Melbourne (no app_config row).';
+                                : 'Default: hour 19 (~7pm), Australia/Melbourne (no app_config row).';
                         }
                     }
                     var fallbackPct = pctFromStored(legacyRow ? legacyRow.value : '');
@@ -636,7 +636,7 @@
             function saveDoctorSchedule() {
                 ensureDoctorHourOptions();
                 initDoctorTzSelect();
-                var h = parseInt(doctorHourEl && doctorHourEl.value ? doctorHourEl.value : '10', 10);
+                var h = parseInt(doctorHourEl && doctorHourEl.value ? doctorHourEl.value : '19', 10);
                 var tz = doctorTzEl && doctorTzEl.value ? String(doctorTzEl.value).trim() : 'Australia/Melbourne';
                 if (!Number.isFinite(h) || h < 0 || h > 23) {
                     showMsg('Hour must be 0–23.', true);
@@ -660,7 +660,7 @@
             }
 
             function resetDoctorSchedule() {
-                if (!confirm('Remove stored doctor schedule? Default is hour 10, Australia/Melbourne.')) return;
+                if (!confirm('Remove stored doctor schedule? Default is hour 19 (~7pm), Australia/Melbourne.')) return;
                 portal.fetchAdmin('/config', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
