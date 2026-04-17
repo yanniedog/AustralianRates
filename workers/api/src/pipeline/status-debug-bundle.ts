@@ -40,6 +40,12 @@ import {
   loadLenderUniverseAuditReport,
   runLenderUniverseAudit,
 } from './lender-universe-audit'
+import {
+  getCachedProductClassificationAuditReport,
+  loadProductClassificationAuditReport,
+  runProductClassificationAudit,
+  shouldFilterProductClassificationLogForActionable,
+} from './product-classification-audit'
 import type { EnvBindings } from '../types'
 import { extractTraceback, parseLogContext, queryProblemLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
@@ -63,6 +69,7 @@ const DEFAULT_SECTIONS = [
   'cdr',
   'coverage',
   'lender_universe',
+  'product_classification',
   'replay',
   'probes',
   'backlog',
@@ -299,6 +306,7 @@ export type BuildStatusDebugBundleQuery = {
   healthHistoryLimit?: string
   refreshCoverage?: string
   refreshLenderUniverse?: string
+  refreshProductClassification?: string
   logLimit?: string
   since?: string
   logHoursBeforeHealth?: string
@@ -322,6 +330,7 @@ export async function buildStatusDebugBundle(
   const healthHistoryLimit = clamp(Math.floor(Number(query.healthHistoryLimit) || 12), 1, 48)
   const refreshCoverage = truthyQuery(query.refreshCoverage)
   const refreshLenderUniverse = truthyQuery(query.refreshLenderUniverse)
+  const refreshProductClassification = truthyQuery(query.refreshProductClassification)
   const logLimit = clamp(Math.floor(Number(query.logLimit) || 500), 1, 10000)
   const logHoursBeforeHealth = clamp(Math.floor(Number(query.logHoursBeforeHealth) || 24), 1, 168)
   const includeProbePayloads = truthyQuery(query.includeProbePayloads)
@@ -452,10 +461,11 @@ export async function buildStatusDebugBundle(
     parallel.push(
       (async () => {
         const sinceTs = sinceExplicit ?? logSinceFromHealth(latestHealth?.checked_at, logHoursBeforeHealth)
-        const [{ entries, total }, pauseConfig, gapReport] = await Promise.all([
+        const [{ entries, total }, pauseConfig, gapReport, classificationReport] = await Promise.all([
           queryProblemLogs(env.DB, { sinceTs, limit: logLimit }),
           getIngestPauseConfig(env.DB).catch(() => ({ mode: 'active' as const, reason: null })),
           loadCoverageGapAuditReport(env.DB).catch(() => null),
+          loadProductClassificationAuditReport(env.DB).catch(() => null),
         ])
         logEntriesOut = entries.map((e) => ({
           id: e.id,
@@ -473,6 +483,7 @@ export async function buildStatusDebugBundle(
           const level = String(entry.level || '').toLowerCase()
           if (level !== 'warn' && level !== 'error') return false
           if (shouldFilterCoverageGapLogForActionable(entry, gapReport)) return false
+          if (shouldFilterProductClassificationLogForActionable(entry, classificationReport)) return false
           if (shouldFilterSiteHealthAttentionForActionable(entry, actionableHealthContext)) return false
           if (shouldIgnoreStatusActionableLog(entry, pauseConfig.mode)) return false
           return true
@@ -552,6 +563,31 @@ export async function buildStatusDebugBundle(
           report = await runLenderUniverseAudit(env, { persist: true })
         }
         out.lender_universe = { report }
+      })(),
+    )
+  }
+
+  if (sections.has('product_classification')) {
+    parallel.push(
+      (async () => {
+        let report =
+          getCachedProductClassificationAuditReport() ||
+          (await loadProductClassificationAuditReport(env.DB))
+        const shouldRefresh =
+          !report ||
+          refreshProductClassification ||
+          (latestHealth?.overall_ok === true &&
+            parseIsoDateMs(report.generated_at) != null &&
+            parseIsoDateMs(latestHealth.checked_at) != null &&
+            parseIsoDateMs(report.generated_at)! < parseIsoDateMs(latestHealth.checked_at)!)
+        if (shouldRefresh) {
+          try {
+            report = await runProductClassificationAudit(env, { persist: true })
+          } catch {
+            // Fall through with whatever cached report (or null) we have.
+          }
+        }
+        out.product_classification = { report }
       })(),
     )
   }
