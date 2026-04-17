@@ -142,6 +142,7 @@ export async function onRequest(context) {
     const chartWindow = normaliseChartWindow(url.searchParams.get('chart_window'));
     const preset = normalisePreset(url.searchParams.get('preset'));
 
+    const kvBound = !!(env && env.CHART_CACHE_KV);
     // Prefer direct KV read when the Pages project has the CHART_CACHE_KV binding
     // attached — avoids the zone routing loop that causes self-fetch 404s.
     let result = await fetchSnapshotFromKv(env, section, chartWindow, preset);
@@ -149,7 +150,10 @@ export async function onRequest(context) {
         // Fall back to HTTP subrequest (works when CF doesn't route back to Pages).
         result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
     }
-    if (!result.ok) return wrapOriginalResponse(originalResponse, 'miss:' + result.reason);
+    if (!result.ok) {
+        const diag = kvBound ? 'kv+' : 'kv-';
+        return wrapOriginalResponse(originalResponse, 'miss:' + diag + ':' + result.reason);
+    }
     const snapshotJson = result.body;
     if (snapshotJson.length > MAX_INLINE_BYTES) {
         return wrapOriginalResponse(originalResponse, 'bypass-size:' + snapshotJson.length);
