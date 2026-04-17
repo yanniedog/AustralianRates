@@ -66,21 +66,25 @@
     }
     </script>
     <script src="site-variant.js?v=3fa6bb1046"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="vendor/tabulator/tabulator_midnight.min.css?v=654998d85e">
     <link rel="stylesheet" href="vendor/pivottable/pivot.min.css?v=9e7dcce8df">
     <link rel="stylesheet" href="foundation.css?v=d30e686e00">
-    <link rel="stylesheet" href="public-shell.css?v=8f6a25d9df">
-    <link rel="stylesheet" href="public-results.css?v=5b56552f4b">
+    <link rel="stylesheet" href="public-shell.css?v=f0bd80d34d">
+    <link rel="stylesheet" href="public-results.css?v=7a133b0f4b">
     <link rel="stylesheet" href="public-filter-pads.css?v=164a06c4c3">
     <link rel="stylesheet" href="public-pivot.css?v=fbcc944323">
-    <link rel="stylesheet" href="public-analysis.css?v=cc393f1f43">
+    <link rel="stylesheet" href="public-analysis.css?v=c145906298">
     <link rel="stylesheet" href="public-showcase.css?v=a9922462db">
-    <link rel="stylesheet" href="public-showcase-hero.css?v=96a621217d">
-    <link rel="stylesheet" href="public-showcase-workspace.css?v=0754265497">
+    <link rel="stylesheet" href="public-showcase-hero.css?v=4faf4aee22">
+    <link rel="stylesheet" href="public-showcase-workspace.css?v=a1b19038d9">
     <link rel="stylesheet" href="responsive.css?v=873e720eb2">
     <link rel="stylesheet" href="mobile-host.css?v=99a83ff1d3">
+    <link rel="stylesheet" href="public-polish.css?v=07f61c4bfa">
     <script src="theme.js?v=f42ffd8ec5"></script>
+    <script src="ar-polish-init.js?v=250bf4eb1e" defer></script>
 </head>
 <body class="ar-public ar-section-home-loans" data-ar-section="home-loans">
     <a href="#main-content" class="skip-link">Skip to content</a>
@@ -109,7 +113,30 @@
         </noscript>
         <div id="ar-section-root"></div>
     </main>
-    <p class="disclaimer">This site provides general information only. Always confirm rates and product terms directly with the lender.</p>
+    <footer class="site-footer" role="contentinfo">
+        <div class="site-footer-inner">
+            <span class="site-footer-meta">
+                <span class="site-footer-dot" aria-hidden="true"></span>
+                AustralianRates
+                <span aria-hidden="true">-</span>
+                Daily CDR data
+                <span aria-hidden="true">-</span>
+                <a class="site-footer-data-link" href="/api/home-loan-rates/export.csv">CSV</a>
+                <a class="site-footer-data-link" href="/api/home-loan-rates/health">API status</a>
+            </span>
+            <nav class="site-footer-nav" aria-label="Site">
+                <a href="/">Mortgage</a>
+                <a href="/savings/">Savings</a>
+                <a href="/term-deposits/">Term Deposits</a>
+                <a href="/economic-data/">Economic Data</a>
+                <a href="/about/">About</a>
+                <a href="/privacy/">Privacy</a>
+                <a href="/terms/">Terms</a>
+                <a href="/contact/">Contact</a>
+            </nav>
+        </div>
+    </footer>
+    <p class="disclaimer">General information only. Always confirm rates and product terms directly with the lender.</p>
     <script src="vendor/tabulator/tabulator.min.js?v=8fabbcd1c2"></script>
     <script src="vendor/jquery/jquery.min.js?v=7aa6b0e08f"></script>
     <script src="vendor/jquery-ui/jquery-ui.min.js?v=9d9b75e6bf"></script>
@@ -126,34 +153,34 @@
     <script src="ar-section-config.js?v=36c348bcfb"></script>
     <script src="ar-config.js?v=ab0129871d"></script>
     <script src="ar-chart-site-ui.js?v=f6f22583b5"></script>
-    <script src="ar-public-page.js?v=3fa6f5154a"></script>
-    <script src="ar-public-intro.js?v=86f690b471"></script>
+    <script src="ar-public-page.js?v=3d52460e15"></script>
+    <script src="ar-public-intro.js?v=71f31a55f2"></script>
     <script src="ar-dom.js?v=81006e3151"></script>
     <script src="ar-layout-resize.js?v=60c92cabe3"></script>
     <script src="ar-ui-scale.js?v=5870f0ecd5"></script>
     <script src="ar-state.js?v=fdf590207c"></script>
-    <script src="ar-tabs.js?v=253de1c472"></script>
+    <script src="ar-tabs.js?v=f27e6adef3"></script>
     <script src="ar-filter-ui.js?v=43a25d626d"></script>
     <script src="ar-filters.js?v=4621e95cd3"></script>
     <script src="ar-filter-pads.js?v=826d15af5e"></script>
-    <script src="ar-hero.js?v=277922ceb5"></script>
+    <script src="ar-hero.js?v=1527deaefb"></script>
     <script src="ar-explorer.js?v=81662a9cee"></script>
-    <script src="ar-pivot.js?v=f9e585a67a"></script>
+    <script src="ar-pivot.js?v=d98db11482"></script>
     <script src="ar-chart-config.js?v=fae1c896e6"></script>
     <script src="ar-chart-economic-overlays.js?v=53ef97af97"></script>
-    <script src="ar-chart-data.js?v=fd9ab07835"></script>
+    <script src="ar-chart-data.js?v=06459bb58e"></script>
     <script src="ar-chart-echarts-helpers.js?v=7e8d0c75ab"></script>
     <script src="ar-chart-market.js?v=cf77713c6c"></script>
     <script src="ar-chart-market-echarts.js?v=6ee1a97d33"></script>
     <script src="ar-chart-echarts.js?v=a2af757ce0"></script>
     <script src="ar-chart-macro-lwc-shared.js?v=0e104362fd"></script>
     <script src="ar-chart-report-plot-payload-utils.js?v=98862b6c8e"></script>
-    <script src="ar-chart-report-plot-shared.js?v=d5f0c7b6b3"></script>
+    <script src="ar-chart-report-plot-shared.js?v=e0ab53f4dd"></script>
     <script src="ar-chart-home-loans-report-lwc.js?v=2fb68d882f"></script>
     <script src="ar-chart-lightweight.js?v=5e27f977e8"></script>
-    <script src="ar-chart-ui.js?v=868dd65132"></script>
+    <script src="ar-chart-ui.js?v=c13850aa57"></script>
     <script src="ar-chart-summary.js?v=c3e328a4b4"></script>
-    <script src="ar-charts.js?v=6e5b756425"></script>
+    <script src="ar-charts.js?v=4ac4f37380"></script>
     <script src="ar-refresh.js?v=d3b07741b6"></script>
     <script src="ar-rate-changes.js?v=1253a8ad3d"></script>
     <script src="ar-executive-summary.js?v=80f0e4da29"></script>

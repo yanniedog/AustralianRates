@@ -1,0 +1,234 @@
+/*
+ * public-polish.css
+ * Cross-section visual polish: section-branded accents, richer background,
+ * header scroll shadow, subtle card hover lift. Loaded after other public
+ * stylesheets so it can tune variables and override hover/focus states.
+ *
+ * Data-first: no new content, no marketing. Colour-codes sections for fast
+ * scanning and fixes the chart-workspace dead-space UX issue at the layout
+ * level (see public-analysis.css for the structural clamp).
+ */
+
+/* ── Section accents ─────────────────────────────────────────────────── */
+
+:root[data-theme="dark"] body.ar-section-home-loans,
+:root[data-theme="light"] body.ar-section-home-loans {
+    --ar-section-accent: #3b82f6;
+    --ar-section-accent-soft: rgba(59, 130, 246, 0.14);
+    --ar-section-glow: rgba(59, 130, 246, 0.20);
+}
+
+:root[data-theme="dark"] body.ar-section-savings,
+:root[data-theme="light"] body.ar-section-savings {
+    --ar-section-accent: #10b981;
+    --ar-section-accent-soft: rgba(16, 185, 129, 0.14);
+    --ar-section-glow: rgba(16, 185, 129, 0.20);
+}
+
+:root[data-theme="dark"] body.ar-section-term-deposits,
+:root[data-theme="light"] body.ar-section-term-deposits {
+    --ar-section-accent: #f59e0b;
+    --ar-section-accent-soft: rgba(245, 158, 11, 0.14);
+    --ar-section-glow: rgba(245, 158, 11, 0.20);
+}
+
+:root[data-theme="dark"] body.ar-section-economic-data,
+:root[data-theme="light"] body.ar-section-economic-data {
+    --ar-section-accent: #a855f7;
+    --ar-section-accent-soft: rgba(168, 85, 247, 0.14);
+    --ar-section-glow: rgba(168, 85, 247, 0.20);
+}
+
+body.ar-public {
+    --ar-section-accent: var(--ar-section-accent, var(--ar-accent));
+    --ar-section-accent-soft: var(--ar-section-accent-soft, var(--ar-accent-soft));
+    --ar-section-glow: var(--ar-section-glow, rgba(59, 130, 246, 0.18));
+}
+
+/* ── Section-tinted background aurora ───────────────────────────────── */
+
+body.ar-public .bg-layer {
+    background:
+        radial-gradient(900px 480px at 14% -8%, var(--ar-section-glow), transparent 60%),
+        radial-gradient(700px 400px at 96% 6%, color-mix(in srgb, var(--ar-section-accent) 14%, transparent), transparent 62%),
+        radial-gradient(900px 560px at 50% 120%, color-mix(in srgb, var(--ar-section-accent) 8%, transparent), transparent 70%);
+    opacity: 1;
+}
+
+:root[data-theme="light"] body.ar-public .bg-layer {
+    background:
+        radial-gradient(800px 420px at 14% -6%, color-mix(in srgb, var(--ar-section-accent) 10%, transparent), transparent 60%),
+        radial-gradient(640px 360px at 96% 4%, color-mix(in srgb, var(--ar-section-accent) 8%, transparent), transparent 60%);
+}
+
+/* ── Header: section-tinted active link, scroll shadow ──────────────── */
+
+body.ar-public .site-header {
+    transition: box-shadow var(--ar-motion-base) var(--ar-ease),
+                border-color var(--ar-motion-base) var(--ar-ease);
+}
+
+body.ar-public.is-scrolled .site-header {
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--ar-section-accent) 10%, rgba(0, 0, 0, 0.25));
+    border-bottom-color: color-mix(in srgb, var(--ar-section-accent) 28%, var(--ar-line-strong));
+}
+
+body.ar-public .site-header-segment-link.is-active {
+    color: var(--ar-text) !important;
+    background: color-mix(in srgb, var(--ar-section-accent) 16%, var(--ar-surface)) !important;
+    border: 1px solid color-mix(in srgb, var(--ar-section-accent) 46%, var(--ar-line-strong)) !important;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 6%, transparent),
+                0 0 0 1px color-mix(in srgb, var(--ar-section-accent) 20%, transparent);
+}
+
+body.ar-public .site-header-segment-link:hover {
+    color: var(--ar-text);
+    background: color-mix(in srgb, var(--ar-section-accent) 8%, var(--ar-surface-2));
+}
+
+/* ── Primary CTA tinted to section accent ───────────────────────────── */
+
+body.ar-public .market-intro-actions .buttonish.primary,
+body.ar-public button.primary.is-section-cta,
+body.ar-public .buttonish.primary.is-section-cta {
+    background: var(--ar-section-accent);
+    border-color: color-mix(in srgb, var(--ar-section-accent) 60%, transparent);
+    box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--ar-section-accent) 80%, transparent);
+}
+
+body.ar-public .market-intro-actions .buttonish.primary:hover,
+body.ar-public button.primary.is-section-cta:hover,
+body.ar-public .buttonish.primary.is-section-cta:hover {
+    background: color-mix(in srgb, var(--ar-section-accent) 84%, #000);
+    color: #fff;
+}
+
+/* ── Card polish: subtle hover lift, snappier focus ─────────────────── */
+
+@media (hover: hover) {
+    body.ar-public .ladder-card,
+    body.ar-public .exec-card,
+    body.ar-public .chart-series-card,
+    body.ar-public .chart-spotlight-card {
+        transition:
+            transform var(--ar-motion-fast) var(--ar-ease),
+            border-color var(--ar-motion-fast) var(--ar-ease),
+            box-shadow var(--ar-motion-fast) var(--ar-ease),
+            background-color var(--ar-motion-fast) var(--ar-ease);
+        will-change: transform;
+    }
+
+    body.ar-public .ladder-card:hover,
+    body.ar-public .exec-card:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--ar-section-accent) 36%, var(--ar-line-strong));
+        box-shadow: 0 10px 26px -14px color-mix(in srgb, var(--ar-section-accent) 55%, rgba(0, 0, 0, 0.5));
+    }
+}
+
+/* First ladder card = current leader visual emphasis */
+body.ar-public .quick-compare-cards .ladder-card:first-child,
+body.ar-public .ladder-list .ladder-card:first-child {
+    border-color: color-mix(in srgb, var(--ar-section-accent) 40%, var(--ar-line-strong));
+    background: color-mix(in srgb, var(--ar-section-accent) 10%, var(--ar-surface-2));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-section-accent) 20%, transparent);
+}
+
+body.ar-public .quick-compare-cards .ladder-card:first-child .ladder-rate,
+body.ar-public .ladder-list .ladder-card:first-child .ladder-rate {
+    color: var(--ar-text);
+}
+
+/* ── Focus ring tinted per section ──────────────────────────────────── */
+
+body.ar-public :focus-visible {
+    outline: 2px solid var(--ar-section-accent);
+    outline-offset: 2px;
+}
+
+/* ── Site footer: compact data-first footer (replaces bare disclaimer) ─ */
+
+body.ar-public .site-footer {
+    width: min(var(--ar-shell-max), calc(100vw - calc(var(--ar-shell-gutter) * 2)));
+    margin: 0 auto;
+    padding: 14px 0 28px;
+    border-top: 1px solid var(--ar-line);
+    color: var(--ar-text-muted);
+    font-size: 0.78rem;
+}
+
+body.ar-public .site-footer-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 10px 0;
+}
+
+body.ar-public .site-footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-left: auto;
+}
+
+body.ar-public .site-footer-nav a,
+body.ar-public .site-footer a.site-footer-data-link {
+    color: var(--ar-text-soft);
+    text-decoration: none;
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+
+body.ar-public .site-footer-nav a:hover,
+body.ar-public .site-footer a.site-footer-data-link:hover {
+    color: var(--ar-text);
+    background: color-mix(in srgb, var(--ar-section-accent) 10%, var(--ar-surface-2));
+}
+
+body.ar-public .site-footer-meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    color: var(--ar-text-muted);
+}
+
+body.ar-public .site-footer-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ar-section-accent) 70%, transparent);
+    display: inline-block;
+}
+
+/* Replace legacy disclaimer paragraph visual with compact inline note */
+body.ar-public p.disclaimer {
+    max-width: var(--ar-shell-max);
+    margin: 0 auto;
+    padding: 0 var(--ar-shell-gutter);
+    color: var(--ar-text-muted);
+    font-size: 0.74rem;
+    text-align: left;
+}
+
+/* ── Render perf: below-fold content-visibility for non-critical panels - */
+body.ar-public .market-panel-chart-wrapper,
+body.ar-public .executive-summary-panel,
+body.ar-public .rate-changes-panel {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 720px;
+}
+
+/* ── Mobile polish ──────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+    body.ar-public .site-footer-inner {
+        padding: 8px 0;
+    }
+
+    body.ar-public .site-footer-nav {
+        margin-left: 0;
+        width: 100%;
+    }
+}
