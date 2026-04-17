@@ -8,13 +8,14 @@
  * compilation issues inside the Pages build pipeline.
  */
 
+// Keep in sync with `SNAPSHOT_INLINE_RESPONSE_MAX_BYTES` in workers/api/src/utils/snapshot-inline-trim.ts
 const MAX_INLINE_BYTES = 400000;
 // Budget for the fallback HTTP subrequest. Only used when the CHART_CACHE_KV
 // binding is not attached to the Pages project (direct KV reads are effectively
 // free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
-const SNAPSHOT_KV_VERSION = 4;
+const SNAPSHOT_KV_VERSION = 5;
 const SECTION_KV_KEY = {
     'home-loan-rates': 'home_loans',
     'savings-rates': 'savings',
@@ -54,10 +55,12 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     const dbSection = SECTION_KV_KEY[sectionApiName];
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
-    const key = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
+    const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
+    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
     try {
-        const body = await env.CHART_CACHE_KV.get(key);
-        if (!body) return { ok: false, reason: 'kv-miss', url: 'kv:' + key };
+        let body = await env.CHART_CACHE_KV.get(inlineKey);
+        if (!body) body = await env.CHART_CACHE_KV.get(mainKey);
+        if (!body) return { ok: false, reason: 'kv-miss', url: 'kv:' + inlineKey };
         // The KV value is the raw SnapshotPayload JSON (no `{ok, section, scope, builtAt, data}` wrapper).
         // The client expects the wrapped shape, so wrap it here.
         const parsed = JSON.parse(body);
