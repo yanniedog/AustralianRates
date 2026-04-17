@@ -58,6 +58,7 @@ import { registerSavingsChartDataRoute } from './chart-data/savings'
 import { registerDoctorSchedulePublicRoute } from './doctor-schedule-public'
 import { registerSiteUiPublicRoute } from './site-ui-public'
 import { registerDebugLogRoutes } from './debug-log'
+import { registerSnapshotRoute } from './snapshot-public'
 
 export const savingsPublicRoutes = new Hono<AppContext>()
 
@@ -76,6 +77,7 @@ registerCpiRoutes(savingsPublicRoutes)
 registerSavingsChartDataRoute(savingsPublicRoutes)
 registerSiteUiPublicRoute(savingsPublicRoutes)
 registerDoctorSchedulePublicRoute(savingsPublicRoutes)
+registerSnapshotRoute(savingsPublicRoutes, 'savings')
 
 savingsPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)
