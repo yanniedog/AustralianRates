@@ -67,7 +67,7 @@
         var v = String(value || '').trim();
         if (!v) return '';
         if (f === 'security_purpose') {
-            if (/^owner/i.test(v)) return 'Owner';
+            if (/^owner/i.test(v)) return 'Owner Occupier';
             if (/^investment/i.test(v)) return 'Investor';
         }
         if (f === 'repayment_type') {
@@ -97,7 +97,26 @@
                 return m + ' months';
             }
         }
+        if (f === 'product_name') {
+            return ribbonTrimProductName(v);
+        }
         return v;
+    }
+
+    /**
+     * Strip redundant descriptors that appear higher in the hierarchy
+     * (e.g. "(Owner Occupied)", trailing bank suffix) from product names
+     * so the tree reads compactly.
+     */
+    function ribbonTrimProductName(raw) {
+        var s = String(raw || '').trim();
+        if (!s) return s;
+        s = s.replace(/\s*\((?:owner\s*occupied|owner\s*occupier|investor|investment)\s*\)\s*/gi, ' ');
+        s = s.replace(/\s*-\s*(?:owner\s*occupied|owner\s*occupier|investor|investment)\s*/gi, ' ');
+        s = s.replace(/\s*\((?:P\s*&\s*I|principal\s*&\s*interest|interest\s*only|IO)\s*\)\s*/gi, ' ');
+        s = s.replace(/\s*\((?:variable|fixed(?:\s+\d+\s*y(?:ear|rs)?)?)\s*\)\s*/gi, ' ');
+        s = s.replace(/\s+/g, ' ').trim();
+        return s;
     }
 
     function ribbonCompactFieldLabel(field) {
@@ -133,4 +152,5 @@
     window.AR.ribbon.ribbonCompactTierValue = ribbonCompactTierValue;
     window.AR.ribbon.ribbonCompactFieldLabel = ribbonCompactFieldLabel;
     window.AR.ribbon.ribbonCompactBranchLabel = ribbonCompactBranchLabel;
+    window.AR.ribbon.ribbonTrimProductName = ribbonTrimProductName;
 })();

@@ -506,59 +506,82 @@ button.bank-option-card.is-selected .bank-badge-sub {
 .quick-compare-cards,
 .executive-summary-sections {
     display: grid;
-    gap: 10px;
+    gap: 6px;
 }
 
 .quick-compare-cards {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .ladder-card,
 .exec-card {
     display: grid;
-    gap: 6px;
-    padding: 10px 11px;
-    border: 1px solid var(--ar-line);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--ar-surface-2) 94%, var(--ar-surface));
+    gap: 2px;
+    padding: 7px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-line) 72%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--ar-surface-2) 78%, transparent);
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
 }
 
-.ladder-card-meta {
-    display: flex;
-    justify-content: flex-start;
+.ladder-card:hover,
+.ladder-card:focus-visible {
+    border-color: color-mix(in srgb, var(--ar-section-accent, var(--ar-accent-2)) 42%, var(--ar-line));
+    background: color-mix(in srgb, var(--ar-section-accent, var(--ar-accent-2)) 6%, var(--ar-surface-2));
+    outline: none;
 }
 
-.ladder-scenario {
-    color: var(--ar-text-soft);
-    font-size: 0.68rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.ladder-card-top,
-.ladder-card-bottom {
+.ladder-card-row {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     align-items: baseline;
+    min-width: 0;
+}
+
+.ladder-card-sub {
+    font-size: 0.68rem;
+    color: var(--ar-text-soft);
+}
+
+.ladder-card-sub .ladder-product {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    color: var(--ar-text);
 }
 
 .ladder-rate {
-    color: var(--ar-accent-2);
-    font-size: 1rem;
-}
-
-.ladder-bank,
-.ladder-detail,
-.ladder-product,
-.quick-empty {
-    color: var(--ar-text-soft);
-    font-size: 0.74rem;
+    color: var(--ar-text);
+    font-size: 0.98rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 
 .ladder-bank {
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--ar-text-soft);
+}
+
+.ladder-detail,
+.quick-empty {
+    color: var(--ar-text-soft);
+    font-size: 0.66rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.quick-empty {
+    padding: 10px 12px;
+    margin: 0;
+    font-style: italic;
 }
 
 .terminal-rate-table {

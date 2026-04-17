@@ -13,6 +13,7 @@
     var ribbonCompactTierValue = R.ribbonCompactTierValue;
     var ribbonCompactFieldLabel = R.ribbonCompactFieldLabel;
     var ribbonCompactBranchLabel = R.ribbonCompactBranchLabel;
+    var ribbonTrimProductName = R.ribbonTrimProductName || function (s) { return String(s || ''); };
     var ribbonFiniteNumberOrNull = R.ribbonFiniteNumberOrNull;
     var ribbonMoneyAmountFromText = R.ribbonMoneyAmountFromText;
     var ribbonDepositTierBoundsFromLabel = R.ribbonDepositTierBoundsFromLabel;
@@ -424,7 +425,28 @@
             var ix = dates.indexOf(d);
             if (ix < 0) return;
             var d2 = ix + 1 < dates.length ? dates[ix + 1] : d;
-            out.push([{ xAxis: d }, { xAxis: d2 }]);
+            var change = Number(row.change_bp != null
+                ? row.change_bp
+                : (row.change != null ? row.change * 100 : (row.change_amount != null ? row.change_amount * 100 : 0)));
+            var label = '';
+            if (Number.isFinite(change) && change !== 0) {
+                var arrow = change > 0 ? '\u2191' : '\u2193';
+                label = arrow + Math.abs(Math.round(change)) + 'bp';
+            }
+            var start = { xAxis: d };
+            if (label) {
+                start.name = label;
+                start.label = {
+                    show: true,
+                    formatter: label,
+                    position: 'insideTop',
+                    color: '#eab308',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    distance: 3,
+                };
+            }
+            out.push([start, { xAxis: d2 }]);
         });
         return out;
     }
@@ -868,7 +890,7 @@
 
         var mount = document.createElement('div');
         mount.className = 'lwc-chart-mount lwc-chart-mount--report-plot';
-        mount.style.cssText = 'width:100%;flex:1;min-height:380px;position:relative;';
+        mount.style.cssText = 'width:100%;flex:1;min-height:180px;position:relative;';
         wrapper.appendChild(mount);
         var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
         if (ribbonHierarchyHost && typeof ribbonHierarchyHost.insertBefore === 'function') {
@@ -995,6 +1017,7 @@
         var ribbonRaf = null;
         var zrRibbonSubs = [];
         var siteUiRibbonListener = null;
+        var leaderFocusListener = null;
 
         if (isBandsMode) {
             ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor);
@@ -1583,6 +1606,8 @@
             ribbonCurrentTree = tree;
             ribbonTreeHadBranches = tree.kind !== 'leaves';
             var mm = minMaxRibbonNodeRates(tree, anchor, sec);
+            var bestMode = ribbonBestRateForSection(sec);
+            var bestRate = mm && Number.isFinite(mm[bestMode]) ? mm[bestMode] : null;
             setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
                 heading: 'Current slice',
@@ -1590,9 +1615,15 @@
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonBreadcrumbs(wrap, tree);
-                    renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
+                    renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec, {
+                        ancestorValues: [],
+                        ancestorFields: {},
+                        bestRate: bestRate,
+                    });
                 },
             });
+            applyRibbonBankHighlightState(ribbonChartHighlightBank());
+            scheduleRibbonRedraw();
             syncInfoboxRowHighlight();
             syncRibbonTrayUi();
         }
@@ -1656,30 +1687,30 @@
                 lineData.push([d, prods.length === 1 ? mean : null]);
             });
             var single = prods.length === 1;
-            var ribbonColor = (theme && theme.accent) || '#60a5fa';
+            var ribbonColor = '#60a5fa';
             var lineColor = single && prods[0] && prods[0].baseHex ? prods[0].baseHex : ribbonColor;
             var scopedUpdates = [
                 {
                     id: 'scoped_min',
                     data: single ? [] : minData,
-                    lineStyle: { color: ribbonColor, width: single ? 0 : 0.75, opacity: single ? 0 : 0.5, cap: 'round', join: 'round' },
+                    lineStyle: { color: ribbonColor, width: single ? 0 : 0.6, opacity: single ? 0 : 0.35, cap: 'round', join: 'round' },
                     areaStyle: { opacity: 0 },
                 },
                 {
                     id: 'scoped_fill',
                     data: single ? [] : deltaData,
                     lineStyle: { width: 0, opacity: 0 },
-                    areaStyle: single ? { opacity: 0 } : ribbonFlowGradientFill(ribbonColor, 0.18, 0.42),
+                    areaStyle: single ? { opacity: 0 } : ribbonAreaStyleMerged({ color: hexToRgba(ribbonColor, 0.5) }),
                 },
                 {
                     id: 'scoped_max',
                     data: single ? [] : maxData,
-                    lineStyle: { color: ribbonColor, width: single ? 0 : 0.75, opacity: single ? 0 : 0.5, cap: 'round', join: 'round' },
+                    lineStyle: { color: ribbonColor, width: single ? 0 : 0.6, opacity: single ? 0 : 0.35, cap: 'round', join: 'round' },
                 },
                 {
                     id: 'scoped_mean',
                     data: single ? [] : meanData,
-                    lineStyle: { color: ribbonColor, width: single ? 0 : 1.6, opacity: single ? 0 : 0.9, cap: 'round', join: 'round' },
+                    lineStyle: { color: ribbonColor, width: single ? 0 : 1.4, opacity: single ? 0 : 0.7, cap: 'round', join: 'round' },
                 },
                 {
                     id: 'scoped_line',
@@ -1700,8 +1731,62 @@
 
         var ribbonTreeBank = '';
 
-        function renderRibbonTreeDom(container, node, path, depth, anchorYmd, secStr) {
+        /** Best (lowest for mortgages, highest for savings/TDs) rate across the tree at the anchor date. */
+        function ribbonBestRateForSection(secStr) {
+            var cfg = window.AR && window.AR.chartConfig;
+            var dir = cfg && typeof cfg.rankDirection === 'function'
+                ? cfg.rankDirection('interest_rate')
+                : (String(secStr || '') === 'home-loans' ? 'asc' : 'desc');
+            return dir === 'desc' ? 'max' : 'min';
+        }
+
+        /** Format a rate-range string but mark the best value with .ar-ribbon-best for green styling. */
+        function ribbonRenderRateRange(targetEl, mm, bestRef, secStr) {
+            if (!targetEl) return;
+            targetEl.textContent = '';
+            if (!mm || !Number.isFinite(mm.min) || !Number.isFinite(mm.max)) return;
+            var bestMode = ribbonBestRateForSection(secStr);
+            var a = mm.min.toFixed(2);
+            var b = mm.max.toFixed(2);
+            var bestVal = Number.isFinite(bestRef) ? bestRef.toFixed(2) : (bestMode === 'max' ? b : a);
+            if (a === b) {
+                var span = document.createElement('span');
+                span.textContent = a + '%';
+                if (a === bestVal) span.className = 'ar-ribbon-best';
+                targetEl.appendChild(span);
+                return;
+            }
+            var loSpan = document.createElement('span');
+            loSpan.textContent = a + '%';
+            if (a === bestVal) loSpan.className = 'ar-ribbon-best';
+            var sep = document.createElement('span');
+            sep.textContent = '\u2013';
+            sep.className = 'ar-ribbon-rate-sep';
+            var hiSpan = document.createElement('span');
+            hiSpan.textContent = b + '%';
+            if (b === bestVal) hiSpan.className = 'ar-ribbon-best';
+            targetEl.appendChild(loSpan);
+            targetEl.appendChild(sep);
+            targetEl.appendChild(hiSpan);
+        }
+
+        /** Strip ancestor field values (bank, security_purpose, etc.) from product/row labels. */
+        function ribbonStripAncestorWords(raw, ancestorValues) {
+            var s = String(raw || '').trim();
+            if (!s) return s;
+            (ancestorValues || []).forEach(function (val) {
+                var v = String(val || '').trim();
+                if (!v || v.length < 3) return;
+                var esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                s = s.replace(new RegExp('\\s*[-\u2013\u2014\u00b7\\|]?\\s*\\(?' + esc + '\\)?\\s*', 'gi'), ' ');
+            });
+            return s.replace(/\s+/g, ' ').trim();
+        }
+
+        function renderRibbonTreeDom(container, node, path, depth, anchorYmd, secStr, ctx) {
             if (!node || node.kind === 'empty') return;
+            ctx = ctx || { ancestorValues: [], ancestorFields: {}, bestRate: null };
+            var bestRate = ctx.bestRate;
             if (node.kind === 'leaves') {
                 var leaves = node.products.slice().sort(function (a, b) {
                     var va = a.byDate[anchorYmd];
@@ -1714,28 +1799,48 @@
                     var scopeId = registerRibbonHoverScope([p.key]);
                     var row = document.createElement('div');
                     row.className = 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row';
-                    row.style.cssText = 'display:flex;align-items:baseline;gap:6px;padding:2px 0;border-top:1px solid rgba(148,163,184,0.18);font-size:11px;line-height:1.25;min-width:0;cursor:default;padding-left:' + (6 + depth * 12) + 'px;';
+                    row.style.setProperty('--ar-ribbon-depth', String(depth));
                     row.setAttribute('data-ribbon-scope', scopeId);
                     row.setAttribute('data-ribbon-tree-path', String(path || ''));
                     row.setAttribute('data-ribbon-prod-key', p.key);
                     var sw = document.createElement('span');
-                    sw.style.cssText = 'width:6px;height:6px;border-radius:1px;flex-shrink:0;margin-top:2px;background:' + String(p.baseHex || '#666').replace(/[<>"']/g, '') + ';';
+                    sw.className = 'ar-report-infobox-tsw';
+                    sw.style.setProperty('--ar-swatch-color', String(p.baseHex || '#666').replace(/[<>"']/g, ''));
                     var mid = document.createElement('span');
-                    mid.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                    var bn = document.createElement('span');
-                    bn.style.fontWeight = '600';
-                    bn.textContent = p.bankName || 'Unknown';
-                    var dot = document.createElement('span');
-                    dot.style.opacity = '0.4';
-                    dot.textContent = ' \u00b7 ';
-                    var pn = document.createElement('span');
-                    pn.textContent = p.productName || '';
-                    mid.appendChild(bn);
-                    mid.appendChild(dot);
-                    mid.appendChild(pn);
+                    mid.className = 'ar-report-infobox-tlabel';
+                    var productNameRaw = ribbonTrimProductName(p.productName || '');
+                    var ancestorValues = ctx.ancestorValues.slice();
+                    if (!ctx.ancestorFields.bank_name && p.bankName) ancestorValues.push(String(p.bankName));
+                    var compactProduct = ribbonStripAncestorWords(productNameRaw, ancestorValues);
+                    var showBank = !ctx.ancestorFields.bank_name;
+                    var showProduct = !!compactProduct && !ctx.ancestorFields.product_name;
+                    if (showBank) {
+                        var bn = document.createElement('span');
+                        bn.className = 'ar-ribbon-tleaf-bank';
+                        bn.textContent = p.bankName || '';
+                        mid.appendChild(bn);
+                        if (showProduct) {
+                            var sep = document.createElement('span');
+                            sep.className = 'ar-ribbon-tleaf-sep';
+                            sep.textContent = ' \u00b7 ';
+                            mid.appendChild(sep);
+                        }
+                    }
+                    if (showProduct) {
+                        var pn = document.createElement('span');
+                        pn.className = 'ar-ribbon-tleaf-product';
+                        pn.textContent = compactProduct;
+                        mid.appendChild(pn);
+                    }
+                    if (!showBank && !showProduct) {
+                        var dash = document.createElement('span');
+                        dash.className = 'ar-ribbon-tleaf-product';
+                        dash.textContent = '\u2014';
+                        mid.appendChild(dash);
+                    }
                     var rateEl = document.createElement('span');
-                    rateEl.style.cssText = 'font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;';
-                    rateEl.textContent = v.toFixed(2) + '%';
+                    rateEl.className = 'ar-report-infobox-trate';
+                    ribbonRenderRateRange(rateEl, { min: v, max: v }, bestRate, secStr);
                     row.appendChild(sw);
                     row.appendChild(mid);
                     row.appendChild(rateEl);
@@ -1752,11 +1857,16 @@
                 if (!keys.length) return;
                 var scopeId = registerRibbonHoverScope(keys);
                 var mm = minMaxRibbonNodeRates(g.child, anchorYmd, secStr);
-                var branchLabel = ribbonFieldLabel(node.field) + ': ' + g.label;
-                var branchText = ribbonCompactBranchLabel(node.field, g.label, 'row');
+                var rawLabel = String(g.label || '');
+                var compactValueRaw = node.field === 'product_name'
+                    ? ribbonStripAncestorWords(ribbonTrimProductName(rawLabel), ctx.ancestorValues)
+                    : rawLabel;
+                if (!compactValueRaw && node.field === 'product_name') compactValueRaw = '\u2014';
+                var branchLabel = ribbonFieldLabel(node.field) + ': ' + rawLabel;
+                var branchText = ribbonCompactBranchLabel(node.field, compactValueRaw, 'row');
                 var brow = document.createElement('div');
                 brow.className = 'ar-report-infobox-trow ar-report-infobox-trow--branch';
-                brow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;border-top:1px solid rgba(148,163,184,0.2);font-size:11px;line-height:1.25;min-width:0;cursor:pointer;padding-left:' + (4 + depth * 12) + 'px;';
+                brow.style.setProperty('--ar-ribbon-depth', String(depth));
                 brow.setAttribute('data-ribbon-scope', scopeId);
                 brow.setAttribute('data-ribbon-tree-path', subPath);
                 brow.setAttribute('role', 'button');
@@ -1767,15 +1877,14 @@
                 var twist = document.createElement('span');
                 twist.className = 'ar-report-infobox-twist';
                 twist.setAttribute('aria-hidden', 'true');
-                twist.style.cssText = 'flex-shrink:0;user-select:none;';
                 twist.textContent = expanded ? '\u25bc' : '\u25b6';
                 var lab = document.createElement('span');
-                lab.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;';
+                lab.className = 'ar-report-infobox-tlabel';
                 lab.textContent = branchText;
                 lab.title = branchLabel;
                 var rateSpan = document.createElement('span');
-                rateSpan.style.cssText = 'font-variant-numeric:tabular-nums;opacity:0.9;flex-shrink:0;';
-                rateSpan.textContent = formatRibbonTierRateRange(mm);
+                rateSpan.className = 'ar-report-infobox-trate';
+                ribbonRenderRateRange(rateSpan, mm, bestRate, secStr);
                 brow.appendChild(twist);
                 brow.appendChild(lab);
                 brow.appendChild(rateSpan);
@@ -1788,6 +1897,8 @@
                         label: chartLogClip(branchLabel, 72),
                     });
                     refreshRibbonUnderChartPanel();
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    scheduleRibbonRedraw();
                 }
                 brow.addEventListener('click', function (ev) {
                     ev.preventDefault();
@@ -1803,7 +1914,13 @@
                 if (expanded) {
                     var nest = document.createElement('div');
                     nest.className = 'ar-report-infobox-tnest';
-                    renderRibbonTreeDom(nest, g.child, subPath, depth + 1, anchorYmd, secStr);
+                    var childCtx = {
+                        ancestorValues: ctx.ancestorValues.concat([rawLabel]),
+                        ancestorFields: Object.assign({}, ctx.ancestorFields),
+                        bestRate: bestRate,
+                    };
+                    childCtx.ancestorFields[node.field] = rawLabel;
+                    renderRibbonTreeDom(nest, g.child, subPath, depth + 1, anchorYmd, secStr, childCtx);
                     container.appendChild(nest);
                 }
             });
@@ -1902,6 +2019,9 @@
                         : ibLo.toFixed(2) + '%';
                 }
             }
+            var mmTree = minMaxRibbonNodeRates(tree, anchor, sec);
+            var bestModeB = ribbonBestRateForSection(sec);
+            var bestRateB = mmTree && Number.isFinite(mmTree[bestModeB]) ? mmTree[bestModeB] : null;
             setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
                 heading: pbPanel,
@@ -1909,9 +2029,15 @@
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonBreadcrumbs(wrap, tree);
-                    renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
+                    renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec, {
+                        ancestorValues: [],
+                        ancestorFields: { bank_name: pbPanel },
+                        bestRate: bestRateB,
+                    });
                 },
             });
+            applyRibbonBankHighlightState(ribbonChartHighlightBank());
+            scheduleRibbonRedraw();
             syncInfoboxRowHighlight();
             syncRibbonTrayUi();
         }
@@ -1926,24 +2052,31 @@
 
         chart.setOption({
             animation: false,
-            grid: { top: 18, right: reportGridRight, bottom: 56, left: 48, containLabel: true },
+            grid: { top: 14, right: reportGridRight, bottom: 36, left: 8, containLabel: true },
             tooltip: tooltipConfig,
             legend: { show: false },
             xAxis: {
                 type: 'category',
                 data: dates,
                 axisLine: { lineStyle: { color: theme.axis } },
-                axisLabel: { color: theme.muted, hideOverlap: true },
+                axisLabel: { color: theme.muted, hideOverlap: true, fontSize: 10 },
                 splitLine: { show: false },
             },
             yAxis: [
                 (function () {
                     var y0 = {
                         type: 'value',
-                        name: '%',
                         position: 'left',
                         axisLine: { lineStyle: { color: theme.axis } },
-                        axisLabel: { color: theme.muted },
+                        axisLabel: {
+                            color: theme.muted,
+                            fontSize: 10,
+                            formatter: function (value) {
+                                var n = Number(value);
+                                if (!Number.isFinite(n)) return '';
+                                return (Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2)) + '%';
+                            },
+                        },
                         splitLine: { lineStyle: { color: theme.grid } },
                     };
                     if (bandsOnlyYExtent) {
@@ -2076,6 +2209,68 @@
                 if (/^\d{4}-\d{2}-\d{2}$/.test(cur) && dates.indexOf(cur) >= 0) return cur;
                 return dates.length ? dates[dates.length - 1] : '';
             }
+
+            /** Walk tree and return path string '0>2>1' that ends at leaf whose row matches bank+product. */
+            function findTreePathForProduct(tree, bankName, productName) {
+                if (!tree) return '';
+                var wantBank = String(bankName || '').trim().toLowerCase();
+                var wantProduct = String(productName || '').trim().toLowerCase();
+                function walk(node, path) {
+                    if (!node || node.kind === 'empty') return '';
+                    if (node.kind === 'leaves') {
+                        var found = (node.products || []).some(function (p) {
+                            var pb = String(p.bankName || '').toLowerCase();
+                            var pp = String(p.productName || '').toLowerCase();
+                            return (!wantBank || pb === wantBank) && (!wantProduct || pp.indexOf(wantProduct) >= 0 || wantProduct.indexOf(pp) >= 0);
+                        });
+                        return found ? path : '';
+                    }
+                    var groups = node.groups || [];
+                    for (var i = 0; i < groups.length; i++) {
+                        var subPath = path ? path + '>' + i : String(i);
+                        var result = walk(groups[i].child, subPath);
+                        if (result) return result;
+                    }
+                    return '';
+                }
+                return walk(tree, '');
+            }
+
+            function focusOnLeaderProduct(detail) {
+                if (!detail) return;
+                var bankRaw = String(detail.bankName || '').trim();
+                if (!bankRaw) return;
+                var bn = canonicalBandsBankFromUi(bankRaw);
+                if (!bn) return;
+                ribbonTrayHoverBank = '';
+                ribbonProductBank = bn;
+                hoveredBank = bn;
+                setRibbonAnchorDate(ribbonAnchorYmdOrLast());
+                refreshRibbonUnderChartPanel();
+                if (ribbonCurrentTree && detail.productName) {
+                    var path = findTreePathForProduct(ribbonCurrentTree, bn, detail.productName);
+                    if (path) {
+                        setRibbonExpandedBranchPath(path, true);
+                        refreshRibbonUnderChartPanel();
+                    }
+                }
+                applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                scheduleRibbonRedraw();
+                syncRibbonTrayUi();
+                clientLog('info', 'Chart leader focus jump', {
+                    section: String(section || ''),
+                    bank: chartLogClip(bn, 48),
+                    product: chartLogClip(detail.productName || '', 60),
+                });
+            }
+
+            leaderFocusListener = function (ev) {
+                var detail = ev && ev.detail;
+                if (!detail) return;
+                if (detail.section && String(detail.section) !== String(section)) return;
+                focusOnLeaderProduct(detail);
+            };
+            window.addEventListener('ar:leader-focus', leaderFocusListener);
 
             ribbonChromeHandlers.onChipClick = function (fullName) {
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
@@ -2249,6 +2444,10 @@
                 if (siteUiRibbonListener) {
                     try { window.removeEventListener('ar:site-ui-settings', siteUiRibbonListener); } catch (_) {}
                     siteUiRibbonListener = null;
+                }
+                if (leaderFocusListener) {
+                    try { window.removeEventListener('ar:leader-focus', leaderFocusListener); } catch (_) {}
+                    leaderFocusListener = null;
                 }
                 if (options.infoBox && options.infoBox.el) {
                     var ibx = options.infoBox.el;

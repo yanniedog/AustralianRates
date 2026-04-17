@@ -262,6 +262,38 @@
         });
     }
 
+    function compactProductName(productName, bankName) {
+        var s = String(productName || '').trim();
+        var bn = String(bankName || '').trim();
+        if (bn && s.toLowerCase().indexOf(bn.toLowerCase()) === 0) {
+            s = s.slice(bn.length).trim();
+        }
+        s = s.replace(/\s*\((?:owner\s*occupied|owner\s*occupier|investor|investment|P\s*&\s*I|interest\s*only)\s*\)\s*/gi, ' ');
+        return s.replace(/\s+/g, ' ').trim() || productName || '-';
+    }
+
+    function shortDetail(row) {
+        if (!row) return '';
+        if (section === 'home-loans') {
+            var parts = [];
+            if (/^owner/i.test(String(row.security_purpose || ''))) parts.push('OO');
+            else if (/^investment/i.test(String(row.security_purpose || ''))) parts.push('Inv');
+            if (/interest\s*only/i.test(String(row.repayment_type || ''))) parts.push('IO');
+            else if (/principal/i.test(String(row.repayment_type || ''))) parts.push('P&I');
+            var rs = String(row.rate_structure || '').trim();
+            var yr = rs.match(/fixed\s+(\d+)\s+year/i);
+            if (yr) parts.push(yr[1] + 'Y fixed');
+            else if (/^variable$/i.test(rs)) parts.push('Var');
+            else if (/^fixed$/i.test(rs)) parts.push('Fixed');
+            if (row.lvr_tier) parts.push(String(row.lvr_tier).replace(/^lvr_/i, '').replace('_', ' '));
+            return parts.join(' \u00b7 ');
+        }
+        if (section === 'savings') {
+            return [row.account_type, row.rate_type, row.deposit_tier].filter(Boolean).join(' \u00b7 ');
+        }
+        return [row.term_months ? row.term_months + 'mo' : '', row.deposit_tier, row.interest_payment].filter(Boolean).join(' \u00b7 ');
+    }
+
     function ladderCard(entry) {
         var row = entry && entry.row ? entry.row : entry;
         var scenarioLabel = entry && entry.scenarioLabel ? String(entry.scenarioLabel).trim() : '';
@@ -269,26 +301,68 @@
         var bank = bankBrand && typeof bankBrand.badge === 'function'
             ? bankBrand.badge(bankName, { compact: true })
             : esc(bankName);
-        var product = esc(row && row.product_name || (scenarioLabel ? 'No current match' : '-'));
-        var rate = row ? pct(row.interest_rate) : 'Unavailable';
-        var detail = section === 'home-loans'
-            ? [row && row.security_purpose, row && row.repayment_type, row && row.rate_structure, row && row.lvr_tier].filter(Boolean).join(' | ')
-            : section === 'savings'
-                ? [row && row.account_type, row && row.rate_type, row && row.deposit_tier].filter(Boolean).join(' | ')
-                : [row && row.term_months ? row.term_months + 'm' : '', row && row.deposit_tier, row && row.interest_payment].filter(Boolean).join(' | ');
+        var productRaw = row && row.product_name || (scenarioLabel ? 'No match' : '-');
+        var product = esc(compactProductName(productRaw, bankName));
+        var rate = row ? pct(row.interest_rate) : '-';
+        var detail = esc(shortDetail(row) || scenarioLabel);
+
+        var targetKey = '';
+        if (row && row.product_key) targetKey = String(row.product_key);
+        else if (row && (row.bank_name || row.product_name)) targetKey = (row.bank_name || '') + '|' + (row.product_name || '');
 
         return '' +
-            '<article class="ladder-card" data-bank="' + esc(bankName.toLowerCase()) + '" data-product="' + product.toLowerCase() + '" data-scenario="' + esc(scenarioLabel.toLowerCase()) + '">' +
-                (scenarioLabel ? '<div class="ladder-card-meta"><span class="ladder-scenario">' + esc(scenarioLabel) + '</span></div>' : '') +
-                '<div class="ladder-card-top">' +
+            '<article class="ladder-card" role="button" tabindex="0"' +
+                ' data-bank="' + esc(bankName.toLowerCase()) + '"' +
+                ' data-bank-name="' + esc(bankName) + '"' +
+                ' data-product="' + product.toLowerCase() + '"' +
+                ' data-product-name="' + esc(productRaw) + '"' +
+                ' data-product-key="' + esc(targetKey) + '"' +
+                ' data-scenario="' + esc(scenarioLabel.toLowerCase()) + '">' +
+                '<div class="ladder-card-row">' +
                     '<strong class="ladder-rate">' + esc(rate) + '</strong>' +
                     '<span class="ladder-bank">' + bank + '</span>' +
                 '</div>' +
-                '<div class="ladder-card-bottom">' +
+                '<div class="ladder-card-row ladder-card-sub">' +
                     '<span class="ladder-product">' + product + '</span>' +
-                    '<span class="ladder-detail">' + esc(detail || (scenarioLabel && !row ? 'No matching product in the current snapshot.' : '-')) + '</span>' +
+                    (detail ? '<span class="ladder-detail">' + detail + '</span>' : '') +
                 '</div>' +
             '</article>';
+    }
+
+    function dispatchLadderClick(el) {
+        if (!el) return;
+        var detail = {
+            bankName: el.getAttribute('data-bank-name') || '',
+            productName: el.getAttribute('data-product-name') || '',
+            productKey: el.getAttribute('data-product-key') || '',
+            scenario: el.getAttribute('data-scenario') || '',
+            section: section,
+        };
+        try {
+            window.dispatchEvent(new CustomEvent('ar:leader-focus', { detail: detail }));
+            clientLog('info', 'Leaders card click', {
+                section: section,
+                bank: String(detail.bankName).slice(0, 48),
+                product: String(detail.productName).slice(0, 60),
+            });
+        } catch (_err) {}
+    }
+
+    function bindLadderCardClicks(container) {
+        if (!container || container._arLadderBound) return;
+        container._arLadderBound = true;
+        container.addEventListener('click', function (ev) {
+            var card = ev.target && ev.target.closest ? ev.target.closest('.ladder-card') : null;
+            if (!card || !container.contains(card)) return;
+            dispatchLadderClick(card);
+        });
+        container.addEventListener('keydown', function (ev) {
+            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+            var card = ev.target && ev.target.closest ? ev.target.closest('.ladder-card') : null;
+            if (!card || !container.contains(card)) return;
+            ev.preventDefault();
+            dispatchLadderClick(card);
+        });
     }
 
     function renderQuickCompareCards(rows) {
@@ -298,6 +372,7 @@
             return;
         }
         els.quickCompareCards.innerHTML = rows.map(ladderCard).join('');
+        bindLadderCardClicks(els.quickCompareCards);
     }
 
     function applyLadderSearch() {

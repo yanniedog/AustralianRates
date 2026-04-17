@@ -138,8 +138,8 @@
             var delta = event.shiftKey ? 32 : 16;
             var next = isDesktop ? sizes.sideWidth : sizes.topHeight;
             if (isDesktop) {
-                if (event.key === 'ArrowLeft') next -= delta;
-                else if (event.key === 'ArrowRight') next += delta;
+                if (event.key === 'ArrowLeft') next += delta;
+                else if (event.key === 'ArrowRight') next -= delta;
                 else if (event.key === 'Home') next = cfg.min;
                 else if (event.key === 'End') next = cfg.max;
                 else return;
@@ -187,7 +187,7 @@
             var coord = isDesktop ? Number(moveEvent.clientX || 0) : Number(moveEvent.clientY || 0);
             var delta = coord - startCoord;
             if (isDesktop) {
-                sizes.sideWidth = clamp(startValue + delta, cfg.min, cfg.max);
+                sizes.sideWidth = clamp(startValue - delta, cfg.min, cfg.max);
             } else {
                 sizes.topHeight = clamp(startValue + delta, cfg.min, cfg.max);
             }
