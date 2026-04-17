@@ -265,6 +265,10 @@
         tray.setAttribute('role', 'list');
         tray.setAttribute('aria-label', 'Lenders');
 
+        var onChipClick = typeof opts.onRibbonBankChipClick === 'function' ? opts.onRibbonBankChipClick : null;
+        var onChipEnter = typeof opts.onRibbonBankChipPointerEnter === 'function' ? opts.onRibbonBankChipPointerEnter : null;
+        var onChipLeave = typeof opts.onRibbonBankChipPointerLeave === 'function' ? opts.onRibbonBankChipPointerLeave : null;
+
         var BB = window.AR.bankBrand;
         bankList.forEach(function (bn) {
             var chip = document.createElement('span');
@@ -299,6 +303,33 @@
             }
             body.appendChild(brand);
             chip.appendChild(body);
+
+            // Wire interaction so the chip tray actually responds to the user.
+            // Without this, handlers passed via opts.onRibbonBankChip* were
+            // accepted and silently dropped, leaving hover/click inert.
+            if (onChipClick || onChipEnter || onChipLeave) {
+                chip.style.cursor = 'pointer';
+                if (onChipClick) {
+                    chip.setAttribute('tabindex', '0');
+                    chip.setAttribute('role', 'button');
+                    chip.addEventListener('click', function () { onChipClick(bn.full); });
+                    chip.addEventListener('keydown', function (ev) {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                            ev.preventDefault();
+                            onChipClick(bn.full);
+                        }
+                    });
+                }
+                if (onChipEnter) {
+                    chip.addEventListener('pointerenter', function () { onChipEnter(bn.full); });
+                    chip.addEventListener('focus', function () { onChipEnter(bn.full); });
+                }
+                if (onChipLeave) {
+                    chip.addEventListener('pointerleave', function () { onChipLeave(bn.full); });
+                    chip.addEventListener('blur', function () { onChipLeave(bn.full); });
+                }
+            }
+
             tray.appendChild(chip);
         });
 
