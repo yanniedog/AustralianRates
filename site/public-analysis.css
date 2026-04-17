@@ -644,10 +644,7 @@
 }
 
 .chart-side-panel-head {
-    display: grid;
-    gap: 10px;
-    padding: 12px 14px 10px;
-    border-bottom: 1px solid var(--ar-line);
+    display: none !important;
 }
 
 .chart-side-summary {
