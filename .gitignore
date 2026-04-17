@@ -14,6 +14,8 @@ Thumbs.db
 .DS_Store
 tmp/
 .tmp/
+# Local agent audit snapshots / draft PR text (never commit)
+.audit/
 test-screenshots/
 docs/CLOUDFLARE_USAGE.md
 *.log
