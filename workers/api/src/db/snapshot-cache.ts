@@ -16,8 +16,8 @@ import {
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. */
-const SNAPSHOT_PAYLOAD_VERSION = 2
+/** Bump when snapshot payload shape changes so stale rows are ignored. v3: analyticsSeries switched from flat rows to grouped_v1. */
+const SNAPSHOT_PAYLOAD_VERSION = 3
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 
