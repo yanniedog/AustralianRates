@@ -730,8 +730,8 @@
     align-items: center;
     gap: 4px;
     min-width: 0;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
     overflow-x: auto;
     border-bottom: 1px solid color-mix(in srgb, var(--ar-ribbon-tree-border, var(--ar-line)) 88%, transparent);
     scrollbar-width: thin;
@@ -739,15 +739,16 @@
 
 .ar-report-underchart-tree-crumb {
     flex: 0 0 auto;
-    max-width: 10rem;
-    min-height: 24px;
-    padding: 0 8px;
+    max-width: 7.5rem;
+    min-height: 22px;
+    padding: 0 7px;
     border: 1px solid color-mix(in srgb, var(--ar-ribbon-tree-border, var(--ar-line)) 92%, transparent);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--ar-ribbon-tree-bg, var(--ar-surface-2)) 86%, transparent);
+    background: color-mix(in srgb, var(--ar-ribbon-tree-bg, var(--ar-surface-2)) 92%, transparent);
     color: inherit;
     font: inherit;
-    font-size: 0.68rem;
+    font-size: 0.64rem;
+    font-weight: 600;
     line-height: 1;
     white-space: nowrap;
     overflow: hidden;
@@ -756,8 +757,8 @@
 }
 
 .ar-report-underchart-tree-crumb.is-current {
-    border-color: color-mix(in srgb, var(--ar-accent) 36%, var(--ar-ribbon-tree-border, var(--ar-line)));
-    background: color-mix(in srgb, var(--ar-accent) 10%, var(--ar-ribbon-tree-bg, var(--ar-surface-2)));
+    border-color: color-mix(in srgb, var(--ar-text-muted) 36%, var(--ar-ribbon-tree-border, var(--ar-line)));
+    background: color-mix(in srgb, var(--ar-text-muted) 10%, var(--ar-ribbon-tree-bg, var(--ar-surface-2)));
 }
 
 .ar-report-underchart-tree-crumb-sep {
@@ -1893,17 +1894,17 @@ body.ar-public .ar-report-infobox--ribbon-tree.ar-report-infobox--compact {
 }
 
 body.ar-public .ar-report-infobox-ribbon-tree {
-    margin-top: 6px;
-    padding: 8px 4px 4px 10px;
-    border-left: 2px solid color-mix(in srgb, var(--ar-accent) 38%, var(--ar-line-strong));
+    margin-top: 4px;
+    padding: 6px 4px 3px 8px;
+    border-left: 2px solid color-mix(in srgb, var(--ar-line-strong) 88%, transparent);
     border-radius: 0 8px 8px 0;
     background: color-mix(in srgb, var(--ar-surface-2) 68%, transparent);
 }
 
 body.ar-public .ar-report-infobox-tnest {
     margin: 0 0 0 4px;
-    padding: 0 0 2px 10px;
-    border-left: 2px solid color-mix(in srgb, var(--ar-line-strong) 85%, var(--ar-accent));
+    padding: 0 0 2px 8px;
+    border-left: 2px solid color-mix(in srgb, var(--ar-line-strong) 82%, transparent);
 }
 
 body.ar-public .ar-report-infobox-twist {
@@ -1924,9 +1925,9 @@ body.ar-public .ar-report-infobox-twist {
 
 body.ar-public .ar-report-infobox-trow--branch:hover .ar-report-infobox-twist,
 body.ar-public .ar-report-infobox-trow--branch:focus-visible .ar-report-infobox-twist {
-    border-color: color-mix(in srgb, var(--ar-accent) 45%, var(--ar-line-strong));
+    border-color: color-mix(in srgb, var(--ar-text-muted) 34%, var(--ar-line-strong));
     color: var(--ar-text);
-    background: color-mix(in srgb, var(--ar-accent-soft) 22%, var(--ar-surface-2));
+    background: color-mix(in srgb, var(--ar-text-muted) 12%, var(--ar-surface-2));
 }
 
 body.ar-public .ar-report-infobox-trow--branch:focus-visible {
@@ -1935,22 +1936,22 @@ body.ar-public .ar-report-infobox-trow--branch:focus-visible {
 }
 
 body.ar-public .ar-report-infobox--compact .ar-report-infobox-row:hover {
-    background: color-mix(in srgb, var(--ar-accent) 8%, transparent);
+    background: color-mix(in srgb, var(--ar-text-muted) 7%, transparent);
 }
 
 body.ar-public .ar-report-infobox--compact .ar-report-infobox-row.is-ribbon-chart-sync {
-    background: color-mix(in srgb, var(--ar-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--ar-text-muted) 11%, transparent);
 }
 
 body.ar-public .ar-report-infobox-trow--branch:hover {
-    background: color-mix(in srgb, var(--ar-accent) 7%, transparent);
+    background: color-mix(in srgb, var(--ar-text-muted) 7%, transparent);
     border-radius: 6px;
 }
 
 body.ar-public .ar-report-infobox-trow--branch.is-ribbon-chart-sync {
-    background: color-mix(in srgb, var(--ar-accent) 12%, transparent);
+    background: color-mix(in srgb, var(--ar-text-muted) 10%, transparent);
     border-radius: 6px;
-    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ar-accent) 55%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ar-text-muted) 36%, transparent);
 }
 
 body.ar-public .lwc-focus-bank-chip-logo {
