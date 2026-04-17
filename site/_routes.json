@@ -1,9 +1,35 @@
 {
   "version": 1,
   "include": [
-    "/*"
+    "/",
+    "/savings/",
+    "/savings",
+    "/term-deposits/",
+    "/term-deposits"
   ],
   "exclude": [
-    "/api/*"
+    "/api/*",
+    "/assets/*",
+    "/vendor/*",
+    "/*.js",
+    "/*.mjs",
+    "/*.css",
+    "/*.map",
+    "/*.ico",
+    "/*.png",
+    "/*.jpg",
+    "/*.jpeg",
+    "/*.gif",
+    "/*.svg",
+    "/*.webp",
+    "/*.avif",
+    "/*.woff",
+    "/*.woff2",
+    "/*.ttf",
+    "/*.otf",
+    "/*.json",
+    "/*.xml",
+    "/*.txt",
+    "/*.webmanifest"
   ]
 }

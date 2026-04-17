@@ -171,13 +171,33 @@
         return qs.length ? url + '?' + qs.join('&') : url;
     }
 
+    function adoptInlineSnapshot(payload) {
+        if (!payload || !payload.data) return false;
+        SNAPSHOT.payload = payload;
+        SNAPSHOT.data = payload.data;
+        SNAPSHOT.scope = String(payload.scope || 'default');
+        SNAPSHOT.loadedAt = Date.now();
+        SNAPSHOT.inlined = true;
+        SNAPSHOT.ready = Promise.resolve(payload);
+        dispatchReady(payload);
+        return true;
+    }
+
     function start() {
         if (SNAPSHOT.ready) return SNAPSHOT.ready;
+        // Prefer a snapshot inlined by the Pages Functions `_middleware` (zero round-trip).
+        var inline = window.AR && window.AR.snapshotInline;
+        if (inline) {
+            var scope = scopeFromState();
+            SNAPSHOT.chartWindow = scope.chartWindow;
+            SNAPSHOT.preset = scope.preset;
+            if (adoptInlineSnapshot(inline)) return SNAPSHOT.ready;
+        }
         var base = window.AR && window.AR.config && window.AR.config.apiBase;
         if (!base) return null;
-        var scope = scopeFromState();
-        SNAPSHOT.chartWindow = scope.chartWindow;
-        SNAPSHOT.preset = scope.preset;
+        var fetchScope = scopeFromState();
+        SNAPSHOT.chartWindow = fetchScope.chartWindow;
+        SNAPSHOT.preset = fetchScope.preset;
         SNAPSHOT.pendingStartedAt = Date.now();
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var timeoutId = window.setTimeout(function () {
@@ -185,7 +205,7 @@
                 try { controller.abort(); } catch (_err) { /* ignore */ }
             }
         }, 10000);
-        var url = buildSnapshotUrl(base, scope.chartWindow, scope.preset);
+        var url = buildSnapshotUrl(base, fetchScope.chartWindow, fetchScope.preset);
         SNAPSHOT.ready = fetch(url, {
             method: 'GET',
             cache: 'default',
