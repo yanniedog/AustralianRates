@@ -272,6 +272,19 @@
         return s.replace(/\s+/g, ' ').trim() || productName || '-';
     }
 
+    function shortRateStructure(rs) {
+        var s = String(rs || '').trim();
+        if (!s) return '';
+        // Accepts: "fixed_1yr" / "fixed_3_year" / "fixed 1 year" / "1 year fixed".
+        var m = s.match(/(?:fixed[_\s]*|^)(\d+)\s*(?:yr|year|yrs|years)/i);
+        if (m) return m[1] + 'Y fixed';
+        m = s.match(/^(\d+)\s*(?:yr|year|yrs|years)\s+fixed/i);
+        if (m) return m[1] + 'Y fixed';
+        if (/^variable$/i.test(s)) return 'Var';
+        if (/^fixed$/i.test(s) || /^fixed_?term$/i.test(s)) return 'Fixed';
+        return s;
+    }
+
     function shortDetail(row) {
         if (!row) return '';
         if (section === 'home-loans') {
@@ -280,18 +293,24 @@
             else if (/^investment/i.test(String(row.security_purpose || ''))) parts.push('Inv');
             if (/interest\s*only/i.test(String(row.repayment_type || ''))) parts.push('IO');
             else if (/principal/i.test(String(row.repayment_type || ''))) parts.push('P&I');
-            var rs = String(row.rate_structure || '').trim();
-            var yr = rs.match(/fixed\s+(\d+)\s+year/i);
-            if (yr) parts.push(yr[1] + 'Y fixed');
-            else if (/^variable$/i.test(rs)) parts.push('Var');
-            else if (/^fixed$/i.test(rs)) parts.push('Fixed');
-            if (row.lvr_tier) parts.push(String(row.lvr_tier).replace(/^lvr_/i, '').replace('_', ' '));
+            var rsLabel = shortRateStructure(row.rate_structure);
+            if (rsLabel) parts.push(rsLabel);
+            if (row.lvr_tier) parts.push(String(row.lvr_tier).replace(/^lvr_/i, '').replace(/_/g, ' '));
             return parts.join(' \u00b7 ');
         }
         if (section === 'savings') {
             return [row.account_type, row.rate_type, row.deposit_tier].filter(Boolean).join(' \u00b7 ');
         }
-        return [row.term_months ? row.term_months + 'mo' : '', row.deposit_tier, row.interest_payment].filter(Boolean).join(' \u00b7 ');
+        var tdParts = [];
+        if (row.term_months) {
+            var tm = Number(row.term_months);
+            if (Number.isFinite(tm) && tm > 0) {
+                tdParts.push(tm >= 12 && tm % 12 === 0 ? (tm / 12) + 'y' : tm + 'mo');
+            }
+        }
+        if (row.deposit_tier) tdParts.push(row.deposit_tier);
+        if (row.interest_payment) tdParts.push(row.interest_payment);
+        return tdParts.filter(Boolean).join(' \u00b7 ');
     }
 
     function ladderCard(entry) {

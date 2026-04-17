@@ -1145,17 +1145,24 @@
             var node = tree;
             var crumbs = [];
             var acc = '';
+            var ancestorValues = [];
             deep.split('>').forEach(function (part) {
                 if (!node || node.kind !== 'branch') return;
                 var idx = Number(part);
                 if (!Number.isFinite(idx) || !node.groups || !node.groups[idx]) return;
                 acc = acc ? acc + '>' + idx : String(idx);
                 var group = node.groups[idx];
+                var rawLabel = String(group.label || '');
+                var preStripped = node.field === 'product_name'
+                    ? ribbonTrimProductName(rawLabel)
+                    : rawLabel;
+                var compactValue = ribbonStripAncestorWords(preStripped, ancestorValues) || preStripped;
                 crumbs.push({
                     path: acc,
-                    label: ribbonFieldLabel(node.field) + ': ' + group.label,
-                    compactLabel: ribbonCompactBranchLabel(node.field, group.label, 'crumb'),
+                    label: ribbonFieldLabel(node.field) + ': ' + rawLabel,
+                    compactLabel: ribbonCompactBranchLabel(node.field, compactValue, 'crumb'),
                 });
+                ancestorValues.push(rawLabel);
                 node = group.child;
             });
             return crumbs;
@@ -1784,6 +1791,31 @@
             targetEl.appendChild(hiSpan);
         }
 
+        /**
+         * Find a short label that distinguishes a leaf product from its
+         * siblings when bank + product are already ancestors (e.g. feature_set
+         * or a product_id suffix). Returns '' when nothing informative exists.
+         */
+        function ribbonLeafDistinguisher(p, ancestorFields) {
+            var row = (p && p.row && typeof p.row === 'object') ? p.row : {};
+            var candidates = ['feature_set', 'rate_type', 'lvr_tier', 'term_months', 'deposit_tier', 'interest_payment', 'repayment_type', 'rate_structure'];
+            for (var i = 0; i < candidates.length; i += 1) {
+                var field = candidates[i];
+                if (ancestorFields[field]) continue;
+                var value = formatRibbonTierValue(row, field);
+                if (value && value !== '\u2014') {
+                    var compact = ribbonCompactTierValue(field, value);
+                    if (compact && compact !== '\u2014') return String(compact);
+                }
+            }
+            var idRaw = String((row && (row.product_id || row.series_key)) || (p && p.key) || '').trim();
+            if (idRaw) {
+                var trail = idRaw.split(/[|_\-:]+/).filter(Boolean).pop();
+                if (trail && trail.length <= 24) return trail;
+            }
+            return '';
+        }
+
         /** Strip ancestor field values (bank, security_purpose, etc.) from product/row labels. */
         function ribbonStripAncestorWords(raw, ancestorValues) {
             var s = String(raw || '').trim();
@@ -1807,9 +1839,38 @@
                     var vb = b.byDate[anchorYmd];
                     return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
                 });
+                // Build leaf rows with per-product labels first so we can dedupe
+                // redundant rows where every visible descriptor is already an
+                // ancestor (avoids the bank > product > '--' dash cascade).
+                var leafEntries = [];
                 leaves.forEach(function (p) {
                     var v = ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr);
                     if (v == null) return;
+                    var productNameRaw = ribbonTrimProductName(p.productName || '');
+                    var ancestorValues = ctx.ancestorValues.slice();
+                    if (!ctx.ancestorFields.bank_name && p.bankName) ancestorValues.push(String(p.bankName));
+                    var compactProduct = ribbonStripAncestorWords(productNameRaw, ancestorValues);
+                    var showBank = !ctx.ancestorFields.bank_name;
+                    var showProduct = !!compactProduct && !ctx.ancestorFields.product_name;
+                    var distinguisher = '';
+                    if (!showBank && !showProduct) {
+                        distinguisher = ribbonLeafDistinguisher(p, ctx.ancestorFields);
+                    }
+                    leafEntries.push({
+                        product: p, rate: v,
+                        showBank: showBank,
+                        showProduct: showProduct,
+                        compactProduct: compactProduct,
+                        distinguisher: distinguisher,
+                    });
+                });
+                var skipRedundant = leaves.length === 1 && leafEntries.length === 1
+                    && !leafEntries[0].showBank && !leafEntries[0].showProduct
+                    && !leafEntries[0].distinguisher;
+                if (skipRedundant) return;
+                leafEntries.forEach(function (entry) {
+                    var p = entry.product;
+                    var v = entry.rate;
                     var scopeId = registerRibbonHoverScope([p.key]);
                     var row = document.createElement('div');
                     row.className = 'ar-report-infobox-trow ar-report-infobox-trow--leaf ar-report-infobox-row';
@@ -1822,35 +1883,29 @@
                     sw.style.setProperty('--ar-swatch-color', String(p.baseHex || '#666').replace(/[<>"']/g, ''));
                     var mid = document.createElement('span');
                     mid.className = 'ar-report-infobox-tlabel';
-                    var productNameRaw = ribbonTrimProductName(p.productName || '');
-                    var ancestorValues = ctx.ancestorValues.slice();
-                    if (!ctx.ancestorFields.bank_name && p.bankName) ancestorValues.push(String(p.bankName));
-                    var compactProduct = ribbonStripAncestorWords(productNameRaw, ancestorValues);
-                    var showBank = !ctx.ancestorFields.bank_name;
-                    var showProduct = !!compactProduct && !ctx.ancestorFields.product_name;
-                    if (showBank) {
+                    if (entry.showBank) {
                         var bn = document.createElement('span');
                         bn.className = 'ar-ribbon-tleaf-bank';
                         bn.textContent = p.bankName || '';
                         mid.appendChild(bn);
-                        if (showProduct) {
+                        if (entry.showProduct) {
                             var sep = document.createElement('span');
                             sep.className = 'ar-ribbon-tleaf-sep';
                             sep.textContent = ' \u00b7 ';
                             mid.appendChild(sep);
                         }
                     }
-                    if (showProduct) {
+                    if (entry.showProduct) {
                         var pn = document.createElement('span');
                         pn.className = 'ar-ribbon-tleaf-product';
-                        pn.textContent = compactProduct;
+                        pn.textContent = entry.compactProduct;
                         mid.appendChild(pn);
                     }
-                    if (!showBank && !showProduct) {
-                        var dash = document.createElement('span');
-                        dash.className = 'ar-ribbon-tleaf-product';
-                        dash.textContent = '\u2014';
-                        mid.appendChild(dash);
+                    if (!entry.showBank && !entry.showProduct) {
+                        var dist = document.createElement('span');
+                        dist.className = 'ar-ribbon-tleaf-product';
+                        dist.textContent = entry.distinguisher || '\u2014';
+                        mid.appendChild(dist);
                     }
                     var rateEl = document.createElement('span');
                     rateEl.className = 'ar-report-infobox-trate';
@@ -1872,10 +1927,10 @@
                 var scopeId = registerRibbonHoverScope(keys);
                 var mm = minMaxRibbonNodeRates(g.child, anchorYmd, secStr);
                 var rawLabel = String(g.label || '');
-                var compactValueRaw = node.field === 'product_name'
-                    ? ribbonStripAncestorWords(ribbonTrimProductName(rawLabel), ctx.ancestorValues)
+                var preStripped = node.field === 'product_name'
+                    ? ribbonTrimProductName(rawLabel)
                     : rawLabel;
-                if (!compactValueRaw && node.field === 'product_name') compactValueRaw = '\u2014';
+                var compactValueRaw = ribbonStripAncestorWords(preStripped, ctx.ancestorValues) || preStripped;
                 var branchLabel = ribbonFieldLabel(node.field) + ': ' + rawLabel;
                 var branchText = ribbonCompactBranchLabel(node.field, compactValueRaw, 'row');
                 var brow = document.createElement('div');
@@ -2382,6 +2437,7 @@
                     if (!keys || !keys.length) return;
                     ribbonListHoverKeys = keys.slice();
                     ribbonListHoverPath = String(row.getAttribute('data-ribbon-tree-path') || '');
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                     scheduleRibbonRedraw();
                     syncInfoboxRowHighlight();
@@ -2402,6 +2458,7 @@
                     var n = ribbonListHoverKeys.length;
                     ribbonListHoverKeys = null;
                     ribbonListHoverPath = '';
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     updateProductVisibility();
                     scheduleRibbonRedraw();
                     syncInfoboxRowHighlight();
