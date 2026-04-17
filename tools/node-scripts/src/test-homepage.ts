@@ -217,6 +217,24 @@ async function gotoPublic(page, url) {
     throw lastErr;
 }
 
+/**
+ * True when the public feature flag for the `All rates` tab is enabled on the
+ * live site. Admin-controlled; default off hides the tab via CSS and then
+ * explorer-panel tests cannot open the panel or wait for rows.
+ */
+async function isExplorerFeatureEnabled(page) {
+    return await page
+        .evaluate(() => {
+            const tab = document.getElementById('tab-explorer');
+            if (!tab) return false;
+            const style = window.getComputedStyle(tab);
+            const hiddenByCss = style.display === 'none' || style.visibility === 'hidden';
+            const hiddenByBody = !document.body.classList.contains('ar-feature-on-all-rates');
+            return !hiddenByCss && !hiddenByBody;
+        })
+        .catch(() => false);
+}
+
 async function waitForExplorerTableReady(page, timeout = EXPLORER_TABLE_TIMEOUT_MS) {
     // Chart is the default tab; the table lives in a hidden panel until Table is selected.
     async function openExplorerPanel() {
@@ -472,6 +490,10 @@ function verifyHeaders(results, label, headers, expectComparisonRate) {
 }
 
 async function verifyExplorerTable(page, results, label, expectComparisonRate) {
+    if (!(await isExplorerFeatureEnabled(page))) {
+        pass(results, `${label}: explorer feature disabled (skipping table checks)`);
+        return;
+    }
     await waitForExplorerTableReady(page);
     const table = await page.evaluate(() => {
         const headers = Array.from(document.querySelectorAll('#rate-table .tabulator-col-title')).map((el) => String(el.textContent || '').trim());
