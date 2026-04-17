@@ -1,6 +1,31 @@
 (function () {
     'use strict';
     window.AR = window.AR || {};
+    window.AR.ribbon = window.AR.ribbon || {};
+    var R = window.AR.ribbon;
+    var ribbonBankShortName = R.ribbonBankShortName;
+    var ribbonRangeText = R.ribbonRangeText;
+    var ribbonSpreadBpText = R.ribbonSpreadBpText;
+    var ribbonTierFieldsForSection = R.ribbonTierFieldsForSection;
+    var ribbonInitialTierFieldsForSection = R.ribbonInitialTierFieldsForSection;
+    var formatRibbonTierValue = R.formatRibbonTierValue;
+    var ribbonFieldLabel = R.ribbonFieldLabel;
+    var ribbonCompactTierValue = R.ribbonCompactTierValue;
+    var ribbonCompactFieldLabel = R.ribbonCompactFieldLabel;
+    var ribbonCompactBranchLabel = R.ribbonCompactBranchLabel;
+    var ribbonFiniteNumberOrNull = R.ribbonFiniteNumberOrNull;
+    var ribbonMoneyAmountFromText = R.ribbonMoneyAmountFromText;
+    var ribbonDepositTierBoundsFromLabel = R.ribbonDepositTierBoundsFromLabel;
+    var ribbonDepositTierBoundsFromRow = R.ribbonDepositTierBoundsFromRow;
+    var ribbonDepositTierBandEntriesForProduct = R.ribbonDepositTierBandEntriesForProduct;
+    var buildRibbonFieldGroups = R.buildRibbonFieldGroups;
+    var buildRibbonTierTree = R.buildRibbonTierTree;
+    var ribbonRateAtAnchorForHierarchy = R.ribbonRateAtAnchorForHierarchy;
+    var minMaxRibbonNodeRates = R.minMaxRibbonNodeRates;
+    var formatRibbonTierRateRange = R.formatRibbonTierRateRange;
+    var collectRibbonNodeKeys = R.collectRibbonNodeKeys;
+    var collectRibbonNodeKeysInto = R.collectRibbonNodeKeysInto;
+    var ribbonProductSeriesKey = R.ribbonProductSeriesKey;
 
     function chartClientLog() {
         var u = window.AR && window.AR.utils;
@@ -96,26 +121,6 @@
         var p = s.split('-');
         var m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return m[+p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0];
-    }
-
-    function ribbonBankShortName(bankName) {
-        var shared = window.AR && window.AR.chartMacroLwcShared;
-        if (shared && typeof shared.bankAcronym === 'function') return shared.bankAcronym(bankName);
-        return String(bankName || '').trim();
-    }
-
-    function ribbonRangeText(lo, hi) {
-        if (lo == null && hi == null) return '';
-        if (lo != null && hi != null) {
-            return lo !== hi ? lo.toFixed(2) + '\u2013' + hi.toFixed(2) + '%' : lo.toFixed(2) + '%';
-        }
-        var one = lo != null ? lo : hi;
-        return one != null ? one.toFixed(2) + '%' : '';
-    }
-
-    function ribbonSpreadBpText(lo, hi) {
-        if (lo == null || hi == null || hi < lo) return '';
-        return Math.round((hi - lo) * 100) + 'bp spread';
     }
 
     function latestRibbonPointForSeries(series, viewStart, ctxMax) {
@@ -536,326 +541,6 @@
             });
         });
         return out;
-    }
-
-    function ribbonTierFieldsForSection(sec) {
-        var s = String(sec || '');
-        if (s === 'home-loans') {
-            return ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set', 'product_name', 'product_id'];
-        }
-        if (s === 'savings') {
-            return ['account_type', 'rate_type', 'deposit_tier', 'feature_set', 'product_name', 'product_id'];
-        }
-        if (s === 'term-deposits') {
-            return ['term_months', 'deposit_tier', 'interest_payment', 'rate_structure', 'feature_set', 'product_name', 'product_id'];
-        }
-        return ['security_purpose', 'repayment_type', 'rate_structure', 'product_name', 'product_id'];
-    }
-
-    function ribbonInitialTierFieldsForSection(sec) {
-        var fields = ribbonTierFieldsForSection(sec).slice();
-        var insertAt = fields.indexOf('feature_set');
-        if (insertAt < 0) insertAt = Math.max(1, fields.length - 2);
-        if (fields.indexOf('bank_name') < 0) fields.splice(insertAt, 0, 'bank_name');
-        return fields;
-    }
-
-    function formatRibbonTierValue(row, field) {
-        if (!row || typeof row !== 'object') return '';
-        var cfg = window.AR && window.AR.chartConfig;
-        if (cfg && typeof cfg.formatFieldValue === 'function') {
-            var out = cfg.formatFieldValue(field, row[field], row);
-            if (out != null && String(out).trim() !== '' && String(out) !== '-') return String(out).trim();
-        }
-        if (row[field] != null && String(row[field]).trim() !== '') return String(row[field]).trim();
-        return '';
-    }
-
-    function ribbonFieldLabel(field) {
-        var cfg = window.AR && window.AR.chartConfig;
-        if (cfg && typeof cfg.fieldLabel === 'function') return cfg.fieldLabel(field);
-        return String(field || '').replace(/_/g, ' ');
-    }
-
-    function ribbonCompactTierValue(field, value) {
-        var f = String(field || '');
-        var v = String(value || '').trim();
-        if (!v) return '';
-        if (f === 'security_purpose') {
-            if (/^owner/i.test(v)) return 'Owner';
-            if (/^investment/i.test(v)) return 'Investor';
-        }
-        if (f === 'repayment_type') {
-            if (/interest\s*only/i.test(v)) return 'Interest only';
-            if (/principal/i.test(v)) return 'P&I';
-        }
-        if (f === 'rate_structure') {
-            if (/^variable$/i.test(v)) return 'Variable';
-            var fixedYears = v.match(/fixed\s+(\d+)\s+year/i);
-            if (fixedYears) return fixedYears[1] + 'Y fixed';
-            if (/^fixed$/i.test(v)) return 'Fixed';
-        }
-        if (f === 'account_type') {
-            if (/^transaction$/i.test(v)) return 'Transaction';
-        }
-        if (f === 'rate_type') {
-            if (/^introductory$/i.test(v)) return 'Introductory';
-        }
-        if (f === 'term_months') {
-            var months = Number(v);
-            if (Number.isFinite(months) && months > 0) {
-                var m = Math.round(months);
-                if (m >= 12 && m % 12 === 0) {
-                    var years = m / 12;
-                    return years + (years === 1 ? ' year' : ' years');
-                }
-                return m + ' months';
-            }
-        }
-        return v;
-    }
-
-    function ribbonCompactFieldLabel(field) {
-        var f = String(field || '');
-        if (f === 'security_purpose') return 'Purpose';
-        if (f === 'repayment_type') return 'Repayment';
-        if (f === 'rate_structure') return 'Structure';
-        if (f === 'account_type') return 'Account';
-        if (f === 'rate_type') return 'Rate type';
-        if (f === 'deposit_tier') return 'Deposit';
-        if (f === 'term_months') return 'Term';
-        if (f === 'interest_payment') return 'Interest';
-        if (f === 'feature_set') return 'Features';
-        if (f === 'lvr_tier') return 'LVR';
-        if (f === 'bank_name') return 'Lender';
-        if (f === 'product_name') return 'Product';
-        return ribbonFieldLabel(field);
-    }
-
-    var RIBBON_DEPOSIT_TIER_BANDS = [
-        { min: 0, max: 10000, label: '$0 to $10k' },
-        { min: 10000, max: 50000, label: '$10k to $50k' },
-        { min: 50000, max: 250000, label: '$50k to $250k' },
-        { min: 250000, max: 1000000, label: '$250k to $1m' },
-        { min: 1000000, max: 10000000, label: '$1m to $10m' },
-        { min: 10000000, max: null, label: '$10m+' },
-    ];
-
-    function ribbonFiniteNumberOrNull(value) {
-        var n = Number(value);
-        return Number.isFinite(n) ? n : null;
-    }
-
-    function ribbonMoneyAmountFromText(value, suffix) {
-        var n = Number(value);
-        if (!Number.isFinite(n)) return null;
-        var mult = 1;
-        var s = String(suffix || '').trim().toLowerCase();
-        if (s === 'k') mult = 1000;
-        else if (s === 'm') mult = 1000000;
-        else if (s === 'b') mult = 1000000000;
-        return n * mult;
-    }
-
-    function ribbonDepositTierBoundsFromLabel(label) {
-        var raw = String(label || '').trim().replace(/,/g, '');
-        if (!raw) return null;
-        var openMatch = raw.match(/^\$?\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb])?\s*\+$/i);
-        if (openMatch) {
-            return {
-                min: ribbonMoneyAmountFromText(openMatch[1], openMatch[2]),
-                max: null,
-            };
-        }
-        var rangeMatch = raw.match(/^\$?\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb])?\s*(?:to|-|–|—)\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb])?$/i);
-        if (rangeMatch) {
-            return {
-                min: ribbonMoneyAmountFromText(rangeMatch[1], rangeMatch[2]),
-                max: ribbonMoneyAmountFromText(rangeMatch[3], rangeMatch[4]),
-            };
-        }
-        return null;
-    }
-
-    function ribbonDepositTierBoundsFromRow(row) {
-        if (!row || typeof row !== 'object') return null;
-        var min = ribbonFiniteNumberOrNull(row.min_balance);
-        var max = row.max_balance == null ? null : ribbonFiniteNumberOrNull(row.max_balance);
-        if (min == null && max == null) {
-            min = ribbonFiniteNumberOrNull(row.min_deposit);
-            max = row.max_deposit == null ? null : ribbonFiniteNumberOrNull(row.max_deposit);
-        }
-        if (min == null && max == null) {
-            var parsed = ribbonDepositTierBoundsFromLabel(row.deposit_tier);
-            if (parsed) {
-                min = parsed.min;
-                max = parsed.max;
-            }
-        }
-        if (min == null && max == null) return null;
-        if (min == null) min = 0;
-        if (max != null && max < min) {
-            var swap = min;
-            min = max;
-            max = swap;
-        }
-        if (max != null && max <= min) max = min + 0.01;
-        return { min: Math.max(0, min), max: max };
-    }
-
-    function ribbonDepositTierBandEntriesForProduct(product) {
-        var row = product && product.row && typeof product.row === 'object' ? product.row : {};
-        var bounds = ribbonDepositTierBoundsFromRow(row);
-        if (!bounds) {
-            var raw = formatRibbonTierValue(row, 'deposit_tier') || '\u2014';
-            return [{ label: raw, sortIndex: RIBBON_DEPOSIT_TIER_BANDS.length, products: [product] }];
-        }
-        var lo = Number(bounds.min);
-        var hi = bounds.max == null ? Infinity : Number(bounds.max);
-        if (!Number.isFinite(lo) || !(hi > lo)) hi = lo + 0.01;
-        var hits = [];
-        RIBBON_DEPOSIT_TIER_BANDS.forEach(function (band, idx) {
-            var bandHi = band.max == null ? Infinity : band.max;
-            if (lo < bandHi && hi > band.min) {
-                hits.push({ label: band.label, sortIndex: idx, products: [product] });
-            }
-        });
-        if (hits.length) return hits;
-        var fallback = formatRibbonTierValue(row, 'deposit_tier') || '\u2014';
-        return [{ label: fallback, sortIndex: RIBBON_DEPOSIT_TIER_BANDS.length, products: [product] }];
-    }
-
-    function buildRibbonFieldGroups(prods, field) {
-        var groups = {};
-        if (String(field || '') === 'deposit_tier') {
-            prods.forEach(function (product) {
-                ribbonDepositTierBandEntriesForProduct(product).forEach(function (entry) {
-                    if (!groups[entry.label]) {
-                        groups[entry.label] = { label: entry.label, sortIndex: entry.sortIndex, products: [] };
-                    }
-                    groups[entry.label].products.push(product);
-                });
-            });
-            return Object.keys(groups).map(function (label) { return groups[label]; }).sort(function (a, b) {
-                if (a.sortIndex !== b.sortIndex) return a.sortIndex - b.sortIndex;
-                return a.label.localeCompare(b.label);
-            });
-        }
-        prods.forEach(function (p) {
-            var raw = formatRibbonTierValue(p.row || {}, field);
-            var key = raw || '\u2014';
-            if (!groups[key]) groups[key] = { label: key, sortIndex: Number.MAX_SAFE_INTEGER, products: [] };
-            groups[key].products.push(p);
-        });
-        return Object.keys(groups).map(function (label) { return groups[label]; }).sort(function (a, b) {
-            return a.label.localeCompare(b.label);
-        });
-    }
-
-    function ribbonCompactBranchLabel(field, value, mode) {
-        var compactValue = ribbonCompactTierValue(field, value);
-        if (mode === 'crumb') return compactValue || ribbonCompactFieldLabel(field);
-        return compactValue || (ribbonCompactFieldLabel(field) + ': ' + String(value || ''));
-    }
-
-    function buildRibbonTierTree(prods, tierFields, fieldIdx) {
-        if (!prods || prods.length === 0) return { kind: 'empty' };
-        if (prods.length === 1 || fieldIdx >= (tierFields || []).length) {
-            return { kind: 'leaves', products: prods.slice() };
-        }
-        var field = tierFields[fieldIdx];
-        var groups = buildRibbonFieldGroups(prods, field);
-        if (groups.length === 1) {
-            return buildRibbonTierTree(groups[0].products, tierFields, fieldIdx + 1);
-        }
-        return {
-            kind: 'branch',
-            field: field,
-            groups: groups.map(function (group) {
-                return { label: group.label, child: buildRibbonTierTree(group.products, tierFields, fieldIdx + 1) };
-            }),
-        };
-    }
-
-    function ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr) {
-        var v = p.byDate[anchorYmd];
-        if (v == null || !Number.isFinite(v) || v <= 0) return null;
-        if (secStr === 'savings' && v < 1.0) return null;
-        return v;
-    }
-
-    /** Min/max rates under a tier node at anchor date (same inclusion rules as hierarchy leaf rows). */
-    function minMaxRibbonNodeRates(node, anchorYmd, secStr) {
-        if (!node || node.kind === 'empty') return null;
-        if (node.kind === 'leaves') {
-            var minV = Infinity;
-            var maxV = -Infinity;
-            node.products.forEach(function (p) {
-                var v = ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr);
-                if (v == null) return;
-                if (v < minV) minV = v;
-                if (v > maxV) maxV = v;
-            });
-            if (!Number.isFinite(minV) || !Number.isFinite(maxV)) return null;
-            return { min: minV, max: maxV };
-        }
-        var minA = Infinity;
-        var maxA = -Infinity;
-        (node.groups || []).forEach(function (g) {
-            var mm = minMaxRibbonNodeRates(g.child, anchorYmd, secStr);
-            if (!mm) return;
-            if (mm.min < minA) minA = mm.min;
-            if (mm.max > maxA) maxA = mm.max;
-        });
-        if (!Number.isFinite(minA) || !Number.isFinite(maxA)) return null;
-        return { min: minA, max: maxA };
-    }
-
-    function formatRibbonTierRateRange(mm) {
-        if (!mm || !Number.isFinite(mm.min) || !Number.isFinite(mm.max)) return '';
-        var a = mm.min.toFixed(2);
-        var b = mm.max.toFixed(2);
-        return a === b ? a + '%' : a + '%\u2013' + b + '%';
-    }
-
-    function collectRibbonNodeKeys(node) {
-        var out = [];
-        collectRibbonNodeKeysInto(node, out, {});
-        return out;
-    }
-
-    function collectRibbonNodeKeysInto(node, out, seen) {
-        if (!node || node.kind === 'empty') return;
-        if (node.kind === 'leaves') {
-            node.products.forEach(function (p) {
-                if (!p || !p.key || seen[p.key]) return;
-                seen[p.key] = true;
-                out.push(p.key);
-            });
-            return;
-        }
-        (node.groups || []).forEach(function (g) {
-            collectRibbonNodeKeysInto(g.child, out, seen);
-        });
-    }
-
-    function ribbonProductSeriesKey(series, bankName, productName, row) {
-        var latestRow = row;
-        if ((!latestRow || typeof latestRow !== 'object' || Object.keys(latestRow).length === 0) && series && typeof series === 'object') {
-            latestRow = (series.latestRow && typeof series.latestRow === 'object') ? series.latestRow : null;
-            if ((!latestRow || Object.keys(latestRow).length === 0) && Array.isArray(series.points) && series.points.length) {
-                var lastPoint = series.points[series.points.length - 1];
-                if (lastPoint && lastPoint.row && typeof lastPoint.row === 'object') latestRow = lastPoint.row;
-            }
-        }
-        var rawKey = latestRow && (
-            latestRow.product_key ||
-            latestRow.series_key ||
-            latestRow.product_id
-        );
-        if (rawKey != null && String(rawKey).trim() !== '') return '[P]' + String(rawKey).trim();
-        if (series && series.key != null && String(series.key).trim() !== '') return '[P]' + String(series.key).trim();
-        return '[P]' + String(bankName || '').trim() + '|' + String(productName || 'Unknown').trim();
     }
 
     /** Build hidden product overlay lines for ribbon hover reveal (ECharts path when product count <= cap). */
