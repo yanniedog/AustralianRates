@@ -28,6 +28,21 @@
             <p class="admin-subtitle">Public site presentation options stored in app configuration.</p>
         </div>
         <div class="admin-message" id="msg"></div>
+        <section class="admin-card" id="doctor-schedule-section">
+            <h2>Scheduled doctor run</h2>
+            <p class="admin-hint">GitHub Actions runs <code>npm run doctor</code> once per day in the wall-clock hour below (in the chosen IANA time zone). On failure, alert email is sent. CI reads production <code>GET /api/home-loan-rates/doctor-schedule</code> (~2 min cache).</p>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="doctor-hour">Local hour (0–23)</label>
+                <select id="doctor-hour" aria-label="Doctor run local hour"></select>
+                <label for="doctor-schedule-tz">Time zone</label>
+                <select id="doctor-schedule-tz" aria-label="Doctor run time zone"></select>
+            </div>
+            <div class="rate-check-row" style="margin-top:10px;gap:12px;">
+                <button type="button" id="doctor-schedule-save-btn" class="primary">Save doctor schedule</button>
+                <button type="button" id="doctor-schedule-reset-btn" class="secondary">Reset to default (10, Melbourne)</button>
+            </div>
+            <p class="admin-hint" id="doctor-schedule-stored" style="margin-top:8px;opacity:0.75;"></p>
+        </section>
         <section class="admin-card" id="chart-legend-section">
             <h2>Chart legend opacity</h2>
             <p class="admin-hint">Controls how see-through the floating legend panel is (not the chart itself). Desktop uses viewport width &gt; 767px; mobile uses &le; 767px. If you only set the legacy single value elsewhere, both devices inherit that until you save overrides here. Stored as a decimal in <code>app_config</code>; public pages read it from <code>GET /site-ui</code> (short CDN cache).</p>
@@ -151,6 +166,20 @@
             var CHART_MAX_PRODUCTS_KEY = 'chart_max_products';
             var CHART_MAX_PRODUCTS_UNLIMITED = 'unlimited';
             var CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style';
+            var DOCTOR_SCHEDULE_KEY = 'doctor_schedule';
+            var DOCTOR_TZ_OPTIONS = [
+                'Australia/Melbourne',
+                'Australia/Sydney',
+                'Australia/Brisbane',
+                'Australia/Adelaide',
+                'Australia/Perth',
+                'Australia/Darwin',
+                'Australia/Hobart',
+                'Pacific/Auckland',
+                'UTC',
+                'Europe/London',
+                'America/New_York',
+            ];
             var RIBBON_DEFAULT = {
                 edge_width: 2,
                 edge_opacity: 1,
@@ -188,6 +217,42 @@
             var chartMaxProductsUnlimitedEl = document.getElementById('chart-max-products-unlimited');
             var chartMaxProductsStoredEl = document.getElementById('chart-max-products-stored');
             var chartRibbonStoredEl = document.getElementById('chart-ribbon-stored');
+            var doctorHourEl = document.getElementById('doctor-hour');
+            var doctorTzEl = document.getElementById('doctor-schedule-tz');
+            var doctorStoredEl = document.getElementById('doctor-schedule-stored');
+
+            function ensureDoctorHourOptions() {
+                if (!doctorHourEl || doctorHourEl.options.length >= 24) return;
+                for (var h = 0; h < 24; h++) {
+                    var o = document.createElement('option');
+                    o.value = String(h);
+                    o.textContent = String(h) + ':00–' + String(h) + ':59';
+                    doctorHourEl.appendChild(o);
+                }
+            }
+
+            function initDoctorTzSelect() {
+                if (!doctorTzEl || doctorTzEl.options.length > 0) return;
+                DOCTOR_TZ_OPTIONS.forEach(function (tz) {
+                    var o = document.createElement('option');
+                    o.value = tz;
+                    o.textContent = tz;
+                    doctorTzEl.appendChild(o);
+                });
+            }
+
+            function ensureDoctorTzOption(tz) {
+                if (!doctorTzEl || !tz) return;
+                var t = String(tz).trim();
+                if (!t) return;
+                for (var i = 0; i < doctorTzEl.options.length; i++) {
+                    if (doctorTzEl.options[i].value === t) return;
+                }
+                var o = document.createElement('option');
+                o.value = t;
+                o.textContent = t + ' (stored)';
+                doctorTzEl.appendChild(o);
+            }
 
             function assertAdminJsonOk(d, fallbackMsg) {
                 if (!d || d.ok !== true) {
@@ -312,6 +377,7 @@
                     var textLegacyRow = null;
                     var chartMaxProductsRow = null;
                     var chartRibbonRow = null;
+                    var doctorRow = null;
                     d.config.forEach(function (r) {
                         if (r.key === DESKTOP_KEY) desktopRow = r;
                         if (r.key === MOBILE_KEY) mobileRow = r;
@@ -321,7 +387,33 @@
                         if (r.key === TEXT_LEGACY_KEY) textLegacyRow = r;
                         if (r.key === CHART_MAX_PRODUCTS_KEY) chartMaxProductsRow = r;
                         if (r.key === CHART_RIBBON_STYLE_KEY) chartRibbonRow = r;
+                        if (r.key === DOCTOR_SCHEDULE_KEY) doctorRow = r;
                     });
+                    ensureDoctorHourOptions();
+                    initDoctorTzSelect();
+                    if (doctorHourEl && doctorTzEl) {
+                        var dh = 10;
+                        var dtz = 'Australia/Melbourne';
+                        if (doctorRow && doctorRow.value) {
+                            try {
+                                var parsed = JSON.parse(String(doctorRow.value));
+                                if (parsed && typeof parsed.hour === 'number') {
+                                    dh = Math.max(0, Math.min(23, Math.floor(parsed.hour)));
+                                }
+                                if (parsed && typeof parsed.time_zone === 'string' && parsed.time_zone.trim()) {
+                                    dtz = parsed.time_zone.trim();
+                                }
+                            } catch (_e) { /* keep defaults */ }
+                        }
+                        ensureDoctorTzOption(dtz);
+                        doctorHourEl.value = String(dh);
+                        doctorTzEl.value = dtz;
+                        if (doctorStoredEl) {
+                            doctorStoredEl.textContent = doctorRow
+                                ? ('Stored: hour ' + String(dh) + ', ' + dtz + ' (updated ' + String(doctorRow.updated_at || '') + ').')
+                                : 'Default: hour 10, Australia/Melbourne (no app_config row).';
+                        }
+                    }
                     var fallbackPct = pctFromStored(legacyRow ? legacyRow.value : '');
                     var fallbackTextPct = pctFromStoredBrightness(textLegacyRow ? textLegacyRow.value : '');
                     if (desktopRangeEl) desktopRangeEl.value = String(pctFromStored(desktopRow ? desktopRow.value : fallbackPct));
@@ -541,6 +633,48 @@
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
             }
 
+            function saveDoctorSchedule() {
+                ensureDoctorHourOptions();
+                initDoctorTzSelect();
+                var h = parseInt(doctorHourEl && doctorHourEl.value ? doctorHourEl.value : '10', 10);
+                var tz = doctorTzEl && doctorTzEl.value ? String(doctorTzEl.value).trim() : 'Australia/Melbourne';
+                if (!Number.isFinite(h) || h < 0 || h > 23) {
+                    showMsg('Hour must be 0–23.', true);
+                    return;
+                }
+                portal.fetchAdmin('/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: DOCTOR_SCHEDULE_KEY,
+                        value: JSON.stringify({ hour: h, time_zone: tz }),
+                    }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d.ok) throw new Error(d.error && d.error.message ? d.error.message : 'Save failed');
+                        showMsg('Saved doctor schedule. Allow ~2 min for doctor-schedule cache.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
+            }
+
+            function resetDoctorSchedule() {
+                if (!confirm('Remove stored doctor schedule? Default is hour 10, Australia/Melbourne.')) return;
+                portal.fetchAdmin('/config', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: DOCTOR_SCHEDULE_KEY }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        assertAdminJsonOk(d, 'Reset failed');
+                        showMsg('Doctor schedule reset.', false);
+                        loadFromConfig();
+                    })
+                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
+            }
+
             if (desktopRangeEl) desktopRangeEl.addEventListener('input', syncOutput);
             if (mobileRangeEl) mobileRangeEl.addEventListener('input', syncOutput);
             if (textDesktopRangeEl) textDesktopRangeEl.addEventListener('input', syncOutput);
@@ -562,6 +696,10 @@
             if (chartRibbonSaveBtn) chartRibbonSaveBtn.addEventListener('click', saveChartRibbonStyle);
             var chartRibbonResetBtn = document.getElementById('chart-ribbon-reset-btn');
             if (chartRibbonResetBtn) chartRibbonResetBtn.addEventListener('click', resetChartRibbonStyle);
+            var doctorSaveBtn = document.getElementById('doctor-schedule-save-btn');
+            if (doctorSaveBtn) doctorSaveBtn.addEventListener('click', saveDoctorSchedule);
+            var doctorResetBtn = document.getElementById('doctor-schedule-reset-btn');
+            if (doctorResetBtn) doctorResetBtn.addEventListener('click', resetDoctorSchedule);
 
             loadFromConfig();
         })();

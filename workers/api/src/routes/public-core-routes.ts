@@ -9,10 +9,12 @@ import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import { queryChangesWithFallback, queryIntegritySafely } from './change-route-utils'
+import { registerDoctorSchedulePublicRoute } from './doctor-schedule-public'
 import { registerSiteUiPublicRoute } from './site-ui-public'
 
 export function registerPublicCoreRoutes(publicRoutes: Hono<AppContext>): void {
   registerSiteUiPublicRoute(publicRoutes)
+  registerDoctorSchedulePublicRoute(publicRoutes)
   publicRoutes.get('/overview', async (c) => {
     withPublicCache(c, 60)
     const section = (c.req.query('section') || 'home_loans').trim() as 'home_loans' | 'savings' | 'term_deposits'
