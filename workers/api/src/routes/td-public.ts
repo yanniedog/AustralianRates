@@ -56,6 +56,7 @@ import {
   parseSortDirection,
 } from './public-query'
 import { registerTdChartDataRoute } from './chart-data/term-deposits'
+import { registerDoctorSchedulePublicRoute } from './doctor-schedule-public'
 import { registerSiteUiPublicRoute } from './site-ui-public'
 
 export const tdPublicRoutes = new Hono<AppContext>()
@@ -74,6 +75,7 @@ registerRbaRoutes(tdPublicRoutes)
 registerCpiRoutes(tdPublicRoutes)
 registerTdChartDataRoute(tdPublicRoutes)
 registerSiteUiPublicRoute(tdPublicRoutes)
+registerDoctorSchedulePublicRoute(tdPublicRoutes)
 
 tdPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

@@ -1,14 +1,15 @@
-# Runs `npm run doctor` once per calendar day during the Australia/Melbourne 10:00 wall-clock hour.
-# (GitHub cron is UTC-only; we trigger hourly and gate on local hour == 10.)
+# Runs `npm run doctor` once per calendar day in the wall-clock hour configured in the admin portal
+# (app_config `doctor_schedule`, JSON { hour, time_zone }). CI reads GET /api/home-loan-rates/doctor-schedule.
+# GitHub cron is UTC-only; we trigger hourly and gate on local hour in that time zone.
 #
 # Repository secrets (Settings > Secrets and variables > Actions):
 #   ADMIN_API_TOKEN           — same as production API worker (required for full doctor: bundle + logs gate).
 #   DOCTOR_ALERT_SMTP_USER    — Gmail address used to authenticate (and as From).
 #   DOCTOR_ALERT_SMTP_PASSWORD — Gmail App Password (not your normal Google password).
 #
-# Manual run: Actions > "Scheduled doctor (Melbourne 10:00)" > Run workflow (runs doctor immediately; email only on failure).
+# Manual run: Actions > this workflow > Run workflow (runs doctor immediately; email only on failure).
 
-name: Scheduled doctor (Melbourne 10:00)
+name: Scheduled doctor (admin-configured hour)
 
 on:
   schedule:
@@ -38,6 +39,8 @@ jobs:
     steps:
       - name: Decide whether to run doctor now
         id: gate
+        env:
+          DOCTOR_SCHEDULE_URL: https://www.australianrates.com/api/home-loan-rates/doctor-schedule
         run: |
           set -euo pipefail
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -45,20 +48,27 @@ jobs:
             echo "reason=workflow_dispatch" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          H=$(TZ=Australia/Melbourne date +%H)
-          echo "melbourne_hour=$H" >> "$GITHUB_OUTPUT"
-          if [[ "$H" == "10" ]]; then
+          curl -fsS "$DOCTOR_SCHEDULE_URL" -o doctor-schedule.json
+          TARGET_HOUR=$(jq -r '.hour | tonumber' doctor-schedule.json)
+          TZIANA=$(jq -r '.time_zone // "Australia/Melbourne"' doctor-schedule.json)
+          echo "target_hour=$TARGET_HOUR" >> "$GITHUB_OUTPUT"
+          echo "time_zone=$TZIANA" >> "$GITHUB_OUTPUT"
+          H=$(TZ="$TZIANA" date +%H)
+          H=$((10#$H))
+          TARGET_HOUR=$((10#$TARGET_HOUR))
+          echo "local_hour=$H" >> "$GITHUB_OUTPUT"
+          if [[ "$H" -eq "$TARGET_HOUR" ]]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "reason=melbourne_hour_10" >> "$GITHUB_OUTPUT"
+            echo "reason=scheduled_hour_match" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "reason=not_melbourne_10" >> "$GITHUB_OUTPUT"
+            echo "reason=scheduled_hour_mismatch" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Log skip (scheduled, outside Melbourne 10:00 hour)
+      - name: Log skip (scheduled, outside configured doctor hour)
         if: github.event_name == 'schedule' && steps.gate.outputs.should_run != 'true'
         run: |
-          echo "Skipping doctor: Australia/Melbourne hour is ${{ steps.gate.outputs.melbourne_hour }} (runs only in the 10:00 hour)."
+          echo "Skipping doctor: ${{ steps.gate.outputs.time_zone }} local hour is ${{ steps.gate.outputs.local_hour }} (configured target hour ${{ steps.gate.outputs.target_hour }})."
 
       - name: Checkout
         if: steps.gate.outputs.should_run == 'true'
