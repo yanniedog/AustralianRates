@@ -1,52 +1,135 @@
+# ──────────────────────────────────────────────────────────────
+# Dependencies and package-manager caches
+# ──────────────────────────────────────────────────────────────
 node_modules/
+# Yarn (Berry / PnP) + pnpm - not used today but guard pre-emptively
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+!.yarn/patches
+.pnp.*
+.pnpm-store/
+# Misc npm/yarn logs (redundant with *.log below but explicit for discoverability)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ──────────────────────────────────────────────────────────────
+# Build / cache / dist output
+# ──────────────────────────────────────────────────────────────
 .wrangler/
 .turbo/
 .cache/
+.vite/
+.vitest-cache/
+.parcel-cache/
+.next/
+.nuxt/
+.svelte-kit/
 dist/
+dist-ssr/
 coverage/
+# TypeScript incremental build info
+*.tsbuildinfo
 # Wrangler accidental build-output when --outdir is unset (outputs under literal "null/")
-workers/*/null/
 workers/**/null/
-# Temp image captures + scratch scripts (ignored so they stop reappearing after cleanup)
-tmp-*.png
-scratch-*.js
-site/version.json
+
+# ──────────────────────────────────────────────────────────────
+# Playwright / test output
+# ──────────────────────────────────────────────────────────────
+playwright-report/
+playwright/.cache/
+test-results/
+test-screenshots/
+
+# ──────────────────────────────────────────────────────────────
+# Editors and OS metadata
+# ──────────────────────────────────────────────────────────────
+# VS Code: keep shared settings.json / extensions.json; ignore the rest
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+# JetBrains IDEs / Visual Studio
+.idea/
+.vs/
+# Vim / Emacs swap and backup
+*.swp
+*.swo
+*~
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+.Spotlight-V100
+.Trashes
+
+# ──────────────────────────────────────────────────────────────
+# Secrets and local env
+# ──────────────────────────────────────────────────────────────
 .env
 .env.*
 !.env.example
+# Wrangler dev secrets (matches any depth, e.g. workers/api/.dev.vars)
 .dev.vars
+!.dev.vars.example
 *.local
-Thumbs.db
-.DS_Store
+
+# ──────────────────────────────────────────────────────────────
+# Site build artefacts
+# ──────────────────────────────────────────────────────────────
+# Generated each deploy by write-deploy-version.js
+site/version.json
+
+# ──────────────────────────────────────────────────────────────
+# Temp / scratch files (agent sessions leave these behind)
+# ──────────────────────────────────────────────────────────────
 tmp/
 .tmp/
+# Root-only so tools/node-scripts/tmp-local-preview-proxy.cjs and similar
+# legitimately-named files deeper in the tree stay tracked.
+/tmp-*
+/scratch-*
+# Specific spurious captures seen historically
+page_content.html
+test-homepage-output.txt
+
+# ──────────────────────────────────────────────────────────────
+# Logs
+# ──────────────────────────────────────────────────────────────
+*.log
+debug-*.log
+logs/
+# Claude MCP diagnostic state (transition detection; do not commit)
+debug-claude-mcp.state.json
+*australianrates-log*.txt
+
+# ──────────────────────────────────────────────────────────────
 # Local agent audit snapshots / draft PR text (never commit)
+# ──────────────────────────────────────────────────────────────
 .audit/
-test-screenshots/
-# Codex style-audit / style-fix screenshot captures (never commit)
+# Codex style-audit / style-fix screenshot captures
 .codex-review/
 # Beta-test capture script output (run fresh; never commit)
 docs/beta-test-client-log.txt
+# Local-only copy of Cloudflare usage notes (contains account IDs)
 docs/CLOUDFLARE_USAGE.md
-*.log
-debug-*.log
-# Claude MCP diagnostic state (transition detection; do not commit)
-debug-claude-mcp.state.json
-logs/
-*australianrates-log*.txt
-page_content.html
-test-homepage-output.txt
-tmp-*.json
-tmp-*.js
 
+# ──────────────────────────────────────────────────────────────
 # Ephemeral production log downloads: never commit; always fetch fresh; delete after use
+# ──────────────────────────────────────────────────────────────
 errors.jsonl
 warn.jsonl
 actionable.json
 status-debug-bundle-latest.json
 *-production-logs*.jsonl
 
+# ──────────────────────────────────────────────────────────────
 # Local DB exports / audit artefacts (do not commit)
+# ──────────────────────────────────────────────────────────────
 artifacts/*
 !artifacts/.gitkeep
 artifacts/**/*.sql
