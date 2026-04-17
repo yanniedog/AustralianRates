@@ -45,10 +45,10 @@
     }
 
     function topHeightConfig() {
-        var total = workspaceHeight() || Math.max(420, Math.round(window.innerHeight || 844));
-        var min = Math.max(180, Math.round(total * 0.28));
-        var max = Math.max(min + 80, total - 220);
-        var value = clamp(Math.round(total * 0.44), min, max);
+        var total = workspaceHeight() || Math.max(420, Math.round((window.innerHeight || 844) * 0.58));
+        var min = Math.max(180, Math.round(total * 0.34));
+        var max = Math.max(min + 72, total - 180);
+        var value = clamp(Math.round(total * 0.48), min, max);
         return { min: min, max: max, value: value };
     }
 
@@ -174,6 +174,9 @@
         function finish() {
             body.classList.remove('is-resizing-chart-workspace');
             handle.classList.remove('is-active');
+            handle.removeEventListener('pointermove', onMove);
+            handle.removeEventListener('pointerup', onStop);
+            handle.removeEventListener('pointercancel', onStop);
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onStop);
             window.removeEventListener('pointercancel', onStop);
@@ -195,6 +198,9 @@
             finish();
         }
 
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onStop);
+        handle.addEventListener('pointercancel', onStop);
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onStop);
         window.addEventListener('pointercancel', onStop);
