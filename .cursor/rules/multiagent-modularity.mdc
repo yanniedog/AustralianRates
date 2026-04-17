@@ -1,0 +1,40 @@
+---
+description: "Multiagent workflow (fresh branch, conflict-aware merges, CI feedback) + modular code (<=1000 LOC per file)"
+alwaysApply: true
+---
+
+# Multiagent Workflow and Modular Code (Always Follow)
+
+This repo is actively worked on by **multiple concurrent agents** (Cursor, Codex, Claude, and parallel sessions of each). Every chat MUST adhere to the following at all times, without being asked.
+
+## Multiagent Workflow (mandatory)
+
+1. **Always branch from fresh `main`.** Never commit directly to `main` unless the user explicitly requests a `main` hotfix. Follow `.cursor/rules/git-pr-workflow-default.mdc` strictly:
+   - `git fetch origin`, base the work branch on `origin/main` (e.g. `git checkout -b agent/<slug> origin/main`).
+   - One branch per task or agent stream; do **not** reuse another agent's in-flight branch.
+   - Choose a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) so parallel agents never clash on branch name.
+2. **Check for conflicts/clashes before opening the PR and before merging.**
+   - Before pushing: `git fetch origin && git diff origin/main...HEAD --stat` and rebase/merge `origin/main` in if it has moved.
+   - Inspect overlapping files against other active `agent/*` / `feat/*` / `fix/*` branches (e.g. `git log origin/agent/* --oneline --name-only`) and call out clashes in the PR body.
+   - If another agent has pushed to the branch name you picked, assume collision: move your work to a new branch (`git checkout -b agent/<slug>-v2 origin/main`) and reapply.
+   - Resolve conflicts deliberately — do not blindly accept either side. Preserve both agents' intent where possible.
+3. **Respond to CI feedback, always.** After push and PR creation:
+   - Watch PR checks (`gh pr checks <num> --watch`) and the Cloudflare deploy, not just local tests.
+   - For every failure, read the log, fix on the same branch, push again. Loop until CI is green.
+   - For review comments (human or bot), address each one in follow-up commits; do not ignore.
+4. **Complete the production closeout** from `.cursor/rules/every-chat-commit-deploy-verify-production.mdc` **after** merge and Cloudflare deploy — never treat a green PR alone as shipped.
+
+## Modular Code (mandatory)
+
+LLMs have finite context windows; large files cause subtle breakage when agents edit them. Keep code modular so any agent can safely load a whole file.
+
+- **Hard ceiling: 1000 lines per file.** Files at or above this MUST be split before adding more code.
+- **Soft target: 800 lines or less.** When a file crosses 800 LOC in a change, plan a split in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`.
+- **Also cap functions at ~50 lines** and avoid duplicated logic in 3+ places (extract a helper).
+- Apply the split along **natural seams** (domain concerns, lifecycle stages, UI section, data source, etc.), not arbitrary line counts. Preserve public API; update imports; keep behaviour identical unless the task asks otherwise.
+- Exemptions (do not refactor purely for size): `wrangler.toml`, `wrangler.jsonc`, `tsconfig*.json`, `vite.config.*`, `vitest.config.*`, `package.json`, `package-lock.json`, generated files, D1 migrations, real-data test fixtures (per `.cursor/rules/no-mock-test-data.mdc`), `node_modules`, build output, `.env*`.
+- When editing any file, proactively check its size. If it is over 800 LOC and the change is non-trivial, extract a module as part of the same work or add it to the backlog.
+
+## Enduring scope
+
+These rules apply in **every chat, past and future, without being reminded**. They override any default assumption that a single large file, a shared branch, or ignoring CI is acceptable.
