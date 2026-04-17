@@ -50,7 +50,12 @@ jobs:
             echo "reason=workflow_dispatch" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          curl -fsS "$DOCTOR_SCHEDULE_URL" -o doctor-schedule.json
+          # Do not use curl --fail: Cloudflare may return 403 to GitHub runner IPs (curl exit 22).
+          HTTP=$(curl -sS -w '%{http_code}' -o doctor-schedule.json "$DOCTOR_SCHEDULE_URL" || echo 000)
+          if [[ "$HTTP" != 200 ]] || ! jq -e '(.hour | type == "number") and (.time_zone | type == "string")' doctor-schedule.json >/dev/null 2>&1; then
+            echo "::warning::doctor-schedule unavailable or invalid (HTTP ${HTTP}); using default hour 19 Australia/Melbourne (same as API default)."
+            printf '%s\n' '{"ok":true,"hour":19,"time_zone":"Australia/Melbourne"}' > doctor-schedule.json
+          fi
           TARGET_HOUR=$(jq -r '.hour | tonumber' doctor-schedule.json)
           TZIANA=$(jq -r '.time_zone // "Australia/Melbourne"' doctor-schedule.json)
           echo "target_hour=$TARGET_HOUR" >> "$GITHUB_OUTPUT"
