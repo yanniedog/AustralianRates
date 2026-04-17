@@ -2241,7 +2241,16 @@
                 var bankRaw = String(detail.bankName || '').trim();
                 if (!bankRaw) return;
                 var bn = canonicalBandsBankFromUi(bankRaw);
-                if (!bn) return;
+                if (!bn) bn = bankRaw;
+                var plist = ribbonCanvasModel.byBank[bn];
+                if (!plist || !plist.length) {
+                    clientLog('info', 'Chart leader focus bank not in scope', {
+                        section: String(section || ''),
+                        requested: chartLogClip(bankRaw, 48),
+                        canonical: chartLogClip(bn, 48),
+                    });
+                    return;
+                }
                 ribbonTrayHoverBank = '';
                 ribbonProductBank = bn;
                 hoveredBank = bn;
