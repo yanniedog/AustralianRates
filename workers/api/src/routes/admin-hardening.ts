@@ -16,6 +16,11 @@ import {
   loadLenderUniverseAuditReport,
   runLenderUniverseAudit,
 } from '../pipeline/lender-universe-audit'
+import {
+  getCachedProductClassificationAuditReport,
+  loadProductClassificationAuditReport,
+  runProductClassificationAudit,
+} from '../pipeline/product-classification-audit'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { buildStatusDebugBundle } from '../pipeline/status-debug-bundle'
 import type { AppContext } from '../types'
@@ -117,6 +122,30 @@ adminHardeningRoutes.get('/diagnostics/lender-universe', async (c) => {
 
 adminHardeningRoutes.post('/diagnostics/lender-universe/run', async (c) => {
   const report = await runLenderUniverseAudit(c.env, { persist: true })
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    report,
+  })
+})
+
+adminHardeningRoutes.get('/diagnostics/product-classification', async (c) => {
+  const refresh = ['1', 'true', 'yes'].includes(String(c.req.query('refresh') || '').trim().toLowerCase())
+  let report =
+    getCachedProductClassificationAuditReport() ||
+    await loadProductClassificationAuditReport(c.env.DB)
+  if (!report || refresh) {
+    report = await runProductClassificationAudit(c.env, { persist: true })
+  }
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    report,
+  })
+})
+
+adminHardeningRoutes.post('/diagnostics/product-classification/run', async (c) => {
+  const report = await runProductClassificationAudit(c.env, { persist: true })
   return c.json({
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,

@@ -163,6 +163,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
       'Open admin Status, review economic coverage and E2E slices in the latest health run, and run POST /health/run if you need a fresh snapshot.',
     links: ['/admin/status.html', '/admin/logs.html'],
   },
+  product_classification_gaps: {
+    code: 'product_classification_gaps',
+    title: 'Products with missing or unspecified classifications',
+    action:
+      'Review the product classification audit (status bundle `product_classification` section). For home loans: lvr_unspecified rows are CDR products that do not publish LVR bands; decide whether to widen the parser, request richer data from the lender, or accept the gap. For invalid_enum / null_required rows: a parser started emitting a value the schema does not accept - fix the parser or add the enum value before the next ingest.',
+    links: ['/admin/status.html', '/admin/database.html', '/admin/logs.html'],
+  },
 }
 
 function inferCodeFromMessage(message: string): string {
@@ -189,6 +196,10 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('analytics_change_query_schema_mismatch')) return 'analytics_change_query_schema_mismatch'
   if (normalized.includes('cdr_audit_detected_gaps')) return 'cdr_audit_detected_gaps'
   if (normalized === 'site_health_attention' || normalized.includes('site_health_attention')) return 'site_health_diagnostics'
+  if (
+    normalized.includes('product_classification_gaps') ||
+    normalized.includes('product_classification_gaps_detected')
+  ) return 'product_classification_gaps'
   return DEFAULT_ISSUE.code
 }
 

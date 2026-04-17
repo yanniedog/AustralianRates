@@ -219,6 +219,9 @@ type BundleMetrics = {
   replay_queue_count: number | null
   coverage_report_present: boolean
   log_problem_row_total: number | null
+  product_classification_ok: boolean | null
+  product_classification_issues: number | null
+  product_classification_affected: number | null
 }
 
 function readBundleMetrics(bundleAbsPath: string): BundleMetrics | null {
@@ -229,11 +232,18 @@ function readBundleMetrics(bundleAbsPath: string): BundleMetrics | null {
       remediation?: { hints?: unknown[] }
       replay_queue?: { count?: number }
       coverage_gaps?: { report?: unknown }
+      product_classification?: {
+        report?: {
+          ok?: boolean
+          totals?: { issues?: number; affected_products?: number }
+        } | null
+      }
       logs?: { total?: number }
     }
     const hints = Array.isArray(j.remediation?.hints) ? j.remediation.hints.length : null
     const rq = j.replay_queue?.count
     const logTotal = j.logs?.total
+    const pc = j.product_classification?.report ?? null
     return {
       health_run_id: j.meta?.health_run_id ?? null,
       health_checked_at: j.meta?.health_checked_at ?? null,
@@ -241,6 +251,11 @@ function readBundleMetrics(bundleAbsPath: string): BundleMetrics | null {
       replay_queue_count: typeof rq === 'number' ? rq : null,
       coverage_report_present: j.coverage_gaps?.report != null,
       log_problem_row_total: typeof logTotal === 'number' ? logTotal : null,
+      product_classification_ok: typeof pc?.ok === 'boolean' ? pc.ok : null,
+      product_classification_issues:
+        typeof pc?.totals?.issues === 'number' ? pc.totals.issues : null,
+      product_classification_affected:
+        typeof pc?.totals?.affected_products === 'number' ? pc.totals.affected_products : null,
     }
   } catch {
     return null
@@ -362,6 +377,12 @@ async function mainAsync(): Promise<void> {
     console.log(`  remediation_hints:                 ${metrics.remediation_hints ?? '(n/a)'}`)
     console.log(`  replay_queue_count:                ${metrics.replay_queue_count ?? '(n/a)'}`)
     console.log(`  coverage_gaps.report:              ${metrics.coverage_report_present ? 'present' : 'absent'}`)
+    const pcOkLabel = metrics.product_classification_ok == null
+      ? '(n/a)'
+      : metrics.product_classification_ok
+        ? 'ok'
+        : `${metrics.product_classification_issues ?? 0} issues / ${metrics.product_classification_affected ?? 0} rows`
+    console.log(`  product_classification:            ${pcOkLabel}`)
     console.log(`  logs.total (problem rows in bundle): ${metrics.log_problem_row_total ?? '(n/a)'}`)
   }
   if (!dumpBundle && bundleWritten) {

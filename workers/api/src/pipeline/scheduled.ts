@@ -11,6 +11,7 @@ import { collectEconomicSeries } from '../economic/collect'
 import { runCoverageGapAudit } from './coverage-gap-audit'
 import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
+import { runProductClassificationAudit } from './product-classification-audit'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
@@ -241,6 +242,18 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
 
   if (result.ok && !skipped) {
     await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY, cronIso)
+  }
+
+  // Classification audit runs AFTER the daily ingest so it reads the freshest
+  // collection_date snapshot. Failure here must not fail the daily run.
+  try {
+    await runProductClassificationAudit(env, { persist: true })
+  } catch (error) {
+    log.error('scheduler', 'product_classification_audit_failed', {
+      code: 'product_classification_gaps',
+      error,
+      context: (error as Error)?.message || String(error),
+    })
   }
 
   return {
