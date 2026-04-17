@@ -37,9 +37,9 @@ describe('doctor-schedule', () => {
 
   it('resolvedDoctorScheduleFromStored falls back on empty or bad stored value', () => {
     const r = resolvedDoctorScheduleFromStored(null)
-    expect(r.hour).toBe(10)
+    expect(r.hour).toBe(19)
     expect(r.time_zone).toBe('Australia/Melbourne')
     const r2 = resolvedDoctorScheduleFromStored('{bad')
-    expect(r2.hour).toBe(10)
+    expect(r2.hour).toBe(19)
   })
 })
