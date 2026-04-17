@@ -583,8 +583,11 @@
 }
 
 .chart-workspace {
+    --ar-chart-side-panel-width: 360px;
+    --ar-chart-mobile-top-height: 42dvh;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    grid-template-columns: minmax(0, 1fr) 12px minmax(280px, var(--ar-chart-side-panel-width));
+    grid-template-areas: "chart resize rail";
     align-items: stretch;
     min-width: 0;
     /* Bound the side-panel scroll area so the product list never stretches the chart column into empty space. */
@@ -592,7 +595,46 @@
     min-height: 520px;
 }
 
+.terminal-chart-surface {
+    grid-area: chart;
+    min-width: 0;
+    min-height: 0;
+}
+
+.chart-workspace-resizer {
+    grid-area: resize;
+    position: relative;
+    min-width: 12px;
+    min-height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+    background: transparent;
+}
+
+.chart-workspace-resizer::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ar-line-strong) 78%, transparent);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chart-workspace-resizer:hover::before,
+.chart-workspace-resizer:focus-visible::before,
+.chart-workspace-resizer.is-active::before,
+.is-resizing-chart-workspace .chart-workspace-resizer::before {
+    background: color-mix(in srgb, var(--ar-accent) 65%, var(--ar-line-strong));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ar-accent) 14%, transparent);
+}
+
 .chart-side-panel {
+    grid-area: rail;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
@@ -621,6 +663,108 @@
     padding: 12px 14px 16px;
     border-top: 0;
     background: transparent;
+}
+
+.chart-selection-rail.has-ribbon-hierarchy > :not(.ar-report-underchart-tree) {
+    display: none;
+}
+
+.ar-report-underchart-tree {
+    display: none;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    padding: 10px 12px 12px;
+    font: 11px/1.45 "Space Grotesk", system-ui, sans-serif;
+    color: var(--ar-ribbon-tree-text, var(--ar-text));
+    background: var(--ar-ribbon-tree-bg, var(--ar-surface-2));
+    border: 1px solid var(--ar-ribbon-tree-border, var(--ar-line));
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.chart-selection-rail.has-ribbon-hierarchy .ar-report-underchart-tree {
+    display: flex;
+    flex-direction: column;
+}
+
+.ar-report-underchart-tree-body {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+    height: 100%;
+}
+
+.ar-report-underchart-tree-head {
+    display: grid;
+    gap: 4px;
+}
+
+.ar-report-underchart-tree-heading {
+    min-width: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.ar-report-underchart-tree-meta {
+    min-width: 0;
+    color: var(--ar-ribbon-tree-muted, var(--ar-text-soft));
+    font-size: 0.66rem;
+    line-height: 1.3;
+}
+
+.ar-report-underchart-tree-scroll {
+    display: grid;
+    align-content: start;
+    gap: 0;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 2px;
+    scrollbar-gutter: stable;
+}
+
+.ar-report-underchart-tree-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    overflow-x: auto;
+    border-bottom: 1px solid color-mix(in srgb, var(--ar-ribbon-tree-border, var(--ar-line)) 88%, transparent);
+    scrollbar-width: thin;
+}
+
+.ar-report-underchart-tree-crumb {
+    flex: 0 0 auto;
+    max-width: 10rem;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--ar-ribbon-tree-border, var(--ar-line)) 92%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ar-ribbon-tree-bg, var(--ar-surface-2)) 86%, transparent);
+    color: inherit;
+    font: inherit;
+    font-size: 0.68rem;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.ar-report-underchart-tree-crumb.is-current {
+    border-color: color-mix(in srgb, var(--ar-accent) 36%, var(--ar-ribbon-tree-border, var(--ar-line)));
+    background: color-mix(in srgb, var(--ar-accent) 10%, var(--ar-ribbon-tree-bg, var(--ar-surface-2)));
+}
+
+.ar-report-underchart-tree-crumb-sep {
+    flex: 0 0 auto;
+    color: var(--ar-ribbon-tree-muted, var(--ar-text-soft));
+    font-size: 0.72rem;
+    opacity: 0.72;
 }
 
 .terminal-chart-output,
@@ -947,17 +1091,41 @@
 @media (max-width: 980px) {
     .chart-workspace {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(220px, var(--ar-chart-mobile-top-height)) 12px minmax(260px, 1fr);
+        grid-template-areas:
+            "rail"
+            "resize"
+            "chart";
         /* When stacked, let each section use natural height - side panel becomes its own scroll zone. */
         max-height: none;
+        min-height: 0;
+        height: 100%;
     }
 
     .chart-side-panel {
         border-left: 0;
-        border-top: 1px solid var(--ar-line);
+        border-bottom: 1px solid var(--ar-line);
     }
 
     .chart-selection-rail {
-        max-height: min(520px, 68dvh);
+        max-height: none;
+        height: 100%;
+    }
+
+    .chart-workspace-resizer {
+        min-width: 100%;
+        min-height: 12px;
+        cursor: row-resize;
+    }
+
+    .chart-workspace-resizer::before {
+        top: 50%;
+        bottom: auto;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        height: 2px;
+        transform: translateY(-50%);
     }
 }
 
@@ -1301,11 +1469,12 @@
 @media (max-height: 760px) and (orientation: landscape) {
     .chart-workspace {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(180px, var(--ar-chart-mobile-top-height)) 12px minmax(200px, 1fr);
     }
 
     .chart-side-panel {
         border-left: 0;
-        border-top: 1px solid var(--ar-line);
+        border-bottom: 1px solid var(--ar-line);
     }
 
     .terminal-chart-surface,
@@ -1332,7 +1501,7 @@
     }
 
     .chart-selection-rail {
-        max-height: min(160px, 30dvh);
+        max-height: none;
     }
 }
 
@@ -1343,7 +1512,7 @@
 
     .chart-side-panel {
         border-left: 0;
-        border-top: 1px solid var(--ar-line);
+        border-bottom: 1px solid var(--ar-line);
     }
 
     .chart-toolbar {

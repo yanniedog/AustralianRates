@@ -950,7 +950,14 @@
         var wrapper = document.createElement('div');
         wrapper.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;';
         container.appendChild(wrapper);
-        var ribbonHierarchyHost = (container && container.closest && container.closest('.chart-figure')) || wrapper;
+        var ribbonWorkspace = (container && container.closest && container.closest('.chart-workspace')) || null;
+        var ribbonHierarchyRail = ribbonWorkspace && ribbonWorkspace.querySelector
+            ? ribbonWorkspace.querySelector('.chart-selection-rail')
+            : null;
+        var ribbonHierarchySidePanel = ribbonWorkspace && ribbonWorkspace.querySelector
+            ? ribbonWorkspace.querySelector('.chart-side-panel')
+            : null;
+        var ribbonHierarchyHost = ribbonHierarchyRail || ribbonHierarchySidePanel || ((container && container.closest && container.closest('.chart-figure')) || wrapper);
         if (ribbonHierarchyHost && ribbonHierarchyHost.querySelectorAll) {
             ribbonHierarchyHost.querySelectorAll('.ar-report-underchart-tree').forEach(function (panel) {
                 if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
@@ -999,7 +1006,11 @@
         mount.style.cssText = 'width:100%;flex:1;min-height:380px;position:relative;';
         wrapper.appendChild(mount);
         var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
-        ribbonHierarchyHost.appendChild(ribbonHierarchyPanel.el);
+        if (ribbonHierarchyHost && typeof ribbonHierarchyHost.insertBefore === 'function') {
+            ribbonHierarchyHost.insertBefore(ribbonHierarchyPanel.el, ribbonHierarchyHost.firstChild || null);
+        } else {
+            ribbonHierarchyHost.appendChild(ribbonHierarchyPanel.el);
+        }
 
         if (options.noteText) {
             var note = document.createElement('div');
@@ -1179,12 +1190,55 @@
             return best;
         }
 
-        function seedDefaultRibbonExpandedPaths(tree) {
-            if (!tree || tree.kind !== 'branch') return;
-            if (Object.keys(ribbonExpandedPaths).some(function (p) { return !!ribbonExpandedPaths[p]; })) return;
-            (tree.groups || []).forEach(function (_group, idx) {
-                ribbonExpandedPaths[String(idx)] = true;
+        function ribbonPathSegments(path) {
+            var parts = String(path || '').split('>').filter(Boolean);
+            var out = [];
+            var acc = '';
+            parts.forEach(function (part) {
+                acc = acc ? acc + '>' + part : String(part);
+                out.push(acc);
             });
+            return out;
+        }
+
+        function setRibbonExpandedBranchPath(path, shouldOpen) {
+            var next = {};
+            var segs = ribbonPathSegments(path);
+            if (!shouldOpen && segs.length) segs.pop();
+            segs.forEach(function (seg) {
+                next[seg] = true;
+            });
+            ribbonExpandedPaths = next;
+        }
+
+        function buildRibbonBreadcrumbItems(tree) {
+            var deep = deepestExpandedRibbonPath();
+            if (!deep || !tree || tree.kind !== 'branch') return [];
+            var node = tree;
+            var crumbs = [];
+            var acc = '';
+            deep.split('>').forEach(function (part) {
+                if (!node || node.kind !== 'branch') return;
+                var idx = Number(part);
+                if (!Number.isFinite(idx) || !node.groups || !node.groups[idx]) return;
+                acc = acc ? acc + '>' + idx : String(idx);
+                var group = node.groups[idx];
+                crumbs.push({
+                    path: acc,
+                    label: ribbonFieldLabel(node.field) + ': ' + group.label,
+                });
+                node = group.child;
+            });
+            return crumbs;
+        }
+
+        function setRibbonHierarchyLayoutActive(isActive) {
+            if (ribbonHierarchyRail && ribbonHierarchyRail.classList) {
+                ribbonHierarchyRail.classList.toggle('has-ribbon-hierarchy', !!isActive);
+            }
+            if (ribbonHierarchySidePanel && ribbonHierarchySidePanel.classList) {
+                ribbonHierarchySidePanel.classList.toggle('has-ribbon-hierarchy', !!isActive);
+            }
         }
 
         var ribbonTreeHadBranches = false;
@@ -1536,6 +1590,7 @@
             ribbonTreeBank = '';
             ribbonTreeAnchorYmd = '';
             ribbonTreeHadBranches = false;
+            setRibbonHierarchyLayoutActive(false);
             if (ribbonHierarchyPanel && typeof ribbonHierarchyPanel.hide === 'function') ribbonHierarchyPanel.hide();
             syncInfoboxRowHighlight();
         }
@@ -1762,7 +1817,7 @@
                 brow.appendChild(rateSpan);
                 function toggleBranch() {
                     var nextOpen = !expanded;
-                    ribbonExpandedPaths[subPath] = nextOpen;
+                    setRibbonExpandedBranchPath(subPath, nextOpen);
                     clientLog('info', nextOpen ? 'Chart product hierarchy expand' : 'Chart product hierarchy collapse', {
                         section: String(section || ''),
                         path: chartLogClip(subPath, 40),
@@ -1788,6 +1843,41 @@
                     container.appendChild(nest);
                 }
             });
+        }
+
+        function renderRibbonBreadcrumbs(container, tree) {
+            var crumbs = buildRibbonBreadcrumbItems(tree);
+            if (!crumbs.length) return;
+            var bar = document.createElement('div');
+            bar.className = 'ar-report-underchart-tree-breadcrumbs';
+            var rootBtn = document.createElement('button');
+            rootBtn.type = 'button';
+            rootBtn.className = 'ar-report-underchart-tree-crumb';
+            rootBtn.textContent = 'All tiers';
+            rootBtn.addEventListener('click', function () {
+                setRibbonExpandedBranchPath('', false);
+                refreshRibbonUnderChartPanel();
+            });
+            bar.appendChild(rootBtn);
+            crumbs.forEach(function (crumb, idx) {
+                var sep = document.createElement('span');
+                sep.className = 'ar-report-underchart-tree-crumb-sep';
+                sep.setAttribute('aria-hidden', 'true');
+                sep.textContent = '>';
+                bar.appendChild(sep);
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'ar-report-underchart-tree-crumb';
+                if (idx === crumbs.length - 1) btn.classList.add('is-current');
+                btn.title = crumb.label;
+                btn.textContent = crumb.label;
+                btn.addEventListener('click', function () {
+                    setRibbonExpandedBranchPath(crumb.path, true);
+                    refreshRibbonUnderChartPanel();
+                });
+                bar.appendChild(btn);
+            });
+            container.appendChild(bar);
         }
 
         function refreshRibbonUnderChartPanel() {
@@ -1834,7 +1924,6 @@
                 return;
             }
             ribbonTreeHadBranches = tree.kind !== 'leaves';
-            seedDefaultRibbonExpandedPaths(tree);
             var n = prodsAtAnchor.length;
             var ibBandPt = bandByDateByBank[pbPanel] && bandByDateByBank[pbPanel][anchor];
             var ibRateStr = '';
@@ -1847,11 +1936,13 @@
                         : ibLo.toFixed(2) + '%';
                 }
             }
+            setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
-                heading: fmtReportDateYmd(anchor) + (ibRateStr ? '  \u00b7  ' + ibRateStr : ''),
-                meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : ''),
+                heading: pbPanel,
+                meta: fmtReportDateYmd(anchor) + (ibRateStr ? ' \u00b7 ' + ibRateStr : '') + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : ''),
                 compact: true,
                 renderBody: function (wrap) {
+                    renderRibbonBreadcrumbs(wrap, tree);
                     renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
                 },
             });
@@ -2338,8 +2429,12 @@
     function createRibbonHierarchyPanel(theme, escHtml) {
         var el = document.createElement('div');
         el.className = 'ar-report-infobox ar-report-infobox--compact ar-report-infobox--ribbon-tree ar-report-underchart-tree';
-        el.style.cssText = 'display:none;padding:8px 10px 10px;font:11px/1.5 "Space Grotesk",system-ui,sans-serif;color:' + theme.ttText + ';background:' + theme.ttBg + ';border:1px solid ' + theme.ttBorder + ';border-radius:6px;margin-top:8px;flex-shrink:0;max-height:min(42vh,320px);overflow:auto;';
+        el.style.setProperty('--ar-ribbon-tree-text', theme.ttText);
+        el.style.setProperty('--ar-ribbon-tree-bg', theme.ttBg);
+        el.style.setProperty('--ar-ribbon-tree-border', theme.ttBorder);
+        el.style.setProperty('--ar-ribbon-tree-muted', theme.muted);
         var body = document.createElement('div');
+        body.className = 'ar-report-underchart-tree-body';
         el.appendChild(body);
         return {
             el: el,
@@ -2350,14 +2445,14 @@
                     return;
                 }
                 var heading = input.heading
-                    ? '<div style="font-weight:700;margin-bottom:4px;font-size:12px;line-height:1.2;">' + escHtml(input.heading) + '</div>'
+                    ? '<div class="ar-report-underchart-tree-heading">' + escHtml(input.heading) + '</div>'
                     : '';
                 var meta = input.meta
-                    ? '<div style="font-size:10px;color:' + theme.muted + ';margin-bottom:8px;line-height:1.3;">' + escHtml(input.meta) + '</div>'
+                    ? '<div class="ar-report-underchart-tree-meta">' + escHtml(input.meta) + '</div>'
                     : '';
-                body.innerHTML = heading + meta;
+                body.innerHTML = '<div class="ar-report-underchart-tree-head">' + heading + meta + '</div>';
                 var treeRoot = document.createElement('div');
-                treeRoot.className = 'ar-report-infobox-ribbon-tree';
+                treeRoot.className = 'ar-report-infobox-ribbon-tree ar-report-underchart-tree-scroll';
                 body.appendChild(treeRoot);
                 try {
                     input.renderBody(treeRoot);

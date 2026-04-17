@@ -126,6 +126,10 @@ body.ar-public .chart-side-panel {
     background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 94%, transparent), color-mix(in srgb, var(--ar-surface-3) 88%, transparent));
 }
 
+body.ar-public .chart-workspace-resizer::before {
+    background: color-mix(in srgb, var(--ar-line-strong) 82%, transparent);
+}
+
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
     body.ar-public .chart-figure .terminal-chart-surface {
         -webkit-backdrop-filter: blur(8px);
@@ -457,6 +461,14 @@ body.ar-legal .legal-hero { animation: none; }
         overflow: hidden;
     }
 
+    body.ar-public .chart-workspace {
+        flex: 1 1 0;
+        min-height: 0;
+        height: 100%;
+        max-height: 100%;
+        grid-template-rows: minmax(220px, var(--ar-chart-mobile-top-height, calc((100dvh - var(--ar-header-height) - 4px) * 0.42))) 12px minmax(240px, 1fr);
+    }
+
     body.ar-public .chart-figure .chart-toolbar {
         flex-shrink: 0;
     }
@@ -469,10 +481,23 @@ body.ar-legal .legal-hero { animation: none; }
         overflow: hidden;
     }
 
+    body.ar-public .chart-side-panel {
+        min-height: 0;
+    }
+
+    body.ar-public .chart-selection-rail.has-ribbon-hierarchy {
+        grid-auto-rows: minmax(0, 1fr);
+    }
+
+    body.ar-public .chart-selection-rail.has-ribbon-hierarchy .ar-report-underchart-tree {
+        height: 100%;
+        max-height: none;
+    }
+
     body.ar-public .terminal-chart-output,
     body.ar-public #chart-output {
         flex: 1 1 0;
-        min-height: max(240px, min(52dvh, calc((100dvh - var(--ar-header-height) - 4px) * 0.5)));
+        min-height: 0;
     }
 
     body.ar-public #chart-detail-output {
@@ -507,6 +532,11 @@ body.ar-legal .legal-hero { animation: none; }
     body.ar-public .site-footer,
     body.ar-legal .site-footer {
         width: calc(100vw - calc(var(--ar-shell-gutter) * 2));
+    }
+
+    body.ar-public .ar-report-underchart-tree-crumb {
+        max-width: 7.5rem;
+        font-size: 0.64rem;
     }
 }
 
