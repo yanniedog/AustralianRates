@@ -658,22 +658,6 @@
             '</div>';
     }
 
-    function chartEconomicOverlayMarkup() {
-        return '' +
-            '<details class="chart-overlay-picker" id="chart-economic-overlay-picker">' +
-                '<summary class="chart-overlay-picker-summary">' +
-                    '<span class="chart-overlay-picker-title">Economic overlays</span>' +
-                    '<span id="chart-economic-overlay-summary" class="chart-overlay-picker-count">None</span>' +
-                '</summary>' +
-                '<div class="chart-overlay-picker-panel">' +
-                    '<p id="chart-economic-overlay-hint" class="hint">Plot indexed economic metrics alongside bank rates in Rate Report and Compare views.</p>' +
-                    '<div id="chart-economic-overlay-options" class="chart-overlay-picker-options">' +
-                        '<p class="chart-overlay-picker-empty">Loading overlays…</p>' +
-                    '</div>' +
-                '</div>' +
-            '</details>';
-    }
-
     function tabButtonMarkup(tab, active) {
         return '' +
             '<button id="tab-' + esc(tab.id) + '" class="tab-btn chip-btn secondary' + (active ? ' active' : '') + '"' +
@@ -746,7 +730,6 @@
                                             chartQuestionMarkup(),
                                             chartEngineMarkup(),
                                         '</div>',
-                                        chartEconomicOverlayMarkup(),
                                     '</div>',
                                     '<div class="chart-workspace">',
                                         '<div class="terminal-chart-surface">',
@@ -754,10 +737,6 @@
                                         '</div>',
                                         '<div id="chart-workspace-resizer" class="chart-workspace-resizer" role="separator" tabindex="0" aria-label="Resize chart workspace panels"></div>',
                                         '<aside id="chart-side-panel" class="chart-side-panel" aria-label="Filtered product hierarchy and selection">',
-                                            '<div class="chart-side-panel-head">',
-                                                '<span id="chart-guidance" class="chart-footer-guidance hint">On demand</span>',
-                                                '<div id="chart-summary" class="chart-summary chart-side-summary" aria-live="polite"><span class="pill">Load chart when ready</span></div>',
-                                            '</div>',
                                             '<div class="chart-selection-rail" aria-label="Series and selection">',
                                                 '<p id="chart-series-note" class="chart-series-note hint" aria-live="polite"></p>',
                                                 '<div id="chart-series-list" class="chart-series-list" role="list"></div>',
