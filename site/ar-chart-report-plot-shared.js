@@ -950,6 +950,7 @@
         var wrapper = document.createElement('div');
         wrapper.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;';
         container.appendChild(wrapper);
+        var ribbonHierarchyHost = (container && container.closest && container.closest('.chart-figure')) || wrapper;
 
         var viewBarOpts = {
             section: section,
@@ -993,7 +994,7 @@
         mount.style.cssText = 'width:100%;flex:1;min-height:380px;position:relative;';
         wrapper.appendChild(mount);
         var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
-        wrapper.appendChild(ribbonHierarchyPanel.el);
+        ribbonHierarchyHost.appendChild(ribbonHierarchyPanel.el);
 
         if (options.noteText) {
             var note = document.createElement('div');
