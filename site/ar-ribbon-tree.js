@@ -1,0 +1,244 @@
+(function () {
+    'use strict';
+    window.AR = window.AR || {};
+    window.AR.ribbon = window.AR.ribbon || {};
+
+    var RIBBON_DEPOSIT_TIER_BANDS = [
+        { min: 0, max: 10000, label: '$0 to $10k' },
+        { min: 10000, max: 50000, label: '$10k to $50k' },
+        { min: 50000, max: 250000, label: '$50k to $250k' },
+        { min: 250000, max: 1000000, label: '$250k to $1m' },
+        { min: 1000000, max: 10000000, label: '$1m to $10m' },
+        { min: 10000000, max: null, label: '$10m+' },
+    ];
+
+    function formatTierValue(row, field) {
+        var fn = window.AR && window.AR.ribbon && window.AR.ribbon.formatRibbonTierValue;
+        return typeof fn === 'function' ? fn(row, field) : '';
+    }
+
+    function ribbonFiniteNumberOrNull(value) {
+        var n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function ribbonMoneyAmountFromText(value, suffix) {
+        var n = Number(value);
+        if (!Number.isFinite(n)) return null;
+        var mult = 1;
+        var s = String(suffix || '').trim().toLowerCase();
+        if (s === 'k') mult = 1000;
+        else if (s === 'm') mult = 1000000;
+        else if (s === 'b') mult = 1000000000;
+        return n * mult;
+    }
+
+    function ribbonDepositTierBoundsFromLabel(label) {
+        var raw = String(label || '').trim().replace(/,/g, '');
+        if (!raw) return null;
+        var openMatch = raw.match(/^\$?\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb])?\s*\+$/i);
+        if (openMatch) {
+            return {
+                min: ribbonMoneyAmountFromText(openMatch[1], openMatch[2]),
+                max: null,
+            };
+        }
+        var rangeMatch = raw.match(/^\$?\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb])?\s*(?:to|-|\u2013|\u2014)\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*([kmb])?$/i);
+        if (rangeMatch) {
+            return {
+                min: ribbonMoneyAmountFromText(rangeMatch[1], rangeMatch[2]),
+                max: ribbonMoneyAmountFromText(rangeMatch[3], rangeMatch[4]),
+            };
+        }
+        return null;
+    }
+
+    function ribbonDepositTierBoundsFromRow(row) {
+        if (!row || typeof row !== 'object') return null;
+        var min = ribbonFiniteNumberOrNull(row.min_balance);
+        var max = row.max_balance == null ? null : ribbonFiniteNumberOrNull(row.max_balance);
+        if (min == null && max == null) {
+            min = ribbonFiniteNumberOrNull(row.min_deposit);
+            max = row.max_deposit == null ? null : ribbonFiniteNumberOrNull(row.max_deposit);
+        }
+        if (min == null && max == null) {
+            var parsed = ribbonDepositTierBoundsFromLabel(row.deposit_tier);
+            if (parsed) {
+                min = parsed.min;
+                max = parsed.max;
+            }
+        }
+        if (min == null && max == null) return null;
+        if (min == null) min = 0;
+        if (max != null && max < min) {
+            var swap = min;
+            min = max;
+            max = swap;
+        }
+        if (max != null && max <= min) max = min + 0.01;
+        return { min: Math.max(0, min), max: max };
+    }
+
+    function ribbonDepositTierBandEntriesForProduct(product) {
+        var row = product && product.row && typeof product.row === 'object' ? product.row : {};
+        var bounds = ribbonDepositTierBoundsFromRow(row);
+        if (!bounds) {
+            var raw = formatTierValue(row, 'deposit_tier') || '\u2014';
+            return [{ label: raw, sortIndex: RIBBON_DEPOSIT_TIER_BANDS.length, products: [product] }];
+        }
+        var lo = Number(bounds.min);
+        var hi = bounds.max == null ? Infinity : Number(bounds.max);
+        if (!Number.isFinite(lo) || !(hi > lo)) hi = lo + 0.01;
+        var hits = [];
+        RIBBON_DEPOSIT_TIER_BANDS.forEach(function (band, idx) {
+            var bandHi = band.max == null ? Infinity : band.max;
+            if (lo < bandHi && hi > band.min) {
+                hits.push({ label: band.label, sortIndex: idx, products: [product] });
+            }
+        });
+        if (hits.length) return hits;
+        var fallback = formatTierValue(row, 'deposit_tier') || '\u2014';
+        return [{ label: fallback, sortIndex: RIBBON_DEPOSIT_TIER_BANDS.length, products: [product] }];
+    }
+
+    function buildRibbonFieldGroups(prods, field) {
+        var groups = {};
+        if (String(field || '') === 'deposit_tier') {
+            prods.forEach(function (product) {
+                ribbonDepositTierBandEntriesForProduct(product).forEach(function (entry) {
+                    if (!groups[entry.label]) {
+                        groups[entry.label] = { label: entry.label, sortIndex: entry.sortIndex, products: [] };
+                    }
+                    groups[entry.label].products.push(product);
+                });
+            });
+            return Object.keys(groups).map(function (label) { return groups[label]; }).sort(function (a, b) {
+                if (a.sortIndex !== b.sortIndex) return a.sortIndex - b.sortIndex;
+                return a.label.localeCompare(b.label);
+            });
+        }
+        prods.forEach(function (p) {
+            var raw = formatTierValue(p.row || {}, field);
+            var key = raw || '\u2014';
+            if (!groups[key]) groups[key] = { label: key, sortIndex: Number.MAX_SAFE_INTEGER, products: [] };
+            groups[key].products.push(p);
+        });
+        return Object.keys(groups).map(function (label) { return groups[label]; }).sort(function (a, b) {
+            return a.label.localeCompare(b.label);
+        });
+    }
+
+    function buildRibbonTierTree(prods, tierFields, fieldIdx) {
+        if (!prods || prods.length === 0) return { kind: 'empty' };
+        if (prods.length === 1 || fieldIdx >= (tierFields || []).length) {
+            return { kind: 'leaves', products: prods.slice() };
+        }
+        var field = tierFields[fieldIdx];
+        var groups = buildRibbonFieldGroups(prods, field);
+        if (groups.length === 1) {
+            return buildRibbonTierTree(groups[0].products, tierFields, fieldIdx + 1);
+        }
+        return {
+            kind: 'branch',
+            field: field,
+            groups: groups.map(function (group) {
+                return { label: group.label, child: buildRibbonTierTree(group.products, tierFields, fieldIdx + 1) };
+            }),
+        };
+    }
+
+    function ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr) {
+        var v = p.byDate[anchorYmd];
+        if (v == null || !Number.isFinite(v) || v <= 0) return null;
+        if (secStr === 'savings' && v < 1.0) return null;
+        return v;
+    }
+
+    function minMaxRibbonNodeRates(node, anchorYmd, secStr) {
+        if (!node || node.kind === 'empty') return null;
+        if (node.kind === 'leaves') {
+            var minV = Infinity;
+            var maxV = -Infinity;
+            node.products.forEach(function (p) {
+                var v = ribbonRateAtAnchorForHierarchy(p, anchorYmd, secStr);
+                if (v == null) return;
+                if (v < minV) minV = v;
+                if (v > maxV) maxV = v;
+            });
+            if (!Number.isFinite(minV) || !Number.isFinite(maxV)) return null;
+            return { min: minV, max: maxV };
+        }
+        var minA = Infinity;
+        var maxA = -Infinity;
+        (node.groups || []).forEach(function (g) {
+            var mm = minMaxRibbonNodeRates(g.child, anchorYmd, secStr);
+            if (!mm) return;
+            if (mm.min < minA) minA = mm.min;
+            if (mm.max > maxA) maxA = mm.max;
+        });
+        if (!Number.isFinite(minA) || !Number.isFinite(maxA)) return null;
+        return { min: minA, max: maxA };
+    }
+
+    function formatRibbonTierRateRange(mm) {
+        if (!mm || !Number.isFinite(mm.min) || !Number.isFinite(mm.max)) return '';
+        var a = mm.min.toFixed(2);
+        var b = mm.max.toFixed(2);
+        return a === b ? a + '%' : a + '%\u2013' + b + '%';
+    }
+
+    function collectRibbonNodeKeysInto(node, out, seen) {
+        if (!node || node.kind === 'empty') return;
+        if (node.kind === 'leaves') {
+            node.products.forEach(function (p) {
+                if (!p || !p.key || seen[p.key]) return;
+                seen[p.key] = true;
+                out.push(p.key);
+            });
+            return;
+        }
+        (node.groups || []).forEach(function (g) {
+            collectRibbonNodeKeysInto(g.child, out, seen);
+        });
+    }
+
+    function collectRibbonNodeKeys(node) {
+        var out = [];
+        collectRibbonNodeKeysInto(node, out, {});
+        return out;
+    }
+
+    function ribbonProductSeriesKey(series, bankName, productName, row) {
+        var latestRow = row;
+        if ((!latestRow || typeof latestRow !== 'object' || Object.keys(latestRow).length === 0) && series && typeof series === 'object') {
+            latestRow = (series.latestRow && typeof series.latestRow === 'object') ? series.latestRow : null;
+            if ((!latestRow || Object.keys(latestRow).length === 0) && Array.isArray(series.points) && series.points.length) {
+                var lastPoint = series.points[series.points.length - 1];
+                if (lastPoint && lastPoint.row && typeof lastPoint.row === 'object') latestRow = lastPoint.row;
+            }
+        }
+        var rawKey = latestRow && (
+            latestRow.product_key ||
+            latestRow.series_key ||
+            latestRow.product_id
+        );
+        if (rawKey != null && String(rawKey).trim() !== '') return '[P]' + String(rawKey).trim();
+        if (series && series.key != null && String(series.key).trim() !== '') return '[P]' + String(series.key).trim();
+        return '[P]' + String(bankName || '').trim() + '|' + String(productName || 'Unknown').trim();
+    }
+
+    window.AR.ribbon.RIBBON_DEPOSIT_TIER_BANDS = RIBBON_DEPOSIT_TIER_BANDS;
+    window.AR.ribbon.ribbonFiniteNumberOrNull = ribbonFiniteNumberOrNull;
+    window.AR.ribbon.ribbonMoneyAmountFromText = ribbonMoneyAmountFromText;
+    window.AR.ribbon.ribbonDepositTierBoundsFromLabel = ribbonDepositTierBoundsFromLabel;
+    window.AR.ribbon.ribbonDepositTierBoundsFromRow = ribbonDepositTierBoundsFromRow;
+    window.AR.ribbon.ribbonDepositTierBandEntriesForProduct = ribbonDepositTierBandEntriesForProduct;
+    window.AR.ribbon.buildRibbonFieldGroups = buildRibbonFieldGroups;
+    window.AR.ribbon.buildRibbonTierTree = buildRibbonTierTree;
+    window.AR.ribbon.ribbonRateAtAnchorForHierarchy = ribbonRateAtAnchorForHierarchy;
+    window.AR.ribbon.minMaxRibbonNodeRates = minMaxRibbonNodeRates;
+    window.AR.ribbon.formatRibbonTierRateRange = formatRibbonTierRateRange;
+    window.AR.ribbon.collectRibbonNodeKeys = collectRibbonNodeKeys;
+    window.AR.ribbon.collectRibbonNodeKeysInto = collectRibbonNodeKeysInto;
+    window.AR.ribbon.ribbonProductSeriesKey = ribbonProductSeriesKey;
+})();
