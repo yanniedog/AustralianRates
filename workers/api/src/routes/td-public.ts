@@ -58,6 +58,7 @@ import {
 import { registerTdChartDataRoute } from './chart-data/term-deposits'
 import { registerDoctorSchedulePublicRoute } from './doctor-schedule-public'
 import { registerSiteUiPublicRoute } from './site-ui-public'
+import { registerSnapshotRoute } from './snapshot-public'
 
 export const tdPublicRoutes = new Hono<AppContext>()
 
@@ -76,6 +77,7 @@ registerCpiRoutes(tdPublicRoutes)
 registerTdChartDataRoute(tdPublicRoutes)
 registerSiteUiPublicRoute(tdPublicRoutes)
 registerDoctorSchedulePublicRoute(tdPublicRoutes)
+registerSnapshotRoute(tdPublicRoutes, 'term_deposits')
 
 tdPublicRoutes.get('/overview', async (c) => {
   withPublicCache(c, 60)

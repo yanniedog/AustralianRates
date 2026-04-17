@@ -10,6 +10,8 @@ import {
 } from '../db/chart-cache'
 import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
+import { writeD1SnapshotCache } from '../db/snapshot-cache'
+import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
 import {
   collectHomeLoanAnalyticsRowsResolved,
@@ -225,6 +227,21 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
           })
         }
       }
+    }
+  }
+
+  for (const section of SECTIONS) {
+    try {
+      const snapshot = await buildSnapshotPayload(env, section, 'default')
+      await writeD1SnapshotCache(db, section, 'default', snapshot)
+      refreshed++
+    } catch (e) {
+      const msg = (e as Error)?.message ?? String(e)
+      errors.push(`${section}:snapshot: ${msg}`)
+      log.warn('chart_cache_refresh', `Failed to refresh ${section} snapshot`, {
+        code: 'snapshot_cache_refresh_failed',
+        context: msg,
+      })
     }
   }
 

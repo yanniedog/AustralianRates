@@ -47,6 +47,7 @@ import { registerPublicCoreRoutes } from './public-core-routes'
 import { registerRbaRoutes } from './rba-routes'
 import { registerCpiRoutes } from './cpi-routes'
 import { registerHomeLoanChartDataRoute } from './chart-data/home-loans'
+import { registerSnapshotRoute } from './snapshot-public'
 
 export const publicRoutes = new Hono<AppContext>()
 
@@ -64,6 +65,7 @@ registerPublicCoreRoutes(publicRoutes)
 registerRbaRoutes(publicRoutes)
 registerCpiRoutes(publicRoutes)
 registerHomeLoanChartDataRoute(publicRoutes)
+registerSnapshotRoute(publicRoutes, 'home_loans')
 
 publicRoutes.post('/trigger-run', async (c) => {
   const guard = guardPublicTriggerRun(c)

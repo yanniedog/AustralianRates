@@ -106,14 +106,44 @@
         return nextUrl;
     }
 
+    /** Maximum time a snapshottable request will wait for /snapshot to arrive before falling through to network. */
+    var SNAPSHOT_WAIT_BUDGET_MS = 600;
+
+    function readSnapshotCache(rawUrl) {
+        var snap = window.AR && window.AR.snapshot;
+        if (!snap || typeof snap.lookup !== 'function') return null;
+        return snap.lookup(rawUrl);
+    }
+
+    async function awaitSnapshotIfApplicable(rawUrl, opts) {
+        if (opts && opts.bypassSnapshot) return;
+        var snap = window.AR && window.AR.snapshot;
+        if (!snap) return;
+        if (snap.data || snap.failed) return;
+        if (typeof snap.isSnapshottableUrl !== 'function' || !snap.isSnapshottableUrl(rawUrl)) return;
+        if (typeof snap.awaitReady !== 'function') return;
+        var budget = asPositiveInt(opts && opts.snapshotWaitMs, SNAPSHOT_WAIT_BUDGET_MS);
+        try { await snap.awaitReady(budget); } catch (_err) { /* ignore */ }
+    }
+
     async function requestJson(url, options) {
         var opts = options || {};
-        url = prepareRequestUrl(url || '', opts);
+        var rawUrl = String(url || '');
+        url = prepareRequestUrl(rawUrl, opts);
         var timeoutMs = asPositiveInt(opts.timeoutMs, 12000);
         var retryCount = Math.max(0, Math.floor(Number(opts.retryCount || 0)));
         var retryDelayMs = asPositiveInt(opts.retryDelayMs, 650);
         var label = String(opts.requestLabel || requestLabel(url, 'request'));
         var lastError = null;
+
+        if (!opts.bypassSnapshot) {
+            await awaitSnapshotIfApplicable(rawUrl, opts);
+            var cached = readSnapshotCache(rawUrl);
+            if (cached != null) {
+                var cachedText = JSON.stringify(cached);
+                return { data: cached, response: null, text: cachedText, attempts: 0, fromSnapshot: true };
+            }
+        }
 
         for (var attempt = 0; attempt <= retryCount; attempt += 1) {
             var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
