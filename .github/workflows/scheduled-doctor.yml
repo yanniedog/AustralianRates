@@ -1,15 +1,16 @@
-# Runs `npm run doctor` once per calendar day in the wall-clock hour configured in the admin portal
-# (app_config `doctor_schedule`, JSON { hour, time_zone }). CI reads GET /api/home-loan-rates/doctor-schedule.
-# GitHub cron is UTC-only; we trigger hourly and gate on local hour in that time zone.
+# Production triage: runs `npm run doctor` against live https://www.australianrates.com once per day
+# in the wall-clock hour from Admin → Settings (`app_config` key `doctor_schedule`, JSON { hour, time_zone }).
+# This workflow reads GET /api/home-loan-rates/doctor-schedule (~2 min cache). GitHub cron is UTC-only, so we
+# trigger hourly and gate on the configured local hour.
 #
-# Repository secrets (Settings > Secrets and variables > Actions):
-#   ADMIN_API_TOKEN           — same as production API worker (required for full doctor: bundle + logs gate).
-#   DOCTOR_ALERT_SMTP_USER    — Gmail address used to authenticate (and as From).
-#   DOCTOR_ALERT_SMTP_PASSWORD — Gmail App Password (not your normal Google password).
+# Secrets (repo Settings → Actions): `ADMIN_API_TOKEN` — same bearer as production API worker (bundle + logs gate).
 #
-# Manual run: Actions > this workflow > Run workflow (runs doctor immediately; email only on failure).
+# Manual run: Actions → this workflow → "Run workflow" (runs doctor immediately; no email).
+#
+# On failure: job summary + log artifact; see `doctor-failure-open-review-pr.yml` for the draft PR that
+# re-runs Cloudflare Pages, Sourcery, and other PR checks.
 
-name: Scheduled doctor (admin-configured hour)
+name: 'Production health: scheduled npm run doctor (australianrates.com)'
 
 on:
   schedule:
@@ -29,7 +30,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  doctor:
+  production_doctor:
+    name: Live production doctor (API + Pages + bundle gate)
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -37,7 +39,7 @@ jobs:
       NPM_CONFIG_FUND: 'false'
       NPM_CONFIG_AUDIT: 'false'
     steps:
-      - name: Decide whether to run doctor now
+      - name: Gate — fetch schedule and match local wall hour (or always run on workflow_dispatch)
         id: gate
         env:
           DOCTOR_SCHEDULE_URL: https://www.australianrates.com/api/home-loan-rates/doctor-schedule
@@ -65,27 +67,27 @@ jobs:
             echo "reason=scheduled_hour_mismatch" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Log skip (scheduled, outside configured doctor hour)
+      - name: Skip (scheduled — outside configured doctor hour)
         if: github.event_name == 'schedule' && steps.gate.outputs.should_run != 'true'
         run: |
           echo "Skipping doctor: ${{ steps.gate.outputs.time_zone }} local hour is ${{ steps.gate.outputs.local_hour }} (configured target hour ${{ steps.gate.outputs.target_hour }})."
 
-      - name: Checkout
+      - name: Checkout repository (for npm run doctor scripts)
         if: steps.gate.outputs.should_run == 'true'
         uses: actions/checkout@v6
 
-      - name: Setup Node
+      - name: Setup Node.js 22
         if: steps.gate.outputs.should_run == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         if: steps.gate.outputs.should_run == 'true'
         run: npm ci --prefer-offline
 
-      - name: Run doctor (production triage)
+      - name: Run npm run doctor (production triage)
         id: doctor_run
         if: steps.gate.outputs.should_run == 'true'
         env:
@@ -95,51 +97,36 @@ jobs:
           set -o pipefail
           npm run doctor 2>&1 | tee doctor-run.log
 
-      - name: Prepare failure email body
+      - name: Report failure — job summary + annotation
         if: failure() && steps.gate.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           {
-            echo "AustralianRates scheduled doctor failed."
-            echo "Repository run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo "SHA: ${{ github.sha }}"
+            echo "## Production doctor failed"
             echo ""
-            echo "--- Doctor console output (last 220 lines) ---"
+            echo "**Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "**Ref:** \`${{ github.ref }}\` **SHA:** \`${{ github.sha }}\`"
             echo ""
-            if [[ -f doctor-run.log ]]; then
-              tail -n 220 doctor-run.log
-            else
-              echo "(doctor-run.log missing; failure may have occurred before the doctor step.)"
-            fi
+            echo "### Last lines of doctor output"
+            echo ""
+            echo '```'
+            tail -n 120 doctor-run.log 2>/dev/null || echo "(doctor-run.log missing)"
+            echo '```'
             echo ""
             if [[ -f status-debug-bundle-latest.json ]]; then
-              echo "--- status-debug-bundle: remediation hints (first 12, JSON lines) ---"
+              echo "### status-debug-bundle (remediation hints, capped)"
               echo ""
-              jq -c '.remediation.hints[:12]' status-debug-bundle-latest.json 2>/dev/null || echo "(jq parse failed or hints absent)"
-              echo ""
-              echo "--- bundle ok / health_run_id (if present) ---"
-              jq -c '{ok: .ok, health_run_id: .meta.health_run_id, health_checked_at: .meta.health_checked_at}' status-debug-bundle-latest.json 2>/dev/null || true
+              echo '```json'
+              jq -c '.remediation.hints[:12]' status-debug-bundle-latest.json 2>/dev/null || echo "(no hints)"
+              echo '```'
             fi
-          } > email-body.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Production npm run doctor failed — see the Summary tab on this job and the uploaded artifact."
 
-      - name: Upload doctor log on failure
+      - name: Upload doctor log artifact on failure
         if: failure() && steps.gate.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: doctor-run-log-${{ github.run_id }}
           path: doctor-run.log
           if-no-files-found: ignore
-
-      - name: Send failure alert email
-        if: failure() && steps.gate.outputs.should_run == 'true'
-        uses: dawidd6/action-send-mail@v4
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.DOCTOR_ALERT_SMTP_USER }}
-          password: ${{ secrets.DOCTOR_ALERT_SMTP_PASSWORD }}
-          subject: 'FAIL: AustralianRates doctor (${{ github.repository }})'
-          to: jkokavec@gmail.com
-          from: "Australian Rates Doctor <${{ secrets.DOCTOR_ALERT_SMTP_USER }}>"
-          body: file://email-body.txt
