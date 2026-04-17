@@ -2318,6 +2318,7 @@
                         try { panelEl.removeEventListener('mouseout', panelEl._arRibbonListOut); } catch (_e4) {}
                         panelEl._arRibbonListOut = null;
                     }
+                    if (panelEl.parentNode) panelEl.parentNode.removeChild(panelEl);
                 }
                 try { chart.dispose(); } catch (_) {}
                 if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
