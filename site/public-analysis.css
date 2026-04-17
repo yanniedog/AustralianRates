@@ -587,12 +587,16 @@
     grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
     align-items: stretch;
     min-width: 0;
+    /* Bound the side-panel scroll area so the product list never stretches the chart column into empty space. */
+    max-height: min(78vh, 880px);
+    min-height: 520px;
 }
 
 .chart-side-panel {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
+    min-height: 0;
     border-left: 1px solid var(--ar-line);
     background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
 }
@@ -943,11 +947,17 @@
 @media (max-width: 980px) {
     .chart-workspace {
         grid-template-columns: minmax(0, 1fr);
+        /* When stacked, let each section use natural height - side panel becomes its own scroll zone. */
+        max-height: none;
     }
 
     .chart-side-panel {
         border-left: 0;
         border-top: 1px solid var(--ar-line);
+    }
+
+    .chart-selection-rail {
+        max-height: min(520px, 68dvh);
     }
 }
 
