@@ -19,11 +19,14 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 }).trim();
 
 function git(args, inherit = false) {
-  return execFileSync("git", args, {
+  const out = execFileSync("git", args, {
     encoding: "utf8",
     cwd: root,
     stdio: inherit ? "inherit" : "pipe",
-  }).trimEnd();
+  });
+  // With stdio inherit, Node may return null (no captured stdout).
+  if (out == null) return "";
+  return String(out).trimEnd();
 }
 
 function gitTry(args) {
@@ -72,7 +75,9 @@ function goneLocalBranches() {
     if (!line) continue;
     const gone = /: gone]/.test(line);
     if (!gone) continue;
-    const rest = line.startsWith("* ") ? line.slice(2) : line;
+    let rest = line;
+    if (rest.startsWith("* ")) rest = rest.slice(2);
+    else if (rest.startsWith("+ ")) rest = rest.slice(2);
     const name = rest.split(/\s+/)[0];
     if (name && !name.startsWith("(")) {
       names.push(name);
