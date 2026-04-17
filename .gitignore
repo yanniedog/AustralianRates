@@ -23,6 +23,10 @@ tmp/
 # Local agent audit snapshots / draft PR text (never commit)
 .audit/
 test-screenshots/
+# Codex style-audit / style-fix screenshot captures (never commit)
+.codex-review/
+# Beta-test capture script output (run fresh; never commit)
+docs/beta-test-client-log.txt
 docs/CLOUDFLARE_USAGE.md
 *.log
 debug-*.log
