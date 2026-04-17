@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  latestLenderDatasetRowPerLender,
   pickBestDailyLenderDatasetStatusRows,
   type DailyLenderDatasetStatusRow,
 } from '../src/db/lender-dataset-status'
@@ -95,5 +96,36 @@ describe('pickBestDailyLenderDatasetStatusRows', () => {
 
     expect(rows).toHaveLength(1)
     expect(rows[0].run_id).toBe('run:newer-finalized')
+  })
+})
+
+describe('latestLenderDatasetRowPerLender', () => {
+  it('keeps only the newest updated row per lender_code', () => {
+    const rows = latestLenderDatasetRowPerLender([
+      makeRow({
+        run_id: 'run:older',
+        lender_code: 'ing',
+        updated_at: '2026-04-17T10:00:00.000Z',
+      }),
+      makeRow({
+        run_id: 'run:newer',
+        lender_code: 'ing',
+        accepted_row_count: 0,
+        written_row_count: 0,
+        detail_fetch_event_count: 0,
+        completed_detail_count: 0,
+        finalized_at: null,
+        updated_at: '2026-04-17T20:00:00.000Z',
+      }),
+      makeRow({
+        run_id: 'run:other',
+        lender_code: 'anz',
+        updated_at: '2026-04-17T12:00:00.000Z',
+      }),
+    ])
+
+    expect(rows.map((r) => r.lender_code).sort()).toEqual(['anz', 'ing'])
+    const ing = rows.find((r) => r.lender_code === 'ing')
+    expect(ing?.run_id).toBe('run:newer')
   })
 })
