@@ -334,7 +334,6 @@
         if (fields.view === 'tdTermTime') tags.push('Term vs time');
         if (fields.view === 'compare') tags.push('Compare');
         if (fields.view === 'distribution') tags.push('Distribution');
-        if (fields.view === 'homeLoanReport') tags.push('Like-for-like');
         if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('Limited');
         else if (model && model.meta && model.meta.visibleSeries < model.meta.totalSeries) tags.push('Limited');
         if (stale) tags.push('Stale');
