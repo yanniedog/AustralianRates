@@ -9,7 +9,10 @@
  */
 
 const MAX_INLINE_BYTES = 400000;
-const SNAPSHOT_FETCH_TIMEOUT_MS = 50;
+// 50 ms is too tight for a Pages Function -> API Worker subrequest (round-trip
+// typically 80-200 ms even on a KV-hot snapshot). 400 ms keeps the document TTFB
+// comfortable while giving the snapshot subrequest room to land.
+const SNAPSHOT_FETCH_TIMEOUT_MS = 400;
 
 function resolveSection(pathname) {
     const clean = String(pathname || '').replace(/\/index\.html$/i, '').replace(/\/+$/, '/');
