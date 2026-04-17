@@ -233,25 +233,25 @@ body.ar-public .rate-changes-panel {
     }
 }
 
-body.ar-public button.ar-report-underchart-tree-crumb {
-    border-color: color-mix(in srgb, var(--ar-ribbon-tree-border, var(--ar-line)) 92%, transparent) !important;
-    background: color-mix(in srgb, var(--ar-ribbon-tree-bg, var(--ar-surface-2)) 92%, transparent) !important;
-    box-shadow: none !important;
-    color: inherit !important;
+body.ar-public button.ar-report-underchart-tree-crumb.secondary {
+    border-color: color-mix(in srgb, var(--ar-ribbon-tree-border, var(--ar-line)) 92%, transparent);
+    background: color-mix(in srgb, var(--ar-ribbon-tree-bg, var(--ar-surface-2)) 92%, transparent);
+    box-shadow: none;
+    color: inherit;
 }
 
-body.ar-public button.ar-report-underchart-tree-crumb:hover {
-    background: color-mix(in srgb, var(--ar-text-muted) 7%, var(--ar-ribbon-tree-bg, var(--ar-surface-2))) !important;
+body.ar-public button.ar-report-underchart-tree-crumb.secondary:hover {
+    background: color-mix(in srgb, var(--ar-text-muted) 7%, var(--ar-ribbon-tree-bg, var(--ar-surface-2)));
 }
 
-body.ar-public button.ar-report-underchart-tree-crumb.is-current,
-body.ar-public button.ar-report-underchart-tree-crumb.is-current:hover {
-    border-color: color-mix(in srgb, var(--ar-text-muted) 36%, var(--ar-ribbon-tree-border, var(--ar-line))) !important;
-    background: color-mix(in srgb, var(--ar-text-muted) 10%, var(--ar-ribbon-tree-bg, var(--ar-surface-2))) !important;
-    box-shadow: none !important;
+body.ar-public button.ar-report-underchart-tree-crumb.secondary.is-current,
+body.ar-public button.ar-report-underchart-tree-crumb.secondary.is-current:hover {
+    border-color: color-mix(in srgb, var(--ar-text-muted) 36%, var(--ar-ribbon-tree-border, var(--ar-line)));
+    background: color-mix(in srgb, var(--ar-text-muted) 10%, var(--ar-ribbon-tree-bg, var(--ar-surface-2)));
+    box-shadow: none;
 }
 
-body.ar-public button.ar-report-underchart-tree-crumb:focus-visible {
+body.ar-public button.ar-report-underchart-tree-crumb.secondary:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--ar-text-muted) 42%, transparent);
     outline-offset: 1px;
 }
