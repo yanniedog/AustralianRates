@@ -10,7 +10,7 @@ import {
 import { resolveFiltersForScope } from '../db/scope-filters'
 import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
-import { writeD1SnapshotCache } from '../db/snapshot-cache'
+import { writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
 import {
@@ -108,6 +108,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
       try {
         const snapshot = await buildSnapshotPayload(env, section, cacheScope)
         await writeD1SnapshotCache(db, section, cacheScope, snapshot)
+        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
         refreshed++
       } catch (e) {
         const msg = (e as Error)?.message ?? String(e)

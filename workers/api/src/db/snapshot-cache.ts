@@ -5,6 +5,7 @@
  */
 
 import { log } from '../utils/logger'
+import { trimSnapshotDataForHtmlInline } from '../utils/snapshot-inline-trim'
 import {
   CHART_CACHE_KV_TTL,
   GZIP_PREFIX,
@@ -16,8 +17,8 @@ import {
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v4 adds `data.chartModels.default` (server-precomputed compare-view chart model). */
-const SNAPSHOT_PAYLOAD_VERSION = 4
+/** Bump when snapshot payload shape changes so stale rows are ignored. v5 adds KV `snapshot-inline:*` slim rows for Pages HTML inlining. */
+const SNAPSHOT_PAYLOAD_VERSION = 5
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 
@@ -35,21 +36,46 @@ function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope): s
   return `snapshot:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
 }
 
+/** Slim KV entry for Pages HTML inlining (same payload version as full `snapshot:v*` keys). */
+function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
+  return `snapshot-inline:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
+}
+
 function isNoSuchTableError(error: unknown, table: string): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /no such table/i.test(message) && message.includes(table)
 }
 
-async function writeSnapshotToKv(
+/** Writes full snapshot KV plus a byte-capped inline variant for Pages `_middleware`. */
+export async function writeSnapshotKvBundles(
   kv: KVNamespace | undefined,
-  key: string,
+  section: ChartCacheSection,
+  scope: SnapshotScope,
   payload: SnapshotPayload,
 ): Promise<void> {
   if (!kv) return
+  const mainKey = buildSnapshotKvKey(section, scope)
+  const inlineKey = buildSnapshotInlineKvKey(section, scope)
   try {
-    await kv.put(key, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
+    await kv.put(mainKey, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
   } catch {
-    /* ignore KV write failure */
+    return
+  }
+  try {
+    const trimmed = trimSnapshotDataForHtmlInline(
+      payload.section,
+      String(payload.scope),
+      payload.builtAt,
+      payload.data as Record<string, unknown>,
+    )
+    if (trimmed) {
+      const inlinePayload: SnapshotPayload = { ...payload, data: trimmed }
+      await kv.put(inlineKey, JSON.stringify(inlinePayload), { expirationTtl: CHART_CACHE_KV_TTL })
+    } else {
+      await kv.delete(inlineKey)
+    }
+  } catch {
+    /* ignore inline KV failure */
   }
 }
 
@@ -152,7 +178,7 @@ export async function getCachedOrComputeSnapshot(
 
   const d1Cached = await readD1SnapshotCache(env.DB, section, scope)
   if (d1Cached) {
-    await writeSnapshotToKv(env.CHART_CACHE_KV, kvKey, d1Cached)
+    await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)
     return { ...d1Cached, fromCache: 'd1' }
   }
 
@@ -162,6 +188,6 @@ export async function getCachedOrComputeSnapshot(
   } catch {
     /* ignore D1 write failure on live requests */
   }
-  await writeSnapshotToKv(env.CHART_CACHE_KV, kvKey, payload)
+  await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
   return { ...payload, fromCache: 'live' }
 }
