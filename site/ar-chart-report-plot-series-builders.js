@@ -132,7 +132,11 @@
     /**
      * ECharts merges nested areaStyle objects across setOption calls.
      * Clear mutually-exclusive fields so ribbons do not retain stale flat or
-     * gradient fill state after switching focus repeatedly.
+     * gradient fill state after switching focus repeatedly. `opacity` is
+     * cleared too because scoped ribbon series are initialised with
+     * `areaStyle: { opacity: 0 }` to stay hidden until a tier is active;
+     * without resetting opacity here the ECharts merge keeps the 0 and the
+     * ribbon fill never appears.
      */
     function ribbonAreaStyleMerged(next) {
         var out = {
@@ -143,6 +147,7 @@
             y2: null,
             colorStops: null,
             color: null,
+            opacity: 1,
         };
         if (!next || typeof next !== 'object') return out;
         Object.keys(next).forEach(function (key) {
