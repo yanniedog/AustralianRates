@@ -248,32 +248,29 @@
         }));
     }
 
-    /** Horizontal bank logo tray for ribbon report charts (per-bank highlight / product drilldown). */
+    /** Compact bank logo rail for ribbon report charts. */
     function createReportViewModeBar(opts) {
         var bankList = opts.bankList || [];
         preloadBankIcons(bankList);
 
         var bar = document.createElement('div');
         bar.className = 'lwc-report-viewmode';
-        bar.setAttribute('role', 'toolbar');
-        bar.setAttribute('aria-label', 'Lender ribbon');
+        bar.setAttribute('aria-label', 'Lender availability rail');
 
         var trayWrap = document.createElement('div');
         trayWrap.className = 'lwc-focus-bank-tray-wrap';
 
         var tray = document.createElement('div');
         tray.className = 'lwc-focus-bank-tray';
-        tray.setAttribute('role', 'radiogroup');
+        tray.setAttribute('role', 'list');
         tray.setAttribute('aria-label', 'Lenders');
 
         var BB = window.AR.bankBrand;
         bankList.forEach(function (bn) {
-            var chip = document.createElement('button');
-            chip.type = 'button';
+            var chip = document.createElement('span');
             chip.className = 'lwc-focus-bank-chip';
-            chip.setAttribute('role', 'radio');
-            chip.setAttribute('aria-checked', 'false');
-            chip.title = bn.full;
+            chip.setAttribute('role', 'listitem');
+            chip.title = [bn.full, bn.metric, bn.meta].filter(Boolean).join(' · ');
             chip.setAttribute('data-ar-bank-full', bn.full);
             chip.setAttribute('aria-label', [bn.full, bn.metric, bn.meta].filter(Boolean).join(', '));
 
@@ -288,8 +285,8 @@
                 img.src = meta.icon;
                 img.alt = '';
                 img.className = 'lwc-focus-bank-chip-logo';
-                img.width = 20;
-                img.height = 20;
+                img.width = 24;
+                img.height = 24;
                 img.loading = 'eager';
                 img.decoding = 'sync';
                 img.draggable = false;
@@ -301,48 +298,7 @@
                 brand.appendChild(fb);
             }
             body.appendChild(brand);
-
-            if (bn.short || bn.metric || bn.meta) {
-                var copy = document.createElement('span');
-                copy.className = 'lwc-focus-bank-chip-copy';
-
-                var name = document.createElement('span');
-                name.className = 'lwc-focus-bank-chip-name';
-                name.textContent = bn.short || meta.short || bn.full;
-                copy.appendChild(name);
-
-                if (bn.metric) {
-                    var metric = document.createElement('span');
-                    metric.className = 'lwc-focus-bank-chip-metric';
-                    metric.textContent = bn.metric;
-                    copy.appendChild(metric);
-                }
-
-                if (bn.meta) {
-                    var sub = document.createElement('span');
-                    sub.className = 'lwc-focus-bank-chip-sub';
-                    sub.textContent = bn.meta;
-                    copy.appendChild(sub);
-                }
-
-                body.appendChild(copy);
-            }
-
             chip.appendChild(body);
-
-            chip.addEventListener('click', function () {
-                if (typeof opts.onRibbonBankChipClick === 'function') opts.onRibbonBankChipClick(bn.full);
-            });
-            if (typeof opts.onRibbonBankChipPointerEnter === 'function') {
-                chip.addEventListener('pointerenter', function () {
-                    opts.onRibbonBankChipPointerEnter(bn.full);
-                });
-            }
-            if (typeof opts.onRibbonBankChipPointerLeave === 'function') {
-                chip.addEventListener('pointerleave', function () {
-                    opts.onRibbonBankChipPointerLeave(bn.full);
-                });
-            }
             tray.appendChild(chip);
         });
 
