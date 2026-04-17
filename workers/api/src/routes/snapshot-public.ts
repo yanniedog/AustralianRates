@@ -39,8 +39,10 @@ import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
   collectTdAnalyticsRowsResolved,
+  type ResolvedAnalyticsRows,
 } from './analytics-data'
 import { buildGroupedChartRows } from '../utils/chart-row-groups'
+import { buildDefaultChartModel, type ChartModelPayload } from '../chart-model/chart-model'
 import { buildSiteUiPayload } from './site-ui-public'
 import {
   getCachedOrComputeSnapshot,
@@ -151,23 +153,21 @@ async function buildLatestAllEntry(
   return { ok: true, count: rows.length, rows }
 }
 
-async function buildAnalyticsSeriesEntry(
+async function collectAnalyticsRows(
   db: D1Database,
   section: DatasetKind,
   filters: ScopedFilters,
-): Promise<Record<string, unknown>> {
+): Promise<ResolvedAnalyticsRows> {
   const dbs = { canonicalDb: db, analyticsDb: db }
   const internalFilters = { ...filters, disableRowCap: true, chartInternalRefresh: true }
-  const result =
-    section === 'home_loans'
-      ? await collectHomeLoanAnalyticsRowsResolved(dbs, 'day', internalFilters)
-      : section === 'savings'
-        ? await collectSavingsAnalyticsRowsResolved(dbs, 'day', internalFilters)
-        : await collectTdAnalyticsRowsResolved(dbs, 'day', internalFilters)
+  if (section === 'home_loans') return collectHomeLoanAnalyticsRowsResolved(dbs, 'day', internalFilters)
+  if (section === 'savings') return collectSavingsAnalyticsRowsResolved(dbs, 'day', internalFilters)
+  return collectTdAnalyticsRowsResolved(dbs, 'day', internalFilters)
+}
+
+function buildAnalyticsSeriesEntry(result: ResolvedAnalyticsRows): Record<string, unknown> {
   // Ship the compact grouped form — dense per-product meta + sparse per-day points.
-  // For home-loans/savings default scope this is ~7-10x smaller than the flat rows
-  // and matches the `rows_format: 'grouped_v1'` shape the client's fetchAllRateRows
-  // (site/ar-chart-data.js) already handles natively.
+  // Client handles `rows_format: 'grouped_v1'` via `expandGroupedRows` already.
   const grouped = buildGroupedChartRows(result.rows)
   return {
     ok: true,
@@ -203,6 +203,14 @@ export async function buildSnapshotPayload(
   const filters = await resolveFiltersForScope(db, section, scope)
   const includeSeries = await shouldIncludeAnalyticsSeries(db)
 
+  // Fetch analytics rows once (if bundling); derive both the grouped wire form and
+  // the server-side chart model from the same row set so they can't drift.
+  const analyticsPromise = includeSeries
+    ? collectAnalyticsRows(db, section, filters).catch((error) => {
+        return { error: error instanceof Error ? error.message : String(error) }
+      })
+    : Promise.resolve(null)
+
   const fetchers: Array<Promise<{ ok: true; name: string; value: unknown } | { ok: false; name: string; error: string }>> = [
     safeEntry('siteUi', () => buildSiteUiPayload(db)),
     safeEntry('filters', async () => {
@@ -223,11 +231,6 @@ export async function buildSnapshotPayload(
       queryReportPlotPayload(db, section, 'bands', filters as Parameters<typeof queryReportPlotPayload>[3]),
     ),
   ]
-  if (includeSeries) {
-    fetchers.push(
-      safeEntry('analyticsSeries', () => buildAnalyticsSeriesEntry(db, section, filters)),
-    )
-  }
 
   const results = await Promise.all(fetchers)
 
@@ -236,6 +239,24 @@ export async function buildSnapshotPayload(
   for (const result of results) {
     if (result.ok) data[result.name] = result.value
     else errors[result.name] = result.error
+  }
+
+  const analyticsResult = await analyticsPromise
+  if (analyticsResult) {
+    if ('error' in analyticsResult) {
+      errors.analyticsSeries = analyticsResult.error
+    } else {
+      data.analyticsSeries = buildAnalyticsSeriesEntry(analyticsResult)
+      try {
+        const chartModel: ChartModelPayload = buildDefaultChartModel({
+          section,
+          rows: analyticsResult.rows,
+        })
+        data.chartModels = { default: chartModel }
+      } catch (error) {
+        errors.chartModels = error instanceof Error ? error.message : String(error)
+      }
+    }
   }
 
   return {

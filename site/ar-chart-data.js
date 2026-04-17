@@ -934,6 +934,34 @@
             .catch(function () { return []; });
     }
 
+    /**
+     * Return the snapshot's precomputed default chart model when the request shape is
+     * compatible (default view, no spotlight, no selected series override) and the
+     * `chart_model_server_side` site-ui feature flag is on. Otherwise returns null so
+     * callers fall through to the full client-side buildChartModel path.
+     *
+     * Consumers (ar-charts.js) can merge the precomputed sub-models
+     * (meta/surface/lenderRanking/distribution) into their render pipeline to avoid
+     * re-running aggregation on the browser for the default view.
+     */
+    function getPrecomputedChartModel(fields, selectionState) {
+        var snap = window.AR && window.AR.snapshot;
+        if (!snap || !snap.data) return null;
+        var siteUi = snap.data.siteUi || null;
+        var features = siteUi && siteUi.features ? siteUi.features : null;
+        if (!features || !features.chart_model_server_side) return null;
+        var chartModels = snap.data.chartModels;
+        if (!chartModels || !chartModels['default']) return null;
+        var defaultView = typeof chartConfig.defaultView === 'function' ? chartConfig.defaultView() : null;
+        if (fields && fields.view && defaultView && fields.view !== defaultView) return null;
+        if (selectionState) {
+            if (selectionState.spotlightSeriesKey) return null;
+            if (Array.isArray(selectionState.selectedSeriesKeys) && selectionState.selectedSeriesKeys.length > 0) return null;
+            if (Array.isArray(selectionState.includedRateStructures) && selectionState.includedRateStructures.length > 0) return null;
+        }
+        return chartModels['default'];
+    }
+
     window.AR.chartData = {
         buildChartModel: buildChartModel,
         buildSlopeModel: buildSlopeModel,
@@ -942,5 +970,6 @@
         fetchReportPlot: fetchReportPlot,
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,
+        getPrecomputedChartModel: getPrecomputedChartModel,
     };
 })();
