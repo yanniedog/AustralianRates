@@ -906,6 +906,15 @@
         var M = window.AR.chartMacroLwcShared;
         var overlayModule = window.AR.chartEconomicOverlays || {};
         if (!echarts || !M) throw new Error('report plot dependencies not loaded');
+        var escHtml = typeof M.escHtml === 'function'
+            ? M.escHtml
+            : function (value) {
+                return String(value == null ? '' : value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            };
 
         var container = options.container;
         var theme = options.theme;
@@ -983,6 +992,8 @@
         mount.className = 'lwc-chart-mount lwc-chart-mount--report-plot';
         mount.style.cssText = 'width:100%;flex:1;min-height:380px;position:relative;';
         wrapper.appendChild(mount);
+        var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
+        wrapper.appendChild(ribbonHierarchyPanel.el);
 
         if (options.noteText) {
             var note = document.createElement('div');
@@ -1328,15 +1339,19 @@
         }
 
         function syncInfoboxRowHighlight() {
-            var ib = options.infoBox;
-            if (!ib || !ib.el) return;
+            syncRibbonScopedRowHighlight(options.infoBox && options.infoBox.el);
+            syncRibbonScopedRowHighlight(ribbonHierarchyPanel && ribbonHierarchyPanel.el);
+        }
+
+        function syncRibbonScopedRowHighlight(root) {
+            if (!root) return;
             var k = ribbonListHoverKeys && ribbonListHoverKeys.length === 1 ? ribbonListHoverKeys[0] : '';
-            var rows = ib.el.querySelectorAll('.ar-report-infobox-row[data-ribbon-prod-key]');
+            var rows = root.querySelectorAll('.ar-report-infobox-row[data-ribbon-prod-key]');
             for (var i = 0; i < rows.length; i++) {
                 var row = rows[i];
                 row.classList.toggle('is-ribbon-chart-sync', !!k && row.getAttribute('data-ribbon-prod-key') === k);
             }
-            var scopes = ib.el.querySelectorAll('[data-ribbon-scope]');
+            var scopes = root.querySelectorAll('[data-ribbon-scope]');
             for (var j = 0; j < scopes.length; j++) {
                 var el = scopes[j];
                 if (el.classList.contains('ar-report-infobox-row') && el.hasAttribute('data-ribbon-prod-key')) continue;
@@ -1496,13 +1511,19 @@
         }
 
         function hideRibbonInfoBox() {
+            var ib = options.infoBox;
+            if (ib && typeof ib.hide === 'function') ib.hide();
+        }
+
+        function hideRibbonHierarchyPanel() {
             ribbonListHoverKeys = null;
             ribbonListHoverPath = '';
             ribbonExpandedPaths = {};
             ribbonTreeBank = '';
             ribbonTreeAnchorYmd = '';
-            var ib = options.infoBox;
-            if (ib && typeof ib.hide === 'function') ib.hide();
+            ribbonTreeHadBranches = false;
+            if (ribbonHierarchyPanel && typeof ribbonHierarchyPanel.hide === 'function') ribbonHierarchyPanel.hide();
+            syncInfoboxRowHighlight();
         }
 
         function applyRibbonBankHighlightState(hoveredBankName) {
@@ -1756,16 +1777,15 @@
         }
 
         function refreshRibbonUnderChartPanel() {
-            var ib = options.infoBox;
-            if (!ib || typeof ib.show !== 'function') return;
+            if (!ribbonHierarchyPanel || typeof ribbonHierarchyPanel.show !== 'function') return;
             var pbPanel = ribbonPanelBank();
             if (!pbPanel) {
-                hideRibbonInfoBox();
+                hideRibbonHierarchyPanel();
                 return;
             }
             var anchor = lastPointerDate || (dates.length ? dates[dates.length - 1] : '');
             if (!anchor) {
-                hideRibbonInfoBox();
+                hideRibbonHierarchyPanel();
                 return;
             }
             if (ribbonTreeBank !== pbPanel) {
@@ -1789,14 +1809,14 @@
                 return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
             });
             if (!prodsAtAnchor.length) {
-                hideRibbonInfoBox();
+                hideRibbonHierarchyPanel();
                 return;
             }
             clearRibbonHoverScopes();
             var tierFields = ribbonTierFieldsForSection(sec);
             var tree = buildRibbonTierTree(prodsAtAnchor, tierFields, 0);
             if (!tree || tree.kind === 'empty') {
-                hideRibbonInfoBox();
+                hideRibbonHierarchyPanel();
                 return;
             }
             ribbonTreeHadBranches = tree.kind !== 'leaves';
@@ -1812,7 +1832,7 @@
                         : ibLo.toFixed(2) + '%';
                 }
             }
-            ib.show({
+            ribbonHierarchyPanel.show({
                 heading: fmtReportDateYmd(anchor) + (ibRateStr ? '  \u00b7  ' + ibRateStr : ''),
                 meta: pbPanel + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : ''),
                 compact: true,
@@ -1820,6 +1840,7 @@
                     renderRibbonTreeDom(wrap, tree, '', 0, anchor, sec);
                 },
             });
+            syncInfoboxRowHighlight();
         }
 
         var tooltipConfig = isBandsMode
@@ -2169,16 +2190,16 @@
                 });
             };
 
-            (function attachRibbonInfoboxProductHover() {
-                var ibEl = options.infoBox && options.infoBox.el;
-                if (!ibEl) return;
-                if (ibEl._arRibbonListOver) {
-                    try { ibEl.removeEventListener('mouseover', ibEl._arRibbonListOver); } catch (_e) {}
-                    try { ibEl.removeEventListener('mouseout', ibEl._arRibbonListOut); } catch (_e2) {}
+            (function attachRibbonHierarchyHover() {
+                var panelEl = ribbonHierarchyPanel && ribbonHierarchyPanel.el;
+                if (!panelEl) return;
+                if (panelEl._arRibbonListOver) {
+                    try { panelEl.removeEventListener('mouseover', panelEl._arRibbonListOver); } catch (_e) {}
+                    try { panelEl.removeEventListener('mouseout', panelEl._arRibbonListOut); } catch (_e2) {}
                 }
-                ibEl._arRibbonListOver = function (ev) {
+                panelEl._arRibbonListOver = function (ev) {
                     var row = ev.target.closest('[data-ribbon-scope]');
-                    if (!row || !ibEl.contains(row)) return;
+                    if (!row || !panelEl.contains(row)) return;
                     var sid = row.getAttribute('data-ribbon-scope');
                     var keys = sid ? ribbonHoverScopeMap[sid] : null;
                     if (!keys || !keys.length) return;
@@ -2189,16 +2210,16 @@
                     syncInfoboxRowHighlight();
                     var rowIsLeaf = row.classList && row.classList.contains('ar-report-infobox-trow--leaf');
                     var preview = keys.length === 1 ? chartLogProductParts(keys[0]) : null;
-                    clientLog('info', rowIsLeaf ? 'Chart infobox product row hover' : 'Chart infobox tier row hover', {
+                    clientLog('info', rowIsLeaf ? 'Chart hierarchy product row hover' : 'Chart hierarchy tier row hover', {
                         section: String(section || ''),
                         keys: keys.length,
                         bank: preview ? preview.bank : null,
                         product: preview ? preview.product : null,
                     });
                 };
-                ibEl._arRibbonListOut = function (ev) {
+                panelEl._arRibbonListOut = function (ev) {
                     var toEl = ev.relatedTarget;
-                    if (toEl && ibEl.contains(toEl)) return;
+                    if (toEl && panelEl.contains(toEl)) return;
                     if (!ribbonListHoverKeys) return;
                     var n = ribbonListHoverKeys.length;
                     ribbonListHoverKeys = null;
@@ -2206,17 +2227,10 @@
                     updateProductVisibility();
                     scheduleRibbonRedraw();
                     syncInfoboxRowHighlight();
-                    clientLog('info', 'Chart infobox row hover clear', { section: String(section || ''), keys: n });
+                    clientLog('info', 'Chart hierarchy row hover clear', { section: String(section || ''), keys: n });
                 };
-                ibEl.addEventListener('mouseover', ibEl._arRibbonListOver);
-                ibEl.addEventListener('mouseout', ibEl._arRibbonListOut);
-                ibEl._arOnClose = function () {
-                    ribbonListHoverKeys = null;
-                    ribbonListHoverPath = '';
-                    updateProductVisibility();
-                    scheduleRibbonRedraw();
-                    syncInfoboxRowHighlight();
-                };
+                panelEl.addEventListener('mouseover', panelEl._arRibbonListOver);
+                panelEl.addEventListener('mouseout', panelEl._arRibbonListOut);
             })();
 
             zr.on('mousemove', onRibbonZrMouseMove);
@@ -2286,18 +2300,57 @@
                 }
                 if (options.infoBox && options.infoBox.el) {
                     var ibx = options.infoBox.el;
-                    if (ibx._arRibbonListOver) {
-                        try { ibx.removeEventListener('mouseover', ibx._arRibbonListOver); } catch (_e) {}
-                        ibx._arRibbonListOver = null;
-                    }
-                    if (ibx._arRibbonListOut) {
-                        try { ibx.removeEventListener('mouseout', ibx._arRibbonListOut); } catch (_e2) {}
-                        ibx._arRibbonListOut = null;
-                    }
                     ibx._arOnClose = null;
+                }
+                if (ribbonHierarchyPanel && ribbonHierarchyPanel.el) {
+                    var panelEl = ribbonHierarchyPanel.el;
+                    if (panelEl._arRibbonListOver) {
+                        try { panelEl.removeEventListener('mouseover', panelEl._arRibbonListOver); } catch (_e3) {}
+                        panelEl._arRibbonListOver = null;
+                    }
+                    if (panelEl._arRibbonListOut) {
+                        try { panelEl.removeEventListener('mouseout', panelEl._arRibbonListOut); } catch (_e4) {}
+                        panelEl._arRibbonListOut = null;
+                    }
                 }
                 try { chart.dispose(); } catch (_) {}
                 if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+            },
+        };
+    }
+
+    function createRibbonHierarchyPanel(theme, escHtml) {
+        var el = document.createElement('div');
+        el.className = 'ar-report-infobox ar-report-infobox--compact ar-report-infobox--ribbon-tree ar-report-underchart-tree';
+        el.style.cssText = 'display:none;padding:8px 10px 10px;font:11px/1.5 "Space Grotesk",system-ui,sans-serif;color:' + theme.ttText + ';background:' + theme.ttBg + ';border:1px solid ' + theme.ttBorder + ';border-radius:6px;margin-top:8px;flex-shrink:0;max-height:min(42vh,320px);overflow:auto;';
+        var body = document.createElement('div');
+        el.appendChild(body);
+        return {
+            el: el,
+            show: function (input) {
+                if (!input || typeof input.renderBody !== 'function') {
+                    el.style.display = 'none';
+                    body.innerHTML = '';
+                    return;
+                }
+                var heading = input.heading
+                    ? '<div style="font-weight:700;margin-bottom:4px;font-size:12px;line-height:1.2;">' + escHtml(input.heading) + '</div>'
+                    : '';
+                var meta = input.meta
+                    ? '<div style="font-size:10px;color:' + theme.muted + ';margin-bottom:8px;line-height:1.3;">' + escHtml(input.meta) + '</div>'
+                    : '';
+                body.innerHTML = heading + meta;
+                var treeRoot = document.createElement('div');
+                treeRoot.className = 'ar-report-infobox-ribbon-tree';
+                body.appendChild(treeRoot);
+                try {
+                    input.renderBody(treeRoot);
+                } catch (_e) {}
+                el.style.display = 'block';
+            },
+            hide: function () {
+                body.innerHTML = '';
+                el.style.display = 'none';
             },
         };
     }
