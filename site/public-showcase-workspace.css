@@ -118,7 +118,7 @@ body.ar-public .chart-figure {
 }
 
 body.ar-public .chart-figure .terminal-chart-surface {
-    min-height: 480px;
+    min-height: 220px;
     background: linear-gradient(180deg, color-mix(in srgb, var(--ar-surface-2) 96%, transparent), color-mix(in srgb, var(--ar-surface-3) 90%, transparent));
 }
 
@@ -173,7 +173,7 @@ body.ar-public .terminal-stat strong {
 }
 
 body.ar-public .ladder-rate {
-    font-size: 1.26rem;
+    font-size: 1.02rem;
 }
 
 body.ar-public .terminal-column-center > .panel {

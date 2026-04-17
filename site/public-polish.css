@@ -126,17 +126,15 @@ body.ar-public .buttonish.primary.is-section-cta:hover {
     }
 }
 
-/* First ladder card = current leader visual emphasis */
+/* First ladder card = current leader: subtle left accent only */
 body.ar-public .quick-compare-cards .ladder-card:first-child,
 body.ar-public .ladder-list .ladder-card:first-child {
-    border-color: color-mix(in srgb, var(--ar-section-accent) 40%, var(--ar-line-strong));
-    background: color-mix(in srgb, var(--ar-section-accent) 10%, var(--ar-surface-2));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ar-section-accent) 20%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ar-section-accent) 60%, transparent);
 }
 
 body.ar-public .quick-compare-cards .ladder-card:first-child .ladder-rate,
 body.ar-public .ladder-list .ladder-card:first-child .ladder-rate {
-    color: var(--ar-text);
+    color: color-mix(in srgb, #22c55e 72%, var(--ar-text));
 }
 
 /* ── Focus ring tinted per section ──────────────────────────────────── */

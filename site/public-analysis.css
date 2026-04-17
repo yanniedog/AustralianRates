@@ -771,7 +771,7 @@
 .terminal-chart-output,
 #chart-output,
 #chart-detail-output {
-    min-height: 500px;
+    min-height: 220px;
     width: 100%;
     touch-action: manipulation;
     position: relative;
@@ -1905,6 +1905,86 @@ body.ar-public .ar-report-infobox-tnest {
     margin: 0 0 0 4px;
     padding: 0 0 2px 8px;
     border-left: 2px solid color-mix(in srgb, var(--ar-line-strong) 82%, transparent);
+}
+
+/* Compact hierarchy tree rows (branch + leaf). Uses --ar-ribbon-depth custom property to indent. */
+body.ar-public .ar-report-infobox-trow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    font-size: 11px;
+    line-height: 1.25;
+    min-width: 0;
+    padding-left: calc(4px + var(--ar-ribbon-depth, 0) * 12px);
+}
+
+body.ar-public .ar-report-infobox-trow--branch {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+body.ar-public .ar-report-infobox-trow--leaf {
+    align-items: baseline;
+    padding: 2px 0 2px calc(6px + var(--ar-ribbon-depth, 0) * 12px);
+    cursor: default;
+    font-weight: 500;
+}
+
+body.ar-public .ar-report-infobox-tsw {
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    background: var(--ar-swatch-color, #666);
+}
+
+body.ar-public .ar-report-infobox-tlabel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.ar-public .ar-ribbon-tleaf-bank {
+    font-weight: 600;
+}
+
+body.ar-public .ar-ribbon-tleaf-sep {
+    opacity: 0.4;
+}
+
+body.ar-public .ar-ribbon-tleaf-product {
+    opacity: 0.9;
+}
+
+body.ar-public .ar-report-infobox-trate {
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+    opacity: 0.9;
+}
+
+body.ar-public .ar-ribbon-rate-sep {
+    opacity: 0.55;
+}
+
+body.ar-public .ar-ribbon-best {
+    color: #22c55e;
+    font-weight: 700;
+    text-shadow: 0 0 2px color-mix(in srgb, #22c55e 28%, transparent);
+}
+
+@media (prefers-color-scheme: light) {
+    body.ar-public .ar-ribbon-best {
+        color: #15803d;
+        text-shadow: none;
+    }
 }
 
 body.ar-public .ar-report-infobox-twist {
