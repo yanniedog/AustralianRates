@@ -12,7 +12,6 @@
  * in memory for status-debug bundles, and emitted as an actionable log entry
  * with code `product_classification_gaps` when any issue is found.
  */
-import crypto from 'node:crypto'
 import { getAppConfig, setAppConfig } from '../db/app-config'
 import {
   FEATURE_SETS,
