@@ -44,19 +44,29 @@ async function fetchSnapshotWithTimeout(origin, section, params) {
     if (preset) qs.set('preset', preset);
     const url = origin + '/api/' + section + '/snapshot' + (qs.toString() ? '?' + qs.toString() : '');
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(function () { controller.abort(); }, SNAPSHOT_FETCH_TIMEOUT_MS);
+    const timeoutMarker = { timedOut: false };
+    const timeoutPromise = new Promise(function (resolve) {
+        setTimeout(function () { timeoutMarker.timedOut = true; resolve(null); }, SNAPSHOT_FETCH_TIMEOUT_MS);
+    });
     try {
-        const response = await fetch(url, {
-            signal: controller.signal,
-            cf: { cacheTtl: 60, cacheEverything: true },
-        });
-        if (!response.ok) return null;
-        return await response.text();
-    } catch (_err) {
-        return null;
-    } finally {
-        clearTimeout(timeoutId);
+        const response = await Promise.race([
+            fetch(url, { cf: { cacheTtl: 60, cacheEverything: true } }),
+            timeoutPromise,
+        ]);
+        if (!response) {
+            return { ok: false, reason: 'timeout', url };
+        }
+        if (!response.ok) {
+            return { ok: false, reason: 'http-' + response.status, url };
+        }
+        const body = await Promise.race([response.text(), timeoutPromise]);
+        if (!body) {
+            return { ok: false, reason: 'body-timeout', url };
+        }
+        return { ok: true, body };
+    } catch (err) {
+        const message = err && err.message ? String(err.message) : String(err || 'unknown');
+        return { ok: false, reason: 'error:' + message.slice(0, 60).replace(/[^A-Za-z0-9_.:-]/g, '_'), url };
     }
 }
 
@@ -90,10 +100,11 @@ export async function onRequest(context) {
     const contentType = (originalResponse.headers.get('content-type') || '').toLowerCase();
     if (!contentType.includes('text/html')) return wrapOriginalResponse(originalResponse, 'bypass-html');
 
-    const snapshotJson = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
-    if (!snapshotJson) return wrapOriginalResponse(originalResponse, 'miss');
+    const result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
+    if (!result.ok) return wrapOriginalResponse(originalResponse, 'miss:' + result.reason);
+    const snapshotJson = result.body;
     if (snapshotJson.length > MAX_INLINE_BYTES) {
-        return wrapOriginalResponse(originalResponse, 'bypass-size');
+        return wrapOriginalResponse(originalResponse, 'bypass-size:' + snapshotJson.length);
     }
 
     const scriptTag = inlineScriptFor(snapshotJson);
