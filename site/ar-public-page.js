@@ -142,8 +142,8 @@
 
     var WORKSPACE_TABS = [
         { id: 'chart', label: 'Compare', icon: 'chart', help: 'Summary-first comparison with current leaders and chart context.' },
-        { id: 'explorer', label: 'All rates', icon: 'table', help: 'Full live rates table for the current slice.' },
-        { id: 'pivot', label: 'Advanced', icon: 'pivot', help: 'Pivot workspace and deeper analysis for the active slice.' }
+        { id: 'explorer', label: 'All rates', icon: 'table', help: 'Full live rates table for the current slice.', featureClass: 'ar-feature-all-rates' },
+        { id: 'pivot', label: 'Advanced', icon: 'pivot', help: 'Pivot workspace and deeper analysis for the active slice.', featureClass: 'ar-feature-advanced' }
     ];
 
     var SHARED_ADVANCED_FIELDS = [
@@ -551,7 +551,7 @@
 
     function filterDrawerMarkup(ui) {
         var scenarioSection = section !== 'economic-data' ? (
-            '<section class="compare-start-card" id="compare-start">' +
+            '<section class="compare-start-card ar-feature-scenario" id="compare-start">' +
                 '<div class="compare-start-head">' +
                     '<p class="compare-start-kicker">Scenario</p>' +
                     '<p class="compare-start-note">' + esc(ui.starterNote || 'More filters adds banks, dates, and workspace controls without changing the active slice.') + '</p>' +
@@ -569,7 +569,7 @@
 
         return '' +
             scenarioSection +
-            '<details class="filters-drawer" id="scenario">' +
+            '<details class="filters-drawer ar-feature-more-filters" id="scenario">' +
                 '<summary class="filters-drawer-summary">' +
                     iconText('filter', 'Scenario and more filters', 'control-chip-label') +
                     '<span id="filter-dirty-indicator" class="filter-dirty-dot" hidden></span>' +
@@ -659,8 +659,9 @@
     }
 
     function tabButtonMarkup(tab, active) {
+        var featureClass = tab.featureClass ? ' ' + esc(tab.featureClass) : '';
         return '' +
-            '<button id="tab-' + esc(tab.id) + '" class="tab-btn chip-btn secondary' + (active ? ' active' : '') + '"' +
+            '<button id="tab-' + esc(tab.id) + '" class="tab-btn chip-btn secondary' + (active ? ' active' : '') + featureClass + '"' +
                 ' role="tab"' +
                 ' aria-selected="' + (active ? 'true' : 'false') + '"' +
                 ' aria-controls="panel-' + esc(tab.id) + '"' +
@@ -717,7 +718,7 @@
                         // ── Chart tab panel ──────────────────────────────────────
                         '<section id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="tab-chart">',
                             '<div class="chart-block">',
-                                '<section class="compare-summary-panel" id="compare-leaders" aria-label="' + esc(ui.compareHeading || 'Current leaders') + '">',
+                                '<section class="compare-summary-panel ar-feature-current-leaders" id="compare-leaders" aria-label="' + esc(ui.compareHeading || 'Current leaders') + '">',
                                     '<div class="compare-summary-copy">',
                                         '<p class="compare-summary-kicker">Current leaders</p>',
                                         '<h2>' + esc(ui.compareHeading || 'Current leaders') + '</h2>',
@@ -807,7 +808,7 @@
                         '</section>',
 
                         // ── Table tab panel ──────────────────────────────────────
-                        '<section id="panel-explorer" class="tab-panel" role="tabpanel" aria-labelledby="tab-explorer" hidden>',
+                        '<section id="panel-explorer" class="tab-panel ar-feature-all-rates" role="tabpanel" aria-labelledby="tab-explorer" hidden>',
                             '<div class="terminal-data-head">',
                                 '<div>',
                                     panelIcon('table', 'All rates'),
@@ -833,7 +834,7 @@
                         '</section>',
 
                         // ── Pivot tab panel ──────────────────────────────────────
-                        '<section id="panel-pivot" class="tab-panel" role="tabpanel" aria-labelledby="tab-pivot" hidden>',
+                        '<section id="panel-pivot" class="tab-panel ar-feature-advanced" role="tabpanel" aria-labelledby="tab-pivot" hidden>',
                             '<div id="pivot" class="pivot-panel">',
                                 '<div class="pivot-controls">',
                                     '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="Analysis basis">',

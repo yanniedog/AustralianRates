@@ -60,6 +60,23 @@ export const CHART_MAX_PRODUCTS_MIN = 1
 export const CHART_MAX_PRODUCTS_MAX = 1000
 /** JSON object (string in app_config) for public Rate Report ribbon (bands) styling. */
 export const CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style'
+/**
+ * Public-site feature flags (app_config booleans, '1' = on, anything else = off).
+ * Each key toggles a UI chunk in the public home-loans/savings/term-deposits
+ * workspace. Hidden by default; admin enables them from /admin/settings.html.
+ */
+export const FEATURE_ALL_RATES_TAB_KEY = 'feature_all_rates_tab'
+export const FEATURE_ADVANCED_TAB_KEY = 'feature_advanced_tab'
+export const FEATURE_CURRENT_LEADERS_KEY = 'feature_current_leaders'
+export const FEATURE_SCENARIO_KEY = 'feature_scenario'
+export const FEATURE_MORE_FILTERS_KEY = 'feature_more_filters'
+export const PUBLIC_FEATURE_KEYS = [
+  FEATURE_ALL_RATES_TAB_KEY,
+  FEATURE_ADVANCED_TAB_KEY,
+  FEATURE_CURRENT_LEADERS_KEY,
+  FEATURE_SCENARIO_KEY,
+  FEATURE_MORE_FILTERS_KEY,
+] as const
 /** JSON in app_config: `{"hour":0-23,"time_zone":"IANA"}`. Served at GET /doctor-schedule for scheduled CI. */
 export const DOCTOR_SCHEDULE_KEY = 'doctor_schedule'
 /** Default wall-clock hour in `time_zone` when no `doctor_schedule` row exists (19 ≈ 7pm local). */

@@ -8,6 +8,11 @@ import {
   CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY,
   CHART_MAX_PRODUCTS_KEY,
   CHART_RIBBON_STYLE_KEY,
+  FEATURE_ADVANCED_TAB_KEY,
+  FEATURE_ALL_RATES_TAB_KEY,
+  FEATURE_CURRENT_LEADERS_KEY,
+  FEATURE_MORE_FILTERS_KEY,
+  FEATURE_SCENARIO_KEY,
 } from '../constants'
 import { getAppConfig } from '../db/app-config'
 import { getReadDb } from '../db/read-db'
@@ -35,6 +40,11 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
       brightnessMobileRaw,
       chartMaxProductsRaw,
       chartRibbonStyleRaw,
+      featureAllRatesRaw,
+      featureAdvancedRaw,
+      featureCurrentLeadersRaw,
+      featureScenarioRaw,
+      featureMoreFiltersRaw,
     ] = await Promise.all([
       getAppConfig(db, CHART_LEGEND_OPACITY_KEY),
       getAppConfig(db, CHART_LEGEND_OPACITY_DESKTOP_KEY),
@@ -44,6 +54,11 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
       getAppConfig(db, CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY),
       getAppConfig(db, CHART_MAX_PRODUCTS_KEY),
       getAppConfig(db, CHART_RIBBON_STYLE_KEY),
+      getAppConfig(db, FEATURE_ALL_RATES_TAB_KEY),
+      getAppConfig(db, FEATURE_ADVANCED_TAB_KEY),
+      getAppConfig(db, FEATURE_CURRENT_LEADERS_KEY),
+      getAppConfig(db, FEATURE_SCENARIO_KEY),
+      getAppConfig(db, FEATURE_MORE_FILTERS_KEY),
     ])
     const opacities = resolveChartLegendOpacitySetFromDb({
       legacyRaw,
@@ -58,6 +73,13 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
     const chartMaxProducts = resolveChartMaxProductsFromDb(chartMaxProductsRaw)
     const chartMaxProductsMode = resolveChartMaxProductsModeFromDb(chartMaxProductsRaw)
     const chartRibbonStyle = resolveChartRibbonStyleFromDb(chartRibbonStyleRaw)
+    const features = {
+      all_rates_tab: isFeatureOn(featureAllRatesRaw),
+      advanced_tab: isFeatureOn(featureAdvancedRaw),
+      current_leaders: isFeatureOn(featureCurrentLeadersRaw),
+      scenario: isFeatureOn(featureScenarioRaw),
+      more_filters: isFeatureOn(featureMoreFiltersRaw),
+    }
     return c.json({
       ok: true,
       chart_legend_opacity: opacities.desktop,
@@ -69,6 +91,14 @@ export function registerSiteUiPublicRoute(routes: Hono<AppContext>): void {
       chart_max_products: chartMaxProducts,
       chart_max_products_mode: chartMaxProductsMode,
       chart_ribbon_style: chartRibbonStyle,
+      features,
     })
   })
+}
+
+/** Feature flags default off; only the string '1' / 'true' / 'on' / 'yes' enables them. */
+function isFeatureOn(raw: string | null | undefined): boolean {
+  if (raw == null) return false
+  const text = String(raw).trim().toLowerCase()
+  return text === '1' || text === 'true' || text === 'on' || text === 'yes'
 }

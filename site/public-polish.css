@@ -253,3 +253,16 @@ body.ar-public button.ar-report-underchart-tree-crumb.secondary:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--ar-text-muted) 42%, transparent);
     outline-offset: 1px;
 }
+
+/* ── Public feature flags (admin-toggleable) ───────────────────────────
+ * Elements tagged with these classes are hidden by default on the public
+ * site. Admin re-enables them in /admin/settings.html which writes to
+ * app_config; /site-ui returns the resolved features and ar-chart-site-ui.js
+ * adds `ar-feature-on-*` body classes to reveal the matching elements. */
+body.ar-public:not(.ar-feature-on-all-rates) .ar-feature-all-rates,
+body.ar-public:not(.ar-feature-on-advanced) .ar-feature-advanced,
+body.ar-public:not(.ar-feature-on-current-leaders) .ar-feature-current-leaders,
+body.ar-public:not(.ar-feature-on-scenario) .ar-feature-scenario,
+body.ar-public:not(.ar-feature-on-more-filters) .ar-feature-more-filters {
+    display: none !important;
+}
