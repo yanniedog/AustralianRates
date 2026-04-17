@@ -9,10 +9,12 @@
  */
 
 const MAX_INLINE_BYTES = 400000;
-// 50 ms is too tight for a Pages Function -> API Worker subrequest (round-trip
-// typically 80-200 ms even on a KV-hot snapshot). 400 ms keeps the document TTFB
-// comfortable while giving the snapshot subrequest room to land.
-const SNAPSHOT_FETCH_TIMEOUT_MS = 400;
+// Worst-case budget for the snapshot subrequest + body read. The abort signal
+// covers the FULL duration including `response.text()` — for a 260 KB KV-hot
+// consumer-default body the body read is the dominant cost, so we give it a
+// generous ceiling. The middleware will pass-through to Pages output on miss so
+// a slow origin never blocks document delivery.
+const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 
 function resolveSection(pathname) {
     const clean = String(pathname || '').replace(/\/index\.html$/i, '').replace(/\/+$/, '/');
