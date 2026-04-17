@@ -133,6 +133,12 @@ jobs:
                       deps_or_ci=true
                       ;;
                   esac
+
+                  case "$file" in
+                    reports/automation/*)
+                      deps_or_ci=true
+                      ;;
+                  esac
                 done
 
                 if [[ "$deps_or_ci" == "true" ]]; then

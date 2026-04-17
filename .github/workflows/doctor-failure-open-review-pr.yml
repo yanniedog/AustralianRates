@@ -1,0 +1,58 @@
+# When "Production health: scheduled npm run doctor" fails, open a draft PR with a small JSON pointer file
+# under reports/automation/. That triggers the main CI workflow (Cloudflare Pages, Sourcery, etc.) and any
+# GitHub PR integrations you enable (e.g. Gemini Code Assist). Close the PR without merging after triage.
+
+name: 'Doctor failure: open draft PR for CI review'
+
+on:
+  workflow_run:
+    workflows:
+      - scheduled-doctor.yml
+    types:
+      - completed
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: doctor-failure-open-review-pr
+  cancel-in-progress: true
+
+jobs:
+  open_draft_pr_for_checks:
+    name: Draft PR — Cloudflare Pages, Sourcery, PR app checks
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Write failure pointer (triggers full CI via reports/automation path rule)
+        run: |
+          set -euo pipefail
+          mkdir -p reports/automation
+          jq -n \
+            --arg url "${{ github.event.workflow_run.html_url }}" \
+            --arg sha "${{ github.event.workflow_run.head_sha }}" \
+            --arg name "${{ github.event.workflow_run.name }}" \
+            --argjson id ${{ github.event.workflow_run.id }} \
+            '{source_workflow: $name, workflow_run_id: $id, html_url: $url, head_sha: $sha, note: "Close this draft PR without merging after triage."}' \
+            > "reports/automation/doctor-failure-${{ github.event.workflow_run.id }}.json"
+
+      - name: Create draft pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore(automation): doctor failure pointer for workflow run ${{ github.event.workflow_run.id }}'
+          branch: automated/doctor-failure-${{ github.event.workflow_run.id }}
+          title: 'Production doctor failed — draft PR for CI review (run ${{ github.event.workflow_run.id }})'
+          body: |
+            This **draft** PR was opened automatically because [**${{ github.event.workflow_run.name }}**](${{ github.event.workflow_run.html_url }}) **failed**.
+
+            **Why this PR exists:** GitHub PR checks (e.g. **Cloudflare Pages**, **Sourcery**, and any PR-only integrations such as **Gemini Code Assist** if enabled on the repo) do not run on scheduled workflows alone. Pushing this branch opens a normal pull request so those checks can run against the same `main` baseline.
+
+            **What to do:** Inspect the failing doctor run (link above) and the **Summary** / **Artifacts** on that workflow job. **Close this PR without merging** when done (the only commit is a pointer JSON under `reports/automation/`).
+          draft: true
+          delete-branch: true

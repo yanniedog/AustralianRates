@@ -30,7 +30,7 @@
         <div class="admin-message" id="msg"></div>
         <section class="admin-card" id="doctor-schedule-section">
             <h2>Scheduled doctor run</h2>
-            <p class="admin-hint">GitHub Actions runs <code>npm run doctor</code> once per day in the wall-clock hour below (in the chosen IANA time zone). On failure, alert email is sent. CI reads production <code>GET /api/home-loan-rates/doctor-schedule</code> (~2 min cache).</p>
+            <p class="admin-hint">GitHub Actions runs <code>npm run doctor</code> once per day in the wall-clock hour below (in the chosen IANA time zone). On failure, a draft PR is opened so Cloudflare Pages, Sourcery, and other PR checks can run. CI reads production <code>GET /api/home-loan-rates/doctor-schedule</code> (~2 min cache).</p>
             <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
                 <label for="doctor-hour">Local hour (0–23)</label>
                 <select id="doctor-hour" aria-label="Doctor run local hour"></select>
