@@ -262,7 +262,8 @@ body.ar-public .deposit-balance-track-bg {
     height: 6px;
     margin-top: -3px;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--ar-line-strong) 45%, var(--ar-surface-2));
+    background: color-mix(in srgb, var(--ar-text) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ar-text) 14%, transparent);
     pointer-events: none;
     overflow: hidden;
 }
@@ -276,8 +277,8 @@ body.ar-public .deposit-balance-track-fill {
     margin: 0;
     padding: 0;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--ar-showcase-spark) 42%, var(--ar-line-strong));
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 6%, transparent);
+    background: color-mix(in srgb, var(--ar-section-accent, var(--ar-accent-2)) 80%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ar-text) 10%, transparent);
     pointer-events: none;
 }
 
@@ -304,15 +305,15 @@ body.ar-public .deposit-balance-range-input::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     pointer-events: auto;
-    width: 14px;
-    height: 14px;
-    margin-top: -4px;
+    width: 18px;
+    height: 18px;
+    margin-top: -6px;
     border-radius: 50%;
-    border: 2px solid color-mix(in srgb, var(--ar-showcase-spark) 70%, var(--ar-surface-1));
+    border: 2px solid var(--ar-section-accent, var(--ar-accent-2));
     background: var(--ar-surface-1);
     box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--ar-text) 12%, transparent),
-        0 1px 3px color-mix(in srgb, var(--ar-text) 18%, transparent);
+        0 0 0 1px color-mix(in srgb, var(--ar-text) 30%, transparent),
+        0 2px 6px color-mix(in srgb, var(--ar-text) 25%, transparent);
     cursor: grab;
     transition: transform var(--ar-motion-fast) var(--ar-ease), box-shadow var(--ar-motion-fast) var(--ar-ease);
 }
@@ -340,14 +341,14 @@ body.ar-public .deposit-balance-range-input::-moz-range-track {
 
 body.ar-public .deposit-balance-range-input::-moz-range-thumb {
     pointer-events: auto;
-    width: 14px;
-    height: 14px;
-    border: 2px solid color-mix(in srgb, var(--ar-showcase-spark) 70%, var(--ar-surface-1));
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--ar-section-accent, var(--ar-accent-2));
     border-radius: 50%;
     background: var(--ar-surface-1);
     box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--ar-text) 12%, transparent),
-        0 1px 3px color-mix(in srgb, var(--ar-text) 18%, transparent);
+        0 0 0 1px color-mix(in srgb, var(--ar-text) 30%, transparent),
+        0 2px 6px color-mix(in srgb, var(--ar-text) 25%, transparent);
     cursor: grab;
 }
 

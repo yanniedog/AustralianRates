@@ -40,15 +40,24 @@
         return Math.max(0, Math.round(rect.height || 0));
     }
 
+    function workspaceWidth() {
+        var rect = workspace.getBoundingClientRect();
+        return Math.max(0, Math.round(rect.width || 0));
+    }
+
     function sideWidthConfig() {
-        return { min: 280, max: 560, value: 360 };
+        var total = workspaceWidth() || Math.max(720, Math.round((window.innerWidth || 1280) * 0.72));
+        var min = 240;
+        var max = Math.max(min + 120, total - 240);
+        var value = clamp(Math.round(total * 0.5), min, max);
+        return { min: min, max: max, value: value };
     }
 
     function topHeightConfig() {
         var total = workspaceHeight() || Math.max(420, Math.round((window.innerHeight || 844) * 0.58));
-        var min = Math.max(180, Math.round(total * 0.34));
-        var max = Math.max(min + 72, total - 180);
-        var value = clamp(Math.round(total * 0.48), min, max);
+        var min = Math.max(160, Math.round(total * 0.3));
+        var max = Math.max(min + 72, total - 160);
+        var value = clamp(Math.round(total * 0.5), min, max);
         return { min: min, max: max, value: value };
     }
 
