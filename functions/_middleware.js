@@ -9,12 +9,17 @@
  */
 
 const MAX_INLINE_BYTES = 400000;
-// Worst-case budget for the snapshot subrequest + body read. The abort signal
-// covers the FULL duration including `response.text()` — for a 260 KB KV-hot
-// consumer-default body the body read is the dominant cost, so we give it a
-// generous ceiling. The middleware will pass-through to Pages output on miss so
-// a slow origin never blocks document delivery.
+// Budget for the fallback HTTP subrequest. Only used when the CHART_CACHE_KV
+// binding is not attached to the Pages project (direct KV reads are effectively
+// free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
+/** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
+const SNAPSHOT_KV_VERSION = 4;
+const SECTION_KV_KEY = {
+    'home-loan-rates': 'home_loans',
+    'savings-rates': 'savings',
+    'term-deposit-rates': 'term_deposits',
+};
 
 function resolveSection(pathname) {
     const clean = String(pathname || '').replace(/\/index\.html$/i, '').replace(/\/+$/, '/');
@@ -34,6 +39,40 @@ function normalisePreset(value) {
     if (!value) return '';
     const lower = String(value).trim().toLowerCase();
     return lower === 'consumer-default' ? 'consumer-default' : '';
+}
+
+function buildScope(chartWindow, preset) {
+    if (preset === 'consumer-default' && chartWindow) return 'preset:consumer-default:window:' + chartWindow;
+    if (preset === 'consumer-default') return 'preset:consumer-default';
+    if (chartWindow) return 'window:' + chartWindow;
+    return 'default';
+}
+
+/** Read snapshot directly from KV when the binding is available. Returns {ok, body} like the HTTP fallback. */
+async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
+    if (!env || !env.CHART_CACHE_KV) return null;
+    const dbSection = SECTION_KV_KEY[sectionApiName];
+    if (!dbSection) return null;
+    const scope = buildScope(chartWindow, preset);
+    const key = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
+    try {
+        const body = await env.CHART_CACHE_KV.get(key);
+        if (!body) return { ok: false, reason: 'kv-miss', url: 'kv:' + key };
+        // The KV value is the raw SnapshotPayload JSON (no `{ok, section, scope, builtAt, data}` wrapper).
+        // The client expects the wrapped shape, so wrap it here.
+        const parsed = JSON.parse(body);
+        const wrapped = JSON.stringify({
+            ok: true,
+            section: parsed.section,
+            scope: parsed.scope,
+            builtAt: parsed.builtAt,
+            data: parsed.data,
+        });
+        return { ok: true, body: wrapped, source: 'kv' };
+    } catch (err) {
+        const message = err && err.message ? String(err.message) : 'unknown';
+        return { ok: false, reason: 'kv-error:' + message.slice(0, 60).replace(/[^A-Za-z0-9_.:-]/g, '_') };
+    }
 }
 
 async function fetchSnapshotWithTimeout(origin, section, params) {
@@ -85,7 +124,7 @@ function inlineScriptFor(snapshotJson) {
 }
 
 export async function onRequest(context) {
-    const { request, next } = context;
+    const { request, next, env } = context;
     const method = request.method.toUpperCase();
     if (method !== 'GET' && method !== 'HEAD') return next();
 
@@ -100,7 +139,16 @@ export async function onRequest(context) {
     const contentType = (originalResponse.headers.get('content-type') || '').toLowerCase();
     if (!contentType.includes('text/html')) return wrapOriginalResponse(originalResponse, 'bypass-html');
 
-    const result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
+    const chartWindow = normaliseChartWindow(url.searchParams.get('chart_window'));
+    const preset = normalisePreset(url.searchParams.get('preset'));
+
+    // Prefer direct KV read when the Pages project has the CHART_CACHE_KV binding
+    // attached — avoids the zone routing loop that causes self-fetch 404s.
+    let result = await fetchSnapshotFromKv(env, section, chartWindow, preset);
+    if (!result || !result.ok) {
+        // Fall back to HTTP subrequest (works when CF doesn't route back to Pages).
+        result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
+    }
     if (!result.ok) return wrapOriginalResponse(originalResponse, 'miss:' + result.reason);
     const snapshotJson = result.body;
     if (snapshotJson.length > MAX_INLINE_BYTES) {
