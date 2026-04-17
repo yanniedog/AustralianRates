@@ -3,11 +3,11 @@ import {
   buildPrecomputedChartScope,
   buildPrecomputedChartScopeForPreset,
   PRECOMPUTED_CHART_WINDOWS,
-  resolveChartDateRangeFromDb,
   writeD1ChartCache,
   type ChartCacheScope,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { resolveFiltersForScope } from '../db/scope-filters'
 import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
 import { writeD1SnapshotCache } from '../db/snapshot-cache'
@@ -19,144 +19,22 @@ import {
   collectTdAnalyticsRowsResolved,
 } from '../routes/analytics-data'
 import { log } from '../utils/logger'
-import type { ChartWindow } from '../utils/chart-window'
-import type { ReportPlotMode } from '../db/report-plot-types'
 
 const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
 const REPRESENTATIONS = ['day', 'change'] as const
-const REPORT_PLOT_MODES: ReportPlotMode[] = ['moves', 'bands']
-const DEFAULT_CACHE_LOOKBACK_DAYS = 365
 
-type PrecomputedScopeSpec = {
-  cacheScope: ChartCacheScope
-  window: ChartWindow | null
-  preset: 'consumer-default' | null
-}
-
-const SECTION_TABLES: Record<ChartCacheSection, string> = {
-  home_loans: 'historical_loan_rates',
-  savings: 'historical_savings_rates',
-  term_deposits: 'historical_term_deposit_rates',
-}
-
-/** Default end date for chart cache: today (YYYY-MM-DD). */
-function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function boundedLookbackStartDate(endDate: string): string {
-  const start = new Date(`${endDate}T00:00:00.000Z`)
-  start.setUTCDate(start.getUTCDate() - DEFAULT_CACHE_LOOKBACK_DAYS)
-  return start.toISOString().slice(0, 10)
-}
-
-/** Resolve default date range for a section: last 365 days, bounded by the dataset's earliest row. */
-async function getDefaultDateRangeForSection(
-  db: D1Database,
-  section: ChartCacheSection,
-): Promise<{ startDate: string; endDate: string }> {
-  const table = SECTION_TABLES[section]
-  const row = await db
-      .prepare(`SELECT MIN(collection_date) AS min_date FROM ${table}`)
-      .first<{ min_date: string | null }>()
-  const endDate = todayYmd()
-  const boundedStartDate = boundedLookbackStartDate(endDate)
-  const minDate = row?.min_date && /^\d{4}-\d{2}-\d{2}$/.test(row.min_date) ? row.min_date : null
-  const startDate = minDate && minDate > boundedStartDate ? minDate : boundedStartDate
-  return { startDate, endDate }
-}
-
-/** Build default filters for precomputed cache: last 365 days to today, no selective filters. */
-async function defaultFilters(
-  db: EnvBindings['DB'],
-  section: ChartCacheSection,
-): Promise<{ startDate: string; endDate: string; mode: 'all'; includeRemoved: false; sourceMode: 'all' }> {
-  const { startDate, endDate } = await getDefaultDateRangeForSection(db, section)
-  return {
-    startDate,
-    endDate,
-    mode: 'all' as const,
-    includeRemoved: false,
-    sourceMode: 'all' as const,
-  }
-}
-
-type PrecomputedFilters = {
-  startDate: string
-  endDate: string
-  mode: 'all'
-  includeRemoved: false
-  sourceMode: 'all'
-  securityPurpose?: 'owner_occupied'
-  repaymentType?: 'principal_and_interest'
-  rateStructure?: 'variable'
-  lvrTier?: 'lvr_80-85%'
-  minRate?: number
-  accountType?: 'savings'
-}
-
-function precomputedScopeSpecs(section: ChartCacheSection): PrecomputedScopeSpec[] {
-  const rawScopes: PrecomputedScopeSpec[] = [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) => ({
-    cacheScope: buildPrecomputedChartScope(window),
-    window,
-    preset: null,
-  }))
+function precomputedScopes(section: ChartCacheSection): ChartCacheScope[] {
+  const raw: ChartCacheScope[] = [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) =>
+    buildPrecomputedChartScope(window),
+  )
   if (section === 'home_loans' || section === 'savings') {
-    return rawScopes.concat(
-      [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) => ({
-        cacheScope: buildPrecomputedChartScopeForPreset(window, 'consumer-default'),
-        window,
-        preset: 'consumer-default' as const,
-      })),
+    return raw.concat(
+      [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) =>
+        buildPrecomputedChartScopeForPreset(window, 'consumer-default'),
+      ),
     )
   }
-  return rawScopes
-}
-
-function applyPresetFilters(
-  section: ChartCacheSection,
-  filters: PrecomputedFilters,
-  preset: 'consumer-default' | null,
-): PrecomputedFilters {
-  if (preset !== 'consumer-default') return filters
-  if (section === 'home_loans') {
-    return {
-      ...filters,
-      securityPurpose: 'owner_occupied',
-      repaymentType: 'principal_and_interest',
-      rateStructure: 'variable',
-      lvrTier: 'lvr_80-85%',
-      // Public home-loan UI injects 0.01 as the min-rate display sentinel on first load.
-      minRate: 0.01,
-    }
-  }
-  if (section === 'savings') {
-    return {
-      ...filters,
-      accountType: 'savings',
-    }
-  }
-  return filters
-}
-
-async function scopeFilters(
-  db: EnvBindings['DB'],
-  section: ChartCacheSection,
-  spec: PrecomputedScopeSpec,
-): Promise<PrecomputedFilters> {
-  const baseFilters = !spec.window
-    ? await defaultFilters(db, section)
-    : (await resolveChartDateRangeFromDb(
-        db,
-        section,
-        {
-          mode: 'all' as const,
-          includeRemoved: false,
-          sourceMode: 'all' as const,
-        },
-        { window: spec.window },
-      )) as PrecomputedFilters
-  return applyPresetFilters(section, baseFilters, spec.preset)
+  return raw
 }
 
 /** Refresh scoped chart request caches for all sections and representations. Called by cron every 15 min. */
@@ -179,9 +57,8 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
   }
 
   for (const section of SECTIONS) {
-    for (const spec of precomputedScopeSpecs(section)) {
-      const filters = await scopeFilters(rd, section, spec)
-      const cacheScope = spec.cacheScope
+    for (const cacheScope of precomputedScopes(section)) {
+      const filters = await resolveFiltersForScope(rd, section, cacheScope)
       for (const rep of REPRESENTATIONS) {
         try {
           const result =
@@ -213,7 +90,7 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
           })
         }
       }
-      for (const mode of REPORT_PLOT_MODES) {
+      for (const mode of ['moves', 'bands'] as const) {
         try {
           const payload = await queryReportPlotPayload(rd, section, mode, filters)
           await writeD1ReportPlotCache(db, section, mode, cacheScope, payload)
@@ -227,21 +104,19 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
           })
         }
       }
-    }
-  }
 
-  for (const section of SECTIONS) {
-    try {
-      const snapshot = await buildSnapshotPayload(env, section, 'default')
-      await writeD1SnapshotCache(db, section, 'default', snapshot)
-      refreshed++
-    } catch (e) {
-      const msg = (e as Error)?.message ?? String(e)
-      errors.push(`${section}:snapshot: ${msg}`)
-      log.warn('chart_cache_refresh', `Failed to refresh ${section} snapshot`, {
-        code: 'snapshot_cache_refresh_failed',
-        context: msg,
-      })
+      try {
+        const snapshot = await buildSnapshotPayload(env, section, cacheScope)
+        await writeD1SnapshotCache(db, section, cacheScope, snapshot)
+        refreshed++
+      } catch (e) {
+        const msg = (e as Error)?.message ?? String(e)
+        errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
+        log.warn('chart_cache_refresh', `Failed to refresh ${section} snapshot ${cacheScope}`, {
+          code: 'snapshot_cache_refresh_failed',
+          context: msg,
+        })
+      }
     }
   }
 

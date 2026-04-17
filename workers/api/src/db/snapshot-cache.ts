@@ -4,22 +4,25 @@
  * into one D1 row so the public site can load them in a single request. Refreshed by cron.
  */
 
+import { log } from '../utils/logger'
 import {
   CHART_CACHE_KV_TTL,
   GZIP_PREFIX,
   MAX_UNCOMPRESSED_CHARS,
   gunzipFromBase64,
   gzipToBase64,
+  type ChartCacheScope,
   type ChartCacheSection,
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
 /** Bump when snapshot payload shape changes so stale rows are ignored. */
-const SNAPSHOT_PAYLOAD_VERSION = 1
+const SNAPSHOT_PAYLOAD_VERSION = 2
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 
-export type SnapshotScope = 'default'
+/** Snapshot scope matches chart-cache scope so the same scope strings cover both caches. */
+export type SnapshotScope = ChartCacheScope
 export type SnapshotPayload = {
   builtAt: string
   scope: SnapshotScope
@@ -86,15 +89,30 @@ export async function readD1SnapshotCache(
   }
 }
 
+/** Hard ceiling for a single stored snapshot row (uncompressed+base64 size). Beyond this we log and store anyway — callers that care about size should drop heavy fields before calling. */
+const SNAPSHOT_SIZE_WARN_CHARS = 2_000_000
+
 export async function writeD1SnapshotCache(
   db: D1Database,
   section: ChartCacheSection,
   scope: SnapshotScope,
   payload: SnapshotPayload,
-): Promise<void> {
+): Promise<{ rawBytes: number; storedBytes: number; compressed: boolean }> {
   const rawJson = JSON.stringify({ v: SNAPSHOT_PAYLOAD_VERSION, payload })
-  const payloadJson =
-    rawJson.length <= MAX_UNCOMPRESSED_CHARS ? rawJson : `${GZIP_PREFIX}${await gzipToBase64(rawJson)}`
+  const compressed = rawJson.length > MAX_UNCOMPRESSED_CHARS
+  const payloadJson = compressed ? `${GZIP_PREFIX}${await gzipToBase64(rawJson)}` : rawJson
+  const rawBytes = rawJson.length
+  const storedBytes = payloadJson.length
+  if (storedBytes > SNAPSHOT_SIZE_WARN_CHARS) {
+    log.warn('snapshot_cache', 'Snapshot row exceeds soft size ceiling', {
+      code: 'snapshot_payload_oversize',
+      context: JSON.stringify({ section, scope, rawBytes, storedBytes, compressed }),
+    })
+  } else {
+    log.info('snapshot_cache', 'Snapshot row written', {
+      context: `section=${section} scope=${scope} raw=${rawBytes} stored=${storedBytes} compressed=${compressed ? 1 : 0}`,
+    })
+  }
   try {
     await db
       .prepare(
@@ -107,9 +125,10 @@ export async function writeD1SnapshotCache(
       .bind(section, scope, payloadJson, payload.builtAt)
       .run()
   } catch (error) {
-    if (isNoSuchTableError(error, SNAPSHOT_CACHE_TABLE)) return
+    if (isNoSuchTableError(error, SNAPSHOT_CACHE_TABLE)) return { rawBytes, storedBytes, compressed }
     throw error
   }
+  return { rawBytes, storedBytes, compressed }
 }
 
 export async function getCachedOrComputeSnapshot(

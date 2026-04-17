@@ -1,15 +1,16 @@
 /**
  * GET /snapshot — unified bootstrap payload for a public section.
  *
- * Bundles the small per-page dependencies (site-ui, filters, overview, latest-all,
- * changes, executive-summary, rba/cpi history, report-plot moves+bands) into one
- * JSON so the browser can render the default view without a waterfall of requests.
+ * Bundles per-page dependencies (site-ui, filters, overview, latest-all, changes,
+ * executive-summary, rba/cpi history, report-plot moves+bands, analytics/series day)
+ * into one JSON so the browser can render the default view without a waterfall.
  *
- * Heavy series data (analytics/series for 365d) is intentionally NOT bundled — it
- * has its own edge + KV + D1 cache (chart_request_cache) and staying separate keeps
- * the snapshot small so Cloudflare can cache it aggressively.
+ * Query params (v2):
+ *   - chart_window: 30D | 90D | 180D | 1Y | ALL (optional; default = "default" scope / ~365 days)
+ *   - preset: consumer-default (optional; applies section-specific filter layering)
  *
- * Refreshed hourly alongside chart_request_cache / report_plot_request_cache (cron).
+ * Scopes match the `ChartCacheScope` strings used by chart_request_cache and
+ * report_plot_request_cache, so all three caches refresh in lockstep.
  */
 
 import type { Hono, Context } from 'hono'
@@ -34,6 +35,11 @@ import { queryExecutiveSummaryReport } from '../db/executive-summary'
 import { getRbaHistory } from '../db/rba-cash-rate'
 import { getCpiHistory } from '../db/cpi-data'
 import { queryReportPlotPayload } from '../db/report-plot'
+import {
+  collectHomeLoanAnalyticsRowsResolved,
+  collectSavingsAnalyticsRowsResolved,
+  collectTdAnalyticsRowsResolved,
+} from './analytics-data'
 import { buildSiteUiPayload } from './site-ui-public'
 import {
   getCachedOrComputeSnapshot,
@@ -41,13 +47,19 @@ import {
   type SnapshotScope,
 } from '../db/snapshot-cache'
 import {
-  resolveChartDateRangeFromDb,
+  buildPrecomputedChartScopeForPreset,
   type ChartCacheSection,
 } from '../db/chart-cache'
+import { resolveFiltersForScope, type ScopedFilters, type ScopePreset } from '../db/scope-filters'
+import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
+import { getAppConfig } from '../db/app-config'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 
 const SNAPSHOT_CACHE_MAX_AGE = 300
+
+/** Feature flag key: if set to "0"/"false"/"off" snapshot omits the heavy analyticsSeries.day entry. */
+const SNAPSHOT_INCLUDE_SERIES_KEY = 'snapshot_include_series'
 
 type DatasetKind = ChartCacheSection
 
@@ -55,6 +67,11 @@ const SECTION_API_BASE: Record<DatasetKind, string> = {
   home_loans: '/api/home-loan-rates',
   savings: '/api/savings-rates',
   term_deposits: '/api/term-deposit-rates',
+}
+
+function parsePreset(value: string | undefined | null): ScopePreset | null {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized === 'consumer-default' ? 'consumer-default' : null
 }
 
 /** Map a snapshot data entry to the concrete URL(s) the client would otherwise have requested. */
@@ -69,8 +86,6 @@ function buildEntryUrls(section: DatasetKind): Record<string, string[]> {
     executiveSummary: [`${base}/executive-summary?window_days=30`, `${base}/executive-summary`],
     rbaHistory: [`${base}/rba/history`],
     cpiHistory: [`${base}/cpi/history`],
-    reportPlotMoves: [], /* populated dynamically by client since params vary */
-    reportPlotBands: [],
   }
 }
 
@@ -111,46 +126,77 @@ async function buildRateChangesEntry(db: D1Database, section: DatasetKind): Prom
   }
 }
 
-async function buildLatestAllEntry(db: D1Database, section: DatasetKind): Promise<Record<string, unknown>> {
-  const baseFilters = { limit: 5000, includeRemoved: false, sourceMode: 'all' as const }
-  const rows =
-    section === 'home_loans'
-      ? await queryLatestAllRates(db, baseFilters)
-      : section === 'savings'
-        ? await queryLatestAllSavingsRates(db, baseFilters)
-        : await queryLatestAllTdRates(db, baseFilters)
+function buildLatestAllFilters(filters: ScopedFilters): ScopedFilters & { limit: number } {
+  // `/latest-all` is latest-as-of snapshot, so date-range fields don't apply.
+  // Carry preset fields (security_purpose etc.) through so consumer-default snapshots stay scoped.
   return {
-    ok: true,
-    count: rows.length,
-    rows,
+    ...filters,
+    limit: 5000,
   }
 }
 
-function todayYmd(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-/** Default report-plot filter set: last 365 days (or dataset min) clipped to today, no selective filters. */
-async function defaultReportPlotFilters(
+async function buildLatestAllEntry(
   db: D1Database,
   section: DatasetKind,
-): Promise<Record<string, unknown> & { startDate: string; endDate: string }> {
-  const base = { mode: 'all' as const, includeRemoved: false, sourceMode: 'all' as const }
-  const resolved = await resolveChartDateRangeFromDb(db, section, base, { window: null })
-  const today = todayYmd()
-  const endDate = !resolved.endDate || resolved.endDate > today ? today : resolved.endDate
-  const startDate = resolved.startDate && resolved.startDate <= endDate ? resolved.startDate : endDate
-  return { ...resolved, startDate, endDate }
+  filters: ScopedFilters,
+): Promise<Record<string, unknown>> {
+  const latestFilters = buildLatestAllFilters(filters)
+  const rows =
+    section === 'home_loans'
+      ? await queryLatestAllRates(db, latestFilters)
+      : section === 'savings'
+        ? await queryLatestAllSavingsRates(db, latestFilters)
+        : await queryLatestAllTdRates(db, latestFilters)
+  return { ok: true, count: rows.length, rows }
 }
 
-/** Build the full snapshot bundle for a section. Each sub-fetch is isolated so a single failure is non-fatal. */
+async function buildAnalyticsSeriesEntry(
+  db: D1Database,
+  section: DatasetKind,
+  filters: ScopedFilters,
+): Promise<Record<string, unknown>> {
+  const dbs = { canonicalDb: db, analyticsDb: db }
+  const internalFilters = { ...filters, disableRowCap: true, chartInternalRefresh: true }
+  const result =
+    section === 'home_loans'
+      ? await collectHomeLoanAnalyticsRowsResolved(dbs, 'day', internalFilters)
+      : section === 'savings'
+        ? await collectSavingsAnalyticsRowsResolved(dbs, 'day', internalFilters)
+        : await collectTdAnalyticsRowsResolved(dbs, 'day', internalFilters)
+  return {
+    ok: true,
+    representation: result.representation,
+    requested_representation: 'day' as const,
+    fallback_reason: result.fallbackReason,
+    count: result.rows.length,
+    total: result.rows.length,
+    rows: result.rows,
+    rows_format: 'flat_v1' as const,
+    grouped_rows: null,
+  }
+}
+
+async function shouldIncludeAnalyticsSeries(db: D1Database): Promise<boolean> {
+  try {
+    const raw = await getAppConfig(db, SNAPSHOT_INCLUDE_SERIES_KEY)
+    if (raw == null) return true
+    const normalized = String(raw).trim().toLowerCase()
+    return !(normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'no')
+  } catch {
+    return true
+  }
+}
+
+/** Build the full snapshot bundle for a section + scope. Each sub-fetch is isolated. */
 export async function buildSnapshotPayload(
   env: { DB: D1Database; CHART_CACHE_KV?: KVNamespace },
   section: DatasetKind,
   scope: SnapshotScope = 'default',
 ): Promise<SnapshotPayload> {
   const db = env.DB
-  const reportPlotFiltersPromise = defaultReportPlotFilters(db, section).catch(() => null)
+  const filters = await resolveFiltersForScope(db, section, scope)
+  const includeSeries = await shouldIncludeAnalyticsSeries(db)
+
   const fetchers: Array<Promise<{ ok: true; name: string; value: unknown } | { ok: false; name: string; error: string }>> = [
     safeEntry('siteUi', () => buildSiteUiPayload(db)),
     safeEntry('filters', async () => {
@@ -159,22 +205,24 @@ export async function buildSnapshotPayload(
       return { ok: true, filters: await getTdFilters(db) }
     }),
     safeEntry('overview', async () => ({ ok: true, ...(await getLandingOverview(db, section)) })),
-    safeEntry('latestAll', () => buildLatestAllEntry(db, section)),
+    safeEntry('latestAll', () => buildLatestAllEntry(db, section, filters)),
     safeEntry('changes', () => buildRateChangesEntry(db, section)),
     safeEntry('executiveSummary', async () => ({ ok: true, ...(await queryExecutiveSummaryReport(db, { windowDays: 30 })) })),
     safeEntry('rbaHistory', async () => ({ ok: true, rows: await getRbaHistory(db) })),
     safeEntry('cpiHistory', async () => ({ ok: true, rows: await getCpiHistory(db) })),
-    safeEntry('reportPlotMoves', async () => {
-      const filters = await reportPlotFiltersPromise
-      if (!filters) throw new Error('report_plot_filters_unresolved')
-      return queryReportPlotPayload(db, section, 'moves', filters as Parameters<typeof queryReportPlotPayload>[3])
-    }),
-    safeEntry('reportPlotBands', async () => {
-      const filters = await reportPlotFiltersPromise
-      if (!filters) throw new Error('report_plot_filters_unresolved')
-      return queryReportPlotPayload(db, section, 'bands', filters as Parameters<typeof queryReportPlotPayload>[3])
-    }),
+    safeEntry('reportPlotMoves', () =>
+      queryReportPlotPayload(db, section, 'moves', filters as Parameters<typeof queryReportPlotPayload>[3]),
+    ),
+    safeEntry('reportPlotBands', () =>
+      queryReportPlotPayload(db, section, 'bands', filters as Parameters<typeof queryReportPlotPayload>[3]),
+    ),
   ]
+  if (includeSeries) {
+    fetchers.push(
+      safeEntry('analyticsSeries', () => buildAnalyticsSeriesEntry(db, section, filters)),
+    )
+  }
+
   const results = await Promise.all(fetchers)
 
   const data: Record<string, unknown> = {}
@@ -190,16 +238,34 @@ export async function buildSnapshotPayload(
     section,
     data: {
       ...data,
+      filtersResolved: {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        preset: filters.accountType ? 'consumer-default' : filters.securityPurpose ? 'consumer-default' : null,
+      },
       urls: buildEntryUrls(section),
       errors: Object.keys(errors).length ? errors : undefined,
     },
   }
 }
 
+function resolveRequestScope(section: DatasetKind, windowRaw: string | undefined, presetRaw: string | undefined): SnapshotScope {
+  const window: ChartWindow | null = parseChartWindow(windowRaw)
+  let preset: ScopePreset | null = parsePreset(presetRaw)
+  if (preset === 'consumer-default' && section === 'term_deposits') {
+    // TD has no consumer-default preset in the cache enumeration; fall back to base scope.
+    preset = null
+  }
+  return buildPrecomputedChartScopeForPreset(window, preset)
+}
+
 async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKind) {
-  const payload = await getCachedOrComputeSnapshot(c.env, section, 'default', () => buildSnapshotPayload(c.env, section, 'default'))
+  const query = c.req.query()
+  const scope = resolveRequestScope(section, query.chart_window, query.preset)
+  const payload = await getCachedOrComputeSnapshot(c.env, section, scope, () => buildSnapshotPayload(c.env, section, scope))
   withPublicCache(c, SNAPSHOT_CACHE_MAX_AGE)
   c.header('X-AR-Cache', payload.fromCache)
+  c.header('X-AR-Snapshot-Scope', scope)
   return c.json({
     ok: true,
     section: payload.section,
