@@ -1,0 +1,135 @@
+# Runs `npm run doctor` once per calendar day during the Australia/Melbourne 10:00 wall-clock hour.
+# (GitHub cron is UTC-only; we trigger hourly and gate on local hour == 10.)
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   ADMIN_API_TOKEN           — same as production API worker (required for full doctor: bundle + logs gate).
+#   DOCTOR_ALERT_SMTP_USER    — Gmail address used to authenticate (and as From).
+#   DOCTOR_ALERT_SMTP_PASSWORD — Gmail App Password (not your normal Google password).
+#
+# Manual run: Actions > "Scheduled doctor (Melbourne 10:00)" > Run workflow (runs doctor immediately; email only on failure).
+
+name: Scheduled doctor (Melbourne 10:00)
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: scheduled-doctor
+  cancel-in-progress: false
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NPM_CONFIG_FUND: 'false'
+      NPM_CONFIG_AUDIT: 'false'
+    steps:
+      - name: Decide whether to run doctor now
+        id: gate
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=workflow_dispatch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          H=$(TZ=Australia/Melbourne date +%H)
+          echo "melbourne_hour=$H" >> "$GITHUB_OUTPUT"
+          if [[ "$H" == "10" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=melbourne_hour_10" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "reason=not_melbourne_10" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log skip (scheduled, outside Melbourne 10:00 hour)
+        if: github.event_name == 'schedule' && steps.gate.outputs.should_run != 'true'
+        run: |
+          echo "Skipping doctor: Australia/Melbourne hour is ${{ steps.gate.outputs.melbourne_hour }} (runs only in the 10:00 hour)."
+
+      - name: Checkout
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.gate.outputs.should_run == 'true'
+        run: npm ci --prefer-offline
+
+      - name: Run doctor (production triage)
+        id: doctor_run
+        if: steps.gate.outputs.should_run == 'true'
+        env:
+          ADMIN_API_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          npm run doctor 2>&1 | tee doctor-run.log
+
+      - name: Prepare failure email body
+        if: failure() && steps.gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo "AustralianRates scheduled doctor failed."
+            echo "Repository run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "SHA: ${{ github.sha }}"
+            echo ""
+            echo "--- Doctor console output (last 220 lines) ---"
+            echo ""
+            if [[ -f doctor-run.log ]]; then
+              tail -n 220 doctor-run.log
+            else
+              echo "(doctor-run.log missing; failure may have occurred before the doctor step.)"
+            fi
+            echo ""
+            if [[ -f status-debug-bundle-latest.json ]]; then
+              echo "--- status-debug-bundle: remediation hints (first 12, JSON lines) ---"
+              echo ""
+              jq -c '.remediation.hints[:12]' status-debug-bundle-latest.json 2>/dev/null || echo "(jq parse failed or hints absent)"
+              echo ""
+              echo "--- bundle ok / health_run_id (if present) ---"
+              jq -c '{ok: .ok, health_run_id: .meta.health_run_id, health_checked_at: .meta.health_checked_at}' status-debug-bundle-latest.json 2>/dev/null || true
+            fi
+          } > email-body.txt
+
+      - name: Upload doctor log on failure
+        if: failure() && steps.gate.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: doctor-run-log-${{ github.run_id }}
+          path: doctor-run.log
+          if-no-files-found: ignore
+
+      - name: Send failure alert email
+        if: failure() && steps.gate.outputs.should_run == 'true'
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.DOCTOR_ALERT_SMTP_USER }}
+          password: ${{ secrets.DOCTOR_ALERT_SMTP_PASSWORD }}
+          subject: 'FAIL: AustralianRates doctor (${{ github.repository }})'
+          to: jkokavec@gmail.com
+          from: "Australian Rates Doctor <${{ secrets.DOCTOR_ALERT_SMTP_USER }}>"
+          body: file://email-body.txt
