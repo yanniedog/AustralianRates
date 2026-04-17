@@ -4,6 +4,12 @@ node_modules/
 .cache/
 dist/
 coverage/
+# Wrangler accidental build-output when --outdir is unset (outputs under literal "null/")
+workers/*/null/
+workers/**/null/
+# Temp image captures + scratch scripts (ignored so they stop reappearing after cleanup)
+tmp-*.png
+scratch-*.js
 site/version.json
 .env
 .env.*

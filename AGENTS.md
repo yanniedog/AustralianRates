@@ -10,6 +10,17 @@ These rules are mandatory and override any conflicting preference.
 
 **MUST ALWAYS** (any assistant, any chat about this repo): after making changes, **commit and push**; **confirm deployment and CI completed successfully** and fix any failures until green; then **confirm the intended result on https://www.australianrates.com** using the commands below—not push alone. Applies to **every** conversation unless the user explicitly waives commit, push, deploy, or production verification. Cursor rule: `.cursor/rules/every-chat-commit-deploy-verify-production.mdc`.
 
+### Multiagent workflow and modular code
+
+This repo has multiple concurrent agents working in parallel. Every agent MUST:
+
+- **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
+- **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
+- **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green.
+- **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
+
+Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
+
 ### Default git workflow (Cursor, Codex, Claude)
 
 **Default:** land work via a **feature branch** and a **pull request into `main`** (not by pushing commits straight to `main`). Sync `main`, `git checkout -b agent/<slug>` (or `feat/…` / `fix/…`), commit, `git push -u origin HEAD`, open PR (`gh pr create --base main` or GitHub UI), fix until **PR CI** is green. For branches named **`agent/*`**, **`feat/*`**, or **`fix/*`**, GitHub Actions (`.github/workflows/pr-auto-merge.yml`) enables **squash auto-merge** when the PR is not a draft; after **`ci_result`** passes and the repo has **Allow auto-merge** plus required **`ci_result`** on **`main`** (see `docs/CONCURRENT_AGENT_WORKFLOW.md`), GitHub merges without a separate merge click, and **delete head branch** (if enabled on the repo) clears the remote branch. **`.github/workflows/stale-branch-cleanup.yml`** runs weekly and deletes lingering remote heads under those prefixes when the branch had a **merged** PR and has **no open PR**. Full steps: `docs/CONCURRENT_AGENT_WORKFLOW.md` and `.cursor/rules/git-pr-workflow-default.mdc`.
