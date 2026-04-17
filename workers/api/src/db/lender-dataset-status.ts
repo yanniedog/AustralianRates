@@ -33,6 +33,23 @@ export function lenderDatasetStatusScopeKey(
   return `${row.collection_date}|${row.lender_code}|${row.dataset_kind}`
 }
 
+/**
+ * When multiple lender_dataset_runs rows exist for the same lender on a collection day (e.g. manual
+ * reconcile + scheduled), bootstrap must use the **newest** row only. Otherwise an older complete
+ * run keeps the lender out of the pending set while the current run is still incomplete.
+ */
+export function latestLenderDatasetRowPerLender(rows: DailyLenderDatasetStatusRow[]): DailyLenderDatasetStatusRow[] {
+  const byLender = new Map<string, DailyLenderDatasetStatusRow>()
+  for (const row of rows) {
+    const key = row.lender_code
+    const existing = byLender.get(key)
+    if (!existing || String(row.updated_at || '').localeCompare(String(existing.updated_at || '')) > 0) {
+      byLender.set(key, row)
+    }
+  }
+  return Array.from(byLender.values())
+}
+
 function compareStatusRecency(a: DailyLenderDatasetStatusRow, b: DailyLenderDatasetStatusRow): number {
   return String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
 }
@@ -222,7 +239,7 @@ export async function getCompletedLenderCodesForDailyCollection(
     limit: 500,
   })
   const completed = new Set<string>()
-  for (const row of rows) {
+  for (const row of latestLenderDatasetRowPerLender(rows)) {
     if (isLenderDatasetCollectionComplete(row)) {
       completed.add(row.lender_code)
     }

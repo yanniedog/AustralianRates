@@ -1,5 +1,42 @@
+import { MELBOURNE_TIMEZONE } from '../constants'
 import { addDays } from '../economic/parser-utils'
-import { ECONOMIC_SERIES_DEFINITIONS, type EconomicSeriesDefinition, type EconomicSeriesId } from '../economic/registry'
+import {
+  ECONOMIC_SERIES_DEFINITIONS,
+  type EconomicFrequency,
+  type EconomicSeriesDefinition,
+  type EconomicSeriesId,
+} from '../economic/registry'
+import { getMelbourneNowParts } from '../utils/time'
+
+/**
+ * Latest observation_date that still counts as "not future" for coverage audit.
+ * Monthly/quarterly/annual RBA series use period-end labels (e.g. 2026-04-30 for April);
+ * comparing those to the Melbourne calendar day produced false economic_future_observation_dates.
+ */
+export function observationFutureCompareCutoffYmd(
+  checkedAtIso: string,
+  frequency: EconomicFrequency,
+  timeZone: string,
+): string {
+  const parts = getMelbourneNowParts(new Date(checkedAtIso), timeZone)
+  const d = parts.date
+  const y = Number(d.slice(0, 4))
+  const m = Number(d.slice(5, 7))
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return d
+  }
+  if (frequency === 'monthly') {
+    return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+  }
+  if (frequency === 'quarterly') {
+    const qEnd = m <= 3 ? 3 : m <= 6 ? 6 : m <= 9 ? 9 : 12
+    return new Date(Date.UTC(y, qEnd, 0)).toISOString().slice(0, 10)
+  }
+  if (frequency === 'annual') {
+    return new Date(Date.UTC(y + 1, 0, 0)).toISOString().slice(0, 10)
+  }
+  return d
+}
 
 type EconomicStatusDbRow = {
   series_id: string
@@ -170,8 +207,10 @@ function countBySeverity(findings: EconomicCoverageFinding[], probes: EconomicCo
 async function getObservationAggregate(
   db: D1Database,
   definition: EconomicSeriesDefinition,
-  todayIso: string,
+  checkedAtIso: string,
+  timeZone: string,
 ): Promise<ObservationAggregateRow> {
+  const futureCutoff = observationFutureCompareCutoffYmd(checkedAtIso, definition.frequency, timeZone)
   const row = await db
     .prepare(
       `SELECT
@@ -190,7 +229,7 @@ async function getObservationAggregate(
       definition.proxy ? 1 : 0,
       definition.frequency,
       definition.sourceUrl,
-      todayIso,
+      futureCutoff,
     )
     .first<ObservationAggregateRow>()
 
@@ -263,7 +302,7 @@ function reportWithProbes(report: EconomicCoverageReport, probes: EconomicCovera
 
 export async function runEconomicCoverageAudit(db: D1Database, input?: { checkedAt?: string }): Promise<EconomicCoverageReport> {
   const checkedAt = input?.checkedAt ?? new Date().toISOString()
-  const todayIso = checkedAt.slice(0, 10)
+  const timeZone = MELBOURNE_TIMEZONE
   const definitions = ECONOMIC_SERIES_DEFINITIONS
   const definitionMap = new Map(definitions.map((definition) => [definition.id, definition]))
   const findings: EconomicCoverageFinding[] = []
@@ -310,7 +349,7 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
 
   for (const definition of definitions) {
     const statusRow = statusMap.get(definition.id) ?? null
-    const observationAggregate = await getObservationAggregate(db, definition, todayIso)
+    const observationAggregate = await getObservationAggregate(db, definition, checkedAt, timeZone)
     const latestObservation = observationAggregate.observation_count
       ? await getLatestObservation(db, definition.id)
       : null
