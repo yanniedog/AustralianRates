@@ -951,6 +951,11 @@
         wrapper.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;';
         container.appendChild(wrapper);
         var ribbonHierarchyHost = (container && container.closest && container.closest('.chart-figure')) || wrapper;
+        if (ribbonHierarchyHost && ribbonHierarchyHost.querySelectorAll) {
+            ribbonHierarchyHost.querySelectorAll('.ar-report-underchart-tree').forEach(function (panel) {
+                if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+            });
+        }
 
         var viewBarOpts = {
             section: section,
