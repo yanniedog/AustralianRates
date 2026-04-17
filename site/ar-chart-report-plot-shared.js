@@ -1606,8 +1606,7 @@
             ribbonCurrentTree = tree;
             ribbonTreeHadBranches = tree.kind !== 'leaves';
             var mm = minMaxRibbonNodeRates(tree, anchor, sec);
-            var bestMode = ribbonBestRateForSection(sec);
-            var bestRate = mm && Number.isFinite(mm[bestMode]) ? mm[bestMode] : null;
+            var bestRate = ribbonScopedBestRate(tree, anchor, sec);
             setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
                 heading: 'Current slice',
@@ -1626,6 +1625,21 @@
             scheduleRibbonRedraw();
             syncInfoboxRowHighlight();
             syncRibbonTrayUi();
+        }
+
+        /**
+         * Best rate for the currently-focused hierarchy scope. Uses the deepest
+         * expanded branch when the user has drilled into a tier so that the
+         * green "best rate" marker refers to the best within the visible slice
+         * rather than the whole tree.
+         */
+        function ribbonScopedBestRate(tree, anchorYmd, secStr) {
+            if (!tree) return null;
+            var deep = deepestExpandedRibbonPath();
+            var scopeNode = deep ? (ribbonNodeAtPath(tree, deep) || tree) : tree;
+            var mm = minMaxRibbonNodeRates(scopeNode, anchorYmd, secStr);
+            var bestMode = ribbonBestRateForSection(secStr);
+            return mm && Number.isFinite(mm[bestMode]) ? mm[bestMode] : null;
         }
 
         function currentScopedProductKeys() {
@@ -2020,8 +2034,7 @@
                 }
             }
             var mmTree = minMaxRibbonNodeRates(tree, anchor, sec);
-            var bestModeB = ribbonBestRateForSection(sec);
-            var bestRateB = mmTree && Number.isFinite(mmTree[bestModeB]) ? mmTree[bestModeB] : null;
+            var bestRateB = ribbonScopedBestRate(tree, anchor, sec);
             setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
                 heading: pbPanel,
