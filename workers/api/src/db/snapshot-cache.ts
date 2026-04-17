@@ -31,7 +31,8 @@ export type SnapshotPayload = {
 }
 
 function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
-  return `snapshot:${section}:${scope}`
+  // Include payload version so bumping SNAPSHOT_PAYLOAD_VERSION instantly invalidates all KV keys.
+  return `snapshot:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
 }
 
 function isNoSuchTableError(error: unknown, table: string): boolean {
