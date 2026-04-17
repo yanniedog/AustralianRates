@@ -40,6 +40,7 @@ import {
   collectSavingsAnalyticsRowsResolved,
   collectTdAnalyticsRowsResolved,
 } from './analytics-data'
+import { buildGroupedChartRows } from '../utils/chart-row-groups'
 import { buildSiteUiPayload } from './site-ui-public'
 import {
   getCachedOrComputeSnapshot,
@@ -163,6 +164,11 @@ async function buildAnalyticsSeriesEntry(
       : section === 'savings'
         ? await collectSavingsAnalyticsRowsResolved(dbs, 'day', internalFilters)
         : await collectTdAnalyticsRowsResolved(dbs, 'day', internalFilters)
+  // Ship the compact grouped form — dense per-product meta + sparse per-day points.
+  // For home-loans/savings default scope this is ~7-10x smaller than the flat rows
+  // and matches the `rows_format: 'grouped_v1'` shape the client's fetchAllRateRows
+  // (site/ar-chart-data.js) already handles natively.
+  const grouped = buildGroupedChartRows(result.rows)
   return {
     ok: true,
     representation: result.representation,
@@ -170,9 +176,9 @@ async function buildAnalyticsSeriesEntry(
     fallback_reason: result.fallbackReason,
     count: result.rows.length,
     total: result.rows.length,
-    rows: result.rows,
-    rows_format: 'flat_v1' as const,
-    grouped_rows: null,
+    rows: [] as Array<Record<string, unknown>>,
+    rows_format: 'grouped_v1' as const,
+    grouped_rows: grouped,
   }
 }
 
