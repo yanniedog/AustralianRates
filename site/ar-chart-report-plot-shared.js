@@ -1179,6 +1179,14 @@
             return best;
         }
 
+        function seedDefaultRibbonExpandedPaths(tree) {
+            if (!tree || tree.kind !== 'branch') return;
+            if (Object.keys(ribbonExpandedPaths).some(function (p) { return !!ribbonExpandedPaths[p]; })) return;
+            (tree.groups || []).forEach(function (_group, idx) {
+                ribbonExpandedPaths[String(idx)] = true;
+            });
+        }
+
         var ribbonTreeHadBranches = false;
 
         function ribbonPathAllowsProductLines(rowPath) {
@@ -1826,6 +1834,7 @@
                 return;
             }
             ribbonTreeHadBranches = tree.kind !== 'leaves';
+            seedDefaultRibbonExpandedPaths(tree);
             var n = prodsAtAnchor.length;
             var ibBandPt = bandByDateByBank[pbPanel] && bandByDateByBank[pbPanel][anchor];
             var ibRateStr = '';
