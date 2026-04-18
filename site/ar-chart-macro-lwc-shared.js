@@ -325,7 +325,7 @@
                     chip.addEventListener('focus', function () { onChipEnter(bn.full); });
                 }
                 if (onChipLeave) {
-                    chip.addEventListener('pointerleave', function () { onChipLeave(bn.full); });
+                    chip.addEventListener('pointerleave', function (ev) { onChipLeave(bn.full, ev); });
                     chip.addEventListener('blur', function () { onChipLeave(bn.full); });
                 }
             }

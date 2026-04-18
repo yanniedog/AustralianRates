@@ -33,7 +33,7 @@
                 try {
                     input.renderBody(treeRoot);
                 } catch (_e) {}
-                el.style.display = 'block';
+                el.style.display = '';
             },
             hide: function () {
                 body.innerHTML = '';
