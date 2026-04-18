@@ -20,9 +20,8 @@ const layoutCheckInPage = require(join(
 type MobileQaFn = (opts: { phase: string; workspace: boolean }) => { failures: string[]; warnings: string[] }
 const mobileBrowser = require(join(REPO_ROOT, 'workers/mobile-site-qa/src/mobile-site-qa-browser.cjs')) as {
   mobileSiteQaInPage: MobileQaFn
-  refreshMobileNavInPage: () => void
 }
-const { mobileSiteQaInPage, refreshMobileNavInPage } = mobileBrowser
+const { mobileSiteQaInPage } = mobileBrowser
 
 const DEFAULT_ORIGIN = 'https://www.australianrates.com'
 const IPHONE_UA =
@@ -68,48 +67,7 @@ async function prepareWorkspaceChart(page: Page): Promise<void> {
   if (!chartActiveOnLoad) {
     await page.locator('#tab-chart').click({ timeout: 15_000 }).catch(() => {})
   }
-  await page.waitForTimeout(400)
-  await page.locator('#tab-explorer').click({ timeout: 15_000 }).catch(() => {})
-  await page.waitForFunction(
-    () => {
-      const panel = document.getElementById('panel-explorer')
-      return !!(panel && !panel.hidden)
-    },
-    { timeout: 12_000 },
-  ).catch(() => {})
-  await page.waitForFunction(
-    () => document.querySelectorAll('#rate-table .tabulator-row').length > 0,
-    { timeout: 35_000 },
-  ).catch(() => {})
-  await page.waitForTimeout(400)
-  await page.locator('#tab-chart').click({ timeout: 15_000 }).catch(() => {})
   await page.waitForTimeout(900)
-}
-
-async function openExplorerForRail(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const d = document.getElementById('table-details')
-    if (d instanceof HTMLDetailsElement) d.open = true
-  })
-  await page.waitForTimeout(300)
-  await page.locator('#tab-explorer').click({ timeout: 15_000 })
-  await page.waitForSelector('#panel-explorer.active', { timeout: 10_000 }).catch(() => {})
-  await page.waitForFunction(
-    () => document.querySelectorAll('#rate-table .tabulator-row').length > 0,
-    { timeout: 35_000 },
-  )
-  await page.evaluate(refreshMobileNavInPage)
-  await page.waitForTimeout(600)
-  const deadline = Date.now() + 20_000
-  while (Date.now() < deadline) {
-    const visible = await page.evaluate(() => {
-      const rail = document.getElementById('mobile-table-rail')
-      return !!(rail && !rail.hidden)
-    })
-    if (visible) return
-    await page.evaluate(refreshMobileNavInPage)
-    await page.waitForTimeout(250)
-  }
 }
 
 async function overlaySmoke(page: Page, label: string, failures: string[]): Promise<void> {
@@ -179,10 +137,6 @@ async function runRouteViewport(
     await prepareWorkspaceChart(page)
     mergePayload(contextLabel, await page.evaluate(layoutCheckInPage, true), allFailures)
     mergePayload(contextLabel, await page.evaluate(mobileSiteQaInPage, { phase: 'chart', workspace: true }), allFailures)
-
-    await openExplorerForRail(page)
-    mergePayload(contextLabel, await page.evaluate(mobileSiteQaInPage, { phase: 'explorer', workspace: true }), allFailures)
-
     await overlaySmoke(page, contextLabel, allFailures)
   } else {
     mergePayload(contextLabel, await page.evaluate(layoutCheckInPage, false), allFailures)

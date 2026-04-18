@@ -5,7 +5,7 @@
     var config = window.AR.config;
     var runtimePrefs = window.AR.runtimePrefs = window.AR.runtimePrefs || {};
     var params = config && config.params ? config.params : new URLSearchParams(window.location.search);
-    var VALID_TABS = ['chart', 'explorer', 'pivot', 'history', 'changes'];
+    var VALID_TABS = ['chart', 'history', 'changes'];
     var MOBILE_BREAKPOINT = 760;
 
     function normalizeUiMode(value) {
@@ -14,14 +14,13 @@
 
     function normalizeTab(value) {
         var candidate = String(value || '').toLowerCase();
-        return VALID_TABS.indexOf(candidate) >= 0 ? candidate : 'explorer';
+        if (candidate === 'explorer' || candidate === 'pivot') return 'chart';
+        return VALID_TABS.indexOf(candidate) >= 0 ? candidate : 'chart';
     }
 
     function hashTab() {
         var hash = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
-        if (hash === 'table') return 'explorer';
         if (hash === 'chart') return 'chart';
-        if (hash === 'pivot') return 'pivot';
         if (hash === 'history') return 'history';
         if (hash === 'changes') return 'changes';
         return '';
@@ -38,7 +37,7 @@
         var storedRaw = String(runtimePrefs.activeTab || '').trim();
         var stored = storedRaw ? normalizeTab(storedRaw) : '';
         if (isCompactViewport()) {
-            if (stored && stored !== 'explorer') return stored;
+            if (stored && stored !== 'chart') return stored;
             return 'history';
         }
         return stored || 'chart';

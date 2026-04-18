@@ -2,16 +2,12 @@
 
 function refreshMobileNavInPage() {
   window.dispatchEvent(new Event('resize'))
-  const ar = window.AR
-  if (ar && ar.mobileTableNav && typeof ar.mobileTableNav.refresh === 'function') {
-    ar.mobileTableNav.refresh()
-  }
 }
 
 /**
- * In-page checks for narrow viewports: viewport meta, touch targets, explorer rail.
+ * In-page checks for narrow viewports: viewport meta, touch targets, chart workspace.
  * Serialized by Playwright from plain CJS (no tsx __name).
- * @param {{ workspace: boolean, phase: 'chart' | 'explorer' }} opts
+ * @param {{ workspace: boolean, phase: 'chart' }} opts
  * @returns {{ failures: string[], warnings: string[] }}
  */
 function mobileSiteQaInPage(opts) {
@@ -49,33 +45,12 @@ function mobileSiteQaInPage(opts) {
   }
 
   if (workspace && phase === 'chart') {
-    for (const id of ['tab-chart', 'tab-explorer', 'tab-pivot']) {
+    for (const id of ['tab-chart']) {
       const tab = document.getElementById(id)
       if (!tab || !isVisible(tab)) continue
       const r = tab.getBoundingClientRect()
       if (r.width < 32 || r.height < 32) {
         failures.push(`workspace tab #${id} touch target small (${Math.round(r.width)}x${Math.round(r.height)})`)
-      }
-    }
-  }
-
-  if (workspace && phase === 'explorer') {
-    const explorer = document.getElementById('panel-explorer')
-    const rail = document.getElementById('mobile-table-rail')
-    const rows = document.querySelectorAll('#rate-table .tabulator-row').length
-    const explorerActive = !!(explorer && !explorer.hidden && explorer.classList.contains('active'))
-    if (!explorerActive) {
-      failures.push('explorer panel not active for mobile rail check')
-    } else if (rows === 0) {
-      warnings.push('no table rows; skipping mobile rail visibility assertion')
-    } else if (!rail) {
-      failures.push('mobile-table-rail missing while explorer has rows')
-    } else if (rail.hidden) {
-      failures.push('mobile-table-rail hidden while explorer active with rows')
-    } else {
-      const rr = rail.getBoundingClientRect()
-      if (rr.left < -2 || rr.right > window.innerWidth + 2) {
-        failures.push('mobile-table-rail clipped horizontally')
       }
     }
   }

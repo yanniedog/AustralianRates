@@ -8,12 +8,7 @@ import {
   CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY,
   CHART_MAX_PRODUCTS_KEY,
   CHART_RIBBON_STYLE_KEY,
-  FEATURE_ADVANCED_TAB_KEY,
-  FEATURE_ALL_RATES_TAB_KEY,
   FEATURE_CHART_MODEL_SERVER_SIDE_KEY,
-  FEATURE_CURRENT_LEADERS_KEY,
-  FEATURE_MORE_FILTERS_KEY,
-  FEATURE_SCENARIO_KEY,
 } from '../constants'
 import { getAppConfig } from '../db/app-config'
 import { getReadDb } from '../db/read-db'
@@ -38,11 +33,6 @@ export async function buildSiteUiPayload(db: D1Database): Promise<Record<string,
     brightnessMobileRaw,
     chartMaxProductsRaw,
     chartRibbonStyleRaw,
-    featureAllRatesRaw,
-    featureAdvancedRaw,
-    featureCurrentLeadersRaw,
-    featureScenarioRaw,
-    featureMoreFiltersRaw,
     featureChartModelServerSideRaw,
   ] = await Promise.all([
     getAppConfig(db, CHART_LEGEND_OPACITY_KEY),
@@ -53,11 +43,6 @@ export async function buildSiteUiPayload(db: D1Database): Promise<Record<string,
     getAppConfig(db, CHART_LEGEND_TEXT_BRIGHTNESS_MOBILE_KEY),
     getAppConfig(db, CHART_MAX_PRODUCTS_KEY),
     getAppConfig(db, CHART_RIBBON_STYLE_KEY),
-    getAppConfig(db, FEATURE_ALL_RATES_TAB_KEY),
-    getAppConfig(db, FEATURE_ADVANCED_TAB_KEY),
-    getAppConfig(db, FEATURE_CURRENT_LEADERS_KEY),
-    getAppConfig(db, FEATURE_SCENARIO_KEY),
-    getAppConfig(db, FEATURE_MORE_FILTERS_KEY),
     getAppConfig(db, FEATURE_CHART_MODEL_SERVER_SIDE_KEY),
   ])
   const opacities = resolveChartLegendOpacitySetFromDb({ legacyRaw, desktopRaw, mobileRaw })
@@ -78,11 +63,6 @@ export async function buildSiteUiPayload(db: D1Database): Promise<Record<string,
     chart_max_products_mode: resolveChartMaxProductsModeFromDb(chartMaxProductsRaw),
     chart_ribbon_style: resolveChartRibbonStyleFromDb(chartRibbonStyleRaw),
     features: {
-      all_rates_tab: isFeatureOn(featureAllRatesRaw),
-      advanced_tab: isFeatureOn(featureAdvancedRaw),
-      current_leaders: isFeatureOn(featureCurrentLeadersRaw),
-      scenario: isFeatureOn(featureScenarioRaw),
-      more_filters: isFeatureOn(featureMoreFiltersRaw),
       chart_model_server_side: isFeatureOn(featureChartModelServerSideRaw),
     },
   }

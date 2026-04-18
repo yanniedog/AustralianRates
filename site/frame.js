@@ -242,13 +242,7 @@
             ];
         }
         return [
-            { href: baseHref + '#chart', label: 'Compare', icon: 'chart' },
-            { href: baseHref + '#table', label: 'All rates', icon: 'table' },
-            { href: baseHref + '#pivot', label: 'Advanced', icon: 'pivot' },
-            { href: baseHref + '#history', label: 'History', icon: 'history' },
-            { href: baseHref + '#changes', label: 'Changes', icon: 'changes' },
-            { href: baseHref + '#export', label: 'Download', icon: 'download' },
-            { href: baseHref + '#market-notes', label: 'Notes', icon: 'notes' }
+            { href: baseHref + '#chart', label: 'Chart', icon: 'chart' }
         ];
     }
 
@@ -851,7 +845,7 @@
         }
         if (context.legal) return 'Use the menu for Home Loans, Savings, Term Deposits, and reference pages. The header keeps theme, help, and quick links available without interrupting the page content.';
         if (context.section === 'economic-data') return 'Use a preset or the grouped indicator list, change the visible date window, then read the normalized chart with raw values and source details on hover.';
-        return 'Set the scenario once, then use current leaders, Compare, All rates, Advanced, and history without losing the same filtered slice.';
+        return 'Use the chart workspace, select a hierarchy branch or lender, and change the window without leaving the current slice.';
     }
 
     function isAdminLoginRoute() {

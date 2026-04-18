@@ -28,37 +28,6 @@
             <p class="admin-subtitle">Public site presentation options stored in app configuration.</p>
         </div>
         <div class="admin-message" id="msg"></div>
-        <section class="admin-card" id="public-features-section">
-            <h2>Public features</h2>
-            <p class="admin-hint">Toggle public-site UI chunks on or off. All flags default to off; the public site hides the matching section until you enable it here. Flags are stored in <code>app_config</code> as <code>1</code>/<code>0</code> and served on <code>GET /site-ui</code> (~60s cache). Applies to all sections (Home loans, Savings, Term deposits).</p>
-            <div class="rate-check-row" style="flex-direction:column;align-items:stretch;gap:8px;">
-                <label style="display:inline-flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="feature-all-rates-tab">
-                    <span><strong>All rates</strong> tab and panel</span>
-                </label>
-                <label style="display:inline-flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="feature-advanced-tab">
-                    <span><strong>Advanced</strong> tab and panel (pivot workspace)</span>
-                </label>
-                <label style="display:inline-flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="feature-current-leaders">
-                    <span><strong>Current leaders</strong> summary section</span>
-                </label>
-                <label style="display:inline-flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="feature-scenario">
-                    <span><strong>Scenario</strong> card (inline scenario filter pads)</span>
-                </label>
-                <label style="display:inline-flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="feature-more-filters">
-                    <span><strong>Scenario and more filters</strong> drawer (banks, dates, advanced)</span>
-                </label>
-            </div>
-            <div class="rate-check-row" style="margin-top:10px;gap:12px;">
-                <button type="button" id="public-features-save-btn" class="primary">Save features</button>
-                <button type="button" id="public-features-reset-btn" class="secondary">Reset all to off (default)</button>
-            </div>
-            <p class="admin-hint" id="public-features-stored" style="margin-top:8px;opacity:0.75;"></p>
-        </section>
         <section class="admin-card" id="doctor-schedule-section">
             <h2>Scheduled doctor run</h2>
             <p class="admin-hint">GitHub Actions runs <code>npm run doctor</code> once per day in the wall-clock hour below (in the chosen IANA time zone). On failure, a draft PR is opened so Cloudflare Pages, Sourcery, and other PR checks can run. CI reads production <code>GET /api/home-loan-rates/doctor-schedule</code> (~2 min cache).</p>
@@ -182,7 +151,7 @@
     <script src="admin-portal.js?v=e6678ffa5b"></script>
     <script src="admin-sidebar.js?v=6114d7314a"></script>
     <script src="../ui-icons.js?v=0c1d292f12"></script>
-    <script src="../frame.js?v=09df5e2ce8"></script>
+    <script src="../frame.js?v=f5a201e05a"></script>
     <script>
         (function () {
             if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
@@ -198,13 +167,6 @@
             var CHART_MAX_PRODUCTS_UNLIMITED = 'unlimited';
             var CHART_RIBBON_STYLE_KEY = 'chart_ribbon_style';
             var DOCTOR_SCHEDULE_KEY = 'doctor_schedule';
-            var PUBLIC_FEATURES = [
-                { key: 'feature_all_rates_tab', checkboxId: 'feature-all-rates-tab', label: 'All rates' },
-                { key: 'feature_advanced_tab', checkboxId: 'feature-advanced-tab', label: 'Advanced' },
-                { key: 'feature_current_leaders', checkboxId: 'feature-current-leaders', label: 'Current leaders' },
-                { key: 'feature_scenario', checkboxId: 'feature-scenario', label: 'Scenario' },
-                { key: 'feature_more_filters', checkboxId: 'feature-more-filters', label: 'Scenario and more filters' }
-            ];
             var DOCTOR_TZ_OPTIONS = [
                 'Australia/Melbourne',
                 'Australia/Sydney',
@@ -258,13 +220,6 @@
             var doctorHourEl = document.getElementById('doctor-hour');
             var doctorTzEl = document.getElementById('doctor-schedule-tz');
             var doctorStoredEl = document.getElementById('doctor-schedule-stored');
-            var publicFeaturesStoredEl = document.getElementById('public-features-stored');
-
-            function isFeatureValueOn(value) {
-                if (value == null) return false;
-                var t = String(value).trim().toLowerCase();
-                return t === '1' || t === 'true' || t === 'on' || t === 'yes';
-            }
 
             function ensureDoctorHourOptions() {
                 if (!doctorHourEl || doctorHourEl.options.length >= 24) return;
@@ -423,7 +378,6 @@
                     var chartMaxProductsRow = null;
                     var chartRibbonRow = null;
                     var doctorRow = null;
-                    var featureRows = {};
                     d.config.forEach(function (r) {
                         if (r.key === DESKTOP_KEY) desktopRow = r;
                         if (r.key === MOBILE_KEY) mobileRow = r;
@@ -434,21 +388,7 @@
                         if (r.key === CHART_MAX_PRODUCTS_KEY) chartMaxProductsRow = r;
                         if (r.key === CHART_RIBBON_STYLE_KEY) chartRibbonRow = r;
                         if (r.key === DOCTOR_SCHEDULE_KEY) doctorRow = r;
-                        for (var fi = 0; fi < PUBLIC_FEATURES.length; fi++) {
-                            if (r.key === PUBLIC_FEATURES[fi].key) featureRows[r.key] = r;
-                        }
                     });
-                    var featureStoredParts = [];
-                    PUBLIC_FEATURES.forEach(function (spec) {
-                        var cb = document.getElementById(spec.checkboxId);
-                        var row = featureRows[spec.key];
-                        var on = row ? isFeatureValueOn(row.value) : false;
-                        if (cb) cb.checked = on;
-                        featureStoredParts.push(spec.label + ': ' + (on ? 'on' : 'off') + (row ? (' (updated ' + String(row.updated_at || '') + ')') : ' (default)'));
-                    });
-                    if (publicFeaturesStoredEl) {
-                        publicFeaturesStoredEl.textContent = featureStoredParts.join(' | ');
-                    }
                     ensureDoctorHourOptions();
                     initDoctorTzSelect();
                     if (doctorHourEl && doctorTzEl) {
@@ -693,43 +633,6 @@
                     .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
             }
 
-            function savePublicFeatures() {
-                var puts = PUBLIC_FEATURES.map(function (spec) {
-                    var cb = document.getElementById(spec.checkboxId);
-                    var on = !!(cb && cb.checked);
-                    return portal.fetchAdmin('/config', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: spec.key, value: on ? '1' : '0' }),
-                    }).then(function (r) { return r.json(); });
-                });
-                Promise.all(puts)
-                    .then(function (rows) {
-                        rows.forEach(function (d) { assertAdminJsonOk(d, 'Save failed'); });
-                        showMsg('Saved public features. Allow ~1 min for cached /site-ui to refresh.', false);
-                        loadFromConfig();
-                    })
-                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Save failed', true); });
-            }
-
-            function resetPublicFeatures() {
-                if (!confirm('Reset all public feature toggles to off (delete stored rows)? The public site will hide these sections until you re-enable them.')) return;
-                var deletes = PUBLIC_FEATURES.map(function (spec) {
-                    return portal.fetchAdmin('/config', {
-                        method: 'DELETE',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: spec.key }),
-                    }).then(function (r) { return r.json(); });
-                });
-                Promise.all(deletes)
-                    .then(function (rows) {
-                        rows.forEach(function (d) { assertAdminJsonOk(d, 'Reset failed'); });
-                        showMsg('Reset public features to defaults (all off).', false);
-                        loadFromConfig();
-                    })
-                    .catch(function (e) { showMsg(e && e.message ? e.message : 'Reset failed', true); });
-            }
-
             function saveDoctorSchedule() {
                 ensureDoctorHourOptions();
                 initDoctorTzSelect();
@@ -797,10 +700,6 @@
             if (doctorSaveBtn) doctorSaveBtn.addEventListener('click', saveDoctorSchedule);
             var doctorResetBtn = document.getElementById('doctor-schedule-reset-btn');
             if (doctorResetBtn) doctorResetBtn.addEventListener('click', resetDoctorSchedule);
-            var publicFeaturesSaveBtn = document.getElementById('public-features-save-btn');
-            if (publicFeaturesSaveBtn) publicFeaturesSaveBtn.addEventListener('click', savePublicFeatures);
-            var publicFeaturesResetBtn = document.getElementById('public-features-reset-btn');
-            if (publicFeaturesResetBtn) publicFeaturesResetBtn.addEventListener('click', resetPublicFeatures);
 
             loadFromConfig();
         })();

@@ -7,14 +7,6 @@
     var tabs = window.AR.tabs;
     var utils = window.AR.utils || {};
     var clientLog = utils.clientLog || function () {};
-    var explorerState = {
-        status: 'idle',
-        rows: 0,
-        total: 0,
-        currentPage: 1,
-        totalPages: 1,
-        message: '',
-    };
     var copyResetTimer = null;
     var copyStatusTimer = null;
 
@@ -32,41 +24,7 @@
     function getActiveTab() {
         return tabs && typeof tabs.getActiveTab === 'function'
             ? tabs.getActiveTab()
-            : 'explorer';
-    }
-
-    function updateExplorerOverview() {
-        var titleEl = byId('explorer-overview-title');
-        var textEl = byId('explorer-overview-text');
-        var statusEl = byId('explorer-overview-status');
-        var panelEl = byId('panel-explorer');
-        if (!titleEl || !textEl || !statusEl) return;
-
-        if (explorerState.status === 'error') {
-            titleEl.textContent = 'All rates unavailable';
-            textEl.textContent = explorerState.message || 'The full live slice could not load right now.';
-            statusEl.textContent = 'ERR';
-            statusEl.className = 'pill danger';
-        } else if (explorerState.status === 'ready' && Number(explorerState.total) === 0) {
-            titleEl.textContent = 'No rates match this slice';
-            textEl.textContent = 'Broaden the filters to see more rates.';
-            statusEl.textContent = '0';
-            statusEl.className = 'pill warning';
-        } else if (explorerState.status === 'ready') {
-            titleEl.textContent = 'All matching rates';
-            textEl.textContent = explorerState.total > explorerState.rows
-                ? ('Showing ' + explorerState.rows.toLocaleString() + ' of ' + explorerState.total.toLocaleString() + ' rows in the live slice.')
-                : ('Showing ' + explorerState.total.toLocaleString() + ' rows in the live slice.');
-            statusEl.textContent = 'OK';
-            statusEl.className = 'pill positive';
-        } else {
-            titleEl.textContent = 'All matching rates';
-            textEl.textContent = 'Loading the latest rows for the active slice.';
-            statusEl.textContent = 'WAIT';
-            statusEl.className = 'pill';
-        }
-
-        if (panelEl) panelEl.setAttribute('aria-busy', explorerState.status === 'loading' ? 'true' : 'false');
+            : 'chart';
     }
 
     function copyCurrentLink() {
@@ -150,7 +108,6 @@
             dirtyEl.textContent = snapshot.dirty ? 'DIRTY' : String(snapshot.activeCount || 0);
             dirtyEl.className = snapshot.dirty ? 'pill warning' : 'pill';
         }
-        updateExplorerOverview();
     }
 
     function focusAnchorFromHash() {
@@ -160,11 +117,6 @@
         if (!el) return;
         if (el.tagName === 'DETAILS') {
             el.open = true;
-            return;
-        }
-        var tableDetails = document.getElementById('table-details');
-        if (hash === 'table' && tableDetails && tableDetails.tagName === 'DETAILS') {
-            tableDetails.open = true;
         }
     }
 
@@ -173,14 +125,9 @@
         if (copyLinkBtn) copyLinkBtn.addEventListener('click', copyCurrentLink);
     }
 
-    window.addEventListener('ar:explorer-state', function (event) {
-        explorerState = event && event.detail ? event.detail : explorerState;
-        updateExplorerOverview();
-    });
     window.addEventListener('ar:filters-state', refreshShellState);
     window.addEventListener('ar:tab-changed', refreshShellState);
     window.addEventListener('hashchange', focusAnchorFromHash);
-    window.addEventListener('resize', updateExplorerOverview);
 
     bindActions();
     window.setTimeout(function () {

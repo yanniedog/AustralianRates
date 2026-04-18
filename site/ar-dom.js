@@ -4,14 +4,9 @@
 
     var els = {
         tabChart: document.getElementById('tab-chart'),
-        tabExplorer: document.getElementById('tab-explorer'),
-        tabPivot: document.getElementById('tab-pivot'),
         panelChart: document.getElementById('panel-chart'),
-        panelExplorer: document.getElementById('panel-explorer'),
-        panelPivot: document.getElementById('panel-pivot'),
         modeConsumer: document.getElementById('mode-consumer'),
         modeAnalyst: document.getElementById('mode-analyst'),
-        quickCompareCards: document.getElementById('quick-compare-cards'),
         ladderSearch: document.getElementById('ladder-search'),
         comparisonRateDisclosure: document.getElementById('comparison-rate-disclosure'),
         filterBank: document.getElementById('filter-bank'),
@@ -86,11 +81,6 @@
         executiveSummaryPanel: document.getElementById('executive-summary-panel'),
         executiveSummaryStatus: document.getElementById('executive-summary-status'),
         executiveSummarySections: document.getElementById('executive-summary-sections'),
-        rateChangeDetails: document.getElementById('rate-change-details'),
-        rateChangeHeadline: document.getElementById('rate-change-headline'),
-        rateChangeWarning: document.getElementById('rate-change-warning'),
-        rateChangeStatus: document.getElementById('rate-change-status'),
-        rateChangeList: document.getElementById('rate-change-list'),
         filterIncludeManual: document.getElementById('filter-include-manual'),
         refreshInterval: document.getElementById('refresh-interval'),
         lastRefreshed: document.getElementById('last-refreshed'),
@@ -99,8 +89,6 @@
         uiScaleUp: document.getElementById('ui-scale-up'),
         uiScaleReset: document.getElementById('ui-scale-reset'),
         uiScaleValue: document.getElementById('ui-scale-value'),
-        tableSettingsBtn: document.getElementById('table-settings-btn'),
-        tableSettingsPopover: document.getElementById('table-settings-popover'),
         workspaceCopyLink: document.getElementById('workspace-copy-link'),
     };
 
