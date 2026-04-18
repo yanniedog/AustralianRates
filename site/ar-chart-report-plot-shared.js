@@ -114,6 +114,7 @@
             onChipPointerEnter: function () {},
             onChipPointerLeave: function () {},
         };
+        var ribbonUnderchartSyncedOnFinish = false;
         var ribbonTrayRoot = null;
         var ribbonHoverLabelEl = null;
 
@@ -148,8 +149,8 @@
             viewBarOpts.onRibbonBankChipPointerEnter = function (full) {
                 ribbonChromeHandlers.onChipPointerEnter(full);
             };
-            viewBarOpts.onRibbonBankChipPointerLeave = function (full) {
-                ribbonChromeHandlers.onChipPointerLeave(full);
+            viewBarOpts.onRibbonBankChipPointerLeave = function (full, ev) {
+                ribbonChromeHandlers.onChipPointerLeave(full, ev);
             };
         }
         var viewBar = M.createReportViewModeBar(viewBarOpts);
@@ -1685,9 +1686,13 @@
                     bank: chartLogClip(bn, 48),
                 });
             };
-            ribbonChromeHandlers.onChipPointerLeave = function (fullName) {
+            ribbonChromeHandlers.onChipPointerLeave = function (fullName, ev) {
                 var bn = canonicalBandsBankFromUi(String(fullName || '').trim());
                 if (normRibbonBankName(ribbonTrayHoverBank) !== normRibbonBankName(bn)) return;
+                var toEl = ev && ev.relatedTarget;
+                if (toEl && ribbonHierarchyPanel && ribbonHierarchyPanel.el && ribbonHierarchyPanel.el.contains(toEl)) {
+                    return;
+                }
                 ribbonTrayHoverBank = '';
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
                 updateProductVisibility();
@@ -1747,8 +1752,35 @@
                 panelEl.addEventListener('mouseout', panelEl._arRibbonListOut);
             })();
 
+            if (ribbonWorkspace) {
+                if (ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn) {
+                    try {
+                        ribbonWorkspace.removeEventListener('pointerleave', ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn);
+                    } catch (_e) {}
+                    ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn = null;
+                }
+                var onRibbonWorkspacePointerLeave = function (ev) {
+                    var to = ev && ev.relatedTarget;
+                    if (to && ribbonWorkspace.contains(to)) return;
+                    if (ribbonProductBank) return;
+                    if (!ribbonTrayHoverBank) return;
+                    ribbonTrayHoverBank = '';
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    updateProductVisibility();
+                    refreshRibbonUnderChartPanel();
+                    scheduleRibbonRedraw();
+                    syncRibbonTrayUi();
+                };
+                ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn = onRibbonWorkspacePointerLeave;
+                ribbonWorkspace.addEventListener('pointerleave', onRibbonWorkspacePointerLeave);
+            }
+
             chart.on('finished', function () {
                 applyRibbonBankHighlightState();
+                if (!ribbonUnderchartSyncedOnFinish) {
+                    ribbonUnderchartSyncedOnFinish = true;
+                    refreshRibbonUnderChartPanel();
+                }
             });
 
             siteUiRibbonListener = function () {
@@ -1805,6 +1837,12 @@
                 if (leaderFocusListener) {
                     try { window.removeEventListener('ar:leader-focus', leaderFocusListener); } catch (_) {}
                     leaderFocusListener = null;
+                }
+                if (ribbonWorkspace && ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn) {
+                    try {
+                        ribbonWorkspace.removeEventListener('pointerleave', ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn);
+                    } catch (_e5) {}
+                    ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn = null;
                 }
                 if (options.infoBox && options.infoBox.el) {
                     var ibx = options.infoBox.el;
