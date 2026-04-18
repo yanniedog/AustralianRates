@@ -8,6 +8,7 @@
     var els = dom && dom.els ? dom.els : {};
     var tabState = state && state.state ? state.state : {};
     var loadHeroStats = hero && hero.loadHeroStats ? hero.loadHeroStats : function () {};
+    var loadQuickCompare = hero && hero.loadQuickCompare ? hero.loadQuickCompare : function () {};
 
     /** Full page reload with cache-bust param so browser fetches fresh HTML/JS and API requests bypass Worker cache. */
     function fullPageRefreshWithCacheBust() {
@@ -87,6 +88,7 @@
 
     function doAutoRefresh() {
         loadHeroStats();
+        loadQuickCompare();
         tabState.lastRefreshedAt = Date.now();
         updateLastRefreshed();
     }

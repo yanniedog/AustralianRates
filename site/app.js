@@ -117,6 +117,7 @@
     }
 
     function reloadStartupSurfaces() {
+        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
@@ -124,7 +125,15 @@
     }
 
     function scheduleStartupQuickCompare() {
-        startupQuickCompareTimerId = 0;
+        if (!hero || !hero.loadQuickCompare) {
+            startupQuickCompareTimerId = 0;
+            return;
+        }
+        if (startupQuickCompareTimerId) return;
+        startupQuickCompareTimerId = window.setTimeout(function () {
+            startupQuickCompareTimerId = 0;
+            hero.loadQuickCompare();
+        }, 1600);
     }
 
     function ensureExplorerReady() {
@@ -190,7 +199,6 @@
 
         if (tabs && tabs.applyUiMode) tabs.applyUiMode();
         if (filters && filters.applyUiMode) filters.applyUiMode();
-
         if (!opts.skipRefresh) {
             if (filters && filters.syncUrlState) filters.syncUrlState();
             if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
@@ -227,6 +235,7 @@
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
+        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (charts && charts.drawChart) charts.drawChart();
         else if (charts && charts.markStale) charts.markStale('STALE');
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {

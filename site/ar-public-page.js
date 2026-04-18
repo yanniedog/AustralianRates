@@ -141,7 +141,7 @@
     }
 
     var WORKSPACE_TABS = [
-        { id: 'chart', label: 'Compare', icon: 'chart', help: 'Summary-first comparison with chart context.' }
+        { id: 'chart', label: 'Compare', icon: 'chart', help: 'Summary-first comparison with current leaders and chart context.' }
     ];
 
     var SHARED_ADVANCED_FIELDS = [
@@ -534,9 +534,19 @@
             '</label>';
     }
 
-    function filterDrawerMarkup(_ui) { return ''; }
+    function drawerScenarioMarkup(ui) {
+        var ids;
+        if (section === 'home-loans') ids = ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'];
+        else if (section === 'savings') ids = ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'];
+        else if (section === 'term-deposits') ids = ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'];
+        else return '';
+        return ids.map(function (id) {
+            var f = findUiField(ui, id);
+            return f ? fieldMarkup(f) : '';
+        }).join('');
+    }
 
-    function unusedFilterDrawerMarkup(ui) {
+    function filterDrawerMarkup(ui) {
         var scenarioSection = section !== 'economic-data' ? (
             '<section class="compare-start-card ar-feature-scenario" id="compare-start">' +
                 '<div class="compare-start-head">' +
@@ -703,6 +713,13 @@
                         // ── Chart tab panel ──────────────────────────────────────
                         '<section id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="tab-chart">',
                             '<div class="chart-block">',
+                                '<section class="compare-summary-panel ar-feature-current-leaders" id="compare-leaders" aria-label="' + esc(ui.compareHeading || 'Current leaders') + '">',
+                                    '<div class="compare-summary-copy">',
+                                        '<p class="compare-summary-kicker">Current leaders</p>',
+                                        '<h2>' + esc(ui.compareHeading || 'Current leaders') + '</h2>',
+                                    '</div>',
+                                    '<div id="quick-compare-cards" class="quick-compare-cards"><p class="quick-empty">Loading leaders</p></div>',
+                                '</section>',
                                 '<div class="chart-figure">',
                                     '<div class="chart-toolbar">',
                                         '<div class="chart-toolbar-stack">',
