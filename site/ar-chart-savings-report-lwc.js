@@ -173,7 +173,9 @@
                 render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);
             },
             onRangeChange: function () {
-                if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
+                if (window.AR && window.AR.charts && typeof window.AR.charts.refreshReportRangePreview === 'function') {
+                    window.AR.charts.refreshReportRangePreview();
+                } else if (window.AR && window.AR.charts && typeof window.AR.charts.drawChart === 'function') {
                     window.AR.charts.drawChart();
                 } else {
                     render(container, model, fields, rbaHistory, cpiData, economicOverlaySeries);

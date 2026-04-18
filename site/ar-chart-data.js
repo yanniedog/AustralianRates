@@ -593,6 +593,23 @@
         }).join('&');
     }
 
+    function normalizeCacheableQueryParams(params) {
+        var normalized = {};
+        Object.keys(params || {}).forEach(function (key) {
+            var value = params[key];
+            if (value == null) return;
+            if (key === 'min_rate' && isDefaultishMinRate(value)) return;
+            if (key === 'chart_window') {
+                var chartWindow = String(value || '').trim().toUpperCase();
+                if (!chartWindow) return;
+                normalized[key] = chartWindow;
+                return;
+            }
+            normalized[key] = value;
+        });
+        return normalized;
+    }
+
     function isKnownChartWindow(value) {
         var text = String(value || '').trim().toUpperCase();
         return text === '' || text === '30D' || text === '90D' || text === '180D' || text === '1Y' || text === 'ALL';
@@ -676,8 +693,9 @@
     }
 
     function buildRequestPolicy(path, params, requestKind) {
-        var cacheable = isCacheablePublicChartRequest(requestKind, params || {});
-        var query = stableQueryString(params || {});
+        var normalizedParams = normalizeCacheableQueryParams(params || {});
+        var cacheable = isCacheablePublicChartRequest(requestKind, normalizedParams);
+        var query = stableQueryString(normalizedParams);
         return {
             url: apiBase + path + (query ? '?' + query : ''),
             fetchCache: cacheable ? 'default' : 'no-store',
@@ -835,7 +853,7 @@
             if (key === 'representation' || key === 'sort' || key === 'dir' || key === 'chart_window') return;
             queryParams[key] = params[key];
         });
-        return String((window.AR && window.AR.section) || 'home-loans') + '::' + stableQueryString(queryParams);
+        return String((window.AR && window.AR.section) || 'home-loans') + '::' + stableQueryString(normalizeCacheableQueryParams(queryParams));
     }
 
     function warmReportPlotWindows(params) {
