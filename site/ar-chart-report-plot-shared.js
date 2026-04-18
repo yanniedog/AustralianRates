@@ -369,6 +369,8 @@
         var ribbonTreeAnchorYmd = '';
         var ribbonListHoverPath = '';
         var ribbonCurrentTree = null;
+        var ribbonAnchorProductsCache = {};
+        var ribbonTreeCache = {};
 
         function deepestExpandedRibbonPath() {
             var best = '';
@@ -416,6 +418,43 @@
                 next[seg] = true;
             });
             ribbonExpandedPaths = next;
+        }
+
+        function ribbonAnchorCacheKey(bankName, anchorYmd) {
+            return String(bankName || '') + '::' + String(anchorYmd || '');
+        }
+
+        function productsAtRibbonAnchor(bankName, anchorYmd, sec) {
+            var key = ribbonAnchorCacheKey(bankName, anchorYmd);
+            if (ribbonAnchorProductsCache[key]) return ribbonAnchorProductsCache[key];
+            var plist = ribbonCanvasModel.byBank[bankName] || [];
+            var out = [];
+            plist.forEach(function (prod) {
+                var value = prod.byDate[anchorYmd];
+                if (value == null || !Number.isFinite(value) || value <= 0) return;
+                if (sec === 'savings' && value < 1.0) return;
+                out.push(prod);
+            });
+            out.sort(function (a, b) {
+                var va = a.byDate[anchorYmd];
+                var vb = b.byDate[anchorYmd];
+                return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
+            });
+            ribbonAnchorProductsCache[key] = out;
+            return out;
+        }
+
+        function ribbonTreeForAnchor(bankName, anchorYmd, tierFields) {
+            var key = ribbonAnchorCacheKey(bankName, anchorYmd);
+            if (ribbonTreeCache[key]) return ribbonTreeCache[key];
+            var sec = String(section || '');
+            var prodsAtAnchor = productsAtRibbonAnchor(bankName, anchorYmd, sec);
+            var tree = prodsAtAnchor.length ? buildRibbonTierTree(prodsAtAnchor, tierFields, 0) : null;
+            ribbonTreeCache[key] = {
+                prodsAtAnchor: prodsAtAnchor,
+                tree: tree,
+            };
+            return ribbonTreeCache[key];
         }
 
         function buildRibbonBreadcrumbItems(tree) {
@@ -1328,27 +1367,18 @@
                 ribbonTreeBank = pbPanel;
             }
             ribbonTreeAnchorYmd = anchor;
-            var plist = ribbonCanvasModel.byBank[pbPanel] || [];
-            var prodsAtAnchor = [];
             var sec = String(section || '');
-            plist.forEach(function (prod) {
-                var v = prod.byDate[anchor];
-                if (v == null || !Number.isFinite(v) || v <= 0) return;
-                if (sec === 'savings' && v < 1.0) return;
-                prodsAtAnchor.push(prod);
-            });
-            prodsAtAnchor.sort(function (a, b) {
-                var va = a.byDate[anchor];
-                var vb = b.byDate[anchor];
-                return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
-            });
+            var tierFields = ribbonTierFieldsForSection(sec);
+            var cachedTree = ribbonTreeForAnchor(pbPanel, anchor, tierFields);
+            var prodsAtAnchor = cachedTree && Array.isArray(cachedTree.prodsAtAnchor)
+                ? cachedTree.prodsAtAnchor
+                : [];
             if (!prodsAtAnchor.length) {
                 hideRibbonHierarchyPanel();
                 return;
             }
             clearRibbonHoverScopes();
-            var tierFields = ribbonTierFieldsForSection(sec);
-            var tree = buildRibbonTierTree(prodsAtAnchor, tierFields, 0);
+            var tree = cachedTree ? cachedTree.tree : null;
             if (!tree || tree.kind === 'empty') {
                 hideRibbonHierarchyPanel();
                 return;

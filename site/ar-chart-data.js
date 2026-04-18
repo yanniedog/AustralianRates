@@ -14,8 +14,10 @@
     var CHART_PREVIEW_TIMEOUT_MS = 12000;
     var CHART_PREVIEW_ROWS_LIMIT = 5000;
     var CHART_RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
+    var REPORT_PLOT_WARM_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
     var chartResponseCache = {};
     var inflightChartRequests = {};
+    var inflightReportWarmers = {};
 
     function numericValue(row, field) {
         var num = Number(row && row[field]);
@@ -827,6 +829,41 @@
         });
     }
 
+    function buildReportPlotWarmKey(params) {
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            if (key === 'representation' || key === 'sort' || key === 'dir' || key === 'chart_window') return;
+            queryParams[key] = params[key];
+        });
+        return String((window.AR && window.AR.section) || 'home-loans') + '::' + stableQueryString(queryParams);
+    }
+
+    function warmReportPlotWindows(params) {
+        var warmKey = buildReportPlotWarmKey(params);
+        if (inflightReportWarmers[warmKey]) return inflightReportWarmers[warmKey];
+        var baseParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            if (key === 'representation' || key === 'sort' || key === 'dir') return;
+            baseParams[key] = params[key];
+        });
+        inflightReportWarmers[warmKey] = Promise.all(REPORT_PLOT_WARM_WINDOWS.map(function (chartWindow) {
+            var warmParams = {};
+            Object.keys(baseParams).forEach(function (key) {
+                warmParams[key] = baseParams[key];
+            });
+            warmParams.chart_window = chartWindow;
+            return Promise.all([
+                fetchReportPlot('moves', warmParams).catch(function () { return null; }),
+                fetchReportPlot('bands', warmParams).catch(function () { return null; }),
+            ]);
+        })).catch(function () {
+            return null;
+        }).finally(function () {
+            delete inflightReportWarmers[warmKey];
+        });
+        return inflightReportWarmers[warmKey];
+    }
+
     function expandGroupedRows(payload) {
         if (!payload || !Array.isArray(payload.groups)) return [];
         var rows = [];
@@ -971,5 +1008,6 @@
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,
         getPrecomputedChartModel: getPrecomputedChartModel,
+        warmReportPlotWindows: warmReportPlotWindows,
     };
 })();
