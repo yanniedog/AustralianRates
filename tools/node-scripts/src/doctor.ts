@@ -12,6 +12,7 @@
  *   --strict-archive           Fail if ARCHIVE_ORIGIN is set but /api/health fails
  *
  * Env: ADMIN_API_TOKEN (bundle, logs), ARCHIVE_ORIGIN (optional workers URL for archive /api/health)
+ * Env: DOCTOR_TOLERATE_CF_ACTIONS_RUNNER_BLOCK (with GITHUB_ACTIONS): scheduled CI may skip checks when Cloudflare returns 403 to runner IPs (see diagnose-api / diagnose-pages).
  */
 
 import { spawnSync } from 'node:child_process'

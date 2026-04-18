@@ -3,7 +3,12 @@
  *
  * Flags: --smoke: deploy-signoff smoke only (health, filters, latest/latest-all contracts).
  * Flags: --quick (or DOCTOR_QUICK=1): fewer bench reps, no warmup, subset of bench paths.
+ *
+ * Env: DOCTOR_TOLERATE_CF_ACTIONS_RUNNER_BLOCK + GITHUB_ACTIONS: if public /health is 403,
+ * exit 0 (scheduled CI skip — Cloudflare often blocks GitHub runner IPs).
  */
+
+import { publicHealthIs403, tolerateCfActionsRunnerBlock } from './lib/ci-cf-runner-block'
 
 const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
 const ORIGIN = new URL(DEFAULT_TEST_URL).origin;
@@ -258,6 +263,14 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
 }
 
 async function main(): Promise<void> {
+  if (tolerateCfActionsRunnerBlock() && (await publicHealthIs403(ORIGIN))) {
+    console.warn(
+      '[diagnose-api] Public health returned HTTP 403 from this environment (typical: Cloudflare blocking GitHub-hosted runner IPs). Skipping diagnostics with exit 0 so scheduled CI does not false-fail. Use workflow_dispatch or a self-hosted runner with allowlisted egress for real checks.',
+    )
+    console.log('RESULT: SKIPPED (cf-runner-block)')
+    return
+  }
+
   console.log('========================================');
   console.log('AustralianRates API Diagnostics');
   console.log('========================================');

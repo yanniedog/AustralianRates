@@ -3,7 +3,10 @@
  * Uses same origin as diagnose-api (TEST_URL or https://www.australianrates.com/).
  *
  * Env: DIAG_PAGES_TIMEOUT_MS (default 25000), DIAG_PAGES_TTFB_WARN_MS (default 8000; warn only).
+ * Env: DOCTOR_TOLERATE_CF_ACTIONS_RUNNER_BLOCK + GITHUB_ACTIONS: same cf-runner skip as diagnose-api.
  */
+
+import { publicHealthIs403, tolerateCfActionsRunnerBlock } from './lib/ci-cf-runner-block'
 
 const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/'
 const ORIGIN = new URL(DEFAULT_TEST_URL).origin
@@ -104,6 +107,14 @@ async function runCheck(p: PageCheck): Promise<{ ok: boolean; failures: string[]
 }
 
 async function main(): Promise<void> {
+  if (tolerateCfActionsRunnerBlock() && (await publicHealthIs403(ORIGIN))) {
+    console.warn(
+      '[diagnose-pages] Public health returned HTTP 403 from this environment (Cloudflare vs GitHub runner). Skipping HTML smoke with exit 0.',
+    )
+    console.log('RESULT: SKIPPED (cf-runner-block)')
+    return
+  }
+
   console.log('========================================')
   console.log('AustralianRates Pages Diagnostics')
   console.log('========================================')
