@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { requestCloudflareJson } from './lib/cloudflare-api';
 import { getCloudflareAccountId, pickCloudflareToken } from './lib/cloudflare-token';
 import { loadRepoEnv } from './lib/env';
+import { describeTokenCreateResponse } from './lib/safe-api-response-log';
 
 loadRepoEnv(process.cwd());
 
@@ -124,7 +125,7 @@ async function main(): Promise<void> {
 
   const newToken = createResult?.result && (createResult.result.value || createResult.result.token);
   if (!newToken) {
-    console.error('Create response missing token value:', JSON.stringify(createResult).slice(0, 200));
+    console.error('Create response missing token value.', describeTokenCreateResponse(createResult));
     process.exit(1);
   }
 
