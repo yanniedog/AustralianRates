@@ -59,6 +59,7 @@ import { getAppConfig } from '../db/app-config'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 import { buildSnapshotCurrentLeaders } from './snapshot-current-leaders'
+import { trimSnapshotDataForHtmlInline } from '../utils/snapshot-inline-trim'
 
 const SNAPSHOT_CACHE_MAX_AGE = 300
 
@@ -291,19 +292,29 @@ function resolveRequestScope(section: DatasetKind, windowRaw: string | undefined
   return buildPrecomputedChartScopeForPreset(window, preset)
 }
 
+function parseBooleanQuery(value: string | undefined): boolean {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
 async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKind) {
   const query = c.req.query()
   const scope = resolveRequestScope(section, query.chart_window, query.preset)
+  const wantsLite = parseBooleanQuery(query.lite)
   const payload = await getCachedOrComputeSnapshot(c.env, section, scope, () => buildSnapshotPayload(c.env, section, scope))
+  const data = wantsLite
+    ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data) || payload.data
+    : payload.data
   withPublicCache(c, SNAPSHOT_CACHE_MAX_AGE)
   c.header('X-AR-Cache', payload.fromCache)
   c.header('X-AR-Snapshot-Scope', scope)
+  c.header('X-AR-Snapshot-Shape', wantsLite ? 'lite' : 'full')
   return c.json({
     ok: true,
     section: payload.section,
     scope: payload.scope,
     builtAt: payload.builtAt,
-    data: payload.data,
+    data,
   })
 }
 

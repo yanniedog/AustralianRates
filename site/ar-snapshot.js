@@ -268,6 +268,7 @@
         var qs = [];
         if (chartWindow) qs.push('chart_window=' + encodeURIComponent(chartWindow));
         if (preset) qs.push('preset=' + encodeURIComponent(preset));
+        qs.push('lite=1');
         return qs.length ? url + '?' + qs.join('&') : url;
     }
 
