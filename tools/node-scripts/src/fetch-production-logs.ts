@@ -43,13 +43,14 @@ async function fetchText(url: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  if (tolerateCfActionsRunnerBlock() && (await publicHealthIs403(ORIGIN))) {
+    console.warn(
+      '[fetch-production-logs] Public health is HTTP 403 from this runner (Cloudflare block). Skipping admin log fetch with exit 0.',
+    )
+    process.exit(0);
+  }
+
   if (!token) {
-    if (tolerateCfActionsRunnerBlock() && (await publicHealthIs403(ORIGIN))) {
-      console.warn(
-        '[fetch-production-logs] No ADMIN_API_TOKEN and public health is HTTP 403 from this runner (Cloudflare block). Skipping admin log fetch with exit 0.',
-      )
-      process.exit(0);
-    }
     console.error('Missing ADMIN_API_TOKEN in environment. Set it in repo root .env.');
     process.exit(1);
   }
