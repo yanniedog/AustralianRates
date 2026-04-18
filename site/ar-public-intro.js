@@ -29,7 +29,7 @@
     var SECTION_COPY = {
         'home-loans': sectionCopy({
             eyebrow: 'Daily CDR data · major lenders',
-            title: 'Home loan rates, ranked.',
+            title: 'Home loan rates, tracked.',
             summary: '',
             liveCards: [
                 { id: 'updated', label: 'Updated', value: '—', note: 'Latest collection date in the active slice.' },
@@ -39,7 +39,7 @@
         }),
         savings: sectionCopy({
             eyebrow: 'Daily CDR data · major lenders',
-            title: 'Savings rates, ranked.',
+            title: 'Savings rates, tracked.',
             summary: '',
             liveCards: [
                 { id: 'updated', label: 'Updated', value: '—', note: 'Latest collection date in the active slice.' },
@@ -49,7 +49,7 @@
         }),
         'term-deposits': sectionCopy({
             eyebrow: 'Daily CDR data · major lenders',
-            title: 'Term deposit yields, by term.',
+            title: 'Term deposit yields, tracked.',
             summary: '',
             liveCards: [
                 { id: 'updated', label: 'Updated', value: '—', note: 'Latest collection date in the active slice.' },

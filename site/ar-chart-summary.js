@@ -119,7 +119,7 @@
             ];
         });
         tableMarkup(
-            'Lender ranking summary',
+            'Lender tracking summary',
             'Each row shows the best matching product for the current lender slice.',
             ['Lender', 'Best product', 'Latest', 'Latest date', 'Points'],
             rows
