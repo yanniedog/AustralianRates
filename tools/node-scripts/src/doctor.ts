@@ -100,6 +100,13 @@ function fetchFullStatusBundleToFile(): boolean {
     return false
   }
 
+  if (!existsSync(outAbs)) {
+    console.warn(
+      '[doctor] status-debug-bundle: fetch script exited 0 but no output file (e.g. skipped when Cloudflare blocks the runner).',
+    )
+    return false
+  }
+
   return true
 }
 
