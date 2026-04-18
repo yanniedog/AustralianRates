@@ -42,6 +42,8 @@
         { suffix: '/rba/history', dataKey: 'rbaHistory', allowedKeys: [] },
         { suffix: '/cpi/history', dataKey: 'cpiHistory', allowedKeys: [] },
         { suffix: '/analytics/series', dataKey: 'analyticsSeries', allowedKeys: ['representation', 'compact'], requiresDayRepresentation: true },
+        { suffix: '/analytics/report-plot', dataKey: 'reportPlotMoves', allowedKeys: ['mode'], requiredParams: { mode: 'moves' } },
+        { suffix: '/analytics/report-plot', dataKey: 'reportPlotBands', allowedKeys: ['mode'], requiredParams: { mode: 'bands' } },
     ];
 
     function apiBasePath() {
@@ -114,6 +116,13 @@
         if (matcher.requiresDayRepresentation) {
             var rep = String(parsedUrl.searchParams.get('representation') || '').trim().toLowerCase();
             if (rep && rep !== 'day') return false;
+        }
+        if (matcher.requiredParams) {
+            var rp = matcher.requiredParams;
+            var keys = Object.keys(rp);
+            for (var i = 0; i < keys.length; i++) {
+                if (parsedUrl.searchParams.get(keys[i]) !== rp[keys[i]]) return false;
+            }
         }
         return true;
     }

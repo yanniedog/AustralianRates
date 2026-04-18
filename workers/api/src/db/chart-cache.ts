@@ -37,8 +37,8 @@ const D1_CACHE_FRESH_MINUTES = 90
  */
 export const GZIP_PREFIX = 'gz:'
 export const MAX_UNCOMPRESSED_CHARS = 500_000
-/** KV TTL for computed responses (seconds). */
-export const CHART_CACHE_KV_TTL = 300
+/** KV TTL for computed responses (seconds). Set to 2 h so KV stays warm across the hourly cron refresh cycle. */
+export const CHART_CACHE_KV_TTL = 7200
 export { PRECOMPUTED_CHART_WINDOWS }
 
 const CONSUMER_DEFAULT_SCOPE = 'preset:consumer-default' as const
