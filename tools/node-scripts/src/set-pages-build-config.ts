@@ -12,12 +12,10 @@ loadRepoEnv(process.cwd());
 const accountId = getCloudflareAccountId();
 const apiToken = pickCloudflareToken([
   'CLOUDFLARE_FULL_ACCESS_TOKEN',
-  'CLOUDFLARE_API_AGENT_LEE_FULL_FULL',
   'CLOUDFLARE_PAGES_TOKEN',
   'CLOUDFLARE_API_TOKEN',
   'CLOUDFLARE_GENERAL_TOKEN',
   'CF_API_TOKEN',
-  'CLOUDFLARE_API_SELFPERMISSION_MOD',
   'CLOUDFLARE_MULTI',
   'CLOUDFLARE_EDIT_ZONE_DNS',
 ]);
