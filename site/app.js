@@ -33,6 +33,7 @@
     var initialBootstrapStarted = false;
     var hasFiltersReadyOnce = false;
     var hasExplorerReadyOnce = false;
+    var startupQuickCompareTimerId = 0;
 
     clientLog('info', 'App init start', {
         section: window.AR.section || 'home-loans',
@@ -119,11 +120,38 @@
     }
 
     function reloadStartupSurfaces() {
-        if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
+        if (tabState.activeTab === 'explorer' && explorer) {
+            if (typeof explorer.isInitialized === 'function' ? explorer.isInitialized() : true) {
+                if (explorer.reloadExplorer) explorer.reloadExplorer();
+            } else if (explorer.initRateTable) {
+                explorer.initRateTable();
+            }
+        }
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
-        if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        if (tabState.activeTab === 'explorer' && rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
+        }
+    }
+
+    function scheduleStartupQuickCompare() {
+        if (!hero || !hero.loadQuickCompare) return;
+        if (startupQuickCompareTimerId) return;
+        startupQuickCompareTimerId = window.setTimeout(function () {
+            startupQuickCompareTimerId = 0;
+            hero.loadQuickCompare();
+        }, 1600);
+    }
+
+    function ensureExplorerReady() {
+        if (!explorer) return;
+        if (typeof explorer.isInitialized === 'function' && !explorer.isInitialized()) {
+            if (explorer.initRateTable) explorer.initRateTable();
+            return;
+        }
+        var explorerState = explorer.getExplorerState ? explorer.getExplorerState() : null;
+        if (explorerState && explorerState.status === 'error' && explorer.reloadExplorer) {
+            explorer.reloadExplorer();
         }
     }
 
@@ -224,7 +252,7 @@
         setFilterLiveStatus(opts.source === 'live' ? 'Syncing...' : 'Refreshing...', 'is-pending');
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
-        if (explorer && explorer.reloadExplorer) explorer.reloadExplorer();
+        if (tabState.activeTab === 'explorer') ensureExplorerReady();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (pivot && pivot.invalidatePivot) {
@@ -238,7 +266,7 @@
         }
         if (charts && charts.drawChart) charts.drawChart();
         else if (charts && charts.markStale) charts.markStale('STALE');
-        if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        if (tabState.activeTab === 'explorer' && rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
@@ -267,10 +295,10 @@
 
         applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst', { skipRefresh: true });
         if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'chart', { skipHash: false });
-        if (explorer && explorer.initRateTable) explorer.initRateTable();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
-        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
-        if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        scheduleStartupQuickCompare();
+        if (tabState.activeTab === 'explorer') ensureExplorerReady();
+        if (tabState.activeTab === 'explorer' && rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
@@ -400,6 +428,10 @@
         var tab = event && event.detail && event.detail.tab;
         if (tab === 'chart' && charts) {
             if (charts.refreshFromCache) charts.refreshFromCache('chart-tab');
+        }
+        if (tab === 'explorer') {
+            ensureExplorerReady();
+            if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         }
         if (tab === 'pivot' && pivot && pivot.ensurePivotLoaded) {
             pivot.ensurePivotLoaded({ reason: 'pivot-tab-activated' });

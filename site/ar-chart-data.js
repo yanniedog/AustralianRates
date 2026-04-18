@@ -856,15 +856,20 @@
         return String((window.AR && window.AR.section) || 'home-loans') + '::' + stableQueryString(normalizeCacheableQueryParams(queryParams));
     }
 
-    function warmReportPlotWindows(params) {
+    function warmReportPlotWindows(params, windows) {
         var warmKey = buildReportPlotWarmKey(params);
         if (inflightReportWarmers[warmKey]) return inflightReportWarmers[warmKey];
         var baseParams = {};
+        var targetWindows = Array.isArray(windows) && windows.length
+            ? windows.filter(function (value, index, list) {
+                return REPORT_PLOT_WARM_WINDOWS.indexOf(value) >= 0 && list.indexOf(value) === index;
+            })
+            : REPORT_PLOT_WARM_WINDOWS.slice();
         Object.keys(params || {}).forEach(function (key) {
             if (key === 'representation' || key === 'sort' || key === 'dir') return;
             baseParams[key] = params[key];
         });
-        inflightReportWarmers[warmKey] = Promise.all(REPORT_PLOT_WARM_WINDOWS.map(function (chartWindow) {
+        inflightReportWarmers[warmKey] = Promise.all(targetWindows.map(function (chartWindow) {
             var warmParams = {};
             Object.keys(baseParams).forEach(function (key) {
                 warmParams[key] = baseParams[key];

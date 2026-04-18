@@ -12,8 +12,6 @@
     window.AR = window.AR || {};
 
     var CHART_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
-    var WARM_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
-
     var SNAPSHOT = {
         ready: null,
         payload: null,
@@ -332,20 +330,7 @@
 
     function maybeWarmReportWindows() {
         if (SNAPSHOT.warmStarted) return;
-        var current = scopeFromState();
-        if (!current.chartWindow) return;
         SNAPSHOT.warmStarted = true;
-        window.setTimeout(function () {
-            WARM_WINDOWS.filter(function (value) {
-                return value !== current.chartWindow;
-            }).forEach(function (value, index) {
-                window.setTimeout(function () {
-                    fetchScopeBundle({ chartWindow: value, preset: current.preset }, { activate: false }).catch(function () {
-                        return null;
-                    });
-                }, index * 120);
-            });
-        }, 800);
     }
 
     function adoptInlineSnapshot(payload) {

@@ -74,10 +74,55 @@
     var heroStatsReady = false;
     var landingOverview = null;
     var quickCompareRequestSeq = 0;
+    var SNAPSHOT_IGNORE_PARAMS = {
+        cache_bust: true,
+        chart_window: true,
+        dataset_mode: true,
+        dir: true,
+        end_date: true,
+        exclude_compare_edge_cases: true,
+        include_manual: true,
+        include_removed: true,
+        limit: true,
+        mode: true,
+        order_by: true,
+        page: true,
+        representation: true,
+        size: true,
+        sort: true,
+        start_date: true,
+    };
 
     function syncPublicIntro() {
         publicIntro = window.AR.publicIntro || publicIntro;
         return publicIntro;
+    }
+
+    function snapshotData() {
+        var snapshot = window.AR && window.AR.snapshot;
+        return snapshot && snapshot.data ? snapshot.data : null;
+    }
+
+    function snapshotLatestAllRows() {
+        var data = snapshotData();
+        var latestAll = data && data.latestAll;
+        return latestAll && Array.isArray(latestAll.rows) ? latestAll.rows : [];
+    }
+
+    function snapshotCurrentLeaders() {
+        var data = snapshotData();
+        var currentLeaders = data && data.currentLeaders;
+        return currentLeaders && typeof currentLeaders === 'object' ? currentLeaders : null;
+    }
+
+    function pickLatestSnapshotRow(rows) {
+        var best = null;
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            var date = String(row && row.collection_date || '').slice(0, 10);
+            if (!date) return;
+            if (!best || date > String(best.collection_date || '').slice(0, 10)) best = row;
+        });
+        return best;
     }
 
     function setIntroMetric(id, value, note) {
@@ -191,6 +236,23 @@
         return true;
     }
 
+    function syncHeroStatsFromSnapshot() {
+        var data = snapshotData();
+        if (!data) return false;
+        if (data.overview && data.overview.ok) {
+            landingOverview = {
+                rba: data.overview.rba || null,
+                feeds: data.overview.feeds || null,
+            };
+            applyLandingOverview();
+        }
+        var analytics = data.analyticsSeries || null;
+        var total = analytics && Number.isFinite(Number(analytics.total)) ? Number(analytics.total) : NaN;
+        var latest = pickLatestSnapshotRow(snapshotLatestAllRows());
+        if (!Number.isFinite(total) || !latest) return !!landingOverview;
+        return applyHeroSnapshot(total, latest);
+    }
+
     function syncHeroStatsFromExplorer(snapshot) {
         var currentExplorer = window.AR.explorer || {};
         var state = snapshot && typeof snapshot === 'object'
@@ -201,6 +263,15 @@
     }
 
     function loadOverview() {
+        var data = snapshotData();
+        if (data && data.overview && data.overview.ok) {
+            landingOverview = {
+                rba: data.overview.rba || null,
+                feeds: data.overview.feeds || null,
+            };
+            applyLandingOverview();
+            return;
+        }
         if (!apiBase || landingOverview !== null) return;
         var url = apiBase + '/overview';
         requestJson
@@ -225,6 +296,7 @@
     }
 
     function loadHeroStats() {
+        if (syncHeroStatsFromSnapshot()) return;
         loadOverview();
         if (!syncHeroStatsFromExplorer()) {
             clearHeroError();
@@ -420,6 +492,74 @@
         };
     }
 
+    function rowMatchesParam(row, key, value) {
+        var nextKey = String(key || '').trim();
+        var nextValue = String(value == null ? '' : value).trim();
+        if (!nextKey || !nextValue) return true;
+        if (SNAPSHOT_IGNORE_PARAMS[nextKey]) return true;
+        if (nextKey === 'min_rate') return Number(row && row.interest_rate) >= Number(nextValue);
+        if (nextKey === 'max_rate') return Number(row && row.interest_rate) <= Number(nextValue);
+        if (nextKey === 'min_comparison_rate') return Number(row && row.comparison_rate) >= Number(nextValue);
+        if (nextKey === 'max_comparison_rate') return Number(row && row.comparison_rate) <= Number(nextValue);
+        if (nextKey === 'bank') return String(row && row.bank_name || '').trim().toLowerCase() === nextValue.toLowerCase();
+        if (nextKey === 'banks') {
+            var allowed = nextValue.split(',').map(function (part) { return part.trim().toLowerCase(); }).filter(Boolean);
+            if (!allowed.length) return true;
+            return allowed.indexOf(String(row && row.bank_name || '').trim().toLowerCase()) >= 0;
+        }
+        return String(row && row[nextKey] || '').trim() === nextValue;
+    }
+
+    function filterSnapshotRows(rows, params) {
+        return (Array.isArray(rows) ? rows : []).filter(function (row) {
+            var keys = Object.keys(params || {});
+            for (var i = 0; i < keys.length; i++) {
+                if (!rowMatchesParam(row, keys[i], params[keys[i]])) return false;
+            }
+            return true;
+        });
+    }
+
+    function loadHomeLoanScenarioRibbonFromSnapshot(baseParams, rows) {
+        var entries = [];
+        for (var i = 0; i < MORTGAGE_SAMPLE_SCENARIOS.length; i++) {
+            var scenario = MORTGAGE_SAMPLE_SCENARIOS[i];
+            var params = {};
+            Object.keys(baseParams || {}).forEach(function (key) {
+                params[key] = baseParams[key];
+            });
+            Object.keys(scenario.params).forEach(function (key) {
+                params[key] = scenario.params[key];
+            });
+            var matches = sortRows(filterSnapshotRows(rows, params));
+            if (!matches.length) return null;
+            entries.push({
+                scenarioLabel: scenario.label,
+                row: matches[0] || null,
+            });
+        }
+        return entries;
+    }
+
+    function loadQuickCompareFromSnapshot(context) {
+        var currentLeaders = snapshotCurrentLeaders();
+        if (section === 'home-loans' && context.activeCount === 0) {
+            var scenarioLeaders = currentLeaders && Array.isArray(currentLeaders.scenarios) ? currentLeaders.scenarios : null;
+            if (scenarioLeaders && scenarioLeaders.length) return scenarioLeaders;
+        }
+        if (context.activeCount === 0) {
+            var defaultLeaders = currentLeaders && Array.isArray(currentLeaders.rows) ? currentLeaders.rows : null;
+            if (defaultLeaders && defaultLeaders.length && section !== 'home-loans') return sortRows(defaultLeaders).slice(0, QUICK_COMPARE_LIMIT);
+        }
+        var rows = snapshotLatestAllRows();
+        if (!rows.length) return null;
+        if (section === 'home-loans' && context.activeCount === 0) {
+            return loadHomeLoanScenarioRibbonFromSnapshot(context.params, rows);
+        }
+        var filtered = sortRows(filterSnapshotRows(rows, context.params));
+        return filtered.length ? filtered.slice(0, QUICK_COMPARE_LIMIT) : null;
+    }
+
     function buildLatestUrl(params) {
         return apiBase + '/latest?' + new URLSearchParams(params).toString();
     }
@@ -471,7 +611,17 @@
         try {
             var context = getQuickCompareContext();
             var params = context.params;
-            if (section === 'home-loans' && context.activeCount === 0) {
+            var snapshotRows = loadQuickCompareFromSnapshot(context);
+            if (!snapshotRows) {
+                var snapshot = window.AR && window.AR.snapshot;
+                if (snapshot && typeof snapshot.awaitReady === 'function') {
+                    await snapshot.awaitReady(1400);
+                    snapshotRows = loadQuickCompareFromSnapshot(context);
+                }
+            }
+            if (snapshotRows) {
+                ladderRows = snapshotRows;
+            } else if (section === 'home-loans' && context.activeCount === 0) {
                 ladderRows = await loadHomeLoanScenarioRibbon(params);
             } else {
                 params.limit = String(QUICK_COMPARE_LIMIT);

@@ -1366,6 +1366,7 @@
         reloadExplorer: reloadExplorer,
         applyUiMode: applyUiMode,
         getCurrentSort: getCurrentSort,
+        isInitialized: function () { return !!rateTable; },
         getExplorerState: function () { return Object.assign({}, explorerState); },
     };
 
