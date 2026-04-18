@@ -95,6 +95,13 @@
         return value === 'consumer-default' ? 'consumer-default' : null;
     }
 
+    function isDefaultLikeParam(key, value) {
+        var param = String(key || '').trim().toLowerCase();
+        var text = String(value == null ? '' : value).trim().toLowerCase();
+        if (!text) return false;
+        return param === 'min_rate' && Number(text) === 0.01;
+    }
+
     function resolveScope(chartWindow, preset) {
         if (preset === 'consumer-default' && chartWindow) return 'preset:consumer-default:window:' + chartWindow;
         if (preset === 'consumer-default') return 'preset:consumer-default';
@@ -146,6 +153,7 @@
             if (extra) return;
             if (key === 'cache_bust') return;
             if (key === 'chart_window' || key === 'preset') return;
+            if (isDefaultLikeParam(key, _value)) return;
             if (allowed.indexOf(key) >= 0) return;
             extra = true;
         });
