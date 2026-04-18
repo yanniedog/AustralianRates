@@ -1690,7 +1690,7 @@ body.ar-public .lwc-focus-bank-tray {
     display: flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: 6px;
+    gap: 0;
     min-height: 30px;
     max-height: 36px;
     overflow-x: auto;
@@ -2174,10 +2174,6 @@ body.ar-public .lwc-report-moves-strip-lane.is-down .lwc-report-moves-strip-bar 
 }
 
 @media (max-width: 420px) {
-    body.ar-public .lwc-focus-bank-tray {
-        gap: 6px;
-    }
-
     body.ar-public .lwc-focus-bank-chip {
         width: 26px;
         height: 26px;
