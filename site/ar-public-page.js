@@ -534,9 +534,19 @@
             '</label>';
     }
 
-    function filterDrawerMarkup(_ui) { return ''; }
+    function drawerScenarioMarkup(ui) {
+        var ids;
+        if (section === 'home-loans') ids = ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'];
+        else if (section === 'savings') ids = ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'];
+        else if (section === 'term-deposits') ids = ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'];
+        else return '';
+        return ids.map(function (id) {
+            var f = findUiField(ui, id);
+            return f ? fieldMarkup(f) : '';
+        }).join('');
+    }
 
-    function unusedFilterDrawerMarkup(ui) {
+    function filterDrawerMarkup(ui) {
         var scenarioSection = section !== 'economic-data' ? (
             '<section class="compare-start-card ar-feature-scenario" id="compare-start">' +
                 '<div class="compare-start-head">' +

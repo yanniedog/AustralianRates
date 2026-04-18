@@ -456,19 +456,30 @@
         });
     }
 
+    function quickCompareRoot() {
+        return els.quickCompareCards || document.getElementById('quick-compare-cards');
+    }
+
+    function ladderSearchInput() {
+        return els.ladderSearch || document.getElementById('ladder-search');
+    }
+
     function renderQuickCompareCards(rows) {
-        if (!els.quickCompareCards) return;
+        var root = quickCompareRoot();
+        if (!root) return;
         if (!rows.length) {
-            els.quickCompareCards.innerHTML = '<p class="quick-empty">No leaders match this slice.</p>';
+            root.innerHTML = '<p class="quick-empty">No leaders match this slice.</p>';
             return;
         }
-        els.quickCompareCards.innerHTML = rows.map(ladderCard).join('');
-        bindLadderCardClicks(els.quickCompareCards);
+        root.innerHTML = rows.map(ladderCard).join('');
+        bindLadderCardClicks(root);
     }
 
     function applyLadderSearch() {
-        if (!els.quickCompareCards) return;
-        var needle = String(els.ladderSearch && els.ladderSearch.value || '').trim().toLowerCase();
+        var root = quickCompareRoot();
+        var search = ladderSearchInput();
+        if (!root) return;
+        var needle = String(search && search.value || '').trim().toLowerCase();
         if (!needle) {
             renderQuickCompareCards(ladderRows);
             return;
@@ -603,8 +614,9 @@
     }
 
     async function loadQuickCompare() {
-        if (!els.quickCompareCards || !apiBase) {
-            if (els.quickCompareCards && !apiBase) els.quickCompareCards.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
+        var root = quickCompareRoot();
+        if (!root || !apiBase) {
+            if (root && !apiBase) root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
             return;
         }
         var requestSeq = ++quickCompareRequestSeq;
@@ -648,12 +660,12 @@
             clientLog('error', 'Quick compare load failed', {
                 message: describeError(err, 'Leaders rail is temporarily unavailable.'),
             });
-            if (els.quickCompareCards) els.quickCompareCards.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
+            root.innerHTML = '<p class="quick-empty">Leaders unavailable right now.</p>';
         }
     }
 
-    if (els.ladderSearch) {
-        els.ladderSearch.addEventListener('input', applyLadderSearch);
+    if (ladderSearchInput()) {
+        ladderSearchInput().addEventListener('input', applyLadderSearch);
     }
 
     window.AR.hero = {
