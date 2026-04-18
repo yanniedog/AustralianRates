@@ -8,6 +8,10 @@
  * exit 0 (scheduled CI skip — Cloudflare often blocks GitHub runner IPs).
  */
 
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
+import https from 'node:https'
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
+
 import { publicHealthIs403, tolerateCfActionsRunnerBlock } from './lib/ci-cf-runner-block'
 
 const DEFAULT_TEST_URL = process.env.TEST_URL || 'https://www.australianrates.com/';
@@ -24,6 +28,8 @@ const BENCH_N = QUICK
 const BENCH_WARMUP_N = QUICK ? 0 : Math.max(0, Math.floor(Number(process.env.DIAG_BENCH_WARMUP_N || 1)));
 const P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_P95_TARGET_MS || 500)));
 const EXPORT_P95_TARGET_MS = Math.max(1, Math.floor(Number(process.env.DIAG_EXPORT_P95_TARGET_MS || 4000)));
+const REQUEST_TIMEOUT_MS = Math.max(1000, Math.floor(Number(process.env.DIAG_REQUEST_TIMEOUT_MS || 10000)));
+const REQUEST_RETRIES = Math.max(1, Math.floor(Number(process.env.DIAG_REQUEST_RETRIES || 3)));
 const DATASET_P95_OVERRIDES: Record<string, { default: number; exportJson: number }> = {
   'home-loans': { default: P95_TARGET_MS, exportJson: Math.max(P95_TARGET_MS, 1800) },
   savings: { default: P95_TARGET_MS, exportJson: Math.max(P95_TARGET_MS, 1200) },
@@ -60,12 +66,76 @@ function inferRowsAndTotal(payload: any): { rows: any[]; total: number } {
   return { rows, total };
 }
 
+function decodeResponseStream(res: IncomingMessage): NodeJS.ReadableStream {
+  const encoding = String(res.headers['content-encoding'] || '').toLowerCase();
+  if (encoding.includes('br')) return res.pipe(createBrotliDecompress());
+  if (encoding.includes('gzip')) return res.pipe(createGunzip());
+  if (encoding.includes('deflate')) return res.pipe(createInflate());
+  return res;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestText(url: string): Promise<{ status: number; durationMs: number; text: string; headers: IncomingHttpHeaders }> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= REQUEST_RETRIES; attempt += 1) {
+    try {
+      return await new Promise((resolve, reject) => {
+        const start = Date.now();
+        let durationMs = 0;
+        const req = https.request(
+          url,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Cache-Control': 'no-cache',
+              Pragma: 'no-cache',
+              'User-Agent': 'AustralianRates-DiagnoseApi/1.0',
+            },
+            timeout: REQUEST_TIMEOUT_MS,
+          },
+          (res) => {
+            durationMs = Date.now() - start;
+            const chunks: Buffer[] = [];
+            const stream = decodeResponseStream(res);
+            stream.on('data', (chunk) => {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            });
+            stream.on('end', () => {
+              resolve({
+                status: res.statusCode || 0,
+                durationMs,
+                text: Buffer.concat(chunks).toString('utf8'),
+                headers: res.headers,
+              });
+            });
+            stream.on('error', reject);
+          },
+        );
+
+        req.on('timeout', () => {
+          req.destroy(new Error(`Request timeout after ${REQUEST_TIMEOUT_MS}ms for ${url} (attempt ${attempt}/${REQUEST_RETRIES})`));
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt >= REQUEST_RETRIES) break;
+      await sleep(250 * attempt);
+    }
+  }
+  throw lastError;
+}
+
 async function requestJson(pathname: string): Promise<any> {
   const url = `${ORIGIN}${pathname}`;
-  const start = Date.now();
-  const res = await fetch(url);
-  const durationMs = Date.now() - start;
-  const text = await res.text();
+  const res = await requestText(url);
+  const text = res.text;
   let json: any = null;
   try {
     json = JSON.parse(text);
@@ -75,7 +145,7 @@ async function requestJson(pathname: string): Promise<any> {
   return {
     url,
     status: res.status,
-    durationMs,
+    durationMs: res.durationMs,
     textLength: text.length,
     json,
     text,
@@ -86,16 +156,13 @@ async function benchmark(pathname: string, n: number): Promise<{ avgMs: number; 
   const durations: number[] = [];
   let non200 = 0;
   for (let i = 0; i < BENCH_WARMUP_N; i += 1) {
-    const warmup = await fetch(`${ORIGIN}${pathname}`);
+    const warmup = await requestText(`${ORIGIN}${pathname}`);
     if (warmup.status !== 200) non200 += 1;
-    await warmup.arrayBuffer();
   }
   for (let i = 0; i < n; i += 1) {
-    const start = Date.now();
-    const res = await fetch(`${ORIGIN}${pathname}`);
-    durations.push(Date.now() - start);
+    const res = await requestText(`${ORIGIN}${pathname}`);
+    durations.push(res.durationMs);
     if (res.status !== 200) non200 += 1;
-    await res.arrayBuffer();
   }
   const avg = durations.reduce((sum, x) => sum + x, 0) / durations.length;
   return {
@@ -119,12 +186,10 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     out.checks.push({ name, status: r.status, ms: r.durationMs });
   };
 
-  const [health, filters, latest, latestAll] = await Promise.all([
-    requestJson(`${base}/health`),
-    requestJson(`${base}/filters`),
-    requestJson(`${base}/latest?limit=5&source_mode=all`),
-    requestJson(`${base}/latest-all?limit=50&source_mode=all`),
-  ]);
+  const health = await requestJson(`${base}/health`);
+  const filters = await requestJson(`${base}/filters`);
+  const latest = await requestJson(`${base}/latest?limit=5&source_mode=all`);
+  const latestAll = await requestJson(`${base}/latest-all?limit=50&source_mode=all`);
 
   pushCheck('health', health);
   if (health.status !== 200) out.failures.push(`health status ${health.status}`);
@@ -157,10 +222,8 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
     return out;
   }
 
-  const [rates, exportJson] = await Promise.all([
-    requestJson(`${base}/rates?page=1&size=1&source_mode=all`),
-    requestJson(`${base}/export?format=json&source_mode=all`),
-  ]);
+  const rates = await requestJson(`${base}/rates?page=1&size=1&source_mode=all`);
+  const exportJson = await requestJson(`${base}/export?format=json&source_mode=all`);
 
   pushCheck('rates', rates);
   if (rates.status !== 200 || !rates.json) out.failures.push(`rates status ${rates.status}`);
@@ -196,12 +259,10 @@ async function runDatasetDiagnostics(dataset: { key: string; base: string }): Pr
   }
 
   if (dataset.key === 'home-loans') {
-    const [siteUi, doctorSchedule, cpi, rba] = await Promise.all([
-      requestJson(`${base}/site-ui`),
-      requestJson(`${base}/doctor-schedule`),
-      requestJson(`${base}/cpi/history`),
-      requestJson(`${base}/rba/history`),
-    ]);
+    const siteUi = await requestJson(`${base}/site-ui`);
+    const doctorSchedule = await requestJson(`${base}/doctor-schedule`);
+    const cpi = await requestJson(`${base}/cpi/history`);
+    const rba = await requestJson(`${base}/rba/history`);
     pushCheck('site-ui', siteUi);
     if (siteUi.status !== 200 || !siteUi.json || siteUi.json.ok !== true) {
       out.failures.push(`site-ui status ${siteUi.status} or ok!=true`);
