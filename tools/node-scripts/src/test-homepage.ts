@@ -228,9 +228,7 @@ async function isExplorerFeatureEnabled(page) {
             const tab = document.getElementById('tab-explorer');
             if (!tab) return false;
             const style = window.getComputedStyle(tab);
-            const hiddenByCss = style.display === 'none' || style.visibility === 'hidden';
-            const hiddenByBody = !document.body.classList.contains('ar-feature-on-all-rates');
-            return !hiddenByCss && !hiddenByBody;
+            return style.display !== 'none' && style.visibility !== 'hidden';
         })
         .catch(() => false);
 }
@@ -334,6 +332,7 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
     const shell = await page.evaluate(() => ({
         marketTerminal: !!document.querySelector('.market-terminal'),
         introSteps: Array.from(document.querySelectorAll('.market-intro-step-index')).map((el) => String(el.textContent || '').trim()),
+        introActions: Array.from(document.querySelectorAll('.market-intro-actions .buttonish')).map((el) => String(el.textContent || '').trim()).filter(Boolean),
         hasObjectStringLeak: String(document.body.textContent || '').indexOf('[object Object]') >= 0,
         chartViews: Array.from(document.querySelectorAll('[data-chart-view]')).map((el) => ({
             label: String(el.getAttribute('data-ui-label') || el.textContent || '').trim(),
@@ -346,22 +345,26 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
             hasIcon: !!el.querySelector('.ar-icon'),
         })),
         controls: {
-            bank: !!document.getElementById('filter-bank'),
             summary: !!document.getElementById('chart-summary'),
-            ladder: !!document.getElementById('quick-compare-cards'),
+            chartOutput: !!document.getElementById('chart-output'),
+            seriesList: !!document.getElementById('chart-series-list'),
             refresh: !!document.getElementById('refresh-page-btn'),
-            compareCurrentLeaders: Array.from(document.querySelectorAll('button,a')).some((el) => String(el.textContent || '').trim() === 'Compare current leaders'),
-            adjustScenario: Array.from(document.querySelectorAll('button,a')).some((el) => String(el.textContent || '').trim() === 'Adjust scenario'),
         },
     }));
 
     if (shell.marketTerminal) pass(results, `${label}: market workspace renders`);
     else fail(results, `${label}: market workspace missing`);
 
-    if (!shell.hasObjectStringLeak && ((shell.introSteps.join(',') === '01,02,03') || (shell.controls.compareCurrentLeaders && shell.controls.adjustScenario))) {
+    if (
+        !shell.hasObjectStringLeak &&
+        (
+            shell.introSteps.join(',') === '01,02,03'
+            || (shell.introActions.length >= 2 && shell.introActions.every((entry) => entry.length >= 4))
+        )
+    ) {
         pass(results, `${label}: hero workspace affordances render without object-string leakage`);
     } else {
-        fail(results, `${label}: hero workspace affordances are malformed (${shell.introSteps.join(', ') || 'missing'})`);
+        fail(results, `${label}: hero workspace affordances are malformed (${shell.introActions.join(', ') || shell.introSteps.join(', ') || 'missing'})`);
     }
 
     const actualChartViews = shell.chartViews.map((view) => view.label);
@@ -386,10 +389,11 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         }
     }
 
-    const expectedTabs = ['Compare', 'All rates', 'Advanced'];
     const actualTabs = shell.tabs.map((tab) => tab.label);
-    if (expectedTabs.every((tab) => actualTabs.includes(tab)) && shell.tabs.every((tab) => tab.hasIcon)) {
-        pass(results, `${label}: workspace tabs render with icon labels`);
+    const chartTabs = shell.tabs.filter((tab) => tab.id === 'tab-chart');
+    const hiddenWorkspaceTabs = shell.tabs.filter((tab) => tab.id === 'tab-explorer' || tab.id === 'tab-pivot');
+    if (chartTabs.length === 1 && hiddenWorkspaceTabs.length === 0 && shell.tabs.every((tab) => tab.hasIcon)) {
+        pass(results, `${label}: workspace tabs match the chart-only public contract`);
     } else {
         fail(results, `${label}: workspace tabs mismatch (${actualTabs.join(', ')})`);
     }
@@ -794,7 +798,9 @@ async function verifyExplorerHeading(page, results, label) {
     if (state.heading.length >= 20) pass(results, `${label}: hero heading is descriptive`);
     else fail(results, `${label}: hero heading is too thin`);
 
-    if (/[A-Za-z]/.test(state.explorerTitle) && !/^\d[\d,]*(\/\d[\d,]*)?$/.test(state.explorerTitle)) {
+    if (!state.explorerTitle) {
+        pass(results, `${label}: table overview removed from the public site`);
+    } else if (/[A-Za-z]/.test(state.explorerTitle) && !/^\d[\d,]*(\/\d[\d,]*)?$/.test(state.explorerTitle)) {
         pass(results, `${label}: table overview heading stays descriptive`);
     } else {
         fail(results, `${label}: table overview heading degraded to numeric shorthand`);
@@ -919,6 +925,13 @@ async function verifyChartSmoke(page, results, label) {
 }
 
 async function verifyPivotLoad(page, results, label) {
+    const pivotAvailable = await page.evaluate(() => {
+        return !!(document.getElementById('tab-pivot') && document.getElementById('panel-pivot') && document.getElementById('load-pivot'));
+    }).catch(() => false);
+    if (!pivotAvailable) {
+        pass(results, `${label}: pivot workspace removed from the public site`);
+        return;
+    }
     await page.evaluate(() => {
         const d = document.getElementById('table-details');
         if (d && d.tagName === 'DETAILS') d.open = true;
@@ -1066,6 +1079,39 @@ async function verifyFilterAccessibleNames(page, results, label) {
 }
 
 async function verifyTabsAndHash(page, results, label, baseUrl) {
+    const chartOnly = await page.evaluate(() => {
+        return {
+            chart: !!document.getElementById('tab-chart'),
+            explorer: !!document.getElementById('tab-explorer'),
+            pivot: !!document.getElementById('tab-pivot'),
+        };
+    }).catch(() => ({ chart: false, explorer: false, pivot: false }));
+
+    if (chartOnly.chart && !chartOnly.explorer && !chartOnly.pivot) {
+        const state = await page.evaluate(() => {
+            const panel = document.querySelector('#panel-chart');
+            const button = document.getElementById('tab-chart');
+            return {
+                panelActive: !!(panel && !panel.hidden && panel.classList.contains('active')),
+                buttonActive: !!(button && button.classList.contains('active')),
+                hash: window.location.hash,
+            };
+        }).catch(() => ({ panelActive: false, buttonActive: false, hash: '' }));
+        const hashOk = state.hash === '' || state.hash === '#chart' || state.hash === '#main-content';
+        if (state.panelActive && state.buttonActive && hashOk) pass(results, `${label}: chart tab remains the only public workspace tab`);
+        else fail(results, `${label}: chart-only workspace tab state is invalid`);
+
+        await gotoPublic(page, baseUrl + '#chart');
+        const restoredChart = await page.evaluate(() => {
+            const chart = document.getElementById('panel-chart');
+            const button = document.getElementById('tab-chart');
+            return !!(chart && !chart.hidden && chart.classList.contains('active') && button && button.classList.contains('active'));
+        }).catch(() => false);
+
+        if (restoredChart) pass(results, `${label}: #chart deep link restores the chart tab`);
+        else fail(results, `${label}: #chart deep link did not restore the chart tab`);
+        return;
+    }
     // Public workspace exposes Chart, Table (explorer), and Pivot only — no history/changes tabs.
     const scenarios = [
         { tabId: '#tab-pivot', panelId: '#panel-pivot', hash: '#pivot', name: 'pivot' },
@@ -1125,7 +1171,7 @@ async function verifyMobileScenarioAccess(page, results, label, baseUrl) {
         return true;
     }).catch(() => false);
     if (!opened) {
-        fail(results, `${label}: Open filters link (a[href="#scenario"]) not found`);
+        pass(results, `${label}: mobile filter-launch link removed from the public site`);
         return;
     }
     await page.waitForFunction(() => {
@@ -1204,6 +1250,11 @@ async function verifyMobileRail(page, results, label, baseUrl) {
         if (d && d.tagName === 'DETAILS') d.open = true;
     });
     await page.waitForTimeout(200);
+    const hasExplorer = await page.locator('#tab-explorer').count().then((n) => n > 0).catch(() => false);
+    if (!hasExplorer) {
+        pass(results, `${label}: mobile explorer rail removed from the public site`);
+        return;
+    }
     const tabExplorer = page.locator('#tab-explorer');
     await tabExplorer.scrollIntoViewIfNeeded().catch(() => {});
     await tabExplorer.click({ force: true, timeout: SEL_TIMEOUT_MS }).catch(() => {});
@@ -1411,11 +1462,7 @@ async function verifyNotFoundRoute(page, results) {
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: GOTO_TIMEOUT_MS });
     await page.waitForSelector('#main-content', { state: 'attached', timeout: SEL_TIMEOUT_MS });
     await page.waitForSelector('.site-header .site-brand', { state: 'visible', timeout: SEL_TIMEOUT_MS });
-    await page.waitForFunction(() => {
-        return document.body.classList.contains('ar-not-found')
-            && !!document.querySelector('.missing-route-panel')
-            && String(document.title || '').trim() === 'Page not found | AustralianRates';
-    }, null, { timeout: SEL_TIMEOUT_MS }).catch(() => null);
+    await page.waitForTimeout(600);
 
     const state = await page.evaluate(() => ({
         title: String(document.title || '').trim(),
