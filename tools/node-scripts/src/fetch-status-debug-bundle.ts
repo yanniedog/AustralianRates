@@ -6,6 +6,7 @@
  */
 
 import { buildAdminHeaders, fetchWithTimeout, resolveAdminToken, resolveEnvOrigin } from './lib/admin-api';
+import { publicHealthIs403, tolerateCfActionsRunnerBlock } from './lib/ci-cf-runner-block';
 
 const ORIGIN = resolveEnvOrigin(['API_BASE']);
 const BASE = `${ORIGIN}/api/home-loan-rates/admin/diagnostics/status-debug-bundle`;
@@ -33,6 +34,13 @@ async function fetchBundle(url: string): Promise<unknown> {
 }
 
 async function main(): Promise<void> {
+  if (tolerateCfActionsRunnerBlock() && (await publicHealthIs403(ORIGIN))) {
+    console.warn(
+      '[fetch-status-debug-bundle] Public health is HTTP 403 from this runner (Cloudflare block). Skipping bundle fetch with exit 0.',
+    )
+    process.exit(0);
+  }
+
   if (!token) {
     console.error('Missing ADMIN_API_TOKEN in environment. Set it in repo root .env.');
     process.exit(1);
@@ -70,4 +78,4 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+void main();
