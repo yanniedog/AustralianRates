@@ -442,8 +442,8 @@
             backgroundColor: 'transparent',
             axisPointer: axisPointerConfig(theme),
             title: {
-                text: 'Rate ladder: rank and value',
-                subtext: 'Best rate per lender, ranked. Lower is better for loans; higher for savings and term deposits.',
+                text: 'Rate ladder: order and value',
+                subtext: 'Best rate per lender, tracked. Lower is better for loans; higher for savings and term deposits.',
                 left: 0,
                 top: 2,
                 textStyle: { color: theme.emphasisText, fontSize: narrow ? 13 : 14, fontWeight: 700 },
@@ -461,7 +461,7 @@
                 formatter: function (params) {
                     var data = params.data || {};
                     var row = data.row || {};
-                    var rank = data.rank != null ? 'Rank #' + data.rank + '<br>' : '';
+                    var rank = data.rank != null ? '#' + data.rank + '<br>' : '';
                     return rank + '<strong>' + chartConfig.formatFieldValue('bank_name', data.bankName || row.bank_name || 'Lender', row) + '</strong><br>' +
                         (data.productName || row.product_name || '') + '<br>' +
                         chartConfig.fieldLabel(fields.yField) + ': ' + tooltipMetric(fields.yField, row, data.value);

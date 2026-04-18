@@ -1143,7 +1143,7 @@
                 textStyle: base.textStyle,
                 backgroundColor: 'transparent',
                 title: {
-                    text: 'Select a market bucket to inspect the bank ranking',
+                    text: 'Select a market bucket to inspect tracked bank rates',
                     left: 'center',
                     top: 'middle',
                     textStyle: { color: theme.mutedText, fontSize: 14, fontWeight: 500 },
