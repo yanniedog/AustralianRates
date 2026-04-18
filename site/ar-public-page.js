@@ -141,9 +141,7 @@
     }
 
     var WORKSPACE_TABS = [
-        { id: 'chart', label: 'Compare', icon: 'chart', help: 'Summary-first comparison with current leaders and chart context.' },
-        { id: 'explorer', label: 'All rates', icon: 'table', help: 'Full live rates table for the current slice.', featureClass: 'ar-feature-all-rates' },
-        { id: 'pivot', label: 'Advanced', icon: 'pivot', help: 'Pivot workspace and deeper analysis for the active slice.', featureClass: 'ar-feature-advanced' }
+        { id: 'chart', label: 'Compare', icon: 'chart', help: 'Summary-first comparison with chart context.' }
     ];
 
     var SHARED_ADVANCED_FIELDS = [
@@ -536,20 +534,9 @@
             '</label>';
     }
 
-    function drawerScenarioMarkup(ui) {
-        var ids;
-        if (section === 'home-loans') ids = ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'];
-        else if (section === 'savings') ids = ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'];
-        else if (section === 'term-deposits') ids = ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'];
-        else return '';
-        return ids.map(function (id) {
-            var f = findUiField(ui, id);
-            // Use pad grids (filter-*-pads) so filters stay keyboard/touch friendly and E2E can assert on pad buttons.
-            return f ? fieldMarkup(f) : '';
-        }).join('');
-    }
+    function filterDrawerMarkup(_ui) { return ''; }
 
-    function filterDrawerMarkup(ui) {
+    function unusedFilterDrawerMarkup(ui) {
         var scenarioSection = section !== 'economic-data' ? (
             '<section class="compare-start-card ar-feature-scenario" id="compare-start">' +
                 '<div class="compare-start-head">' +
@@ -688,8 +675,6 @@
                         '<div class="workspace-nav-row">',
                             '<nav class="workspace-tab-nav" role="tablist" aria-label="' + esc(ui.title) + ' views">',
                                 tabButtonMarkup(WORKSPACE_TABS[0], true),
-                                tabButtonMarkup(WORKSPACE_TABS[1], false),
-                                tabButtonMarkup(WORKSPACE_TABS[2], false),
                             '</nav>',
                             '<div class="workspace-nav-actions" role="toolbar" aria-label="Workspace actions">',
                                 '<button type="button" id="refresh-page-btn" class="secondary small" aria-label="Refresh page and data">Refresh</button>',
@@ -718,13 +703,6 @@
                         // ── Chart tab panel ──────────────────────────────────────
                         '<section id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="tab-chart">',
                             '<div class="chart-block">',
-                                '<section class="compare-summary-panel ar-feature-current-leaders" id="compare-leaders" aria-label="' + esc(ui.compareHeading || 'Current leaders') + '">',
-                                    '<div class="compare-summary-copy">',
-                                        '<p class="compare-summary-kicker">Current leaders</p>',
-                                        '<h2>' + esc(ui.compareHeading || 'Current leaders') + '</h2>',
-                                    '</div>',
-                                    '<div id="quick-compare-cards" class="quick-compare-cards"><p class="quick-empty">Loading leaders</p></div>',
-                                '</section>',
                                 '<div class="chart-figure">',
                                     '<div class="chart-toolbar">',
                                         '<div class="chart-toolbar-stack">',
@@ -808,45 +786,8 @@
                         '</section>',
 
                         // ── Table tab panel ──────────────────────────────────────
-                        '<section id="panel-explorer" class="tab-panel ar-feature-all-rates" role="tabpanel" aria-labelledby="tab-explorer" hidden>',
-                            '<div class="terminal-data-head">',
-                                '<div>',
-                                    panelIcon('table', 'All rates'),
-                                    '<h2 id="explorer-overview-title">' + esc(ui.tableHeading || 'Loading all rates') + '</h2>',
-                                '</div>',
-                                '<div class="terminal-data-actions">',
-                                    '<span id="explorer-overview-status" class="pill">Loading</span>',
-                                    '<button id="table-settings-btn" class="icon-btn secondary" type="button" aria-label="All-rates settings" data-help="Column visibility, removed rows, and move-column mode." data-help-label="All-rates settings">' + iconOnly('settings', 'All-rates settings') + '</button>',
-                                    '<div id="table-settings-popover" class="table-settings-popover" hidden></div>',
-                                '</div>',
-                            '</div>',
-                            '<p id="explorer-overview-text" class="hint">' + esc(ui.tableSummary || 'Waiting for the full live slice.') + '</p>',
-                            '<div id="rate-table" class="terminal-rate-table"></div>',
-                            // Inline 24h rate changes
-                            '<section class="rate-change-inline-section" aria-label="Recent rate changes">',
-                                '<details id="rate-change-details" class="rate-change-details" open>',
-                                    '<summary id="rate-change-summary" class="rate-change-summary">' + panelIcon('changes', 'Changes') + '<span id="rate-change-headline" class="rate-change-headline">Recent changes</span></summary>',
-                                    '<p id="rate-change-warning" class="rate-change-warning" hidden></p>',
-                                    '<p id="rate-change-status" class="hint">Loading changes</p>',
-                                    '<ul id="rate-change-list" class="rate-change-list"><li class="rate-change-item-empty">Loading changes</li></ul>',
-                                '</details>',
-                            '</section>',
-                        '</section>',
 
                         // ── Pivot tab panel ──────────────────────────────────────
-                        '<section id="panel-pivot" class="tab-panel ar-feature-advanced" role="tabpanel" aria-labelledby="tab-pivot" hidden>',
-                            '<div id="pivot" class="pivot-panel">',
-                                '<div class="pivot-controls">',
-                                    '<label class="terminal-field" data-help="Use daily rows or optimized change events." data-help-label="Analysis basis">',
-                                        iconText('history', 'Analysis basis', 'field-code'),
-                                        '<select id="pivot-representation"><option value="change" selected>Change basis</option><option value="day">Daily basis</option></select>',
-                                    '</label>',
-                                    '<button id="load-pivot" type="button" class="secondary" data-help="Reload rows into the advanced workspace." data-help-label="Refresh analysis">' + iconText('refresh', 'Refresh analysis', 'control-chip-label') + '</button>',
-                                    '<span id="pivot-status" class="hint">Load rows to start.</span>',
-                                '</div>',
-                                '<div id="pivot-output"></div>',
-                            '</div>',
-                        '</section>',
 
                     '</section>',
                 '</section>',

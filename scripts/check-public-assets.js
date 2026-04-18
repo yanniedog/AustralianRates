@@ -16,14 +16,6 @@ const allowedExternalStyles = new Set([
 ]);
 
 const requiredVendorSnippets = [
-  'vendor/tabulator/tabulator_midnight.min.css',
-  'vendor/pivottable/pivot.min.css',
-  'vendor/tabulator/tabulator.min.js',
-  'vendor/jquery/jquery.min.js',
-  'vendor/jquery-ui/jquery-ui.min.js',
-  'vendor/pivottable/pivot.min.js',
-  'vendor/plotly/plotly-basic-2.35.2.min.js',
-  'vendor/pivottable/plotly_renderers.min.js',
   'vendor/echarts/echarts.min.js',
   'vendor/sheetjs/xlsx.full.min.js',
 ];

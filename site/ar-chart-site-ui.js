@@ -31,11 +31,7 @@
         inactive_z: 2
     };
     var FEATURE_KEYS = [
-        { key: 'all_rates_tab', bodyClass: 'ar-feature-on-all-rates' },
-        { key: 'advanced_tab', bodyClass: 'ar-feature-on-advanced' },
-        { key: 'current_leaders', bodyClass: 'ar-feature-on-current-leaders' },
-        { key: 'scenario', bodyClass: 'ar-feature-on-scenario' },
-        { key: 'more_filters', bodyClass: 'ar-feature-on-more-filters' }
+        { key: 'chart_model_server_side' }
     ];
 
     var cached = {
@@ -111,7 +107,7 @@
         if (!document.body || !document.body.classList) return;
         FEATURE_KEYS.forEach(function (entry) {
             var on = !!cached.features[entry.key];
-            document.body.classList.toggle(entry.bodyClass, on);
+            if (entry.bodyClass) document.body.classList.toggle(entry.bodyClass, on);
         });
     }
 

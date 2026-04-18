@@ -11,8 +11,6 @@
     var pendingPointerScroll = null;
     var TAB_MAP = {
         chart: { button: els.tabChart, panel: els.panelChart, hash: 'chart' },
-        explorer: { button: els.tabExplorer, panel: els.panelExplorer, hash: 'table' },
-        pivot: { button: els.tabPivot, panel: els.panelPivot, hash: 'pivot' },
     };
 
     function normalizeTabId(tabId) {
@@ -23,7 +21,7 @@
     function updateHash(tabId) {
         var target = TAB_MAP[tabId] ? TAB_MAP[tabId].hash : '';
         // Default landing is chart; keep the address bar clean (same idea as explorer → empty hash).
-        var nextHash = tabId === 'explorer' || tabId === 'chart' ? '' : ('#' + target);
+        var nextHash = tabId === 'chart' ? '' : ('#' + target);
         if (window.location.hash === nextHash) return;
         window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
     }
@@ -161,9 +159,7 @@
 
     window.addEventListener('hashchange', function () {
         var hash = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
-        if (hash === 'pivot') activateTab('pivot', { skipHash: true });
-        else if (hash === 'table') activateTab('explorer', { skipHash: true });
-        else if (!hash || hash === 'chart') activateTab('chart', { skipHash: true });
+        if (!hash || hash === 'chart') activateTab('chart', { skipHash: true });
     });
 
     window.AR.tabs = {

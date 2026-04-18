@@ -5,11 +5,8 @@
     var state = window.AR.state;
     var tabs = window.AR.tabs;
     var filters = window.AR.filters;
-    var explorer = window.AR.explorer;
-    var pivot = window.AR.pivot;
     var charts = window.AR.charts;
     var refresh = window.AR.refresh;
-    var rateChanges = window.AR.rateChanges;
     var executiveSummary = window.AR.executiveSummary;
     var hero = window.AR.hero;
     var utils = window.AR.utils || {};
@@ -32,12 +29,12 @@
     var startupRetryDelayMs = 3500;
     var initialBootstrapStarted = false;
     var hasFiltersReadyOnce = false;
-    var hasExplorerReadyOnce = false;
+    var hasExplorerReadyOnce = true;
     var startupQuickCompareTimerId = 0;
 
     clientLog('info', 'App init start', {
         section: window.AR.section || 'home-loans',
-        activeTab: tabState.activeTab || 'explorer',
+        activeTab: tabState.activeTab || 'chart',
     });
 
     if (routeState.notFound) {
@@ -120,39 +117,18 @@
     }
 
     function reloadStartupSurfaces() {
-        if (tabState.activeTab === 'explorer' && explorer) {
-            if (typeof explorer.isInitialized === 'function' ? explorer.isInitialized() : true) {
-                if (explorer.reloadExplorer) explorer.reloadExplorer();
-            } else if (explorer.initRateTable) {
-                explorer.initRateTable();
-            }
-        }
-        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
-        if (tabState.activeTab === 'explorer' && rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
+        if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
     }
 
     function scheduleStartupQuickCompare() {
-        if (!hero || !hero.loadQuickCompare) return;
-        if (startupQuickCompareTimerId) return;
-        startupQuickCompareTimerId = window.setTimeout(function () {
-            startupQuickCompareTimerId = 0;
-            hero.loadQuickCompare();
-        }, 1600);
+        startupQuickCompareTimerId = 0;
     }
 
     function ensureExplorerReady() {
-        if (!explorer) return;
-        if (typeof explorer.isInitialized === 'function' && !explorer.isInitialized()) {
-            if (explorer.initRateTable) explorer.initRateTable();
-            return;
-        }
-        var explorerState = explorer.getExplorerState ? explorer.getExplorerState() : null;
-        if (explorerState && explorerState.status === 'error' && explorer.reloadExplorer) {
-            explorer.reloadExplorer();
-        }
+        return;
     }
 
     function handleFilterBootstrapResult(result, successSource, failureSource) {
@@ -160,7 +136,7 @@
         if (ok) {
             hasFiltersReadyOnce = true;
             if (!appInitialized) finishAppInit(successSource || 'filters-loaded');
-            else if (!maybeCompleteStartupRecovery() && startupRetryAttempts > 0 && !hasExplorerReadyOnce) {
+            else if (!maybeCompleteStartupRecovery() && startupRetryAttempts > 0) {
                 showStartupRetryPending();
             } else if (startupRetryAttempts === 0) {
                 hideWorkspaceStatus();
@@ -214,10 +190,8 @@
 
         if (tabs && tabs.applyUiMode) tabs.applyUiMode();
         if (filters && filters.applyUiMode) filters.applyUiMode();
-        if (explorer && explorer.applyUiMode) explorer.applyUiMode();
 
         if (!opts.skipRefresh) {
-            if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
             if (filters && filters.syncUrlState) filters.syncUrlState();
             if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
         }
@@ -252,21 +226,9 @@
         setFilterLiveStatus(opts.source === 'live' ? 'Syncing...' : 'Refreshing...', 'is-pending');
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
-        if (tabState.activeTab === 'explorer') ensureExplorerReady();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
-        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
-        if (pivot && pivot.invalidatePivot) {
-            pivot.invalidatePivot({
-                message: tabState.activeTab === 'pivot'
-                    ? 'Advanced analysis is stale. Press Refresh analysis to reload.'
-                    : 'Advanced analysis is queued until you open the Advanced tab.',
-            });
-        } else if (tabState.pivotLoaded && els.pivotStatus) {
-            els.pivotStatus.textContent = 'STALE';
-        }
         if (charts && charts.drawChart) charts.drawChart();
         else if (charts && charts.markStale) charts.markStale('STALE');
-        if (tabState.activeTab === 'explorer' && rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
@@ -297,8 +259,6 @@
         if (tabs && tabs.activateTab) tabs.activateTab(tabState.activeTab || 'chart', { skipHash: false });
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         scheduleStartupQuickCompare();
-        if (tabState.activeTab === 'explorer') ensureExplorerReady();
-        if (tabState.activeTab === 'explorer' && rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
         }
@@ -356,43 +316,6 @@
             if (filters && filters.resetFilters) filters.resetFilters();
         });
     }
-    if (els.loadPivot) {
-        els.loadPivot.addEventListener('click', function () {
-            if (filters && filters.validateInputs && !filters.validateInputs()) return;
-            if (pivot && pivot.ensurePivotLoaded) {
-                pivot.ensurePivotLoaded({
-                    reason: 'manual-refresh',
-                    statusMessage: 'Loading advanced analysis...',
-                    statusPrefix: 'Loading advanced analysis... ',
-                });
-            } else if (pivot && pivot.loadPivotData) {
-                pivot.loadPivotData({
-                    reason: 'manual-refresh',
-                    statusMessage: 'Loading advanced analysis...',
-                    statusPrefix: 'Loading advanced analysis... ',
-                });
-            }
-        });
-    }
-    if (els.pivotRepresentation) {
-        els.pivotRepresentation.addEventListener('change', function () {
-            if (pivot && pivot.invalidatePivot) {
-                pivot.invalidatePivot({
-                    message: tabState.activeTab === 'pivot'
-                        ? 'Advanced analysis is stale. Press Refresh analysis to reload.'
-                        : 'Advanced analysis is queued until you open the Advanced tab.',
-                });
-            }
-            if (tabState.activeTab === 'pivot' && pivot && pivot.loadPivotData) {
-                pivot.loadPivotData({
-                    force: true,
-                    reason: 'representation-change',
-                    statusMessage: 'Refreshing advanced analysis...',
-                    statusPrefix: 'Refreshing advanced analysis... ',
-                });
-            }
-        });
-    }
     if (els.filterIncludeManual) {
         els.filterIncludeManual.addEventListener('change', function () {
             if (filters && filters.refreshFilterUiState) filters.refreshFilterUiState();
@@ -429,30 +352,9 @@
         if (tab === 'chart' && charts) {
             if (charts.refreshFromCache) charts.refreshFromCache('chart-tab');
         }
-        if (tab === 'explorer') {
-            ensureExplorerReady();
-            if (rateChanges && rateChanges.loadRateChanges) rateChanges.loadRateChanges();
-        }
-        if (tab === 'pivot' && pivot && pivot.ensurePivotLoaded) {
-            pivot.ensurePivotLoaded({ reason: 'pivot-tab-activated' });
-        }
     });
     window.addEventListener('ar:theme-changed', function () {
         if (charts && charts.refreshFromCache) charts.refreshFromCache('theme-changed');
-    });
-    window.addEventListener('ar:explorer-state', function (event) {
-        var detail = event && event.detail ? event.detail : {};
-        if (detail.status === 'ready') {
-            hasExplorerReadyOnce = true;
-            maybeCompleteStartupRecovery();
-            return;
-        }
-        if (detail.status !== 'error') return;
-        if (hasFiltersReadyOnce && hasExplorerReadyOnce) return;
-        var message = describeError({ userMessage: detail.message }, 'Live rates table could not be loaded.');
-        if (!scheduleStartupRetry(message)) {
-            showStartupDegraded(message, 'is-warning');
-        }
     });
     document.addEventListener('keydown', applyFiltersShortcut);
 
