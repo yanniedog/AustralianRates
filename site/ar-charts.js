@@ -685,6 +685,63 @@
         return true;
     }
 
+    async function refreshReportRangePreview() {
+        var currentFields = fields();
+        if (!currentFields || !isReportView(currentFields.view)) {
+            return drawChart();
+        }
+        if (!chartData.fetchReportPlot) {
+            return drawChart();
+        }
+
+        chartState.loadSerial += 1;
+        var loadSerial = chartState.loadSerial;
+        var baseParams = buildBaseParams();
+
+        chartState.loadedChartWindow = String(baseParams.chart_window || '');
+        chartState.fallbackReason = '';
+        chartState.stale = false;
+        if (chartUi.clearErrorState) chartUi.clearErrorState();
+        if (chartUi.setStatus) chartUi.setStatus('SYNC');
+
+        if (chartData.warmReportPlotWindows) {
+            window.setTimeout(function () {
+                chartData.warmReportPlotWindows(baseParams);
+            }, 0);
+        }
+
+        var reportPlots = await Promise.all([
+            chartData.fetchReportPlot('moves', baseParams),
+            chartData.fetchReportPlot('bands', baseParams),
+        ]).then(function (results) {
+            return {
+                moves: results[0] || null,
+                bands: results[1] || null,
+            };
+        }).catch(function (error) {
+            clientLog('warn', 'Report range preview fetch failed', {
+                message: String(error && error.message || 'Report range preview fetch failed'),
+                view: currentFields.view,
+                chartWindow: baseParams.chart_window || '',
+            });
+            return null;
+        });
+
+        if (chartState.loadSerial !== loadSerial) return false;
+        if (!reportPlots || !reportPlots.bands) return drawChart();
+
+        if ((!chartState.rbaHistory || !chartState.rbaHistory.length) && chartData.fetchRbaHistory) {
+            chartState.rbaHistory = await chartData.fetchRbaHistory().catch(function () { return []; });
+        }
+        if ((!chartState.cpiHistory || !chartState.cpiHistory.length) && chartData.fetchCpiHistory) {
+            chartState.cpiHistory = await chartData.fetchCpiHistory().catch(function () { return []; });
+        }
+        if (chartState.loadSerial !== loadSerial) return false;
+
+        chartState.reportPlots = reportPlots;
+        return renderReportPreview(currentFields);
+    }
+
     async function drawChart() {
         if (!els.chartOutput) return;
         if (chartLoadPromise) {
@@ -805,6 +862,7 @@
                 var _previewHistory = await historyPromise;
                 chartState.rbaHistory = _previewHistory[0];
                 chartState.cpiHistory = _previewHistory[1];
+                if (chartState.loadSerial !== loadSerial) return;
                 try {
                     reportPreviewRendered = await renderReportPreview(currentFields);
                 } catch (previewError) {
@@ -816,6 +874,7 @@
             }
 
             var payload = await rowsPromise;
+            if (chartState.loadSerial !== loadSerial) return;
             if (rowsError) {
                 if (reportPreviewRendered) {
                     chartState.fallbackReason = 'series-timeout';
@@ -1032,5 +1091,6 @@
         drawChart: drawChart,
         markStale: markStale,
         refreshFromCache: refreshFromCache,
+        refreshReportRangePreview: refreshReportRangePreview,
     };
 })();
