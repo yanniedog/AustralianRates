@@ -17,8 +17,8 @@ import {
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v5 adds KV `snapshot-inline:*` slim rows for Pages HTML inlining. */
-const SNAPSHOT_PAYLOAD_VERSION = 5
+/** Bump when snapshot payload shape changes so stale rows are ignored. v6 adds precomputed current leaders to snapshot payloads. */
+const SNAPSHOT_PAYLOAD_VERSION = 6
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 

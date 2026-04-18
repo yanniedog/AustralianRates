@@ -78,6 +78,9 @@
     var responsiveSyncTimer = 0;
     var resizeObserver = null;
     var chartLoadPromise = null;
+    var reportPlotWarmTimer = 0;
+    var CHART_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
+    var REPORT_PLOT_WARM_DELAY_MS = 1200;
     function fields() {
         var defaultView;
         if (window.AR.chartConfig && window.AR.chartConfig.defaultView) {
@@ -146,6 +149,12 @@
         } else {
             chartState.tdCurveFrameIndex = null;
         }
+    }
+
+    function cancelReportPlotWarm() {
+        if (!reportPlotWarmTimer) return;
+        window.clearTimeout(reportPlotWarmTimer);
+        reportPlotWarmTimer = 0;
     }
 
     function rowsDateRange(rows) {
@@ -685,6 +694,26 @@
         return true;
     }
 
+    function neighbouringChartWindows(chartWindow) {
+        var current = String(chartWindow || '').trim().toUpperCase();
+        var index = CHART_WINDOWS.indexOf(current);
+        var out = [];
+        if (index > 0) out.push(CHART_WINDOWS[index - 1]);
+        if (index >= 0 && index < CHART_WINDOWS.length - 1) out.push(CHART_WINDOWS[index + 1]);
+        return out;
+    }
+
+    function scheduleReportPlotWarm(baseParams) {
+        if (!chartData.warmReportPlotWindows) return;
+        cancelReportPlotWarm();
+        reportPlotWarmTimer = window.setTimeout(function () {
+            reportPlotWarmTimer = 0;
+            chartData.warmReportPlotWindows(baseParams, neighbouringChartWindows(baseParams && baseParams.chart_window)).catch(function () {
+                return null;
+            });
+        }, REPORT_PLOT_WARM_DELAY_MS);
+    }
+
     async function refreshReportRangePreview() {
         var currentFields = fields();
         if (!currentFields || !isReportView(currentFields.view)) {
@@ -744,6 +773,7 @@
 
     async function drawChart() {
         if (!els.chartOutput) return;
+        cancelReportPlotWarm();
         if (chartLoadPromise) {
             chartState.pendingReload = true;
             return chartLoadPromise;
@@ -800,11 +830,6 @@
                     return { moves: null, bands: null };
                 })
                 : Promise.resolve({ moves: null, bands: null });
-            if (wantsReportPlots && chartData.warmReportPlotWindows) {
-                window.setTimeout(function () {
-                    chartData.warmReportPlotWindows(baseParams);
-                }, 250);
-            }
             var historyPromise = Promise.all([
                 chartData.fetchRbaHistory ? chartData.fetchRbaHistory() : Promise.resolve([]),
                 chartData.fetchCpiHistory ? chartData.fetchCpiHistory() : Promise.resolve([]),
@@ -826,23 +851,25 @@
                 : Promise.resolve([]);
 
             var rowsError = null;
-            var rowsPromise = chartData.fetchAllRateRows(baseParams, function (progress) {
-                if (chartUi.setStatus) {
-                    chartUi.setStatus(
-                        (reportPreviewRendered ? 'HYDRATE ' : 'LOAD ')
-                        + progress.loaded.toLocaleString()
-                        + '/'
-                        + progress.total.toLocaleString()
-                        + ' '
-                        + progress.page
-                        + '/'
-                        + progress.lastPage
-                    );
-                }
-            }).catch(function (error) {
-                rowsError = error;
-                return null;
-            });
+            var rowsPromise = wantsReportPlots
+                ? Promise.resolve(null)
+                : chartData.fetchAllRateRows(baseParams, function (progress) {
+                    if (chartUi.setStatus) {
+                        chartUi.setStatus(
+                            (reportPreviewRendered ? 'HYDRATE ' : 'LOAD ')
+                            + progress.loaded.toLocaleString()
+                            + '/'
+                            + progress.total.toLocaleString()
+                            + ' '
+                            + progress.page
+                            + '/'
+                            + progress.lastPage
+                        );
+                    }
+                }).catch(function (error) {
+                    rowsError = error;
+                    return null;
+                });
             if (wantsReportPlots) {
                 previewRowsPromise.then(function () {
                     if (!reportPreviewRendered) return;
@@ -871,6 +898,27 @@
                         view: currentView,
                     });
                 }
+                if (reportPreviewRendered) {
+                    scheduleReportPlotWarm(baseParams);
+                    return;
+                }
+                rowsPromise = chartData.fetchAllRateRows(baseParams, function (progress) {
+                    if (chartUi.setStatus) {
+                        chartUi.setStatus(
+                            'LOAD '
+                            + progress.loaded.toLocaleString()
+                            + '/'
+                            + progress.total.toLocaleString()
+                            + ' '
+                            + progress.page
+                            + '/'
+                            + progress.lastPage
+                        );
+                    }
+                }).catch(function (error) {
+                    rowsError = error;
+                    return null;
+                });
             }
 
             var payload = await rowsPromise;

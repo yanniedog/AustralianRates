@@ -58,6 +58,7 @@ import { parseChartWindow, type ChartWindow } from '../utils/chart-window'
 import { getAppConfig } from '../db/app-config'
 import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
+import { buildSnapshotCurrentLeaders } from './snapshot-current-leaders'
 
 const SNAPSHOT_CACHE_MAX_AGE = 300
 
@@ -239,6 +240,10 @@ export async function buildSnapshotPayload(
   for (const result of results) {
     if (result.ok) data[result.name] = result.value
     else errors[result.name] = result.error
+  }
+  const latestAllEntry = data.latestAll as { rows?: Array<Record<string, unknown>> } | undefined
+  if (latestAllEntry && Array.isArray(latestAllEntry.rows) && latestAllEntry.rows.length) {
+    data.currentLeaders = buildSnapshotCurrentLeaders(section, latestAllEntry.rows)
   }
 
   const analyticsResult = await analyticsPromise
