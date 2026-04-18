@@ -743,6 +743,11 @@
                     return { moves: null, bands: null };
                 })
                 : Promise.resolve({ moves: null, bands: null });
+            if (wantsReportPlots && chartData.warmReportPlotWindows) {
+                window.setTimeout(function () {
+                    chartData.warmReportPlotWindows(baseParams);
+                }, 250);
+            }
             var historyPromise = Promise.all([
                 chartData.fetchRbaHistory ? chartData.fetchRbaHistory() : Promise.resolve([]),
                 chartData.fetchCpiHistory ? chartData.fetchCpiHistory() : Promise.resolve([]),

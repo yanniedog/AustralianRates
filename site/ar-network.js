@@ -107,7 +107,7 @@
     }
 
     /** Maximum time a snapshottable request will wait for /snapshot to arrive before falling through to network. */
-    var SNAPSHOT_WAIT_BUDGET_MS = 600;
+    var SNAPSHOT_WAIT_BUDGET_MS = 1200;
 
     function readSnapshotCache(rawUrl) {
         var snap = window.AR && window.AR.snapshot;
@@ -119,11 +119,19 @@
         if (opts && opts.bypassSnapshot) return;
         var snap = window.AR && window.AR.snapshot;
         if (!snap) return;
-        if (snap.data || snap.failed) return;
+        if (typeof snap.lookup === 'function' && snap.lookup(rawUrl) != null) return;
+        if (snap.failed) return;
         if (typeof snap.isSnapshottableUrl !== 'function' || !snap.isSnapshottableUrl(rawUrl)) return;
-        if (typeof snap.awaitReady !== 'function') return;
         var budget = asPositiveInt(opts && opts.snapshotWaitMs, SNAPSHOT_WAIT_BUDGET_MS);
-        try { await snap.awaitReady(budget); } catch (_err) { /* ignore */ }
+        try {
+            if (typeof snap.awaitUrl === 'function') {
+                await snap.awaitUrl(rawUrl, budget);
+                return;
+            }
+            if (typeof snap.awaitReady === 'function') {
+                await snap.awaitReady(budget);
+            }
+        } catch (_err) { /* ignore */ }
     }
 
     async function requestJson(url, options) {

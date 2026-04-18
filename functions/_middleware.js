@@ -42,6 +42,12 @@ function normalisePreset(value) {
     return lower === 'consumer-default' ? 'consumer-default' : '';
 }
 
+function defaultChartWindowForSection(section) {
+    if (section === 'term-deposit-rates') return '30D';
+    if (section === 'home-loan-rates' || section === 'savings-rates') return '90D';
+    return '';
+}
+
 function buildScope(chartWindow, preset) {
     if (preset === 'consumer-default' && chartWindow) return 'preset:consumer-default:window:' + chartWindow;
     if (preset === 'consumer-default') return 'preset:consumer-default';
@@ -80,7 +86,7 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
 
 async function fetchSnapshotWithTimeout(origin, section, params) {
     const qs = new URLSearchParams();
-    const chartWindow = normaliseChartWindow(params.get('chart_window'));
+    const chartWindow = normaliseChartWindow(params.get('chart_window')) || defaultChartWindowForSection(section);
     const preset = normalisePreset(params.get('preset'));
     if (chartWindow) qs.set('chart_window', chartWindow);
     if (preset) qs.set('preset', preset);
@@ -142,7 +148,7 @@ export async function onRequest(context) {
     const contentType = (originalResponse.headers.get('content-type') || '').toLowerCase();
     if (!contentType.includes('text/html')) return wrapOriginalResponse(originalResponse, 'bypass-html');
 
-    const chartWindow = normaliseChartWindow(url.searchParams.get('chart_window'));
+    const chartWindow = normaliseChartWindow(url.searchParams.get('chart_window')) || defaultChartWindowForSection(section);
     const preset = normalisePreset(url.searchParams.get('preset'));
 
     const kvBound = !!(env && env.CHART_CACHE_KV);
