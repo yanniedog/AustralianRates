@@ -8,7 +8,7 @@
  */
 
 /** Wrapped JSON shape produced by Pages middleware and `GET /snapshot` responses. */
-export const SNAPSHOT_INLINE_RESPONSE_MAX_BYTES = 400_000
+export const SNAPSHOT_INLINE_RESPONSE_MAX_BYTES = 500_000
 
 const encoder = new TextEncoder()
 

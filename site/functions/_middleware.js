@@ -9,13 +9,13 @@
  */
 
 // Keep in sync with `SNAPSHOT_INLINE_RESPONSE_MAX_BYTES` in workers/api/src/utils/snapshot-inline-trim.ts
-const MAX_INLINE_BYTES = 400000;
+const MAX_INLINE_BYTES = 500000;
 // Budget for the fallback HTTP subrequest. Only used when the CHART_CACHE_KV
 // binding is not attached to the Pages project (direct KV reads are effectively
 // free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
-const SNAPSHOT_KV_VERSION = 8;
+const SNAPSHOT_KV_VERSION = 9;
 const SECTION_KV_KEY = {
     'home-loan-rates': 'home_loans',
     'savings-rates': 'savings',
