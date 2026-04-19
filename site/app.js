@@ -117,7 +117,6 @@
     }
 
     function reloadStartupSurfaces() {
-        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
             executiveSummary.loadExecutiveSummary();
@@ -125,15 +124,7 @@
     }
 
     function scheduleStartupQuickCompare() {
-        if (!hero || !hero.loadQuickCompare) {
-            startupQuickCompareTimerId = 0;
-            return;
-        }
-        if (startupQuickCompareTimerId) return;
-        startupQuickCompareTimerId = window.setTimeout(function () {
-            startupQuickCompareTimerId = 0;
-            hero.loadQuickCompare();
-        }, 1600);
+        // Quick compare UI removed; no-op.
     }
 
     function ensureExplorerReady() {
@@ -235,7 +226,6 @@
         if (filters && filters.syncUrlState) filters.syncUrlState();
         if (filters && filters.markFiltersApplied) filters.markFiltersApplied();
         if (hero && hero.loadHeroStats) hero.loadHeroStats();
-        if (hero && hero.loadQuickCompare) hero.loadQuickCompare();
         if (charts && charts.drawChart) charts.drawChart();
         else if (charts && charts.markStale) charts.markStale('STALE');
         if (executiveSummary && executiveSummary.loadExecutiveSummary && els.executiveSummarySections) {
@@ -272,10 +262,8 @@
             executiveSummary.loadExecutiveSummary();
         }
         if (refresh && refresh.setupAutoRefresh) refresh.setupAutoRefresh();
-        if (document.body && document.body.classList.contains('ar-public') && charts && typeof charts.drawChart === 'function') {
-            window.setTimeout(function () {
-                charts.drawChart();
-            }, 150);
+        if (!(window.AR && window.AR.__earlyChartDrawStarted) && document.body && document.body.classList.contains('ar-public') && charts && typeof charts.drawChart === 'function') {
+            charts.drawChart();
         }
         var sourceText = String(source || '');
         if (sourceText.indexOf('pending') >= 0) showStartupRetryPending();
@@ -288,9 +276,23 @@
         });
     }
 
+    function drawChartFromInlineSnapshotIfReady() {
+        if (!charts || typeof charts.drawChart !== 'function') return;
+        if (!(document.body && document.body.classList.contains('ar-public'))) return;
+        var inline = window.AR && window.AR.snapshotInline;
+        var snapshot = window.AR && window.AR.snapshot;
+        if (!inline && !(snapshot && snapshot.data)) return;
+        if (window.AR && window.AR.__earlyChartDrawStarted) return;
+        window.AR = window.AR || {};
+        window.AR.__earlyChartDrawStarted = true;
+        try { charts.drawChart(); } catch (_err) { /* ignore */ }
+    }
+
     function beginInitialBootstrap() {
         if (initialBootstrapStarted) return;
         initialBootstrapStarted = true;
+
+        drawChartFromInlineSnapshotIfReady();
 
         if (filters && filters.loadFilters) {
             filters.loadFilters().then(function (result) {
@@ -372,11 +374,11 @@
     applyUiMode(state && state.getUiMode ? state.getUiMode() : 'analyst', { skipRefresh: true });
 
     if (document.readyState === 'complete') {
-        window.setTimeout(beginInitialBootstrap, 120);
+        window.setTimeout(beginInitialBootstrap, 0);
     } else {
         window.addEventListener('load', function handleInitialBootstrap() {
             window.removeEventListener('load', handleInitialBootstrap);
-            window.setTimeout(beginInitialBootstrap, 120);
+            window.setTimeout(beginInitialBootstrap, 0);
         });
     }
 })();
