@@ -111,6 +111,10 @@
         return resolveScope(chartWindow, preset);
     }
 
+    function requestKey(chartWindow, preset, wantsLite) {
+        return (wantsLite === false ? 'full:' : 'lite:') + bundleKey(chartWindow, preset);
+    }
+
     function activateBundle(bundle) {
         if (!bundle || !bundle.data) return null;
         SNAPSHOT.payload = bundle.payload;
@@ -123,18 +127,29 @@
         return bundle;
     }
 
-    function storeBundle(payload, chartWindow, preset, activate) {
+    function storeBundle(payload, chartWindow, preset, activate, options) {
         if (!payload || !payload.data) return null;
+        var wantsLite = !(options && options.lite === false);
         var scope = String(payload.scope || resolveScope(chartWindow, preset));
-        var bundle = {
-            payload: payload,
-            data: payload.data,
+        var bundle = SNAPSHOT.bundles[scope] || {
+            payload: null,
+            data: null,
             scope: scope,
             chartWindow: chartWindow || null,
             preset: preset || null,
-            loadedAt: Date.now(),
-            inlined: !!payload.__inline,
+            loadedAt: 0,
+            inlined: false,
+            full: false,
         };
+        if (!wantsLite || !bundle.full) {
+            bundle.payload = payload;
+            bundle.data = payload.data;
+        }
+        bundle.chartWindow = chartWindow || null;
+        bundle.preset = preset || null;
+        bundle.loadedAt = Date.now();
+        bundle.inlined = bundle.inlined || !!payload.__inline;
+        if (!wantsLite) bundle.full = true;
         SNAPSHOT.bundles[scope] = bundle;
         if (activate !== false) activateBundle(bundle);
         return bundle;
@@ -263,26 +278,29 @@
         }
     }
 
-    function buildSnapshotUrl(apiBase, chartWindow, preset) {
+    function buildSnapshotUrl(apiBase, chartWindow, preset, wantsLite) {
         var url = String(apiBase).replace(/\/+$/, '') + '/snapshot';
         var qs = [];
         if (chartWindow) qs.push('chart_window=' + encodeURIComponent(chartWindow));
         if (preset) qs.push('preset=' + encodeURIComponent(preset));
-        qs.push('lite=1');
+        if (wantsLite !== false) qs.push('lite=1');
         return qs.length ? url + '?' + qs.join('&') : url;
     }
 
     function fetchScopeBundle(scope, options) {
+        var opts = options || {};
+        var wantsLite = opts.lite !== false;
         var nextScope = scope || scopeFromState();
         var chartWindow = nextScope.chartWindow || null;
         var preset = nextScope.preset || null;
         var key = bundleKey(chartWindow, preset);
         var existing = SNAPSHOT.bundles[key];
-        if (existing) {
-            if (options && options.activate !== false) activateBundle(existing);
+        if (existing && (wantsLite || existing.full)) {
+            if (opts.activate !== false) activateBundle(existing);
             return Promise.resolve(existing.payload);
         }
-        if (SNAPSHOT.pendingByScope[key]) return SNAPSHOT.pendingByScope[key];
+        var pendingKey = requestKey(chartWindow, preset, wantsLite);
+        if (SNAPSHOT.pendingByScope[pendingKey]) return SNAPSHOT.pendingByScope[pendingKey];
 
         var base = window.AR && window.AR.config && window.AR.config.apiBase;
         if (!base) return null;
@@ -293,7 +311,7 @@
             if (!controller) return;
             try { controller.abort(); } catch (_err) { /* ignore */ }
         }, 10000);
-        var url = buildSnapshotUrl(base, chartWindow, preset);
+        var url = buildSnapshotUrl(base, chartWindow, preset, wantsLite);
         var promise = fetch(url, {
             method: 'GET',
             cache: 'default',
@@ -305,16 +323,16 @@
             })
             .then(function (payload) {
                 if (payload && payload.ok === false) return null;
-                var bundle = storeBundle(payload, chartWindow, preset, !(options && options.activate === false));
+                var bundle = storeBundle(payload, chartWindow, preset, !(opts.activate === false), { lite: wantsLite });
                 if (!bundle) return null;
-                if (!options || options.activate !== false) {
+                if (opts.activate !== false) {
                     SNAPSHOT.ready = Promise.resolve(bundle.payload);
                     dispatchReady(bundle.payload);
                 }
                 return bundle.payload;
             })
             .catch(function () {
-                if (!options || options.activate !== false) {
+                if (opts.activate !== false) {
                     SNAPSHOT.failed = true;
                     dispatchReady(null);
                 }
@@ -322,23 +340,47 @@
             })
             .finally(function () {
                 window.clearTimeout(timeoutId);
-                delete SNAPSHOT.pendingByScope[key];
+                delete SNAPSHOT.pendingByScope[pendingKey];
             });
 
-        SNAPSHOT.pendingByScope[key] = promise;
+        SNAPSHOT.pendingByScope[pendingKey] = promise;
         return promise;
+    }
+
+    var warmQueue = Promise.resolve(null);
+
+    function enqueueWarm(scope, options) {
+        warmQueue = warmQueue.then(function () {
+            return fetchScopeBundle(scope, options);
+        }).catch(function () {
+            return null;
+        });
+        return warmQueue;
     }
 
     function maybeWarmReportWindows() {
         if (SNAPSHOT.warmStarted) return;
         SNAPSHOT.warmStarted = true;
+        var baseScope = scopeFromState();
+        var baseIndex = CHART_WINDOWS.indexOf(String(baseScope.chartWindow || '').toUpperCase());
+        window.setTimeout(function () {
+            enqueueWarm(baseScope, { activate: false, lite: false });
+            CHART_WINDOWS.forEach(function (chartWindow) {
+                if (String(chartWindow || '') === String(baseScope.chartWindow || '')) return;
+                var nextScope = { chartWindow: chartWindow, preset: baseScope.preset };
+                enqueueWarm(nextScope, { activate: false, lite: true });
+                if (baseIndex >= 0 && CHART_WINDOWS.indexOf(chartWindow) > baseIndex) {
+                    enqueueWarm(nextScope, { activate: false, lite: false });
+                }
+            });
+        }, 0);
     }
 
     function adoptInlineSnapshot(payload) {
         if (!payload || !payload.data) return false;
         payload.__inline = true;
         var scope = scopeFromState();
-        var bundle = storeBundle(payload, scope.chartWindow, scope.preset, true);
+        var bundle = storeBundle(payload, scope.chartWindow, scope.preset, true, { lite: true });
         if (!bundle) return false;
         SNAPSHOT.inlined = true;
         SNAPSHOT.ready = Promise.resolve(bundle.payload);
@@ -371,7 +413,8 @@
         var targetScope = scope || scopeFromState();
         var key = bundleKey(targetScope.chartWindow, targetScope.preset);
         var existing = SNAPSHOT.bundles[key];
-        if (existing) {
+        var wantsLite = !options || options.lite !== false;
+        if (existing && (wantsLite || existing.full)) {
             if (!options || options.activate !== false) activateBundle(existing);
             SNAPSHOT.ready = Promise.resolve(existing.payload);
             return SNAPSHOT.ready;
@@ -379,7 +422,7 @@
 
         // Prefer a snapshot already inlined by the Pages middleware.
         var inline = window.AR && window.AR.snapshotInline;
-        if (inline && !SNAPSHOT.inlined && (!scope || key === bundleKey(scopeFromState().chartWindow, scopeFromState().preset))) {
+        if (wantsLite && inline && !SNAPSHOT.inlined && (!scope || key === bundleKey(scopeFromState().chartWindow, scopeFromState().preset))) {
             if (adoptInlineSnapshot(inline)) return SNAPSHOT.ready;
         }
 
@@ -430,6 +473,15 @@
     }
 
     SNAPSHOT.start = start;
+    SNAPSHOT.ensureFullScope = function (scope) {
+        return fetchScopeBundle(scope || scopeFromState(), { activate: false, lite: false });
+    };
+    SNAPSHOT.getBundle = function (chartWindow, preset) {
+        return bundleForScope(chartWindow || null, preset || null);
+    };
+    SNAPSHOT.listBundles = function () {
+        return Object.keys(SNAPSHOT.bundles).map(function (key) { return SNAPSHOT.bundles[key]; });
+    };
     SNAPSHOT.lookup = lookup;
     SNAPSHOT.isSnapshottableUrl = isSnapshottableUrl;
     SNAPSHOT.awaitReady = awaitReady;
