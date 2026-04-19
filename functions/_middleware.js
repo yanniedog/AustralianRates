@@ -55,6 +55,96 @@ function buildScope(chartWindow, preset) {
     return 'default';
 }
 
+function wrappedSnapshotByteLength(snapshot) {
+    return new TextEncoder().encode(JSON.stringify(snapshot)).length;
+}
+
+function cloneData(data) {
+    return data && typeof data === 'object' ? { ...data } : {};
+}
+
+function withoutKeys(source, keys) {
+    const out = cloneData(source);
+    keys.forEach(function (key) {
+        delete out[key];
+    });
+    return out;
+}
+
+function pickKeys(source, keys) {
+    const out = {};
+    keys.forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = source[key];
+    });
+    return out;
+}
+
+function capTableRows(source, key, max) {
+    const out = cloneData(source);
+    const block = source && source[key];
+    if (!block || typeof block !== 'object' || !Array.isArray(block.rows) || block.rows.length <= max) {
+        return out;
+    }
+    out[key] = { ...block, rows: block.rows.slice(0, max) };
+    return out;
+}
+
+function trimSnapshotForInline(payload) {
+    if (!payload || !payload.data || typeof payload.data !== 'object') return null;
+    const fits = function (data) {
+        return wrappedSnapshotByteLength({
+            ok: true,
+            section: payload.section,
+            scope: payload.scope,
+            builtAt: payload.builtAt,
+            data,
+        }) <= MAX_INLINE_BYTES;
+    };
+
+    let data = cloneData(payload.data);
+    if (fits(data)) return data;
+
+    data = withoutKeys(data, ['analyticsSeries']);
+    if (fits(data)) return data;
+
+    data = withoutKeys(data, ['chartModels']);
+    if (fits(data)) return data;
+
+    [2000, 1000, 500, 300, 200, 100, 50].forEach(function (cap) {
+        if (!fits(data)) data = capTableRows(data, 'latestAll', cap);
+    });
+    if (fits(data)) return data;
+
+    [200, 100, 50, 25].forEach(function (cap) {
+        if (!fits(data)) data = capTableRows(data, 'changes', cap);
+    });
+    if (fits(data)) return data;
+
+    data = withoutKeys(data, ['reportPlotMoves', 'reportPlotBands']);
+    if (fits(data)) return data;
+
+    data = withoutKeys(data, ['executiveSummary']);
+    if (fits(data)) return data;
+
+    data = capTableRows(data, 'latestAll', 25);
+    if (fits(data)) return data;
+
+    data = capTableRows(data, 'changes', 10);
+    if (fits(data)) return data;
+
+    const minimalSets = [
+        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'chartModels', 'currentLeaders', 'filtersResolved', 'urls'],
+        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'filtersResolved', 'urls'],
+        ['siteUi', 'filters', 'overview', 'filtersResolved', 'urls'],
+    ];
+    for (const keys of minimalSets) {
+        const minimal = pickKeys(payload.data, keys);
+        if (fits(minimal)) return minimal;
+    }
+
+    return null;
+}
+
 /** Read snapshot directly from KV when the binding is available. Returns {ok, body} like the HTTP fallback. */
 async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     if (!env || !env.CHART_CACHE_KV) return null;
@@ -62,20 +152,35 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
     const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
+    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
     try {
         const body = await env.CHART_CACHE_KV.get(inlineKey);
-        if (!body) return { ok: false, reason: 'kv-miss', url: 'kv:' + inlineKey };
-        // The KV value is the raw SnapshotPayload JSON (no `{ok, section, scope, builtAt, data}` wrapper).
-        // The client expects the wrapped shape, so wrap it here.
-        const parsed = JSON.parse(body);
+        if (body) {
+            // The KV value is the raw SnapshotPayload JSON (no `{ok, section, scope, builtAt, data}` wrapper).
+            // The client expects the wrapped shape, so wrap it here.
+            const parsed = JSON.parse(body);
+            const wrapped = JSON.stringify({
+                ok: true,
+                section: parsed.section,
+                scope: parsed.scope,
+                builtAt: parsed.builtAt,
+                data: parsed.data,
+            });
+            return { ok: true, body: wrapped, source: 'kv-inline' };
+        }
+        const mainBody = await env.CHART_CACHE_KV.get(mainKey);
+        if (!mainBody) return { ok: false, reason: 'kv-miss', url: 'kv:' + inlineKey };
+        const parsed = JSON.parse(mainBody);
+        const trimmed = trimSnapshotForInline(parsed);
+        if (!trimmed) return { ok: false, reason: 'kv-main-oversize', url: 'kv:' + mainKey };
         const wrapped = JSON.stringify({
             ok: true,
             section: parsed.section,
             scope: parsed.scope,
             builtAt: parsed.builtAt,
-            data: parsed.data,
+            data: trimmed,
         });
-        return { ok: true, body: wrapped, source: 'kv' };
+        return { ok: true, body: wrapped, source: 'kv-main' };
     } catch (err) {
         const message = err && err.message ? String(err.message) : 'unknown';
         return { ok: false, reason: 'kv-error:' + message.slice(0, 60).replace(/[^A-Za-z0-9_.:-]/g, '_') };

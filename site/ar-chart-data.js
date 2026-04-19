@@ -880,7 +880,7 @@
                     cache: policy.fetchCache,
                     skipCacheBust: policy.skipCacheBust,
                     sortQuery: policy.sortQuery,
-                    bypassSnapshot: true,
+                    snapshotWaitMs: 2500,
                 }, function (result) {
                     var body = result && result.data ? result.data : result;
                     return Array.isArray(body && body.rows) ? body.rows : [];
@@ -895,7 +895,7 @@
             cache: policy.fetchCache,
             skipCacheBust: policy.skipCacheBust,
             sortQuery: policy.sortQuery,
-            bypassSnapshot: true,
+            snapshotWaitMs: 2500,
         }, function (result) {
             var body = result && result.data ? result.data : result;
             return Array.isArray(body && body.rows) ? body.rows : [];
@@ -912,6 +912,9 @@
     }
 
     function warmReportPlotWindows(params, windows) {
+        if (chartLocalData && typeof chartLocalData.getReportPlot === 'function') {
+            return Promise.resolve(null);
+        }
         var warmKey = buildReportPlotWarmKey(params);
         if (inflightReportWarmers[warmKey]) return inflightReportWarmers[warmKey];
         var baseParams = {};
