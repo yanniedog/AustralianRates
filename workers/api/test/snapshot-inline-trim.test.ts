@@ -57,6 +57,37 @@ describe('snapshot-inline-trim', () => {
     )
   })
 
+  it('preserves reportProductHistory and reportPlotBands ahead of latestAll and chartModels', () => {
+    const data: Record<string, unknown> = {
+      siteUi: { ok: true },
+      reportPlotBands: { series: [{ bank_name: 'ANZ', points: [{ date: '2026-04-19', min_rate: 4.5, max_rate: 4.7 }] }] },
+      reportProductHistory: {
+        ok: true,
+        version: 1,
+        section: 'home_loans',
+        dates: ['2026-04-18', '2026-04-19'],
+        products: Array.from({ length: 300 }, (_, index) => ({
+          key: `bank-${index}|product-${index}`,
+          bank_name: `Bank ${index}`,
+          product_name: `Product ${index}`,
+          rate_structure: 'variable',
+          points: [[0, 5.5], [1, 5.4]],
+        })),
+      },
+      latestAll: { rows: Array.from({ length: 1200 }, (_, index) => ({ bank_name: `Bank ${index}`, product_name: `Product ${index}` })) },
+      currentLeaders: { scenarios: [{ scenarioLabel: 'Leader', row: { bank_name: 'Bank 1' } }] },
+      chartModels: { default: { meta: { totalSeries: 1200 } } },
+      analyticsSeries: { grouped_rows: { x: 'y'.repeat(600_000) } },
+    }
+
+    const out = trimSnapshotDataForHtmlInline(section, scope, builtAt, data)
+    expect(out).toHaveProperty('reportProductHistory')
+    expect(out).toHaveProperty('reportPlotBands')
+    expect(wrappedSnapshotApiByteLength(section, scope, builtAt, out!)).toBeLessThanOrEqual(
+      SNAPSHOT_INLINE_RESPONSE_MAX_BYTES,
+    )
+  })
+
   it('returns null when immovable fields alone exceed the cap', () => {
     const data: Record<string, unknown> = {
       siteUi: { blob: 'x'.repeat(500_000) },

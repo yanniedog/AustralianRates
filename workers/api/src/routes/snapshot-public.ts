@@ -43,6 +43,7 @@ import {
 } from './analytics-data'
 import { buildGroupedChartRows } from '../utils/chart-row-groups'
 import { buildDefaultChartModel, type ChartModelPayload } from '../chart-model/chart-model'
+import { buildReportProductHistoryPayload } from '../chart-model/report-product-history'
 import { buildSiteUiPayload } from './site-ui-public'
 import {
   getCachedOrComputeSnapshot,
@@ -207,11 +208,9 @@ export async function buildSnapshotPayload(
 
   // Fetch analytics rows once (if bundling); derive both the grouped wire form and
   // the server-side chart model from the same row set so they can't drift.
-  const analyticsPromise = includeSeries
-    ? collectAnalyticsRows(db, section, filters).catch((error) => {
-        return { error: error instanceof Error ? error.message : String(error) }
-      })
-    : Promise.resolve(null)
+  const analyticsPromise = collectAnalyticsRows(db, section, filters).catch((error) => {
+    return { error: error instanceof Error ? error.message : String(error) }
+  })
 
   const fetchers: Array<Promise<{ ok: true; name: string; value: unknown } | { ok: false; name: string; error: string }>> = [
     safeEntry('siteUi', () => buildSiteUiPayload(db)),
@@ -248,20 +247,21 @@ export async function buildSnapshotPayload(
   }
 
   const analyticsResult = await analyticsPromise
-  if (analyticsResult) {
-    if ('error' in analyticsResult) {
-      errors.analyticsSeries = analyticsResult.error
-    } else {
+  if ('error' in analyticsResult) {
+    errors.analyticsSeries = analyticsResult.error
+  } else {
+    data.reportProductHistory = buildReportProductHistoryPayload(section, analyticsResult.rows)
+    if (includeSeries) {
       data.analyticsSeries = buildAnalyticsSeriesEntry(analyticsResult)
-      try {
-        const chartModel: ChartModelPayload = buildDefaultChartModel({
-          section,
-          rows: analyticsResult.rows,
-        })
-        data.chartModels = { default: chartModel }
-      } catch (error) {
-        errors.chartModels = error instanceof Error ? error.message : String(error)
-      }
+    }
+    try {
+      const chartModel: ChartModelPayload = buildDefaultChartModel({
+        section,
+        rows: analyticsResult.rows,
+      })
+      data.chartModels = { default: chartModel }
+    } catch (error) {
+      errors.chartModels = error instanceof Error ? error.message : String(error)
     }
   }
 

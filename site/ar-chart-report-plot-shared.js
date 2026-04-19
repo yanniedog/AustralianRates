@@ -877,6 +877,29 @@
             if (ib && typeof ib.hide === 'function') ib.hide();
         }
 
+        function showRibbonEmptyPanel(heading, meta, message) {
+            ribbonListHoverKeys = null;
+            ribbonListHoverPath = '';
+            ribbonExpandedPaths = {};
+            ribbonCurrentTree = null;
+            ribbonTreeHadBranches = false;
+            setRibbonHierarchyLayoutActive(true);
+            if (!ribbonHierarchyPanel || typeof ribbonHierarchyPanel.show !== 'function') return;
+            ribbonHierarchyPanel.show({
+                heading: heading || 'Hierarchy',
+                meta: meta || '',
+                compact: true,
+                renderBody: function (wrap) {
+                    var empty = document.createElement('div');
+                    empty.className = 'chart-series-empty';
+                    empty.textContent = message || 'No hierarchy data available.';
+                    wrap.appendChild(empty);
+                },
+            });
+            syncInfoboxRowHighlight();
+            syncRibbonTrayUi();
+        }
+
         function hideRibbonHierarchyPanel() {
             ribbonListHoverKeys = null;
             ribbonListHoverPath = '';
@@ -896,7 +919,7 @@
             var anchor = lastPointerDate || (dates.length ? dates[dates.length - 1] : '');
             var sec = String(section || '');
             if (!anchor) {
-                hideRibbonHierarchyPanel();
+                showRibbonEmptyPanel('Current slice', '', 'No hierarchy data available yet.');
                 return;
             }
             if (ribbonTreeBank) {
@@ -918,14 +941,14 @@
                 return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
             });
             if (!prodsAtAnchor.length) {
-                hideRibbonHierarchyPanel();
+                showRibbonEmptyPanel('Current slice', fmtReportDateYmd(anchor), 'No products available for this slice.');
                 return;
             }
 
             clearRibbonHoverScopes();
             var tree = buildRibbonTierTree(prodsAtAnchor, ribbonInitialTierFieldsForSection(sec), 0);
             if (!tree || tree.kind === 'empty') {
-                hideRibbonHierarchyPanel();
+                showRibbonEmptyPanel('Current slice', fmtReportDateYmd(anchor), 'No hierarchy available for this slice.');
                 return;
             }
             ribbonCurrentTree = tree;
@@ -1374,13 +1397,13 @@
                 ? cachedTree.prodsAtAnchor
                 : [];
             if (!prodsAtAnchor.length) {
-                hideRibbonHierarchyPanel();
+                showRibbonEmptyPanel(pbPanel, fmtReportDateYmd(anchor), 'No products available for this lender.');
                 return;
             }
             clearRibbonHoverScopes();
             var tree = cachedTree ? cachedTree.tree : null;
             if (!tree || tree.kind === 'empty') {
-                hideRibbonHierarchyPanel();
+                showRibbonEmptyPanel(pbPanel, fmtReportDateYmd(anchor), 'No hierarchy available for this lender.');
                 return;
             }
             ribbonCurrentTree = tree;

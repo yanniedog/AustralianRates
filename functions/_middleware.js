@@ -15,7 +15,7 @@ const MAX_INLINE_BYTES = 400000;
 // free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
-const SNAPSHOT_KV_VERSION = 6;
+const SNAPSHOT_KV_VERSION = 7;
 const SECTION_KV_KEY = {
     'home-loan-rates': 'home_loans',
     'savings-rates': 'savings',
@@ -107,34 +107,37 @@ function trimSnapshotForInline(payload) {
     data = withoutKeys(data, ['analyticsSeries']);
     if (fits(data)) return data;
 
-    data = withoutKeys(data, ['chartModels']);
+    data = withoutKeys(data, ['currentLeaders']);
     if (fits(data)) return data;
 
-    [2000, 1000, 500, 300, 200, 100, 50].forEach(function (cap) {
+    [500, 300, 200, 100, 50, 25].forEach(function (cap) {
         if (!fits(data)) data = capTableRows(data, 'latestAll', cap);
     });
     if (fits(data)) return data;
 
-    [200, 100, 50, 25].forEach(function (cap) {
+    [100, 50, 25, 10].forEach(function (cap) {
         if (!fits(data)) data = capTableRows(data, 'changes', cap);
     });
     if (fits(data)) return data;
 
-    data = withoutKeys(data, ['reportPlotMoves', 'reportPlotBands']);
+    data = withoutKeys(data, ['chartModels']);
+    if (fits(data)) return data;
+
+    data = withoutKeys(data, ['reportPlotMoves']);
     if (fits(data)) return data;
 
     data = withoutKeys(data, ['executiveSummary']);
     if (fits(data)) return data;
 
-    data = capTableRows(data, 'latestAll', 25);
+    data = capTableRows(data, 'latestAll', 10);
     if (fits(data)) return data;
 
     data = capTableRows(data, 'changes', 10);
     if (fits(data)) return data;
 
     const minimalSets = [
-        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'chartModels', 'currentLeaders', 'filtersResolved', 'urls'],
-        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'filtersResolved', 'urls'],
+        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
+        ['siteUi', 'filters', 'overview', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
         ['siteUi', 'filters', 'overview', 'filtersResolved', 'urls'],
     ];
     for (const keys of minimalSets) {

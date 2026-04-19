@@ -12,8 +12,6 @@
     // take much longer on larger public datasets.
     var CHART_SERIES_TIMEOUT_MS = 65000;
     var CHART_REPORT_TIMEOUT_MS = 12000;
-    var CHART_PREVIEW_TIMEOUT_MS = 12000;
-    var CHART_PREVIEW_ROWS_LIMIT = 5000;
     var CHART_RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
     var REPORT_PLOT_WARM_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
     var chartResponseCache = {};
@@ -578,6 +576,149 @@
         };
     }
 
+    var REPORT_PRODUCT_PARAM_FIELDS = [
+        'security_purpose',
+        'repayment_type',
+        'rate_structure',
+        'lvr_tier',
+        'feature_set',
+        'account_type',
+        'rate_type',
+        'deposit_tier',
+        'interest_payment',
+        'term_months',
+    ];
+
+    function normalizeMatchValue(value) {
+        return String(value == null ? '' : value).trim().toLowerCase();
+    }
+
+    function csvValueMap(value) {
+        var text = String(value == null ? '' : value).trim();
+        if (!text) return null;
+        var out = {};
+        text.split(',').forEach(function (part) {
+            var key = normalizeMatchValue(part);
+            if (key) out[key] = true;
+        });
+        return Object.keys(out).length ? out : null;
+    }
+
+    function valueMatchesMap(map, value) {
+        if (!map) return true;
+        return !!map[normalizeMatchValue(value)];
+    }
+
+    function reportProductMatchesParams(row, latestValue, params) {
+        var bankMap = csvValueMap(params && (params.banks || params.bank));
+        if (bankMap && !valueMatchesMap(bankMap, row && row.bank_name)) return false;
+
+        for (var i = 0; i < REPORT_PRODUCT_PARAM_FIELDS.length; i += 1) {
+            var field = REPORT_PRODUCT_PARAM_FIELDS[i];
+            var allowed = csvValueMap(params && params[field]);
+            if (allowed && !valueMatchesMap(allowed, row && row[field])) return false;
+        }
+
+        var minRate = Number(params && params.min_rate);
+        if (Number.isFinite(minRate) && minRate > 0.01 && Number(latestValue) < minRate) return false;
+
+        var maxRate = Number(params && params.max_rate);
+        if (Number.isFinite(maxRate) && Number(latestValue) > maxRate) return false;
+
+        return true;
+    }
+
+    function reportSeriesFromProductHistory(product, dates) {
+        var meta = {};
+        Object.keys(product || {}).forEach(function (key) {
+            if (key !== 'points') meta[key] = product[key];
+        });
+        var encodedPoints = Array.isArray(product && product.points) ? product.points : [];
+        var points = [];
+        encodedPoints.forEach(function (entry) {
+            var dateIndex = Array.isArray(entry) ? Number(entry[0]) : Number(entry && entry.date_index);
+            var value = Array.isArray(entry) ? Number(entry[1]) : Number(entry && entry.value);
+            var date = dates[dateIndex];
+            if (!date || !Number.isFinite(value)) return;
+            var row = {
+                collection_date: date,
+                interest_rate: value,
+            };
+            Object.keys(meta).forEach(function (key) {
+                row[key] = meta[key];
+            });
+            points.push({
+                date: date,
+                value: value,
+                row: row,
+            });
+        });
+        if (!points.length) return null;
+        return finalizeSeries({
+            key: String(meta.key || meta.product_key || meta.series_key || meta.product_id || productIdentity(meta)),
+            firstRow: points[0].row,
+            points: points,
+        });
+    }
+
+    function buildChartModelFromReportProductHistory(history, fields, selectionState, params) {
+        var dates = history && Array.isArray(history.dates) ? history.dates : [];
+        var products = history && Array.isArray(history.products) ? history.products : [];
+        var density = chartConfig.parseDensity(fields.density);
+        var direction = metricDirection(fields.yField);
+        var included = selectionState && selectionState.includedRateStructures;
+
+        var allSeries = products.map(function (product) {
+            var series = reportSeriesFromProductHistory(product, dates);
+            if (!series) return null;
+            if (included && Array.isArray(included) && included.length) {
+                var structure = String(series.latestRow && series.latestRow.rate_structure || '');
+                if (included.indexOf(structure) < 0) return null;
+            }
+            if (!reportProductMatchesParams(series.latestRow || {}, series.latestValue, params || {})) return null;
+            return series;
+        }).filter(Boolean).sort(function (left, right) {
+            return compareSeriesByMetric(left, right, direction);
+        });
+
+        var visibleSeries = buildVisibleSeries(allSeries, density, selectionState, direction);
+        var lenderRanking = buildLenderRanking(allSeries, fields, density);
+        var selectedKeys = effectiveSelection(visibleSeries, selectionState && selectionState.selectedSeriesKeys, density.compareLimit);
+        var spotlight = spotlightEntry(visibleSeries, selectionState, selectedKeys);
+        lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
+            return spotlight && spotlight.series && entry.seriesKey === spotlight.series.key;
+        }) || lenderRanking.entries[0] || null;
+
+        return {
+            meta: {
+                totalRows: allSeries.reduce(function (sum, series) { return sum + Number(series.pointCount || 0); }, 0),
+                totalSeries: allSeries.length,
+                visibleSeries: visibleSeries.length,
+                visibleLenders: lenderRanking.entries.length,
+                totalLenders: lenderRanking.totalBanks,
+                densityLabel: density.label,
+                renderedCells: visibleSeries.reduce(function (sum, series) { return sum + Number(series.pointCount || 0); }, 0),
+                selectedCount: selectedKeys.length,
+            },
+            lenderRanking: lenderRanking,
+            allSeries: allSeries,
+            surface: null,
+            distribution: null,
+            visibleSeries: visibleSeries,
+            selectedKeys: selectedKeys,
+            compareSeries: visibleSeries.filter(function (series) {
+                return selectedKeys.indexOf(series.key) >= 0;
+            }),
+            market: null,
+            tdCurveFrames: null,
+            tdCurveDates: null,
+            timeRibbon: null,
+            tdTermTime: null,
+            slope: null,
+            spotlight: spotlight,
+        };
+    }
+
     function stableQueryString(params) {
         var pairs = [];
         Object.keys(params || {}).forEach(function (key) {
@@ -857,48 +998,43 @@
         });
     }
 
-    function fetchLatestPreviewRows(params) {
-        var queryParams = {};
-        Object.keys(params || {}).forEach(function (key) {
-            queryParams[key] = params[key];
-        });
-        delete queryParams.representation;
-        delete queryParams.sort;
-        delete queryParams.dir;
-        delete queryParams.chart_window;
-        delete queryParams.start_date;
-        delete queryParams.end_date;
-        queryParams.limit = String(CHART_PREVIEW_ROWS_LIMIT);
-        if (chartLocalData && typeof chartLocalData.getLatestPreviewRows === 'function') {
-            return Promise.resolve(chartLocalData.getLatestPreviewRows(queryParams)).then(function (localRows) {
-                if (Array.isArray(localRows)) return localRows;
-                var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
-                return fetchJsonWithPolicy(policy, '/latest-all', {
-                    requestLabel: 'Current products',
-                    timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
-                    retryCount: 0,
-                    cache: policy.fetchCache,
-                    skipCacheBust: policy.skipCacheBust,
-                    sortQuery: policy.sortQuery,
-                    snapshotWaitMs: 2500,
-                }, function (result) {
-                    var body = result && result.data ? result.data : result;
-                    return Array.isArray(body && body.rows) ? body.rows : [];
-                });
+    function snapshotBundleForParams(params) {
+        var snap = window.AR && window.AR.snapshot;
+        if (!snap || typeof snap.getBundle !== 'function') return null;
+        var chartWindow = String(params && params.chart_window || '').trim().toUpperCase();
+        var preset = String(params && params.preset || '').trim().toLowerCase();
+        if (REPORT_PLOT_WARM_WINDOWS.indexOf(chartWindow) < 0) chartWindow = '';
+        if (preset !== 'consumer-default') preset = '';
+        return snap.getBundle(chartWindow || null, preset || null);
+    }
+
+    function getSnapshotReportProductHistory(params) {
+        var bundle = snapshotBundleForParams(params);
+        return bundle && bundle.data ? (bundle.data.reportProductHistory || null) : null;
+    }
+
+    function fetchReportProductHistory(params) {
+        if (chartLocalData && typeof chartLocalData.getReportProductHistory === 'function') {
+            return Promise.resolve(chartLocalData.getReportProductHistory(params || {})).then(function (localResult) {
+                if (localResult) return localResult;
+                return getSnapshotReportProductHistory(params);
             });
         }
-        var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
-        return fetchJsonWithPolicy(policy, '/latest-all', {
-            requestLabel: 'Current products',
-            timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
-            retryCount: 0,
-            cache: policy.fetchCache,
-            skipCacheBust: policy.skipCacheBust,
-            sortQuery: policy.sortQuery,
-            snapshotWaitMs: 2500,
-        }, function (result) {
-            var body = result && result.data ? result.data : result;
-            return Array.isArray(body && body.rows) ? body.rows : [];
+        var direct = getSnapshotReportProductHistory(params);
+        if (direct) return Promise.resolve(direct);
+        var snap = window.AR && window.AR.snapshot;
+        if (!snap || typeof snap.ensureFullScope !== 'function') return Promise.resolve(null);
+        var chartWindow = String(params && params.chart_window || '').trim().toUpperCase();
+        var preset = String(params && params.preset || '').trim().toLowerCase();
+        if (REPORT_PLOT_WARM_WINDOWS.indexOf(chartWindow) < 0) chartWindow = null;
+        if (preset !== 'consumer-default') preset = null;
+        return Promise.resolve(snap.ensureFullScope({
+            chartWindow: chartWindow,
+            preset: preset,
+        })).then(function () {
+            return getSnapshotReportProductHistory(params);
+        }).catch(function () {
+            return null;
         });
     }
 
@@ -1082,10 +1218,11 @@
 
     window.AR.chartData = {
         buildChartModel: buildChartModel,
+        buildChartModelFromReportProductHistory: buildChartModelFromReportProductHistory,
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
-        fetchLatestPreviewRows: fetchLatestPreviewRows,
         fetchReportPlot: fetchReportPlot,
+        fetchReportProductHistory: fetchReportProductHistory,
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,
         getPrecomputedChartModel: getPrecomputedChartModel,

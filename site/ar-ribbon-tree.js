@@ -3,6 +3,11 @@
     window.AR = window.AR || {};
     window.AR.ribbon = window.AR.ribbon || {};
 
+    var R = window.AR.ribbon || {};
+    var formatRibbonTierValue = R.formatRibbonTierValue || function (row, field) {
+        return row && row[field] != null ? String(row[field]) : '';
+    };
+
     var RIBBON_DEPOSIT_TIER_BANDS = [
         { min: 0, max: 10000, label: '$0 to $10k' },
         { min: 10000, max: 50000, label: '$10k to $50k' },
@@ -13,8 +18,20 @@
     ];
 
     function formatTierValue(row, field) {
-        var fn = window.AR && window.AR.ribbon && window.AR.ribbon.formatRibbonTierValue;
-        return typeof fn === 'function' ? fn(row, field) : '';
+        return typeof formatRibbonTierValue === 'function' ? formatRibbonTierValue(row, field) : '';
+    }
+
+    function ribbonGroupSortIndex(field, label) {
+        if (field === 'rate_structure') {
+            if (label === 'variable') return 0;
+            if (label === 'fixed') return 1;
+            return Number.MAX_SAFE_INTEGER;
+        }
+        if (field === 'term_months' || field === 'fixed_rate_term') {
+            var num = Number(label);
+            return Number.isFinite(num) ? num : Number.MAX_SAFE_INTEGER;
+        }
+        return Number.MAX_SAFE_INTEGER;
     }
 
     function ribbonFiniteNumberOrNull(value) {
@@ -121,9 +138,11 @@
             var raw = formatTierValue(p.row || {}, field);
             var key = raw || '\u2014';
             if (!groups[key]) groups[key] = { label: key, sortIndex: Number.MAX_SAFE_INTEGER, products: [] };
+            groups[key].sortIndex = Math.min(groups[key].sortIndex, ribbonGroupSortIndex(String(field || ''), key));
             groups[key].products.push(p);
         });
         return Object.keys(groups).map(function (label) { return groups[label]; }).sort(function (a, b) {
+            if (a.sortIndex !== b.sortIndex) return a.sortIndex - b.sortIndex;
             return a.label.localeCompare(b.label);
         });
     }
