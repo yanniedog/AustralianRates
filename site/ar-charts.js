@@ -719,14 +719,18 @@
         if (!snapshot || typeof snapshot.awaitReady !== 'function') return;
         try {
             await snapshot.awaitReady(timeoutMs || 2500);
-            if (typeof snapshot.ensureFullScope === 'function') {
-                await snapshot.ensureFullScope({
+        } catch (_error) {
+            /* ignore */
+        }
+        if (snapshot && typeof snapshot.ensureFullScope === 'function') {
+            try {
+                snapshot.ensureFullScope({
                     chartWindow: baseParams && baseParams.chart_window ? String(baseParams.chart_window) : null,
                     preset: baseParams && baseParams.preset ? String(baseParams.preset) : null,
                 });
+            } catch (_error) {
+                /* background upgrade; ignore failures */
             }
-        } catch (_error) {
-            /* ignore */
         }
     }
 

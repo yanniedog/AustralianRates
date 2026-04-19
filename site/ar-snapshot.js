@@ -347,15 +347,8 @@
         return promise;
     }
 
-    var warmQueue = Promise.resolve(null);
-
     function enqueueWarm(scope, options) {
-        warmQueue = warmQueue.then(function () {
-            return fetchScopeBundle(scope, options);
-        }).catch(function () {
-            return null;
-        });
-        return warmQueue;
+        return fetchScopeBundle(scope, options) || Promise.resolve(null);
     }
 
     function maybeWarmReportWindows() {

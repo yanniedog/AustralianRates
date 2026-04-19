@@ -546,79 +546,7 @@
         }).join('');
     }
 
-    function filterDrawerMarkup(ui) {
-        var scenarioSection = section !== 'economic-data' ? (
-            '<section class="compare-start-card ar-feature-scenario" id="compare-start">' +
-                '<div class="compare-start-head">' +
-                    '<p class="compare-start-kicker">Scenario</p>' +
-                    '<p class="compare-start-note">' + esc(ui.starterNote || 'More filters adds banks, dates, and workspace controls without changing the active slice.') + '</p>' +
-                '</div>' +
-                '<div class="filters-scenarios-grid">' + drawerScenarioMarkup(ui) + '</div>' +
-            '</section>'
-        ) : '';
-
-        var extraAdvancedFields = (ui.advancedFields || []).filter(function (f) {
-            if (section === 'home-loans' && ['filter-security', 'filter-repayment', 'filter-structure', 'filter-lvr', 'filter-feature'].indexOf(f.id) >= 0) return false;
-            if (section === 'savings' && ['filter-account-type', 'filter-rate-type', 'filter-deposit-tier'].indexOf(f.id) >= 0) return false;
-            if (section === 'term-deposits' && ['filter-term-months', 'filter-deposit-tier', 'filter-interest-payment'].indexOf(f.id) >= 0) return false;
-            return true;
-        });
-
-        return '' +
-            scenarioSection +
-            '<details class="filters-drawer ar-feature-more-filters" id="scenario">' +
-                '<summary class="filters-drawer-summary">' +
-                    iconText('filter', 'Scenario and more filters', 'control-chip-label') +
-                    '<span id="filter-dirty-indicator" class="filter-dirty-dot" hidden></span>' +
-                '</summary>' +
-                '<div class="filters-drawer-body">' +
-                    '<div class="filters-drawer-section">' +
-                        '<div class="terminal-field terminal-field-bank" data-help="Search and select one or more institutions." data-help-label="Banks">' +
-                            '<div id="filter-bank-label" class="terminal-field-label">' + iconText('bank', 'Banks', 'field-code') + '</div>' +
-                            '<div class="terminal-inline-inputs terminal-inline-inputs-bank">' +
-                                '<input id="filter-bank-search" type="search" placeholder="Search banks…" aria-label="Search banks">' +
-                                '<button id="filter-bank-clear" class="chip-btn secondary" type="button" aria-label="Clear bank selection">All</button>' +
-                                '<span id="filter-bank-count" class="pill filter-bank-count" aria-live="polite">All</span>' +
-                            '</div>' +
-                            '<div id="filter-bank-options" class="bank-picker-grid bank-picker-compact" role="group" aria-labelledby="filter-bank-label"></div>' +
-                            '<select id="filter-bank" class="bank-native-select" multiple size="5" hidden aria-hidden="true" aria-labelledby="filter-bank-label"></select>' +
-                        '</div>' +
-                    '</div>' +
-                    '<details class="filters-more">' +
-                        '<summary class="filters-more-summary">' + iconText('filter', 'More filters', 'control-chip-label') + '</summary>' +
-                        '<div class="filters-more-body">' +
-                            '<div class="filters-drawer-section">' +
-                                '<div class="terminal-filter-group-head"><strong>Dates and limits</strong></div>' +
-                                '<div class="filters-more-grid">' +
-                                    compactNumberFieldMarkup({ id: 'filter-min-rate', label: 'Min rate', icon: 'summary', placeholder: ui.minRatePlaceholder || '', help: 'Minimum visible headline rate.' }) +
-                                    compactNumberFieldMarkup({ id: 'filter-max-rate', label: 'Max rate', icon: 'summary', placeholder: ui.maxRatePlaceholder || '', help: 'Maximum visible headline rate.' }) +
-                                    compactDateFieldMarkup('filter-start-date', 'From date', 'calendar', 'Choose a start date or type YYYY-MM-DD.') +
-                                    compactDateFieldMarkup('filter-end-date', 'To date', 'calendar', 'Choose an end date or type YYYY-MM-DD.') +
-                                '</div>' +
-                                '<div class="chart-filter-shortcuts-wrap">' +
-                                    dateShortcutMarkup() +
-                                    '<p id="filter-date-status" class="field-help">Choose a date or type YYYY-MM-DD</p>' +
-                                '</div>' +
-                            '</div>' +
-                            (extraAdvancedFields.length ? (
-                                '<div class="filters-drawer-section">' +
-                                    '<div class="terminal-filter-group-head"><strong>Advanced</strong></div>' +
-                                    '<div class="filters-more-grid">' +
-                                        extraAdvancedFields.map(function (f) { return fieldMarkup(Object.assign({}, f, { padGrid: false })); }).join('') +
-                                    '</div>' +
-                                '</div>'
-                            ) : '') +
-                            '<div class="filters-drawer-section">' +
-                                '<div class="terminal-filter-group-head"><strong>Workspace</strong></div>' +
-                                '<div class="filters-more-grid">' +
-                                    SHARED_ADVANCED_FIELDS.map(function (f) { return fieldMarkup(Object.assign({}, f, { padGrid: false })); }).join('') +
-                                '</div>' +
-                            '</div>' +
-                        '</div>' +
-                    '</details>' +
-                '</div>' +
-            '</details>';
-    }
+    function filterDrawerMarkup(_ui) { return ''; }
 
     function chartQuestionMarkup() {
         if (!CHART_VIEWS.length || CHART_VIEWS.length <= 1) {
@@ -713,13 +641,6 @@
                         // ── Chart tab panel ──────────────────────────────────────
                         '<section id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="tab-chart">',
                             '<div class="chart-block">',
-                                '<section class="compare-summary-panel ar-feature-current-leaders" id="compare-leaders" aria-label="' + esc(ui.compareHeading || 'Current leaders') + '">',
-                                    '<div class="compare-summary-copy">',
-                                        '<p class="compare-summary-kicker">Current leaders</p>',
-                                        '<h2>' + esc(ui.compareHeading || 'Current leaders') + '</h2>',
-                                    '</div>',
-                                    '<div id="quick-compare-cards" class="quick-compare-cards"><p class="quick-empty">Loading leaders</p></div>',
-                                '</section>',
                                 '<div class="chart-figure">',
                                     '<div class="chart-toolbar">',
                                         '<div class="chart-toolbar-stack">',
