@@ -303,7 +303,7 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const wantsLite = parseBooleanQuery(query.lite)
   const payload = await getCachedOrComputeSnapshot(c.env, section, scope, () => buildSnapshotPayload(c.env, section, scope))
   const data = wantsLite
-    ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data) || payload.data
+    ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data) || {}
     : payload.data
   withPublicCache(c, SNAPSHOT_CACHE_MAX_AGE)
   c.header('X-AR-Cache', payload.fromCache)

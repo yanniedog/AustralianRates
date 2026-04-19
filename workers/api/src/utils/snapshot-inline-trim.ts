@@ -34,6 +34,14 @@ function withoutKeys(source: Record<string, unknown>, keys: string[]): Record<st
   return out
 }
 
+function pickKeys(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = source[key]
+  }
+  return out
+}
+
 function capTableRows(source: Record<string, unknown>, key: string, max: number): Record<string, unknown> {
   const out: Record<string, unknown> = { ...source }
   const block = source[key]
@@ -89,6 +97,15 @@ export function trimSnapshotDataForHtmlInline(
 
   d = capTableRows(d, 'changes', 10)
   if (fits(d)) return d
+
+  for (const keys of [
+    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'chartModels', 'currentLeaders', 'filtersResolved', 'urls'],
+    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'filtersResolved', 'urls'],
+    ['siteUi', 'filters', 'overview', 'filtersResolved', 'urls'],
+  ]) {
+    const minimal = pickKeys(data, keys)
+    if (fits(minimal)) return minimal
+  }
 
   return null
 }

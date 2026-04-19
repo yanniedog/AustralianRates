@@ -62,10 +62,8 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
     if (!dbSection) return null;
     const scope = buildScope(chartWindow, preset);
     const inlineKey = 'snapshot-inline:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
-    const mainKey = 'snapshot:v' + SNAPSHOT_KV_VERSION + ':' + dbSection + ':' + scope;
     try {
-        let body = await env.CHART_CACHE_KV.get(inlineKey);
-        if (!body) body = await env.CHART_CACHE_KV.get(mainKey);
+        const body = await env.CHART_CACHE_KV.get(inlineKey);
         if (!body) return { ok: false, reason: 'kv-miss', url: 'kv:' + inlineKey };
         // The KV value is the raw SnapshotPayload JSON (no `{ok, section, scope, builtAt, data}` wrapper).
         // The client expects the wrapped shape, so wrap it here.
@@ -90,6 +88,7 @@ async function fetchSnapshotWithTimeout(origin, section, params) {
     const preset = normalisePreset(params.get('preset'));
     if (chartWindow) qs.set('chart_window', chartWindow);
     if (preset) qs.set('preset', preset);
+    qs.set('lite', '1');
     const url = origin + '/api/' + section + '/snapshot' + (qs.toString() ? '?' + qs.toString() : '');
 
     const timeoutMarker = { timedOut: false };

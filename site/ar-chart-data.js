@@ -4,6 +4,7 @@
 
     var config = window.AR.config || {};
     var chartConfig = window.AR.chartConfig || {};
+    var chartLocalData = window.AR.chartLocalData || null;
     var network = window.AR.network || {};
     var apiBase = config.apiBase || '';
     var requestJson = typeof network.requestJson === 'function' ? network.requestJson : null;
@@ -785,6 +786,25 @@
             queryParams[key] = params[key];
         });
         queryParams.compact = '1';
+        if (chartLocalData && typeof chartLocalData.getAnalyticsRows === 'function') {
+            return Promise.resolve(chartLocalData.getAnalyticsRows(queryParams)).then(function (localResult) {
+                if (localResult && (Array.isArray(localResult.rows) || (localResult.grouped_rows && Array.isArray(localResult.grouped_rows.groups)))) {
+                    return localResult;
+                }
+                var policy = buildRequestPolicy('/analytics/series', queryParams, 'series');
+                return fetchJsonWithPolicy(policy, '/analytics/series', {
+                    requestLabel: 'Chart history',
+                    timeoutMs: CHART_SERIES_TIMEOUT_MS,
+                    retryCount: 2,
+                    retryDelayMs: 900,
+                    cache: policy.fetchCache,
+                    skipCacheBust: policy.skipCacheBust,
+                    sortQuery: policy.sortQuery,
+                }, function (result) {
+                    return result && result.data ? result.data : result;
+                });
+            });
+        }
         var policy = buildRequestPolicy('/analytics/series', queryParams, 'series');
         return fetchJsonWithPolicy(policy, '/analytics/series', {
             requestLabel: 'Chart history',
@@ -808,6 +828,22 @@
         delete queryParams.sort;
         delete queryParams.dir;
         queryParams.mode = String(mode || 'moves');
+        if (chartLocalData && typeof chartLocalData.getReportPlot === 'function') {
+            return Promise.resolve(chartLocalData.getReportPlot(queryParams.mode, queryParams)).then(function (localResult) {
+                if (localResult) return localResult;
+                var policy = buildRequestPolicy('/analytics/report-plot', queryParams, 'report-plot');
+                return fetchJsonWithPolicy(policy, '/analytics/report-plot', {
+                    requestLabel: 'Report plot ' + String(mode || 'moves'),
+                    timeoutMs: CHART_REPORT_TIMEOUT_MS,
+                    retryCount: 0,
+                    cache: policy.fetchCache,
+                    skipCacheBust: policy.skipCacheBust,
+                    sortQuery: policy.sortQuery,
+                }, function (result) {
+                    return result && result.data ? result.data : result;
+                });
+            });
+        }
         var policy = buildRequestPolicy('/analytics/report-plot', queryParams, 'report-plot');
         return fetchJsonWithPolicy(policy, '/analytics/report-plot', {
             requestLabel: 'Report plot ' + String(mode || 'moves'),
@@ -833,6 +869,24 @@
         delete queryParams.start_date;
         delete queryParams.end_date;
         queryParams.limit = String(CHART_PREVIEW_ROWS_LIMIT);
+        if (chartLocalData && typeof chartLocalData.getLatestPreviewRows === 'function') {
+            return Promise.resolve(chartLocalData.getLatestPreviewRows(queryParams)).then(function (localRows) {
+                if (Array.isArray(localRows)) return localRows;
+                var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
+                return fetchJsonWithPolicy(policy, '/latest-all', {
+                    requestLabel: 'Current products',
+                    timeoutMs: CHART_PREVIEW_TIMEOUT_MS,
+                    retryCount: 0,
+                    cache: policy.fetchCache,
+                    skipCacheBust: policy.skipCacheBust,
+                    sortQuery: policy.sortQuery,
+                    bypassSnapshot: true,
+                }, function (result) {
+                    var body = result && result.data ? result.data : result;
+                    return Array.isArray(body && body.rows) ? body.rows : [];
+                });
+            });
+        }
         var policy = buildRequestPolicy('/latest-all', queryParams, 'latest-all');
         return fetchJsonWithPolicy(policy, '/latest-all', {
             requestLabel: 'Current products',
@@ -841,6 +895,7 @@
             cache: policy.fetchCache,
             skipCacheBust: policy.skipCacheBust,
             sortQuery: policy.sortQuery,
+            bypassSnapshot: true,
         }, function (result) {
             var body = result && result.data ? result.data : result;
             return Array.isArray(body && body.rows) ? body.rows : [];
