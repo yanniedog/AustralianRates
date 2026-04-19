@@ -23,10 +23,25 @@
         return Math.round((hi - lo) * 100) + 'bp spread';
     }
 
+    function ribbonFixedRateTermValue(raw) {
+        var value = String(raw || '').trim().toLowerCase();
+        if (!value || value === 'variable') return '';
+        var fixedYears = value.match(/^fixed_(\d+)yr$/) || value.match(/fixed[^0-9]*(\d+)/);
+        return fixedYears ? String(Number(fixedYears[1])) : '';
+    }
+
+    function ribbonRateStructureGroupValue(raw) {
+        var value = String(raw || '').trim().toLowerCase();
+        if (!value) return '';
+        if (value === 'variable') return 'variable';
+        if (value === 'fixed' || ribbonFixedRateTermValue(value)) return 'fixed';
+        return value;
+    }
+
     function ribbonTierFieldsForSection(sec) {
         var s = String(sec || '');
         if (s === 'home-loans') {
-            return ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set', 'product_name', 'product_id'];
+            return ['security_purpose', 'repayment_type', 'rate_structure', 'fixed_rate_term', 'lvr_tier', 'feature_set', 'product_name', 'product_id'];
         }
         if (s === 'savings') {
             return ['account_type', 'rate_type', 'deposit_tier', 'feature_set', 'product_name', 'product_id'];
@@ -47,6 +62,12 @@
 
     function formatRibbonTierValue(row, field) {
         if (!row || typeof row !== 'object') return '';
+        if (field === 'rate_structure') return ribbonRateStructureGroupValue(row.rate_structure);
+        if (field === 'fixed_rate_term') return ribbonFixedRateTermValue(row.rate_structure);
+        if (field === 'term_months') {
+            var months = Number(row.term_months);
+            return Number.isFinite(months) && months > 0 ? String(Math.round(months)) : '';
+        }
         var cfg = window.AR && window.AR.chartConfig;
         if (cfg && typeof cfg.formatFieldValue === 'function') {
             var out = cfg.formatFieldValue(field, row[field], row);
@@ -76,8 +97,13 @@
         }
         if (f === 'rate_structure') {
             if (/^variable$/i.test(v)) return 'Variable';
-            var fixedYears = v.match(/fixed\s+(\d+)\s+year/i);
-            if (fixedYears) return fixedYears[1] + 'Y fixed';
+            if (/^fixed$/i.test(v)) return 'Fixed';
+            var fixedYears = v.match(/^fixed_(\d+)yr$/i) || v.match(/fixed[^0-9]*(\d+)/i);
+            if (fixedYears) return fixedYears[1] + 'Y';
+        }
+        if (f === 'fixed_rate_term') {
+            var years = Number(v);
+            if (Number.isFinite(years) && years > 0) return Math.round(years) + 'Y';
             if (/^fixed$/i.test(v)) return 'Fixed';
         }
         if (f === 'account_type') {
@@ -89,12 +115,7 @@
         if (f === 'term_months') {
             var months = Number(v);
             if (Number.isFinite(months) && months > 0) {
-                var m = Math.round(months);
-                if (m >= 12 && m % 12 === 0) {
-                    var years = m / 12;
-                    return years + (years === 1 ? ' year' : ' years');
-                }
-                return m + ' months';
+                return Math.round(months) + 'm';
             }
         }
         if (f === 'product_name') {
@@ -124,6 +145,7 @@
         if (f === 'security_purpose') return 'Purpose';
         if (f === 'repayment_type') return 'Repayment';
         if (f === 'rate_structure') return 'Structure';
+        if (f === 'fixed_rate_term') return 'Fixed term';
         if (f === 'account_type') return 'Account';
         if (f === 'rate_type') return 'Rate type';
         if (f === 'deposit_tier') return 'Deposit';
@@ -145,6 +167,8 @@
     window.AR.ribbon.ribbonBankShortName = ribbonBankShortName;
     window.AR.ribbon.ribbonRangeText = ribbonRangeText;
     window.AR.ribbon.ribbonSpreadBpText = ribbonSpreadBpText;
+    window.AR.ribbon.ribbonFixedRateTermValue = ribbonFixedRateTermValue;
+    window.AR.ribbon.ribbonRateStructureGroupValue = ribbonRateStructureGroupValue;
     window.AR.ribbon.ribbonTierFieldsForSection = ribbonTierFieldsForSection;
     window.AR.ribbon.ribbonInitialTierFieldsForSection = ribbonInitialTierFieldsForSection;
     window.AR.ribbon.formatRibbonTierValue = formatRibbonTierValue;

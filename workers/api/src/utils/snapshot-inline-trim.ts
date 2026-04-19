@@ -73,34 +73,37 @@ export function trimSnapshotDataForHtmlInline(
   d = withoutKeys(d, ['analyticsSeries'])
   if (fits(d)) return d
 
-  d = withoutKeys(d, ['chartModels'])
+  d = withoutKeys(d, ['currentLeaders'])
   if (fits(d)) return d
 
-  for (const cap of [2000, 1000, 500, 300, 200, 100, 50]) {
+  for (const cap of [500, 300, 200, 100, 50, 25]) {
     d = capTableRows(d, 'latestAll', cap)
     if (fits(d)) return d
   }
 
-  for (const cap of [200, 100, 50, 25]) {
+  for (const cap of [100, 50, 25, 10]) {
     d = capTableRows(d, 'changes', cap)
     if (fits(d)) return d
   }
 
-  d = withoutKeys(d, ['reportPlotMoves', 'reportPlotBands'])
+  d = withoutKeys(d, ['chartModels'])
+  if (fits(d)) return d
+
+  d = withoutKeys(d, ['reportPlotMoves'])
   if (fits(d)) return d
 
   d = withoutKeys(d, ['executiveSummary'])
   if (fits(d)) return d
 
-  d = capTableRows(d, 'latestAll', 25)
+  d = capTableRows(d, 'latestAll', 10)
   if (fits(d)) return d
 
   d = capTableRows(d, 'changes', 10)
   if (fits(d)) return d
 
   for (const keys of [
-    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'chartModels', 'currentLeaders', 'filtersResolved', 'urls'],
-    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotMoves', 'reportPlotBands', 'filtersResolved', 'urls'],
+    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
+    ['siteUi', 'filters', 'overview', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
     ['siteUi', 'filters', 'overview', 'filtersResolved', 'urls'],
   ]) {
     const minimal = pickKeys(data, keys)

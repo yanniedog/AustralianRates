@@ -30,6 +30,8 @@ easy to bisect if a visual regression appears.
 | `site/public-shell.css` | 1232 | CSS. Separate layout shell (grid / main / bg) from header+footer+nav. |
 | `site/ar-chart-echarts.js` | 1420 | Likely splits into: option builder, tooltip, zoom/range, event wiring. |
 | `site/ar-chart-market-echarts.js` | 1221 | Same pattern as above; extract bank-color + series-building helpers first. |
+| `site/ar-chart-data.js` | 1130 | Split request/snapshot helpers from model builders. The new report snapshot product-history path is a natural seam: extract `buildChartModelFromReportProductHistory`, request-policy helpers, and snapshot bundle reads into sibling modules loaded before the main chart-data entrypoint. |
+| `site/ar-charts.js` | 1092 | Split report-view lifecycle from generic chart orchestration. The report snapshot bootstrap / lightweight render path (`buildReportPreviewModel`, `renderReportPreview`, `refreshReportRangePreview`, report draw branch) can move into a dedicated report-controller module. |
 | `site/ar-explorer.js` | 1299 | Split by explorer subsystem (filters, sort, URL sync, DOM wiring). |
 | `site/admin/status-page.js` | 1213 | Split by section card: coverage-gaps, logs, replay-queue, remediation-hints. |
 | `site/economic-data.js` | 1048 | Split by metric family (RBA / CPI / other). |

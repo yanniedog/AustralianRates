@@ -53,7 +53,7 @@
         tdCurveFrames: [],
         economicOverlayIds: [],
         economicOverlaySeries: [],
-        previewRows: [],
+        reportProductHistory: null,
         reportPlots: { moves: null, bands: null },
         mainChart: null,
         detailChart: null,
@@ -610,10 +610,15 @@
         return view === 'economicReport' || view === 'homeLoanReport' || view === 'termDepositReport';
     }
 
-    function buildReportPreviewModel(reportPlots, currentFields) {
-        var previewRows = Array.isArray(chartState.previewRows) ? chartState.previewRows : [];
-        if (previewRows.length && chartData.buildChartModel) {
-            var previewModel = chartData.buildChartModel(previewRows, currentFields || fields(), chartState);
+    function buildReportPreviewModel(reportPlots, currentFields, baseParams) {
+        var history = chartState.reportProductHistory || null;
+        if (history && chartData.buildChartModelFromReportProductHistory) {
+            var previewModel = chartData.buildChartModelFromReportProductHistory(
+                history,
+                currentFields || fields(),
+                chartState,
+                baseParams || buildBaseParams()
+            );
             previewModel.reportPlots = reportPlots || { moves: null, bands: null };
             return previewModel;
         }
@@ -638,7 +643,7 @@
         };
     }
 
-    async function renderReportPreview(currentFields) {
+    async function renderReportPreview(currentFields, baseParams) {
         if (!els.chartOutput || !currentFields || !isReportView(currentFields.view)) return false;
         if (!chartState.reportPlots || !chartState.reportPlots.bands) return false;
         if (!chartLightweight || typeof chartLightweight.ensureLoaded !== 'function') return false;
@@ -655,8 +660,8 @@
         if (els.chartOutput) els.chartOutput.innerHTML = '';
         if (els.chartDetailOutput) els.chartDetailOutput.innerHTML = '';
 
-        var previewModel = buildReportPreviewModel(chartState.reportPlots, currentFields);
-        var hasPreviewRows = Array.isArray(chartState.previewRows) && chartState.previewRows.length > 0;
+        var previewModel = buildReportPreviewModel(chartState.reportPlots, currentFields, baseParams);
+        var hasPreviewSeries = previewModel && Array.isArray(previewModel.allSeries) && previewModel.allSeries.length > 0;
         chartState.lwcMain = renderer(
             els.chartOutput,
             previewModel,
@@ -678,16 +683,16 @@
 
         observeChartContainers();
         if (chartUi.clearErrorState) chartUi.clearErrorState();
-        if (chartUi.renderSummary) chartUi.renderSummary(hasPreviewRows ? previewModel : null, currentFields, null, false);
-        if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(hasPreviewRows ? previewModel : null, chartState);
-        if (hasPreviewRows && els.chartSeriesList) {
+        if (chartUi.renderSummary) chartUi.renderSummary(hasPreviewSeries ? previewModel : null, currentFields, null, false);
+        if (chartUi.renderSeriesRail) chartUi.renderSeriesRail(hasPreviewSeries ? previewModel : null, chartState);
+        if (hasPreviewSeries && els.chartSeriesList) {
             els.chartSeriesList.setAttribute('data-preview-only', 'true');
         }
-        if (chartUi.renderSpotlight) chartUi.renderSpotlight(hasPreviewRows ? previewModel : null, currentFields);
-        if (chartSummary && chartSummary.render && hasPreviewRows) chartSummary.render(previewModel, currentFields);
-        else if (chartSummary && chartSummary.clear) chartSummary.clear('Detailed summary loading.');
+        if (chartUi.renderSpotlight) chartUi.renderSpotlight(hasPreviewSeries ? previewModel : null, currentFields);
+        if (chartSummary && chartSummary.render && hasPreviewSeries) chartSummary.render(previewModel, currentFields);
+        else if (chartSummary && chartSummary.clear) chartSummary.clear('No precomputed hierarchy data.');
         if (chartUi.setStatus) {
-            chartUi.setStatus('LIVE ' + currentFields.view + (hasPreviewRows ? ' | overview ready | current products' : ' | overview ready'));
+            chartUi.setStatus('LIVE ' + currentFields.view + (hasPreviewSeries ? ' | hierarchy ready' : ' | hierarchy pending'));
         }
         tabState.chartDrawn = true;
         scheduleResizeCharts();
@@ -760,13 +765,17 @@
             }, 0);
         }
 
-        var reportPlots = await Promise.all([
+        var reportData = await Promise.all([
             chartData.fetchReportPlot('moves', baseParams),
             chartData.fetchReportPlot('bands', baseParams),
+            chartData.fetchReportProductHistory ? chartData.fetchReportProductHistory(baseParams) : Promise.resolve(null),
         ]).then(function (results) {
             return {
-                moves: results[0] || null,
-                bands: results[1] || null,
+                reportPlots: {
+                    moves: results[0] || null,
+                    bands: results[1] || null,
+                },
+                reportProductHistory: results[2] || null,
             };
         }).catch(function (error) {
             clientLog('warn', 'Report range preview fetch failed', {
@@ -778,7 +787,7 @@
         });
 
         if (chartState.loadSerial !== loadSerial) return false;
-        if (!reportPlots || !reportPlots.bands) return drawChart();
+        if (!reportData || !reportData.reportPlots || !reportData.reportPlots.bands) return drawChart();
 
         if ((!chartState.rbaHistory || !chartState.rbaHistory.length) && chartData.fetchRbaHistory) {
             chartState.rbaHistory = await chartData.fetchRbaHistory().catch(function () { return []; });
@@ -788,8 +797,9 @@
         }
         if (chartState.loadSerial !== loadSerial) return false;
 
-        chartState.reportPlots = reportPlots;
-        return renderReportPreview(currentFields);
+        chartState.reportPlots = reportData.reportPlots;
+        chartState.reportProductHistory = reportData.reportProductHistory || null;
+        return renderReportPreview(currentFields, baseParams);
     }
 
     async function drawChart() {
@@ -812,16 +822,16 @@
             chartState.totalRows = 0;
             chartState.truncated = false;
             chartState.reportPlots = { moves: null, bands: null };
+            chartState.reportProductHistory = null;
             chartState.economicOverlaySeries = [];
-            chartState.previewRows = [];
             chartState.rbaHistory = [];
             chartState.cpiHistory = [];
             resetSelection();
             if (chartUi.setPendingState) chartUi.setPendingState('LOAD');
         } else if (chartUi.setStatus) {
             chartState.fallbackReason = '';
-            chartState.previewRows = [];
             chartState.reportPlots = { moves: null, bands: null };
+            chartState.reportProductHistory = null;
             chartState.economicOverlaySeries = [];
             chartState.stale = true;
             chartUi.setStatus('SYNC');
@@ -858,19 +868,19 @@
             ]).catch(function () {
                 return [[], []];
             });
-            var previewRowsPromise = wantsReportPlots && chartData.fetchLatestPreviewRows
-                ? chartData.fetchLatestPreviewRows(baseParams).then(function (rows) {
-                    chartState.previewRows = Array.isArray(rows) ? rows : [];
-                    return chartState.previewRows;
+            var reportProductHistoryPromise = wantsReportPlots && chartData.fetchReportProductHistory
+                ? chartData.fetchReportProductHistory(baseParams).then(function (payload) {
+                    chartState.reportProductHistory = payload || null;
+                    return chartState.reportProductHistory;
                 }).catch(function (error) {
-                    chartState.previewRows = [];
-                    clientLog('warn', 'Preview rows fetch failed', {
-                        message: String(error && error.message || 'Preview rows fetch failed'),
+                    chartState.reportProductHistory = null;
+                    clientLog('warn', 'Report product history fetch failed', {
+                        message: String(error && error.message || 'Report product history fetch failed'),
                         view: currentView,
                     });
-                    return [];
+                    return null;
                 })
-                : Promise.resolve([]);
+                : Promise.resolve(null);
 
             var rowsError = null;
             var rowsPromise = wantsReportPlots
@@ -893,27 +903,18 @@
                     return null;
                 });
             if (wantsReportPlots) {
-                previewRowsPromise.then(function () {
-                    if (!reportPreviewRendered) return;
-                    if (!chartState.previewRows.length) return;
-                    if (chartState.rows.length) return;
-                    if (chartState.loadSerial !== loadSerial) return;
-                    renderReportPreview(currentFields).catch(function (previewError) {
-                        clientLog('warn', 'Report preview update failed', {
-                            message: String(previewError && previewError.message || 'Report preview update failed'),
-                            view: currentView,
-                        });
-                    });
-                });
-            }
-            if (wantsReportPlots) {
-                chartState.reportPlots = await reportPlotPromise;
-                var _previewHistory = await historyPromise;
-                chartState.rbaHistory = _previewHistory[0];
-                chartState.cpiHistory = _previewHistory[1];
+                var reportPreviewData = await Promise.all([
+                    reportPlotPromise,
+                    historyPromise,
+                    reportProductHistoryPromise,
+                ]);
+                chartState.reportPlots = reportPreviewData[0];
+                chartState.rbaHistory = reportPreviewData[1][0];
+                chartState.cpiHistory = reportPreviewData[1][1];
+                chartState.reportProductHistory = reportPreviewData[2] || null;
                 if (chartState.loadSerial !== loadSerial) return;
                 try {
-                    reportPreviewRendered = await renderReportPreview(currentFields);
+                    reportPreviewRendered = await renderReportPreview(currentFields, baseParams);
                 } catch (previewError) {
                     clientLog('warn', 'Report preview render failed', {
                         message: String(previewError && previewError.message || 'Report preview render failed'),

@@ -433,7 +433,7 @@
     function railNote(fields, model) {
         if (!model) return 'Loading';
         if (fields.view === 'lenders') return 'Best lenders';
-        if (fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport') return 'Products meeting current filters';
+        if (fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport') return '';
         if (fields.view === 'market' && model.market) return marketDimensionLabel(model.market) + ' curve';
         if (fields.view === 'slope' && model.slope) return 'Who moved';
         if (fields.view === 'ladder') return 'Rate ladder';
@@ -534,6 +534,11 @@
         if (!els.chartSeriesList || !els.chartSeriesNote) return;
         els.chartSeriesList.removeAttribute('data-preview-only');
         var fields = getChartFields();
+        if (fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport') {
+            els.chartSeriesNote.textContent = '';
+            els.chartSeriesList.innerHTML = '';
+            return;
+        }
         var pal = chartConfig.palette();
         var marketOk = model && model.market && model.market.categories && model.market.categories.length;
         var timeRibbonOk = model && model.timeRibbon && model.timeRibbon.categories && model.timeRibbon.categories.length;
@@ -621,30 +626,6 @@
                     color: pal[index % pal.length],
                 });
             }).join('');
-            return;
-        }
-        if ((fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport') && model.visibleSeries && model.visibleSeries.length) {
-            els.chartSeriesList.innerHTML = hierarchicalSeriesRailMarkup(model, fields, selectionState, pal) +
-                '<div class="chart-series-card secondary is-reference" style="--series-accent:#f59e0b;" role="listitem">' +
-                    '<span class="chart-series-topline">' +
-                        '<span class="chart-series-name-wrap">' +
-                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
-                            '<span class="chart-series-name">RBA</span>' +
-                        '</span>' +
-                        '<span class="chart-series-value">Reference</span>' +
-                    '</span>' +
-                    '<span class="chart-series-caption">Cash rate is always shown</span>' +
-                '</div>' +
-                '<div class="chart-series-card secondary is-reference" style="--series-accent:#dc2626;" role="listitem">' +
-                    '<span class="chart-series-topline">' +
-                        '<span class="chart-series-name-wrap">' +
-                            '<span class="chart-series-swatch" aria-hidden="true"></span>' +
-                            '<span class="chart-series-name">CPI</span>' +
-                        '</span>' +
-                        '<span class="chart-series-value">Reference</span>' +
-                    '</span>' +
-                    '<span class="chart-series-caption">Annual inflation is always shown</span>' +
-                '</div>';
             return;
         }
         if (fields.view === 'market' && model.market) {
@@ -740,6 +721,11 @@
 
     function renderSpotlight(model, fields) {
         if (!els.chartPointDetails) return;
+        if (fields && (fields.view === 'homeLoanReport' || fields.view === 'economicReport' || fields.view === 'termDepositReport')) {
+            els.chartPointDetails.hidden = true;
+            els.chartPointDetails.innerHTML = '';
+            return;
+        }
         if (fields && fields.view === 'market') {
             var market = model && model.market ? model.market : null;
             var bucket = market && market.focusBucket ? market.focusBucket : null;
