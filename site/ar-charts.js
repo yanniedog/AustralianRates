@@ -714,6 +714,22 @@
         }, REPORT_PLOT_WARM_DELAY_MS);
     }
 
+    async function awaitSnapshotBootstrap(baseParams, timeoutMs) {
+        var snapshot = window.AR && window.AR.snapshot;
+        if (!snapshot || typeof snapshot.awaitReady !== 'function') return;
+        try {
+            await snapshot.awaitReady(timeoutMs || 2500);
+            if (typeof snapshot.ensureFullScope === 'function') {
+                await snapshot.ensureFullScope({
+                    chartWindow: baseParams && baseParams.chart_window ? String(baseParams.chart_window) : null,
+                    preset: baseParams && baseParams.preset ? String(baseParams.preset) : null,
+                });
+            }
+        } catch (_error) {
+            /* ignore */
+        }
+    }
+
     async function refreshReportRangePreview() {
         var currentFields = fields();
         if (!currentFields || !isReportView(currentFields.view)) {
@@ -726,6 +742,7 @@
         chartState.loadSerial += 1;
         var loadSerial = chartState.loadSerial;
         var baseParams = buildBaseParams();
+        await awaitSnapshotBootstrap(baseParams, 2500);
 
         chartState.loadedChartWindow = String(baseParams.chart_window || '');
         chartState.fallbackReason = '';
@@ -809,6 +826,7 @@
 
         chartLoadPromise = (async function () {
             var baseParams = buildBaseParams();
+            await awaitSnapshotBootstrap(baseParams, 2500);
             var currentFields = fields();
             var currentView = currentFields.view;
             var wantsReportPlots = isReportView(currentView);

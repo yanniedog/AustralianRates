@@ -169,7 +169,9 @@ export async function getCachedOrComputeSnapshot(
     const kvCached = await env.CHART_CACHE_KV.get(kvKey)
     if (kvCached) {
       try {
-        return { ...(JSON.parse(kvCached) as SnapshotPayload), fromCache: 'kv' }
+        const payload = JSON.parse(kvCached) as SnapshotPayload
+        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, payload)
+        return { ...payload, fromCache: 'kv' }
       } catch {
         /* ignore invalid KV entry */
       }
