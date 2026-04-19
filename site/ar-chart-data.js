@@ -23,6 +23,19 @@
         return Number.isFinite(num) ? num : null;
     }
 
+    function rowMinBalance(row) {
+        return numericValue(row, row && row.min_balance != null ? 'min_balance' : 'min_deposit');
+    }
+
+    function rowMaxBalance(row) {
+        if (!row) return null;
+        return row.max_balance != null
+            ? numericValue(row, 'max_balance')
+            : row.max_deposit != null
+                ? numericValue(row, 'max_deposit')
+                : null;
+    }
+
     function compareDates(left, right) {
         if (left === right) return 0;
         return String(left || '').localeCompare(String(right || ''));
@@ -624,6 +637,15 @@
 
         var maxRate = Number(params && params.max_rate);
         if (Number.isFinite(maxRate) && Number(latestValue) > maxRate) return false;
+
+        var balanceMin = Number(params && params.balance_min);
+        var balanceMax = Number(params && params.balance_max);
+        if (Number.isFinite(balanceMin) || Number.isFinite(balanceMax)) {
+            var rowMin = rowMinBalance(row);
+            var rowMax = rowMaxBalance(row);
+            if (Number.isFinite(balanceMin) && rowMax != null && rowMax < balanceMin) return false;
+            if (Number.isFinite(balanceMax) && rowMin != null && rowMin > balanceMax) return false;
+        }
 
         return true;
     }

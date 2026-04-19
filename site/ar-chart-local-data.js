@@ -469,9 +469,21 @@
         });
     }
 
+    function getReportProductHistory(params) {
+        var chartWindow = normalizeChartWindow(params && params.chart_window);
+        var preset = normalizePreset(params && params.preset);
+        var exact = exactBundle(chartWindow, preset, 'reportProductHistory');
+        if (exact) return Promise.resolve(exact.data.reportProductHistory || null);
+        return ensureFullScope(chartWindow, preset).then(function () {
+            var nextBundle = exactBundle(chartWindow, preset, 'reportProductHistory');
+            return nextBundle ? (nextBundle.data.reportProductHistory || null) : null;
+        });
+    }
+
     window.AR.chartLocalData = {
         getAnalyticsRows: getAnalyticsRows,
         getLatestPreviewRows: getLatestPreviewRows,
         getReportPlot: getReportPlot,
+        getReportProductHistory: getReportProductHistory,
     };
 })();
