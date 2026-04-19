@@ -17,8 +17,8 @@ import {
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v8 compacts reportProductHistory for inline report views. */
-const SNAPSHOT_PAYLOAD_VERSION = 8
+/** Bump when snapshot payload shape changes so stale rows are ignored. v9 raises the inline snapshot budget for raw home-loan report bundles. */
+const SNAPSHOT_PAYLOAD_VERSION = 9
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 

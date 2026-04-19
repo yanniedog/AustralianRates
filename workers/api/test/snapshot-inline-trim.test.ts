@@ -126,6 +126,53 @@ describe('snapshot-inline-trim', () => {
     )
   })
 
+  it('keeps raw home-loan report history and bands inline for the default 90D report bundle', () => {
+    const homeData: Record<string, unknown> = {
+      siteUi: { ok: true },
+      filters: { ok: true, filters: { banks: ['ANZ', 'CBA', 'Westpac'] } },
+      overview: { ok: true },
+      reportPlotBands: {
+        series: Array.from({ length: 16 }, (_, bankIndex) => ({
+          bank_name: `Bank ${bankIndex}`,
+          points: Array.from({ length: 51 }, (_, pointIndex) => ({
+            date: `2026-02-${String((pointIndex % 28) + 1).padStart(2, '0')}`,
+            min_rate: 5 + bankIndex / 20,
+            max_rate: 7 + bankIndex / 20,
+          })),
+        })),
+      },
+      reportProductHistory: {
+        ok: true,
+        version: 2,
+        section: 'home_loans',
+        dates: Array.from({ length: 51 }, (_, index) => `2026-02-${String((index % 28) + 1).padStart(2, '0')}`),
+        products: Array.from({ length: 1100 }, (_, index) => ({
+          key: `bank-${index}|product-${index}|owner_occupied|principal_and_interest|lvr_80-85%|variable`,
+          bank_name: `Bank ${index}`,
+          product_name: `Product ${index}`,
+          security_purpose: 'owner_occupied',
+          repayment_type: 'principal_and_interest',
+          rate_structure: index % 5 === 0 ? 'fixed_1yr' : 'variable',
+          lvr_tier: 'lvr_80-85%',
+          points: [[0, 50, 5.5 + (index % 7) / 10]],
+        })),
+      },
+      filtersResolved: { startDate: '2026-01-20', endDate: '2026-04-19', preset: null },
+      urls: {},
+      latestAll: { rows: Array.from({ length: 1200 }, (_, index) => ({ bank_name: `Bank ${index}`, product_name: `Product ${index}` })) },
+      analyticsSeries: { grouped_rows: { x: 'y'.repeat(600_000) } },
+      chartModels: { default: { meta: { totalSeries: 1100 } } },
+    }
+
+    expect(wrappedSnapshotApiByteLength('home_loans', 'window:90D', builtAt, homeData)).toBeGreaterThan(400_000)
+    const out = trimSnapshotDataForHtmlInline('home_loans', 'window:90D', builtAt, homeData)
+    expect(out).toHaveProperty('reportProductHistory')
+    expect(out).toHaveProperty('reportPlotBands')
+    expect(wrappedSnapshotApiByteLength('home_loans', 'window:90D', builtAt, out!)).toBeLessThanOrEqual(
+      SNAPSHOT_INLINE_RESPONSE_MAX_BYTES,
+    )
+  })
+
   it('returns null when immovable fields alone exceed the cap', () => {
     const data: Record<string, unknown> = {
       siteUi: { blob: 'x'.repeat(500_000) },
