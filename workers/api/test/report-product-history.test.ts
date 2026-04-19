@@ -32,6 +32,7 @@ describe('report-product-history', () => {
       },
     ])
 
+    expect(payload.version).toBe(2)
     expect(payload.dates).toEqual(['2026-04-18', '2026-04-19'])
     expect(payload.products).toHaveLength(1)
     expect(payload.products[0]).toMatchObject({
@@ -45,6 +46,8 @@ describe('report-product-history', () => {
       [0, 5.9],
       [1, 5.88],
     ])
+    expect(payload.products[0]).not.toHaveProperty('product_key')
+    expect(payload.products[0]).not.toHaveProperty('product_id')
   })
 
   it('keeps term-deposit terms numeric for client-side sorting', () => {
@@ -64,5 +67,50 @@ describe('report-product-history', () => {
 
     expect(payload.products[0]?.term_months).toBe(12)
     expect(payload.products[0]?.points).toEqual([[0, 4.55]])
+  })
+
+  it('run-length encodes contiguous unchanged rates and omits null metadata', () => {
+    const payload = buildReportProductHistoryPayload('term_deposits', [
+      {
+        collection_date: '2026-04-17',
+        bank_name: 'AMP Bank',
+        product_name: 'AMP TD',
+        product_key: 'amp|td|12',
+        term_months: 12,
+        deposit_tier: 'all',
+        interest_payment: 'at_maturity',
+        min_deposit: null,
+        max_deposit: null,
+        interest_rate: 4.5,
+      },
+      {
+        collection_date: '2026-04-18',
+        bank_name: 'AMP Bank',
+        product_name: 'AMP TD',
+        product_key: 'amp|td|12',
+        term_months: 12,
+        deposit_tier: 'all',
+        interest_payment: 'at_maturity',
+        min_deposit: null,
+        max_deposit: null,
+        interest_rate: 4.5,
+      },
+      {
+        collection_date: '2026-04-19',
+        bank_name: 'AMP Bank',
+        product_name: 'AMP TD',
+        product_key: 'amp|td|12',
+        term_months: 12,
+        deposit_tier: 'all',
+        interest_payment: 'at_maturity',
+        min_deposit: null,
+        max_deposit: null,
+        interest_rate: 4.5,
+      },
+    ])
+
+    expect(payload.products[0]?.points).toEqual([[0, 2, 4.5]])
+    expect(payload.products[0]).not.toHaveProperty('min_deposit')
+    expect(payload.products[0]).not.toHaveProperty('max_deposit')
   })
 })

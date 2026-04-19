@@ -24,8 +24,8 @@ describe('snapshot cache KV healing', () => {
     const kv = new MemoryKv()
     const section = 'home_loans'
     const scope = 'window:90D'
-    const mainKey = 'snapshot:v7:home_loans:window:90D'
-    const inlineKey = 'snapshot-inline:v7:home_loans:window:90D'
+    const mainKey = 'snapshot:v8:home_loans:window:90D'
+    const inlineKey = 'snapshot-inline:v8:home_loans:window:90D'
     const payload = {
       builtAt: '2026-04-19T00:00:00.000Z',
       scope,
