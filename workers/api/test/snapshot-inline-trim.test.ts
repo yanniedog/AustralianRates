@@ -63,7 +63,7 @@ describe('snapshot-inline-trim', () => {
       reportPlotBands: { series: [{ bank_name: 'ANZ', points: [{ date: '2026-04-19', min_rate: 4.5, max_rate: 4.7 }] }] },
       reportProductHistory: {
         ok: true,
-        version: 1,
+        version: 2,
         section: 'home_loans',
         dates: ['2026-04-18', '2026-04-19'],
         products: Array.from({ length: 300 }, (_, index) => ({
@@ -84,6 +84,44 @@ describe('snapshot-inline-trim', () => {
     expect(out).toHaveProperty('reportProductHistory')
     expect(out).toHaveProperty('reportPlotBands')
     expect(wrappedSnapshotApiByteLength(section, scope, builtAt, out!)).toBeLessThanOrEqual(
+      SNAPSHOT_INLINE_RESPONSE_MAX_BYTES,
+    )
+  })
+
+  it('keeps compact reportProductHistory for large term-deposit report views under the inline cap', () => {
+    const tdData: Record<string, unknown> = {
+      siteUi: { ok: true },
+      filters: { ok: true, filters: { term_months: Array.from({ length: 36 }, (_, index) => String(index + 1)) } },
+      overview: { ok: true },
+      reportPlotBands: {
+        series: [{ bank_name: 'ANZ', points: [{ date: '2026-04-19', min_rate: 4.5, max_rate: 4.7 }] }],
+      },
+      reportProductHistory: {
+        ok: true,
+        version: 2,
+        section: 'term_deposits',
+        dates: Array.from({ length: 31 }, (_, index) => `2026-04-${String(index + 1).padStart(2, '0')}`),
+        products: Array.from({ length: 1000 }, (_, index) => ({
+          key: `bank-${index}|td-${index}|12|all|at_maturity`,
+          bank_name: `Bank ${index}`,
+          product_name: `TD ${index}`,
+          term_months: (index % 36) + 1,
+          deposit_tier: 'all',
+          interest_payment: 'at_maturity',
+          points: [[0, 30, 4 + (index % 5) / 10]],
+        })),
+      },
+      filtersResolved: { startDate: '2026-04-01', endDate: '2026-04-31', preset: null },
+      urls: {},
+      latestAll: { rows: Array.from({ length: 1200 }, (_, index) => ({ bank_name: `Bank ${index}`, product_name: `Product ${index}` })) },
+      analyticsSeries: { grouped_rows: { x: 'y'.repeat(600_000) } },
+      chartModels: { default: { meta: { totalSeries: 1000 } } },
+    }
+
+    const out = trimSnapshotDataForHtmlInline('term_deposits', 'window:30D', builtAt, tdData)
+    expect(out).toHaveProperty('reportProductHistory')
+    expect(out).toHaveProperty('reportPlotBands')
+    expect(wrappedSnapshotApiByteLength('term_deposits', 'window:30D', builtAt, out!)).toBeLessThanOrEqual(
       SNAPSHOT_INLINE_RESPONSE_MAX_BYTES,
     )
   })

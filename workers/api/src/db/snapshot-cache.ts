@@ -17,8 +17,8 @@ import {
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v7 adds reportProductHistory to snapshot payloads. */
-const SNAPSHOT_PAYLOAD_VERSION = 7
+/** Bump when snapshot payload shape changes so stale rows are ignored. v8 compacts reportProductHistory for inline report views. */
+const SNAPSHOT_PAYLOAD_VERSION = 8
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 

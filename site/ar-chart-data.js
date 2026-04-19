@@ -635,27 +635,36 @@
         });
         var encodedPoints = Array.isArray(product && product.points) ? product.points : [];
         var points = [];
+        var canonicalKey = String(meta.key || meta.product_key || meta.series_key || meta.product_id || productIdentity(meta));
         encodedPoints.forEach(function (entry) {
-            var dateIndex = Array.isArray(entry) ? Number(entry[0]) : Number(entry && entry.date_index);
-            var value = Array.isArray(entry) ? Number(entry[1]) : Number(entry && entry.value);
-            var date = dates[dateIndex];
-            if (!date || !Number.isFinite(value)) return;
-            var row = {
-                collection_date: date,
-                interest_rate: value,
-            };
-            Object.keys(meta).forEach(function (key) {
-                row[key] = meta[key];
-            });
-            points.push({
-                date: date,
-                value: value,
-                row: row,
-            });
+            var startIndex = Array.isArray(entry) ? Number(entry[0]) : Number(entry && entry.date_index);
+            var endIndex = Array.isArray(entry) && entry.length > 2 ? Number(entry[1]) : startIndex;
+            var value = Array.isArray(entry)
+                ? Number(entry.length > 2 ? entry[2] : entry[1])
+                : Number(entry && entry.value);
+            if (!Number.isFinite(startIndex) || !Number.isFinite(endIndex) || !Number.isFinite(value)) return;
+            for (var dateIndex = startIndex; dateIndex <= endIndex; dateIndex += 1) {
+                var date = dates[dateIndex];
+                if (!date) continue;
+                var row = {
+                    collection_date: date,
+                    interest_rate: value,
+                };
+                Object.keys(meta).forEach(function (key) {
+                    row[key] = meta[key];
+                });
+                if (!row.product_key) row.product_key = canonicalKey;
+                if (!row.series_key) row.series_key = canonicalKey;
+                points.push({
+                    date: date,
+                    value: value,
+                    row: row,
+                });
+            }
         });
         if (!points.length) return null;
         return finalizeSeries({
-            key: String(meta.key || meta.product_key || meta.series_key || meta.product_id || productIdentity(meta)),
+            key: canonicalKey,
             firstRow: points[0].row,
             points: points,
         });
