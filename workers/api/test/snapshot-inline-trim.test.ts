@@ -173,6 +173,54 @@ describe('snapshot-inline-trim', () => {
     )
   })
 
+  it('keeps raw savings report history and bands inline for the default 90D report bundle', () => {
+    const savingsData: Record<string, unknown> = {
+      siteUi: { ok: true },
+      filters: { ok: true, filters: { banks: ['ANZ', 'ING', 'Macquarie'] } },
+      overview: { ok: true },
+      reportPlotBands: {
+        series: Array.from({ length: 14 }, (_, bankIndex) => ({
+          bank_name: `Bank ${bankIndex}`,
+          points: Array.from({ length: 51 }, (_, pointIndex) => ({
+            date: `2026-02-${String((pointIndex % 28) + 1).padStart(2, '0')}`,
+            min_rate: 3.5 + bankIndex / 20,
+            max_rate: 5.2 + bankIndex / 20,
+          })),
+        })),
+      },
+      reportProductHistory: {
+        ok: true,
+        version: 2,
+        section: 'savings',
+        dates: Array.from({ length: 51 }, (_, index) => `2026-02-${String((index % 28) + 1).padStart(2, '0')}`),
+        products: Array.from({ length: 950 }, (_, index) => ({
+          key: `bank-${index}|savings-${index}`,
+          bank_name: `Bank ${index}`,
+          product_name: `Savings ${index}`,
+          account_type: 'savings',
+          rate_type: index % 2 === 0 ? 'ongoing' : 'introductory',
+          deposit_tier: index % 3 === 0 ? '$0 to $10k' : '$10k to $50k',
+          feature_set: index % 4 === 0 ? 'bonus_interest' : 'everyday',
+          min_balance: index % 3 === 0 ? 0 : 10000,
+          max_balance: index % 3 === 0 ? 10000 : 50000,
+          points: [[0, 50, 4.1 + (index % 6) / 10]],
+        })),
+      },
+      filtersResolved: { startDate: '2026-01-20', endDate: '2026-04-19', preset: null },
+      urls: {},
+      latestAll: { rows: Array.from({ length: 1200 }, (_, index) => ({ bank_name: `Bank ${index}`, product_name: `Savings ${index}` })) },
+      analyticsSeries: { grouped_rows: { x: 'y'.repeat(600_000) } },
+      chartModels: { default: { meta: { totalSeries: 950 } } },
+    }
+
+    const out = trimSnapshotDataForHtmlInline('savings', 'window:90D', builtAt, savingsData)
+    expect(out).toHaveProperty('reportProductHistory')
+    expect(out).toHaveProperty('reportPlotBands')
+    expect(wrappedSnapshotApiByteLength('savings', 'window:90D', builtAt, out!)).toBeLessThanOrEqual(
+      SNAPSHOT_INLINE_RESPONSE_MAX_BYTES,
+    )
+  })
+
   it('returns null when immovable fields alone exceed the cap', () => {
     const data: Record<string, unknown> = {
       siteUi: { blob: 'x'.repeat(500_000) },

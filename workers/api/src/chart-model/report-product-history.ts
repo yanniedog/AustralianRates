@@ -38,8 +38,8 @@ export type ReportProductHistoryPayload = {
 
 const META_FIELDS_BY_SECTION: Record<ChartCacheSection, readonly string[]> = {
   home_loans: ['security_purpose', 'repayment_type', 'rate_structure', 'lvr_tier', 'feature_set'],
-  savings: ['account_type', 'rate_type', 'deposit_tier', 'min_balance', 'max_balance'],
-  term_deposits: ['term_months', 'deposit_tier', 'interest_payment', 'min_deposit', 'max_deposit'],
+  savings: ['account_type', 'rate_type', 'deposit_tier', 'feature_set', 'min_balance', 'max_balance'],
+  term_deposits: ['term_months', 'deposit_tier', 'interest_payment', 'rate_structure', 'feature_set', 'min_deposit', 'max_deposit'],
 }
 
 function productHistoryKey(row: Record<string, unknown>): string {
