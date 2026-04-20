@@ -3,6 +3,7 @@ import { getAppConfig, setAppConfig } from '../db/app-config'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { triggerDailyRun } from './bootstrap-jobs'
+import { buildCoverageGapRemediationRunId } from '../utils/idempotency'
 import type { CoverageGapAuditReport } from './coverage-gap-audit'
 import { dispatchReplayQueue } from './replay-queue'
 
@@ -285,7 +286,7 @@ export async function runCoverageGapRemediation(
           const reconcileResult = await triggerDailyRun(env, {
             source: 'manual',
             force: true,
-            runIdOverride: `daily:${scope.collection_date}:coverage-gap-remediate:${crypto.randomUUID()}`,
+            runIdOverride: buildCoverageGapRemediationRunId(scope.collection_date),
             collectionDateOverride: scope.collection_date,
             lenderCodes: [scope.lender_code],
             datasets: scope.datasets,

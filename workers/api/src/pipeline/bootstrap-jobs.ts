@@ -17,6 +17,7 @@ import { collectCpiFromRbaG1 } from '../ingest/cpi'
 import { acquireRunLock, releaseRunLock } from '../durable/run-lock'
 import { enqueueBackfillJobs, enqueueDailyLenderJobs, enqueueDailySavingsLenderJobs } from '../queue/producer'
 import type { EnvBindings, LenderConfig } from '../types'
+import { VALIDATE_COMMON } from '../ingest/validate-common'
 import { buildBackfillRunId, buildDailyRunId, buildRunLockKey } from '../utils/idempotency'
 import { log } from '../utils/logger'
 import { currentMonthCursor, getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -122,6 +123,21 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
   const runId =
     options.runIdOverride ??
     (options.force ? `${baseRunId}:force:${crypto.randomUUID()}` : baseRunId)
+
+  const maxRunIdLen = VALIDATE_COMMON.MAX_RUN_ID_LENGTH
+  if (runId.length > maxRunIdLen) {
+    log.warn('pipeline', 'daily_run_rejected_run_id_too_long', {
+      runId,
+      context: `length=${runId.length} max=${maxRunIdLen} collectionDate=${collectionDate}`,
+    })
+    return {
+      ok: false,
+      skipped: true,
+      reason: `run_id_exceeds_max_length_${maxRunIdLen}`,
+      runId,
+      collectionDate,
+    }
+  }
 
   const lockKey = buildRunLockKey('daily', collectionDate)
   const lockTtlSeconds = parseIntegerEnv(env.LOCK_TTL_SECONDS, DEFAULT_LOCK_TTL_SECONDS)
