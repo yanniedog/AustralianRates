@@ -208,6 +208,12 @@ export type ChartRibbonStyle = {
   selected_fill_opacity_end: number
   selected_fill_opacity_peak: number
   fill_opacity_others_scale: number
+  /**
+   * When true, each lender band fill uses a chart-global vertical gradient: opacity follows
+   * the rate distribution (20th/40th/60th/80th percentiles of band min/max/mean rates in the payload).
+   * Disabled uses the classic soft tube gradient (fill_opacity_end / fill_opacity_peak).
+   */
+  ribbon_rate_quintile_fill: boolean
   mean_width: number
   mean_opacity: number
   mean_opacity_others: number
@@ -231,6 +237,7 @@ export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
   selected_fill_opacity_end: 0.44,
   selected_fill_opacity_peak: 0.82,
   fill_opacity_others_scale: 0.22,
+  ribbon_rate_quintile_fill: false,
   mean_width: 1.25,
   mean_opacity: 1,
   mean_opacity_others: 0.18,
@@ -271,6 +278,17 @@ function numNonNeg(v: unknown, fallback: number, hi: number): number {
   return clamp(n, 0, hi)
 }
 
+function boolish(v: unknown, fallback: boolean): boolean {
+  if (typeof v === 'boolean') return v
+  if (typeof v === 'string') {
+    const t = v.trim().toLowerCase()
+    if (t === 'true' || t === '1' || t === 'yes') return true
+    if (t === 'false' || t === '0' || t === 'no') return false
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) return v !== 0
+  return fallback
+}
+
 export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null | undefined): ChartRibbonStyle {
   const d = DEFAULT_CHART_RIBBON_STYLE
   if (!raw || typeof raw !== 'object') return { ...d }
@@ -290,6 +308,7 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     selected_fill_opacity_end: num01(raw.selected_fill_opacity_end, d.selected_fill_opacity_end),
     selected_fill_opacity_peak: num01(raw.selected_fill_opacity_peak, d.selected_fill_opacity_peak),
     fill_opacity_others_scale: num01(raw.fill_opacity_others_scale, d.fill_opacity_others_scale),
+    ribbon_rate_quintile_fill: boolish(raw.ribbon_rate_quintile_fill, d.ribbon_rate_quintile_fill),
     mean_width: numNonNeg(raw.mean_width, d.mean_width, 8),
     mean_opacity: num01(raw.mean_opacity, d.mean_opacity),
     mean_opacity_others: num01(raw.mean_opacity_others, d.mean_opacity_others),

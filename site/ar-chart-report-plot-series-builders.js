@@ -93,6 +93,7 @@
             selected_fill_opacity_end: 0.44,
             selected_fill_opacity_peak: 0.82,
             fill_opacity_others_scale: 0.22,
+            ribbon_rate_quintile_fill: false,
             mean_width: 1.6,
             mean_opacity: 1,
             mean_opacity_others: 0.18,
@@ -103,6 +104,47 @@
             others_grey_mix: 0.62,
             active_z: 48,
             inactive_z: 2,
+        };
+    }
+
+    /** Collect positive min / max / mean band rates for ribbon quintile styling. */
+    function collectRibbonRatesForQuintiles(plotPayload) {
+        var out = [];
+        (plotPayload && plotPayload.series || []).forEach(function (bank) {
+            (bank.points || []).forEach(function (point) {
+                var a = positiveRibbonRateOrNull(point.min_rate);
+                var b = positiveRibbonRateOrNull(point.max_rate);
+                var m = positiveRibbonRateOrNull(point.mean_rate);
+                if (a != null) out.push(a);
+                if (b != null) out.push(b);
+                if (m != null) out.push(m);
+            });
+        });
+        return out;
+    }
+
+    /**
+     * 20th / 40th / 60th / 80th percentiles of all band rates in the payload (linear interpolation on sorted sample).
+     * Returns null when there is no usable data.
+     */
+    function computeRibbonRateQuintileThresholds(plotPayload) {
+        var vals = collectRibbonRatesForQuintiles(plotPayload);
+        if (!vals.length) return null;
+        vals.sort(function (a, b) { return a - b; });
+        function q(p) {
+            if (vals.length === 1) return vals[0];
+            var pos = (vals.length - 1) * p;
+            var lo = Math.floor(pos);
+            var hi = Math.ceil(pos);
+            if (lo === hi) return vals[lo];
+            var w = pos - lo;
+            return vals[lo] * (1 - w) + vals[hi] * w;
+        }
+        return {
+            q20: q(0.2),
+            q40: q(0.4),
+            q60: q(0.6),
+            q80: q(0.8),
         };
     }
 
@@ -446,5 +488,6 @@
         buildBandSeries: buildBandSeries,
         buildProductOverlay: buildProductOverlay,
         buildRibbonCanvasProductModel: buildRibbonCanvasProductModel,
+        computeRibbonRateQuintileThresholds: computeRibbonRateQuintileThresholds,
     };
 })();

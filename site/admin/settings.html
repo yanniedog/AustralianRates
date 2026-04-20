@@ -119,6 +119,14 @@
                 <label>Selected fill peak % <input type="number" id="ribbon-selected-fill-peak" min="0" max="100" value="100" style="width:4em;"></label>
                 <label>Fill others scale % <input type="number" id="ribbon-fill-scale-o" min="0" max="100" value="22" style="width:4em;"></label>
             </div>
+            <p class="admin-settings-group-title">Experimental band shading</p>
+            <p class="admin-hint">When enabled, each lender band is filled with a vertical gradient tied to the <strong>chart-wide</strong> distribution of band min, max, and mean rates: outer quintiles (lowest and highest 20% of rates) use 20% opacity, next quintiles 40%, middle 60%. Uncheck to restore the classic soft tube fill (base / focus / selected opacities above).</p>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label style="display:inline-flex;align-items:center;gap:8px;max-width:52rem;line-height:1.35;">
+                    <input type="checkbox" id="ribbon-quintile-fill">
+                    Rate-quintile band fill (3 opacity levels by market rate quintiles)
+                </label>
+            </div>
             <p class="admin-settings-group-title">Mean line (average rate within the band)</p>
             <p class="admin-hint">Optional centre line through each lender band. Set width to 0 to hide. Separate opacities for focused vs other lenders.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
@@ -200,7 +208,8 @@
                 product_line_width_selected: 2.5,
                 others_grey_mix: 0.62,
                 active_z: 48,
-                inactive_z: 2
+                inactive_z: 2,
+                ribbon_rate_quintile_fill: false
             };
             var msgEl = document.getElementById('msg');
             var desktopRangeEl = document.getElementById('chart-legend-opacity-desktop-pct');
@@ -293,6 +302,8 @@
                 v('ribbon-grey-mix', pct100(d.others_grey_mix));
                 v('ribbon-z-a', d.active_z);
                 v('ribbon-z-i', d.inactive_z);
+                var qFillEl = document.getElementById('ribbon-quintile-fill');
+                if (qFillEl) qFillEl.checked = !!d.ribbon_rate_quintile_fill;
             }
             function collectRibbonObject() {
                 function n(id, fallback) {
@@ -324,7 +335,8 @@
                     product_line_width_selected: Math.max(0, Math.min(8, n('ribbon-pl-w-s', 2.5))),
                     others_grey_mix: p('ribbon-grey-mix', 62),
                     active_z: Math.max(4, Math.min(120, Math.floor(n('ribbon-z-a', 48)))),
-                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2))))
+                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2)))),
+                    ribbon_rate_quintile_fill: !!(document.getElementById('ribbon-quintile-fill') && document.getElementById('ribbon-quintile-fill').checked)
                 };
             }
 

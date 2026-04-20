@@ -108,4 +108,20 @@ describe('chart-site-ui', () => {
     expect(merged.active_z).toBe(20)
     expect(merged.inactive_z).toBe(19)
   })
+
+  it('mergeChartRibbonStylePartial parses ribbon_rate_quintile_fill', () => {
+    expect(DEFAULT_CHART_RIBBON_STYLE.ribbon_rate_quintile_fill).toBe(false)
+    expect(
+      mergeChartRibbonStylePartial({ ribbon_rate_quintile_fill: true } as Record<string, unknown>)
+        .ribbon_rate_quintile_fill,
+    ).toBe(true)
+    expect(
+      mergeChartRibbonStylePartial({ ribbon_rate_quintile_fill: 'yes' } as Record<string, unknown>)
+        .ribbon_rate_quintile_fill,
+    ).toBe(true)
+    expect(
+      mergeChartRibbonStylePartial({ ribbon_rate_quintile_fill: '0' } as Record<string, unknown>)
+        .ribbon_rate_quintile_fill,
+    ).toBe(false)
+  })
 })
