@@ -899,13 +899,16 @@
             delete chartResponseCache[key];
             return null;
         }
+        if (entry.immutableSnapshot) return entry.data;
         return cloneCacheValue(entry.data);
     }
 
-    function writeChartResponseCache(key, data) {
+    function writeChartResponseCache(key, data, options) {
+        var immutable = options && options.immutableSnapshot;
         chartResponseCache[key] = {
             ts: Date.now(),
-            data: cloneCacheValue(data),
+            data: immutable ? data : cloneCacheValue(data),
+            immutableSnapshot: !!immutable,
         };
         return data;
     }
@@ -915,15 +918,18 @@
         var cached = readChartResponseCache(key);
         if (cached != null) return Promise.resolve(cached);
         if (inflightChartRequests[key]) {
-            return inflightChartRequests[key].then(function (data) {
-                return cloneCacheValue(data);
+            return inflightChartRequests[key].then(function (wrapped) {
+                if (wrapped && wrapped.immutableSnapshot) return wrapped.payload;
+                return cloneCacheValue(wrapped && wrapped.payload);
             });
         }
 
         var fetchPromise;
         if (requestJson) {
             fetchPromise = requestJson(policy.url, requestOptions).then(function (result) {
-                return extractor(result);
+                var fromSnap = !!(result && result.fromSnapshot);
+                var payload = extractor(result);
+                return { payload: payload, immutableSnapshot: fromSnap };
             });
         } else {
             var fetchUrl = (window.AR.network && window.AR.network.prepareRequestUrl)
@@ -937,19 +943,27 @@
             fetchPromise = fetch(fetchUrl, { cache: policy.fetchCache }).then(function (response) {
                 if (!response.ok) throw new Error('HTTP ' + response.status + ' for ' + requestKind);
                 return response.json();
-            }).then(extractor);
+            }).then(function (body) {
+                var payload = extractor(body);
+                return { payload: payload, immutableSnapshot: false };
+            });
         }
 
-        inflightChartRequests[key] = fetchPromise.then(function (data) {
-            writeChartResponseCache(key, data);
+        inflightChartRequests[key] = fetchPromise.then(function (wrapped) {
+            var data = wrapped && wrapped.payload;
+            var immutable = !!(wrapped && wrapped.immutableSnapshot);
+            writeChartResponseCache(key, data, { immutableSnapshot: immutable });
             delete inflightChartRequests[key];
-            return cloneCacheValue(data);
+            return { payload: data, immutableSnapshot: immutable };
         }).catch(function (error) {
             delete inflightChartRequests[key];
             throw error;
         });
 
-        return inflightChartRequests[key];
+        return inflightChartRequests[key].then(function (wrapped) {
+            if (wrapped && wrapped.immutableSnapshot) return wrapped.payload;
+            return cloneCacheValue(wrapped && wrapped.payload);
+        });
     }
 
     function fetchAnalyticsRows(params) {
