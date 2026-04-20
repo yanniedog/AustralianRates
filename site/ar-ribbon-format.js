@@ -113,10 +113,15 @@
             if (/^introductory$/i.test(v)) return 'Introductory';
         }
         if (f === 'term_months') {
-            var months = Number(v);
-            if (Number.isFinite(months) && months > 0) {
-                return Math.round(months) + 'm';
+            var t = String(v || '').trim();
+            if (/^[0-9]+$/.test(t)) {
+                var months = Number(t);
+                if (Number.isFinite(months) && months > 0) return Math.round(months) + 'm';
             }
+            if (t && /month/i.test(t)) {
+                return t.replace(/\s+months?/gi, 'm').replace(/\s+/g, ' ').trim();
+            }
+            if (t) return t;
         }
         if (f === 'product_name') {
             return ribbonTrimProductName(v);

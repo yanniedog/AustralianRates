@@ -17,6 +17,22 @@
         { min: 10000000, max: null, label: '$10m+' },
     ];
 
+    /** Term deposit ribbon tree: collapse per-month rows into readable ranges (chronological order). */
+    var RIBBON_TERM_MONTH_BANDS = [
+        { min: 1, max: 3, label: '1\u20133 months' },
+        { min: 4, max: 6, label: '4\u20136 months' },
+        { min: 7, max: 9, label: '7\u20139 months' },
+        { min: 10, max: 11, label: '10\u201311 months' },
+        { min: 12, max: 12, label: '12 months (1 year)' },
+        { min: 13, max: 23, label: '13\u201323 months' },
+        { min: 24, max: 24, label: '24 months (2 years)' },
+        { min: 25, max: 35, label: '25\u201335 months' },
+        { min: 36, max: 36, label: '36 months (3 years)' },
+        { min: 37, max: 47, label: '37\u201347 months' },
+        { min: 48, max: 59, label: '48\u201359 months' },
+        { min: 60, max: null, label: '60+ months (5+ years)' },
+    ];
+
     function formatTierValue(row, field) {
         return typeof formatRibbonTierValue === 'function' ? formatRibbonTierValue(row, field) : '';
     }
@@ -118,6 +134,33 @@
         return [{ label: fallback, sortIndex: RIBBON_DEPOSIT_TIER_BANDS.length, products: [product] }];
     }
 
+    function ribbonTermMonthsRoundedFromRow(row) {
+        if (!row || typeof row !== 'object') return null;
+        var m = ribbonFiniteNumberOrNull(row.term_months);
+        if (m == null) return null;
+        var rounded = Math.round(Number(m));
+        if (!Number.isFinite(rounded) || rounded < 1) return null;
+        return rounded;
+    }
+
+    function ribbonTermMonthBandEntriesForProduct(product) {
+        var row = product && product.row && typeof product.row === 'object' ? product.row : {};
+        var months = ribbonTermMonthsRoundedFromRow(row);
+        if (months == null) {
+            var rawUnknown = formatTierValue(row, 'term_months') || '\u2014';
+            return [{ label: rawUnknown, sortIndex: 1e15, products: [product] }];
+        }
+        for (var i = 0; i < RIBBON_TERM_MONTH_BANDS.length; i += 1) {
+            var band = RIBBON_TERM_MONTH_BANDS[i];
+            var hi = band.max == null ? Infinity : band.max;
+            if (months >= band.min && months <= hi) {
+                return [{ label: band.label, sortIndex: band.min, products: [product] }];
+            }
+        }
+        var tail = formatTierValue(row, 'term_months') || String(months);
+        return [{ label: tail + ' months', sortIndex: months, products: [product] }];
+    }
+
     function buildRibbonFieldGroups(prods, field) {
         var groups = {};
         if (String(field || '') === 'deposit_tier') {
@@ -126,6 +169,21 @@
                     if (!groups[entry.label]) {
                         groups[entry.label] = { label: entry.label, sortIndex: entry.sortIndex, products: [] };
                     }
+                    groups[entry.label].products.push(product);
+                });
+            });
+            return Object.keys(groups).map(function (label) { return groups[label]; }).sort(function (a, b) {
+                if (a.sortIndex !== b.sortIndex) return a.sortIndex - b.sortIndex;
+                return a.label.localeCompare(b.label);
+            });
+        }
+        if (String(field || '') === 'term_months') {
+            prods.forEach(function (product) {
+                ribbonTermMonthBandEntriesForProduct(product).forEach(function (entry) {
+                    if (!groups[entry.label]) {
+                        groups[entry.label] = { label: entry.label, sortIndex: entry.sortIndex, products: [] };
+                    }
+                    groups[entry.label].sortIndex = Math.min(groups[entry.label].sortIndex, entry.sortIndex);
                     groups[entry.label].products.push(product);
                 });
             });
@@ -247,11 +305,14 @@
     }
 
     window.AR.ribbon.RIBBON_DEPOSIT_TIER_BANDS = RIBBON_DEPOSIT_TIER_BANDS;
+    window.AR.ribbon.RIBBON_TERM_MONTH_BANDS = RIBBON_TERM_MONTH_BANDS;
     window.AR.ribbon.ribbonFiniteNumberOrNull = ribbonFiniteNumberOrNull;
     window.AR.ribbon.ribbonMoneyAmountFromText = ribbonMoneyAmountFromText;
     window.AR.ribbon.ribbonDepositTierBoundsFromLabel = ribbonDepositTierBoundsFromLabel;
     window.AR.ribbon.ribbonDepositTierBoundsFromRow = ribbonDepositTierBoundsFromRow;
     window.AR.ribbon.ribbonDepositTierBandEntriesForProduct = ribbonDepositTierBandEntriesForProduct;
+    window.AR.ribbon.ribbonTermMonthsRoundedFromRow = ribbonTermMonthsRoundedFromRow;
+    window.AR.ribbon.ribbonTermMonthBandEntriesForProduct = ribbonTermMonthBandEntriesForProduct;
     window.AR.ribbon.buildRibbonFieldGroups = buildRibbonFieldGroups;
     window.AR.ribbon.buildRibbonTierTree = buildRibbonTierTree;
     window.AR.ribbon.ribbonRateAtAnchorForHierarchy = ribbonRateAtAnchorForHierarchy;
