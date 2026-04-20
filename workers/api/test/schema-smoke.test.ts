@@ -140,4 +140,14 @@ describe('schema migration smoke test', () => {
     expect(sql).toContain('CREATE VIEW vw_latest_rates AS')
     expect(sql).toContain('CREATE VIEW vw_rate_timeseries AS')
   })
+
+  it('includes home-loan lvr_standard_reference schema migration', () => {
+    const file = resolve(process.cwd(), 'migrations/0053_home_loan_lvr_standard_reference.sql')
+    const sql = readFileSync(file, 'utf8')
+    expect(sql).toContain("'lvr_standard_reference'")
+    expect(sql).toContain('CREATE TABLE historical_loan_rates_new')
+    expect(sql).toContain("THEN 'lvr_standard_reference'")
+    expect(sql).toContain('CREATE VIEW vw_latest_rates AS')
+    expect(sql).toContain('CREATE VIEW vw_rate_timeseries AS')
+  })
 })

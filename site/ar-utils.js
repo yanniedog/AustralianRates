@@ -163,6 +163,7 @@
         }
         if (field === 'lvr_tier') {
             if (v === 'lvr_=60%') return '<=60%';
+            if (v === 'lvr_standard_reference') return 'Standard base rate';
             if (v === 'lvr_unspecified') return 'Not specified';
             var lvrRange = v.match(/^lvr_(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)%$/);
             if (lvrRange) return lvrRange[1] + '-' + lvrRange[2] + '%';

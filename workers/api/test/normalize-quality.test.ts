@@ -137,6 +137,12 @@ describe('row validation', () => {
     expect(verdict.ok).toBe(true)
   })
 
+  it('accepts lvr_standard_reference for published contract headline rates without an LVR band', () => {
+    const row = loadRealHomeLoanFixture()
+    const verdict = validateNormalizedRow({ ...row, lvrTier: 'lvr_standard_reference' })
+    expect(verdict.ok).toBe(true)
+  })
+
   it('accepts real mortgage product names that do not contain the basic token list', () => {
     const row = loadRealHomeLoanFixture()
     expect(validateNormalizedRow({ ...row, productName: 'Mortgage Simplifier' }).ok).toBe(true)
