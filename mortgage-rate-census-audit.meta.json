@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-04-20T13:02:03.993Z",
+  "origin": "https://www.australianrates.com",
+  "total_rows": 1155,
+  "by_status": {
+    "cdr_only_match": 715,
+    "pass": 426,
+    "presentation": 14
+  },
+  "lenders_configured": 16,
+  "timing": "not_automated_effective_dates_require_manual_bank_page_review",
+  "status_taxonomy": [
+    "pass",
+    "presentation",
+    "cdr_only_match",
+    "ar_error",
+    "timing"
+  ]
+}
