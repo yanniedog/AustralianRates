@@ -70,12 +70,16 @@ function dedupeAnalyticsRows(
   return deduped
 }
 
-/** Keep the most recent rows when over the chart cap (data is sorted ascending by date). */
+/**
+ * Keep the most recent rows when over the chart cap (data is sorted ascending by date).
+ * `disableRowCap` widens how many raw rows we fetch (see resolveChartSeriesFetchCap); only
+ * `chartInternalRefresh` skips the response cap so snapshot/cron can build full cache payloads.
+ */
 function capRows(
   rows: Array<Record<string, unknown>>,
-  disableRowCap?: boolean,
+  filters: ChartSeriesFetchContext,
 ): Array<Record<string, unknown>> {
-  if (disableRowCap) return rows
+  if (filters.chartInternalRefresh) return rows
   return rows.length <= CHART_SERIES_RESPONSE_CAP ? rows : rows.slice(-CHART_SERIES_RESPONSE_CAP)
 }
 
@@ -95,7 +99,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: null,
-      rows: capRows(collapsed, filters.disableRowCap),
+      rows: capRows(collapsed, filters),
     }
   }
 
@@ -108,7 +112,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_unavailable',
-      rows: capRows(collapsed, filters.disableRowCap),
+      rows: capRows(collapsed, filters),
     }
   }
 
@@ -120,7 +124,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'change',
       fallbackReason: null,
-      rows: capRows(collapsed, filters.disableRowCap),
+      rows: capRows(collapsed, filters),
     }
   } catch {
     const rows = await fetchDayRows()
@@ -130,7 +134,7 @@ async function resolveRepresentationRows(
       requestedRepresentation: representation,
       representation: 'day',
       fallbackReason: 'projection_query_failed',
-      rows: capRows(collapsed, filters.disableRowCap),
+      rows: capRows(collapsed, filters),
     }
   }
 }

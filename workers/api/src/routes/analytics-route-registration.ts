@@ -7,6 +7,7 @@ import {
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { buildGroupedChartRows } from '../utils/chart-row-groups'
+import { log } from '../utils/logger'
 import { withPublicCache } from '../utils/http'
 import type { ChartWindow } from '../utils/chart-window'
 import {
@@ -82,6 +83,7 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
   const dbs = { canonicalDb: db, analyticsDb: db }
   const baseFilters = options.buildFilters(merged)
 
+  const seriesStarted = Date.now()
   const result = await getCachedOrCompute(
     c.env,
     options.section,
@@ -107,6 +109,20 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
           fallbackReason: rows.fallbackReason,
         })),
   )
+  const seriesElapsedMs = Date.now() - seriesStarted
+  if (seriesElapsedMs >= 8000) {
+    log.warn('public', 'analytics_series_slow', {
+      code: 'analytics_series_slow',
+      context: {
+        section: options.section,
+        representation: requestedRepresentation,
+        ms: seriesElapsedMs,
+        fromCache: result.fromCache,
+        rowCount: result.rows.length,
+        compact: wantsCompactRows(merged),
+      },
+    })
+  }
   const compactRows = wantsCompactRows(merged) ? buildGroupedChartRows(result.rows) : null
 
   withPublicCache(c, CHART_CACHE_MAX_AGE)
