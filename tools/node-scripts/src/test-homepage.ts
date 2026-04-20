@@ -333,6 +333,7 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         marketTerminal: !!document.querySelector('.market-terminal'),
         introSteps: Array.from(document.querySelectorAll('.market-intro-step-index')).map((el) => String(el.textContent || '').trim()),
         introActions: Array.from(document.querySelectorAll('.market-intro-actions .buttonish')).map((el) => String(el.textContent || '').trim()).filter(Boolean),
+        marketIntroTitle: String(document.querySelector('.market-intro-title')?.textContent || '').trim(),
         hasObjectStringLeak: String(document.body.textContent || '').indexOf('[object Object]') >= 0,
         chartViews: Array.from(document.querySelectorAll('[data-chart-view]')).map((el) => ({
             label: String(el.getAttribute('data-ui-label') || el.textContent || '').trim(),
@@ -360,11 +361,15 @@ async function verifyWorkspaceShell(page, results, label, sectionPath) {
         (
             shell.introSteps.join(',') === '01,02,03'
             || (shell.introActions.length >= 2 && shell.introActions.every((entry) => entry.length >= 4))
+            || (shell.marketIntroTitle.length >= 4)
         )
     ) {
         pass(results, `${label}: hero workspace affordances render without object-string leakage`);
     } else {
-        fail(results, `${label}: hero workspace affordances are malformed (${shell.introActions.join(', ') || shell.introSteps.join(', ') || 'missing'})`);
+        fail(
+            results,
+            `${label}: hero workspace affordances are malformed (${shell.introActions.join(', ') || shell.introSteps.join(', ') || shell.marketIntroTitle || 'missing'})`,
+        );
     }
 
     const actualChartViews = shell.chartViews.map((view) => view.label);

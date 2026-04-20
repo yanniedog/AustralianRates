@@ -16,10 +16,6 @@
 
     function sectionCopy(config) {
         config.sessionStatus = 'live';
-        config.primaryHref = config.primaryHref || '#chart-output';
-        config.primaryAction = config.primaryAction || 'Open chart';
-        config.secondaryHref = config.secondaryHref || '#chart-side-panel';
-        config.secondaryAction = config.secondaryAction || 'Browse series';
         config.liveCards = Array.isArray(config.liveCards) ? config.liveCards : [];
         config.quickPicksLabel = config.quickPicksLabel || '';
         config.quickPicks = Array.isArray(config.quickPicks) ? config.quickPicks : [];
@@ -67,7 +63,6 @@
     };
     var copy = SECTION_COPY[section] || SECTION_COPY['home-loans'];
 
-    function buttonLink(href, label, className) { return '<a class="buttonish ' + esc(className || 'secondary') + '" href="' + esc(href) + '">' + esc(label) + '</a>'; }
     function liveCardMarkup(card) {
         var cardId = String(card && card.id ? card.id : 'metric');
         return ''
@@ -118,10 +113,6 @@
         + '  <div class="market-intro-copy">'
         + '    <p class="eyebrow">' + esc(copy.eyebrow) + '</p>'
         + '    <h1 class="market-intro-title">' + esc(copy.title) + '</h1>'
-        + '  </div>'
-        + '  <div class="market-intro-actions">'
-        + '    ' + buttonLink(copy.primaryHref || '#chart-output', copy.primaryAction || 'Open chart', 'primary')
-        + '    ' + buttonLink(copy.secondaryHref || '#chart-side-panel', copy.secondaryAction || 'Browse series', 'ghost')
         + '  </div>'
         + '</div>'
         + '<div class="market-intro-body">'
