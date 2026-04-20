@@ -55,6 +55,14 @@ describe('row presentation', () => {
     expect(row.lvr_tier_display).toBe('Not specified')
   })
 
+  it('shows lvr_standard_reference as standard base rate', () => {
+    const row = presentHomeLoanRow({
+      lvr_tier: 'lvr_standard_reference',
+    })
+
+    expect(row.lvr_tier_display).toBe('Standard base rate')
+  })
+
   it('normalizes savings and td deposit tier display formatting', () => {
     const savings = presentSavingsRow({
       deposit_tier: '$50k-$100.0k',
