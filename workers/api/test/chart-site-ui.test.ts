@@ -108,4 +108,28 @@ describe('chart-site-ui', () => {
     expect(merged.active_z).toBe(20)
     expect(merged.inactive_z).toBe(19)
   })
+
+  it('mergeChartRibbonStylePartial accepts known presets and falls back to glass', () => {
+    expect(mergeChartRibbonStylePartial({}).preset).toBe('glass')
+    expect(mergeChartRibbonStylePartial({ preset: 'classic' } as Record<string, unknown>).preset).toBe('classic')
+    expect(mergeChartRibbonStylePartial({ preset: 'GLASS' } as Record<string, unknown>).preset).toBe('glass')
+    expect(mergeChartRibbonStylePartial({ preset: 'nope' } as Record<string, unknown>).preset).toBe('glass')
+    expect(mergeChartRibbonStylePartial({ preset: 42 } as Record<string, unknown>).preset).toBe('glass')
+  })
+
+  it('gap_fill_enabled defaults true, only false disables it', () => {
+    expect(DEFAULT_CHART_RIBBON_STYLE.gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({}).gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: true } as Record<string, unknown>).gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: false } as Record<string, unknown>).gap_fill_enabled).toBe(false)
+    // truthy non-false values still enable it
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: 1 } as Record<string, unknown>).gap_fill_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ gap_fill_enabled: null } as Record<string, unknown>).gap_fill_enabled).toBe(true)
+
+    const roundTripped = normalizeChartRibbonStyleForPut(JSON.stringify({ gap_fill_enabled: false }))
+    expect(roundTripped.ok).toBe(true)
+    if (roundTripped.ok) {
+      expect(JSON.parse(roundTripped.value).gap_fill_enabled).toBe(false)
+    }
+  })
 })

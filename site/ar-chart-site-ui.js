@@ -9,27 +9,30 @@
     var DEFAULT = 0.75;
     var DEFAULT_TEXT_BRIGHTNESS = 1;
     var DEFAULT_RIBBON_STYLE = {
-        edge_width: 2,
-        edge_opacity: 1,
-        edge_opacity_others: 0.14,
-        fill_opacity_end: 0.22,
-        fill_opacity_peak: 0.48,
-        focus_fill_opacity_end: 0.34,
-        focus_fill_opacity_peak: 0.70,
-        selected_fill_opacity_end: 0.44,
-        selected_fill_opacity_peak: 0.82,
+        preset: 'glass',
+        edge_width: 1.25,
+        edge_opacity: 0.75,
+        edge_opacity_others: 0.12,
+        fill_opacity_end: 0.14,
+        fill_opacity_peak: 0.42,
+        focus_fill_opacity_end: 0.26,
+        focus_fill_opacity_peak: 0.60,
+        selected_fill_opacity_end: 0.34,
+        selected_fill_opacity_peak: 0.72,
         fill_opacity_others_scale: 0.22,
-        mean_width: 1.25,
-        mean_opacity: 1,
-        mean_opacity_others: 0.18,
+        mean_width: 1,
+        mean_opacity: 0.9,
+        mean_opacity_others: 0.16,
         product_line_opacity_hover: 0.5,
         product_line_opacity_selected: 0.85,
         product_line_width_hover: 1.2,
         product_line_width_selected: 2.5,
         others_grey_mix: 0.62,
         active_z: 48,
-        inactive_z: 2
+        inactive_z: 2,
+        gap_fill_enabled: true
     };
+    var RIBBON_PRESETS = { glass: true, classic: true };
     var FEATURE_KEYS = [
         { key: 'chart_model_server_side' }
     ];
@@ -135,6 +138,7 @@
         var d = DEFAULT_RIBBON_STYLE;
         function cloneDefaults() {
             return {
+                preset: d.preset,
                 edge_width: d.edge_width,
                 edge_opacity: d.edge_opacity,
                 edge_opacity_others: d.edge_opacity_others,
@@ -155,6 +159,7 @@
                 others_grey_mix: d.others_grey_mix,
                 active_z: d.active_z,
                 inactive_z: d.inactive_z,
+                gap_fill_enabled: d.gap_fill_enabled,
             };
         }
         if (!raw || typeof raw !== 'object') return cloneDefaults();
@@ -170,7 +175,10 @@
         var active_z = pick('active_z', 4, 120, d.active_z);
         var inactive_z = pick('inactive_z', 0, 80, d.inactive_z);
         if (inactive_z >= active_z) inactive_z = Math.max(0, active_z - 1);
+        var presetRaw = raw.preset != null ? String(raw.preset).trim().toLowerCase() : '';
+        var preset = RIBBON_PRESETS[presetRaw] ? presetRaw : d.preset;
         return {
+            preset: preset,
             edge_width: pick('edge_width', 0, 12, d.edge_width),
             edge_opacity: pick01('edge_opacity', d.edge_opacity),
             edge_opacity_others: pick01('edge_opacity_others', d.edge_opacity_others),
@@ -191,6 +199,7 @@
             others_grey_mix: pick01('others_grey_mix', d.others_grey_mix),
             active_z: active_z,
             inactive_z: inactive_z,
+            gap_fill_enabled: raw.gap_fill_enabled === false ? false : d.gap_fill_enabled,
         };
     }
 

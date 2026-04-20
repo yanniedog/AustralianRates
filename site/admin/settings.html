@@ -101,6 +101,15 @@
         <section class="admin-card" id="chart-ribbon-style-section">
             <h2>Rate report ribbon (bands mode)</h2>
             <p class="admin-hint">Used only when a rate report chart is in <strong>Ribbon</strong> view (Home Loans, Savings, Term Deposits). The chart shows each lender as a min&ndash;max rate band plus optional per-product lines after you select a lender. Saving writes one JSON object to <code>app_config.chart_ribbon_style</code>; the API merges missing keys with built-in defaults, clamps out-of-range values, and serves the result on <code>GET /site-ui</code> (about one minute cache). After saving, hard-refresh a public report page if you do not see a change immediately.</p>
+            <p class="admin-settings-group-title">Preset</p>
+            <p class="admin-hint">Choose a look. Selecting a preset fills every field below with its recommended values; you can then tweak individual numbers before saving. <strong>Glass</strong> is the default and uses a soft translucent gradient with a subtle highlight. <strong>Classic</strong> is the earlier flatter look with harder edges.</p>
+            <div class="rate-check-row" style="align-items:center;flex-wrap:wrap;gap:12px;">
+                <label for="ribbon-preset">Preset</label>
+                <select id="ribbon-preset" aria-label="Ribbon style preset">
+                    <option value="glass">Glass (recommended)</option>
+                    <option value="classic">Classic</option>
+                </select>
+            </div>
             <p class="admin-settings-group-title">Band outline (top and bottom edge of each lender band)</p>
             <p class="admin-hint">Edge width and opacity apply to the band boundary lines. &ldquo;Others&rdquo; rows apply while another lender is highlighted or selected so non-focused banks stay subdued.</p>
             <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;">
@@ -141,6 +150,11 @@
                 <label>Active z-index <input type="number" id="ribbon-z-a" min="4" max="120" step="1" value="48" style="width:4em;"></label>
                 <label>Inactive z-index <input type="number" id="ribbon-z-i" min="0" max="80" step="1" value="2" style="width:4em;"></label>
             </div>
+            <p class="admin-settings-group-title">Data gap handling</p>
+            <p class="admin-hint">When enabled, a bank's ribbon is forward-filled for up to 3 consecutive missing days using the last known value. Gaps of 4+ days still break the ribbon and are excluded from the mean. Applies only to per-bank ribbon data, not to raw product lines.</p>
+            <div class="rate-check-row" style="flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:8px;">
+                <label><input type="checkbox" id="ribbon-gap-fill" checked> Forward-fill short gaps (&le;3 days)</label>
+            </div>
             <div class="rate-check-row" style="margin-top:10px;">
                 <button type="button" id="chart-ribbon-save-btn" class="primary">Save ribbon style</button>
                 <button type="button" id="chart-ribbon-reset-btn" class="secondary">Remove stored (defaults)</button>
@@ -180,28 +194,57 @@
                 'Europe/London',
                 'America/New_York',
             ];
-            var RIBBON_DEFAULT = {
-                edge_width: 2,
-                edge_opacity: 1,
-                edge_opacity_others: 0.14,
-                fill_opacity_end: 0.22,
-                fill_opacity_peak: 0.48,
-                focus_fill_opacity_end: 0.34,
-                focus_fill_opacity_peak: 0.70,
-                selected_fill_opacity_end: 0.44,
-                selected_fill_opacity_peak: 0.82,
-                fill_opacity_others_scale: 0.22,
-                mean_width: 1.25,
-                mean_opacity: 1,
-                mean_opacity_others: 0.18,
-                product_line_opacity_hover: 0.5,
-                product_line_opacity_selected: 0.85,
-                product_line_width_hover: 1.2,
-                product_line_width_selected: 2.5,
-                others_grey_mix: 0.62,
-                active_z: 48,
-                inactive_z: 2
+            var RIBBON_PRESETS = {
+                glass: {
+                    preset: 'glass',
+                    edge_width: 1.25,
+                    edge_opacity: 0.75,
+                    edge_opacity_others: 0.12,
+                    fill_opacity_end: 0.14,
+                    fill_opacity_peak: 0.42,
+                    focus_fill_opacity_end: 0.26,
+                    focus_fill_opacity_peak: 0.60,
+                    selected_fill_opacity_end: 0.34,
+                    selected_fill_opacity_peak: 0.72,
+                    fill_opacity_others_scale: 0.22,
+                    mean_width: 1,
+                    mean_opacity: 0.9,
+                    mean_opacity_others: 0.16,
+                    product_line_opacity_hover: 0.5,
+                    product_line_opacity_selected: 0.85,
+                    product_line_width_hover: 1.2,
+                    product_line_width_selected: 2.5,
+                    others_grey_mix: 0.62,
+                    active_z: 48,
+                    inactive_z: 2,
+                    gap_fill_enabled: true
+                },
+                classic: {
+                    preset: 'classic',
+                    edge_width: 2,
+                    edge_opacity: 1,
+                    edge_opacity_others: 0.14,
+                    fill_opacity_end: 0.22,
+                    fill_opacity_peak: 0.48,
+                    focus_fill_opacity_end: 0.34,
+                    focus_fill_opacity_peak: 0.70,
+                    selected_fill_opacity_end: 0.44,
+                    selected_fill_opacity_peak: 0.82,
+                    fill_opacity_others_scale: 0.22,
+                    mean_width: 1.25,
+                    mean_opacity: 1,
+                    mean_opacity_others: 0.18,
+                    product_line_opacity_hover: 0.5,
+                    product_line_opacity_selected: 0.85,
+                    product_line_width_hover: 1.2,
+                    product_line_width_selected: 2.5,
+                    others_grey_mix: 0.62,
+                    active_z: 48,
+                    inactive_z: 2,
+                    gap_fill_enabled: true
+                }
             };
+            var RIBBON_DEFAULT = RIBBON_PRESETS.glass;
             var msgEl = document.getElementById('msg');
             var desktopRangeEl = document.getElementById('chart-legend-opacity-desktop-pct');
             var desktopOutEl = document.getElementById('chart-legend-opacity-desktop-out');
@@ -273,6 +316,10 @@
                     var el = document.getElementById(id);
                     if (el) el.value = String(val);
                 }
+                var presetEl = document.getElementById('ribbon-preset');
+                var presetVal = String(d.preset || 'glass').toLowerCase();
+                if (!RIBBON_PRESETS[presetVal]) presetVal = 'glass';
+                if (presetEl) presetEl.value = presetVal;
                 v('ribbon-edge-w', d.edge_width);
                 v('ribbon-edge-op', pct100(d.edge_opacity));
                 v('ribbon-edge-op-o', pct100(d.edge_opacity_others));
@@ -293,6 +340,8 @@
                 v('ribbon-grey-mix', pct100(d.others_grey_mix));
                 v('ribbon-z-a', d.active_z);
                 v('ribbon-z-i', d.inactive_z);
+                var gapFillEl = document.getElementById('ribbon-gap-fill');
+                if (gapFillEl) gapFillEl.checked = d.gap_fill_enabled !== false;
             }
             function collectRibbonObject() {
                 function n(id, fallback) {
@@ -304,7 +353,11 @@
                 function p(id, fallbackPct) {
                     return Math.max(0, Math.min(100, n(id, fallbackPct))) / 100;
                 }
+                var presetEl = document.getElementById('ribbon-preset');
+                var presetVal = presetEl ? String(presetEl.value || '').trim().toLowerCase() : 'glass';
+                if (!RIBBON_PRESETS[presetVal]) presetVal = 'glass';
                 return {
+                    preset: presetVal,
                     edge_width: Math.max(0, Math.min(12, n('ribbon-edge-w', 2))),
                     edge_opacity: p('ribbon-edge-op', 100),
                     edge_opacity_others: p('ribbon-edge-op-o', 14),
@@ -324,7 +377,8 @@
                     product_line_width_selected: Math.max(0, Math.min(8, n('ribbon-pl-w-s', 2.5))),
                     others_grey_mix: p('ribbon-grey-mix', 62),
                     active_z: Math.max(4, Math.min(120, Math.floor(n('ribbon-z-a', 48)))),
-                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2))))
+                    inactive_z: Math.max(0, Math.min(80, Math.floor(n('ribbon-z-i', 2)))),
+                    gap_fill_enabled: !!(document.getElementById('ribbon-gap-fill') || {}).checked
                 };
             }
 
@@ -696,6 +750,14 @@
             if (chartRibbonSaveBtn) chartRibbonSaveBtn.addEventListener('click', saveChartRibbonStyle);
             var chartRibbonResetBtn = document.getElementById('chart-ribbon-reset-btn');
             if (chartRibbonResetBtn) chartRibbonResetBtn.addEventListener('click', resetChartRibbonStyle);
+            var ribbonPresetEl = document.getElementById('ribbon-preset');
+            if (ribbonPresetEl) {
+                ribbonPresetEl.addEventListener('change', function () {
+                    var key = String(ribbonPresetEl.value || '').trim().toLowerCase();
+                    var preset = RIBBON_PRESETS[key];
+                    if (preset) applyRibbonToForm(preset);
+                });
+            }
             var doctorSaveBtn = document.getElementById('doctor-schedule-save-btn');
             if (doctorSaveBtn) doctorSaveBtn.addEventListener('click', saveDoctorSchedule);
             var doctorResetBtn = document.getElementById('doctor-schedule-reset-btn');

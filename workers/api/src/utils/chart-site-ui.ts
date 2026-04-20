@@ -197,7 +197,10 @@ export function normalizeChartMaxProductsForPut(
 }
 
 /** Public Rate Report ribbon (ECharts bands mode) appearance; exposed via GET /site-ui. */
+export type ChartRibbonPreset = 'glass' | 'classic'
+
 export type ChartRibbonStyle = {
+  preset: ChartRibbonPreset
   edge_width: number
   edge_opacity: number
   edge_opacity_others: number
@@ -218,22 +221,27 @@ export type ChartRibbonStyle = {
   others_grey_mix: number
   active_z: number
   inactive_z: number
+  /** Forward-fill per-bank data gaps of ≤3 days; prevents short outages from breaking ribbon continuity or skewing mean. */
+  gap_fill_enabled: boolean
 }
 
+const RIBBON_PRESETS: ReadonlySet<ChartRibbonPreset> = new Set(['glass', 'classic'])
+
 export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
-  edge_width: 2,
-  edge_opacity: 1,
-  edge_opacity_others: 0.14,
-  fill_opacity_end: 0.22,
-  fill_opacity_peak: 0.48,
-  focus_fill_opacity_end: 0.34,
-  focus_fill_opacity_peak: 0.70,
-  selected_fill_opacity_end: 0.44,
-  selected_fill_opacity_peak: 0.82,
+  preset: 'glass',
+  edge_width: 1.25,
+  edge_opacity: 0.75,
+  edge_opacity_others: 0.12,
+  fill_opacity_end: 0.14,
+  fill_opacity_peak: 0.42,
+  focus_fill_opacity_end: 0.26,
+  focus_fill_opacity_peak: 0.60,
+  selected_fill_opacity_end: 0.34,
+  selected_fill_opacity_peak: 0.72,
   fill_opacity_others_scale: 0.22,
-  mean_width: 1.25,
-  mean_opacity: 1,
-  mean_opacity_others: 0.18,
+  mean_width: 1,
+  mean_opacity: 0.9,
+  mean_opacity_others: 0.16,
   product_line_opacity_hover: 0.5,
   product_line_opacity_selected: 0.85,
   product_line_width_hover: 1.2,
@@ -241,6 +249,7 @@ export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
   others_grey_mix: 0.62,
   active_z: 48,
   inactive_z: 2,
+  gap_fill_enabled: true,
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -279,7 +288,12 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
   if (inactive_z >= active_z) {
     inactive_z = Math.max(0, active_z - 1)
   }
+  const presetRaw = typeof raw.preset === 'string' ? raw.preset.trim().toLowerCase() : ''
+  const preset: ChartRibbonPreset = RIBBON_PRESETS.has(presetRaw as ChartRibbonPreset)
+    ? (presetRaw as ChartRibbonPreset)
+    : d.preset
   return {
+    preset,
     edge_width: numNonNeg(raw.edge_width, d.edge_width, 12),
     edge_opacity: num01(raw.edge_opacity, d.edge_opacity),
     edge_opacity_others: num01(raw.edge_opacity_others, d.edge_opacity_others),
@@ -300,6 +314,7 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     others_grey_mix: num01(raw.others_grey_mix, d.others_grey_mix),
     active_z,
     inactive_z,
+    gap_fill_enabled: raw.gap_fill_enabled === false ? false : d.gap_fill_enabled,
   }
 }
 

@@ -83,19 +83,20 @@
         var ui = window.AR && window.AR.chartSiteUi;
         if (ui && typeof ui.getChartRibbonStyle === 'function') return ui.getChartRibbonStyle();
         return {
-            edge_width: 2,
-            edge_opacity: 1,
-            edge_opacity_others: 0.14,
-            fill_opacity_end: 0.22,
-            fill_opacity_peak: 0.48,
-            focus_fill_opacity_end: 0.34,
-            focus_fill_opacity_peak: 0.70,
-            selected_fill_opacity_end: 0.44,
-            selected_fill_opacity_peak: 0.82,
+            preset: 'glass',
+            edge_width: 1.25,
+            edge_opacity: 0.75,
+            edge_opacity_others: 0.12,
+            fill_opacity_end: 0.14,
+            fill_opacity_peak: 0.42,
+            focus_fill_opacity_end: 0.26,
+            focus_fill_opacity_peak: 0.60,
+            selected_fill_opacity_end: 0.34,
+            selected_fill_opacity_peak: 0.72,
             fill_opacity_others_scale: 0.22,
-            mean_width: 1.6,
-            mean_opacity: 1,
-            mean_opacity_others: 0.18,
+            mean_width: 1,
+            mean_opacity: 0.9,
+            mean_opacity_others: 0.16,
             product_line_opacity_hover: 0.5,
             product_line_opacity_selected: 0.85,
             product_line_width_hover: 1.2,
@@ -106,26 +107,45 @@
         };
     }
 
-    /** Vertical gradient so filled ribbon reads as a soft tube in cross-section (bright core, faded edges). */
-    function ribbonFlowGradientFill(hex, endAlpha, peakAlpha) {
+    /**
+     * Vertical gradient fill for a ribbon.
+     * - preset 'classic': original 4-stop symmetric fade (end → peak → peak → end).
+     * - preset 'glass': 6-stop gradient with a bright highlight near the top (light-on-glass)
+     *   and a softer, longer fade below so edges read as translucent rather than hard bands.
+     */
+    function ribbonFlowGradientFill(hex, endAlpha, peakAlpha, preset) {
         var rgb = parseHexRgb(hex);
         var r = rgb.r;
         var g = rgb.g;
         var b = rgb.b;
         var lo = Math.max(0, Math.min(1, Number(endAlpha) || 0));
         var pk = Math.max(0, Math.min(1, Number(peakAlpha) || 0));
+        var stops;
+        if (preset === 'classic') {
+            stops = [
+                { offset: 0,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
+                { offset: 0.28, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 0.72, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 1,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
+            ];
+        } else {
+            var hl = Math.min(1, pk + (1 - pk) * 0.28);
+            var loTop = Math.max(0, lo * 0.55);
+            stops = [
+                { offset: 0,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(loTop) + ')' },
+                { offset: 0.08, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(hl) + ')' },
+                { offset: 0.30, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
+                { offset: 0.70, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk * 0.85) + ')' },
+                { offset: 1,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
+            ];
+        }
         return {
             type: 'linear',
             x: 0,
             y: 0,
             x2: 0,
             y2: 1,
-            colorStops: [
-                { offset: 0,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
-                { offset: 0.28, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
-                { offset: 0.72, color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(pk) + ')' },
-                { offset: 1,    color: 'rgba(' + r + ',' + g + ',' + b + ',' + String(lo) + ')' },
-            ],
+            colorStops: stops,
         };
     }
 
@@ -148,6 +168,10 @@
             colorStops: null,
             color: null,
             opacity: 1,
+            shadowBlur: 0,
+            shadowColor: 'rgba(0,0,0,0)',
+            shadowOffsetX: 0,
+            shadowOffsetY: 0,
         };
         if (!next || typeof next !== 'object') return out;
         Object.keys(next).forEach(function (key) {
@@ -242,12 +266,30 @@
             (series.points || []).forEach(function (point) {
                 byDate[String(point.date || '').slice(0, 10)] = point;
             });
-            var minData = dates.map(function (date) {
+            var gapFillEnabled = rs.gap_fill_enabled !== false;
+            var GAP_FILL_MAX_MS = 3 * 86400000;
+            var lastKnownPoint = null;
+            var lastKnownDate = null;
+            var filledByDate = {};
+            dates.forEach(function (date) {
                 var point = byDate[date];
+                if (point != null) {
+                    filledByDate[date] = point;
+                    lastKnownPoint = point;
+                    lastKnownDate = date;
+                } else if (gapFillEnabled && lastKnownPoint != null) {
+                    var gapMs = new Date(date).getTime() - new Date(lastKnownDate).getTime();
+                    if (gapMs > 0 && gapMs <= GAP_FILL_MAX_MS) {
+                        filledByDate[date] = lastKnownPoint;
+                    }
+                }
+            });
+            var minData = dates.map(function (date) {
+                var point = filledByDate[date];
                 return [date, point == null ? null : positiveRibbonRateOrNull(point.min_rate)];
             });
             var deltaData = dates.map(function (date) {
-                var point = byDate[date];
+                var point = filledByDate[date];
                 if (point == null) return [date, null];
                 var lo = positiveRibbonRateOrNull(point.min_rate);
                 var hi = positiveRibbonRateOrNull(point.max_rate);
@@ -255,14 +297,15 @@
                 return [date, Math.max(0, hi - lo)];
             });
             var meanData = dates.map(function (date) {
-                var point = byDate[date];
+                var point = filledByDate[date];
                 return [date, point == null ? null : positiveRibbonRateOrNull(point.mean_rate)];
             });
             var maxData = dates.map(function (date) {
-                var point = byDate[date];
+                var point = filledByDate[date];
                 return [date, point == null ? null : positiveRibbonRateOrNull(point.max_rate)];
             });
             var stackKey = 'band_' + series.bank_name;
+            var preset = String(rs.preset || 'glass').toLowerCase() === 'classic' ? 'classic' : 'glass';
             var ew = Math.max(0, Number(rs.edge_width) || 0);
             var eo = Math.max(0, Math.min(1, Number(rs.edge_opacity)));
             var flowEdge = {
@@ -290,6 +333,12 @@
             });
             var fillEnd = Math.max(0, Math.min(1, Number(rs.fill_opacity_end)));
             var fillPeak = Math.max(0, Math.min(1, Number(rs.fill_opacity_peak)));
+            var fillAreaStyle = ribbonFlowGradientFill(color, fillEnd, fillPeak, preset);
+            if (preset === 'glass') {
+                fillAreaStyle.shadowBlur = 6;
+                fillAreaStyle.shadowColor = hexToRgba(color, 0.22);
+                fillAreaStyle.shadowOffsetY = 1;
+            }
             out.push({
                 id: 'ribbon_fill_' + index,
                 name: series.bank_name + ' ribbon',
@@ -301,7 +350,7 @@
                 symbol: 'none',
                 connectNulls: false,
                 lineStyle: { color: color, width: 0.01, opacity: 0, cap: 'round', join: 'round' },
-                areaStyle: ribbonFlowGradientFill(color, fillEnd, fillPeak),
+                areaStyle: fillAreaStyle,
                 data: deltaData,
                 z: zBase + 0.01,
             });
