@@ -28,8 +28,7 @@
         product_line_width_selected: 2.5,
         others_grey_mix: 0.62,
         active_z: 48,
-        inactive_z: 2,
-        ribbon_rate_quintile_fill: false
+        inactive_z: 2
     };
     var FEATURE_KEYS = [
         { key: 'chart_model_server_side' }
@@ -156,7 +155,6 @@
                 others_grey_mix: d.others_grey_mix,
                 active_z: d.active_z,
                 inactive_z: d.inactive_z,
-                ribbon_rate_quintile_fill: d.ribbon_rate_quintile_fill,
             };
         }
         if (!raw || typeof raw !== 'object') return cloneDefaults();
@@ -168,17 +166,6 @@
         }
         function pick01(key, fallback) {
             return pick(key, 0, 1, fallback);
-        }
-        function pickBool(key, fallback) {
-            var v = raw[key];
-            if (v === true || v === false) return v;
-            if (typeof v === 'string') {
-                var ts = v.trim().toLowerCase();
-                if (ts === 'true' || ts === '1' || ts === 'yes') return true;
-                if (ts === 'false' || ts === '0' || ts === 'no') return false;
-            }
-            if (typeof v === 'number' && Number.isFinite(v)) return v !== 0;
-            return fallback;
         }
         var active_z = pick('active_z', 4, 120, d.active_z);
         var inactive_z = pick('inactive_z', 0, 80, d.inactive_z);
@@ -204,7 +191,6 @@
             others_grey_mix: pick01('others_grey_mix', d.others_grey_mix),
             active_z: active_z,
             inactive_z: inactive_z,
-            ribbon_rate_quintile_fill: pickBool('ribbon_rate_quintile_fill', d.ribbon_rate_quintile_fill),
         };
     }
 
