@@ -615,6 +615,56 @@
         display: none;
     }
 
+    .site-header-actions {
+        gap: 4px;
+        padding: 3px;
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+    }
+
+    .site-header-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    .site-action-btn,
+    .site-action-btn.icon-link,
+    .site-action-btn.icon-btn,
+    .site-action-github,
+    .site-action-donate,
+    .site-action-help,
+    .site-action-menu,
+    .site-action-refresh {
+        min-width: 36px;
+        min-height: 36px;
+        padding-inline: 0;
+    }
+
+    .site-action-menu .site-action-text,
+    .site-action-refresh .site-action-text,
+    .site-host-switch {
+        display: none;
+    }
+
+    .site-header-segment {
+        gap: 4px;
+        padding-right: 8px;
+    }
+
+    .site-header-segment-link {
+        padding: 0 7px;
+        font-size: 0.66rem;
+    }
+
+    .site-header-segment-text-full {
+        display: none;
+    }
+
+    .site-header-segment-text-short {
+        display: inline;
+    }
+
     .terminal-panel,
     .terminal-subpanel {
         padding: 10px;

@@ -44,6 +44,10 @@ body.ar-admin {
     transition: color var(--ar-motion-base) var(--ar-ease), background-color var(--ar-motion-base) var(--ar-ease);
 }
 
+.site-header-segment-text-short {
+    display: none;
+}
+
 .site-header-segment-link:hover {
     color: var(--ar-text);
     background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);

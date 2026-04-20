@@ -2195,3 +2195,75 @@ body.ar-public .lwc-report-moves-strip-lane.is-down .lwc-report-moves-strip-bar 
         display: none;
     }
 }
+
+@media (max-width: 360px) {
+    body.ar-public .lwc-report-range {
+        gap: 4px;
+        padding-bottom: 6px;
+    }
+
+    body.ar-public .lwc-report-range-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 2px 4px 0;
+        margin-right: -2px;
+        scrollbar-width: none;
+        scroll-snap-type: x proximity;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.ar-public .lwc-report-range-row::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.ar-public .lwc-report-range-row > * {
+        flex: 0 0 auto;
+        scroll-snap-align: start;
+    }
+
+    body.ar-public .ar-report-underchart-tree {
+        padding: 8px 10px 10px;
+    }
+
+    body.ar-public .ar-report-underchart-tree-meta {
+        font-size: 0.62rem;
+        line-height: 1.35;
+    }
+
+    body.ar-public .ar-report-infobox-ribbon-tree {
+        padding: 6px 0 3px 6px;
+    }
+
+    body.ar-public .ar-report-infobox-tnest {
+        margin-left: 2px;
+        padding-left: 6px;
+    }
+
+    body.ar-public .ar-report-infobox-trow {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 4px 6px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+    }
+
+    body.ar-public .ar-report-infobox-trow--leaf {
+        padding-top: 3px;
+        padding-bottom: 3px;
+    }
+
+    body.ar-public .ar-report-infobox-tlabel {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        line-height: 1.2;
+    }
+
+    body.ar-public .ar-report-infobox-trate {
+        justify-self: end;
+        text-align: right;
+        white-space: nowrap;
+    }
+}
