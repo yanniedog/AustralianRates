@@ -375,6 +375,23 @@
 
         var ribbonQuintileThresholds = isBandsMode && plotPayload ? computeRibbonRateQuintileThresholds(plotPayload) : null;
 
+        /** Live % axis extent (numeric min/max), not raw option (may be function or absent). */
+        function getRibbonYAxisRateExtent(chartInst) {
+            if (!chartInst || typeof chartInst.getModel !== 'function') return null;
+            try {
+                var comp = chartInst.getModel().getComponent('yAxis', 0);
+                if (!comp || !comp.axis || !comp.axis.scale || typeof comp.axis.scale.getExtent !== 'function') return null;
+                var ext = comp.axis.scale.getExtent();
+                if (!Array.isArray(ext) || ext.length < 2) return null;
+                var lo = Number(ext[0]);
+                var hi = Number(ext[1]);
+                if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null;
+                return { min: lo, max: hi };
+            } catch (_ex) {
+                return null;
+            }
+        }
+
         function ribbonAlphaForQuintileRate(r, qs) {
             if (!qs || !Number.isFinite(r)) return 0.48;
             if (r < qs.q20) return 0.2;
@@ -425,6 +442,12 @@
             for (var j = 0; j < stops.length; j++) {
                 if (!deduped.length || deduped[deduped.length - 1].color !== stops[j].color) deduped.push(stops[j]);
             }
+            if (deduped.length < 2) {
+                deduped = [
+                    { offset: 0, color: 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.2)' },
+                    { offset: 1, color: 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.6)' },
+                ];
+            }
             return {
                 type: 'linear',
                 x: top[0],
@@ -432,6 +455,7 @@
                 x2: bot[0],
                 y2: bot[1],
                 globalCoord: true,
+                global: true,
                 colorStops: deduped,
             };
         }
@@ -441,10 +465,9 @@
             if (!isBandsMode || !chart || !rsQ.ribbon_rate_quintile_fill || !ribbonQuintileThresholds || !plotPayload || !plotPayload.series) {
                 return;
             }
-            var opt = chart.getOption();
-            var yax = opt.yAxis && opt.yAxis[0];
-            var yMinLive = Number.isFinite(Number(yax && yax.min)) ? Number(yax.min) : (bandsOnlyYExtent ? bandsOnlyYExtent.min : NaN);
-            var yMaxLive = Number.isFinite(Number(yax && yax.max)) ? Number(yax.max) : (bandsOnlyYExtent ? bandsOnlyYExtent.max : NaN);
+            var yExtLive = getRibbonYAxisRateExtent(chart);
+            var yMinLive = yExtLive ? yExtLive.min : (bandsOnlyYExtent ? bandsOnlyYExtent.min : NaN);
+            var yMaxLive = yExtLive ? yExtLive.max : (bandsOnlyYExtent ? bandsOnlyYExtent.max : NaN);
             if (!Number.isFinite(yMinLive) || !Number.isFinite(yMaxLive) || yMaxLive <= yMinLive) return;
             var ref = dates.length ? dates[Math.floor(dates.length / 2)] : '';
             if (!ref) return;
@@ -1166,10 +1189,9 @@
             if (single) {
                 scopedFillStyle = { opacity: 0 };
             } else if (rsScoped.ribbon_rate_quintile_fill && ribbonQuintileThresholds) {
-                var optSc = chart.getOption();
-                var yaxSc = optSc.yAxis && optSc.yAxis[0];
-                var yMinSc = Number.isFinite(Number(yaxSc && yaxSc.min)) ? Number(yaxSc.min) : (bandsOnlyYExtent ? bandsOnlyYExtent.min : NaN);
-                var yMaxSc = Number.isFinite(Number(yaxSc && yaxSc.max)) ? Number(yaxSc.max) : (bandsOnlyYExtent ? bandsOnlyYExtent.max : NaN);
+                var yExtSc = getRibbonYAxisRateExtent(chart);
+                var yMinSc = yExtSc ? yExtSc.min : (bandsOnlyYExtent ? bandsOnlyYExtent.min : NaN);
+                var yMaxSc = yExtSc ? yExtSc.max : (bandsOnlyYExtent ? bandsOnlyYExtent.max : NaN);
                 var refSc = dates.length ? dates[Math.floor(dates.length / 2)] : '';
                 var gSc = buildRibbonGlobalQuintileFillColor(chart, ribbonColor, ribbonQuintileThresholds, yMinSc, yMaxSc, ribbonAxisFinder, refSc);
                 scopedFillStyle = gSc
@@ -1216,6 +1238,9 @@
             ];
             try { chart.setOption({ series: scopedUpdates }, { lazyUpdate: false, silent: true }); } catch (_e) {}
             lastRibbonVisualSig = keys.length + ':' + (single ? lineColor : ribbonColor);
+            window.requestAnimationFrame(function () {
+                syncRibbonQuintileFillGradients();
+            });
         }
 
         var ribbonTreeBank = '';
@@ -1960,7 +1985,6 @@
 
             chart.on('finished', function () {
                 applyRibbonBankHighlightState();
-                syncRibbonQuintileFillGradients();
                 if (!ribbonUnderchartSyncedOnFinish) {
                     ribbonUnderchartSyncedOnFinish = true;
                     refreshRibbonUnderChartPanel();
@@ -1974,7 +1998,6 @@
                     clientLog('info', 'Chart ribbon style refresh (site UI)', { section: String(section || '') });
                 }
                 applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                syncRibbonQuintileFillGradients();
                 updateProductVisibility();
                 scheduleRibbonRedraw();
                 syncRibbonTrayUi();
@@ -1993,10 +2016,7 @@
                     showRibbonEdgeLabels = chartWidth >= 1080;
                     reportGridRight = showRibbonEdgeLabels ? 144 : (chartWidth >= 760 ? 28 : 18);
                     chart.setOption({ grid: { right: reportGridRight } }, { lazyUpdate: false, silent: true });
-                    if (isBandsMode) {
-                        applyRibbonBankHighlightState(ribbonChartHighlightBank());
-                        syncRibbonQuintileFillGradients();
-                    }
+                    if (isBandsMode) applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     if (useRibbonCanvas) {
                         recomputeRibbonLod();
                         scheduleRibbonRedraw();

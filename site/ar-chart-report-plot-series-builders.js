@@ -181,6 +181,12 @@
      * ribbon fill never appears.
      */
     function ribbonAreaStyleMerged(next) {
+        if (next && typeof next === 'object' && next.color && typeof next.color === 'object' && next.color.type === 'linear') {
+            return {
+                opacity: next.opacity != null ? next.opacity : 1,
+                color: next.color,
+            };
+        }
         var out = {
             type: null,
             x: null,
