@@ -28,6 +28,22 @@
     };
     window.AR.snapshot = SNAPSHOT;
 
+    /** Keys that may appear on cacheable public `/analytics/report-plot` URLs (keep in sync with ar-chart-data.js). */
+    var REPORT_PLOT_ALLOWED_KEYS = [
+        'mode',
+        'security_purpose',
+        'repayment_type',
+        'rate_structure',
+        'lvr_tier',
+        'feature_set',
+        'account_type',
+        'rate_type',
+        'deposit_tier',
+        'balance_min',
+        'balance_max',
+        'dataset_mode',
+    ];
+
     // `allowedKeys` are query params that may appear without disqualifying snapshot lookup.
     // `chart_window` and `preset` are resolved separately into a bundle scope.
     var PATTERN_MATCHERS = [
@@ -46,8 +62,18 @@
             requiresDayRepresentation: true,
             requiredParams: { sort: 'collection_date', dir: 'asc' },
         },
-        { suffix: '/analytics/report-plot', dataKey: 'reportPlotMoves', allowedKeys: ['mode'], requiredParams: { mode: 'moves' } },
-        { suffix: '/analytics/report-plot', dataKey: 'reportPlotBands', allowedKeys: ['mode'], requiredParams: { mode: 'bands' } },
+        {
+            suffix: '/analytics/report-plot',
+            dataKey: 'reportPlotMoves',
+            allowedKeys: REPORT_PLOT_ALLOWED_KEYS,
+            requiredParams: { mode: 'moves' },
+        },
+        {
+            suffix: '/analytics/report-plot',
+            dataKey: 'reportPlotBands',
+            allowedKeys: REPORT_PLOT_ALLOWED_KEYS,
+            requiredParams: { mode: 'bands' },
+        },
     ];
 
     function activeSection() {
@@ -105,6 +131,158 @@
         if (preset === 'consumer-default') return 'preset:consumer-default';
         if (chartWindow) return 'window:' + chartWindow;
         return 'default';
+    }
+
+    function searchParamsToParamRecord(searchParams) {
+        var p = {};
+        if (!searchParams || typeof searchParams.forEach !== 'function') return p;
+        searchParams.forEach(function (value, key) {
+            p[String(key || '')] = value;
+        });
+        return p;
+    }
+
+    function isKnownChartWindowValue(value) {
+        var text = String(value || '').trim().toUpperCase();
+        return text === '' || CHART_WINDOWS.indexOf(text) >= 0;
+    }
+
+    function isDefaultishMinRateVal(value) {
+        var text = String(value == null ? '' : value).trim();
+        if (!text) return true;
+        return Number(text) === 0.01;
+    }
+
+    function isDisabledCompareEdgeCasesVal(value) {
+        var text = String(value == null ? '' : value).trim().toLowerCase();
+        return text === '0' || text === 'false' || text === 'no' || text === 'off';
+    }
+
+    /** Mirrors ar-chart-data.js hasNoSelectiveFilters + isCacheablePublicChartRequest for snapshot scope. */
+    function isCacheablePublicRequestParams(sectionName, params, requestKind) {
+        if (!params || typeof params !== 'object') return false;
+        if (params.bank || params.banks) return false;
+        if (params.include_removed === 'true') return false;
+        if (params.include_manual === 'true') return false;
+        if (isDisabledCompareEdgeCasesVal(params.exclude_compare_edge_cases)) return false;
+        if (params.start_date || params.end_date) return false;
+        if (!isKnownChartWindowValue(params.chart_window)) return false;
+        if (params.dataset_mode && String(params.dataset_mode).trim() !== 'all') return false;
+        if (requestKind === 'series' && params.mode && String(params.mode).trim() !== 'all') return false;
+
+        var section = String(sectionName || '').trim().toLowerCase();
+        if (section === 'home-loans') {
+            var rawDefault = !params.security_purpose
+                && !params.repayment_type
+                && !params.rate_structure
+                && !params.lvr_tier
+                && !params.feature_set
+                && isDefaultishMinRateVal(params.min_rate)
+                && !params.max_rate
+                && !params.min_comparison_rate
+                && !params.max_comparison_rate;
+            var consumerPreset = params.security_purpose === 'owner_occupied'
+                && params.repayment_type === 'principal_and_interest'
+                && params.rate_structure === 'variable'
+                && params.lvr_tier === 'lvr_80-85%'
+                && !params.feature_set
+                && isDefaultishMinRateVal(params.min_rate)
+                && !params.max_rate
+                && !params.min_comparison_rate
+                && !params.max_comparison_rate;
+            return rawDefault || consumerPreset;
+        }
+        if (section === 'savings') {
+            var savingsRawDefault = !params.account_type
+                && !params.rate_type
+                && !params.deposit_tier
+                && !params.balance_min
+                && !params.balance_max
+                && isDefaultishMinRateVal(params.min_rate)
+                && !params.max_rate;
+            var savingsPreset = params.account_type === 'savings'
+                && !params.rate_type
+                && !params.deposit_tier
+                && !params.balance_min
+                && !params.balance_max
+                && isDefaultishMinRateVal(params.min_rate)
+                && !params.max_rate;
+            return savingsRawDefault || savingsPreset;
+        }
+        if (section === 'term-deposits') {
+            return !params.term_months
+                && !params.deposit_tier
+                && !params.interest_payment
+                && !params.balance_min
+                && !params.balance_max
+                && isDefaultishMinRateVal(params.min_rate)
+                && !params.max_rate;
+        }
+        return false;
+    }
+
+    function isConsumerPresetParamsShape(sectionName, params) {
+        var section = String(sectionName || '').trim().toLowerCase();
+        if (section === 'home-loans') {
+            return params.security_purpose === 'owner_occupied'
+                && params.repayment_type === 'principal_and_interest'
+                && params.rate_structure === 'variable'
+                && params.lvr_tier === 'lvr_80-85%'
+                && !params.feature_set;
+        }
+        if (section === 'savings') {
+            return params.account_type === 'savings';
+        }
+        return false;
+    }
+
+    /** Which snapshot KV row `/snapshot` fetch should use for the browser location (HTML inline alignment). */
+    function inferSnapshotScopeForPage(section, searchParams) {
+        var name = String(section || '').trim().toLowerCase();
+        var chartWindow = normalizeChartWindow(searchParams.get('chart_window'))
+            || defaultChartWindowForSection(name);
+        if (name === 'term-deposits') return { chartWindow: chartWindow, preset: null };
+        if (String(searchParams.get('view') || '').trim().toLowerCase() === 'analyst') {
+            return { chartWindow: chartWindow, preset: null };
+        }
+        if (name === 'home-loans' || name === 'savings') {
+            var explicit = normalizePreset(searchParams.get('preset'));
+            if (explicit === 'consumer-default') return { chartWindow: chartWindow, preset: 'consumer-default' };
+            return { chartWindow: chartWindow, preset: 'consumer-default' };
+        }
+        return { chartWindow: chartWindow, preset: null };
+    }
+
+    /** Which snapshot bundle satisfies this chart API URL (report-plot / series). */
+    function inferSnapshotScopeForChartRequest(section, searchParams, requestKind) {
+        var rk = String(requestKind || 'report-plot');
+        var name = String(section || '').trim().toLowerCase();
+        var chartWindow = normalizeChartWindow(searchParams.get('chart_window'))
+            || defaultChartWindowForSection(name);
+        if (name === 'term-deposits') return { chartWindow: chartWindow, preset: null };
+        var explicit = normalizePreset(searchParams.get('preset'));
+        if (explicit === 'consumer-default') {
+            return { chartWindow: chartWindow, preset: 'consumer-default' };
+        }
+        var p = searchParamsToParamRecord(searchParams);
+        if (!isCacheablePublicRequestParams(name, p, rk)) {
+            return { chartWindow: chartWindow, preset: null };
+        }
+        if (isConsumerPresetParamsShape(name, p)) return { chartWindow: chartWindow, preset: 'consumer-default' };
+        return { chartWindow: chartWindow, preset: null };
+    }
+
+    function relativeApiPath(parsedUrl) {
+        var basePath = apiBasePath();
+        if (!basePath || !parsedUrl) return '';
+        var pathname = parsedUrl.pathname || '';
+        if (pathname.indexOf(basePath) !== 0) return '';
+        return pathname.slice(basePath.length) || '/';
+    }
+
+    function isAnalyticsChartRequestPath(relative) {
+        return relative === '/analytics/series' || relative === '/analytics/series/'
+            || relative === '/analytics/report-plot' || relative === '/analytics/report-plot/';
     }
 
     function bundleKey(chartWindow, preset) {
@@ -218,41 +396,25 @@
             var analyticsMode = String(parsedUrl.searchParams.get('mode') || '').trim().toLowerCase();
             if (analyticsMode && analyticsMode !== 'all') return false;
         }
+        if (matcher.dataKey === 'reportPlotMoves' || matcher.dataKey === 'reportPlotBands') {
+            var datasetMode = String(parsedUrl.searchParams.get('dataset_mode') || '').trim().toLowerCase();
+            if (datasetMode && datasetMode !== 'all') return false;
+        }
         return true;
     }
 
-    function resolveRequestScope(parsedUrl) {
-        if (!parsedUrl) return { chartWindow: null, preset: null };
-        var chartWindow = normalizeChartWindow(parsedUrl.searchParams.get('chart_window'));
-        var preset = normalizePreset(parsedUrl.searchParams.get('preset'));
-        return { chartWindow: chartWindow, preset: preset };
-    }
-
-    function bundleForScopeLessRequest(preset) {
-        if (SNAPSHOT.data && String(SNAPSHOT.preset || '') === String(preset || '')) {
-            return bundleForScope(SNAPSHOT.chartWindow, SNAPSHOT.preset) || {
-                payload: SNAPSHOT.payload,
-                data: SNAPSHOT.data,
-                scope: SNAPSHOT.scope,
-                chartWindow: SNAPSHOT.chartWindow,
-                preset: SNAPSHOT.preset,
-                loadedAt: SNAPSHOT.loadedAt,
-            };
-        }
-        var exact = bundleForScope(null, preset || null);
-        if (exact) return exact;
-        var keys = Object.keys(SNAPSHOT.bundles);
-        for (var i = 0; i < keys.length; i++) {
-            var bundle = SNAPSHOT.bundles[keys[i]];
-            if (String(bundle && bundle.preset || '') === String(preset || '')) return bundle;
-        }
-        return null;
-    }
-
     function bundleForUrl(parsedUrl) {
-        var requested = resolveRequestScope(parsedUrl);
-        if (requested.chartWindow) return bundleForScope(requested.chartWindow, requested.preset);
-        return bundleForScopeLessRequest(requested.preset);
+        if (!parsedUrl) return null;
+        var section = activeSection();
+        var rel = relativeApiPath(parsedUrl);
+        var scopeParts = isAnalyticsChartRequestPath(rel)
+            ? inferSnapshotScopeForChartRequest(
+                section,
+                parsedUrl.searchParams,
+                rel.indexOf('report-plot') >= 0 ? 'report-plot' : 'series',
+            )
+            : inferSnapshotScopeForPage(section, new URLSearchParams(window.location.search || ''));
+        return bundleForScope(scopeParts.chartWindow, scopeParts.preset);
     }
 
     function dispatchReady(payload) {
@@ -265,11 +427,7 @@
 
     function scopeFromState() {
         try {
-            var params = new URLSearchParams(window.location.search || '');
-            var chartWindow = normalizeChartWindow(params.get('chart_window'));
-            var preset = normalizePreset(params.get('preset'));
-            if (!chartWindow) chartWindow = defaultChartWindowForSection(activeSection());
-            return { chartWindow: chartWindow, preset: preset };
+            return inferSnapshotScopeForPage(activeSection(), new URLSearchParams(window.location.search || ''));
         } catch (_err) {
             return {
                 chartWindow: defaultChartWindowForSection(activeSection()),
@@ -368,8 +526,8 @@
     function adoptInlineSnapshot(payload) {
         if (!payload || !payload.data) return false;
         payload.__inline = true;
-        var scope = scopeFromState();
-        var bundle = storeBundle(payload, scope.chartWindow, scope.preset, true, { lite: true });
+        var pageScope = scopeFromState();
+        var bundle = storeBundle(payload, pageScope.chartWindow, pageScope.preset, true, { lite: true });
         if (!bundle) return false;
         SNAPSHOT.inlined = true;
         SNAPSHOT.ready = Promise.resolve(bundle.payload);
@@ -409,9 +567,17 @@
             return SNAPSHOT.ready;
         }
 
-        // Prefer a snapshot already inlined by the Pages middleware.
+        // Prefer a snapshot already inlined by the Pages middleware (scope must match page + inline payload).
         var inline = window.AR && window.AR.snapshotInline;
-        if (wantsLite && inline && !SNAPSHOT.inlined && (!scope || key === bundleKey(scopeFromState().chartWindow, scopeFromState().preset))) {
+        var pageScope = scopeFromState();
+        var pageKey = bundleKey(pageScope.chartWindow, pageScope.preset);
+        if (
+            wantsLite
+            && inline
+            && !SNAPSHOT.inlined
+            && String(inline.scope || '') === pageKey
+            && (!scope || bundleKey(targetScope.chartWindow, targetScope.preset) === pageKey)
+        ) {
             if (adoptInlineSnapshot(inline)) return SNAPSHOT.ready;
         }
 
@@ -445,10 +611,15 @@
         if (!parsed) return Promise.resolve(null);
         var matcher = resolveMatcher(parsed);
         if (!matcher) return Promise.resolve(null);
-        var requested = resolveRequestScope(parsed);
-        var targetScope = requested.chartWindow
-            ? requested
-            : { chartWindow: SNAPSHOT.chartWindow || scopeFromState().chartWindow, preset: requested.preset };
+        var section = activeSection();
+        var rel = relativeApiPath(parsed);
+        var targetScope = isAnalyticsChartRequestPath(rel)
+            ? inferSnapshotScopeForChartRequest(
+                section,
+                parsed.searchParams,
+                rel.indexOf('report-plot') >= 0 ? 'report-plot' : 'series',
+            )
+            : inferSnapshotScopeForPage(section, new URLSearchParams(window.location.search || ''));
         var pending = start(targetScope, { activate: true });
         if (!pending) return Promise.resolve(null);
         var deadline = Math.max(0, Number(timeoutMs) || 0);
