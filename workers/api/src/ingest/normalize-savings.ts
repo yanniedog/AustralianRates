@@ -154,8 +154,11 @@ export function minConfidenceForFlag(flag: string): number {
 
 export function normalizeAccountType(text: string): SavingsAccountType {
   const t = lower(text)
-  if (t.includes('transaction') || t.includes('everyday') || t.includes('spending')) return 'transaction'
   if (t.includes('at call') || t.includes('at_call')) return 'at_call'
+  // Names like "Everyday Savings Account" (e.g. HSBC) must stay savings; do not let the
+  // generic "everyday" token (meant for spend/transaction-style accounts) win first.
+  if (t.includes('savings') || t.includes('saver') || t.includes('save account')) return 'savings'
+  if (t.includes('transaction') || t.includes('everyday') || t.includes('spending')) return 'transaction'
   return 'savings'
 }
 
