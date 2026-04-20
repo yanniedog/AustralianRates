@@ -150,7 +150,7 @@ describe('runProductClassificationAudit', () => {
 
     const report = await runProductClassificationAudit(env, { persist: false })
 
-    expect(report.ok).toBe(false)
+    expect(report.ok).toBe(true)
     const bucket = report.buckets.find((b) => b.kind === 'lvr_unspecified' && b.dataset === 'home_loans')
     expect(bucket).toBeDefined()
     expect(bucket!.count).toBe(2)
@@ -169,8 +169,8 @@ describe('runProductClassificationAudit', () => {
     await seedHomeLoan({ collectionDate: '2026-04-17', lvrTier: 'lvr_unspecified' })
 
     const initial = await runProductClassificationAudit(env, { persist: true })
-    expect(initial.ok).toBe(false)
-    expect(getCachedProductClassificationAuditReport()?.ok).toBe(false)
+    expect(initial.ok).toBe(true)
+    expect(getCachedProductClassificationAuditReport()?.ok).toBe(true)
 
     const stored = await env.DB
       .prepare('SELECT value FROM app_config WHERE key = ?')

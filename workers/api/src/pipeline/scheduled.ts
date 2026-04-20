@@ -228,6 +228,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
         idleMinutes: 120,
         limit: 200,
         persist: true,
+        emitDetectedGapsLog: false,
       })
     } catch (error) {
       log.error('scheduler', 'Coverage gap auto-remediation failed', {

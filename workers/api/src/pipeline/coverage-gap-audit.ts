@@ -119,6 +119,8 @@ export async function runCoverageGapAudit(
     idleMinutes?: number
     limit?: number
     persist?: boolean
+    /** When false, still persists the report but does not emit coverage_gap_audit_detected_gaps (e.g. post-remediation re-audit). */
+    emitDetectedGapsLog?: boolean
   } = {},
 ): Promise<CoverageGapAuditReport> {
   const generatedAt = new Date().toISOString()
@@ -153,11 +155,12 @@ export async function runCoverageGapAudit(
     await setAppConfig(env.DB, COVERAGE_GAP_REPORT_KEY, JSON.stringify(report))
   }
 
+  const emitGapLog = input.emitDetectedGapsLog !== false
   if (report.ok) {
     log.info('scheduler', 'coverage_gap_audit_ok', {
       context: `collection_date=${collectionDate || 'none'} idle_minutes=${idleMinutes}`,
     })
-  } else {
+  } else if (emitGapLog) {
     log.error('scheduler', 'coverage_gap_audit_detected_gaps', {
       code: 'coverage_slo_breach',
       context: JSON.stringify({

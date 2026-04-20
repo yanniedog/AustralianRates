@@ -5,8 +5,9 @@
  * term deposits), counts products whose canonical classification fields are
  * missing, empty, or outside the allowed enum. Also surfaces the known
  * `lvr_unspecified` tier for home loans so the inherent data-coverage gap
- * (CDR products that do not publish an LVR band) shows up as an actionable
- * triage item instead of silently flowing through the ingest pipeline.
+ * (CDR products that do not publish an LVR band) is visible in the persisted
+ * report buckets. Blocking gaps (invalid enum / null required / low confidence)
+ * still fail `report.ok` and emit `product_classification_gaps_detected`.
  *
  * Output shape mirrors coverage-gap-audit: persisted in `app_config`, cached
  * in memory for status-debug bundles, and emitted as an actionable log entry
@@ -24,7 +25,7 @@ import {
   SECURITY_PURPOSES,
 } from '../constants'
 import type { EnvBindings } from '../types'
-import { log } from '../utils/logger'
+import { log, parseLogContext } from '../utils/logger'
 
 export const PRODUCT_CLASSIFICATION_REPORT_KEY = 'product_classification_last_report_json'
 
@@ -368,6 +369,8 @@ export async function runProductClassificationAudit(
     },
   )
 
+  const blockingBuckets = buckets.filter((b) => b.kind !== 'lvr_unspecified')
+
   const report: ProductClassificationAuditReport = {
     run_id: `product-classification-audit:${generatedAt}:${crypto.randomUUID()}`,
     generated_at: generatedAt,
@@ -377,7 +380,7 @@ export async function runProductClassificationAudit(
       term_deposits: tdDate,
     },
     totals,
-    ok: totals.issues === 0,
+    ok: blockingBuckets.length === 0,
     buckets,
   }
 
@@ -393,15 +396,7 @@ export async function runProductClassificationAudit(
     }
   }
 
-  if (report.ok) {
-    log.info('scheduler', 'product_classification_audit_ok', {
-      context: JSON.stringify({
-        home_loans_date: homeLoanDate,
-        savings_date: savingsDate,
-        term_deposits_date: tdDate,
-      }),
-    })
-  } else {
+  if (blockingBuckets.length > 0) {
     log.error('scheduler', 'product_classification_gaps_detected', {
       code: 'product_classification_gaps',
       context: JSON.stringify({
@@ -418,6 +413,31 @@ export async function runProductClassificationAudit(
         })),
       }),
     })
+  } else if (buckets.some((b) => b.kind === 'lvr_unspecified')) {
+    log.info('scheduler', 'product_classification_lvr_unspecified_snapshot', {
+      context: JSON.stringify({
+        home_loans_date: homeLoanDate,
+        savings_date: savingsDate,
+        term_deposits_date: tdDate,
+        totals,
+        buckets: buckets
+          .filter((b) => b.kind === 'lvr_unspecified')
+          .map((b) => ({
+            dataset: b.dataset,
+            field: b.field,
+            count: b.count,
+            sample_bank_names: Array.from(new Set(b.sample.slice(0, 5).map((s) => s.bank_name))),
+          })),
+      }),
+    })
+  } else {
+    log.info('scheduler', 'product_classification_audit_ok', {
+      context: JSON.stringify({
+        home_loans_date: homeLoanDate,
+        savings_date: savingsDate,
+        term_deposits_date: tdDate,
+      }),
+    })
   }
 
   return report
@@ -432,9 +452,29 @@ export function shouldFilterProductClassificationLogForActionable(
   entry: Record<string, unknown>,
   report: ProductClassificationAuditReport | null,
 ): boolean {
-  if (!report?.ok) return false
   const msg = String(entry.message || '').trim().toLowerCase()
   if (msg !== 'product_classification_gaps_detected') return false
+
+  if (report?.ok) {
+    try {
+      const raw = parseLogContext(entry.context)
+      const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+      const totals = obj?.totals && typeof obj.totals === 'object' ? (obj.totals as Record<string, unknown>) : null
+      if (
+        totals &&
+        Number(totals.invalid_enum ?? 0) === 0 &&
+        Number(totals.null_required ?? 0) === 0 &&
+        Number(totals.low_confidence ?? 0) === 0 &&
+        Number(totals.lvr_unspecified ?? 0) > 0
+      ) {
+        return true
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (!report?.ok) return false
   const ts = String(entry.ts || '')
   const gen = report.generated_at
   if (!ts || !gen) return false
