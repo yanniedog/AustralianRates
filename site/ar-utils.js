@@ -269,6 +269,45 @@
         return entries.length;
     }
 
+    /**
+     * Public product pages set --ar-section-accent on body (see public-polish.css).
+     * Used so rate-report ribbons, crosshairs, and fallbacks match Mortgage / Savings / TD / Economic themes.
+     */
+    function resolveSectionRibbonAccentHex() {
+        try {
+            var body = document.body;
+            if (body) {
+                var raw = String(window.getComputedStyle(body).getPropertyValue('--ar-section-accent') || '').trim();
+                if (raw.charAt(0) === '#') {
+                    if (raw.length === 7 && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+                    if (raw.length === 4 && /^#[0-9a-fA-F]{3}$/.test(raw)) {
+                        return ('#' + raw[1] + raw[1] + raw[2] + raw[2] + raw[3] + raw[3]).toLowerCase();
+                    }
+                }
+            }
+        } catch (_e) {}
+        var sec = String((document.body && document.body.getAttribute && document.body.getAttribute('data-ar-section')) || '');
+        if (sec === 'savings') return '#10b981';
+        if (sec === 'term-deposits') return '#f59e0b';
+        if (sec === 'economic-data') return '#a855f7';
+        return '#3b82f6';
+    }
+
+    function sectionRibbonCrosshairLineRgba(isDark) {
+        var hex = resolveSectionRibbonAccentHex();
+        if (!hex || hex.charAt(0) !== '#' || hex.length !== 7) {
+            return isDark ? 'rgba(99,179,237,0.60)' : 'rgba(37,99,235,0.55)';
+        }
+        var r = parseInt(hex.slice(1, 3), 16);
+        var g = parseInt(hex.slice(3, 5), 16);
+        var b = parseInt(hex.slice(5, 7), 16);
+        if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+            return isDark ? 'rgba(99,179,237,0.60)' : 'rgba(37,99,235,0.55)';
+        }
+        var a = isDark ? 0.60 : 0.55;
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + String(a) + ')';
+    }
+
     window._arEsc = esc;
     window.AR.utils = {
         pct: pct,
@@ -285,5 +324,7 @@
         formatFilterValue: formatFilterValue,
         clientLog: clientLog,
         flushClientLogQueue: flushClientLogQueue,
+        resolveSectionRibbonAccentHex: resolveSectionRibbonAccentHex,
+        sectionRibbonCrosshairLineRgba: sectionRibbonCrosshairLineRgba,
     };
 })();

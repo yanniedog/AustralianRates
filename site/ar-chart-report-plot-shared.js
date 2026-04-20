@@ -1049,7 +1049,10 @@
                 lineData.push([d, prods.length === 1 ? mean : null]);
             });
             var single = prods.length === 1;
-            var ribbonColor = '#60a5fa';
+            var utilsRibbon = window.AR && window.AR.utils;
+            var ribbonColor = utilsRibbon && typeof utilsRibbon.resolveSectionRibbonAccentHex === 'function'
+                ? utilsRibbon.resolveSectionRibbonAccentHex()
+                : '#3b82f6';
             var lineColor = single && prods[0] && prods[0].baseHex ? prods[0].baseHex : ribbonColor;
             var scopedUpdates = [
                 {

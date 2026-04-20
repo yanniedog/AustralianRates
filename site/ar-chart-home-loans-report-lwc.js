@@ -59,17 +59,23 @@
     }
     function bankColor(name, index) {
         var key = String(name || '').trim().toLowerCase();
-        return BANK_COLOR[key] || ['#4f8dfd', '#27c27a', '#f0b90b', '#f97316', '#8b5cf6', '#ef4444', '#14b8a6', '#64748b', '#a78bfa', '#fb923c'][index % 10];
+        var u = window.AR && window.AR.utils;
+        var lead = u && typeof u.resolveSectionRibbonAccentHex === 'function' ? u.resolveSectionRibbonAccentHex() : '#3b82f6';
+        return BANK_COLOR[key] || [lead, '#27c27a', '#f0b90b', '#f97316', '#8b5cf6', '#ef4444', '#14b8a6', '#64748b', '#a78bfa', '#fb923c'][index % 10];
     }
 
     function isDark() { return document.documentElement.getAttribute('data-theme') !== 'light'; }
     function theme() {
         var dark = isDark();
+        var u = window.AR && window.AR.utils;
+        var cross = u && typeof u.sectionRibbonCrosshairLineRgba === 'function'
+            ? u.sectionRibbonCrosshairLineRgba(dark)
+            : (dark ? 'rgba(99,179,237,0.60)' : 'rgba(37,99,235,0.55)');
         return {
             muted: dark ? '#94a3b8' : '#64748b',
             grid: dark ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.16)',
             axis: dark ? 'rgba(148,163,184,0.20)' : 'rgba(148,163,184,0.35)',
-            crosshairLine: dark ? 'rgba(99,179,237,0.60)' : 'rgba(37,99,235,0.55)',
+            crosshairLine: cross,
             crosshairLabelBg: dark ? 'rgba(15,20,25,0.96)' : 'rgba(255,255,255,0.98)',
             rba: '#f59e0b',
             cpi: dark ? '#f87171' : '#dc2626',

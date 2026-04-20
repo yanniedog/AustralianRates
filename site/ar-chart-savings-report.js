@@ -86,7 +86,11 @@
         'me bank': '#003b6f',
         'mystate bank': '#e05c00',
     };
-    var PALETTE = ['#4f8dfd','#27c27a','#f0b90b','#f97316','#8b5cf6','#ef4444','#14b8a6','#64748b','#a78bfa','#fb923c'];
+    function ribbonPalette() {
+        var u = window.AR && window.AR.utils;
+        var lead = u && typeof u.resolveSectionRibbonAccentHex === 'function' ? u.resolveSectionRibbonAccentHex() : '#10b981';
+        return [lead,'#27c27a','#f0b90b','#f97316','#8b5cf6','#ef4444','#14b8a6','#64748b','#a78bfa','#fb923c'];
+    }
 
     function bankShort(name) {
         var k = String(name || '').trim().toLowerCase();
@@ -94,7 +98,8 @@
     }
     function bankColor(name, idx) {
         var k = String(name || '').trim().toLowerCase();
-        return BANK_COLOR[k] || PALETTE[idx % PALETTE.length];
+        var pal = ribbonPalette();
+        return BANK_COLOR[k] || pal[idx % pal.length];
     }
 
     // ── Theme ─────────────────────────────────────────────────────────────────
