@@ -50,6 +50,7 @@
         window.matchMedia('(max-width: 760px)').matches ||
         window.matchMedia('(max-height: 760px) and (orientation: landscape)').matches
     ));
+    var tinyViewport = !!(window.matchMedia && window.matchMedia('(max-width: 360px)').matches);
 
     function setMeta(selector, attr, value) {
         var el = document.querySelector(selector);
@@ -121,8 +122,8 @@
     ];
 
     var TD_EXTRA_VIEWS = [
-        { value: 'timeRibbon', label: 'Ribbon (time)', icon: 'history', help: 'Rate range and mean over time, all banks.', selected: false },
-        { value: 'tdTermTime', label: 'Term vs time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.', selected: false }
+        { value: 'timeRibbon', label: 'Ribbon (time)', shortLabel: 'Ribbon', icon: 'history', help: 'Rate range and mean over time, all banks.', selected: false },
+        { value: 'tdTermTime', label: 'Term vs time', shortLabel: 'Term/time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.', selected: false }
     ];
     var CHART_VIEWS;
     if (section === 'home-loans') {
@@ -555,6 +556,7 @@
         return '' +
             '<div class="chart-question-row" role="group" aria-label="Chart view">' +
                 CHART_VIEWS.map(function (view) {
+                    var displayLabel = tinyViewport && view.shortLabel ? view.shortLabel : view.label;
                     return '' +
                         '<button class="chart-preset chip-btn secondary' + (view.selected ? ' is-active' : '') + '"' +
                             ' data-chart-view="' + esc(view.value) + '"' +
@@ -564,7 +566,7 @@
                             ' aria-pressed="' + (view.selected ? 'true' : 'false') + '"' +
                             helpAttrs(view.label, view.help) +
                             '>' +
-                            iconText(view.icon, view.label, 'control-chip-label') +
+                            iconText(view.icon, displayLabel, 'control-chip-label') +
                         '</button>';
                 }).join('') +
             '</div>';

@@ -665,6 +665,16 @@
         display: inline;
     }
 
+    .chart-question-row {
+        gap: 6px;
+        padding-right: 8px;
+    }
+
+    .tab-btn,
+    .chart-preset {
+        padding-inline: 10px;
+    }
+
     .terminal-panel,
     .terminal-subpanel {
         padding: 10px;
