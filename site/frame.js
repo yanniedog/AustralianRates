@@ -342,7 +342,13 @@
                 sections.map(function (item) {
                     var active = isSectionActive(currentPath, item);
                     var label = item.label === 'Home Loans' ? 'Mortgage' : item.label;
-                    return '<a href="' + esc(item.path) + '" class="site-header-segment-link' + (active ? ' is-active' : '') + '"' + (active ? ' aria-current="page"' : '') + '>' + esc(label) + '</a>';
+                    var shortLabel = label;
+                    if (item.label === 'Term Deposits') shortLabel = 'TDs';
+                    else if (item.label === 'Economic Data') shortLabel = 'Economy';
+                    return '<a href="' + esc(item.path) + '" class="site-header-segment-link' + (active ? ' is-active' : '') + '"' + (active ? ' aria-current="page"' : '') + '>' +
+                        '<span class="site-header-segment-text site-header-segment-text-full">' + esc(label) + '</span>' +
+                        '<span class="site-header-segment-text site-header-segment-text-short">' + esc(shortLabel) + '</span>' +
+                    '</a>';
                 }).join('') +
             '</nav>';
     }
