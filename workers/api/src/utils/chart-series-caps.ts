@@ -9,7 +9,7 @@ export const CHART_SERIES_RESPONSE_CAP = 120_000
 /** Raw rows to read: default public chart (no chart_window). */
 export const CHART_SERIES_FETCH_PUBLIC = 160_000
 
-/** Raw rows to read when chart_window is set (disableRowCap on slice only). */
+/** Raw rows to read when chart_window is set (`disableRowCap` widens fetch vs default public cap). */
 export const CHART_SERIES_FETCH_WINDOW = 120_000
 
 /** Cron chart-cache refresh: bounded but higher so precomputed slices stay complete. */
