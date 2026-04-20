@@ -16,6 +16,7 @@ import {
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { refreshChartPivotCache } from '../pipeline/chart-cache-refresh'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { FETCH_EVENTS_RETENTION_DAYS, runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
@@ -123,6 +124,34 @@ adminRoutes.post('/retention/run', async (c) => {
   } catch (error) {
     log.error('admin', 'retention_run_failed', { error, context: '/admin/retention/run' })
     return jsonError(c, 500, 'RETENTION_FAILED', 'Retention run failed.')
+  }
+})
+
+/**
+ * Recompute chart_request_cache, report_plot_request_cache, snapshot_cache (D1),
+ * and snapshot KV bundles — same pipeline as the hourly maintenance cron chart leg.
+ */
+adminRoutes.post('/chart-cache/refresh', async (c) => {
+  try {
+    const result = await refreshChartPivotCache(c.env)
+    log.info('admin', 'chart_cache_refresh_manual', {
+      code: 'admin_chart_cache_refresh',
+      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length }),
+    })
+    return c.json({
+      ok: result.ok,
+      auth_mode: c.get('adminAuthState')?.mode ?? null,
+      refreshed: result.refreshed,
+      errors: result.errors,
+    })
+  } catch (error) {
+    log.error('admin', 'chart_cache_refresh_failed', { error, context: '/admin/chart-cache/refresh' })
+    return jsonError(
+      c,
+      500,
+      'CHART_CACHE_REFRESH_FAILED',
+      error instanceof Error ? error.message : 'Chart cache refresh failed.',
+    )
   }
 })
 
