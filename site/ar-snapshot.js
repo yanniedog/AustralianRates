@@ -269,6 +269,18 @@
             return { chartWindow: chartWindow, preset: null };
         }
         if (isConsumerPresetParamsShape(name, p)) return { chartWindow: chartWindow, preset: 'consumer-default' };
+        /** Public home/savings default slice: URL often omits consumer fields (syncUrlState strips some). Match consumer snapshot + middleware. */
+        if (name === 'home-loans' || name === 'savings') {
+            try {
+                var pageView = new URLSearchParams(window.location.search || '').get('view');
+                if (String(pageView || '').trim().toLowerCase() === 'analyst') {
+                    return { chartWindow: chartWindow, preset: null };
+                }
+            } catch (_e) {
+                /* ignore */
+            }
+            return { chartWindow: chartWindow, preset: 'consumer-default' };
+        }
         return { chartWindow: chartWindow, preset: null };
     }
 
