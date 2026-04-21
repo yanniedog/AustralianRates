@@ -29,7 +29,8 @@
       "register_brand_name": "NAB",
       "products_endpoint": "https://openbank.api.nab.com.au/cds-au/v1/banking/products",
       "seed_rate_urls": [
-        "https://www.nab.com.au/personal/home-loans/interest-rates"
+        "https://www.nab.com.au/personal/home-loans/nab-base-variable-rate-home-loan",
+        "https://www.nab.com.au/personal/home-loans/nab-fixed-rate-home-loan"
       ]
     },
     {

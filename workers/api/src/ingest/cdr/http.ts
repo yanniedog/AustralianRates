@@ -143,10 +143,22 @@ type UnsupportedVersionProbe = {
   bodySnippet: string
 }
 
+/**
+ * Probe CDR endpoint across versions, sending `x-min-v` equal to `x-v` on each probe.
+ *
+ * Historically we sent `x-min-v: 1` with a varying `x-v`, betting the server would pick the
+ * highest supported version in our range. NAB (2026-04) tightened their API and started
+ * returning 400/406 UnsupportedVersion when `x-min-v` falls below their supported minimum
+ * (e.g. Min=4 Max=6), even when the intersection with our range would be non-empty. A
+ * strict `x-min-v = x-v` probe is unambiguous: each attempt asks for exactly one version
+ * and the server either returns that version or rejects. The caller controls the order
+ * (highest first) so we still prefer the newest supported version.
+ */
 export async function fetchCdrJson(url: string, versions: number[], context?: FetchRequestContext): Promise<FetchJsonResult> {
   const tried = new Set<number>()
   const queue = [...versions]
   const unsupportedVersionProbes: UnsupportedVersionProbe[] = []
+  let lastProbe: { status: number; text: string } | null = null
   while (queue.length > 0) {
     const version = Number(queue.shift())
     if (!Number.isFinite(version) || tried.has(version)) continue
@@ -158,13 +170,14 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
       {
         accept: 'application/json',
         'x-v': String(version),
-        'x-min-v': '1',
+        'x-min-v': String(version),
       },
       {
         ...context,
         sourceName: context?.sourceName || 'cdr_http',
       },
     )
+    lastProbe = { status: res.status, text: res.text }
     const data = parseJsonSafe(res.text)
     if (res.ok && data != null && !hasCdrErrors(data)) {
       return {
@@ -189,7 +202,7 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
     }
   }
 
-  for (const fallbackVersion of [1, 2, 3, 4, 5, 6]) {
+  for (const fallbackVersion of [6, 5, 4, 3, 2, 1]) {
     if (tried.has(fallbackVersion)) continue
     const res = await fetchTextWithRetries(
       url,
@@ -197,13 +210,14 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
       {
         accept: 'application/json',
         'x-v': String(fallbackVersion),
-        'x-min-v': '1',
+        'x-min-v': String(fallbackVersion),
       },
       {
         ...context,
         sourceName: context?.sourceName || 'cdr_http',
       },
     )
+    lastProbe = { status: res.status, text: res.text }
     const data = parseJsonSafe(res.text)
     if (res.ok && data != null && !hasCdrErrors(data)) {
       return {
@@ -216,8 +230,7 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
     }
   }
 
-  const finalResult = await fetchJson(url, context)
-  if (!finalResult.ok && unsupportedVersionProbes.length > 0) {
+  if (unsupportedVersionProbes.length > 0) {
     const attempts = unsupportedVersionProbes
       .slice(0, 4)
       .map((probe) => `x_v_tried=${probe.versionTried} body_snippet=${probe.bodySnippet}`)
@@ -229,5 +242,12 @@ export async function fetchCdrJson(url: string, versions: number[], context?: Fe
     })
   }
 
-  return finalResult
+  const finalText = lastProbe?.text || ''
+  return {
+    ok: false,
+    status: lastProbe?.status ?? 0,
+    url,
+    data: parseJsonSafe(finalText),
+    text: finalText,
+  }
 }
