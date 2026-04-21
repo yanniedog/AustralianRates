@@ -90,6 +90,76 @@ describe('CDR HTTP helpers', () => {
     expect(requestedVersions).toContain('4')
   })
 
+  it('sends x-min-v equal to x-v on each probe so strict-version servers accept the request', async () => {
+    const probes: Array<{ xv: string; xminv: string }> = []
+    const testServer = await startTestServer((req, res) => {
+      const xv = String(req.headers['x-v'] || '')
+      const xminv = String(req.headers['x-min-v'] || '')
+      probes.push({ xv, xminv })
+      // Simulate NAB: reject unless x-min-v >= 4 AND x-v within [4, 6].
+      const xvNum = Number(xv)
+      const xminvNum = Number(xminv)
+      if (!Number.isFinite(xvNum) || !Number.isFinite(xminvNum) || xminvNum < 4 || xvNum < 4 || xvNum > 6) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            errors: [
+              {
+                code: 'urn:au-cds:error:cds-all:Header/UnsupportedVersion',
+                title: 'Unsupported Version',
+                detail: 'Minimum version supported is 4 and Maximum version supported is 6',
+              },
+            ],
+          }),
+        )
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ data: { products: [{ productId: 'ok' }] } }))
+    })
+    activeServers.push(testServer)
+
+    const result = await fetchCdrJson(`${testServer.baseUrl}/products`, [6, 5, 4, 3])
+
+    expect(result.ok).toBe(true)
+    // First probe should satisfy the strict server (x-v=6, x-min-v=6).
+    expect(probes[0]).toEqual({ xv: '6', xminv: '6' })
+    // Every probe should carry x-min-v equal to x-v; never the old `x-min-v: 1` default.
+    for (const probe of probes) {
+      expect(probe.xminv).toBe(probe.xv)
+    }
+  })
+
+  it('returns the last probe response when every version attempt fails (no unversioned final request)', async () => {
+    const probes: string[] = []
+    const testServer = await startTestServer((req, res) => {
+      const xv = String(req.headers['x-v'] || '(none)')
+      probes.push(xv)
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          errors: [
+            {
+              code: 'urn:au-cds:error:cds-all:Header/UnsupportedVersion',
+              title: 'Unsupported Version',
+              detail: 'Minimum version supported is 99',
+            },
+          ],
+        }),
+      )
+    })
+    activeServers.push(testServer)
+
+    const result = await fetchCdrJson(`${testServer.baseUrl}/products`, [6, 5, 4, 3])
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe(400)
+    // Confirm no probe was sent without an x-v header (that path was removed; it never
+    // produced a usable CDR response and caused noisy `status=0` fetch events).
+    expect(probes).not.toContain('(none)')
+    expect(probes.length).toBeGreaterThan(0)
+  })
+
   it('does not warn for 406 version probes when a later fallback version succeeds', async () => {
     const requestedVersions: string[] = []
     const warnSpy = vi.spyOn(log, 'warn')
