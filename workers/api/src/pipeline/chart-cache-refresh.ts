@@ -37,7 +37,45 @@ function precomputedScopes(section: ChartCacheSection): ChartCacheScope[] {
   return raw
 }
 
-/** Refresh scoped chart request caches for all sections and representations. Called by cron every 15 min. */
+function publicPackageScopes(section: ChartCacheSection, allScopes = false): ChartCacheScope[] {
+  if (allScopes) return precomputedScopes(section)
+  if (section === 'home_loans' || section === 'savings') {
+    return ['preset:consumer-default:window:90D', 'window:90D']
+  }
+  return ['window:30D']
+}
+
+export async function refreshPublicSnapshotPackages(
+  env: EnvBindings,
+  options?: { allScopes?: boolean },
+): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
+  const errors: string[] = []
+  let refreshed = 0
+
+  for (const section of SECTIONS) {
+    for (const cacheScope of publicPackageScopes(section, options?.allScopes)) {
+      try {
+        const snapshot = await buildSnapshotPayload(env, section, cacheScope)
+        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
+        refreshed++
+      } catch (e) {
+        const msg = (e as Error)?.message ?? String(e)
+        errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
+        log.warn('public_package_refresh', `Failed to refresh ${section} snapshot ${cacheScope}`, {
+          code: 'public_package_refresh_failed',
+          context: msg,
+        })
+      }
+    }
+  }
+
+  log.info('public_package_refresh', 'Public snapshot packages refreshed', {
+    context: `refreshed=${refreshed} errors=${errors.length}`,
+  })
+  return { ok: errors.length === 0, refreshed, errors }
+}
+
+/** Refresh scoped chart request caches for all sections and representations. Manual/admin-only in production. */
 export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
   const db = env.DB
   const rd = getReadDbFromEnv(env)

@@ -14,6 +14,7 @@ import { savingsPublicRoutes } from './routes/savings-public'
 import { tdPublicRoutes } from './routes/td-public'
 import type { AppContext, EnvBindings, IngestMessage } from './types'
 import { flushBufferedLogs, initLogger, log } from './utils/logger'
+import { withD1BudgetTracking } from './utils/d1-budget'
 
 const app = new Hono<AppContext>()
 
@@ -98,41 +99,45 @@ const worker: ExportedHandler<EnvBindings, IngestMessage> = {
   },
 
   async scheduled(event, env): Promise<void> {
-    initLogger(env.DB)
-    const cron = String((event as ScheduledController & { cron?: string }).cron || '')
-    log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()} (${cron || 'unknown'})`)
-    try {
-      const result = await dispatchScheduledEvent(event, env)
-      log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
-    } catch (error) {
-      log.error('scheduler', 'Scheduled run failed', {
-        error,
-        context: JSON.stringify({
-          scheduled_time: new Date(event.scheduledTime).toISOString(),
-          cron: cron || 'unknown',
-        }),
-      })
-      throw error
-    } finally {
-      await flushBufferedLogs()
-    }
+    await withD1BudgetTracking(env, async (trackedEnv) => {
+      initLogger(trackedEnv.DB)
+      const cron = String((event as ScheduledController & { cron?: string }).cron || '')
+      log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()} (${cron || 'unknown'})`)
+      try {
+        const result = await dispatchScheduledEvent(event, trackedEnv)
+        log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
+      } catch (error) {
+        log.error('scheduler', 'Scheduled run failed', {
+          error,
+          context: JSON.stringify({
+            scheduled_time: new Date(event.scheduledTime).toISOString(),
+            cron: cron || 'unknown',
+          }),
+        })
+        throw error
+      } finally {
+        await flushBufferedLogs()
+      }
+    })
   },
 
   async queue(batch, env): Promise<void> {
-    initLogger(env.DB)
-    try {
-      await consumeIngestQueue(batch, env)
-    } catch (error) {
-      log.error('consumer', 'Queue batch processing failed', {
-        error,
-        context: JSON.stringify({
-          messages: batch.messages.length,
-        }),
-      })
-      throw error
-    } finally {
-      await flushBufferedLogs()
-    }
+    await withD1BudgetTracking(env, async (trackedEnv) => {
+      initLogger(trackedEnv.DB)
+      try {
+        await consumeIngestQueue(batch, trackedEnv)
+      } catch (error) {
+        log.error('consumer', 'Queue batch processing failed', {
+          error,
+          context: JSON.stringify({
+            messages: batch.messages.length,
+          }),
+        })
+        throw error
+      } finally {
+        await flushBufferedLogs()
+      }
+    })
   },
 }
 

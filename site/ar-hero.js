@@ -125,6 +125,29 @@
         return best;
     }
 
+    function numericSnapshotValue(value) {
+        var n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : NaN;
+    }
+
+    function snapshotChartModelTotal(data) {
+        var models = data && data.chartModels;
+        var model = models && (models.default || models.ribbon || models.line || models.scatter);
+        return numericSnapshotValue(model && model.meta && model.meta.totalRows);
+    }
+
+    function snapshotTotalRows(data) {
+        var analytics = data && data.analyticsSeries;
+        var total = numericSnapshotValue(analytics && analytics.total);
+        if (Number.isFinite(total)) return total;
+
+        var latestAll = data && data.latestAll;
+        total = numericSnapshotValue(latestAll && (latestAll.count || latestAll.total));
+        if (Number.isFinite(total)) return total;
+
+        return snapshotChartModelTotal(data);
+    }
+
     function setIntroMetric(id, value, note) {
         var intro = syncPublicIntro();
         if (!intro || typeof intro.setLiveMetric !== 'function') return;
@@ -246,8 +269,7 @@
             };
             applyLandingOverview();
         }
-        var analytics = data.analyticsSeries || null;
-        var total = analytics && Number.isFinite(Number(analytics.total)) ? Number(analytics.total) : NaN;
+        var total = snapshotTotalRows(data);
         var latest = pickLatestSnapshotRow(snapshotLatestAllRows());
         if (!Number.isFinite(total) || !latest) return !!landingOverview;
         return applyHeroSnapshot(total, latest);

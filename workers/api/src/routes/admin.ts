@@ -14,9 +14,10 @@ import {
   listIntegrityAuditRuns,
 } from '../db/integrity-audit-runs'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
+import { loadPostIngestAssuranceReport, runPostIngestAssurance } from '../pipeline/post-ingest-assurance'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
-import { refreshChartPivotCache } from '../pipeline/chart-cache-refresh'
+import { refreshChartPivotCache, refreshPublicSnapshotPackages } from '../pipeline/chart-cache-refresh'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { FETCH_EVENTS_RETENTION_DAYS, runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
@@ -155,6 +156,33 @@ adminRoutes.post('/chart-cache/refresh', async (c) => {
   }
 })
 
+/** Recompute only the cache-only public snapshot packages in KV. */
+adminRoutes.post('/public-packages/refresh', async (c) => {
+  try {
+    const full = ['1', 'true', 'yes', 'on'].includes(String(c.req.query('full') || '').trim().toLowerCase())
+    const result = await refreshPublicSnapshotPackages(c.env, { allScopes: full })
+    log.info('admin', 'public_packages_refresh_manual', {
+      code: 'admin_public_packages_refresh',
+      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length, full }),
+    })
+    return c.json({
+      ok: result.ok,
+      auth_mode: c.get('adminAuthState')?.mode ?? null,
+      full,
+      refreshed: result.refreshed,
+      errors: result.errors,
+    })
+  } catch (error) {
+    log.error('admin', 'public_packages_refresh_failed', { error, context: '/admin/public-packages/refresh' })
+    return jsonError(
+      c,
+      500,
+      'PUBLIC_PACKAGES_REFRESH_FAILED',
+      error instanceof Error ? error.message : 'Public package refresh failed.',
+    )
+  }
+})
+
 adminRoutes.get('/cdr-audit', async (c) => {
   let report = getCachedCdrAuditReport()
   if (!report) {
@@ -183,6 +211,44 @@ adminRoutes.post('/cdr-audit/run', async (c) => {
       }),
     })
     return jsonError(c, 500, 'CDR_AUDIT_FAILED', 'CDR pipeline audit failed to execute.')
+  }
+})
+
+adminRoutes.get('/post-ingest-assurance', async (c) => {
+  const report = await loadPostIngestAssuranceReport(c.env.DB)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    report,
+  })
+})
+
+adminRoutes.post('/post-ingest-assurance/run', async (c) => {
+  try {
+    const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+    const collectionDate = typeof body.collection_date === 'string'
+      ? body.collection_date
+      : typeof body.collectionDate === 'string'
+        ? body.collectionDate
+        : undefined
+    const report = await runPostIngestAssurance(c.env, {
+      collectionDate,
+      persist: true,
+      emitHardFailureLog: true,
+    })
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      report,
+    })
+  } catch (error) {
+    log.error('admin', 'post_ingest_assurance_run_failed', {
+      error,
+      context: JSON.stringify({
+        route: '/admin/post-ingest-assurance/run',
+      }),
+    })
+    return jsonError(c, 500, 'POST_INGEST_ASSURANCE_FAILED', 'Post-ingest assurance failed to execute.')
   }
 })
 
