@@ -186,6 +186,83 @@
     color: var(--ar-accent);
 }
 
+.admin-cost-warning {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-warning) 42%, var(--ar-line));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-warning) 8%, var(--ar-surface));
+    color: var(--ar-text-soft);
+    font-size: 0.82rem;
+}
+
+.admin-cost-warning a {
+    color: var(--ar-warning);
+    font-weight: 700;
+}
+
+.d1-guard-grid,
+.d1-usage-bars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.d1-usage-bars {
+    align-items: end;
+    min-height: 210px;
+    padding: 10px 0 0;
+    border-bottom: 1px solid var(--ar-line);
+}
+
+.d1-guard-grid .pill.pass {
+    border-color: color-mix(in srgb, var(--ar-positive) 40%, var(--ar-line));
+    color: var(--ar-positive);
+}
+
+.d1-guard-grid .pill.warn {
+    border-color: color-mix(in srgb, var(--ar-warning) 44%, var(--ar-line));
+    color: var(--ar-warning);
+}
+
+.d1-guard-grid .pill.error {
+    border-color: color-mix(in srgb, var(--ar-danger) 44%, var(--ar-line));
+    color: var(--ar-danger);
+}
+
+.d1-bar-day {
+    display: grid;
+    grid-template-columns: 8px 8px;
+    grid-template-rows: 1fr auto;
+    gap: 3px;
+    align-items: end;
+    min-width: 24px;
+    height: 190px;
+}
+
+.d1-bar-day small {
+    grid-column: 1 / -1;
+    color: var(--ar-text-muted);
+    font-size: 0.64rem;
+    text-align: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.d1-bar {
+    display: block;
+    border-radius: 4px 4px 0 0;
+}
+
+.d1-bar-read {
+    background: var(--ar-accent);
+}
+
+.d1-bar-write {
+    background: var(--ar-warning);
+}
+
 .admin-status .integrity-audit-traffic {
     display: flex;
     align-items: center;

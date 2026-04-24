@@ -60,7 +60,6 @@
     function isLocalHost() {
         return /^(localhost|127\.0\.0\.1)$/i.test(String(window.location.hostname || ''));
     }
-
     function ratesOrigin() {
         var params = new URLSearchParams(window.location.search || '');
         return String(params.get('ratesOrigin') || (isLocalHost() ? 'https://www.australianrates.com' : window.location.origin)).replace(/\/+$/, '');
@@ -69,7 +68,6 @@
     function apiUrl(path) {
         return ratesOrigin() + path;
     }
-
     function getJson(url) {
         return fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' }).then(function (response) {
             return response.json().then(function (body) {
@@ -119,26 +117,22 @@
         if (!match) return null;
         return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Math.min(Number(match[3]), 28)));
     }
-
     function addMonthsYmd(dateText, months) {
         var date = parseDate(dateText);
         if (!date) return '';
         date.setUTCMonth(date.getUTCMonth() + Number(months || 0));
         return date.toISOString().slice(0, 10);
     }
-
     function termLabel(months) {
         var n = Number(months);
         if (!Number.isFinite(n)) return '';
         if (n % 12 === 0) return String(n / 12) + 'Y';
         return String(n) + 'M';
     }
-
     function fixedMonths(rateStructure) {
         var match = String(rateStructure || '').match(/^fixed_(\d+)yr$/);
         return match ? Number(match[1]) * 12 : null;
     }
-
     function quantile(sorted, q) {
         if (!sorted.length) return null;
         if (sorted.length === 1) return sorted[0];
@@ -147,7 +141,6 @@
         var next = Math.min(sorted.length - 1, base + 1);
         return sorted[base] + (sorted[next] - sorted[base]) * (position - base);
     }
-
     function summarizeBucket(bucket) {
         var values = bucket.values.sort(function (a, b) { return a - b; });
         var banks = Object.keys(bucket.banks);
@@ -167,7 +160,6 @@
             bankCount: banks.length,
         };
     }
-
     function addBucket(map, input) {
         if (!input.maturityDate || !Number.isFinite(input.value)) return;
         var key = input.market + '|' + input.months;
@@ -186,7 +178,6 @@
         map[key].values.push(input.value);
         map[key].banks[input.bankName || 'Unknown bank'] = true;
     }
-
     function buildCurve(rows, market) {
         var buckets = {};
         rows.forEach(function (row) {
@@ -247,13 +238,19 @@
     function formatBp(value) {
         if (!Number.isFinite(Number(value))) return 'n/a';
         var n = Math.round(Number(value));
-        return (n > 0 ? '+' : '') + n + ' bp';
+        return (n > 0 ? '+' : '') + n + ' bps';
     }
 
     function dateLabel(value) {
         var date = parseDate(value);
         if (!date) return String(value || '');
         return date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    }
+
+    function fullDateLabel(value) {
+        var date = parseDate(value);
+        if (!date) return String(value || '');
+        return date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
     }
 
     function metricValue(bucket) {
@@ -276,9 +273,12 @@
             if (!bucket || entry.seriesName.indexOf('IQR') >= 0 || entry.seriesName.indexOf('base') >= 0) return;
             lines.push(
                 '<strong>' + bucket.label + '</strong><br>' +
-                'Maturity: ' + dateLabel(bucket.maturityDate) + '<br>' +
-                'Median: ' + formatRate(bucket.median) + '<br>' +
-                'Curve: ' + formatBp(bucket.spreadBp) + '<br>' +
+                'Snapshot date: ' + fullDateLabel(bucket.snapshotDate) + '<br>' +
+                'Maturity date: ' + fullDateLabel(bucket.maturityDate) + '<br>' +
+                'Term: ' + termLabel(bucket.months) + '<br>' +
+                'Curve type: ' + (bucket.market === 'td' ? 'Term deposit' : 'Fixed mortgage') + '<br>' +
+                'Median rate: ' + formatRate(bucket.median) + '<br>' +
+                'Spread vs shortest maturity: ' + formatBp(bucket.spreadBp) + '<br>' +
                 'IQR: ' + formatRate(bucket.q1) + ' to ' + formatRate(bucket.q3) + '<br>' +
                 'Banks: ' + bucket.bankCount + ' | Rows: ' + bucket.rowCount
             );
@@ -413,6 +413,10 @@
             grid: { left: 54, right: 18, top: 18, bottom: 70, containLabel: true },
             xAxis: {
                 type: 'time',
+                name: 'Maturity date',
+                nameLocation: 'middle',
+                nameGap: 34,
+                nameTextStyle: { color: theme.mutedText },
                 axisLine: { lineStyle: { color: theme.axisLine } },
                 splitLine: { show: false },
                 axisLabel: { color: theme.mutedText, formatter: dateLabel },
@@ -420,7 +424,7 @@
             yAxis: {
                 type: 'value',
                 scale: true,
-                name: state.mode === 'rate' ? 'Median rate' : 'Curve slope',
+                name: state.mode === 'rate' ? 'Median rate' : 'Spread vs shortest maturity',
                 nameTextStyle: { color: theme.mutedText },
                 axisLine: { lineStyle: { color: theme.axisLine } },
                 splitLine: { lineStyle: { color: theme.splitLine } },
@@ -436,8 +440,8 @@
         state.chart.resize();
         if (refs.meta) {
             refs.meta.textContent = state.mode === 'rate'
-                ? 'Median headline rates by future maturity date; dashed line is current RBA cash rate.'
-                : 'Curve slope in basis points versus each market shortest maturity; negative values imply lower pricing further out.';
+                ? 'Median rate by maturity date; dashed line is current RBA cash rate.'
+                : 'Spread in basis points versus each market shortest maturity.';
         }
     }
 
