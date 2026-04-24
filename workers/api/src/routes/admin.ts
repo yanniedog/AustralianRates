@@ -14,6 +14,7 @@ import {
   listIntegrityAuditRuns,
 } from '../db/integrity-audit-runs'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
+import { loadPostIngestAssuranceReport, runPostIngestAssurance } from '../pipeline/post-ingest-assurance'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { refreshChartPivotCache, refreshPublicSnapshotPackages } from '../pipeline/chart-cache-refresh'
@@ -210,6 +211,44 @@ adminRoutes.post('/cdr-audit/run', async (c) => {
       }),
     })
     return jsonError(c, 500, 'CDR_AUDIT_FAILED', 'CDR pipeline audit failed to execute.')
+  }
+})
+
+adminRoutes.get('/post-ingest-assurance', async (c) => {
+  const report = await loadPostIngestAssuranceReport(c.env.DB)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    report,
+  })
+})
+
+adminRoutes.post('/post-ingest-assurance/run', async (c) => {
+  try {
+    const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+    const collectionDate = typeof body.collection_date === 'string'
+      ? body.collection_date
+      : typeof body.collectionDate === 'string'
+        ? body.collectionDate
+        : undefined
+    const report = await runPostIngestAssurance(c.env, {
+      collectionDate,
+      persist: true,
+      emitHardFailureLog: true,
+    })
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      report,
+    })
+  } catch (error) {
+    log.error('admin', 'post_ingest_assurance_run_failed', {
+      error,
+      context: JSON.stringify({
+        route: '/admin/post-ingest-assurance/run',
+      }),
+    })
+    return jsonError(c, 500, 'POST_INGEST_ASSURANCE_FAILED', 'Post-ingest assurance failed to execute.')
   }
 })
 

@@ -31,7 +31,7 @@ export type SnapshotPayload = {
   data: Record<string, unknown>
 }
 
-function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
+export function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
   // Include payload version so bumping SNAPSHOT_PAYLOAD_VERSION instantly invalidates all KV keys.
   return `snapshot:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
 }
