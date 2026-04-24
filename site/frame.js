@@ -350,7 +350,7 @@
                 '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>'
             );
         } else {
-            actions.push('<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>');
+            actions.push('<button type="button" id="site-help-btn" class="icon-btn secondary site-action-btn site-action-help" aria-label="Open help" title="Open help">' + iconOnly('help', 'Help', 'site-action-icon') + '</button>', '<button type="button" id="refresh-site-btn" class="icon-btn secondary site-action-btn site-action-refresh" aria-label="Refresh" title="' + esc(refreshTitle) + '">' + actionIconMarkup('refresh', 'Refresh') + '</button>');
         }
         actions.push('<button type="button" id="site-menu-toggle" class="icon-btn secondary site-action-btn site-action-menu" aria-label="Toggle menu" title="Toggle menu">' + actionIconMarkup('menu', menuLabel) + '</button>');
         return '<div class="site-header-actions">' + actions.join('') + '</div>';
