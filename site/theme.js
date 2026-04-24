@@ -6,36 +6,59 @@
     var boundToggleAttr = 'data-ar-theme-bound';
     var themeTransitionTimer = null;
 
-    function getDefaultTheme() {
-        return 'dark';
+    function getDefaultThemeMode() {
+        return 'system';
+    }
+
+    function normalizeMode(value) {
+        var v = String(value || '').toLowerCase();
+        if (v === 'light' || v === 'dark' || v === 'system') return v;
+        return getDefaultThemeMode();
     }
 
     function normalizeTheme(value) {
         return String(value || '').toLowerCase() === 'light' ? 'light' : 'dark';
     }
 
+    function systemTheme() {
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+        } catch (_err) {}
+        return 'dark';
+    }
+
+    function resolveMode(mode) {
+        var normalized = normalizeMode(mode);
+        return normalized === 'system' ? systemTheme() : normalized;
+    }
+
     function readStoredTheme() {
         try {
             var stored = window.localStorage.getItem(STORAGE_KEY);
-            return stored ? normalizeTheme(stored) : getDefaultTheme();
+            return stored ? normalizeMode(stored) : getDefaultThemeMode();
         } catch (_err) {
-            return getDefaultTheme();
+            return getDefaultThemeMode();
         }
     }
 
-    function themeMeta(theme) {
-        var current = normalizeTheme(theme);
+    function themeMeta(mode, resolved) {
+        var currentMode = normalizeMode(mode);
+        var current = normalizeTheme(resolved || resolveMode(currentMode));
+        var nextMode = currentMode === 'system' ? 'light' : (currentMode === 'light' ? 'dark' : 'system');
         return {
             current: current,
-            next: current === 'dark' ? 'light' : 'dark',
-            icon: current === 'dark' ? '\u2600' : '\u263E',
-            label: current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+            mode: currentMode,
+            next: nextMode,
+            icon: currentMode === 'system' ? '\u25d0' : (current === 'dark' ? '\u2600' : '\u263e'),
+            label: currentMode === 'system'
+                ? 'Theme follows system. Switch to light mode'
+                : (currentMode === 'light' ? 'Light mode. Switch to dark mode' : 'Dark mode. Switch to system theme'),
         };
     }
 
-    function syncToggleButton(button, theme) {
+    function syncToggleButton(button, mode, resolved) {
         if (!button) return;
-        var meta = themeMeta(theme);
+        var meta = themeMeta(mode, resolved);
         var visibleLabel = button.getAttribute('data-theme-label') || 'Theme';
         if (button.classList.contains('site-action-btn')) {
             button.innerHTML = '<span class="site-action-glyph" aria-hidden="true">' + meta.icon + '</span><span class="site-action-text">' + visibleLabel + '</span>';
@@ -46,12 +69,13 @@
         button.setAttribute('title', meta.label);
         button.setAttribute('data-theme-current', meta.current);
         button.setAttribute('data-theme-next', meta.next);
+        button.setAttribute('data-theme-mode', meta.mode);
     }
 
-    function syncAllToggles(theme) {
+    function syncAllToggles(mode, resolved) {
         var buttons = document.querySelectorAll('[data-theme-toggle]');
         for (var i = 0; i < buttons.length; i++) {
-            syncToggleButton(buttons[i], theme);
+            syncToggleButton(buttons[i], mode, resolved);
         }
     }
 
@@ -66,26 +90,28 @@
         }, 220);
     }
 
-    function applyTheme(theme, options) {
-        var next = normalizeTheme(theme);
+    function applyTheme(mode, options) {
+        var nextMode = normalizeMode(mode);
+        var next = resolveMode(nextMode);
         var opts = options || {};
         if (!opts.skipTransitionClamp && typeof window.setTimeout === 'function') {
             clampThemeTransitions();
         }
         root.setAttribute('data-theme', next);
+        root.setAttribute('data-theme-mode', nextMode);
         root.style.colorScheme = next;
 
         if (!opts.skipPersist) {
             try {
-                window.localStorage.setItem(STORAGE_KEY, next);
+                window.localStorage.setItem(STORAGE_KEY, nextMode);
             } catch (_err) {}
         }
 
-        syncAllToggles(next);
+        syncAllToggles(nextMode, next);
 
         if (!opts.silent) {
             window.dispatchEvent(new CustomEvent('ar:theme-changed', {
-                detail: { theme: next },
+                detail: { theme: next, mode: nextMode },
             }));
         }
 
@@ -96,18 +122,23 @@
         return normalizeTheme(root.getAttribute('data-theme') || readStoredTheme());
     }
 
+    function getMode() {
+        return normalizeMode(root.getAttribute('data-theme-mode') || readStoredTheme());
+    }
+
     function setTheme(theme) {
         return applyTheme(theme);
     }
 
     function toggleTheme() {
-        return applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
+        var mode = getMode();
+        return applyTheme(mode === 'system' ? 'light' : (mode === 'light' ? 'dark' : 'system'));
     }
 
     function bindToggle(button) {
         if (!button || button.getAttribute(boundToggleAttr) === 'true') return button;
         button.setAttribute(boundToggleAttr, 'true');
-        syncToggleButton(button, getTheme());
+        syncToggleButton(button, getMode(), getTheme());
         button.addEventListener('click', function () {
             toggleTheme();
         });
@@ -124,8 +155,20 @@
 
     applyTheme(readStoredTheme(), { skipPersist: true, silent: true, skipTransitionClamp: true });
 
+    try {
+        if (window.matchMedia) {
+            var media = window.matchMedia('(prefers-color-scheme: light)');
+            var onSystemThemeChange = function () {
+                if (getMode() === 'system') applyTheme('system', { skipPersist: true });
+            };
+            if (media.addEventListener) media.addEventListener('change', onSystemThemeChange);
+            else if (media.addListener) media.addListener(onSystemThemeChange);
+        }
+    } catch (_err) {}
+
     window.ARTheme = {
         bindToggle: bindToggle,
+        getMode: getMode,
         getTheme: getTheme,
         initToggles: initToggles,
         setTheme: setTheme,
