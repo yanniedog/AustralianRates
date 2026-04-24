@@ -929,10 +929,14 @@ async function verifyChartSmoke(page, results, label) {
     else fail(results, `${label}: chart summary did not populate after draw`);
 }
 
-async function verifyPivotLoad(page, results, label) {
-    const pivotAvailable = await page.evaluate(() => {
+async function isPivotWorkspaceAvailable(page) {
+    return await page.evaluate(() => {
         return !!(document.getElementById('tab-pivot') && document.getElementById('panel-pivot') && document.getElementById('load-pivot'));
     }).catch(() => false);
+}
+
+async function verifyPivotLoad(page, results, label) {
+    const pivotAvailable = await isPivotWorkspaceAvailable(page);
     if (!pivotAvailable) {
         pass(results, `${label}: pivot workspace removed from the public site`);
         return;
@@ -1143,6 +1147,11 @@ async function verifyTabsAndHash(page, results, label, baseUrl) {
     }
 
     await gotoPublic(page, baseUrl + '#pivot');
+    if (!(await isPivotWorkspaceAvailable(page))) {
+        pass(results, `${label}: #pivot deep link ignored because pivot workspace is removed from the public site`);
+        return;
+    }
+
     const restoredPivot = await page.evaluate(() => {
         const pivot = document.getElementById('panel-pivot');
         const button = document.getElementById('tab-pivot');
@@ -1560,6 +1569,12 @@ async function runPivotSuite(page, results, phase, homeUrl) {
     const pivotUrl = `${homeUrl}#pivot`;
     await phase('homepage pivot: load');
     await gotoPublic(page, pivotUrl);
+
+    if (!(await isPivotWorkspaceAvailable(page))) {
+        pass(results, 'Homepage: #pivot deep link ignored because pivot workspace is removed from the public site');
+        await verifyPivotLoad(page, results, 'Homepage');
+        return;
+    }
 
     const restoredPivot = await page.evaluate(() => {
         const panel = document.getElementById('panel-pivot');
