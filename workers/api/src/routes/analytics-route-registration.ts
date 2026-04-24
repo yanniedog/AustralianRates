@@ -11,7 +11,8 @@ import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { buildGroupedChartRows } from '../utils/chart-row-groups'
 import { log } from '../utils/logger'
-import { withPublicCache } from '../utils/http'
+import { jsonError, withPublicCache } from '../utils/http'
+import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
 import type { ChartWindow } from '../utils/chart-window'
 import {
   parseAnalyticsRepresentation,
@@ -139,32 +140,47 @@ async function handleAnalyticsRequest<TFilters extends AnalyticsFilters>(
     return c.json(packaged.payload)
   }
 
+  const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
   const seriesStarted = Date.now()
-  const result = await getCachedOrCompute(
-    c.env,
-    options.section,
-    requestedRepresentation,
-    toQueryParams(merged),
-    () =>
-      Promise.resolve()
-        .then(async () => {
-          const resolvedFilters = clampAnalyticsFiltersToToday(
-            (
-              baseFilters.startDate && baseFilters.endDate
-                ? baseFilters
-                : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
-                  window: baseFilters.chartWindow ?? null,
-                }))
-            ) as TFilters,
-          )
-          return options.collectRowsResolved(dbs, requestedRepresentation, resolvedFilters)
-        })
-        .then((rows) => ({
-          rows: rows.rows,
-          representation: rows.representation,
-          fallbackReason: rows.fallbackReason,
-        })),
-  )
+  let result: Awaited<ReturnType<typeof getCachedOrCompute>>
+  try {
+    result = await getCachedOrCompute(
+      c.env,
+      options.section,
+      requestedRepresentation,
+      toQueryParams(merged),
+      () =>
+        Promise.resolve()
+          .then(async () => {
+            const resolvedFilters = clampAnalyticsFiltersToToday(
+              (
+                baseFilters.startDate && baseFilters.endDate
+                  ? baseFilters
+                  : (await resolveChartDateRangeFromDb(dbs.canonicalDb, options.section, baseFilters, {
+                    window: baseFilters.chartWindow ?? null,
+                  }))
+              ) as TFilters,
+            )
+            return options.collectRowsResolved(dbs, requestedRepresentation, resolvedFilters)
+          })
+          .then((rows) => ({
+            rows: rows.rows,
+            representation: rows.representation,
+            fallbackReason: rows.fallbackReason,
+          })),
+      { allowLiveCompute: liveAllowed },
+    )
+  } catch (error) {
+    if (!liveAllowed) {
+      return jsonError(
+        c,
+        503,
+        'PUBLIC_LIVE_D1_FALLBACK_DISABLED',
+        'Live chart data is temporarily restricted by D1 usage guardrails. Cached data will be served when available.',
+      )
+    }
+    throw error
+  }
   const seriesElapsedMs = Date.now() - seriesStarted
   if (seriesElapsedMs >= 8000) {
     log.warn('public', 'analytics_series_slow', {

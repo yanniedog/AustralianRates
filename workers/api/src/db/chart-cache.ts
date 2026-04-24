@@ -571,6 +571,7 @@ export async function getCachedOrCompute(
   representation: 'day' | 'change',
   params: Record<string, string | undefined>,
   compute: () => Promise<ChartAnalyticsPayload>,
+  options?: { allowLiveCompute?: boolean },
 ): Promise<ChartAnalyticsPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildChartCacheKey(section, representation, params)
 
@@ -620,6 +621,10 @@ export async function getCachedOrCompute(
         fromCache: 'd1',
       }
     }
+  }
+
+  if (options?.allowLiveCompute === false) {
+    throw new Error(`chart_cache_live_compute_disabled:${section}:${representation}`)
   }
 
   const result = await compute()

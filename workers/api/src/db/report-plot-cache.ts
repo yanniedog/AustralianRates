@@ -146,6 +146,7 @@ export async function getCachedOrComputeReportPlot(
   mode: ReportPlotMode,
   params: Record<string, string | undefined>,
   compute: () => Promise<ReportPlotPayload>,
+  options?: { allowLiveCompute?: boolean },
 ): Promise<ReportPlotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildReportPlotCacheKey(section, mode, params)
   if (env.CHART_CACHE_KV) {
@@ -166,6 +167,10 @@ export async function getCachedOrComputeReportPlot(
       await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, key, d1Cached)
       return { ...d1Cached, fromCache: 'd1' }
     }
+  }
+
+  if (options?.allowLiveCompute === false) {
+    throw new Error(`report_plot_live_compute_disabled:${section}:${mode}`)
   }
 
   const payload = await compute()

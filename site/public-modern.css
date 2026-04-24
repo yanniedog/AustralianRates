@@ -339,6 +339,80 @@ body.ar-public .site-menu-actions {
     gap: 8px;
 }
 
+.site-guide-backdrop {
+    background: color-mix(in srgb, var(--ar-overlay) 82%, transparent);
+}
+
+.site-guide-spotlight {
+    position: fixed;
+    z-index: 111;
+    box-sizing: border-box;
+    border: 2px solid var(--ar-section-accent, var(--ar-accent));
+    border-radius: 10px;
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--ar-section-accent, var(--ar-accent)) 16%, transparent),
+        0 16px 42px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+    transition:
+        left var(--ar-motion-base) var(--ar-ease),
+        top var(--ar-motion-base) var(--ar-ease),
+        width var(--ar-motion-base) var(--ar-ease),
+        height var(--ar-motion-base) var(--ar-ease);
+}
+
+.site-guide-popover {
+    position: fixed;
+    z-index: 112;
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--ar-line-strong);
+    border-radius: 10px;
+    background: var(--ar-surface);
+    box-shadow: var(--ar-shadow);
+}
+
+.site-guide-popover-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.site-guide-step-count,
+.site-guide-action {
+    margin: 0;
+    color: var(--ar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.site-guide-popover h2,
+.site-guide-copy {
+    margin: 0;
+}
+
+.site-guide-popover h2 {
+    color: var(--ar-text);
+    font-size: 1rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.site-guide-copy {
+    color: var(--ar-text-soft);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+abbr[title] {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.16em;
+}
+
 body .site-guide-actions button.buttonish.primary,
 body .site-guide-actions .buttonish.primary {
     color: #ffffff !important;

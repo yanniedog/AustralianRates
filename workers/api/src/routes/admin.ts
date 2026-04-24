@@ -26,6 +26,7 @@ import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
+import { adminCloudflareRoutes } from './admin-cloudflare'
 import { adminDbRoutes } from './admin-db'
 import { adminBackupRoutes } from './admin-backups'
 import { adminDownloadRoutes } from './admin-downloads'
@@ -82,6 +83,7 @@ adminRoutes.get('/auth-check', async (c) => {
 })
 
 adminRoutes.route('/', adminConfigRoutes)
+adminRoutes.route('/', adminCloudflareRoutes)
 adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminDownloadRoutes)
 adminRoutes.route('/', adminBackupRoutes)
