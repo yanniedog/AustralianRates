@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseFedTargetHistoryHtml, parseFredChinaGdpProxyCsv, parseRbnzOcrText } from '../src/economic/external-parsers'
 import { parseRbaTableCsv, extractRbaSeriesObservations } from '../src/economic/rba-table'
+import { parseAbsIndicatorCsv } from '../src/economic/abs-indicator'
 
 function fixture(name: string): string {
   return readFileSync(resolve(process.cwd(), 'test/fixtures/economic', name), 'utf8')
@@ -77,5 +78,22 @@ describe('economic parsers', () => {
     expect(rows[0].observationDate).toBe('2021-01-01')
     expect(rows[0].value).toBeCloseTo(8.6, 3)
     expect(rows[0].frequency).toBe('annual')
+  })
+
+  it('parses ABS indicator CSV rows by filter', () => {
+    const rows = parseAbsIndicatorCsv(fixture('abs-indicator-sample.csv'), {
+      seriesId: 'monthly_trimmed_mean_cpi',
+      sourceUrl: 'https://indicator.api.abs.gov.au',
+      frequency: 'monthly',
+      proxy: false,
+      filters: { MEASURE: 'trimmed_mean_annual_movement', REGION: 'AUS' },
+    })
+    expect(rows.length).toBe(2)
+    expect(rows[0]).toMatchObject({
+      seriesId: 'monthly_trimmed_mean_cpi',
+      observationDate: '2025-07-31',
+      value: 2.7,
+      frequency: 'monthly',
+    })
   })
 })

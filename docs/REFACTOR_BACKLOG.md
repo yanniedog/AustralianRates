@@ -34,7 +34,7 @@ easy to bisect if a visual regression appears.
 | `site/ar-charts.js` | 1092 | Split report-view lifecycle from generic chart orchestration. The report snapshot bootstrap / lightweight render path (`buildReportPreviewModel`, `renderReportPreview`, `refreshReportRangePreview`, report draw branch) can move into a dedicated report-controller module. |
 | `site/ar-explorer.js` | 1299 | Split by explorer subsystem (filters, sort, URL sync, DOM wiring). |
 | `site/admin/status-page.js` | 1213 | Split by section card: coverage-gaps, logs, replay-queue, remediation-hints. |
-| `site/economic-data.js` | 1048 | Split by metric family (RBA / CPI / other). |
+| `site/economic-data.js` | 995 | Existing large economic dashboard entrypoint; this PR split signal summary/chart, axis helpers, and legend-stack rendering into sibling modules. Split catalog controls and ECharts raw/indexed rendering next. |
 | `site/frame.js` | 1045 | Split chrome bootstrap from runtime re-render / resize handlers. |
 | `tools/node-scripts/src/test-homepage.ts` | 1490 | Split by suite: smoke, pivot, mobile, sections. |
 | `tools/node-scripts/src/integrity/repair-presence-prod.ts` | 1359 | Split by repair stage (detect / plan / apply / verify). |

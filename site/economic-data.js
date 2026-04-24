@@ -64,9 +64,11 @@
         range: '5Y',
         yScale: readStoredYScale(),
         multiSelect: readStoredMultiSelect(),
-        selectedPreset: 'rba_watchlist',
+        selectedPreset: 'rba_signal_dashboard',
         selectedIds: [],
         series: [],
+        signal: null,
+        chartMode: 'signal',
         chart: null,
         hoveredDate: null,
         legendHoverYmd: null,
@@ -97,7 +99,16 @@
         selectedCount: document.getElementById('economic-selected-count'),
         statusText: document.getElementById('economic-status-text'),
         yScaleBtn: document.getElementById('economic-y-scale'),
-        yScaleNote: document.getElementById('economic-y-scale-note')
+        yScaleNote: document.getElementById('economic-y-scale-note'),
+        chartModeRow: document.getElementById('economic-chart-mode-row'),
+        signalBias: document.getElementById('economic-signal-bias'),
+        signalMarket: document.getElementById('economic-signal-market'),
+        signalCash: document.getElementById('economic-signal-cash'),
+        signalInflation: document.getElementById('economic-signal-inflation'),
+        signalLabour: document.getElementById('economic-signal-labour'),
+        signalWages: document.getElementById('economic-signal-wages'),
+        signalUpdated: document.getElementById('economic-signal-updated'),
+        componentBody: document.getElementById('economic-component-body')
     };
 
     function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -179,6 +190,12 @@
         return Number(value).toLocaleString('en-AU', { maximumFractionDigits: 2 });
     }
 
+    function formatSigned(value, suffix) {
+        if (value == null || !isFinite(value)) return 'n/a';
+        var n = Number(value);
+        return (n > 0 ? '+' : '') + n.toLocaleString('en-AU', { maximumFractionDigits: 2 }) + (suffix || '');
+    }
+
     function formatDate(value) {
         if (!value) return 'n/a';
         var date = (typeof value === 'number')
@@ -187,6 +204,42 @@
         if (!isFinite(date.getTime())) return value;
         return new Intl.DateTimeFormat('en-AU', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' }).format(date);
     }
+
+    var signalDashboard = window.AR.economicSignals && typeof window.AR.economicSignals.create === 'function'
+        ? window.AR.economicSignals.create({
+            state: state,
+            refs: refs,
+            esc: esc,
+            formatSigned: formatSigned,
+            formatNumber: formatNumber,
+            formatDate: formatDate,
+            fetchJson: fetchJson,
+            describeError: describeError,
+            logEvent: logEvent,
+            ensureLegendStackEl: ensureLegendStackEl,
+            syncYScaleButton: syncYScaleButton
+        })
+        : null;
+
+    var legendStack = window.AR.economicLegendStack && typeof window.AR.economicLegendStack.create === 'function'
+        ? window.AR.economicLegendStack.create({
+            state: state,
+            refs: refs,
+            esc: esc,
+            formatDate: formatDate,
+            getTheme: getEconomicChartTheme,
+            palette: ECONOMIC_CHART_PALETTE
+        })
+        : null;
+
+    var chartAxis = window.AR.economicChartAxis && typeof window.AR.economicChartAxis.create === 'function'
+        ? window.AR.economicChartAxis.create({
+            state: state,
+            refs: refs,
+            persistYScale: persistYScale,
+            logEvent: logEvent
+        })
+        : null;
 
     function badge(label, className) {
         return '<span class="economic-badge' + (className ? (' ' + className) : '') + '">' + esc(label) + '</span>';
@@ -212,77 +265,19 @@
 
     /** Smallest strictly positive normalized_value across series (for log y-axis domain). */
     function minPositiveNormalized(seriesList) {
-        var min = Infinity;
-        (seriesList || []).forEach(function (series) {
-            (series.points || []).forEach(function (point) {
-                var v = point && point.normalized_value;
-                if (v != null && isFinite(v) && v > 0 && v < min) min = v;
-            });
-        });
-        return min === Infinity ? null : min;
+        return chartAxis ? chartAxis.minPositiveNormalized(seriesList) : null;
     }
 
     function normalizedSeriesHasNonPositive(seriesList) {
-        return (seriesList || []).some(function (series) {
-            return (series.points || []).some(function (point) {
-                var v = point && point.normalized_value;
-                return v != null && isFinite(v) && v <= 0;
-            });
-        });
+        return chartAxis ? chartAxis.normalizedSeriesHasNonPositive(seriesList) : false;
     }
 
     function normalizedExtent(seriesList) {
-        var min = Infinity;
-        var max = -Infinity;
-        (seriesList || []).forEach(function (series) {
-            (series.points || []).forEach(function (point) {
-                var v = Number(point && point.normalized_value);
-                if (!Number.isFinite(v)) return;
-                if (v < min) min = v;
-                if (v > max) max = v;
-            });
-        });
-        if (min === Infinity || max === -Infinity) return null;
-        return { min: min, max: max };
+        return chartAxis ? chartAxis.normalizedExtent(seriesList) : null;
     }
 
     function buildAutoFitYAxis(type, extent, minPositive) {
-        if (!extent) return null;
-        var min = Number(extent.min);
-        var max = Number(extent.max);
-        if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
-
-        if (type === 'log') {
-            var safeMin = Number.isFinite(minPositive) && minPositive > 0 ? minPositive : min;
-            var safeMax = max > 0 ? max : safeMin;
-            if (!Number.isFinite(safeMin) || !Number.isFinite(safeMax) || safeMin <= 0 || safeMax <= 0) return null;
-            if (safeMax < safeMin) safeMax = safeMin;
-            if (safeMax === safeMin) {
-                return {
-                    min: safeMin / 1.35,
-                    max: safeMax * 1.35,
-                };
-            }
-            return {
-                min: safeMin / 1.12,
-                max: safeMax * 1.12,
-            };
-        }
-
-        var span = max - min;
-        if (!(span > 0)) {
-            var center = min;
-            var delta = Math.max(Math.abs(center) * 0.04, 1);
-            return {
-                min: center - delta,
-                max: center + delta,
-            };
-        }
-        var pad = span * 0.08;
-        return {
-            min: min - pad,
-            max: max + pad,
-        };
+        return chartAxis ? chartAxis.buildAutoFitYAxis(type, extent, minPositive) : null;
     }
 
     /**
@@ -290,32 +285,7 @@
      * @param {'log'|'value'} [opt.effectiveYAxis] y-axis type actually used by ECharts (after log fallback).
      */
     function syncYScaleButton(opt) {
-        if (!refs.yScaleBtn) return;
-        var effective = opt && opt.effectiveYAxis;
-        var requestedLog = state.yScale === 'log';
-        var actualLog = effective === 'log' || (!effective && requestedLog);
-        refs.yScaleBtn.textContent = actualLog ? 'log' : 'lin';
-        refs.yScaleBtn.setAttribute('aria-pressed', actualLog ? 'true' : 'false');
-        var forcedLinear = requestedLog && effective === 'value';
-        refs.yScaleBtn.classList.toggle('is-forced-linear', forcedLinear);
-        if (forcedLinear) {
-            refs.yScaleBtn.title = 'Log scale is selected, but the chart uses linear because some series have zero or negative index values in this range.';
-        } else if (actualLog) {
-            refs.yScaleBtn.title = 'Y-axis: logarithmic (base 10). Click for linear scale.';
-        } else {
-            refs.yScaleBtn.title = 'Y-axis: linear. Click for logarithmic scale.';
-        }
-        refs.yScaleBtn.setAttribute(
-            'aria-label',
-            forcedLinear
-                ? 'Chart uses a linear Y-axis; log scale is unavailable for the current data. Click to confirm linear preference.'
-                : (actualLog ? 'Y-axis logarithmic. Click for linear.' : 'Y-axis linear. Click for logarithmic.')
-        );
-        if (refs.yScaleNote) {
-            refs.yScaleNote.textContent = forcedLinear
-                ? 'Log unavailable for the current selection because at least one indexed series reaches zero or below in this range.'
-                : (actualLog ? 'Log scale active.' : 'Linear scale active.');
-        }
+        if (chartAxis) chartAxis.syncYScaleButton(opt);
     }
 
     function syncSelectionModeUi() {
@@ -339,7 +309,7 @@
     }
 
     function fallbackSelectedIds() {
-        var preset = findPreset(state.selectedPreset) || findPreset('rba_watchlist');
+        var preset = findPreset(state.selectedPreset) || findPreset('rba_signal_dashboard') || findPreset('rba_watchlist');
         if (preset && Array.isArray(preset.seriesIds) && preset.seriesIds.length) {
             return state.multiSelect ? preset.seriesIds.slice() : [preset.seriesIds[0]];
         }
@@ -548,139 +518,12 @@
         };
     }
 
-    function stackOverlayTheme() {
-        var theme = getEconomicChartTheme();
-        return {
-            ttBg: theme.stackBg != null ? theme.stackBg : (document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.97)' : 'rgba(15,23,42,0.96)'),
-            ttBorder: theme.stackBorder != null ? theme.stackBorder : (document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(100,116,139,0.20)' : 'rgba(100,116,139,0.30)'),
-            ttText: theme.stackText != null ? theme.stackText : theme.text,
-        };
-    }
-
-    /** Matches admin Settings chart_legend_opacity (see ar-chart-site-ui.js). */
-    function chartLegendOpacityForStack() {
-        if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.getChartLegendOpacity === 'function') {
-            return String(window.AR.chartSiteUi.getChartLegendOpacity());
-        }
-        return '0.75';
-    }
-
-    function chartLegendTextBrightnessForStack() {
-        if (window.AR && window.AR.chartSiteUi && typeof window.AR.chartSiteUi.getChartLegendTextBrightness === 'function') {
-            return String(window.AR.chartSiteUi.getChartLegendTextBrightness());
-        }
-        return '1';
-    }
-
     function ensureLegendStackEl() {
-        if (!refs.chartEl) return null;
-        var el = refs.chartEl.querySelector('.economic-chart-legend-stack');
-        if (!el) {
-            el = document.createElement('div');
-            el.className = 'economic-chart-legend-stack';
-            el.setAttribute('aria-hidden', 'true');
-            refs.chartEl.appendChild(el);
-        }
-        return el;
-    }
-
-    /** Latest normalized observation on or before ymd (ISO); if ymd null, use last point per series. */
-    function resolvedNormalizedForLegend(series, ymd) {
-        var pts = (series.points || []).filter(function (p) { return p != null && p.normalized_value != null && isFinite(Number(p.normalized_value)); });
-        if (!pts.length) return null;
-        if (!ymd) {
-            var last = pts[pts.length - 1];
-            return { value: Number(last.normalized_value), atYmd: last.date };
-        }
-        var exact = pts.filter(function (p) { return p.date === ymd; })[0];
-        if (exact) return { value: Number(exact.normalized_value), atYmd: exact.date };
-        var best = null;
-        for (var i = 0; i < pts.length; i++) {
-            if (pts[i].date <= ymd) best = pts[i];
-        }
-        if (!best) return null;
-        return { value: Number(best.normalized_value), atYmd: best.date };
-    }
-
-    function formatLegendIndex(value) {
-        if (value == null || !isFinite(value)) return 'n/a';
-        return Number(value).toLocaleString('en-AU', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+        return legendStack ? legendStack.ensureEl() : null;
     }
 
     function syncEconomicLegendStack() {
-        var legendEl = ensureLegendStackEl();
-        if (!legendEl) return;
-        if (!state.series.length) {
-            legendEl.innerHTML = '';
-            return;
-        }
-        var t = stackOverlayTheme();
-        var chartW = refs.chartEl.clientWidth || 400;
-        var narrow = chartW < 760;
-        var compact = chartW < 420;
-        var gridLeft = compact ? 46 : (narrow ? 50 : 56);
-        var fontSize = compact ? '8px' : '9px';
-        var hoverYmd = state.legendHoverYmd;
-        legendEl.style.cssText = [
-            'position:absolute',
-            'top:8px',
-            'left:' + (gridLeft + 6) + 'px',
-            'display:flex',
-            'flex-direction:column',
-            'align-items:flex-start',
-            'gap:1px',
-            'padding:4px 6px',
-            'font-size:' + fontSize,
-            'line-height:1.4',
-            "font-family:'Space Grotesk',system-ui,sans-serif",
-            'color:' + t.ttText,
-            'background:' + t.ttBg,
-            'border:1px solid ' + t.ttBorder,
-            'border-radius:4px',
-            'z-index:5',
-            'max-width:min(42%, 220px)',
-            'max-height:calc(100% - 16px)',
-            'overflow-x:hidden',
-            'overflow-y:auto',
-            '-webkit-overflow-scrolling:touch',
-            'box-sizing:border-box',
-            'pointer-events:auto',
-            'cursor:default',
-            'opacity:' + chartLegendOpacityForStack(),
-            '--ar-chart-legend-text-brightness:' + chartLegendTextBrightnessForStack()
-        ].join(';');
-
-        var rows = [];
-        state.series.forEach(function (series, idx) {
-            var res = resolvedNormalizedForLegend(series, hoverYmd);
-            if (!res) return;
-            rows.push({
-                series: series,
-                color: ECONOMIC_CHART_PALETTE[idx % ECONOMIC_CHART_PALETTE.length],
-                value: res.value,
-                atYmd: res.atYmd,
-            });
-        });
-        rows.sort(function (a, b) { return b.value - a.value; });
-
-        var parts = [];
-        if (hoverYmd) {
-            parts.push(
-                '<div class="economic-chart-legend-stack-date" style="font-size:' + (compact ? '7px' : '8px') + ';opacity:0.75;white-space:nowrap;padding-bottom:2px;margin-bottom:1px;border-bottom:1px solid rgba(148,163,184,0.15);letter-spacing:0.02em;filter:brightness(var(--ar-chart-legend-text-brightness,1));">' +
-                esc(formatDate(hoverYmd.indexOf('T') >= 0 ? hoverYmd : (hoverYmd + 'T12:00:00.000Z'))) +
-                '</div>'
-            );
-        }
-        rows.forEach(function (row) {
-            parts.push(
-                '<span class="economic-chart-legend-stack-row" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;max-width:100%;">' +
-                '<span style="display:inline-block;width:14px;height:2px;background:' + esc(row.color) + ';flex-shrink:0;border-radius:1px;"></span>' +
-                '<span style="opacity:0.7;overflow:hidden;text-overflow:ellipsis;min-width:0;filter:brightness(var(--ar-chart-legend-text-brightness,1));">' + esc(row.series.short_label) + '</span>' +
-                '<span style="font-variant-numeric:tabular-nums;font-weight:600;flex-shrink:0;filter:brightness(var(--ar-chart-legend-text-brightness,1));">' + esc(formatLegendIndex(row.value)) + '</span>' +
-                '</span>'
-            );
-        });
-        legendEl.innerHTML = parts.join('');
+        if (legendStack) legendStack.sync();
     }
 
     function getEconomicChartTheme() {
@@ -699,6 +542,11 @@
                 '<a class="economic-source-link" href="' + esc(series.source_url) + '" target="_blank" rel="noopener">Open source</a>' +
             '</article>';
         }).join('');
+    }
+
+    function loadSignals() {
+        if (!signalDashboard) return Promise.resolve();
+        return signalDashboard.loadSignals(function () { renderChart(); });
     }
 
     function renderChart() {
@@ -738,7 +586,17 @@
         var compact = chartW < 420;
         var gridLeft = compact ? 46 : (narrow ? 50 : 56);
         var gridBottom = compact ? 36 : (narrow ? 40 : 44);
-        var wantLog = state.yScale === 'log';
+        if (state.chartMode === 'signal' && state.signal && signalDashboard) {
+            signalDashboard.renderSignalChart(state.chart, {
+                theme: theme,
+                styles: styles,
+                narrow: narrow,
+                palette: ECONOMIC_CHART_PALETTE
+            });
+            return;
+        }
+        var rawMode = state.chartMode === 'raw';
+        var wantLog = !rawMode && state.yScale === 'log';
         var canLog = wantLog && !normalizedSeriesHasNonPositive(state.series);
         var minPos = canLog ? minPositiveNormalized(state.series) : null;
         var extent = normalizedExtent(state.series);
@@ -753,7 +611,7 @@
         var yAxis = {
             type: yAxisType,
             scale: true,
-            name: 'Index (start = 100)',
+            name: rawMode ? 'Raw value' : 'Index (start = 100)',
             nameTextStyle: { color: theme.softText, fontSize: 11 },
             axisLine: styles.axisLine,
             axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
@@ -797,8 +655,10 @@
                     smooth: false,
                     showSymbol: false,
                     emphasis: { focus: 'series' },
-                    data: (series.points || []).filter(function (point) { return point.normalized_value != null; }).map(function (point) {
-                        return [point.date, point.normalized_value];
+                    data: (series.points || []).filter(function (point) {
+                        return rawMode ? point.raw_value != null : point.normalized_value != null;
+                    }).map(function (point) {
+                        return [point.date, rawMode ? point.raw_value : point.normalized_value];
                     })
                 };
             })
@@ -820,6 +680,11 @@
         state.chart.resize();
         syncEconomicLegendStack();
         syncYScaleButton({ effectiveYAxis: yAxisType });
+        if (refs.chartMeta) {
+            refs.chartMeta.textContent = rawMode
+                ? 'Raw values use each series native unit; compare levels only within the same unit.'
+                : 'Index = 100 at the start of the visible range for each selected series.';
+        }
         logEvent('info', 'Economic chart render completed', {
             seriesCount: state.series.length,
             pointCount: pointCount(state.series),
@@ -917,7 +782,7 @@
         return fetchJson('/catalog').then(function (payload) {
             state.catalog = payload;
             state.lastCatalogLoadedAt = new Date().toISOString();
-            state.selectedPreset = findPreset(state.selectedPreset) ? state.selectedPreset : ((payload.presets && payload.presets[0] && payload.presets[0].id) || 'rba_watchlist');
+            state.selectedPreset = findPreset(state.selectedPreset) ? state.selectedPreset : ((payload.presets && payload.presets[0] && payload.presets[0].id) || 'rba_signal_dashboard');
             if (findPreset(state.selectedPreset)) {
                 state.multiSelect = true;
                 persistMultiSelect(true);
@@ -933,6 +798,7 @@
                 selectedIds: state.selectedIds.slice(),
             });
             bindControls();
+            loadSignals();
             return loadSeries('catalog-loaded');
         }).catch(function (error) {
             refs.emptyEl.hidden = false;
@@ -1009,6 +875,22 @@
                     selectedIds: state.selectedIds.slice(),
                 });
                 loadSeries('selection-mode-change');
+            });
+        }
+        if (refs.chartModeRow) {
+            refs.chartModeRow.addEventListener('click', function (event) {
+                var button = event.target.closest('[data-chart-mode]');
+                if (!button) return;
+                state.chartMode = button.getAttribute('data-chart-mode') || 'signal';
+                Array.from(refs.chartModeRow.querySelectorAll('[data-chart-mode]')).forEach(function (node) {
+                    node.classList.toggle('active', node === button);
+                });
+                logEvent('info', 'Economic chart mode changed', { chartMode: state.chartMode });
+                if (state.chartMode === 'signal') {
+                    loadSignals();
+                } else if (state.series.length && hasRenderablePoints(state.series)) {
+                    renderChart();
+                }
             });
         }
         refs.categoryGroups.addEventListener('change', function (event) {
