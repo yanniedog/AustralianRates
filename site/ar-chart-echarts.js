@@ -1035,6 +1035,9 @@
         if (view === 'tdTermTime' && model.tdTermTime && typeof marketModule.buildTdTermTimeOption === 'function') {
             return marketModule.buildTdTermTimeOption(model.tdTermTime, fields, size);
         }
+        if (view === 'tdSettlementExpectations' && model.tdSettlementExpectations && typeof marketModule.buildTdSettlementExpectationsOption === 'function') {
+            return marketModule.buildTdSettlementExpectationsOption(model.tdSettlementExpectations, fields, size, chartState && chartState.rbaHistory);
+        }
         if (view === 'slope') return buildSlopeOption(model, fields, size);
         if (view === 'ladder') return buildLadderOption(model, fields, size);
         if (view === 'lenders') return buildLenderOption(model, fields, size);
