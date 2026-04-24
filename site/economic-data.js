@@ -30,7 +30,7 @@
     var sessionKey = 'ar-economic-data-debug-session';
     var Y_SCALE_STORAGE_KEY = 'ar-economic-y-scale';
     var MULTI_SELECT_STORAGE_KEY = 'ar-economic-multi-select';
-    var ECONOMIC_CHART_PALETTE = ['#d95f02', '#1b9e77', '#7570b3', '#66a61e', '#e7298a', '#1f78b4', '#b15928', '#6a3d9a'];
+    var ECONOMIC_CHART_PALETTE = ['#0f766e', '#2563eb', '#b7791f', '#7c3aed', '#dc2626', '#0891b2', '#65a30d', '#be185d'];
 
     function readStoredYScale() {
         try {

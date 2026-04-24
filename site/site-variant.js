@@ -63,7 +63,7 @@
 
     /* Public donate modal (Order Skew style): set address to show a tab; omit or leave blank to hide that network. */
     window.AR.donateNetworks = [
-        { id: 'solana', label: 'Solana (SOL)', address: '' },
+        { id: 'solana', label: 'Solana (SOL)', address: 'F6mjNXKBKzjmKTK1Z9cWabFHZYtxMg8rojuNuppX2EG1' },
         { id: 'cardano', label: 'Cardano (ADA)', address: '' },
         { id: 'bnb', label: 'Binance (BNB)', address: '' },
         { id: 'doge', label: 'Dogecoin (DOGE)', address: '' },
