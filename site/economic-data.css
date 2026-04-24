@@ -294,6 +294,69 @@ body.ar-section-economic-data .economic-y-scale-btn:focus-visible {
     color: var(--ar-ok-strong);
 }
 
+.economic-forward-panel {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.economic-forward-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.economic-forward-stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(110px, 1fr));
+    gap: 8px;
+}
+
+.economic-forward-stats article {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
+}
+
+.economic-forward-stats span {
+    display: block;
+    color: var(--ar-text-soft);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.economic-forward-stats strong {
+    display: block;
+    overflow: hidden;
+    color: var(--ar-text);
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.economic-forward-chart {
+    width: 100%;
+    min-height: clamp(320px, 46vh, 520px);
+}
+
+.economic-forward-table-wrap {
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+}
+
+.economic-forward-table {
+    min-width: 680px;
+}
+
 .economic-stale-chip {
     display: inline-flex;
     min-height: 18px;
@@ -551,6 +614,10 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .economic-forward-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .economic-chart {
         min-height: 420px;
     }
@@ -577,6 +644,14 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
 
     body.ar-section-economic-data .economic-signal-strip {
         grid-template-columns: 1fr;
+    }
+
+    body.ar-section-economic-data .economic-forward-stats {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-section-economic-data .economic-forward-chart {
+        min-height: min(52dvh, 380px);
     }
 
     body.ar-section-economic-data .economic-topline {
