@@ -27,7 +27,7 @@
 
     var MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     var SAVINGS_RATE_TYPE_ORDER = { base: 0, bonus: 1, introductory: 2, intro: 2, bundle: 3 };
-    var SAVINGS_ACCOUNT_ORDER = { transaction: 0, at_call: 1, savings: 2 };
+    var SAVINGS_ACCOUNT_ORDER = { savings: 0, transaction: 1, at_call: 2 };
     /** LVR tier order: lowest to highest (for ribbon low/high edge). */
     var LVR_TIER_ORDER = ['lvr_=60%', 'lvr_60-70%', 'lvr_70-80%', 'lvr_80-85%', 'lvr_85-90%', 'lvr_90-95%', 'lvr_unspecified'];
 
