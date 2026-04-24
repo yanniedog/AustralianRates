@@ -60,7 +60,7 @@
             caps.groupField = true;
             return caps;
         }
-        if (key === 'slope' || key === 'timeRibbon' || key === 'tdTermTime') {
+        if (key === 'slope' || key === 'timeRibbon' || key === 'tdTermTime' || key === 'tdSettlementExpectations') {
             caps.representation = false;
             return caps;
         }
@@ -332,6 +332,7 @@
         if (fields.view === 'ladder') tags.push('Ladder');
         if (fields.view === 'timeRibbon') tags.push('Ribbon (time)');
         if (fields.view === 'tdTermTime') tags.push('Term vs time');
+        if (fields.view === 'tdSettlementExpectations') tags.push('RBA proxy');
         if (fields.view === 'compare') tags.push('Compare');
         if (fields.view === 'distribution') tags.push('Distribution');
         if (model && model.meta && fields.view === 'lenders' && model.meta.visibleLenders < model.meta.totalLenders) tags.push('Limited');
@@ -361,7 +362,10 @@
         }
         var representation = actualRepresentation(fields, payloadMeta);
         var pills = [];
-        pills.push('<span class="chart-summary-pill is-emphasis">' + esc(String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1)) + ' view</span>');
+        var viewName = fields.view === 'tdSettlementExpectations'
+            ? 'RBA proxy'
+            : String(fields.view).charAt(0).toUpperCase() + String(fields.view).slice(1);
+        pills.push('<span class="chart-summary-pill is-emphasis">' + esc(viewName) + ' view</span>');
         pills.push('<span class="chart-summary-pill">' + esc(chartConfig.fieldLabel(fields.yField)) + '</span>');
         pills.push('<span class="chart-summary-pill">' + esc(representation === 'day' ? 'Daily basis' : 'Change basis') + '</span>');
         if (fields.view === 'market' && model.market) {
@@ -372,6 +376,9 @@
             pills.push('<span class="chart-summary-pill">' + esc(model.timeRibbon.categories.length + ' dates') + '</span>');
         } else if (fields.view === 'tdTermTime' && model.tdTermTime) {
             pills.push('<span class="chart-summary-pill">' + esc(model.tdTermTime.terms.length + ' terms') + '</span>');
+        } else if (fields.view === 'tdSettlementExpectations' && model.tdSettlementExpectations) {
+            pills.push('<span class="chart-summary-pill">' + esc(model.tdSettlementExpectations.categories.length + ' settlement dates') + '</span>');
+            pills.push('<span class="chart-summary-pill">' + esc('Snapshot ' + model.tdSettlementExpectations.snapshotDateDisplay) + '</span>');
         } else if (fields.view === 'slope' && model.slope && model.slope.lines) {
             pills.push('<span class="chart-summary-pill">' + esc(model.slope.lines.length + ' slopes') + '</span>');
             pills.push('<span class="chart-summary-pill">' + esc(model.slope.dateLeftLabel + ' \u2192 ' + model.slope.dateRightLabel) + '</span>');
@@ -439,6 +446,7 @@
         if (fields.view === 'ladder') return 'Rate ladder';
         if (fields.view === 'timeRibbon' && model.timeRibbon) return 'Rate over time · ' + (model.timeRibbon.termLabel || '');
         if (fields.view === 'tdTermTime' && model.tdTermTime) return 'Term vs time';
+        if (fields.view === 'tdSettlementExpectations' && model.tdSettlementExpectations) return 'Settlement curve';
         if (fields.view === 'compare') return 'Selected shortlist';
         if (fields.view === 'distribution') return 'Distribution view';
         return 'Product series';
@@ -461,6 +469,34 @@
                     '<span class="chart-series-points">' + esc(options.metaRight) + '</span>' +
                 '</span>' +
             '</button>';
+    }
+
+    function appendText(parent, className, text) {
+        var el = document.createElement('span');
+        if (className) el.className = className;
+        el.textContent = String(text == null ? '' : text);
+        parent.appendChild(el);
+        return el;
+    }
+
+    function seriesCardElement(options) {
+        var button = document.createElement('button');
+        button.className = 'chart-series-card secondary' + (options.isSelected ? ' is-selected' : '') + (options.isSpotlight ? ' is-active' : '');
+        button.type = 'button';
+        button.setAttribute('data-series-key', String(options.key == null ? '' : options.key));
+        button.style.setProperty('--series-accent', String(options.color || ''));
+
+        var topline = appendText(button, 'chart-series-topline', '');
+        var nameWrap = appendText(topline, 'chart-series-name-wrap', '');
+        appendText(nameWrap, 'chart-series-swatch', '');
+        appendText(nameWrap, 'chart-series-name', options.title);
+        appendText(topline, 'chart-series-value', options.valueText);
+
+        if (options.caption) appendText(button, 'chart-series-caption', options.caption);
+        var meta = appendText(button, 'chart-series-meta', '');
+        appendText(meta, 'chart-series-delta', options.metaLeft);
+        appendText(meta, 'chart-series-points', options.metaRight);
+        return button;
     }
 
     function railMetricDirection(fields) {
@@ -543,12 +579,13 @@
         var marketOk = model && model.market && model.market.categories && model.market.categories.length;
         var timeRibbonOk = model && model.timeRibbon && model.timeRibbon.categories && model.timeRibbon.categories.length;
         var tdTermTimeOk = model && model.tdTermTime && model.tdTermTime.terms && model.tdTermTime.terms.length;
+        var tdExpectationsOk = model && model.tdSettlementExpectations && model.tdSettlementExpectations.categories && model.tdSettlementExpectations.categories.length;
         var slopeOk = model && model.slope && model.slope.lines && model.slope.lines.length;
         var ladderOk = model && model.lenderRanking && model.lenderRanking.entries && model.lenderRanking.entries.length;
         var distOk = model && model.distribution && model.distribution.categories && model.distribution.categories.length;
         var visibleOk = model && model.visibleSeries && model.visibleSeries.length;
-        var excludedFromVisibleGate = fields.view === 'market' || fields.view === 'timeRibbon' || fields.view === 'tdTermTime' || fields.view === 'slope' || fields.view === 'ladder' || fields.view === 'distribution';
-        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || (fields.view === 'slope' && !slopeOk) || (fields.view === 'ladder' && !ladderOk) || (fields.view === 'distribution' && !distOk) || (!excludedFromVisibleGate && !visibleOk)) {
+        var excludedFromVisibleGate = fields.view === 'market' || fields.view === 'timeRibbon' || fields.view === 'tdTermTime' || fields.view === 'tdSettlementExpectations' || fields.view === 'slope' || fields.view === 'ladder' || fields.view === 'distribution';
+        if (!model || (fields.view === 'market' && !marketOk) || (fields.view === 'timeRibbon' && !timeRibbonOk) || (fields.view === 'tdTermTime' && !tdTermTimeOk) || (fields.view === 'tdSettlementExpectations' && !tdExpectationsOk) || (fields.view === 'slope' && !slopeOk) || (fields.view === 'ladder' && !ladderOk) || (fields.view === 'distribution' && !distOk) || (!excludedFromVisibleGate && !visibleOk)) {
             els.chartSeriesNote.textContent = 'Loading';
             els.chartSeriesList.innerHTML = '<p class="chart-series-empty">No series</p>';
             return;
@@ -591,6 +628,23 @@
                     color: pal[index % pal.length],
                 });
             }).join('');
+            return;
+        }
+        if (fields.view === 'tdSettlementExpectations' && model.tdSettlementExpectations) {
+            var cards = model.tdSettlementExpectations.categories.map(function (category, index) {
+                return seriesCardElement({
+                    key: category.key,
+                    title: category.termLabel + ' term',
+                    valueText: chartConfig.formatMetricValue(fields.yField, category.median),
+                    caption: category.maturityLabel,
+                    metaLeft: 'Range ' + chartConfig.formatMetricValue(fields.yField, category.min) + ' to ' + chartConfig.formatMetricValue(fields.yField, category.max),
+                    metaRight: category.bankCount.toLocaleString() + ' banks',
+                    isSelected: false,
+                    isSpotlight: false,
+                    color: pal[index % pal.length],
+                });
+            });
+            els.chartSeriesList.replaceChildren.apply(els.chartSeriesList, cards);
             return;
         }
         if (fields.view === 'slope' && model.slope && model.slope.lines.length) {

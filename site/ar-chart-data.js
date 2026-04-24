@@ -548,11 +548,15 @@
         }
         var timeRibbon = null;
         var tdTermTime = null;
+        var tdSettlementExpectations = null;
         if (fields.view === 'timeRibbon' && marketModule.buildTimeRibbonModel) {
             timeRibbon = marketModule.buildTimeRibbonModel(rows, fields, selectionState);
         }
         if (fields.view === 'tdTermTime' && marketModule.buildTdTermTimeModel) {
             tdTermTime = marketModule.buildTdTermTimeModel(rows, fields);
+        }
+        if (fields.view === 'tdSettlementExpectations' && marketModule.buildTdSettlementExpectationsModel) {
+            tdSettlementExpectations = marketModule.buildTdSettlementExpectationsModel(rows, fields);
         }
         var slope = (fields.view === 'slope') ? buildSlopeModel(rows, fields, density) : null;
         lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
@@ -584,6 +588,7 @@
             tdCurveDates: tdCurveDates,
             timeRibbon: timeRibbon,
             tdTermTime: tdTermTime,
+            tdSettlementExpectations: tdSettlementExpectations,
             slope: slope,
             spotlight: spotlight,
         };
@@ -745,6 +750,7 @@
             tdCurveDates: null,
             timeRibbon: null,
             tdTermTime: null,
+            tdSettlementExpectations: null,
             slope: null,
             spotlight: spotlight,
         };

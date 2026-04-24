@@ -122,6 +122,7 @@
     ];
 
     var TD_EXTRA_VIEWS = [
+        { value: 'tdSettlementExpectations', label: 'RBA proxy', shortLabel: 'RBA proxy', icon: 'stats', help: 'Latest term deposit rates plotted by settlement date as a proxy for bank rate expectations.', selected: false },
         { value: 'timeRibbon', label: 'Ribbon (time)', shortLabel: 'Ribbon', icon: 'history', help: 'Rate range and mean over time, all banks.', selected: false },
         { value: 'tdTermTime', label: 'Term vs time', shortLabel: 'Term/time', icon: 'chart', help: 'Yield by term over time: how banks price across terms.', selected: false }
     ];
