@@ -961,10 +961,12 @@
     function fetchAnalyticsRows(params) {
         var queryParams = {};
         Object.keys(params || {}).forEach(function (key) {
+            if (key === '_bypassSnapshot') return;
             queryParams[key] = params[key];
         });
         queryParams.compact = '1';
-        if (chartLocalData && typeof chartLocalData.getAnalyticsRows === 'function') {
+        var bypassSnapshot = !!(params && params._bypassSnapshot);
+        if (!bypassSnapshot && chartLocalData && typeof chartLocalData.getAnalyticsRows === 'function') {
             return Promise.resolve(chartLocalData.getAnalyticsRows(queryParams)).then(function (localResult) {
                 if (localResult && (Array.isArray(localResult.rows) || (localResult.grouped_rows && Array.isArray(localResult.grouped_rows.groups)))) {
                     return localResult;
@@ -978,6 +980,7 @@
                     cache: policy.fetchCache,
                     skipCacheBust: policy.skipCacheBust,
                     sortQuery: policy.sortQuery,
+                    bypassSnapshot: bypassSnapshot,
                 }, function (result) {
                     return result && result.data ? result.data : result;
                 });
@@ -992,6 +995,7 @@
             cache: policy.fetchCache,
             skipCacheBust: policy.skipCacheBust,
             sortQuery: policy.sortQuery,
+            bypassSnapshot: bypassSnapshot,
         }, function (result) {
             return result && result.data ? result.data : result;
         });
