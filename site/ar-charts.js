@@ -851,9 +851,13 @@
 
         chartLoadPromise = (async function () {
             var baseParams = buildBaseParams();
-            await awaitSnapshotBootstrap(baseParams, 2500);
             var currentFields = fields();
             var currentView = currentFields.view;
+            if (currentView === 'tdSettlementExpectations') {
+                baseParams._bypassSnapshot = true;
+            } else {
+                await awaitSnapshotBootstrap(baseParams, 2500);
+            }
             var wantsReportPlots = isReportView(currentView);
             var reportPreviewRendered = false;
             var reportPlotPromise = wantsReportPlots && chartData.fetchReportPlot

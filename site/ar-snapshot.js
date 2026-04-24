@@ -82,6 +82,10 @@
             || 'home-loans';
     }
 
+    function shouldDeferTermDepositSnapshot() {
+        return activeSection() === 'term-deposits';
+    }
+
     function defaultChartWindowForSection(section) {
         var name = String(section || '').trim().toLowerCase();
         if (name === 'term-deposits') return '30D';
@@ -545,6 +549,7 @@
 
     /** Identifies whether `url` could be served by some snapshot bundle. */
     function isSnapshottableUrl(url) {
+        if (shouldDeferTermDepositSnapshot()) return false;
         var parsed = parseUrl(url);
         if (!parsed) return false;
         return !!resolveMatcher(parsed);
@@ -564,6 +569,7 @@
     }
 
     function start(scope, options) {
+        if (shouldDeferTermDepositSnapshot()) return null;
         var targetScope = scope || scopeFromState();
         var key = bundleKey(targetScope.chartWindow, targetScope.preset);
         var existing = SNAPSHOT.bundles[key];
@@ -655,5 +661,7 @@
     SNAPSHOT.awaitReady = awaitReady;
     SNAPSHOT.awaitUrl = awaitUrl;
 
-    start();
+    if (activeSection() !== 'term-deposits') {
+        start();
+    }
 })();

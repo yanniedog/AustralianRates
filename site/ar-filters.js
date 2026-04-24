@@ -778,6 +778,7 @@
                     timeoutMs: requestTimeoutMs,
                     retryCount: 0,
                     retryDelayMs: 700,
+                    bypassSnapshot: section === 'term-deposits',
                 })
                 : null;
             var data = result ? result.data : null;
