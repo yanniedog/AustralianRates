@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { getEconomicObservationsForSeries, getEconomicStatusMap, expandEconomicObservationsDaily } from '../db/economic-series'
-import { ECONOMIC_PRESETS, ECONOMIC_SERIES_DEFINITIONS, getEconomicPreset, getEconomicSeriesDefinition, groupEconomicSeriesByCategory } from '../economic/registry'
+import { buildDerivedEconomicSeries } from '../economic/derived-series'
+import { buildRbaSignals } from '../economic/rba-signals'
+import { ECONOMIC_PRESETS, ECONOMIC_SERIES_DEFINITIONS, getEconomicPreset, getEconomicSeriesDefinition, groupEconomicSeriesByCategory, isDerivedEconomicSeries } from '../economic/registry'
 import { getReadDb } from '../db/read-db'
 import type { AppContext } from '../types'
 import { jsonError, withPublicCache } from '../utils/http'
@@ -121,6 +123,11 @@ economicPublicRoutes.get('/catalog', async (c) => {
   })
 })
 
+economicPublicRoutes.get('/signals', async (c) => {
+  withPublicCache(c, 300)
+  return c.json(await buildRbaSignals(getReadDb(c)))
+})
+
 economicPublicRoutes.get('/series', async (c) => {
   withPublicCache(c, 300)
   const ids = resolveSeriesIds(c.req.query('ids'), c.req.query('preset'))
@@ -141,8 +148,13 @@ economicPublicRoutes.get('/series', async (c) => {
     ids.map(async (id) => {
       const definition = getEconomicSeriesDefinition(id)
       if (!definition) return null
-      const observations = await getEconomicObservationsForSeries(getReadDb(c), id, startDate, endDate)
-      const expanded = expandEconomicObservationsDaily(observations, startDate, endDate)
+      const expanded = isDerivedEconomicSeries(definition)
+        ? await buildDerivedEconomicSeries(getReadDb(c), definition, startDate, endDate)
+        : expandEconomicObservationsDaily(
+            await getEconomicObservationsForSeries(getReadDb(c), id, startDate, endDate),
+            startDate,
+            endDate,
+          )
       return {
         id: definition.id,
         label: definition.label,

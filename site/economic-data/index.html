@@ -17,7 +17,7 @@
     <meta property="og:description" content="Normalized compare charts for macro indicators that shape the RBA path, collected daily from public official sources.">
     <meta property="og:url" content="https://www.australianrates.com/economic-data/">
     <meta property="og:site_name" content="AustralianRates">
-    <script src="../site-variant.js?v=3fa6bb1046"></script>
+    <script src="../site-variant.js?v=25225129e3"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
@@ -26,10 +26,10 @@
     <link rel="stylesheet" href="../public-showcase.css?v=a9922462db">
     <link rel="stylesheet" href="../public-showcase-hero.css?v=4faf4aee22">
     <link rel="stylesheet" href="../responsive.css?v=6337843280">
-    <link rel="stylesheet" href="../mobile-host.css?v=99a83ff1d3">
-    <link rel="stylesheet" href="../economic-data.css?v=c142b265cd">
+    <link rel="stylesheet" href="../mobile-host.css?v=52aa98da36">
+    <link rel="stylesheet" href="../economic-data.css?v=1f7dc7c6c9">
     <link rel="stylesheet" href="../public-polish.css?v=9a75534abd">
-    <script src="../theme.js?v=f42ffd8ec5"></script>
+    <script src="../theme.js?v=13981d21ec"></script>
     <script src="../ar-polish-init.js?v=250bf4eb1e" defer></script>
 </head>
 <body class="ar-public ar-section-economic-data" data-ar-section="economic-data">
@@ -63,24 +63,31 @@
                     <span class="market-intro-session-label">session::economic-data</span>
                     <span class="market-intro-session-status">live</span>
                 </div>
-                <p class="eyebrow">Australian Economic Data Dashboard</p>
-                <h1 class="market-intro-title">Track macro indicators that shape the RBA path.</h1>
-                <p class="market-intro-summary">The chart defaults to normalized compare mode, rebasing each selected series to 100 at the start of the visible window. Hover always shows raw values, units, frequency, source, and proxy status.</p>
+                <p class="eyebrow">RBA Signal Dashboard</p>
+                <h1 class="market-intro-title">Policy-pressure signals for Australian rates.</h1>
+                <p class="market-intro-summary">Directional pressure only. Positive scores indicate tighter-policy pressure; negative scores indicate easier-policy pressure.</p>
             </div>
             <div class="economic-hero-stats">
                 <article class="terminal-stat">
-                    <span class="metric-code">Preset</span>
-                    <strong id="economic-active-preset">RBA Watchlist</strong>
+                    <span class="metric-code">Bias</span>
+                    <strong id="economic-signal-bias">Loading...</strong>
                 </article>
                 <article class="terminal-stat">
-                    <span class="metric-code">Series</span>
-                    <strong id="economic-selected-count">5 selected</strong>
+                    <span class="metric-code">Market</span>
+                    <strong id="economic-signal-market">...</strong>
                 </article>
                 <article class="terminal-stat">
                     <span class="metric-code">Status</span>
                     <strong id="economic-status-text">Loading...</strong>
                 </article>
             </div>
+        </section>
+        <section class="economic-signal-strip" aria-label="RBA signal summary">
+            <article><span>Cash rate</span><strong id="economic-signal-cash">...</strong></article>
+            <article><span>Inflation gap</span><strong id="economic-signal-inflation">...</strong></article>
+            <article><span>Labour</span><strong id="economic-signal-labour">...</strong></article>
+            <article><span>Wages</span><strong id="economic-signal-wages">...</strong></article>
+            <article><span>Updated</span><strong id="economic-signal-updated">...</strong></article>
         </section>
         <section class="market-terminal economic-terminal" aria-label="Economic data workspace">
             <section class="terminal-column terminal-column-center">
@@ -89,10 +96,15 @@
                         <div class="chart-block-head">
                             <div class="terminal-panel-head">
                                 <span class="panel-code">CHT</span>
-                                <h2 class="terminal-panel-title">Normalized Compare</h2>
+                                <h2 class="terminal-panel-title">RBA Signal</h2>
                             </div>
-                            <p id="chart-meta" class="hint">Index = 100 at the start of the visible range for each selected series.</p>
+                            <div id="economic-chart-mode-row" class="economic-chip-row" role="group" aria-label="Chart mode">
+                                <button type="button" class="chip-btn secondary active" data-chart-mode="signal">RBA signal</button>
+                                <button type="button" class="chip-btn secondary" data-chart-mode="raw">Raw values</button>
+                                <button type="button" class="chip-btn secondary" data-chart-mode="indexed">Indexed compare</button>
+                            </div>
                         </div>
+                        <p id="chart-meta" class="hint">Component scores: -2 easy pressure, +2 tight pressure.</p>
                         <section id="scenario" class="economic-selection-panel" aria-label="Indicator controls">
                             <div class="economic-selection-head">
                                 <span class="panel-code">SET</span>
@@ -147,6 +159,20 @@
                         </div>
                         <div id="economic-chart" class="economic-chart" role="img" aria-label="Economic data chart"></div>
                         <p id="economic-empty" class="terminal-inline-feedback" hidden></p>
+                        <section class="economic-component-panel" aria-label="Signal components">
+                            <div class="economic-selection-head">
+                                <span class="panel-code">SIG</span>
+                                <h2 class="terminal-panel-title">Component Scores</h2>
+                            </div>
+                            <div class="economic-component-table-wrap">
+                                <table class="economic-component-table">
+                                    <thead>
+                                        <tr><th>Signal</th><th>Value</th><th>Change</th><th>Score</th><th>Freshness</th></tr>
+                                    </thead>
+                                    <tbody id="economic-component-body"></tbody>
+                                </table>
+                            </div>
+                        </section>
                     </div>
                 </section>
             </section>
@@ -155,6 +181,8 @@
             <div id="economic-series-list"></div>
             <div id="economic-point-details"></div>
             <div id="economic-source-list"></div>
+            <span id="economic-active-preset"></span>
+            <span id="economic-selected-count"></span>
         </div>
     </main>
     <footer class="site-footer" role="contentinfo">
@@ -181,17 +209,20 @@
         </div>
     </footer>
     <p class="disclaimer">General information only. Series are normalized index values; hover tooltips show raw figures and source.</p>
-    <script src="../vendor/echarts/echarts.min.js?v=e84270bd0c"></script>
+    <script src="../vendor/echarts/echarts.min.js?v=dbc15e9b9c"></script>
     <script src="../ar-utils.js?v=d6faaf3a6f"></script>
-    <script src="../ui-icons.js?v=0c1d292f12"></script>
-    <script src="../ar-time.js?v=1fc60cc8f5"></script>
-    <script src="../ar-section-config.js?v=36c348bcfb"></script>
-    <script src="../ar-config.js?v=ab0129871d"></script>
-    <script src="../ar-network.js?v=9025b53bf6"></script>
+    <script src="../ui-icons.js?v=8831604d04"></script>
+    <script src="../ar-time.js?v=fa7869883b"></script>
+    <script src="../ar-section-config.js?v=b37e2d1968"></script>
+    <script src="../ar-config.js?v=ec90df6b49"></script>
+    <script src="../ar-network.js?v=8c9d964a9c"></script>
     <script src="../ar-chart-site-ui.js?v=8b536c871f"></script>
-    <script src="../ar-chart-echarts-helpers.js?v=7e8d0c75ab"></script>
-    <script src="../economic-data.js?v=10843fdf63"></script>
+    <script src="../ar-chart-echarts-helpers.js?v=6ec518c0ee"></script>
+    <script src="../economic-chart-axis.js?v=e73b9d85f8"></script>
+    <script src="../economic-signals.js?v=a2f2bebafc"></script>
+    <script src="../economic-legend-stack.js?v=3d6578aafc"></script>
+    <script src="../economic-data.js?v=e742a462d6"></script>
     <script src="../frame.js?v=c96cee988c"></script>
-    <script src="../site-variant-ui.js?v=b4ffd8ea84"></script>
+    <script src="../site-variant-ui.js?v=42180e4ccd"></script>
 </body>
 </html>

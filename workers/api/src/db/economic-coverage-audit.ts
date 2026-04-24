@@ -5,6 +5,8 @@ import {
   type EconomicFrequency,
   type EconomicSeriesDefinition,
   type EconomicSeriesId,
+  isAbsIndicatorSeries,
+  isDerivedEconomicSeries,
 } from '../economic/registry'
 import { getMelbourneNowParts } from '../utils/time'
 
@@ -136,7 +138,9 @@ export type EconomicCoverageReport = {
 }
 
 function issueSeverity(issues: string[], computedStatus: EconomicSeriesCoverageRow['computed_status']): EconomicCoverageSeverity {
-  if (issues.some((issue) => issue !== 'stale_status')) return 'red'
+  const redIssues = issues.filter((issue) => issue !== 'stale_status' && !issue.startsWith('optional_abs_'))
+  if (redIssues.length > 0) return 'red'
+  if (issues.some((issue) => issue.startsWith('optional_abs_'))) return 'yellow'
   if (computedStatus === 'stale' || issues.includes('stale_status')) return 'yellow'
   return 'green'
 }
@@ -348,6 +352,30 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
   const latestFutureObservationDateBySeries = new Map<string, string | null>()
 
   for (const definition of definitions) {
+    if (isDerivedEconomicSeries(definition)) {
+      perSeries.push({
+        series_id: definition.id,
+        label: definition.label,
+        category: definition.category,
+        status_row_present: false,
+        observation_row_count: 0,
+        stored_status: 'derived',
+        computed_status: 'ok',
+        severity: 'green',
+        last_checked_at: null,
+        last_success_at: null,
+        last_observation_date: null,
+        latest_observation_date: null,
+        last_value: null,
+        latest_value: null,
+        status_message: 'Derived at request time from stored component series.',
+        source_url: definition.sourceUrl,
+        frequency: definition.frequency,
+        proxy: definition.proxy,
+        issues: [],
+      })
+      continue
+    }
     const statusRow = statusMap.get(definition.id) ?? null
     const observationAggregate = await getObservationAggregate(db, definition, checkedAt, timeZone)
     const latestObservation = observationAggregate.observation_count
@@ -364,8 +392,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     latestFutureObservationDateBySeries.set(definition.id, observationAggregate.latest_future_observation_date ?? null)
 
     if (!statusRow) {
-      issues.push('missing_status')
-      invalidRows += 1
+      issues.push(isAbsIndicatorSeries(definition) ? 'optional_abs_missing_status' : 'missing_status')
+      if (!isAbsIndicatorSeries(definition)) invalidRows += 1
     } else {
       if (!storedProxyFlagMatches(definition, statusRow)) {
         issues.push('status_proxy_mismatch')
@@ -392,8 +420,8 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     }
 
     if (observationCount === 0 && statusRow?.status !== 'error') {
-      issues.push('missing_observations')
-      invalidRows += 1
+      issues.push(isAbsIndicatorSeries(definition) ? 'optional_abs_missing_observations' : 'missing_observations')
+      if (!isAbsIndicatorSeries(definition)) invalidRows += 1
     }
     if (Number(observationAggregate.proxy_mismatch_count ?? 0) > 0) {
       issues.push('observation_proxy_mismatch')
@@ -447,6 +475,9 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
 
   const missingStatusRows = perSeries.filter((row) => row.issues.includes('missing_status'))
   const missingObservationRows = perSeries.filter((row) => row.issues.includes('missing_observations'))
+  const optionalAbsRows = perSeries.filter((row) =>
+    row.issues.includes('optional_abs_missing_status') || row.issues.includes('optional_abs_missing_observations'),
+  )
   const errorStatusRows = perSeries.filter((row) => row.issues.includes('error_status'))
   const hardErrorStatusRows = errorStatusRows.filter((row) => row.proxy !== true)
   const transientUpstreamErrorRows = hardErrorStatusRows.filter(isTransientUpstreamTransportError)
@@ -486,6 +517,17 @@ export async function runEconomicCoverageAudit(db: D1Database, input?: { checked
     message: 'Non-error economic series are missing observation rows.',
     count: missingObservationRows.length,
     sample: missingObservationRows.map((row) => ({ series_id: row.series_id, stored_status: row.stored_status })),
+  })
+  pushFinding(findings, {
+    code: 'economic_optional_abs_unavailable',
+    severity: 'warn',
+    message: 'Optional ABS Indicator API series are unavailable or have not collected yet.',
+    count: optionalAbsRows.length,
+    sample: optionalAbsRows.map((row) => ({
+      series_id: row.series_id,
+      issues: row.issues,
+      stored_status: row.stored_status,
+    })),
   })
   pushFinding(findings, {
     code: 'economic_error_status_rows',

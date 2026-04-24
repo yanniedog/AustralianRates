@@ -235,6 +235,8 @@ export type EnvBindings = {
   HISTORICAL_QUALITY_AUDIT_DO?: DurableObjectNamespace
   ADMIN_API_TOKEN?: string
   ADMIN_API_TOKENS?: string
+  /** Optional ABS Indicator API key for headline CPI/labour/demand/housing indicator feeds. */
+  ABS_INDICATOR_API_KEY?: string
   CF_ACCESS_TEAM_DOMAIN?: string
   CF_ACCESS_AUD?: string
   PUBLIC_ALLOWED_ORIGINS?: string
