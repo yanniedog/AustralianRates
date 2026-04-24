@@ -394,6 +394,7 @@
     }
 
     function getAnalyticsRows(params) {
+        if (params && params._bypassSnapshot) return Promise.resolve(null);
         var chartWindow = normalizeChartWindow(params && params.chart_window);
         var preset = normalizePreset(params && params.preset);
         var bundle = coveringAnalyticsBundle(chartWindow, preset);

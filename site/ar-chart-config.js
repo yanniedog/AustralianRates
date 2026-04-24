@@ -190,7 +190,7 @@
     function defaultView() {
         if (section === 'home-loans') return 'homeLoanReport';
         if (section === 'savings') return 'economicReport';
-        if (section === 'term-deposits') return 'termDepositReport';
+        if (section === 'term-deposits') return 'tdSettlementExpectations';
         return 'homeLoanReport';
     }
 
