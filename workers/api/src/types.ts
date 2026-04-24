@@ -278,6 +278,12 @@ export type EnvBindings = {
   FETCH_MAX_RETRIES?: string
   FETCH_RETRY_BASE_MS?: string
   FETCH_RETRY_CAP_MS?: string
+  /** Cloudflare account id for GraphQL Analytics API usage dashboards. */
+  CLOUDFLARE_ACCOUNT_ID?: string
+  /** Cloudflare API token with analytics read access. */
+  CLOUDFLARE_API_TOKEN?: string
+  /** Optional override for the production D1 database id used by usage dashboards. */
+  CLOUDFLARE_D1_DATABASE_ID?: string
 }
 
 export type SharedIngestTaskKind = IngestTaskKind

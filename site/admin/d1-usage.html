@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>D1 usage | Admin | AustralianRates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="../foundation.css?v=d30e686e00">
+    <link rel="stylesheet" href="../public-shell.css?v=5abed4c037">
+    <link rel="stylesheet" href="admin-layout.css?v=6354239a34">
+    <link rel="stylesheet" href="admin-pages.css?v=685dc3151b">
+    <script src="../site-variant.js?v=c71ae0e0a2"></script>
+    <script src="../theme.js?v=76040c583e"></script>
+</head>
+<body class="ar-admin">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
+        </div>
+    </header>
+    <main class="admin-shell admin-shell--wide admin-d1-usage" id="main-content" tabindex="-1">
+        <p class="admin-back"><a href="dashboard.html">Back to dashboard</a></p>
+        <div class="admin-page-head">
+            <p class="eyebrow">Cost</p>
+            <h1><abbr title="Cloudflare D1 database">D1</abbr> usage</h1>
+            <p class="admin-subtitle">Reads, writes, quota projection, and guardrails.</p>
+        </div>
+        <div class="admin-message" id="msg" role="alert"></div>
+        <div class="admin-toolbar">
+            <button type="button" class="primary" id="refresh-btn">Refresh</button>
+            <span class="admin-status-line" id="source-line">Loading...</span>
+        </div>
+        <section class="admin-summary-grid" id="summary-grid" aria-label="D1 usage summary"></section>
+        <section class="admin-card" aria-labelledby="guard-heading">
+            <h2 id="guard-heading">Guardrails</h2>
+            <div class="d1-guard-grid" id="guard-grid"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="chart-heading">
+            <h2 id="chart-heading">Daily reads/writes</h2>
+            <div class="d1-usage-bars" id="usage-bars" role="img" aria-label="Daily D1 reads and writes"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="table-heading">
+            <h2 id="table-heading">Daily table</h2>
+            <div class="admin-table-wrap" id="table-wrap"></div>
+        </section>
+    </main>
+    <script src="admin-portal.js?v=e6678ffa5b"></script>
+    <script src="admin-sidebar.js?v=24dee280ba"></script>
+    <script src="../ui-icons.js?v=0c1d292f12"></script>
+    <script src="../frame.js?v=eb81d922ba"></script>
+    <script>
+        (function () {
+            if (!window.AR || !window.AR.AdminPortal || !window.AR.AdminPortal.guard()) return;
+            var portal = window.AR.AdminPortal;
+            var msgEl = document.getElementById('msg');
+            var refreshBtn = document.getElementById('refresh-btn');
+            var summaryGrid = document.getElementById('summary-grid');
+            var guardGrid = document.getElementById('guard-grid');
+            var bars = document.getElementById('usage-bars');
+            var tableWrap = document.getElementById('table-wrap');
+            var sourceLine = document.getElementById('source-line');
+
+            function esc(value) {
+                var div = document.createElement('div');
+                div.textContent = value == null ? '' : String(value);
+                return div.innerHTML;
+            }
+
+            function showMsg(text, isError) {
+                msgEl.textContent = text;
+                msgEl.className = 'admin-message visible ' + (isError ? 'error' : 'success');
+                setTimeout(function () { msgEl.classList.remove('visible'); }, 4000);
+            }
+
+            function num(value) {
+                return Number(value || 0).toLocaleString('en-AU');
+            }
+
+            function pct(value) {
+                return (Number(value || 0) * 100).toFixed(1) + '%';
+            }
+
+            function money(value) {
+                return '$' + Number(value || 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function bytes(value) {
+                var n = Number(value || 0);
+                if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB';
+                if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB';
+                if (n >= 1e3) return (n / 1e3).toFixed(2) + ' KB';
+                return n ? n + ' B' : 'n/a';
+            }
+
+            function cell(label, value) {
+                return '<div class="summary-cell"><strong>' + esc(label) + '</strong><span class="db-stats-value">' + esc(value) + '</span></div>';
+            }
+
+            function renderSummary(data) {
+                var month = data.month || {};
+                var latestStorage = (data.days || []).slice().reverse().find(function (day) { return Number(day.storage_bytes || 0) > 0; });
+                summaryGrid.innerHTML = [
+                    cell('Reads projected', num(month.projected_reads) + ' / ' + num(data.quotas.d1_reads_included_monthly)),
+                    cell('Writes projected', num(month.projected_writes) + ' / ' + num(data.quotas.d1_writes_included_monthly)),
+                    cell('Read quota', pct(month.read_quota_fraction)),
+                    cell('Write quota', pct(month.write_quota_fraction)),
+                    cell('Projected overage', money(month.projected_overage_usd)),
+                    cell('Storage', bytes(latestStorage && latestStorage.storage_bytes))
+                ].join('');
+            }
+
+            function guardPill(label, active, tone) {
+                return '<span class="pill ' + (active ? (tone || 'warn') : 'pass') + '">' + esc(label) + ': ' + (active ? 'on' : 'off') + '</span>';
+            }
+
+            function renderGuardrails(data) {
+                var g = (data.month && data.month.guardrails) || {};
+                guardGrid.innerHTML = [
+                    guardPill('Warn', !!g.warn, 'warn'),
+                    guardPill('Nonessential paused', !!g.restrict_nonessential, 'warn'),
+                    guardPill('Public live D1 fallback disabled', !!g.disable_public_live_d1_fallback, 'error'),
+                    guardPill('Daily CDR protected', !!g.daily_cdr_protected, 'pass'),
+                    '<span class="pill">Coverage allowance: ' + money(g.overage_allowance_usd) + '</span>'
+                ].join('');
+            }
+
+            function renderBars(data) {
+                var days = data.days || [];
+                var max = days.reduce(function (m, day) {
+                    return Math.max(m, Number(day.reads || 0), Number(day.writes || 0));
+                }, 1);
+                bars.innerHTML = days.map(function (day) {
+                    var readH = Math.max(2, Math.round((Number(day.reads || 0) / max) * 100));
+                    var writeH = Math.max(2, Math.round((Number(day.writes || 0) / max) * 100));
+                    return '<div class="d1-bar-day" title="' + esc(day.date + ' reads ' + num(day.reads) + ' writes ' + num(day.writes)) + '">' +
+                        '<span class="d1-bar d1-bar-read" style="height:' + readH + '%"></span>' +
+                        '<span class="d1-bar d1-bar-write" style="height:' + writeH + '%"></span>' +
+                        '<small>' + esc(day.date.slice(5)) + '</small>' +
+                    '</div>';
+                }).join('');
+            }
+
+            function renderTable(data) {
+                var rows = data.days || [];
+                tableWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
+                    '<th>Date</th><th>Rows read</th><th>Rows written</th><th>Read queries</th><th>Write queries</th><th>Response</th><th>Storage</th>' +
+                    '</tr></thead><tbody>' +
+                    rows.map(function (day) {
+                        return '<tr><td>' + esc(day.date) + '</td><td>' + num(day.reads) + '</td><td>' + num(day.writes) + '</td><td>' + num(day.read_queries) + '</td><td>' + num(day.write_queries) + '</td><td>' + bytes(day.response_bytes) + '</td><td>' + bytes(day.storage_bytes) + '</td></tr>';
+                    }).join('') +
+                    '</tbody></table>';
+            }
+
+            function load() {
+                sourceLine.textContent = 'Loading...';
+                summaryGrid.innerHTML = '<p class="admin-muted">Loading...</p>';
+                guardGrid.innerHTML = '';
+                bars.innerHTML = '';
+                tableWrap.innerHTML = '';
+                portal.fetchAdmin('/cloudflare/d1-usage?days=31')
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data.ok) throw new Error(data.error && data.error.message ? data.error.message : 'Usage failed');
+                        sourceLine.textContent = 'Source: ' + data.source + ' | Generated: ' + data.generated_at;
+                        renderSummary(data);
+                        renderGuardrails(data);
+                        renderBars(data);
+                        renderTable(data);
+                    })
+                    .catch(function (error) {
+                        sourceLine.textContent = 'Failed';
+                        showMsg(error && error.message ? error.message : 'Failed to load D1 usage', true);
+                    });
+            }
+
+            refreshBtn.addEventListener('click', load);
+            load();
+        })();
+    </script>
+</body>
+</html>

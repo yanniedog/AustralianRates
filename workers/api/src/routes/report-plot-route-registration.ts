@@ -8,8 +8,9 @@ import { getCachedOrComputeReportPlot } from '../db/report-plot-cache'
 import { queryReportPlotPayload } from '../db/report-plot'
 import type { ReportPlotMode } from '../db/report-plot-types'
 import type { AppContext } from '../types'
-import { withPublicCache } from '../utils/http'
+import { jsonError, withPublicCache } from '../utils/http'
 import type { ChartWindow } from '../utils/chart-window'
+import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
 
 const REPORT_PLOT_CACHE_MAX_AGE = 300
 
@@ -87,13 +88,28 @@ async function handleReportPlotRequest<TFilters extends ReportFilters>(
     ) as TFilters,
   )
 
-  const payload = await getCachedOrComputeReportPlot(
-    c.env,
-    options.section,
-    mode,
-    toQueryParams(merged),
-    () => queryReportPlotPayload(getReadDb(c), options.section, mode, resolvedFilters),
-  )
+  const liveAllowed = !(await isPublicLiveD1FallbackDisabled(c.env))
+  let payload: Awaited<ReturnType<typeof getCachedOrComputeReportPlot>>
+  try {
+    payload = await getCachedOrComputeReportPlot(
+      c.env,
+      options.section,
+      mode,
+      toQueryParams(merged),
+      () => queryReportPlotPayload(getReadDb(c), options.section, mode, resolvedFilters),
+      { allowLiveCompute: liveAllowed },
+    )
+  } catch (error) {
+    if (!liveAllowed) {
+      return jsonError(
+        c,
+        503,
+        'PUBLIC_LIVE_D1_FALLBACK_DISABLED',
+        'Live report chart data is temporarily restricted by D1 usage guardrails. Cached data will be served when available.',
+      )
+    }
+    throw error
+  }
 
   withPublicCache(c, REPORT_PLOT_CACHE_MAX_AGE)
   c.header('X-AR-Cache', payload.fromCache)

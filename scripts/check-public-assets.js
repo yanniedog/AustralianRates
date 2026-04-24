@@ -17,7 +17,6 @@ const allowedExternalStyles = new Set([
 
 const requiredVendorSnippets = [
   'vendor/echarts/echarts.min.js',
-  'vendor/sheetjs/xlsx.full.min.js',
 ];
 
 function collectMatches(pattern, text) {
