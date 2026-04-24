@@ -92,8 +92,10 @@ enabled = true
 invocation_logs = true
 
 [triggers]
-# Daily ingest: 07,08,19,20 UTC (DST-safe brackets for Melbourne 06:00 and 18:00); handler gates on MELBOURNE_DAILY_INGEST_HOURS or 6+18. Site health every 15 min. Hourly: wayback + chart cache + RBA. Monthly export 23:59 UTC last day; integrity 04:00 UTC; backup 09:00 UTC; historical quality 23:59 Melbourne via 12,13 UTC.
-crons = ["0 7,8,19,20 * * *", "*/15 * * * *", "0 * * * *", "59 23 * * *", "0 4 * * *", "0 9 * * *", "59 12,13 * * *"]
+# Cost-control schedule: one daily CDR ingest at Melbourne 06:00 plus one post-ingest public package refresh.
+# The UTC pair covers AEST/AEDT; the handler gates on MELBOURNE_DAILY_INGEST_HOURS=6.
+# Heavy maintenance, health, integrity, backup, historical-quality, and chart-cache jobs remain manual/admin-only.
+crons = ["0 19,20 * * *", "0 23 * * *"]
 
 [vars]
 WORKER_VERSION = "phase1"
@@ -101,10 +103,16 @@ PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
 MELBOURNE_TARGET_HOUR = "6"
 MELBOURNE_SECOND_INGEST_HOUR = "18"
+MELBOURNE_DAILY_INGEST_HOURS = "6"
 MANUAL_RUN_COOLDOWN_SECONDS = "60"
 LOCK_TTL_SECONDS = "7200"
 MAX_QUEUE_ATTEMPTS = "3"
 MAX_PRODUCTS_PER_LENDER = "20000"
+FEATURE_SCHEDULED_INGEST_AUDITS_ENABLED = "false"
+FEATURE_SCHEDULED_PRODUCT_CLASSIFICATION_AUDIT_ENABLED = "false"
+D1_DAILY_READ_LIMIT = "166666666"
+D1_DAILY_WRITE_LIMIT = "1000000"
+D1_NONESSENTIAL_DISABLE_FRACTION = "0.75"
 FEATURE_PROSPECTIVE_ENABLED = "true"
 FEATURE_BACKFILL_ENABLED = "true"
 AUTO_BACKFILL_DAILY_QUEUE_CAP = "16"
@@ -182,10 +190,16 @@ PUBLIC_API_BASE_PATH = "/api/home-loan-rates"
 MELBOURNE_TIMEZONE = "Australia/Melbourne"
 MELBOURNE_TARGET_HOUR = "6"
 MELBOURNE_SECOND_INGEST_HOUR = "18"
+MELBOURNE_DAILY_INGEST_HOURS = "6"
 MANUAL_RUN_COOLDOWN_SECONDS = "60"
 LOCK_TTL_SECONDS = "7200"
 MAX_QUEUE_ATTEMPTS = "3"
 MAX_PRODUCTS_PER_LENDER = "20000"
+FEATURE_SCHEDULED_INGEST_AUDITS_ENABLED = "false"
+FEATURE_SCHEDULED_PRODUCT_CLASSIFICATION_AUDIT_ENABLED = "false"
+D1_DAILY_READ_LIMIT = "166666666"
+D1_DAILY_WRITE_LIMIT = "1000000"
+D1_NONESSENTIAL_DISABLE_FRACTION = "0.75"
 FEATURE_PROSPECTIVE_ENABLED = "true"
 FEATURE_BACKFILL_ENABLED = "true"
 AUTO_BACKFILL_DAILY_QUEUE_CAP = "16"
