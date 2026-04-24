@@ -16,7 +16,7 @@ import {
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
-import { refreshChartPivotCache } from '../pipeline/chart-cache-refresh'
+import { refreshChartPivotCache, refreshPublicSnapshotPackages } from '../pipeline/chart-cache-refresh'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { FETCH_EVENTS_RETENTION_DAYS, runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
@@ -151,6 +151,31 @@ adminRoutes.post('/chart-cache/refresh', async (c) => {
       500,
       'CHART_CACHE_REFRESH_FAILED',
       error instanceof Error ? error.message : 'Chart cache refresh failed.',
+    )
+  }
+})
+
+/** Recompute only the cache-only public snapshot packages in KV. */
+adminRoutes.post('/public-packages/refresh', async (c) => {
+  try {
+    const result = await refreshPublicSnapshotPackages(c.env)
+    log.info('admin', 'public_packages_refresh_manual', {
+      code: 'admin_public_packages_refresh',
+      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length }),
+    })
+    return c.json({
+      ok: result.ok,
+      auth_mode: c.get('adminAuthState')?.mode ?? null,
+      refreshed: result.refreshed,
+      errors: result.errors,
+    })
+  } catch (error) {
+    log.error('admin', 'public_packages_refresh_failed', { error, context: '/admin/public-packages/refresh' })
+    return jsonError(
+      c,
+      500,
+      'PUBLIC_PACKAGES_REFRESH_FAILED',
+      error instanceof Error ? error.message : 'Public package refresh failed.',
     )
   }
 })
