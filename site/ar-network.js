@@ -159,11 +159,10 @@
                 return { data: cached, response: null, text: cachedText, attempts: 0, fromSnapshot: true };
             }
             if (snapshotRequired) {
-                var snapshotError = new Error(label + ' is unavailable in the public data package.');
-                snapshotError.code = 'snapshot_required';
-                snapshotError.userMessage = 'The public data package is not ready.';
-                snapshotError.requestLabel = label;
-                throw snapshotError;
+                clientLog('warn', 'Snapshot package unavailable; falling back to API request', {
+                    request: label,
+                    url: rawUrl,
+                });
             }
         }
 
