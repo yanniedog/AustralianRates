@@ -130,12 +130,20 @@ export async function fetchJson(url: string, context?: FetchRequestContext): Pro
 }
 
 function parseSupportedVersions(body: string): number[] {
-  const m = body.match(/Versions available:\s*([0-9,\s]+)/i)
-  if (!m) return []
-  return m[1]
-    .split(',')
-    .map((x) => Number(x.trim()))
-    .filter((x) => Number.isFinite(x))
+  const available = body.match(/Versions available:\s*([0-9,\s]+)/i)
+  if (available) {
+    return available[1]
+      .split(',')
+      .map((x) => Number(x.trim()))
+      .filter((x) => Number.isFinite(x))
+  }
+
+  const range = body.match(/Minimum version supported is\s*(\d+)\s*and\s*Maximum version supported is\s*(\d+)/i)
+  if (!range) return []
+  const min = Number(range[1])
+  const max = Number(range[2])
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) return []
+  return Array.from({ length: max - min + 1 }, (_item, index) => max - index)
 }
 
 type UnsupportedVersionProbe = {
