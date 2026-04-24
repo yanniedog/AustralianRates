@@ -5,6 +5,7 @@ import {
   HOURLY_MAINTENANCE_CRON_EXPRESSION,
   INTEGRITY_AUDIT_CRON_EXPRESSION,
   MONTHLY_EXPORT_CRON_EXPRESSION,
+  PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION,
   SITE_HEALTH_CRON_EXPRESSION,
 } from '../constants'
 import { runDataIntegrityAudit } from '../db/data-integrity-audit'
@@ -12,10 +13,9 @@ import { insertIntegrityAuditRun } from '../db/integrity-audit-runs'
 import { insertHealthCheckRun } from '../db/health-check-runs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
-import { refreshChartPivotCache } from './chart-cache-refresh'
+import { refreshChartPivotCache, refreshPublicSnapshotPackages } from './chart-cache-refresh'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
-import { dispatchReplayQueue } from './replay-queue'
 import { runDailyBackup } from './daily-backup'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import { handleScheduledDaily } from './scheduled'
@@ -23,6 +23,7 @@ import { runSiteHealthChecks } from './site-health'
 import { getMelbourneNowParts } from '../utils/time'
 import { collectRbaCashRateForDate } from '../ingest/rba'
 import { runScheduledHistoricalQualitySnapshot } from './historical-quality-scheduler'
+import { isD1NonEssentialWorkDisabled } from '../utils/d1-budget'
 
 type CronEvent = ScheduledController & { cron?: string }
 export type ScheduledTask =
@@ -33,11 +34,15 @@ export type ScheduledTask =
   | 'integrity_audit'
   | 'daily_backup'
   | 'historical_quality_daily'
+  | 'public_package_refresh'
 
 export function scheduledTasksForCron(cron: string): ScheduledTask[] {
   const normalizedCron = String(cron || '').trim()
   if (!normalizedCron || normalizedCron === DAILY_SCHEDULE_CRON_EXPRESSION) {
     return ['daily']
+  }
+  if (normalizedCron === PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION) {
+    return ['public_package_refresh']
   }
   if (normalizedCron === SITE_HEALTH_CRON_EXPRESSION) {
     return ['site_health']
@@ -181,15 +186,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     context: `scheduled_time=${scheduledIso} cron=${cron || 'unknown'}`,
   })
 
-  const replayDispatch = await dispatchReplayQueue(env, { limit: 50 }).catch((error) => {
-    log.error('scheduler', 'Replay queue dispatch failed', {
-      code: 'replay_queue_dispatch_failed',
-      error,
-      context: `scheduled_time=${scheduledIso} cron=${cron || 'unknown'}`,
-    })
-    return null
-  })
-
   const tasks = scheduledTasksForCron(cron)
   if (tasks.length === 1 && tasks[0] === 'daily') {
     log.info('scheduler', `Dispatching daily ingest cron (${cron || 'unknown'})`, {
@@ -197,8 +193,35 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     })
     const result = await handleScheduledDaily(event, env)
     return {
-      replay_dispatch: replayDispatch,
       ...result,
+    }
+  }
+
+  if (tasks.length === 1 && tasks[0] === 'public_package_refresh') {
+    log.info('scheduler', `Dispatching public package refresh cron (${cron})`, {
+      context: `scheduled_time=${scheduledIso}`,
+    })
+    const packageResult = await refreshPublicSnapshotPackages(env)
+    return {
+      ok: packageResult.ok,
+      skipped: false,
+      kind: 'public_package_refresh',
+      refreshed: packageResult.refreshed,
+      errors: packageResult.errors,
+    }
+  }
+
+  if (tasks.length > 0 && (await isD1NonEssentialWorkDisabled(env))) {
+    log.warn('scheduler', 'Skipping nonessential scheduled work: D1 daily budget threshold reached', {
+      code: 'd1_budget_nonessential_disabled',
+      context: `scheduled_time=${scheduledIso} cron=${cron || 'unknown'} tasks=${tasks.join(',')}`,
+    })
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'd1_budget_nonessential_disabled',
+      cron,
+      tasks,
     }
   }
 
@@ -208,7 +231,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     })
     const monthlyResult = await triggerMonthlyExport(env, event.scheduledTime)
     return {
-      replay_dispatch: replayDispatch,
       ok: monthlyResult.ok,
       skipped: monthlyResult.skipped,
       kind: 'monthly_export',
@@ -231,7 +253,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     })
     const backupResult = await runDailyBackup(env, backupDate)
     return {
-      replay_dispatch: replayDispatch,
       ok: backupResult.ok,
       skipped: false,
       kind: 'daily_backup',
@@ -248,7 +269,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     })
     const qualityResult = await runScheduledHistoricalQualitySnapshot(env, event.scheduledTime)
     return {
-      replay_dispatch: replayDispatch,
       kind: 'historical_quality_daily',
       ...qualityResult,
     }
@@ -272,7 +292,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       findingsJson: JSON.stringify(result.findings),
     })
     return {
-      replay_dispatch: replayDispatch,
       ok: true,
       skipped: false,
       kind: 'integrity_audit',
@@ -291,7 +310,6 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       ok: true,
       skipped: false,
       kind: 'hourly_maintenance',
-      replay_dispatch: replayDispatch,
       ...maintenance,
     }
   }
@@ -305,20 +323,21 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       ok: true,
       skipped: false,
       kind: 'site_health',
-      replay_dispatch: replayDispatch,
       site_health: siteHealthResult,
     }
   }
 
   log.warn('scheduler', `Skipping unknown cron expression: ${cron}`, {
     code: 'unknown_cron_expression',
-    context: `scheduled_time=${scheduledIso} expected_daily=${DAILY_SCHEDULE_CRON_EXPRESSION} expected_hourly_maint=${HOURLY_MAINTENANCE_CRON_EXPRESSION}`,
+    context:
+      `scheduled_time=${scheduledIso} expected_daily=${DAILY_SCHEDULE_CRON_EXPRESSION}` +
+      ` expected_public_package=${PUBLIC_PACKAGE_REFRESH_CRON_EXPRESSION}` +
+      ` expected_hourly_maint=${HOURLY_MAINTENANCE_CRON_EXPRESSION}`,
   })
   return {
     ok: true,
     skipped: true,
     reason: 'unknown_cron_expression',
     cron,
-    replay_dispatch: replayDispatch,
   }
 }

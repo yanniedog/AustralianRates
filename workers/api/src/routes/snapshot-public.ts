@@ -301,7 +301,29 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const query = c.req.query()
   const scope = resolveRequestScope(section, query.chart_window, query.preset)
   const wantsLite = parseBooleanQuery(query.lite)
-  const payload = await getCachedOrComputeSnapshot(c.env, section, scope, () => buildSnapshotPayload(c.env, section, scope))
+  let payload: Awaited<ReturnType<typeof getCachedOrComputeSnapshot>>
+  try {
+    payload = await getCachedOrComputeSnapshot(
+      c.env,
+      section,
+      scope,
+      () => buildSnapshotPayload(c.env, section, scope),
+      { allowD1Fallback: false, allowLiveCompute: false },
+    )
+  } catch {
+    c.header('Cache-Control', 'no-store')
+    c.header('X-AR-Cache', 'miss')
+    c.header('X-AR-Snapshot-Scope', scope)
+    return c.json(
+      {
+        ok: false,
+        error: 'SNAPSHOT_PACKAGE_UNAVAILABLE',
+        section,
+        scope,
+      },
+      503,
+    )
+  }
   const data = wantsLite
     ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data) || {}
     : payload.data
