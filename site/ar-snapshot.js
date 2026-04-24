@@ -527,11 +527,6 @@
         var baseScope = scopeFromState();
         window.setTimeout(function () {
             enqueueWarm(baseScope, { activate: false, lite: false });
-            CHART_WINDOWS.forEach(function (chartWindow) {
-                if (String(chartWindow || '') === String(baseScope.chartWindow || '')) return;
-                var nextScope = { chartWindow: chartWindow, preset: baseScope.preset };
-                enqueueWarm(nextScope, { activate: false, lite: false });
-            });
         }, 0);
     }
 

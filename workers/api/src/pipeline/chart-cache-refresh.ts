@@ -37,14 +37,23 @@ function precomputedScopes(section: ChartCacheSection): ChartCacheScope[] {
   return raw
 }
 
+function publicPackageScopes(section: ChartCacheSection, allScopes = false): ChartCacheScope[] {
+  if (allScopes) return precomputedScopes(section)
+  if (section === 'home_loans' || section === 'savings') {
+    return ['preset:consumer-default:window:90D', 'window:90D']
+  }
+  return ['window:30D']
+}
+
 export async function refreshPublicSnapshotPackages(
   env: EnvBindings,
+  options?: { allScopes?: boolean },
 ): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
   const errors: string[] = []
   let refreshed = 0
 
   for (const section of SECTIONS) {
-    for (const cacheScope of precomputedScopes(section)) {
+    for (const cacheScope of publicPackageScopes(section, options?.allScopes)) {
       try {
         const snapshot = await buildSnapshotPayload(env, section, cacheScope)
         await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)

@@ -158,14 +158,16 @@ adminRoutes.post('/chart-cache/refresh', async (c) => {
 /** Recompute only the cache-only public snapshot packages in KV. */
 adminRoutes.post('/public-packages/refresh', async (c) => {
   try {
-    const result = await refreshPublicSnapshotPackages(c.env)
+    const full = ['1', 'true', 'yes', 'on'].includes(String(c.req.query('full') || '').trim().toLowerCase())
+    const result = await refreshPublicSnapshotPackages(c.env, { allScopes: full })
     log.info('admin', 'public_packages_refresh_manual', {
       code: 'admin_public_packages_refresh',
-      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length }),
+      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length, full }),
     })
     return c.json({
       ok: result.ok,
       auth_mode: c.get('adminAuthState')?.mode ?? null,
+      full,
       refreshed: result.refreshed,
       errors: result.errors,
     })

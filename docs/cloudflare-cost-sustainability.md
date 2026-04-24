@@ -19,7 +19,7 @@ Target: keep the production bill under USD 20/month by keeping Workers Paid as t
 | Cron | Purpose | Cost posture |
 | --- | --- | --- |
 | `0 19,20 * * *` | Daily CDR ingest, gated to Melbourne 06:00 by `MELBOURNE_DAILY_INGEST_HOURS=6` | Essential |
-| `0 23 * * *` | Public package refresh to `CHART_CACHE_KV` | Essential |
+| `0 23 * * *` | Public package refresh to `CHART_CACHE_KV` for the initial public scopes | Essential |
 
 `CHART_CACHE_KV_TTL` is 129600 seconds (36 hours), so one missed package refresh does not immediately push public users back to D1.
 
@@ -35,3 +35,5 @@ Target: keep the production bill under USD 20/month by keeping Workers Paid as t
 ## Operating Rule
 
 If public packages are missing, rebuild packages or investigate the scheduled refresh. Do not re-enable public live D1 fallback as a quick fix; that recreates the bill-shock path.
+
+Use `POST /api/home-loan-rates/admin/public-packages/refresh` for the bounded initial-scope refresh. Add `?full=1` only for a deliberate all-scope rebuild.
