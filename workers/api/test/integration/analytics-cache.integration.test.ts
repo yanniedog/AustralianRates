@@ -8,7 +8,7 @@ async function warmChartCache() {
 }
 
 describe('analytics cache headers', () => {
-  it('serves home-loan consumer default series from D1 after refresh', async () => {
+  it('serves home-loan consumer default compact series from snapshot KV after refresh', async () => {
     await warmChartCache()
 
     const response = await SELF.fetch(
@@ -16,7 +16,9 @@ describe('analytics cache headers', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('X-AR-Cache')).toBe('d1')
+    expect(response.headers.get('X-AR-Cache')).toBe('kv')
+    expect(response.headers.get('X-AR-Analytics-Source')).toBe('snapshot')
+    expect(response.headers.get('X-AR-Snapshot-Scope')).toBe('preset:consumer-default:window:90D')
 
     const json = (await response.json()) as {
       ok?: boolean
@@ -34,7 +36,7 @@ describe('analytics cache headers', () => {
     expect(Array.isArray(json.grouped_rows?.groups)).toBe(true)
   })
 
-  it('promotes a D1-backed chart response into KV for the next hit', async () => {
+  it('keeps repeated home-loan consumer default compact hits on snapshot KV', async () => {
     await warmChartCache()
 
     const url =
@@ -44,9 +46,11 @@ describe('analytics cache headers', () => {
     const secondResponse = await SELF.fetch(url)
 
     expect(firstResponse.status).toBe(200)
-    expect(firstResponse.headers.get('X-AR-Cache')).toBe('d1')
+    expect(firstResponse.headers.get('X-AR-Cache')).toBe('kv')
+    expect(firstResponse.headers.get('X-AR-Analytics-Source')).toBe('snapshot')
     expect(secondResponse.status).toBe(200)
     expect(secondResponse.headers.get('X-AR-Cache')).toBe('kv')
+    expect(secondResponse.headers.get('X-AR-Analytics-Source')).toBe('snapshot')
   })
 
   it('serves savings consumer default chart-window series from D1 after refresh', async () => {
