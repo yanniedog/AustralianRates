@@ -632,7 +632,8 @@
                 rel.indexOf('report-plot') >= 0 ? 'report-plot' : 'series',
             )
             : inferSnapshotScopeForPage(section, new URLSearchParams(window.location.search || ''));
-        var pending = start(targetScope, { activate: true });
+        var wantsFull = isAnalyticsChartRequestPath(rel);
+        var pending = start(targetScope, wantsFull ? { activate: true, lite: false } : { activate: true });
         if (!pending) return Promise.resolve(null);
         var deadline = Math.max(0, Number(timeoutMs) || 0);
         return Promise.race([

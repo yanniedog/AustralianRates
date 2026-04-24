@@ -24,6 +24,11 @@ const MAX_BUFFER = 200
 const MAX_CONTEXT_CHARS = 8000
 /** Info/debug: smaller persisted JSON reduces D1 rows size and bandwidth to log viewers. */
 const MAX_CONTEXT_CHARS_INFO = 2000
+const PERSIST_LEVELS = new Set<LogLevel>(['warn', 'error'])
+const REPEATED_PERSIST_WINDOW_MS = 60_000
+const REPEATED_PERSIST_LIMIT = 3
+
+const _recentPersist = new Map<string, { windowStart: number; count: number }>()
 
 export function initLogger(db: D1Database): void {
   _db = db
@@ -121,6 +126,23 @@ function formatConsole(entry: PersistedLogEntry): string {
   return parts.join(' ')
 }
 
+function persistSignature(entry: PersistedLogEntry): string {
+  return [entry.level, entry.source, entry.message, entry.code || '', entry.runId || '', entry.lenderCode || ''].join('|')
+}
+
+function shouldPersist(entry: PersistedLogEntry): boolean {
+  if (!PERSIST_LEVELS.has(entry.level)) return false
+  const signature = persistSignature(entry)
+  const now = Date.now()
+  const existing = _recentPersist.get(signature)
+  if (!existing || now - existing.windowStart > REPEATED_PERSIST_WINDOW_MS) {
+    _recentPersist.set(signature, { windowStart: now, count: 1 })
+    return true
+  }
+  existing.count += 1
+  return existing.count <= REPEATED_PERSIST_LIMIT
+}
+
 async function persist(entry: PersistedLogEntry): Promise<void> {
   if (!_db) return
   const ctxCap = maxContextPersistChars(entry.level)
@@ -174,11 +196,11 @@ function emit(entry: LogEntry): void {
     console.log(line)
   }
 
-  if (_db) {
+  if (_db && shouldPersist(normalized)) {
     const p = persist(normalized)
     _pendingWrites.add(p)
     p.finally(() => _pendingWrites.delete(p))
-  } else if (_buffer.length < MAX_BUFFER) {
+  } else if (!_db && shouldPersist(normalized) && _buffer.length < MAX_BUFFER) {
     _buffer.push(normalized)
   }
 }

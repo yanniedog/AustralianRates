@@ -163,6 +163,7 @@ export async function getCachedOrComputeSnapshot(
   section: ChartCacheSection,
   scope: SnapshotScope,
   compute: () => Promise<SnapshotPayload>,
+  options?: { allowD1Fallback?: boolean; allowLiveCompute?: boolean },
 ): Promise<SnapshotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const kvKey = buildSnapshotKvKey(section, scope)
   if (env.CHART_CACHE_KV) {
@@ -178,10 +179,16 @@ export async function getCachedOrComputeSnapshot(
     }
   }
 
-  const d1Cached = await readD1SnapshotCache(env.DB, section, scope)
-  if (d1Cached) {
-    await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)
-    return { ...d1Cached, fromCache: 'd1' }
+  if (options?.allowD1Fallback !== false) {
+    const d1Cached = await readD1SnapshotCache(env.DB, section, scope)
+    if (d1Cached) {
+      await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, scope, d1Cached)
+      return { ...d1Cached, fromCache: 'd1' }
+    }
+  }
+
+  if (options?.allowLiveCompute === false) {
+    throw new Error(`snapshot_cache_miss:${section}:${scope}`)
   }
 
   const payload = await compute()

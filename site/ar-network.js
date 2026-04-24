@@ -144,12 +144,26 @@
         var label = String(opts.requestLabel || requestLabel(url, 'request'));
         var lastError = null;
 
+        var snapshotRequired = false;
         if (!opts.bypassSnapshot) {
+            var snap = window.AR && window.AR.snapshot;
+            snapshotRequired = !!(
+                snap
+                && typeof snap.isSnapshottableUrl === 'function'
+                && snap.isSnapshottableUrl(rawUrl)
+            );
             await awaitSnapshotIfApplicable(rawUrl, opts);
             var cached = readSnapshotCache(rawUrl);
             if (cached != null) {
                 var cachedText = JSON.stringify(cached);
                 return { data: cached, response: null, text: cachedText, attempts: 0, fromSnapshot: true };
+            }
+            if (snapshotRequired) {
+                var snapshotError = new Error(label + ' is unavailable in the public data package.');
+                snapshotError.code = 'snapshot_required';
+                snapshotError.userMessage = 'The public data package is not ready.';
+                snapshotError.requestLabel = label;
+                throw snapshotError;
             }
         }
 

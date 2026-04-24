@@ -3,8 +3,6 @@ import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { detectUpstreamBlock, upstreamBlockNote } from '../utils/upstream-block'
 
-const SUCCESS_SAMPLE_RATE = 0.05
-
 export type ProbeCaptureReason =
   | 'success'
   | 'api_invalid_payload'
@@ -24,9 +22,9 @@ function shouldCapture(
   policy: ProbeCapturePolicy,
 ): { capture: boolean; sampledSuccess: boolean } {
   if (reason !== 'success') return { capture: true, sampledSuccess: false }
-  if (policy === 'always') return { capture: true, sampledSuccess: false }
-  const sampled = Math.random() < SUCCESS_SAMPLE_RATE
-  return { capture: sampled, sampledSuccess: sampled }
+  // Success captures are disabled for cost control. Failure payloads still persist for triage.
+  void policy
+  return { capture: false, sampledSuccess: false }
 }
 
 function buildNotes(input: {

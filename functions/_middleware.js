@@ -281,6 +281,10 @@ export async function onRequest(context) {
     // Prefer direct KV read when the Pages project has the CHART_CACHE_KV binding
     // attached — avoids the zone routing loop that causes self-fetch 404s.
     let result = await fetchSnapshotFromKv(env, section, chartWindow, preset);
+    if ((!result || !result.ok) && kvBound) {
+        const diag = 'kv+';
+        return wrapOriginalResponse(originalResponse, 'miss:' + diag + ':' + (result ? result.reason : 'kv-unavailable'));
+    }
     if (!result || !result.ok) {
         // Fall back to HTTP subrequest (works when CF doesn't route back to Pages).
         result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);
