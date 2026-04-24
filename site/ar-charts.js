@@ -187,6 +187,11 @@
             parts.push(model.tdTermTime.terms.length + ' terms');
             return parts.filter(Boolean).join(' | ');
         }
+        if (currentFields.view === 'tdSettlementExpectations' && model.tdSettlementExpectations) {
+            parts.push(model.tdSettlementExpectations.categories.length + ' settlement dates');
+            parts.push(model.tdSettlementExpectations.snapshotDateDisplay || '');
+            return parts.filter(Boolean).join(' | ');
+        }
         if (currentFields.view === 'lenders' || currentFields.view === 'ladder') {
             parts.push(model.meta.visibleLenders.toLocaleString() + '/' + model.meta.totalLenders.toLocaleString() + ' lenders');
             return parts.join(' | ');
@@ -395,6 +400,12 @@
                 if (chartUi.setStatus) chartUi.setStatus('No term vs time data');
                 return;
             }
+            if (currentFields.view === 'tdSettlementExpectations' && (!model.tdSettlementExpectations || !model.tdSettlementExpectations.categories || !model.tdSettlementExpectations.categories.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No settlement curve data');
+                if (chartUi.setStatus) chartUi.setStatus('No settlement curve data');
+                return;
+            }
             if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
                 clearOutput('No lender match');
@@ -430,7 +441,7 @@
                     return;
                 }
             }
-            var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
+            var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'tdSettlementExpectations';
             var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
             if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && currentFields.view !== 'distribution' && (!model.visibleSeries.length || !model.surface.cells.length)) {
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
@@ -594,7 +605,7 @@
         if ((section === 'savings' || section === 'term-deposits') && !String(params.min_rate || '').trim()) {
             params.min_rate = '0.01';
         }
-        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
+        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'tdSettlementExpectations' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         if (currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport') {
             var shared = window.AR.chartMacroLwcShared;
@@ -1073,7 +1084,7 @@
             drawChart();
             return;
         }
-        if ((currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope') && chartState.loadedRepresentation !== 'day') {
+        if ((currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'tdSettlementExpectations' || currentFields.view === 'slope') && chartState.loadedRepresentation !== 'day') {
             drawChart();
             return;
         }
@@ -1097,7 +1108,7 @@
 
     function toggleSeries(seriesKey) {
         if (!seriesKey) return;
-        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'slope' || fields().view === 'ladder') {
+        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'tdSettlementExpectations' || fields().view === 'slope' || fields().view === 'ladder') {
             if (fields().view === 'market') chartState.marketFocusKey = seriesKey;
             if (!chartState.stale) renderFromCache();
             return;
