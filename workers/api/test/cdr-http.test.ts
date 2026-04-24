@@ -130,6 +130,38 @@ describe('CDR HTTP helpers', () => {
     }
   })
 
+  it('uses NAB-style minimum/maximum 406 details to probe version 4 successfully', async () => {
+    const requestedVersions: string[] = []
+    const testServer = await startTestServer((req, res) => {
+      const version = String(req.headers['x-v'] || '')
+      requestedVersions.push(version)
+      if (version === '4') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ data: { products: [{ productId: 'nab-v4-ok' }] } }))
+        return
+      }
+      res.writeHead(406, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          errors: [
+            {
+              code: 'urn:au-cds:error:cds-all:Header/UnsupportedVersion',
+              title: 'Unsupported Version',
+              detail: 'Minimum version supported is 3 and Maximum version supported is 4',
+            },
+          ],
+        }),
+      )
+    })
+    activeServers.push(testServer)
+
+    const result = await fetchCdrJson(`${testServer.baseUrl}/products`, [6, 5])
+
+    expect(result.ok).toBe(true)
+    expect(result.status).toBe(200)
+    expect(requestedVersions).toEqual(['6', '5', '4'])
+  })
+
   it('returns the last probe response when every version attempt fails (no unversioned final request)', async () => {
     const probes: string[] = []
     const testServer = await startTestServer((req, res) => {

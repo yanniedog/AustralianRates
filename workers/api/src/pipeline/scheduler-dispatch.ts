@@ -16,6 +16,7 @@ import { log } from '../utils/logger'
 import { refreshChartPivotCache, refreshPublicSnapshotPackages } from './chart-cache-refresh'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
+import { runPostIngestAssurance } from './post-ingest-assurance'
 import { runDailyBackup } from './daily-backup'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import { handleScheduledDaily } from './scheduled'
@@ -202,12 +203,17 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       context: `scheduled_time=${scheduledIso}`,
     })
     const packageResult = await refreshPublicSnapshotPackages(env)
+    const assurance = await runPostIngestAssurance(env, {
+      persist: true,
+      emitHardFailureLog: true,
+    })
     return {
-      ok: packageResult.ok,
+      ok: packageResult.ok && assurance.ok,
       skipped: false,
       kind: 'public_package_refresh',
       refreshed: packageResult.refreshed,
       errors: packageResult.errors,
+      post_ingest_assurance: assurance,
     }
   }
 
