@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="../public-showcase-hero.css?v=4faf4aee22">
     <link rel="stylesheet" href="../responsive.css?v=6337843280">
     <link rel="stylesheet" href="../mobile-host.css?v=52aa98da36">
-    <link rel="stylesheet" href="../economic-data.css?v=e32f38a719">
+    <link rel="stylesheet" href="../economic-data.css?v=95c683829d">
     <link rel="stylesheet" href="../public-polish.css?v=9a75534abd">
     <script src="../theme.js?v=13981d21ec"></script>
     <script src="../ar-polish-init.js?v=250bf4eb1e" defer></script>
@@ -88,6 +88,35 @@
             <article><span>Labour</span><strong id="economic-signal-labour">...</strong></article>
             <article><span>Wages</span><strong id="economic-signal-wages">...</strong></article>
             <article><span>Updated</span><strong id="economic-signal-updated">...</strong></article>
+        </section>
+        <section class="panel economic-forward-panel" aria-label="Bank forward pricing proxy">
+            <div class="economic-forward-head">
+                <div class="terminal-panel-head">
+                    <span class="panel-code">FWD</span>
+                    <h2 class="terminal-panel-title">Bank Pricing Path</h2>
+                </div>
+                <div id="forward-pricing-mode-row" class="economic-chip-row" role="group" aria-label="Forward pricing display mode">
+                    <button type="button" class="chip-btn secondary active" data-forward-mode="spread">Curve</button>
+                    <button type="button" class="chip-btn secondary" data-forward-mode="rate">Rates</button>
+                </div>
+            </div>
+            <div class="economic-forward-stats">
+                <article><span>RBA</span><strong id="forward-pricing-rba">...</strong></article>
+                <article><span>TD curve</span><strong id="forward-pricing-td-slope">...</strong></article>
+                <article><span>Mortgage curve</span><strong id="forward-pricing-mortgage-slope">...</strong></article>
+                <article><span>Rows</span><strong id="forward-pricing-sample">...</strong></article>
+                <article><span>Status</span><strong id="forward-pricing-status">Loading...</strong></article>
+            </div>
+            <p id="forward-pricing-meta" class="hint">Loading bank forward pricing...</p>
+            <div id="forward-pricing-chart" class="economic-forward-chart" role="img" aria-label="Term deposit and fixed mortgage pricing by future maturity"></div>
+            <div class="economic-forward-table-wrap">
+                <table class="economic-component-table economic-forward-table">
+                    <thead>
+                        <tr><th>Curve</th><th>Maturity</th><th>Median</th><th>Spread</th><th>Banks</th><th>Rows</th></tr>
+                    </thead>
+                    <tbody id="forward-pricing-table-body"></tbody>
+                </table>
+            </div>
         </section>
         <section class="market-terminal economic-terminal" aria-label="Economic data workspace">
             <section class="terminal-column terminal-column-center">
@@ -221,6 +250,7 @@
     <script src="../economic-chart-axis.js?v=2306b23aa5"></script>
     <script src="../economic-signals.js?v=09bf01646e"></script>
     <script src="../economic-legend-stack.js?v=37876617ef"></script>
+    <script src="../economic-forward-pricing.js?v=e6d01d04dc"></script>
     <script src="../economic-data.js?v=8336856bc3"></script>
     <script src="../frame.js?v=c96cee988c"></script>
     <script src="../site-variant-ui.js?v=42180e4ccd"></script>
