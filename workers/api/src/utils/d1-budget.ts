@@ -26,6 +26,14 @@ export const D1_WRITE_OVERAGE_PER_MILLION_USD = 1
 export const D1_OVERAGE_ALLOWANCE_USD = 20
 const LOCAL_USAGE_RETENTION_SECONDS = 35 * 24 * 60 * 60
 
+/** Cloudflare D1 published included tier vs overage pricing (USD). */
+export function computeD1OverageCostUsd(reads: number, writes: number): number {
+  const readOverage = Math.max(0, reads - D1_INCLUDED_MONTHLY_READS)
+  const writeOverage = Math.max(0, writes - D1_INCLUDED_MONTHLY_WRITES)
+  return (readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
+    + (writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD
+}
+
 function ymd(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -277,13 +285,6 @@ function addDays(date: Date, days: number): Date {
   return d
 }
 
-function costUsd(reads: number, writes: number): number {
-  const readOverage = Math.max(0, reads - D1_INCLUDED_MONTHLY_READS)
-  const writeOverage = Math.max(0, writes - D1_INCLUDED_MONTHLY_WRITES)
-  return (readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
-    + (writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD
-}
-
 async function readUsageForDate(env: EnvBindings, date: string): Promise<D1Usage | null> {
   const kv = budgetKv(env)
   if (!kv) return null
@@ -316,7 +317,7 @@ export async function readLocalD1BudgetState(env: EnvBindings, days = 31): Promi
       writes: usage?.writes ?? 0,
       updated_at: usage?.updated_at || '',
       by_class: usage?.by_class || emptyClassUsage(),
-      estimated_cost_usd: costUsd(usage?.reads ?? 0, usage?.writes ?? 0),
+      estimated_cost_usd: computeD1OverageCostUsd(usage?.reads ?? 0, usage?.writes ?? 0),
     })
   }
 
@@ -345,8 +346,8 @@ export async function readLocalD1BudgetState(env: EnvBindings, days = 31): Promi
       projected_writes: projectedWrites,
       read_quota_fraction: readFraction,
       write_quota_fraction: writeFraction,
-      estimated_overage_usd: costUsd(reads, writes),
-      projected_overage_usd: costUsd(projectedReads, projectedWrites),
+      estimated_overage_usd: computeD1OverageCostUsd(reads, writes),
+      projected_overage_usd: computeD1OverageCostUsd(projectedReads, projectedWrites),
     },
     guardrails: {
       warn: maxFraction >= 0.6,

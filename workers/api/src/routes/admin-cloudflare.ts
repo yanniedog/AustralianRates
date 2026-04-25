@@ -6,8 +6,10 @@ import {
   D1_OVERAGE_ALLOWANCE_USD,
   D1_READ_OVERAGE_PER_MILLION_USD,
   D1_WRITE_OVERAGE_PER_MILLION_USD,
+  computeD1OverageCostUsd,
   readLocalD1BudgetState,
 } from '../utils/d1-budget'
+import { aggregateD1UsageByMonth, buildD1UsageSeries } from '../utils/d1-usage-analytics'
 import { jsonError } from '../utils/http'
 
 const DEFAULT_D1_DATABASE_ID = 'de6d4315-686b-4022-b080-956ca3819976'
@@ -27,8 +29,8 @@ type D1UsageDay = {
 
 function clampDays(value: string | undefined): number {
   const parsed = Math.floor(Number(value))
-  if (!Number.isFinite(parsed)) return 31
-  return Math.max(1, Math.min(31, parsed))
+  if (!Number.isFinite(parsed)) return 90
+  return Math.max(1, Math.min(120, parsed))
 }
 
 function dateDaysAgo(days: number): string {
@@ -37,11 +39,8 @@ function dateDaysAgo(days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
-function costUsd(reads: number, writes: number): number {
-  const readOverage = Math.max(0, reads - D1_INCLUDED_MONTHLY_READS)
-  const writeOverage = Math.max(0, writes - D1_INCLUDED_MONTHLY_WRITES)
-  return (readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
-    + (writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD
+function sortDaysByDate(days: D1UsageDay[]): D1UsageDay[] {
+  return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
 
 function summarizeMonth(days: D1UsageDay[]) {
@@ -57,18 +56,32 @@ function summarizeMonth(days: D1UsageDay[]) {
   const readQuotaFraction = projectedReads / D1_INCLUDED_MONTHLY_READS
   const writeQuotaFraction = projectedWrites / D1_INCLUDED_MONTHLY_WRITES
   const maxFraction = Math.max(readQuotaFraction, writeQuotaFraction)
+  const readsPctIncludedMtd = reads / D1_INCLUDED_MONTHLY_READS
+  const writesPctIncludedMtd = writes / D1_INCLUDED_MONTHLY_WRITES
+  const projectedReadRowsOverage = Math.max(0, projectedReads - D1_INCLUDED_MONTHLY_READS)
+  const projectedWriteRowsOverage = Math.max(0, projectedWrites - D1_INCLUDED_MONTHLY_WRITES)
+  const mtdReadRowsOverage = Math.max(0, reads - D1_INCLUDED_MONTHLY_READS)
+  const mtdWriteRowsOverage = Math.max(0, writes - D1_INCLUDED_MONTHLY_WRITES)
 
   return {
     month,
+    period_basis: 'utc_calendar_month' as const,
     elapsed_days: elapsedDays,
+    days_in_calendar_month: daysInMonth,
     reads,
     writes,
     projected_reads: projectedReads,
     projected_writes: projectedWrites,
     read_quota_fraction: readQuotaFraction,
     write_quota_fraction: writeQuotaFraction,
-    estimated_overage_usd: costUsd(reads, writes),
-    projected_overage_usd: costUsd(projectedReads, projectedWrites),
+    reads_pct_included_mtd: readsPctIncludedMtd,
+    writes_pct_included_mtd: writesPctIncludedMtd,
+    projected_read_rows_overage: projectedReadRowsOverage,
+    projected_write_rows_overage: projectedWriteRowsOverage,
+    mtd_read_rows_overage: mtdReadRowsOverage,
+    mtd_write_rows_overage: mtdWriteRowsOverage,
+    estimated_overage_usd: computeD1OverageCostUsd(reads, writes),
+    projected_overage_usd: computeD1OverageCostUsd(projectedReads, projectedWrites),
     guardrails: {
       warn: maxFraction >= 0.6,
       restrict_nonessential: maxFraction >= 0.8,
@@ -85,7 +98,7 @@ function graphqlQuery() {
       viewer {
         accounts(filter: { accountTag: $accountTag }) {
           d1AnalyticsAdaptiveGroups(
-            limit: 100
+            limit: 500
             filter: { databaseId: $databaseId, date_geq: $since }
             orderBy: [date_ASC]
           ) {
@@ -175,13 +188,21 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
     const cloudflareDays = await fetchCloudflareD1Usage(c.env, days)
     const source = cloudflareDays ? 'cloudflare_graphql' : 'local_advisory'
     const usageDays = cloudflareDays ?? await fallbackLocalUsage(c.env, days)
-    const month = summarizeMonth(usageDays)
+    const sorted = sortDaysByDate(usageDays)
+    const month = summarizeMonth(sorted)
+    const dayRows = sorted.map((d) => ({ date: d.date, reads: d.reads, writes: d.writes }))
+    const history_months = aggregateD1UsageByMonth(dayRows)
+    const series = buildD1UsageSeries(dayRows)
     return c.json({
       ok: true,
       auth_mode: c.get('adminAuthState')?.mode ?? null,
       source,
       generated_at: new Date().toISOString(),
       quotas: {
+        allowance_label: 'Cloudflare D1 included monthly (published list pricing)',
+        allowance_source: 'cloudflare_d1_published_included_tier',
+        billing_cycle_note:
+          'This page rolls up by UTC calendar month. Your Cloudflare invoice window may follow a different account cycle; align dates in the Cloudflare billing dashboard when reconciling.',
         d1_reads_included_monthly: D1_INCLUDED_MONTHLY_READS,
         d1_writes_included_monthly: D1_INCLUDED_MONTHLY_WRITES,
         d1_read_overage_per_million_usd: D1_READ_OVERAGE_PER_MILLION_USD,
@@ -189,7 +210,9 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
         accepted_coverage_overage_usd: D1_OVERAGE_ALLOWANCE_USD,
       },
       month,
-      days: usageDays,
+      history_months,
+      series,
+      days: sorted,
     })
   } catch (error) {
     return jsonError(

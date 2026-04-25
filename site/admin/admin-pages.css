@@ -263,6 +263,91 @@
     background: var(--ar-warning);
 }
 
+.d1-billing-note {
+    margin: 0 0 0.75rem;
+    max-width: 72ch;
+}
+
+.d1-meter-block {
+    margin-bottom: 1rem;
+}
+
+.d1-meter-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.35rem 1rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.d1-meter {
+    height: 10px;
+    background: color-mix(in srgb, var(--ar-line) 88%, transparent);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.d1-meter-fill {
+    height: 100%;
+    min-width: 2px;
+    background: var(--ar-accent);
+    border-radius: 5px;
+    transition: width 0.2s ease;
+}
+
+.d1-meter-over .d1-meter-fill {
+    background: var(--ar-danger);
+}
+
+.d1-meter-cap {
+    font-size: 0.72rem;
+    color: var(--ar-text-muted);
+    margin-top: 0.2rem;
+}
+
+.d1-proj-grid {
+    margin-top: 1rem;
+}
+
+.d1-chart-scroll {
+    overflow-x: auto;
+    margin: 0.5rem 0 0;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+    background: var(--ar-surface);
+}
+
+.d1-trend-svg {
+    display: block;
+    min-width: 100%;
+    height: 220px;
+}
+
+.d1-trend-bg {
+    fill: color-mix(in srgb, var(--ar-surface) 96%, var(--ar-line));
+}
+
+.d1-line-raw {
+    stroke: var(--ar-accent);
+    stroke-width: 2;
+}
+
+.d1-line-ma {
+    stroke: var(--ar-positive);
+    stroke-width: 2;
+}
+
+.d1-trend-line {
+    stroke: var(--ar-warning);
+    stroke-width: 1.5;
+}
+
+.d1-trend-meta {
+    margin: 0.35rem 0 0;
+    font-size: 0.78rem;
+}
+
 .admin-status .integrity-audit-traffic {
     display: flex;
     align-items: center;
