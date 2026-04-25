@@ -117,6 +117,19 @@
         if (!match) return null;
         return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Math.min(Number(match[3]), 28)));
     }
+    /** ECharts time-axis label formatter receives ms timestamps; series data may be YYYY-MM-DD strings. */
+    function coerceChartDate(value) {
+        if (value == null || value === '') return null;
+        if (value instanceof Date) {
+            return Number.isFinite(value.getTime()) ? value : null;
+        }
+        var fromYmd = parseDate(value);
+        if (fromYmd) return fromYmd;
+        var n = typeof value === 'number' ? value : Number(value);
+        if (!Number.isFinite(n)) return null;
+        var date = new Date(n);
+        return Number.isFinite(date.getTime()) ? date : null;
+    }
     function addMonthsYmd(dateText, months) {
         var date = parseDate(dateText);
         if (!date) return '';
@@ -242,13 +255,13 @@
     }
 
     function dateLabel(value) {
-        var date = parseDate(value);
+        var date = coerceChartDate(value);
         if (!date) return String(value || '');
         return date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric', timeZone: 'UTC' });
     }
 
     function fullDateLabel(value) {
-        var date = parseDate(value);
+        var date = coerceChartDate(value);
         if (!date) return String(value || '');
         return date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
     }
