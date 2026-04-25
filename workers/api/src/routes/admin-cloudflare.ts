@@ -125,7 +125,7 @@ function graphqlQuery() {
 
 async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D1UsageDay[] | null> {
   const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim()
-  const token = String(env.CLOUDFLARE_API_TOKEN || '').trim()
+  const token = String(env.CLOUDFLARE_GRAPHQL_API_TOKEN || env.CLOUDFLARE_API_TOKEN || '').trim()
   if (!accountId || !token) return null
   const databaseId = String(env.CLOUDFLARE_D1_DATABASE_ID || DEFAULT_D1_DATABASE_ID).trim()
   const response = await fetch(GRAPHQL_URL, {
