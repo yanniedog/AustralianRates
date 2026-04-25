@@ -118,6 +118,117 @@
                 return n ? n + ' B' : 'n/a';
             }
 
+            function iso(date) {
+                return date.toISOString().slice(0, 10);
+            }
+
+            function utcDate(year, monthIndex, day) {
+                return new Date(Date.UTC(year, monthIndex, day));
+            }
+
+            function daysInUtcMonth(year, monthIndex) {
+                return utcDate(year, monthIndex + 1, 0).getUTCDate();
+            }
+
+            function clampCycleDay(year, monthIndex, cycleDay) {
+                return Math.min(cycleDay, daysInUtcMonth(year, monthIndex));
+            }
+
+            function daysInclusive(start, end) {
+                var ms = 24 * 60 * 60 * 1000;
+                return Math.max(1, Math.floor((end.getTime() - start.getTime()) / ms) + 1);
+            }
+
+            function resolveBillingPeriod(now, cycleDay) {
+                var day = Math.min(31, Math.max(1, Math.floor(Number(cycleDay || 21))));
+                var year = now.getUTCFullYear();
+                var month = now.getUTCMonth();
+                var currentStart = utcDate(year, month, clampCycleDay(year, month, day));
+                var start = now >= currentStart ? currentStart : utcDate(year, month - 1, clampCycleDay(year, month - 1, day));
+                var nextStart = utcDate(start.getUTCFullYear(), start.getUTCMonth() + 1, clampCycleDay(start.getUTCFullYear(), start.getUTCMonth() + 1, day));
+                var end = utcDate(nextStart.getUTCFullYear(), nextStart.getUTCMonth(), nextStart.getUTCDate() - 1);
+                return {
+                    start_date: iso(start),
+                    end_date: iso(end),
+                    label: iso(start) + ' to ' + iso(end),
+                    cycle_start_day: day,
+                    elapsed_days: daysInclusive(start, now > end ? end : now),
+                    days_in_period: daysInclusive(start, end)
+                };
+            }
+
+            function computeOverage(q, reads, writes) {
+                var readOver = Math.max(0, Number(reads || 0) - Number(q.d1_reads_included_monthly || 0));
+                var writeOver = Math.max(0, Number(writes || 0) - Number(q.d1_writes_included_monthly || 0));
+                return (readOver / 1000000) * Number(q.d1_read_overage_per_million_usd || 0) +
+                    (writeOver / 1000000) * Number(q.d1_write_overage_per_million_usd || 0);
+            }
+
+            function periodForDate(date, cycleDay) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return null;
+                return resolveBillingPeriod(new Date(date + 'T12:00:00.000Z'), cycleDay);
+            }
+
+            function buildBillingHistory(days, q, cycleDay) {
+                var map = {};
+                (days || []).forEach(function (day) {
+                    var p = periodForDate(day.date, cycleDay);
+                    if (!p) return;
+                    var row = map[p.start_date] || { period: p.label, start_date: p.start_date, end_date: p.end_date, day_count: 0, reads: 0, writes: 0 };
+                    row.day_count += 1;
+                    row.reads += Math.max(0, Number(day.reads || 0));
+                    row.writes += Math.max(0, Number(day.writes || 0));
+                    row.overage_usd = computeOverage(q, row.reads, row.writes);
+                    map[p.start_date] = row;
+                });
+                return Object.keys(map).sort().reverse().map(function (key) { return map[key]; });
+            }
+
+            function ensureBillingPeriod(data) {
+                var q = data.quotas || {};
+                var m = data.month || {};
+                if (m.period && data.history_billing_periods) return data;
+                var cycleDay = Number(q.billing_cycle_start_day || 21);
+                var period = resolveBillingPeriod(new Date(data.generated_at || Date.now()), cycleDay);
+                var periodDays = (data.days || []).filter(function (day) { return day.date >= period.start_date && day.date <= period.end_date; });
+                var reads = periodDays.reduce(function (sum, day) { return sum + Math.max(0, Number(day.reads || 0)); }, 0);
+                var writes = periodDays.reduce(function (sum, day) { return sum + Math.max(0, Number(day.writes || 0)); }, 0);
+                var projectedReads = Math.round((reads / period.elapsed_days) * period.days_in_period);
+                var projectedWrites = Math.round((writes / period.elapsed_days) * period.days_in_period);
+                data.month = Object.assign({}, m, {
+                    period: period.label,
+                    period_basis: 'cloudflare_account_billing_cycle',
+                    period_start_date: period.start_date,
+                    period_end_date: period.end_date,
+                    billing_cycle_start_day: period.cycle_start_day,
+                    elapsed_days: period.elapsed_days,
+                    days_in_period: period.days_in_period,
+                    reads: reads,
+                    writes: writes,
+                    projected_reads: projectedReads,
+                    projected_writes: projectedWrites,
+                    read_quota_fraction: projectedReads / Number(q.d1_reads_included_monthly || 1),
+                    write_quota_fraction: projectedWrites / Number(q.d1_writes_included_monthly || 1),
+                    reads_pct_included_mtd: reads / Number(q.d1_reads_included_monthly || 1),
+                    writes_pct_included_mtd: writes / Number(q.d1_writes_included_monthly || 1),
+                    projected_read_rows_overage: Math.max(0, projectedReads - Number(q.d1_reads_included_monthly || 0)),
+                    projected_write_rows_overage: Math.max(0, projectedWrites - Number(q.d1_writes_included_monthly || 0)),
+                    mtd_read_rows_overage: Math.max(0, reads - Number(q.d1_reads_included_monthly || 0)),
+                    mtd_write_rows_overage: Math.max(0, writes - Number(q.d1_writes_included_monthly || 0)),
+                    estimated_overage_usd: computeOverage(q, reads, writes),
+                    projected_overage_usd: computeOverage(q, projectedReads, projectedWrites)
+                });
+                data.quotas = Object.assign({}, q, {
+                    billing_cycle_note: q.billing_cycle_note || 'This page rolls up by the Cloudflare account billing period (' + period.label + '). Daily rows are UTC analytics dates.',
+                    billing_period: period.label,
+                    billing_period_start_date: period.start_date,
+                    billing_period_end_date: period.end_date,
+                    billing_cycle_start_day: period.cycle_start_day
+                });
+                data.history_billing_periods = buildBillingHistory(data.days || [], data.quotas, period.cycle_start_day);
+                return data;
+            }
+
             function meterRow(label, fraction, mtLabel, mtValue) {
                 var pctVal = Number(fraction || 0) * 100;
                 var w = Math.min(100, pctVal);
@@ -307,6 +418,7 @@
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         if (!data.ok) throw new Error(data.error && data.error.message ? data.error.message : 'Usage failed');
+                        data = ensureBillingPeriod(data);
                         sourceLine.textContent = 'Source: ' + data.source + ' | Generated: ' + data.generated_at;
                         renderUsageDashboard(data);
                         renderGuardrails(data);
