@@ -115,9 +115,7 @@ function graphqlQuery() {
               rowsRead
               rowsWritten
               queryBatchResponseBytes
-              queryBatchTimeMs
             }
-            max { databaseSizeBytes }
           }
         }
       }
@@ -152,11 +150,9 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D
   const groups = (accounts[0]?.d1AnalyticsAdaptiveGroups ?? []) as Array<{
     dimensions?: { date?: string }
     sum?: Record<string, number>
-    max?: Record<string, number>
   }>
   return groups.map((group) => {
     const sum = group.sum ?? {}
-    const max = group.max ?? {}
     return {
       date: String(group.dimensions?.date || ''),
       reads: Math.max(0, Number(sum.rowsRead || 0)),
@@ -164,8 +160,8 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D
       read_queries: Math.max(0, Number(sum.readQueries || 0)),
       write_queries: Math.max(0, Number(sum.writeQueries || 0)),
       response_bytes: Math.max(0, Number(sum.queryBatchResponseBytes || 0)),
-      query_time_ms: Math.max(0, Number(sum.queryBatchTimeMs || 0)),
-      storage_bytes: Math.max(0, Number(max.databaseSizeBytes || 0)),
+      query_time_ms: 0,
+      storage_bytes: 0,
       estimated_cost_usd: 0,
     }
   }).filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
