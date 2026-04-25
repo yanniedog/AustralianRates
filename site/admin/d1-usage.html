@@ -25,7 +25,7 @@
         <div class="admin-page-head">
             <p class="eyebrow">Cost</p>
             <h1><abbr title="Cloudflare D1 database">D1</abbr> usage</h1>
-            <p class="admin-subtitle">Included tier, MTD %, projection, monthly history, 7d MA and OLS trend.</p>
+            <p class="admin-subtitle">Included tier, period %, projection, billing history, 7d MA and OLS trend.</p>
         </div>
         <div class="admin-message" id="msg" role="alert"></div>
         <div class="admin-toolbar">
@@ -42,7 +42,7 @@
             <div class="d1-guard-grid" id="guard-grid"></div>
         </section>
         <section class="admin-card" aria-labelledby="hist-heading">
-            <h2 id="hist-heading">Monthly history</h2>
+            <h2 id="hist-heading">Billing period history</h2>
             <div class="admin-table-wrap" id="history-wrap"></div>
         </section>
         <section class="admin-card" aria-labelledby="trend-r-heading">
@@ -127,7 +127,7 @@
                     '<span>' + esc(mtLabel) + ': ' + esc(mtValue) + '</span></div>' +
                     '<div class="d1-meter ' + (over ? 'd1-meter-over' : '') + '">' +
                     '<div class="d1-meter-fill" style="width:' + w + '%"></div></div>' +
-                    '<div class="d1-meter-cap">' + pctVal.toFixed(1) + '% of included (MTD)</div></div>';
+                    '<div class="d1-meter-cap">' + pctVal.toFixed(1) + '% of included (period to date)</div></div>';
             }
 
             function cell(label, value) {
@@ -140,19 +140,19 @@
                 billingNote.textContent = (q.billing_cycle_note || '') + ' ' + (q.allowance_label || '');
                 var latestStorage = (data.days || []).slice().reverse().find(function (day) { return Number(day.storage_bytes || 0) > 0; });
                 usageDashboard.innerHTML =
-                    meterRow('Rows read vs included', m.reads_pct_included_mtd, 'MTD rows', num(m.reads) + ' / ' + num(q.d1_reads_included_monthly)) +
-                    meterRow('Rows written vs included', m.writes_pct_included_mtd, 'MTD rows', num(m.writes) + ' / ' + num(q.d1_writes_included_monthly)) +
+                    meterRow('Rows read vs included', m.reads_pct_included_mtd, 'Period rows', num(m.reads) + ' / ' + num(q.d1_reads_included_monthly)) +
+                    meterRow('Rows written vs included', m.writes_pct_included_mtd, 'Period rows', num(m.writes) + ' / ' + num(q.d1_writes_included_monthly)) +
                     '<div class="admin-summary-grid d1-proj-grid">' +
-                    cell('Projected reads (month-end)', num(m.projected_reads) + ' (' + pct(m.read_quota_fraction) + ' of included)') +
-                    cell('Projected writes (month-end)', num(m.projected_writes) + ' (' + pct(m.write_quota_fraction) + ' of included)') +
+                    cell('Projected reads (period-end)', num(m.projected_reads) + ' (' + pct(m.read_quota_fraction) + ' of included)') +
+                    cell('Projected writes (period-end)', num(m.projected_writes) + ' (' + pct(m.write_quota_fraction) + ' of included)') +
                     cell('Projected row overage (reads)', num(m.projected_read_rows_overage)) +
                     cell('Projected row overage (writes)', num(m.projected_write_rows_overage)) +
-                    cell('MTD row overage (reads)', num(m.mtd_read_rows_overage)) +
-                    cell('MTD row overage (writes)', num(m.mtd_write_rows_overage)) +
-                    cell('MTD overage cost (if billed on MTD totals)', money(m.estimated_overage_usd)) +
-                    cell('Projected month-end overage cost', money(m.projected_overage_usd)) +
+                    cell('Period row overage (reads)', num(m.mtd_read_rows_overage)) +
+                    cell('Period row overage (writes)', num(m.mtd_write_rows_overage)) +
+                    cell('Period overage cost', money(m.estimated_overage_usd)) +
+                    cell('Projected period-end overage cost', money(m.projected_overage_usd)) +
                     cell('Storage (latest day)', bytes(latestStorage && latestStorage.storage_bytes)) +
-                    cell('Period', (m.month || '') + ' · day ' + String(m.elapsed_days || '') + ' / ' + String(m.days_in_calendar_month || '') + ' UTC') +
+                    cell('Billing period', (m.period || m.month || '') + ' · day ' + String(m.elapsed_days || '') + ' / ' + String(m.days_in_period || m.days_in_calendar_month || '')) +
                     '</div>';
             }
 
@@ -172,16 +172,16 @@
             }
 
             function renderHistory(data) {
-                var rows = data.history_months || [];
+                var rows = data.history_billing_periods || data.history_months || [];
                 if (!rows.length) {
                     historyWrap.innerHTML = '<p class="admin-muted">No history in range.</p>';
                     return;
                 }
                 historyWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
-                    '<th>Month</th><th>Days in range</th><th>Rows read</th><th>Rows written</th><th>Overage USD</th>' +
+                    '<th>Period</th><th>Days in range</th><th>Rows read</th><th>Rows written</th><th>Overage USD</th>' +
                     '</tr></thead><tbody>' +
                     rows.map(function (r) {
-                        return '<tr><td>' + esc(r.month) + '</td><td>' + esc(String(r.day_count)) + '</td><td>' + num(r.reads) + '</td><td>' + num(r.writes) + '</td><td>' + money(r.overage_usd) + '</td></tr>';
+                        return '<tr><td>' + esc(r.period || r.month) + '</td><td>' + esc(String(r.day_count)) + '</td><td>' + num(r.reads) + '</td><td>' + num(r.writes) + '</td><td>' + money(r.overage_usd) + '</td></tr>';
                     }).join('') +
                     '</tbody></table>';
             }
@@ -283,7 +283,7 @@
             function renderTable(data) {
                 var rows = data.days || [];
                 tableWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
-                    '<th>Date</th><th>Rows read</th><th>Rows written</th><th>Read queries</th><th>Write queries</th><th>Response</th><th>Storage</th>' +
+                    '<th>UTC date</th><th>Rows read</th><th>Rows written</th><th>Read queries</th><th>Write queries</th><th>Response</th><th>Storage</th>' +
                     '</tr></thead><tbody>' +
                     rows.map(function (day) {
                         return '<tr><td>' + esc(day.date) + '</td><td>' + num(day.reads) + '</td><td>' + num(day.writes) + '</td><td>' + num(day.read_queries) + '</td><td>' + num(day.write_queries) + '</td><td>' + bytes(day.response_bytes) + '</td><td>' + bytes(day.storage_bytes) + '</td></tr>';
