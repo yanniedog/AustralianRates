@@ -19,6 +19,7 @@ import { jsonError } from '../utils/http'
 
 const DEFAULT_D1_DATABASE_ID = 'de6d4315-686b-4022-b080-956ca3819976'
 const GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql'
+const GRAPHQL_MAX_HISTORY_DAYS = 84
 const GRAPHQL_MAX_DAYS_PER_QUERY = 28
 
 type D1UsageDay = {
@@ -193,8 +194,9 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<C
     return { days: null, error: !accountId ? 'missing_cloudflare_account_id' : 'missing_cloudflare_graphql_token' }
   }
   const databaseId = String(env.CLOUDFLARE_D1_DATABASE_ID || DEFAULT_D1_DATABASE_ID).trim()
+  const effectiveDays = Math.min(days, GRAPHQL_MAX_HISTORY_DAYS)
   const end = new Date()
-  let cursor = dateDaysAgo(days)
+  let cursor = dateDaysAgo(effectiveDays)
   const rows: D1UsageDay[] = []
   while (cursor <= end) {
     const chunkEnd = new Date(Math.min(addUtcDays(cursor, GRAPHQL_MAX_DAYS_PER_QUERY - 1).getTime(), end.getTime()))
