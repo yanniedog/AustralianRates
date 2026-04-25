@@ -290,6 +290,60 @@ export async function claimReplayQueueRows(
   return claimed
 }
 
+export async function requeueStaleDispatchingReplayRows(
+  db: D1Database,
+  input: { staleMinutes?: number; limit?: number } = {},
+): Promise<number> {
+  const staleMinutes = Math.max(15, Math.min(240, Math.floor(Number(input.staleMinutes) || 45)))
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(input.limit) || 25)))
+  const now = new Date().toISOString()
+  const cutoff = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString()
+  const staleRows = await db
+    .prepare(
+      `SELECT replay_id
+       FROM ingest_replay_queue
+       WHERE status = 'dispatching'
+         AND updated_at <= ?1
+       ORDER BY updated_at ASC
+       LIMIT ?2`,
+    )
+    .bind(cutoff, limit)
+    .all<{ replay_id: string }>()
+
+  let requeued = 0
+  for (const row of staleRows.results ?? []) {
+    const update = await db
+      .prepare(
+        `UPDATE ingest_replay_queue
+         SET status = CASE
+               WHEN replay_attempt_count >= max_replay_attempts THEN 'failed'
+               ELSE 'queued'
+             END,
+             last_error = CASE
+               WHEN replay_attempt_count >= max_replay_attempts THEN 'replay_dispatching_stale_exhausted'
+               ELSE 'replay_dispatching_stale_requeued'
+             END,
+             next_attempt_at = CASE
+               WHEN replay_attempt_count >= max_replay_attempts THEN next_attempt_at
+               ELSE ?1
+             END,
+             resolved_at = CASE
+               WHEN replay_attempt_count >= max_replay_attempts THEN ?1
+               ELSE NULL
+             END,
+             updated_at = ?1
+         WHERE replay_id = ?2
+           AND status = 'dispatching'
+           AND updated_at <= ?3`,
+      )
+      .bind(now, row.replay_id, cutoff)
+      .run()
+    if (Number(update.meta?.changes ?? 0) > 0) requeued += 1
+  }
+
+  return requeued
+}
+
 export async function markReplayQueueSuccess(db: D1Database, replayId: string): Promise<void> {
   const now = new Date().toISOString()
   await db

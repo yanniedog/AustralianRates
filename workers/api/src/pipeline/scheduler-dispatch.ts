@@ -18,6 +18,7 @@ import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
 import { runPostIngestAssurance } from './post-ingest-assurance'
 import { runDailyBackup } from './daily-backup'
+import { runReplayQueueMaintenance } from './replay-queue'
 import { runLifecycleReconciliation } from './run-reconciliation'
 import { handleScheduledDaily } from './scheduled'
 import { runSiteHealthChecks } from './site-health'
@@ -69,6 +70,7 @@ export function scheduledTasksForCron(cron: string): ScheduledTask[] {
 async function runSiteHealthCron(env: EnvBindings) {
   const origin = 'https://www.australianrates.com'
   let reconciliation: Awaited<ReturnType<typeof runLifecycleReconciliation>> | null = null
+  let replayMaintenance: Awaited<ReturnType<typeof runReplayQueueMaintenance>> | null = null
   try {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
@@ -92,6 +94,18 @@ async function runSiteHealthCron(env: EnvBindings) {
   } catch (error) {
     log.error('scheduler', 'Site health preflight reconciliation failed', {
       code: 'run_lifecycle_reconciliation_failed',
+      error,
+      context: 'site_health_cron_preflight',
+    })
+  }
+  try {
+    replayMaintenance = await runReplayQueueMaintenance(env, {
+      limit: 10,
+      source: 'site_health_cron',
+    })
+  } catch (error) {
+    log.error('scheduler', 'Replay queue maintenance failed during site health cron', {
+      code: 'replay_queue_dispatch_failed',
       error,
       context: 'site_health_cron_preflight',
     })
@@ -124,6 +138,7 @@ async function runSiteHealthCron(env: EnvBindings) {
     overall_ok: result.overallOk,
     failures: result.failures.length,
     reconciliation,
+    replay_maintenance: replayMaintenance,
   }
 }
 
@@ -142,6 +157,10 @@ async function runHourlyMaintenanceCron(
     refreshChartPivotCache(env),
     collectRbaCashRateForDate(env.DB, melbourneParts.date, env),
   ])
+  const replayMaintenance = await runReplayQueueMaintenance(env, {
+    limit: 25,
+    source: 'hourly_maintenance_cron',
+  })
 
   if (rbaResult.status === 'rejected') {
     log.warn('scheduler', 'RBA cash rate collection failed in hourly maintenance cron', {
@@ -174,6 +193,7 @@ async function runHourlyMaintenanceCron(
     hourly_wayback: coverageResult.value,
     chart_cache: chartCacheResult.status === 'fulfilled' ? chartCacheResult.value : undefined,
     rba: rbaResult.status === 'fulfilled' ? rbaResult.value : undefined,
+    replay_maintenance: replayMaintenance,
   }
 }
 
