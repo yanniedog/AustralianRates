@@ -299,6 +299,27 @@
         return lines.join('<hr>');
     }
 
+    /** Legend hover copy (ECharts legend.tooltip); names must match series `name`. */
+    function forwardPricingLegendHint(params) {
+        var name = '';
+        if (typeof params === 'string') {
+            name = params;
+        } else if (params && params.name != null) {
+            name = String(params.name);
+        }
+        var hints = {
+            'TD IQR base': 'Q1 (or Q1 spread) baseline for the stacked TD IQR band; line hidden.',
+            'TD IQR': 'TD offers from 25th to 75th percentile across banks at each maturity.',
+            'Fixed mortgage IQR base': 'Q1 baseline for the stacked fixed mortgage IQR band; line hidden.',
+            'Fixed mortgage IQR': 'Fixed P&I OO rates from 25th to 75th percentile across banks at each maturity.',
+            'TD median': 'Median TD rate at each maturity across quoted banks.',
+            'Fixed mortgage median': 'Median fixed P&I OO rate at each maturity across quoted banks.',
+            'Near-term baseline': '0 bps in spread mode: each curve vs its own shortest maturity.',
+            'Current RBA': 'RBA cash rate on the snapshot date (horizontal reference in rate mode).',
+        };
+        return hints[name] || name;
+    }
+
     function bandSeries(name, curve, color) {
         return [
             {
@@ -416,7 +437,17 @@
             backgroundColor: 'transparent',
             textStyle: { color: theme.softText, fontFamily: '"Space Grotesk", "Segoe UI", system-ui, sans-serif' },
             color: [tdColor, mortgageColor],
-            legend: { bottom: 0, type: 'scroll', textStyle: { color: theme.mutedText, fontSize: 11 } },
+            legend: {
+                bottom: 0,
+                type: 'scroll',
+                textStyle: { color: theme.mutedText, fontSize: 11 },
+                tooltip: Object.assign({
+                    show: true,
+                    confine: true,
+                    transitionDuration: 0,
+                    formatter: forwardPricingLegendHint,
+                }, tooltipStyles()),
+            },
             tooltip: Object.assign({
                 trigger: 'axis',
                 confine: true,
