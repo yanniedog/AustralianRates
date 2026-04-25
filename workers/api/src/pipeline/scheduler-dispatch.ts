@@ -222,6 +222,10 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
     log.info('scheduler', `Dispatching public package refresh cron (${cron})`, {
       context: `scheduled_time=${scheduledIso}`,
     })
+    const replayMaintenance = await runReplayQueueMaintenance(env, {
+      limit: 25,
+      source: 'public_package_refresh_cron',
+    })
     const packageResult = await refreshPublicSnapshotPackages(env)
     const assurance = await runPostIngestAssurance(env, {
       persist: true,
@@ -233,6 +237,7 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
       kind: 'public_package_refresh',
       refreshed: packageResult.refreshed,
       errors: packageResult.errors,
+      replay_maintenance: replayMaintenance,
       post_ingest_assurance: assurance,
     }
   }
