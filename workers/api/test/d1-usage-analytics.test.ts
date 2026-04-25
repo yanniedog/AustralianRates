@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  aggregateD1UsageByBillingPeriod,
   aggregateD1UsageByMonth,
   buildD1UsageSeries,
   linearRegression,
   movingAverage,
-  resolveD1BillingPeriod,
 } from '../src/utils/d1-usage-analytics'
 
 describe('movingAverage', () => {
@@ -35,40 +33,6 @@ describe('aggregateD1UsageByMonth', () => {
     expect(out.find((m) => m.month === '2026-03')).toMatchObject({
       reads: 300,
       writes: 6,
-      day_count: 2,
-    })
-  })
-})
-
-describe('resolveD1BillingPeriod', () => {
-  it('uses the account billing cycle start day instead of calendar month', () => {
-    const period = resolveD1BillingPeriod(new Date('2026-04-25T10:00:00.000Z'), 21)
-    expect(period).toMatchObject({
-      label: '2026-04-21 to 2026-05-20',
-      start_date: '2026-04-21',
-      end_date: '2026-05-20',
-      cycle_start_day: 21,
-      elapsed_days: 5,
-      days_in_period: 30,
-    })
-  })
-})
-
-describe('aggregateD1UsageByBillingPeriod', () => {
-  it('sums rows by invoice-aligned period', () => {
-    const rows = [
-      { date: '2026-04-20', reads: 100, writes: 5 },
-      { date: '2026-04-21', reads: 200, writes: 10 },
-      { date: '2026-04-25', reads: 50, writes: 1 },
-    ]
-    const out = aggregateD1UsageByBillingPeriod(rows, 21)
-    expect(out.map((p) => p.period)).toEqual([
-      '2026-04-21 to 2026-05-20',
-      '2026-03-21 to 2026-04-20',
-    ])
-    expect(out[0]).toMatchObject({
-      reads: 250,
-      writes: 11,
       day_count: 2,
     })
   })

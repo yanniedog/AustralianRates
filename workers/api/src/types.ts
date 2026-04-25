@@ -284,8 +284,6 @@ export type EnvBindings = {
   CLOUDFLARE_API_TOKEN?: string
   /** Optional override for the production D1 database id used by usage dashboards. */
   CLOUDFLARE_D1_DATABASE_ID?: string
-  /** Cloudflare account billing cycle start day. Latest invoice shows day 21 for this account. */
-  CLOUDFLARE_BILLING_CYCLE_START_DAY?: string
 }
 
 export type SharedIngestTaskKind = IngestTaskKind
