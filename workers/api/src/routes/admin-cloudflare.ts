@@ -33,6 +33,11 @@ type D1UsageDay = {
   estimated_cost_usd: number
 }
 
+type CloudflareD1UsageResult = {
+  days: D1UsageDay[] | null
+  error: string | null
+}
+
 function clampDays(value: string | undefined): number {
   const parsed = Math.floor(Number(value))
   if (!Number.isFinite(parsed)) return 370
@@ -181,10 +186,12 @@ async function fetchCloudflareD1UsageChunk(
   }).filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
 }
 
-async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D1UsageDay[] | null> {
+async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<CloudflareD1UsageResult> {
   const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim()
   const token = String(env.CLOUDFLARE_GRAPHQL_API_TOKEN || env.CLOUDFLARE_API_TOKEN || '').trim()
-  if (!accountId || !token) return null
+  if (!accountId || !token) {
+    return { days: null, error: !accountId ? 'missing_cloudflare_account_id' : 'missing_cloudflare_graphql_token' }
+  }
   const databaseId = String(env.CLOUDFLARE_D1_DATABASE_ID || DEFAULT_D1_DATABASE_ID).trim()
   const end = new Date()
   let cursor = dateDaysAgo(days)
@@ -192,11 +199,11 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D
   while (cursor <= end) {
     const chunkEnd = new Date(Math.min(addUtcDays(cursor, GRAPHQL_MAX_DAYS_PER_QUERY - 1).getTime(), end.getTime()))
     const chunk = await fetchCloudflareD1UsageChunk(token, accountId, databaseId, ymd(cursor), ymd(chunkEnd))
-    if (!chunk) return null
+    if (!chunk) return { days: null, error: `graphql_chunk_failed:${ymd(cursor)}:${ymd(chunkEnd)}` }
     rows.push(...chunk)
     cursor = addUtcDays(chunkEnd, 1)
   }
-  return rows
+  return { days: rows, error: null }
 }
 
 async function fallbackLocalUsage(env: EnvBindings, days: number): Promise<D1UsageDay[]> {
@@ -219,9 +226,9 @@ export const adminCloudflareRoutes = new Hono<AppContext>()
 adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
   const days = clampDays(c.req.query('days'))
   try {
-    const cloudflareDays = await fetchCloudflareD1Usage(c.env, days)
-    const source = cloudflareDays ? 'cloudflare_graphql' : 'local_advisory'
-    const usageDays = cloudflareDays ?? await fallbackLocalUsage(c.env, days)
+    const cloudflareResult = await fetchCloudflareD1Usage(c.env, days)
+    const source = cloudflareResult.days ? 'cloudflare_graphql' : 'local_advisory'
+    const usageDays = cloudflareResult.days ?? await fallbackLocalUsage(c.env, days)
     const sorted = sortDaysByDate(usageDays)
     const now = new Date()
     const cycleStartDay = normalizeBillingCycleStartDay(c.env.CLOUDFLARE_BILLING_CYCLE_START_DAY)
@@ -234,6 +241,7 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
       ok: true,
       auth_mode: c.get('adminAuthState')?.mode ?? null,
       source,
+      source_error: cloudflareResult.error,
       generated_at: new Date().toISOString(),
       quotas: {
         allowance_label: 'Cloudflare D1 included monthly (published list pricing)',
