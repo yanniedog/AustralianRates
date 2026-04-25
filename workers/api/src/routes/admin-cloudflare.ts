@@ -19,6 +19,7 @@ import { jsonError } from '../utils/http'
 
 const DEFAULT_D1_DATABASE_ID = 'de6d4315-686b-4022-b080-956ca3819976'
 const GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql'
+const GRAPHQL_MAX_DAYS_PER_QUERY = 28
 
 type D1UsageDay = {
   date: string
@@ -38,9 +39,19 @@ function clampDays(value: string | undefined): number {
   return Math.max(1, Math.min(731, parsed))
 }
 
-function dateDaysAgo(days: number): string {
+function dateDaysAgo(days: number): Date {
   const date = new Date()
   date.setUTCDate(date.getUTCDate() - Math.max(0, days - 1))
+  return date
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date)
+  next.setUTCDate(next.getUTCDate() + days)
+  return next
+}
+
+function ymd(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
@@ -100,12 +111,12 @@ function summarizeBillingPeriod(days: D1UsageDay[], now: Date, cycleStartDay: nu
 
 function graphqlQuery() {
   return `
-    query D1Usage($accountTag: string!, $databaseId: string!, $since: Date!) {
+    query D1Usage($accountTag: string!, $databaseId: string!, $since: Date!, $until: Date!) {
       viewer {
         accounts(filter: { accountTag: $accountTag }) {
           d1AnalyticsAdaptiveGroups(
             limit: 1000
-            filter: { databaseId: $databaseId, date_geq: $since }
+            filter: { databaseId: $databaseId, date_geq: $since, date_leq: $until }
             orderBy: [date_ASC]
           ) {
             dimensions { date databaseId }
@@ -123,11 +134,13 @@ function graphqlQuery() {
   `
 }
 
-async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D1UsageDay[] | null> {
-  const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim()
-  const token = String(env.CLOUDFLARE_GRAPHQL_API_TOKEN || env.CLOUDFLARE_API_TOKEN || '').trim()
-  if (!accountId || !token) return null
-  const databaseId = String(env.CLOUDFLARE_D1_DATABASE_ID || DEFAULT_D1_DATABASE_ID).trim()
+async function fetchCloudflareD1UsageChunk(
+  token: string,
+  accountId: string,
+  databaseId: string,
+  since: string,
+  until: string,
+): Promise<D1UsageDay[] | null> {
   const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: {
@@ -139,7 +152,8 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D
       variables: {
         accountTag: accountId,
         databaseId,
-        since: dateDaysAgo(days),
+        since,
+        until,
       },
     }),
   })
@@ -165,6 +179,24 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D
       estimated_cost_usd: 0,
     }
   }).filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
+}
+
+async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<D1UsageDay[] | null> {
+  const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim()
+  const token = String(env.CLOUDFLARE_GRAPHQL_API_TOKEN || env.CLOUDFLARE_API_TOKEN || '').trim()
+  if (!accountId || !token) return null
+  const databaseId = String(env.CLOUDFLARE_D1_DATABASE_ID || DEFAULT_D1_DATABASE_ID).trim()
+  const end = new Date()
+  let cursor = dateDaysAgo(days)
+  const rows: D1UsageDay[] = []
+  while (cursor <= end) {
+    const chunkEnd = new Date(Math.min(addUtcDays(cursor, GRAPHQL_MAX_DAYS_PER_QUERY - 1).getTime(), end.getTime()))
+    const chunk = await fetchCloudflareD1UsageChunk(token, accountId, databaseId, ymd(cursor), ymd(chunkEnd))
+    if (!chunk) return null
+    rows.push(...chunk)
+    cursor = addUtcDays(chunkEnd, 1)
+  }
+  return rows
 }
 
 async function fallbackLocalUsage(env: EnvBindings, days: number): Promise<D1UsageDay[]> {
