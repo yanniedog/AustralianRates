@@ -13,6 +13,7 @@ import { writeD1ReportPlotCache } from '../db/report-plot-cache'
 import { writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
+import { defaultPublicChartWindowForSection } from '../utils/chart-window'
 import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
@@ -39,10 +40,11 @@ function precomputedScopes(section: ChartCacheSection): ChartCacheScope[] {
 
 function publicPackageScopes(section: ChartCacheSection, allScopes = false): ChartCacheScope[] {
   if (allScopes) return precomputedScopes(section)
+  const defaultWindow = defaultPublicChartWindowForSection(section)
   if (section === 'home_loans' || section === 'savings') {
-    return ['preset:consumer-default:window:90D', 'window:90D']
+    return [`preset:consumer-default:window:${defaultWindow}`, `window:${defaultWindow}`]
   }
-  return ['window:30D']
+  return [`window:${defaultWindow}`]
 }
 
 export async function refreshPublicSnapshotPackages(

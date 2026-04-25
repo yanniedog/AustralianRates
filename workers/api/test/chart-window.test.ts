@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildChartWindowScope,
+  defaultPublicChartWindowForSection,
   parseChartWindow,
   resolveChartWindowStart,
 } from '../src/utils/chart-window'
@@ -27,5 +28,11 @@ describe('chart-window', () => {
   it('builds stable cache scopes', () => {
     expect(buildChartWindowScope('30D')).toBe('window:30D')
     expect(buildChartWindowScope('ALL')).toBe('window:ALL')
+  })
+
+  it('documents the public default window per section', () => {
+    expect(defaultPublicChartWindowForSection('home_loans')).toBe('90D')
+    expect(defaultPublicChartWindowForSection('savings')).toBe('90D')
+    expect(defaultPublicChartWindowForSection('term_deposits')).toBe('30D')
   })
 })
