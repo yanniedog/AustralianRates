@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="../public-showcase-hero.css?v=4faf4aee22">
     <link rel="stylesheet" href="../responsive.css?v=6337843280">
     <link rel="stylesheet" href="../mobile-host.css?v=99a83ff1d3">
-    <link rel="stylesheet" href="../economic-data.css?v=0012bb7942">
+    <link rel="stylesheet" href="../economic-data.css?v=83e5f681e6">
     <link rel="stylesheet" href="../public-polish.css?v=9a75534abd">
     <link rel="stylesheet" href="../public-modern.css?v=a983137d5a">
     <script src="../theme.js?v=76040c583e"></script>
@@ -200,7 +200,14 @@
             <div class="economic-forward-table-wrap">
                 <table class="economic-component-table economic-forward-table">
                     <thead>
-                        <tr><th>Series</th><th>Maturity date</th><th>Median</th><th>Spread</th><th>Banks</th><th>Rows</th></tr>
+                        <tr>
+                            <th scope="col" class="is-sortable" data-sort-key="series" aria-sort="none">Series <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable" data-sort-key="maturityDate" aria-sort="none">Maturity date <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable is-num" data-sort-key="median" aria-sort="none">Median <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" id="forward-pricing-spread-col" class="is-sortable is-num" data-sort-key="spreadBp" aria-sort="none">Spread <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable is-num" data-sort-key="bankCount" aria-sort="none">Banks <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable is-num" data-sort-key="rowCount" aria-sort="none">Rows <span class="sort-indicator" aria-hidden="true"></span></th>
+                        </tr>
                     </thead>
                     <tbody id="forward-pricing-table-body"></tbody>
                 </table>
@@ -250,7 +257,7 @@
     <script src="../economic-chart-axis.js?v=2306b23aa5"></script>
     <script src="../economic-signals.js?v=09bf01646e"></script>
     <script src="../economic-legend-stack.js?v=37876617ef"></script>
-    <script src="../economic-forward-pricing.js?v=23b984c35c"></script>
+    <script src="../economic-forward-pricing.js?v=9bc9adda99"></script>
     <script src="../economic-data.js?v=27e80681c6"></script>
     <script src="../frame.js?v=eb81d922ba"></script>
     <script src="../ar-donate.js?v=95e3bb6c00"></script>

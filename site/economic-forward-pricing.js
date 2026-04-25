@@ -44,6 +44,8 @@
         status: document.getElementById('forward-pricing-status'),
         meta: document.getElementById('forward-pricing-meta'),
         table: document.getElementById('forward-pricing-table-body'),
+        tableHead: document.querySelector('.economic-forward-table thead'),
+        spreadCol: document.getElementById('forward-pricing-spread-col'),
         modeRow: document.getElementById('forward-pricing-mode-row'),
         rba: document.getElementById('forward-pricing-rba'),
         tdSlope: document.getElementById('forward-pricing-td-slope'),
@@ -55,6 +57,7 @@
         mode: 'spread',
         chart: null,
         model: null,
+        sort: { key: 'months', dir: 'asc' },
     };
 
     function isLocalHost() {
@@ -254,6 +257,127 @@
         return (n > 0 ? '+' : '') + n + ' bps';
     }
 
+    function marketRank(market) {
+        return market === 'td' ? 0 : 1;
+    }
+
+    function defaultSortForMode(mode) {
+        // Keep stable default across modes: scan by curve (TD, then mortgage), then term.
+        // Mode affects only header labels and table text.
+        return { key: 'months', dir: 'asc' };
+    }
+
+    function compare(a, b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return -1;
+        if (b == null) return 1;
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return String(a).localeCompare(String(b));
+    }
+
+    function applyForwardSort(rows, sortState) {
+        var key = sortState && sortState.key ? sortState.key : 'months';
+        var dir = sortState && sortState.dir === 'desc' ? 'desc' : 'asc';
+        var mult = dir === 'desc' ? -1 : 1;
+        return rows.slice().sort(function (left, right) {
+            if (key === 'series') {
+                var mr = compare(marketRank(left.market), marketRank(right.market));
+                if (mr) return mr;
+                var lr = compare(left.label, right.label);
+                if (lr) return lr * mult;
+                return compare(left.months, right.months);
+            }
+            if (key === 'maturityDate') {
+                var dr = compare(left.maturityMs, right.maturityMs);
+                if (dr) return dr * mult;
+                var mr2 = compare(marketRank(left.market), marketRank(right.market));
+                if (mr2) return mr2;
+                return compare(left.months, right.months);
+            }
+            var primary = compare(left[key], right[key]);
+            if (primary) return primary * mult;
+            var secondary = compare(marketRank(left.market), marketRank(right.market));
+            if (secondary) return secondary;
+            return compare(left.months, right.months);
+        });
+    }
+
+    function updateForwardHeaderLabel() {
+        if (!refs.spreadCol) return;
+        refs.spreadCol.childNodes.forEach(function () {}); // no-op: keep older browsers happy
+        refs.spreadCol.firstChild.nodeValue = state.mode === 'rate' ? 'Δ vs shortest ' : 'Spread ';
+    }
+
+    function updateSortUi() {
+        if (!refs.tableHead) return;
+        var ths = refs.tableHead.querySelectorAll('th[data-sort-key]');
+        Array.prototype.forEach.call(ths, function (th) {
+            var key = th.getAttribute('data-sort-key');
+            var active = key === state.sort.key;
+            th.setAttribute('aria-sort', active ? (state.sort.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+            var indicator = th.querySelector('.sort-indicator');
+            if (indicator) indicator.textContent = active ? (state.sort.dir === 'desc' ? '▼' : '▲') : '';
+        });
+    }
+
+    function buildForwardTableRows(model) {
+        var rows = [];
+        if (!model) return rows;
+        function pushCurve(curve) {
+            (curve || []).forEach(function (bucket) {
+                var maturity = coerceChartDate(bucket.maturityDate);
+                rows.push({
+                    market: bucket.market,
+                    label: bucket.label,
+                    months: bucket.months,
+                    maturityDate: bucket.maturityDate,
+                    maturityMs: maturity ? maturity.getTime() : null,
+                    median: bucket.median,
+                    spreadBp: bucket.spreadBp,
+                    bankCount: bucket.bankCount,
+                    rowCount: bucket.rowCount,
+                });
+            });
+        }
+        pushCurve(model.tdCurve);
+        pushCurve(model.mortgageCurve);
+        return rows;
+    }
+
+    function renderForwardTable(rows) {
+        if (!refs.table) return;
+        var fragment = document.createDocumentFragment();
+        var lastMarket = null;
+        rows.forEach(function (row) {
+            if (row.market !== lastMarket) {
+                lastMarket = row.market;
+                var groupTr = document.createElement('tr');
+                groupTr.className = 'forward-group-row';
+                var groupTd = document.createElement('td');
+                groupTd.colSpan = 6;
+                groupTd.textContent = row.market === 'td' ? 'Term deposits' : 'Fixed mortgages';
+                groupTr.appendChild(groupTd);
+                fragment.appendChild(groupTr);
+            }
+            var tr = document.createElement('tr');
+            [
+                { text: row.label },
+                { text: dateLabel(row.maturityDate), className: 'is-date' },
+                { text: formatRate(row.median), className: 'is-num' },
+                { text: formatBp(row.spreadBp), className: 'is-num' },
+                { text: String(row.bankCount), className: 'is-num' },
+                { text: String(row.rowCount), className: 'is-num' },
+            ].forEach(function (cell) {
+                var td = document.createElement('td');
+                td.textContent = cell.text;
+                if (cell.className) td.className = cell.className;
+                tr.appendChild(td);
+            });
+            fragment.appendChild(tr);
+        });
+        refs.table.replaceChildren(fragment);
+    }
+
     function dateLabel(value) {
         var date = coerceChartDate(value);
         if (!date) return String(value || '');
@@ -376,26 +500,10 @@
         if (refs.tdSlope) refs.tdSlope.textContent = formatBp(slope(model.tdCurve));
         if (refs.mortgageSlope) refs.mortgageSlope.textContent = formatBp(slope(model.mortgageCurve));
         if (refs.sample) refs.sample.textContent = model.totalRows.toLocaleString('en-AU');
-        if (!refs.table) return;
-        var rows = model.tdCurve.concat(model.mortgageCurve).sort(function (left, right) {
-            return left.months - right.months || left.market.localeCompare(right.market);
-        }).map(function (bucket) {
-            var tr = document.createElement('tr');
-            [
-                bucket.label,
-                dateLabel(bucket.maturityDate),
-                formatRate(bucket.median),
-                formatBp(bucket.spreadBp),
-                String(bucket.bankCount),
-                String(bucket.rowCount),
-            ].forEach(function (value) {
-                var td = document.createElement('td');
-                td.textContent = value;
-                tr.appendChild(td);
-            });
-            return tr;
-        });
-        refs.table.replaceChildren.apply(refs.table, rows);
+        updateForwardHeaderLabel();
+        var rows = applyForwardSort(buildForwardTableRows(model), state.sort);
+        renderForwardTable(rows);
+        updateSortUi();
     }
 
     function renderChart() {
@@ -489,6 +597,12 @@
         }
     }
 
+    function renderAll() {
+        if (!state.model) return;
+        renderStats(state.model);
+        renderChart();
+    }
+
     function setStatus(text) {
         if (refs.status) refs.status.textContent = text;
     }
@@ -506,8 +620,8 @@
             rbaHistory(),
         ]).then(function (parts) {
             state.model = buildModel({ tdRows: parts[0], mortgageRows: parts[1], rbaRows: parts[2] });
-            renderStats(state.model);
-            renderChart();
+            state.sort = defaultSortForMode(state.mode);
+            renderAll();
             setStatus('Ready');
         }).catch(function (error) {
             setStatus('Error');
@@ -524,7 +638,23 @@
                 Array.from(refs.modeRow.querySelectorAll('[data-forward-mode]')).forEach(function (node) {
                     node.classList.toggle('active', node === button);
                 });
-                renderChart();
+                state.sort = defaultSortForMode(state.mode);
+                renderAll();
+            });
+        }
+        if (refs.tableHead) {
+            refs.tableHead.addEventListener('click', function (event) {
+                var th = event.target.closest('th[data-sort-key]');
+                if (!th || !state.model) return;
+                var key = th.getAttribute('data-sort-key');
+                if (!key) return;
+                if (state.sort.key === key) {
+                    state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    state.sort.key = key;
+                    state.sort.dir = 'asc';
+                }
+                renderStats(state.model);
             });
         }
         window.addEventListener('resize', function () {
