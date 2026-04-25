@@ -13,7 +13,7 @@ import { buildGroupedChartRows } from '../utils/chart-row-groups'
 import { log } from '../utils/logger'
 import { jsonError, withPublicCache } from '../utils/http'
 import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
-import type { ChartWindow } from '../utils/chart-window'
+import { defaultPublicChartWindowForSection, PRECOMPUTED_CHART_WINDOWS, type ChartWindow } from '../utils/chart-window'
 import {
   parseAnalyticsRepresentation,
   type AnalyticsRepresentation,
@@ -63,10 +63,17 @@ function wantsCompactRows(query: QueryRecord): boolean {
 function defaultSnapshotScope(section: ChartCacheSection, params: QueryRecord): ChartCacheScope | null {
   const scope = resolveDefaultChartCacheScope(section, params)
   if (!scope) return null
-  if (scope === 'default') return section === 'term_deposits' ? 'window:30D' : 'window:90D'
-  if (scope === 'preset:consumer-default') return 'preset:consumer-default:window:90D'
-  if (scope === 'window:90D' || scope === 'window:30D' || scope === 'preset:consumer-default:window:90D') {
-    return scope
+  if (scope === 'default') return `window:${defaultPublicChartWindowForSection(section)}`
+  if (scope === 'preset:consumer-default') {
+    return `preset:consumer-default:window:${defaultPublicChartWindowForSection(section)}`
+  }
+  if (scope.startsWith('window:')) {
+    const window = scope.slice('window:'.length) as ChartWindow
+    return PRECOMPUTED_CHART_WINDOWS.includes(window) ? scope : null
+  }
+  if (scope.startsWith('preset:consumer-default:window:')) {
+    const window = scope.slice('preset:consumer-default:window:'.length) as ChartWindow
+    return PRECOMPUTED_CHART_WINDOWS.includes(window) ? scope : null
   }
   return null
 }
