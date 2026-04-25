@@ -4,6 +4,7 @@ import { getAppConfig, setAppConfig } from '../db/app-config'
 import { listCoverageGapRows } from '../db/lender-dataset-status'
 import { buildSnapshotKvKey, type SnapshotScope } from '../db/snapshot-cache'
 import type { EnvBindings } from '../types'
+import { defaultPublicChartWindowForSection } from '../utils/chart-window'
 import { log } from '../utils/logger'
 
 export const POST_INGEST_ASSURANCE_REPORT_KEY = 'post_ingest_assurance_last_report_json'
@@ -16,11 +17,17 @@ type PackageScope = {
 }
 
 const PUBLIC_PACKAGE_SCOPES: PackageScope[] = [
-  { section: 'home_loans', scope: 'preset:consumer-default:window:90D' },
-  { section: 'home_loans', scope: 'window:90D' },
-  { section: 'savings', scope: 'preset:consumer-default:window:90D' },
-  { section: 'savings', scope: 'window:90D' },
-  { section: 'term_deposits', scope: 'window:30D' },
+  {
+    section: 'home_loans',
+    scope: `preset:consumer-default:window:${defaultPublicChartWindowForSection('home_loans')}`,
+  },
+  { section: 'home_loans', scope: `window:${defaultPublicChartWindowForSection('home_loans')}` },
+  {
+    section: 'savings',
+    scope: `preset:consumer-default:window:${defaultPublicChartWindowForSection('savings')}`,
+  },
+  { section: 'savings', scope: `window:${defaultPublicChartWindowForSection('savings')}` },
+  { section: 'term_deposits', scope: `window:${defaultPublicChartWindowForSection('term_deposits')}` },
 ]
 
 type DatasetRowCount = {
