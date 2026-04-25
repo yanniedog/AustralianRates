@@ -30,8 +30,8 @@ const LOCAL_USAGE_RETENTION_SECONDS = 35 * 24 * 60 * 60
 export function computeD1OverageCostUsd(reads: number, writes: number): number {
   const readOverage = Math.max(0, reads - D1_INCLUDED_MONTHLY_READS)
   const writeOverage = Math.max(0, writes - D1_INCLUDED_MONTHLY_WRITES)
-  return (readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
-    + (writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD
+  return Math.ceil(readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
+    + Math.ceil(writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD
 }
 
 function ymd(): string {

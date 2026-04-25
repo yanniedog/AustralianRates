@@ -4,6 +4,7 @@ import {
   D1_INCLUDED_MONTHLY_WRITES,
   D1_READ_OVERAGE_PER_MILLION_USD,
   D1_WRITE_OVERAGE_PER_MILLION_USD,
+  computeD1OverageCostUsd,
   isPublicLiveD1FallbackDisabled,
   readLocalD1BudgetState,
 } from '../src/utils/d1-budget'
@@ -34,6 +35,11 @@ function envWithUsage(usage: Record<string, unknown>): EnvBindings {
 }
 
 describe('D1 budget guardrails', () => {
+  it('prices Cloudflare D1 overage in whole per-million billing units', () => {
+    expect(computeD1OverageCostUsd(0, D1_INCLUDED_MONTHLY_WRITES + 7_380_000)).toBe(8)
+    expect(computeD1OverageCostUsd(D1_INCLUDED_MONTHLY_READS + 1, 0)).toBe(0.001)
+  })
+
   it('projects local advisory usage and preserves daily CDR protection state', async () => {
     const readOverage = 100_000_000
     const writeOverage = 2_000_000
@@ -49,8 +55,8 @@ describe('D1 budget guardrails', () => {
     expect(state.guardrails.daily_cdr_protected).toBe(true)
     expect(state.days[0].by_class?.critical_coverage).toEqual({ reads: 12, writes: 3 })
     expect(state.days[0].estimated_cost_usd).toBeCloseTo(
-      (readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
-      + (writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD,
+      Math.ceil(readOverage / 1_000_000) * D1_READ_OVERAGE_PER_MILLION_USD
+      + Math.ceil(writeOverage / 1_000_000) * D1_WRITE_OVERAGE_PER_MILLION_USD,
     )
   })
 

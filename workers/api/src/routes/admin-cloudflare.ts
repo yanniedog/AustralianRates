@@ -9,6 +9,11 @@ import {
   computeD1OverageCostUsd,
   readLocalD1BudgetState,
 } from '../utils/d1-budget'
+import {
+  aggregateD1UsageByBillingPeriod,
+  normalizeBillingCycleStartDay,
+  resolveBillingPeriod,
+} from '../utils/d1-billing-period'
 import { aggregateD1UsageByMonth, buildD1UsageSeries } from '../utils/d1-usage-analytics'
 import { jsonError } from '../utils/http'
 
@@ -29,8 +34,8 @@ type D1UsageDay = {
 
 function clampDays(value: string | undefined): number {
   const parsed = Math.floor(Number(value))
-  if (!Number.isFinite(parsed)) return 90
-  return Math.max(1, Math.min(120, parsed))
+  if (!Number.isFinite(parsed)) return 370
+  return Math.max(1, Math.min(731, parsed))
 }
 
 function dateDaysAgo(days: number): string {
@@ -43,16 +48,13 @@ function sortDaysByDate(days: D1UsageDay[]): D1UsageDay[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
 
-function summarizeMonth(days: D1UsageDay[]) {
-  const now = new Date()
-  const month = now.toISOString().slice(0, 7)
-  const monthDays = days.filter((day) => day.date.startsWith(`${month}-`))
-  const reads = monthDays.reduce((sum, day) => sum + day.reads, 0)
-  const writes = monthDays.reduce((sum, day) => sum + day.writes, 0)
-  const elapsedDays = Math.max(1, Number(now.toISOString().slice(8, 10)))
-  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate()
-  const projectedReads = Math.round((reads / elapsedDays) * daysInMonth)
-  const projectedWrites = Math.round((writes / elapsedDays) * daysInMonth)
+function summarizeBillingPeriod(days: D1UsageDay[], now: Date, cycleStartDay: number) {
+  const period = resolveBillingPeriod(now, cycleStartDay)
+  const periodDays = days.filter((day) => day.date >= period.start_date && day.date <= period.end_date)
+  const reads = periodDays.reduce((sum, day) => sum + day.reads, 0)
+  const writes = periodDays.reduce((sum, day) => sum + day.writes, 0)
+  const projectedReads = Math.round((reads / period.elapsed_days) * period.days_in_period)
+  const projectedWrites = Math.round((writes / period.elapsed_days) * period.days_in_period)
   const readQuotaFraction = projectedReads / D1_INCLUDED_MONTHLY_READS
   const writeQuotaFraction = projectedWrites / D1_INCLUDED_MONTHLY_WRITES
   const maxFraction = Math.max(readQuotaFraction, writeQuotaFraction)
@@ -64,10 +66,14 @@ function summarizeMonth(days: D1UsageDay[]) {
   const mtdWriteRowsOverage = Math.max(0, writes - D1_INCLUDED_MONTHLY_WRITES)
 
   return {
-    month,
-    period_basis: 'utc_calendar_month' as const,
-    elapsed_days: elapsedDays,
-    days_in_calendar_month: daysInMonth,
+    month: period.start_date.slice(0, 7),
+    period: period.label,
+    period_basis: 'cloudflare_account_billing_cycle' as const,
+    period_start_date: period.start_date,
+    period_end_date: period.end_date,
+    billing_cycle_start_day: period.cycle_start_day,
+    elapsed_days: period.elapsed_days,
+    days_in_period: period.days_in_period,
     reads,
     writes,
     projected_reads: projectedReads,
@@ -98,7 +104,7 @@ function graphqlQuery() {
       viewer {
         accounts(filter: { accountTag: $accountTag }) {
           d1AnalyticsAdaptiveGroups(
-            limit: 500
+            limit: 1000
             filter: { databaseId: $databaseId, date_geq: $since }
             orderBy: [date_ASC]
           ) {
@@ -189,8 +195,11 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
     const source = cloudflareDays ? 'cloudflare_graphql' : 'local_advisory'
     const usageDays = cloudflareDays ?? await fallbackLocalUsage(c.env, days)
     const sorted = sortDaysByDate(usageDays)
-    const month = summarizeMonth(sorted)
+    const now = new Date()
+    const cycleStartDay = normalizeBillingCycleStartDay(c.env.CLOUDFLARE_BILLING_CYCLE_START_DAY)
+    const month = summarizeBillingPeriod(sorted, now, cycleStartDay)
     const dayRows = sorted.map((d) => ({ date: d.date, reads: d.reads, writes: d.writes }))
+    const history_billing_periods = aggregateD1UsageByBillingPeriod(dayRows, cycleStartDay)
     const history_months = aggregateD1UsageByMonth(dayRows)
     const series = buildD1UsageSeries(dayRows)
     return c.json({
@@ -202,7 +211,11 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
         allowance_label: 'Cloudflare D1 included monthly (published list pricing)',
         allowance_source: 'cloudflare_d1_published_included_tier',
         billing_cycle_note:
-          'This page rolls up by UTC calendar month. Your Cloudflare invoice window may follow a different account cycle; align dates in the Cloudflare billing dashboard when reconciling.',
+          'This page rolls up by the configured Cloudflare account billing period. Daily rows are UTC analytics dates.',
+        billing_cycle_start_day: cycleStartDay,
+        billing_period: month.period,
+        billing_period_start_date: month.period_start_date,
+        billing_period_end_date: month.period_end_date,
         d1_reads_included_monthly: D1_INCLUDED_MONTHLY_READS,
         d1_writes_included_monthly: D1_INCLUDED_MONTHLY_WRITES,
         d1_read_overage_per_million_usd: D1_READ_OVERAGE_PER_MILLION_USD,
@@ -210,6 +223,7 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
         accepted_coverage_overage_usd: D1_OVERAGE_ALLOWANCE_USD,
       },
       month,
+      history_billing_periods,
       history_months,
       series,
       days: sorted,
