@@ -6,6 +6,66 @@ export type D1UsageDayRow = {
   writes: number
 }
 
+export type D1BillingPeriod = {
+  label: string
+  start_date: string
+  end_date: string
+  cycle_start_day: number
+  elapsed_days: number
+  days_in_period: number
+}
+
+function utcDate(year: number, monthIndex: number, day: number): Date {
+  return new Date(Date.UTC(year, monthIndex, day))
+}
+
+function ymd(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function daysInUtcMonth(year: number, monthIndex: number): number {
+  return utcDate(year, monthIndex + 1, 0).getUTCDate()
+}
+
+function clampCycleDay(year: number, monthIndex: number, cycleStartDay: number): number {
+  return Math.min(cycleStartDay, daysInUtcMonth(year, monthIndex))
+}
+
+function diffDaysInclusive(start: Date, end: Date): number {
+  const msPerDay = 24 * 60 * 60 * 1000
+  return Math.max(1, Math.floor((end.getTime() - start.getTime()) / msPerDay) + 1)
+}
+
+function periodLabel(startDate: string, endDate: string): string {
+  return `${startDate} to ${endDate}`
+}
+
+export function resolveD1BillingPeriod(now: Date, cycleStartDay: number): D1BillingPeriod {
+  const day = Math.min(31, Math.max(1, Math.floor(cycleStartDay)))
+  const year = now.getUTCFullYear()
+  const month = now.getUTCMonth()
+  const currentStart = utcDate(year, month, clampCycleDay(year, month, day))
+  const start = now >= currentStart
+    ? currentStart
+    : utcDate(year, month - 1, clampCycleDay(year, month - 1, day))
+  const nextStart = utcDate(
+    start.getUTCFullYear(),
+    start.getUTCMonth() + 1,
+    clampCycleDay(start.getUTCFullYear(), start.getUTCMonth() + 1, day),
+  )
+  const end = utcDate(nextStart.getUTCFullYear(), nextStart.getUTCMonth(), nextStart.getUTCDate() - 1)
+  const startDate = ymd(start)
+  const endDate = ymd(end)
+  return {
+    label: periodLabel(startDate, endDate),
+    start_date: startDate,
+    end_date: endDate,
+    cycle_start_day: day,
+    elapsed_days: diffDaysInclusive(start, now > end ? end : now),
+    days_in_period: diffDaysInclusive(start, end),
+  }
+}
+
 export function movingAverage(values: number[], window: number): number[] {
   if (window < 1) throw new Error('window must be >= 1')
   return values.map((_, i) => {
@@ -69,6 +129,54 @@ export function aggregateD1UsageByMonth(sortedDays: D1UsageDayRow[]): D1HistoryM
       overage_usd: computeD1OverageCostUsd(v.reads, v.writes),
     }))
     .sort((a, b) => (a.month < b.month ? 1 : a.month > b.month ? -1 : 0))
+}
+
+export type D1HistoryBillingPeriod = {
+  period: string
+  start_date: string
+  end_date: string
+  day_count: number
+  reads: number
+  writes: number
+  overage_usd: number
+}
+
+function billingPeriodForDate(date: string, cycleStartDay: number): D1BillingPeriod | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
+  return resolveD1BillingPeriod(new Date(`${date}T12:00:00.000Z`), cycleStartDay)
+}
+
+export function aggregateD1UsageByBillingPeriod(
+  sortedDays: D1UsageDayRow[],
+  cycleStartDay: number,
+): D1HistoryBillingPeriod[] {
+  const map = new Map<string, { start_date: string; end_date: string; reads: number; writes: number; day_count: number }>()
+  for (const day of sortedDays) {
+    const period = billingPeriodForDate(day.date, cycleStartDay)
+    if (!period) continue
+    const prev = map.get(period.start_date) ?? {
+      start_date: period.start_date,
+      end_date: period.end_date,
+      reads: 0,
+      writes: 0,
+      day_count: 0,
+    }
+    prev.reads += Math.max(0, day.reads)
+    prev.writes += Math.max(0, day.writes)
+    prev.day_count += 1
+    map.set(period.start_date, prev)
+  }
+  return [...map.values()]
+    .map((v) => ({
+      period: periodLabel(v.start_date, v.end_date),
+      start_date: v.start_date,
+      end_date: v.end_date,
+      day_count: v.day_count,
+      reads: v.reads,
+      writes: v.writes,
+      overage_usd: computeD1OverageCostUsd(v.reads, v.writes),
+    }))
+    .sort((a, b) => (a.start_date < b.start_date ? 1 : a.start_date > b.start_date ? -1 : 0))
 }
 
 const TREND_MAX_DAYS = 28
