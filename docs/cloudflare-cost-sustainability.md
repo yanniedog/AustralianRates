@@ -17,7 +17,7 @@ Primary invariant: daily CDR coverage must run every Melbourne day. Cost guardra
 - Replay queue dispatch no longer runs on every scheduled event.
 - Public snapshot/package requests are KV/cache first. If usage is healthy, bounded best-effort live compute can fill missing cache entries; after the 90% projected threshold, public live D1 fallback returns a stale/unavailable state instead of waterfalling through D1.
 - Frontend snapshottable public requests should fail closed when the package is unavailable instead of falling through to `/filters`, `/latest-all`, `/analytics/series`, or `/analytics/report-plot`.
-- Admin D1 usage is available at `GET /api/home-loan-rates/admin/cloudflare/d1-usage?days=370` and `/admin/d1-usage.html`. Cloudflare GraphQL is the billing-grade source; local KV tracking is advisory fallback. The admin page rolls up current and historical cost by the account billing cycle start day (`CLOUDFLARE_BILLING_CYCLE_START_DAY`, default `21`) and prices overage in whole per-million billing units to match Cloudflare billable usage.
+- Admin D1 usage is available at `GET /api/home-loan-rates/admin/cloudflare/d1-usage?days=84` and `/admin/d1-usage.html`. Cloudflare GraphQL is the billing-grade source within the account analytics retention window; local KV tracking is advisory fallback. The admin page rolls up current and recent historical cost by the account billing cycle start day (`CLOUDFLARE_BILLING_CYCLE_START_DAY`, default `21`) and prices overage in whole per-million billing units to match Cloudflare billable usage.
 
 ## Production Schedule
 
