@@ -282,6 +282,8 @@ export type EnvBindings = {
   CLOUDFLARE_ACCOUNT_ID?: string
   /** Cloudflare API token with analytics read access. */
   CLOUDFLARE_API_TOKEN?: string
+  /** Preferred Worker secret for Cloudflare GraphQL Analytics API read access. */
+  CLOUDFLARE_GRAPHQL_API_TOKEN?: string
   /** Optional override for the production D1 database id used by usage dashboards. */
   CLOUDFLARE_D1_DATABASE_ID?: string
   /** Cloudflare billing cycle start day for account-level billable usage reconciliation. */
