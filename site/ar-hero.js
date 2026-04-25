@@ -199,7 +199,10 @@
 
     function applyLandingOverview() {
         if (!landingOverview) return;
-        if (section === 'home-loans' && els.statCashRate && landingOverview.rba) {
+        if (
+            els.statCashRate && landingOverview.rba &&
+            (section === 'home-loans' || section === 'savings' || section === 'term-deposits')
+        ) {
             var rba = landingOverview.rba;
             var rateChanged = rba.effective_date ? 'Rate changed: ' + rba.effective_date + '.' : '';
             var lastChecked = rba.fetched_at ? 'Last checked: ' + formatOverviewDatetime(rba.fetched_at) + '.' : '';
@@ -239,18 +242,30 @@
         }
 
         if (els.statCashRate) {
-            if (section === 'home-loans' && latest && latest.rba_cash_rate != null) {
-                var cashHelp = 'Current RBA cash rate.';
-                if (landingOverview && landingOverview.rba) {
-                    var r = landingOverview.rba;
-                    cashHelp = ['Current RBA cash rate.', r.effective_date ? 'Rate changed: ' + r.effective_date + '.' : '', r.fetched_at ? 'Last checked: ' + formatOverviewDatetime(r.fetched_at) + '.' : ''].filter(Boolean).join(' ');
+            var cashFromRow = latest && latest.rba_cash_rate != null ? Number(latest.rba_cash_rate) : NaN;
+            var cashFromOverview = landingOverview && landingOverview.rba && landingOverview.rba.cash_rate != null
+                ? Number(landingOverview.rba.cash_rate)
+                : NaN;
+            var cashValue = Number.isFinite(cashFromRow) ? cashFromRow : cashFromOverview;
+            var cashHelp = 'Current RBA cash rate.';
+            if (landingOverview && landingOverview.rba) {
+                var r = landingOverview.rba;
+                cashHelp = ['Current RBA cash rate.', r.effective_date ? 'Rate changed: ' + r.effective_date + '.' : '', r.fetched_at ? 'Last checked: ' + formatOverviewDatetime(r.fetched_at) + '.' : ''].filter(Boolean).join(' ');
+            }
+            if (section === 'home-loans') {
+                if (Number.isFinite(cashValue)) {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', pct(cashValue), cashHelp);
+                    els.statCashRate.setAttribute('title', cashHelp);
+                } else {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
                 }
-                renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), cashHelp);
-                els.statCashRate.setAttribute('title', cashHelp);
-            } else if (section === 'home-loans') {
-                renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
-            } else if (section !== 'home-loans') {
-                renderStat(els.statCashRate, 'continuity', 'Series continuity', 'Healthy', 'Series continuity by canonical product_key.');
+            } else if (section === 'savings' || section === 'term-deposits') {
+                if (Number.isFinite(cashValue)) {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', pct(cashValue), cashHelp);
+                    els.statCashRate.setAttribute('title', cashHelp);
+                } else {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
+                }
             }
         }
         applyLandingOverview();
@@ -303,6 +318,9 @@
                     if (data && data.ok) {
                         landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
                         applyLandingOverview();
+                        if (!syncHeroStatsFromSnapshot()) {
+                            syncHeroStatsFromExplorer();
+                        }
                     }
                 })
                 .catch(function () {})
@@ -312,6 +330,9 @@
                     if (data && data.ok) {
                         landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
                         applyLandingOverview();
+                        if (!syncHeroStatsFromSnapshot()) {
+                            syncHeroStatsFromExplorer();
+                        }
                     }
                 })
                 .catch(function () {});
