@@ -3,6 +3,7 @@ import {
   markReplayQueueSuccess,
   parseReplayPayload,
   queueReplayFromExhaustedMessage,
+  requeueStaleDispatchingReplayRows,
   rescheduleReplayQueueRow,
   replayScopeSummary,
   type ReplayQueueRow,
@@ -14,6 +15,7 @@ import { parseIntegerEnv } from '../utils/time'
 
 const DEFAULT_MAX_REPLAY_ATTEMPTS = 2
 const DEFAULT_REPLAY_BASE_DELAY_SECONDS = 900
+const DEFAULT_REPLAY_MAINTENANCE_LIMIT = 10
 
 function replayConfig(env: EnvBindings): { maxReplayAttempts: number; baseDelaySeconds: number } {
   return {
@@ -146,4 +148,26 @@ export async function dispatchReplayQueue(
       })),
     }
   }
+}
+
+export async function runReplayQueueMaintenance(
+  env: EnvBindings,
+  input: { limit?: number; source?: string } = {},
+): Promise<Awaited<ReturnType<typeof dispatchReplayQueue>>> {
+  const limit = Math.max(1, Math.min(25, Math.floor(Number(input.limit) || DEFAULT_REPLAY_MAINTENANCE_LIMIT)))
+  const requeuedStale = await requeueStaleDispatchingReplayRows(env.DB, {
+    staleMinutes: 45,
+    limit,
+  })
+  const result = await dispatchReplayQueue(env, { limit })
+  if (requeuedStale > 0 || result.claimed > 0 || result.failed > 0) {
+    log.info('consumer', 'replay_queue_maintenance_completed', {
+      code: 'replay_queue_maintenance_completed',
+      context:
+        `source=${input.source || 'scheduled'} limit=${limit}` +
+        ` stale_requeued=${requeuedStale}` +
+        ` claimed=${result.claimed} dispatched=${result.dispatched} failed=${result.failed}`,
+    })
+  }
+  return result
 }
