@@ -14,7 +14,7 @@ import { savingsPublicRoutes } from './routes/savings-public'
 import { tdPublicRoutes } from './routes/td-public'
 import type { AppContext, EnvBindings, IngestMessage } from './types'
 import { flushBufferedLogs, initLogger, log } from './utils/logger'
-import { withD1BudgetTracking, type D1WorkloadClass } from './utils/d1-budget'
+import { createD1BudgetTracker, withD1BudgetTracking, type D1WorkloadClass } from './utils/d1-budget'
 
 const app = new Hono<AppContext>()
 
@@ -112,12 +112,13 @@ function classifyScheduledWorkload(cron: string): D1WorkloadClass {
 }
 
 const worker: ExportedHandler<EnvBindings, IngestMessage> = {
-  fetch(request, env, ctx) {
-    return withD1BudgetTracking(
-      env,
-      async (trackedEnv) => app.fetch(request, trackedEnv, ctx),
-      { workload: classifyFetchWorkload(request) },
-    )
+  async fetch(request, env, ctx) {
+    const tracker = await createD1BudgetTracker(env, { workload: classifyFetchWorkload(request) })
+    try {
+      return await app.fetch(request, tracker.env, ctx)
+    } finally {
+      ctx.waitUntil(tracker.flush())
+    }
   },
 
   async scheduled(event, env): Promise<void> {
