@@ -218,9 +218,15 @@
     }
 
     /** One-category-wide vertical strips at RBA cash-rate change dates (in view). */
-    function buildRbaChangeMarkAreaPairs(dates, decisions, viewStartYmd, ctxMaxYmd) {
+    function buildRbaChangeMarkAreaPairs(dates, decisions, viewStartYmd, ctxMaxYmd, allDecisions) {
         var vs = String(viewStartYmd || '').slice(0, 10);
         var ve = String(ctxMaxYmd || '').slice(0, 10);
+        var full = Array.isArray(allDecisions) && allDecisions.length ? allDecisions : decisions;
+        var dateToFullIndex = {};
+        (full || []).forEach(function (r, i) {
+            var key = String(r && r.date || '').slice(0, 10);
+            if (key) dateToFullIndex[key] = i;
+        });
         var out = [];
         (decisions || []).forEach(function (row) {
             var d = String(row.date || '').slice(0, 10);
@@ -230,23 +236,54 @@
             var d2 = ix + 1 < dates.length ? dates[ix + 1] : d;
             var change = Number(row.change_bp != null
                 ? row.change_bp
-                : (row.change != null ? row.change * 100 : (row.change_amount != null ? row.change_amount * 100 : 0)));
-            var label = '';
-            if (Number.isFinite(change) && change !== 0) {
-                var arrow = change > 0 ? '\u2191' : '\u2193';
-                label = arrow + Math.abs(Math.round(change)) + 'bp';
+                : (row.change != null ? row.change * 100 : (row.change_amount != null ? row.change_amount * 100 : NaN)));
+            if (!Number.isFinite(change) || change === 0) {
+                var fi = dateToFullIndex[d];
+                var rate = Number(row.rate);
+                if (fi != null && fi > 0 && Number.isFinite(rate)) {
+                    var prevR = Number(full[fi - 1].rate);
+                    if (Number.isFinite(prevR)) change = Math.round((rate - prevR) * 100);
+                }
             }
             var start = { xAxis: d };
-            if (label) {
-                start.name = label;
+            if (Number.isFinite(change) && change !== 0) {
+                var bps = Math.abs(Math.round(change));
+                var sign = change > 0 ? '+' : '-';
+                var headText = sign + bps + ' bps';
+                var arrowGlyph = change > 0 ? '\u25b2' : '\u25bc';
+                var arrowLines = [];
+                for (var ai = 0; ai < 5; ai++) arrowLines.push(arrowGlyph);
+                var arrowBlock = arrowLines.join('\n');
+                start.name = headText;
                 start.label = {
                     show: true,
-                    formatter: label,
                     position: 'insideTop',
-                    color: '#eab308',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    distance: 3,
+                    distance: 2,
+                    align: 'center',
+                    verticalAlign: 'top',
+                    formatter: function () {
+                        return '{head|' + headText + '}\n{arr|' + arrowBlock + '}';
+                    },
+                    rich: {
+                        head: {
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#fef9c3',
+                            lineHeight: 16,
+                            align: 'center',
+                            textBorderColor: 'rgba(15,23,42,0.75)',
+                            textBorderWidth: 2,
+                        },
+                        arr: {
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#fde047',
+                            lineHeight: 12,
+                            align: 'center',
+                            textBorderColor: 'rgba(15,23,42,0.65)',
+                            textBorderWidth: 1,
+                        },
+                    },
                 };
             }
             out.push([start, { xAxis: d2 }]);

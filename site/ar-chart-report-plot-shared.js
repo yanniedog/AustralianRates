@@ -211,7 +211,7 @@
             return d && d >= String(range.viewStart || '').slice(0, 10) && d <= String(range.ctxMax || '').slice(0, 10);
         });
         var rbaChangeMarkPairs = bandsReportEarly
-            ? buildRbaChangeMarkAreaPairs(dates, rbaDecisionsWindow, range.viewStart, range.ctxMax)
+            ? buildRbaChangeMarkAreaPairs(dates, rbaDecisionsWindow, range.viewStart, range.ctxMax, prep.rbaData.decisions)
             : [];
 
         var series = [
@@ -255,7 +255,11 @@
                 }),
                 markArea: {
                     silent: true,
-                    itemStyle: { color: 'rgba(234, 179, 8, 0.14)' },
+                    itemStyle: {
+                        color: 'rgba(234, 179, 8, 0.42)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(202, 138, 4, 0.55)',
+                    },
                     data: rbaChangeMarkPairs,
                 },
             });
