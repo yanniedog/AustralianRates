@@ -131,14 +131,21 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
           if (attempts >= maxAttempts) {
             let replayContext = ''
             if (isIngestMessage(body)) {
-              const replayRow = await scheduleReplayForExhaustedMessage(env, {
-                message: body,
-                errorMessage: 'queue_message_duplicate_active_claim',
-              })
+              const replayRow = replayTicketId
+                ? await handleReplayAttemptFailure(env, {
+                    replayTicketId,
+                    errorMessage: 'queue_message_duplicate_active_claim',
+                  })
+                : await scheduleReplayForExhaustedMessage(env, {
+                    message: body,
+                    errorMessage: 'queue_message_duplicate_active_claim',
+                  })
               replayContext =
-                ` replay_id=${replayRow.replay_id}` +
-                ` replay_status=${replayRow.status}` +
-                ` next_attempt_at=${replayRow.next_attempt_at}`
+                replayRow
+                  ? ` replay_id=${replayRow.replay_id}` +
+                    ` replay_status=${replayRow.status}` +
+                    ` next_attempt_at=${replayRow.next_attempt_at}`
+                  : ''
             }
             msg.ack()
             metrics.acked += 1
@@ -172,6 +179,9 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
         }
         msg.ack()
         metrics.acked += 1
+        if (replayTicketId) {
+          await handleReplayAttemptSuccess(env, replayTicketId)
+        }
         log.info('consumer', 'queue_message_duplicate_ack', {
           code: 'queue_idempotency_duplicate_claim',
           runId: context.runId ?? undefined,
