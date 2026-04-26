@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="../foundation.css?v=d30e686e00">
     <link rel="stylesheet" href="../public-shell.css?v=5abed4c037">
     <link rel="stylesheet" href="admin-layout.css?v=6354239a34">
-    <link rel="stylesheet" href="admin-pages.css?v=638b09273a">
+    <link rel="stylesheet" href="admin-pages.css?v=c1e026f148">
     <script src="../site-variant.js?v=c71ae0e0a2"></script>
     <script src="../theme.js?v=76040c583e"></script>
 </head>
@@ -55,9 +55,13 @@
             <div class="d1-chart-scroll" id="trend-writes-wrap"></div>
             <p class="admin-muted d1-trend-meta" id="trend-writes-meta"></p>
         </section>
-        <section class="admin-card" aria-labelledby="chart-heading">
-            <h2 id="chart-heading">Daily reads/writes (bars)</h2>
-            <div class="d1-usage-bars" id="usage-bars" role="img" aria-label="Daily D1 reads and writes"></div>
+        <section class="admin-card" aria-labelledby="reads-bars-heading">
+            <h2 id="reads-bars-heading">Daily reads (bars)</h2>
+            <div class="d1-usage-bars d1-usage-bars-read" id="read-bars" role="img" aria-label="Daily D1 reads"></div>
+        </section>
+        <section class="admin-card" aria-labelledby="writes-bars-heading">
+            <h2 id="writes-bars-heading">Daily writes (bars)</h2>
+            <div class="d1-usage-bars d1-usage-bars-write" id="write-bars" role="img" aria-label="Daily D1 writes"></div>
         </section>
         <section class="admin-card" aria-labelledby="table-heading">
             <h2 id="table-heading">Daily table</h2>
@@ -82,7 +86,8 @@
             var trendWritesWrap = document.getElementById('trend-writes-wrap');
             var trendReadsMeta = document.getElementById('trend-reads-meta');
             var trendWritesMeta = document.getElementById('trend-writes-meta');
-            var bars = document.getElementById('usage-bars');
+            var readBars = document.getElementById('read-bars');
+            var writeBars = document.getElementById('write-bars');
             var tableWrap = document.getElementById('table-wrap');
             var sourceLine = document.getElementById('source-line');
 
@@ -375,20 +380,24 @@
                 el.textContent = '7-day trailing MA; OLS trend on last ' + String(win) + ' days; slope ' + num(slope) + ' rows/day (fit for visualization only).';
             }
 
-            function renderBars(data) {
-                var days = data.days || [];
+            function renderBars(target, days, metric, className, label) {
                 var max = days.reduce(function (m, day) {
-                    return Math.max(m, Number(day.reads || 0), Number(day.writes || 0));
+                    return Math.max(m, Number(day[metric] || 0));
                 }, 1);
-                bars.innerHTML = days.map(function (day) {
-                    var readH = Math.max(2, Math.round((Number(day.reads || 0) / max) * 100));
-                    var writeH = Math.max(2, Math.round((Number(day.writes || 0) / max) * 100));
-                    return '<div class="d1-bar-day" title="' + esc(day.date + ' reads ' + num(day.reads) + ' writes ' + num(day.writes)) + '">' +
-                        '<span class="d1-bar d1-bar-read" style="height:' + readH + '%"></span>' +
-                        '<span class="d1-bar d1-bar-write" style="height:' + writeH + '%"></span>' +
+                target.innerHTML = days.map(function (day) {
+                    var value = Number(day[metric] || 0);
+                    var height = value > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+                    return '<div class="d1-bar-day" title="' + esc(day.date + ' ' + label + ' ' + num(value)) + '">' +
+                        '<span class="d1-bar ' + className + '" style="height:' + height + '%"></span>' +
                         '<small>' + esc(day.date.slice(5)) + '</small>' +
                     '</div>';
                 }).join('');
+            }
+
+            function renderDailyCharts(data) {
+                var days = data.days || [];
+                renderBars(readBars, days, 'reads', 'd1-bar-read', 'reads');
+                renderBars(writeBars, days, 'writes', 'd1-bar-write', 'writes');
             }
 
             function renderTable(data) {
@@ -412,7 +421,8 @@
                 trendWritesWrap.innerHTML = '';
                 trendReadsMeta.textContent = '';
                 trendWritesMeta.textContent = '';
-                bars.innerHTML = '';
+                readBars.innerHTML = '';
+                writeBars.innerHTML = '';
                 tableWrap.innerHTML = '';
                 portal.fetchAdmin('/cloudflare/d1-usage?days=84')
                     .then(function (r) { return r.json(); })
@@ -428,7 +438,7 @@
                         renderTrendSvg(trendWritesWrap, s, 'write');
                         renderTrendMeta(trendReadsMeta, s, 'read');
                         renderTrendMeta(trendWritesMeta, s, 'write');
-                        renderBars(data);
+                        renderDailyCharts(data);
                         renderTable(data);
                     })
                     .catch(function (error) {
