@@ -60,6 +60,7 @@ export async function runPublicPackageRefreshCron(
     skipped: false,
     kind: 'public_package_refresh',
     refreshed: packageResult.refreshed,
+    package_skipped: packageResult.skipped,
     errors: packageResult.errors,
     replay_maintenance: replayMaintenance,
     post_ingest_assurance: assurance,
