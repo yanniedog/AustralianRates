@@ -187,6 +187,20 @@ body.ar-not-found .site-action-text {
     display: none !important;
 }
 
+/* Header refresh: arc-heavy glyph reads faint at 1rem in the compact toolbar. */
+body.ar-public .site-action-refresh .site-action-icon,
+body.ar-legal .site-action-refresh .site-action-icon,
+body.ar-not-found .site-action-refresh .site-action-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+body.ar-public .site-action-refresh .site-action-icon svg,
+body.ar-legal .site-action-refresh .site-action-icon svg,
+body.ar-not-found .site-action-refresh .site-action-icon svg {
+    stroke-width: 2.35;
+}
+
 body.ar-public .shell-public,
 body.ar-legal .shell,
 body.ar-not-found .shell {
