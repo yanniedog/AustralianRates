@@ -536,8 +536,14 @@ body.ar-section-economic-data .economic-chart {
     min-height: clamp(360px, 48vh, 620px);
     border: 1px solid var(--ar-line);
     border-radius: 10px;
-    background: var(--ar-surface);
+    background: color-mix(in srgb, var(--ar-surface) 94%, var(--ar-surface-2));
     overflow: hidden;
+}
+
+:root:not([data-theme="light"]) body.ar-section-economic-data .economic-chart,
+:root:not([data-theme="light"]) body.ar-section-economic-data .economic-forward-chart {
+    background: color-mix(in srgb, var(--ar-surface) 82%, #0f172a);
+    border-color: color-mix(in srgb, var(--ar-line-strong) 74%, transparent);
 }
 
 body.ar-section-economic-data .economic-component-panel {

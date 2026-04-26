@@ -171,6 +171,27 @@
         mount.className = 'lwc-chart-mount lwc-chart-mount--report-plot';
         mount.style.cssText = 'width:100%;flex:1;min-height:180px;position:relative;';
         wrapper.appendChild(mount);
+        var reportHoverBox = document.createElement('div');
+        reportHoverBox.className = 'ar-report-hoverbox';
+        reportHoverBox.setAttribute('aria-hidden', 'true');
+        reportHoverBox.style.cssText = [
+            'position:absolute',
+            'top:8px',
+            'left:10px',
+            'z-index:6',
+            'display:none',
+            'max-width:min(360px, calc(100% - 24px))',
+            'padding:7px 9px',
+            'border:1px solid ' + theme.ttBorder,
+            'border-radius:6px',
+            'background:' + theme.ttBg,
+            'color:' + theme.ttText,
+            'font:11px/1.45 "Space Grotesk",system-ui,sans-serif',
+            'box-shadow:0 14px 28px rgba(0,0,0,0.16)',
+            'pointer-events:none',
+            'font-variant-numeric:tabular-nums'
+        ].join(';');
+        mount.appendChild(reportHoverBox);
         var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
         if (ribbonHierarchyHost && typeof ribbonHierarchyHost.insertBefore === 'function') {
             ribbonHierarchyHost.insertBefore(ribbonHierarchyPanel.el, ribbonHierarchyHost.firstChild || null);
@@ -881,6 +902,83 @@
             if (ib && typeof ib.hide === 'function') ib.hide();
         }
 
+        function fmtHoverRate(value) {
+            var n = Number(value);
+            return Number.isFinite(n) ? n.toFixed(2) + '%' : 'n/a';
+        }
+
+        function reportProductLabel(prod) {
+            if (!prod) return 'Product';
+            return [prod.bankName || '', prod.productName || 'Product'].filter(Boolean).join(' \u00b7 ');
+        }
+
+        function findRibbonProductByKey(key) {
+            var want = String(key || '');
+            if (!want) return null;
+            var flat = (ribbonCanvasModel && ribbonCanvasModel.flat) || [];
+            for (var i = 0; i < flat.length; i += 1) {
+                if (String(flat[i] && flat[i].key || '') === want) return flat[i];
+            }
+            return null;
+        }
+
+        function showReportHoverBox(input) {
+            if (!reportHoverBox || !input) return;
+            var rows = input.rows || [];
+            if (!rows.length) {
+                reportHoverBox.style.display = 'none';
+                return;
+            }
+            reportHoverBox.innerHTML =
+                '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(input.heading || 'Chart') + '</div>' +
+                '<div style="color:' + theme.muted + ';font-size:10px;margin-bottom:5px;">' + escHtml(input.date || '') + '</div>' +
+                rows.map(function (row) {
+                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid rgba(148,163,184,0.14);padding-top:2px;margin-top:2px;">' +
+                        '<span style="color:' + theme.muted + ';">' + escHtml(row.label) + '</span>' +
+                        '<strong>' + escHtml(row.value) + '</strong>' +
+                    '</div>';
+                }).join('');
+            reportHoverBox.style.display = 'block';
+        }
+
+        function syncReportHoverBox(anchorYmd, bankName) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            if (!anchor || dates.indexOf(anchor) < 0) {
+                if (reportHoverBox) reportHoverBox.style.display = 'none';
+                return;
+            }
+            var scoped = isBandsMode ? currentScopedProductKeys() : [];
+            if (scoped.length === 1) {
+                var prod = findRibbonProductByKey(scoped[0]);
+                var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
+                showReportHoverBox({
+                    heading: reportProductLabel(prod),
+                    date: fmtReportDateYmd(anchor),
+                    rows: [{ label: 'Rate', value: fmtHoverRate(rate) }],
+                });
+                return;
+            }
+            var bank = canonicalBandsBankFromUi(String(bankName || ribbonChartHighlightBank() || '').trim());
+            var point = bank ? (bandByDateByBank[bank] && bandByDateByBank[bank][anchor]) : null;
+            if (!point && plotPayload && plotPayload.series && plotPayload.series.length) {
+                bank = String(plotPayload.series[0].bank_name || '');
+                point = bandByDateByBank[bank] && bandByDateByBank[bank][anchor];
+            }
+            if (!point) {
+                if (reportHoverBox) reportHoverBox.style.display = 'none';
+                return;
+            }
+            showReportHoverBox({
+                heading: bank || 'Market band',
+                date: fmtReportDateYmd(anchor),
+                rows: [
+                    { label: 'Max', value: fmtHoverRate(point.max_rate) },
+                    { label: 'Mean', value: fmtHoverRate(point.mean_rate) },
+                    { label: 'Min', value: fmtHoverRate(point.min_rate) },
+                ],
+            });
+        }
+
         function showRibbonEmptyPanel(heading, meta, message) {
             ribbonListHoverKeys = null;
             ribbonListHoverPath = '';
@@ -1449,9 +1547,11 @@
             syncRibbonTrayUi();
         }
 
-        var tooltipConfig = isBandsMode
-            ? { show: false }
-            : { trigger: 'axis', axisPointer: { type: 'line' } };
+        var tooltipConfig = {
+            trigger: 'axis',
+            showContent: false,
+            axisPointer: { type: 'line' },
+        };
 
         if (options.infoBox && options.infoBox.el) {
             wrapper.appendChild(options.infoBox.el);
@@ -1460,6 +1560,18 @@
         chart.setOption({
             animation: false,
             grid: { top: 14, right: reportGridRight, bottom: 36, left: 8, containLabel: true },
+            axisPointer: {
+                link: [{ xAxisIndex: [0] }],
+                label: {
+                    backgroundColor: theme.crosshairLabelBg || theme.ttBg,
+                    borderColor: theme.ttBorder,
+                    borderWidth: 1,
+                    color: theme.ttText,
+                    fontSize: 10,
+                    padding: [3, 6],
+                },
+                lineStyle: { color: theme.crosshairLine || theme.axis, width: 1.4, type: 'dashed' },
+            },
             tooltip: tooltipConfig,
             legend: { show: false },
             xAxis: {
@@ -1506,6 +1618,15 @@
                 },
             ],
             series: series,
+        });
+
+        chart.on('updateAxisPointer', function (ev) {
+            var ax0 = ev && ev.axesInfo && ev.axesInfo[0];
+            if (!ax0) return;
+            var anchor = resolveDateFromAxisValue(ax0.value);
+            if (!anchor) return;
+            setRibbonAnchorDate(anchor);
+            syncReportHoverBox(anchor, ribbonChartHighlightBank());
         });
 
         if (isBandsMode) {
@@ -1834,6 +1955,32 @@
                 ribbonWorkspace._arRibbonTrayWorkspaceLeaveFn = onRibbonWorkspacePointerLeave;
                 ribbonWorkspace.addEventListener('pointerleave', onRibbonWorkspacePointerLeave);
             }
+
+            try {
+                var zr = chart.getZr();
+                var onRibbonChartMove = function (ev) {
+                    var pt = [ev.offsetX, ev.offsetY];
+                    var dataCoord = chart.convertFromPixel(ribbonAxisFinder, pt);
+                    if (!dataCoord || dataCoord.length < 2) return;
+                    var anchor = resolveDateFromAxisValue(dataCoord[0]);
+                    var yVal = Number(dataCoord[1]);
+                    if (!anchor || !Number.isFinite(yVal)) return;
+                    setRibbonAnchorDate(anchor);
+                    var bn = pickBankFromRibbonBand(anchor, yVal);
+                    if (bn) hoveredBank = bn;
+                    syncReportHoverBox(anchor, bn || ribbonChartHighlightBank());
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    syncRibbonTrayUi();
+                    if (useRibbonCanvas) scheduleRibbonRedraw();
+                };
+                var onRibbonChartOut = function () {
+                    if (reportHoverBox) reportHoverBox.style.display = 'none';
+                };
+                zr.on('mousemove', onRibbonChartMove);
+                zr.on('globalout', onRibbonChartOut);
+                zrRibbonSubs.push({ type: 'mousemove', fn: onRibbonChartMove });
+                zrRibbonSubs.push({ type: 'globalout', fn: onRibbonChartOut });
+            } catch (_zrErr) {}
 
             chart.on('finished', function () {
                 applyRibbonBankHighlightState();
