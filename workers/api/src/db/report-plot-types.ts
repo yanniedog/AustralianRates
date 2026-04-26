@@ -10,6 +10,7 @@ export type ReportPlotMeta = {
   end_date: string
   chart_window: string | null
   resolved_term_months: number | null
+  band_source_version?: number
 }
 
 export type ReportMovesPoint = {
