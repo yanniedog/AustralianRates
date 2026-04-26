@@ -18,6 +18,8 @@ import { loadPostIngestAssuranceReport, runPostIngestAssurance } from '../pipeli
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { refreshChartPivotCache, refreshPublicSnapshotPackages } from '../pipeline/chart-cache-refresh'
+import { buildPrecomputedChartScopeForPreset, type ChartCacheSection } from '../db/chart-cache'
+import { parseChartWindow } from '../utils/chart-window'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { FETCH_EVENTS_RETENTION_DAYS, runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
@@ -162,16 +164,30 @@ adminRoutes.post('/chart-cache/refresh', async (c) => {
 adminRoutes.post('/public-packages/refresh', async (c) => {
   try {
     const full = ['1', 'true', 'yes', 'on'].includes(String(c.req.query('full') || '').trim().toLowerCase())
-    const result = await refreshPublicSnapshotPackages(c.env, { allScopes: full })
+    const force = ['1', 'true', 'yes', 'on'].includes(String(c.req.query('force') || '').trim().toLowerCase())
+    const rawSection = String(c.req.query('section') || '').trim()
+    const rawWindow = String(c.req.query('chart_window') || '').trim()
+    const rawPreset = String(c.req.query('preset') || '').trim()
+    const section = rawSection === 'home_loans' || rawSection === 'savings' || rawSection === 'term_deposits'
+      ? rawSection as ChartCacheSection
+      : null
+    const window = rawWindow ? parseChartWindow(rawWindow) : null
+    const preset = rawPreset === 'consumer-default' && section !== 'term_deposits' ? 'consumer-default' : null
+    const items = section && (window || rawPreset || rawWindow)
+      ? [{ section, scope: buildPrecomputedChartScopeForPreset(window, preset) }]
+      : undefined
+    const result = await refreshPublicSnapshotPackages(c.env, { allScopes: full, force, items })
     log.info('admin', 'public_packages_refresh_manual', {
       code: 'admin_public_packages_refresh',
-      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length, full }),
+      context: JSON.stringify({ refreshed: result.refreshed, skipped: result.skipped, error_count: result.errors.length, full, force, items }),
     })
     return c.json({
       ok: result.ok,
       auth_mode: c.get('adminAuthState')?.mode ?? null,
       full,
+      force,
       refreshed: result.refreshed,
+      skipped: result.skipped,
       errors: result.errors,
     })
   } catch (error) {

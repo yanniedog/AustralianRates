@@ -16,6 +16,7 @@ import {
 import { log } from '../utils/logger'
 import {
   precomputedSnapshotScopesForSection,
+  type PublicPackageScope,
   publicSnapshotPackageScopeItems,
   PUBLIC_PACKAGE_SECTIONS,
 } from './public-package-scopes'
@@ -46,15 +47,16 @@ async function isFreshPublicSnapshotPackage(
 
 export async function refreshPublicSnapshotPackages(
   env: EnvBindings,
-  options?: { allScopes?: boolean },
+  options?: { allScopes?: boolean; force?: boolean; items?: PublicPackageScope[] },
 ): Promise<{ ok: boolean; refreshed: number; skipped: number; errors: string[] }> {
   const errors: string[] = []
   let refreshed = 0
   let skipped = 0
 
-  for (const { section, scope: cacheScope } of publicSnapshotPackageScopeItems({ allScopes: options?.allScopes })) {
+  const items = options?.items || publicSnapshotPackageScopeItems({ allScopes: options?.allScopes })
+  for (const { section, scope: cacheScope } of items) {
     try {
-      if (!options?.allScopes && (await isFreshPublicSnapshotPackage(env.CHART_CACHE_KV, section, cacheScope))) {
+      if (!options?.allScopes && !options?.force && (await isFreshPublicSnapshotPackage(env.CHART_CACHE_KV, section, cacheScope))) {
         skipped++
         continue
       }
