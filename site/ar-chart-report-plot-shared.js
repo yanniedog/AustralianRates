@@ -191,7 +191,6 @@
             'pointer-events:none',
             'font-variant-numeric:tabular-nums'
         ].join(';');
-        mount.appendChild(reportHoverBox);
         var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
         if (ribbonHierarchyHost && typeof ribbonHierarchyHost.insertBefore === 'function') {
             ribbonHierarchyHost.insertBefore(ribbonHierarchyPanel.el, ribbonHierarchyHost.firstChild || null);
@@ -207,6 +206,7 @@
         }
 
         var chart = echarts.init(mount, null, { renderer: 'canvas' });
+        mount.appendChild(reportHoverBox);
         /** Ribbons + overlays use left % axis (index 0); grid also has yAxis 1 (e.g. moves count). */
         var ribbonAxisFinder = { gridIndex: 0, xAxisIndex: 0, yAxisIndex: 0 };
         var dates = buildDateRange(range.viewStart, range.ctxMax);
