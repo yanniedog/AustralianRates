@@ -11,7 +11,7 @@ import {
 import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './report-plot-types'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
-const REPORT_PLOT_PAYLOAD_VERSION = 1
+const REPORT_PLOT_PAYLOAD_VERSION = 2
 const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
@@ -47,7 +47,7 @@ export function buildReportPlotCacheKey(
   mode: ReportPlotMode,
   params: Record<string, string | undefined>,
 ): string {
-  return buildChartCacheKey(section, `report-plot:${mode}`, params)
+  return buildChartCacheKey(section, `report-plot:v${REPORT_PLOT_PAYLOAD_VERSION}:${mode}`, params)
 }
 
 function payloadItemCount(payload: ReportPlotPayload): number {
