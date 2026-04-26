@@ -76,20 +76,28 @@
             var signalRows = ((state.signal && state.signal.components) || []).filter(function (row) {
                 return row.score != null;
             });
+            var rowLabels = signalRows.map(function (row) { return row.label; });
             chart.setOption({
                 animation: false,
                 textStyle: { color: theme.text, fontFamily: '"Space Grotesk", "Segoe UI", system-ui, sans-serif' },
                 backgroundColor: 'transparent',
                 color: options.palette,
-                tooltip: { trigger: 'axis', confine: true },
-                grid: { left: 48, right: 16, top: 18, bottom: narrow ? 86 : 56, containLabel: true },
-                xAxis: {
-                    type: 'category',
-                    data: signalRows.map(function (row) { return row.label; }),
-                    axisLine: styles.axisLine,
-                    axisLabel: { color: theme.mutedText, fontSize: narrow ? 9 : 11, interval: 0, rotate: narrow ? 35 : 0 },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    confine: true,
+                    formatter: function (params) {
+                        var entry = Array.isArray(params) ? params[0] : params;
+                        var row = signalRows[entry && entry.dataIndex] || {};
+                        return '<strong>' + esc(row.label || row.key || '') + '</strong><br>' +
+                            'Score: ' + esc(formatSigned(row.score, '')) + '<br>' +
+                            'Value: ' + esc(formatSigned(row.value, '')) + '<br>' +
+                            'Change: ' + esc(formatSigned(row.change, '')) + '<br>' +
+                            'Freshness: ' + freshnessLabel(row);
+                    }
                 },
-                yAxis: {
+                grid: { left: narrow ? 96 : 132, right: narrow ? 28 : 42, top: 16, bottom: 28, containLabel: true },
+                xAxis: {
                     type: 'value',
                     min: -2,
                     max: 2,
@@ -97,20 +105,42 @@
                     axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
                     splitLine: { show: true, lineStyle: styles.splitLine.lineStyle },
                 },
+                yAxis: {
+                    type: 'category',
+                    data: rowLabels,
+                    axisLine: styles.axisLine,
+                    axisTick: { show: false },
+                    axisLabel: { color: theme.mutedText, fontSize: narrow ? 9 : 11, width: narrow ? 82 : 120, overflow: 'truncate' },
+                },
                 series: [{
                     name: 'Pressure score',
                     type: 'bar',
+                    barMaxWidth: narrow ? 18 : 26,
                     data: signalRows.map(function (row) { return row.score; }),
+                    label: {
+                        show: true,
+                        position: 'right',
+                        color: theme.softText,
+                        fontWeight: 700,
+                        formatter: function (params) { return formatSigned(params.value, ''); }
+                    },
                     itemStyle: {
+                        borderRadius: [4, 4, 4, 4],
                         color: function (params) {
                             var value = Number(params.value);
                             return value > 0 ? '#d95f02' : (value < 0 ? '#1b9e77' : '#7570b3');
                         }
+                    },
+                    markLine: {
+                        symbol: 'none',
+                        silent: true,
+                        lineStyle: { color: theme.axisLine, width: 1, type: 'dashed' },
+                        data: [{ xAxis: 0 }]
                     }
                 }]
             }, true);
             syncYScaleButton({ effectiveYAxis: 'value' });
-            if (refs.chartMeta) refs.chartMeta.textContent = 'Component scores: -2 easy pressure, +2 tight pressure.';
+            if (refs.chartMeta) refs.chartMeta.textContent = 'Policy pressure by component; left = easier, right = tighter.';
         }
 
         return {
