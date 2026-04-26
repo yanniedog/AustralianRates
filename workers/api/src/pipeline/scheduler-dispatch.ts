@@ -13,10 +13,9 @@ import { insertIntegrityAuditRun } from '../db/integrity-audit-runs'
 import { insertHealthCheckRun } from '../db/health-check-runs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
-import { refreshChartPivotCache, refreshPublicSnapshotPackages } from './chart-cache-refresh'
+import { refreshChartPivotCache } from './chart-cache-refresh'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
-import { runPostIngestAssurance } from './post-ingest-assurance'
 import { runDailyBackup } from './daily-backup'
 import { runReplayQueueMaintenance } from './replay-queue'
 import { runLifecycleReconciliation } from './run-reconciliation'
@@ -26,7 +25,7 @@ import { getMelbourneNowParts } from '../utils/time'
 import { collectRbaCashRateForDate } from '../ingest/rba'
 import { runScheduledHistoricalQualitySnapshot } from './historical-quality-scheduler'
 import { isD1NonEssentialWorkDisabled } from '../utils/d1-budget'
-import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
+import { runPublicPackageRefreshCron } from './public-package-refresh-cron'
 
 type CronEvent = ScheduledController & { cron?: string }
 export type ScheduledTask =
@@ -220,39 +219,7 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
   }
 
   if (tasks.length === 1 && tasks[0] === 'public_package_refresh') {
-    if (isD1EmergencyMinimumWrites(env) || (await isD1NonEssentialWorkDisabled(env))) {
-      log.warn('scheduler', 'Skipping public package refresh: D1 write guardrail active', {
-        code: 'd1_public_package_refresh_disabled',
-        context: `scheduled_time=${scheduledIso} cron=${cron}`,
-      })
-      return {
-        ok: true,
-        skipped: true,
-        kind: 'public_package_refresh',
-        reason: 'd1_write_guardrail_active',
-      }
-    }
-    log.info('scheduler', `Dispatching public package refresh cron (${cron})`, {
-      context: `scheduled_time=${scheduledIso}`,
-    })
-    const replayMaintenance = await runReplayQueueMaintenance(env, {
-      limit: 25,
-      source: 'public_package_refresh_cron',
-    })
-    const packageResult = await refreshPublicSnapshotPackages(env)
-    const assurance = await runPostIngestAssurance(env, {
-      persist: true,
-      emitHardFailureLog: true,
-    })
-    return {
-      ok: packageResult.ok && assurance.ok,
-      skipped: false,
-      kind: 'public_package_refresh',
-      refreshed: packageResult.refreshed,
-      errors: packageResult.errors,
-      replay_maintenance: replayMaintenance,
-      post_ingest_assurance: assurance,
-    }
+    return runPublicPackageRefreshCron(env, { scheduledIso, cron })
   }
 
   if (tasks.length > 0 && (await isD1NonEssentialWorkDisabled(env))) {

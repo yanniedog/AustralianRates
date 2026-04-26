@@ -2,10 +2,10 @@ import type { DatasetKind } from '../../../../packages/shared/src'
 import { TARGET_LENDERS } from '../constants'
 import { getAppConfig, setAppConfig } from '../db/app-config'
 import { listCoverageGapRows } from '../db/lender-dataset-status'
-import { buildSnapshotKvKey, type SnapshotScope } from '../db/snapshot-cache'
+import { buildSnapshotKvKey } from '../db/snapshot-cache'
 import type { EnvBindings } from '../types'
-import { defaultPublicChartWindowForSection } from '../utils/chart-window'
 import { log } from '../utils/logger'
+import { publicSnapshotPackageScopeItems } from './public-package-scopes'
 
 export const POST_INGEST_ASSURANCE_REPORT_KEY = 'post_ingest_assurance_last_report_json'
 
@@ -13,22 +13,10 @@ const DATASETS: DatasetKind[] = ['home_loans', 'savings', 'term_deposits']
 
 type PackageScope = {
   section: DatasetKind
-  scope: SnapshotScope
+  scope: ReturnType<typeof publicSnapshotPackageScopeItems>[number]['scope']
 }
 
-const PUBLIC_PACKAGE_SCOPES: PackageScope[] = [
-  {
-    section: 'home_loans',
-    scope: `preset:consumer-default:window:${defaultPublicChartWindowForSection('home_loans')}`,
-  },
-  { section: 'home_loans', scope: `window:${defaultPublicChartWindowForSection('home_loans')}` },
-  {
-    section: 'savings',
-    scope: `preset:consumer-default:window:${defaultPublicChartWindowForSection('savings')}`,
-  },
-  { section: 'savings', scope: `window:${defaultPublicChartWindowForSection('savings')}` },
-  { section: 'term_deposits', scope: `window:${defaultPublicChartWindowForSection('term_deposits')}` },
-]
+const PUBLIC_PACKAGE_SCOPES: PackageScope[] = publicSnapshotPackageScopeItems()
 
 type DatasetRowCount = {
   dataset: DatasetKind
@@ -54,7 +42,7 @@ type HardFailure = FailedLenderScope & {
 
 type PackageFreshness = {
   section: DatasetKind
-  scope: SnapshotScope
+  scope: PackageScope['scope']
   ok: boolean
   source: 'kv' | 'missing'
   built_at: string | null
