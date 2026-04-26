@@ -14,6 +14,7 @@ import {
   isHistoricalWriteContractError,
   recordHistoricalWriteContractViolation,
 } from './historical-write-guard'
+import type { RateBatchWriteResult } from './historical-rates'
 
 const UPSERT_HISTORICAL_SAVINGS_RATE_SQL = `INSERT INTO historical_savings_rates (
         bank_name, collection_date, product_id, product_code, product_name,
@@ -52,6 +53,7 @@ export type SavingsRateWriteOptions = {
   updateCatalogs?: boolean
   markSeriesSeen?: boolean
   upsertLatestSeries?: boolean
+  skipUnchangedRows?: boolean
 }
 
 type PreparedSavingsRow = {
@@ -64,12 +66,71 @@ type PreparedSavingsRow = {
   cdrProductDetailHash: string | null
 }
 
+function emptyWriteResult(): RateBatchWriteResult {
+  return { written: 0, unchanged: 0, skippedSideEffects: 0 }
+}
+
+function equalStateValue(left: unknown, right: unknown): boolean {
+  if (left == null && right == null) return true
+  if (typeof left === 'number' || typeof right === 'number') {
+    const a = left == null ? null : Number(left)
+    const b = right == null ? null : Number(right)
+    if (a == null || b == null) return a === b
+    return Number.isFinite(a) && Number.isFinite(b) ? a === b : String(left) === String(right)
+  }
+  return String(left ?? '') === String(right ?? '')
+}
+
+function savingsRowUnchanged(current: Record<string, unknown>, row: NormalizedSavingsRow): boolean {
+  const comparisons: Array<[unknown, unknown]> = [
+    [current.product_id, row.productId],
+    [current.product_name, row.productName],
+    [current.account_type, row.accountType],
+    [current.rate_type, row.rateType],
+    [current.deposit_tier, row.depositTier],
+    [current.interest_rate, row.interestRate],
+    [current.min_balance, row.minBalance ?? null],
+    [current.max_balance, row.maxBalance ?? null],
+    [current.conditions, row.conditions ?? null],
+    [current.monthly_fee, row.monthlyFee ?? null],
+  ]
+  return comparisons.every(([left, right]) => equalStateValue(left, right))
+}
+
 function chunk<T>(rows: T[], size: number): T[][] {
   const output: T[][] = []
   for (let index = 0; index < rows.length; index += size) {
     output.push(rows.slice(index, index + size))
   }
   return output
+}
+
+async function filterChangedSavingsRows(db: D1Database, rows: NormalizedSavingsRow[]): Promise<{
+  changed: NormalizedSavingsRow[]
+  unchanged: number
+}> {
+  const keyed = rows.map((row) => ({ row, seriesKey: savingsSeriesKey(row) }))
+  const currentByKey = new Map<string, Record<string, unknown>>()
+  for (const part of chunk(Array.from(new Set(keyed.map((item) => item.seriesKey))), 80)) {
+    const result = await db
+      .prepare(
+        `SELECT series_key, product_id, product_name, account_type, rate_type, deposit_tier,
+                interest_rate, min_balance, max_balance, conditions, monthly_fee, is_removed
+         FROM latest_savings_series
+         WHERE series_key IN (${part.map(() => '?').join(',')})`,
+      )
+      .bind(...part)
+      .all<Record<string, unknown>>()
+    for (const current of result.results ?? []) currentByKey.set(String(current.series_key || ''), current)
+  }
+  const changed: NormalizedSavingsRow[] = []
+  let unchanged = 0
+  for (const item of keyed) {
+    const current = currentByKey.get(item.seriesKey)
+    if (current && Number(current.is_removed ?? 0) === 0 && savingsRowUnchanged(current, item.row)) unchanged += 1
+    else changed.push(item.row)
+  }
+  return { changed, unchanged }
 }
 
 async function prepareSavingsRow(db: D1Database, row: NormalizedSavingsRow): Promise<PreparedSavingsRow> {
@@ -276,7 +337,7 @@ export async function upsertSavingsRateRow(
   db: D1Database,
   row: NormalizedSavingsRow,
   options: SavingsRateWriteOptions = {},
-): Promise<void> {
+): Promise<RateBatchWriteResult> {
   const verdict = validateNormalizedSavingsRow(row)
   if (!verdict.ok) {
     throw new Error(`invalid_savings_row:${verdict.reason}`)
@@ -286,15 +347,16 @@ export async function upsertSavingsRateRow(
   const prepared = await prepareSavingsRow(db, row)
   await buildHistoricalSavingsRateStatement(db, prepared).run()
   await runSavingsPostWriteSideEffects(db, prepared, options)
+  return { written: 1, unchanged: 0, skippedSideEffects: 0 }
 }
 
 async function upsertSavingsRateRowsBatched(
   db: D1Database,
   rows: NormalizedSavingsRow[],
   options: SavingsRateWriteOptions,
-): Promise<number> {
+): Promise<RateBatchWriteResult> {
   const preparedRows = await Promise.all(rows.map((row) => prepareSavingsRow(db, row)))
-  let written = 0
+  const result = emptyWriteResult()
 
   for (const part of chunk(preparedRows, 32)) {
     try {
@@ -302,7 +364,7 @@ async function upsertSavingsRateRowsBatched(
       for (const prepared of part) {
         try {
           await runSavingsPostWriteSideEffects(db, prepared, options)
-          written += 1
+          result.written += 1
         } catch (error) {
           const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
           if (isHistoricalWriteContractError(error)) {
@@ -324,8 +386,8 @@ async function upsertSavingsRateRowsBatched(
     } catch {
       for (const prepared of part) {
         try {
-          await upsertSavingsRateRow(db, prepared.row, options)
-          written += 1
+          const rowResult = await upsertSavingsRateRow(db, prepared.row, options)
+          result.written += rowResult.written
         } catch (error) {
           const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
           if (isHistoricalWriteContractError(error)) {
@@ -347,14 +409,24 @@ async function upsertSavingsRateRowsBatched(
     }
   }
 
-  return written
+  return result
 }
 
 export async function upsertSavingsRateRows(
   db: D1Database,
   rows: NormalizedSavingsRow[],
   options: SavingsRateWriteOptions = {},
-): Promise<number> {
-  if (rows.length === 0) return 0
-  return upsertSavingsRateRowsBatched(db, rows, options)
+): Promise<RateBatchWriteResult> {
+  if (rows.length === 0) return emptyWriteResult()
+  let inputRows = rows
+  let unchanged = 0
+  if (options.skipUnchangedRows) {
+    const filtered = await filterChangedSavingsRows(db, rows)
+    inputRows = filtered.changed
+    unchanged = filtered.unchanged
+    if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
+  }
+  const result = await upsertSavingsRateRowsBatched(db, inputRows, options)
+  result.unchanged += unchanged
+  return result
 }

@@ -13,6 +13,7 @@ export type LenderDatasetRunRow = {
   accepted_row_count: number
   written_row_count: number
   dropped_row_count: number
+  unchanged_row_count: number
   detail_fetch_event_count: number
   lineage_error_count: number
   completed_detail_count: number
@@ -107,6 +108,7 @@ export async function recordLenderDatasetWriteStats(
     acceptedRows?: number
     writtenRows?: number
     droppedRows?: number
+    unchangedRows?: number
     detailFetchEventCount?: number
     lineageErrors?: number
     errorMessage?: string | null
@@ -119,18 +121,20 @@ export async function recordLenderDatasetWriteStats(
          SET accepted_row_count = accepted_row_count + ?1,
              written_row_count = written_row_count + ?2,
              dropped_row_count = dropped_row_count + ?3,
-             detail_fetch_event_count = detail_fetch_event_count + ?4,
-             lineage_error_count = lineage_error_count + ?5,
-             last_error = COALESCE(?6, last_error),
-             updated_at = ?7
-         WHERE run_id = ?8
-           AND lender_code = ?9
-           AND dataset_kind = ?10`,
+             unchanged_row_count = COALESCE(unchanged_row_count, 0) + ?4,
+             detail_fetch_event_count = detail_fetch_event_count + ?5,
+             lineage_error_count = lineage_error_count + ?6,
+             last_error = COALESCE(?7, last_error),
+             updated_at = ?8
+         WHERE run_id = ?9
+           AND lender_code = ?10
+           AND dataset_kind = ?11`,
       )
       .bind(
         Math.max(0, Math.floor(input.acceptedRows ?? 0)),
         Math.max(0, Math.floor(input.writtenRows ?? 0)),
         Math.max(0, Math.floor(input.droppedRows ?? 0)),
+        Math.max(0, Math.floor(input.unchangedRows ?? 0)),
         Math.max(0, Math.floor(input.detailFetchEventCount ?? 0)),
         Math.max(0, Math.floor(input.lineageErrors ?? 0)),
         input.errorMessage ?? null,
@@ -189,7 +193,8 @@ export async function getLenderDatasetRun(
       `SELECT
          run_id, lender_code, dataset_kind, bank_name, collection_date,
          expected_detail_count, index_fetch_succeeded, accepted_row_count, written_row_count,
-         dropped_row_count, detail_fetch_event_count, lineage_error_count,
+         dropped_row_count, COALESCE(unchanged_row_count, 0) AS unchanged_row_count,
+         detail_fetch_event_count, lineage_error_count,
          completed_detail_count, failed_detail_count,
          finalized_at, last_error, updated_at
        FROM lender_dataset_runs
