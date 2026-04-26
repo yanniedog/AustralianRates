@@ -127,12 +127,11 @@
         container.setAttribute('data-report-view-mode', vm.mode);
 
         var plotPayload = model && model.reportPlots ? model.reportPlots.bands : null;
-        var plotRange = reportPlot.payloadDateRange(plotPayload);
-        var fbRange = reportPlot.fallbackSeriesDateBoundsFromModel
-            ? reportPlot.fallbackSeriesDateBoundsFromModel(model)
-            : { minDate: '', maxDate: '' };
-        var plotMin = plotRange.minDate || fbRange.minDate || todayYmd();
-        var plotMax = plotRange.maxDate || fbRange.maxDate || plotMin;
+        var combinedRange = reportPlot.combinedDateRange
+            ? reportPlot.combinedDateRange(plotPayload, model)
+            : reportPlot.payloadDateRange(plotPayload);
+        var plotMin = combinedRange.minDate || todayYmd();
+        var plotMax = combinedRange.maxDate || plotMin;
         var dataMinPlot = reportRange === 'All'
             ? (M.resolveReportDataMin(plotMin, rbaHistory, cpiData, economicOverlaySeries) || plotMin)
             : plotMin;
