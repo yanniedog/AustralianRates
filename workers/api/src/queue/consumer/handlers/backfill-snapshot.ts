@@ -184,7 +184,8 @@ export async function handleBackfillSnapshotJob(env: EnvBindings, job: BackfillS
     let writtenForSnapshot = 0
     if (accepted.length > 0) {
       const writeStartedAt = Date.now()
-      writtenForSnapshot = await upsertHistoricalRateRows(env.DB, accepted)
+      const writeResult = await upsertHistoricalRateRows(env.DB, accepted)
+      writtenForSnapshot = writeResult.written
       writeMsTotal += elapsedMs(writeStartedAt)
       writtenRows += writtenForSnapshot
     }

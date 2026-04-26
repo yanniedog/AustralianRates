@@ -16,6 +16,7 @@ import {
   UBANK_SAVINGS_FALLBACK_URLS,
 } from '../../../ingest/ubank-fallback'
 import type { DailyLenderJob, DailySavingsLenderJob, EnvBindings, LenderConfig } from '../../../types'
+import { isD1EmergencyMinimumWrites } from '../../../utils/d1-emergency'
 import { FetchWithTimeoutError, fetchWithTimeout, hostFromUrl } from '../../../utils/fetch-with-timeout'
 import { log } from '../../../utils/logger'
 import { nowIso } from '../../../utils/time'
@@ -230,12 +231,14 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
     bankName: lender.canonical_bank_name,
     collectionDate: job.collectionDate,
     productIds: parsedProductIds,
+    skip: isD1EmergencyMinimumWrites(env),
   })
   await markHomeLoanSeriesSeenForRun(env.DB, {
     runId: job.runId,
     lenderCode: job.lenderCode,
     collectionDate: job.collectionDate,
     rows: collectedRows,
+    skip: isD1EmergencyMinimumWrites(env),
   })
 
   const { accepted, dropped } = splitValidatedRows(collectedRows)
@@ -303,13 +306,16 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
     return
   }
 
-  const written = await upsertHistoricalRateRows(env.DB, accepted)
+  const writeResult = await upsertHistoricalRateRows(env.DB, accepted, {
+    skipUnchangedRows: isD1EmergencyMinimumWrites(env),
+  })
   await recordLenderDatasetWriteStats(env.DB, {
     runId: job.runId,
     lenderCode: job.lenderCode,
     dataset: 'home_loans',
     acceptedRows: accepted.length,
-    writtenRows: written,
+    writtenRows: writeResult.written,
+    unchangedRows: writeResult.unchanged,
     droppedRows: dropped.length,
     detailFetchEventCount: parsedProductIds.length,
   })
@@ -358,7 +364,7 @@ export async function handleDailyUbankHomeLoanFallback(env: EnvBindings, job: Da
     runId: job.runId,
     lenderCode: job.lenderCode,
     context:
-      `accepted=${accepted.length} written=${written} dropped=${dropped.length}` +
+      `accepted=${accepted.length} written=${writeResult.written} unchanged=${writeResult.unchanged} dropped=${dropped.length}` +
       ` statuses=${serializeForLog(observedUpstreamStatuses)}` +
       ` pages=${pageDiagnostics.length} total_ms=${elapsedMs(startedAt)}`,
   })
@@ -511,12 +517,14 @@ export async function handleDailyUbankSavingsFallback(
       bankName: lender.canonical_bank_name,
       collectionDate: job.collectionDate,
       productIds: parsedProductIds,
+      skip: isD1EmergencyMinimumWrites(env),
     })
     await markSavingsSeriesSeenForRun(env.DB, {
       runId: job.runId,
       lenderCode: job.lenderCode,
       collectionDate: job.collectionDate,
       rows: parsed.rows,
+      skip: isD1EmergencyMinimumWrites(env),
     })
     const { accepted, dropped } = splitValidatedSavingsRows(parsed.rows)
     const droppedReasons = summarizeDropReasons(dropped)
@@ -531,13 +539,16 @@ export async function handleDailyUbankSavingsFallback(
       row.runSource = job.runSource ?? 'scheduled'
     }
     if (accepted.length > 0) {
-      const written = await upsertSavingsRateRows(env.DB, accepted)
+      const writeResult = await upsertSavingsRateRows(env.DB, accepted, {
+        skipUnchangedRows: isD1EmergencyMinimumWrites(env),
+      })
       await recordLenderDatasetWriteStats(env.DB, {
         runId: job.runId,
         lenderCode: job.lenderCode,
         dataset: 'savings',
         acceptedRows: accepted.length,
-        writtenRows: written,
+        writtenRows: writeResult.written,
+        unchangedRows: writeResult.unchanged,
         droppedRows: dropped.length,
         detailFetchEventCount: parsedProductIds.length,
       })

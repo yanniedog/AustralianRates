@@ -193,11 +193,14 @@ export async function handleHistoricalTaskJob(env: EnvBindings, job: HistoricalT
     })
 
     const writeStartedAt = Date.now()
-    const [mortgageWritten, savingsWritten, tdWritten] = await Promise.all([
+    const [mortgageWriteResult, savingsWriteResult, tdWriteResult] = await Promise.all([
       upsertHistoricalRateRows(env.DB, mortgageAccepted),
       upsertSavingsRateRows(env.DB, savingsAccepted),
       upsertTdRateRows(env.DB, tdAccepted),
     ])
+    const mortgageWritten = mortgageWriteResult.written
+    const savingsWritten = savingsWriteResult.written
+    const tdWritten = tdWriteResult.written
     const writeMs = elapsedMs(writeStartedAt)
 
     const hadSignals =

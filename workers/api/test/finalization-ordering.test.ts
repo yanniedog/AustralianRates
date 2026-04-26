@@ -29,6 +29,7 @@ function makeRunRow(overrides: Partial<LenderDatasetRunRow>): LenderDatasetRunRo
     accepted_row_count: 1,
     written_row_count: 1,
     dropped_row_count: 0,
+    unchanged_row_count: 0,
     detail_fetch_event_count: 1,
     lineage_error_count: 0,
     ...overrides,

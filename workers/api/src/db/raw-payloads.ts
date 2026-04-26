@@ -1,5 +1,6 @@
 import type { DatasetKind, IngestTaskKind } from '../../../../packages/shared/src'
 import { persistFetchEvent } from './fetch-events'
+import { shouldSkipRoutineRawPayload } from '../utils/d1-emergency'
 
 type RawPayloadInput = {
   sourceType: string
@@ -31,9 +32,21 @@ type RawPayloadResult = {
 type RawEnv = {
   DB: D1Database
   RAW_BUCKET: R2Bucket
+  D1_EMERGENCY_MINIMUM_WRITES?: string
 }
 
 export async function persistRawPayload(env: RawEnv, input: RawPayloadInput): Promise<RawPayloadResult> {
+  if (shouldSkipRoutineRawPayload(env, input)) {
+    return {
+      inserted: false,
+      id: null,
+      contentHash: '',
+      r2Key: '',
+      fetchEventId: null,
+      rawObjectCreated: false,
+      bodyBytes: 0,
+    }
+  }
   const result = await persistFetchEvent(env, input)
   return {
     inserted: result.rawObjectCreated,

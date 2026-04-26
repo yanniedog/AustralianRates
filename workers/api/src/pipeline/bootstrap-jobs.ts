@@ -20,6 +20,7 @@ import type { EnvBindings, LenderConfig } from '../types'
 import { VALIDATE_COMMON } from '../ingest/validate-common'
 import { buildBackfillRunId, buildDailyRunId, buildRunLockKey } from '../utils/idempotency'
 import { log } from '../utils/logger'
+import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
 import { currentMonthCursor, getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
 import type { DatasetKind } from '../../../../packages/shared/src'
 
@@ -208,13 +209,15 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       : []
 
     if (pendingLoanLenders.length === 0 && pendingSavingsLenders.length === 0) {
-      const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10)
-      await Promise.all([
-        backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env),
-        collectCpiFromRbaG1(env.DB, env),
-      ])
+      if (!isD1EmergencyMinimumWrites(env)) {
+        const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10)
+        await Promise.all([
+          backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env),
+          collectCpiFromRbaG1(env.DB, env),
+        ])
+      }
       return {
         ok: true,
         skipped: true,
@@ -263,11 +266,16 @@ export async function triggerDailyRun(env: EnvBindings, options: DailyRunOptions
       const sevenDaysAgo = new Date(new Date(collectionDate).getTime() - 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 10)
-      const [rbaCollection] = await Promise.all([
-        backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env),
-        collectCpiFromRbaG1(env.DB, env),
-      ])
-      const endpointRefresh = await refreshEndpointCache(env.DB, TARGET_LENDERS, 24, env)
+      const emergencyMinimumWrites = isD1EmergencyMinimumWrites(env)
+      const [rbaCollection] = emergencyMinimumWrites
+        ? [{ ok: true, upserted: 0, skipped: 0, startDate: sevenDaysAgo, endDate: collectionDate, sourceUrl: '', message: 'skipped_emergency_minimum_writes' }]
+        : await Promise.all([
+            backfillRbaCashRatesForDateRange(env.DB, sevenDaysAgo, collectionDate, env),
+            collectCpiFromRbaG1(env.DB, env),
+          ])
+      const endpointRefresh = emergencyMinimumWrites
+        ? { refreshed: 0, failed: 0, skipped: TARGET_LENDERS.length, errors: [] }
+        : await refreshEndpointCache(env.DB, TARGET_LENDERS, 24, env)
 
       const enqueue = await enqueueDailyLenderJobs(env, {
         runId,

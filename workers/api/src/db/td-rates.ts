@@ -14,6 +14,7 @@ import {
   isHistoricalWriteContractError,
   recordHistoricalWriteContractViolation,
 } from './historical-write-guard'
+import type { RateBatchWriteResult } from './historical-rates'
 
 const UPSERT_HISTORICAL_TD_RATE_SQL = `INSERT INTO historical_term_deposit_rates (
         bank_name, collection_date, product_id, product_code, product_name,
@@ -50,6 +51,7 @@ export type TdRateWriteOptions = {
   updateCatalogs?: boolean
   markSeriesSeen?: boolean
   upsertLatestSeries?: boolean
+  skipUnchangedRows?: boolean
 }
 
 type PreparedTdRow = {
@@ -62,12 +64,69 @@ type PreparedTdRow = {
   cdrProductDetailHash: string | null
 }
 
+function emptyWriteResult(): RateBatchWriteResult {
+  return { written: 0, unchanged: 0, skippedSideEffects: 0 }
+}
+
+function equalStateValue(left: unknown, right: unknown): boolean {
+  if (left == null && right == null) return true
+  if (typeof left === 'number' || typeof right === 'number') {
+    const a = left == null ? null : Number(left)
+    const b = right == null ? null : Number(right)
+    if (a == null || b == null) return a === b
+    return Number.isFinite(a) && Number.isFinite(b) ? a === b : String(left) === String(right)
+  }
+  return String(left ?? '') === String(right ?? '')
+}
+
+function tdRowUnchanged(current: Record<string, unknown>, row: NormalizedTdRow): boolean {
+  const comparisons: Array<[unknown, unknown]> = [
+    [current.product_id, row.productId],
+    [current.product_name, row.productName],
+    [current.term_months, row.termMonths],
+    [current.deposit_tier, row.depositTier],
+    [current.interest_payment, row.interestPayment],
+    [current.interest_rate, row.interestRate],
+    [current.min_deposit, row.minDeposit ?? null],
+    [current.max_deposit, row.maxDeposit ?? null],
+  ]
+  return comparisons.every(([left, right]) => equalStateValue(left, right))
+}
+
 function chunk<T>(rows: T[], size: number): T[][] {
   const output: T[][] = []
   for (let index = 0; index < rows.length; index += size) {
     output.push(rows.slice(index, index + size))
   }
   return output
+}
+
+async function filterChangedTdRows(db: D1Database, rows: NormalizedTdRow[]): Promise<{
+  changed: NormalizedTdRow[]
+  unchanged: number
+}> {
+  const keyed = rows.map((row) => ({ row, seriesKey: tdSeriesKey(row) }))
+  const currentByKey = new Map<string, Record<string, unknown>>()
+  for (const part of chunk(Array.from(new Set(keyed.map((item) => item.seriesKey))), 80)) {
+    const result = await db
+      .prepare(
+        `SELECT series_key, product_id, product_name, term_months, deposit_tier, interest_payment,
+                interest_rate, min_deposit, max_deposit, is_removed
+         FROM latest_td_series
+         WHERE series_key IN (${part.map(() => '?').join(',')})`,
+      )
+      .bind(...part)
+      .all<Record<string, unknown>>()
+    for (const current of result.results ?? []) currentByKey.set(String(current.series_key || ''), current)
+  }
+  const changed: NormalizedTdRow[] = []
+  let unchanged = 0
+  for (const item of keyed) {
+    const current = currentByKey.get(item.seriesKey)
+    if (current && Number(current.is_removed ?? 0) === 0 && tdRowUnchanged(current, item.row)) unchanged += 1
+    else changed.push(item.row)
+  }
+  return { changed, unchanged }
 }
 
 async function prepareTdRow(db: D1Database, row: NormalizedTdRow): Promise<PreparedTdRow> {
@@ -268,7 +327,7 @@ export async function upsertTdRateRow(
   db: D1Database,
   row: NormalizedTdRow,
   options: TdRateWriteOptions = {},
-): Promise<void> {
+): Promise<RateBatchWriteResult> {
   const verdict = validateNormalizedTdRow(row)
   if (!verdict.ok) {
     throw new Error(`invalid_td_row:${verdict.reason}`)
@@ -278,15 +337,16 @@ export async function upsertTdRateRow(
   const prepared = await prepareTdRow(db, row)
   await buildHistoricalTdRateStatement(db, prepared).run()
   await runTdPostWriteSideEffects(db, prepared, options)
+  return { written: 1, unchanged: 0, skippedSideEffects: 0 }
 }
 
 async function upsertTdRateRowsBatched(
   db: D1Database,
   rows: NormalizedTdRow[],
   options: TdRateWriteOptions,
-): Promise<number> {
+): Promise<RateBatchWriteResult> {
   const preparedRows = await Promise.all(rows.map((row) => prepareTdRow(db, row)))
-  let written = 0
+  const result = emptyWriteResult()
 
   for (const part of chunk(preparedRows, 32)) {
     try {
@@ -294,7 +354,7 @@ async function upsertTdRateRowsBatched(
       for (const prepared of part) {
         try {
           await runTdPostWriteSideEffects(db, prepared, options)
-          written += 1
+          result.written += 1
         } catch (error) {
           const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
           if (isHistoricalWriteContractError(error)) {
@@ -316,8 +376,8 @@ async function upsertTdRateRowsBatched(
     } catch {
       for (const prepared of part) {
         try {
-          await upsertTdRateRow(db, prepared.row, options)
-          written += 1
+          const rowResult = await upsertTdRateRow(db, prepared.row, options)
+          result.written += rowResult.written
         } catch (error) {
           const code = isHistoricalWriteContractError(error) ? 'write_contract_violation' : 'upsert_failed'
           if (isHistoricalWriteContractError(error)) {
@@ -339,14 +399,24 @@ async function upsertTdRateRowsBatched(
     }
   }
 
-  return written
+  return result
 }
 
 export async function upsertTdRateRows(
   db: D1Database,
   rows: NormalizedTdRow[],
   options: TdRateWriteOptions = {},
-): Promise<number> {
-  if (rows.length === 0) return 0
-  return upsertTdRateRowsBatched(db, rows, options)
+): Promise<RateBatchWriteResult> {
+  if (rows.length === 0) return emptyWriteResult()
+  let inputRows = rows
+  let unchanged = 0
+  if (options.skipUnchangedRows) {
+    const filtered = await filterChangedTdRows(db, rows)
+    inputRows = filtered.changed
+    unchanged = filtered.unchanged
+    if (inputRows.length === 0) return { written: 0, unchanged, skippedSideEffects: 0 }
+  }
+  const result = await upsertTdRateRowsBatched(db, inputRows, options)
+  result.unchanged += unchanged
+  return result
 }

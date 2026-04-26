@@ -20,6 +20,7 @@ import { enqueueLenderFinalizeJobs, enqueueProductDetailJobs } from '../../produ
 import type { DailySavingsLenderJob, EnvBindings } from '../../../types'
 import { log } from '../../../utils/logger'
 import { detectUpstreamBlock } from '../../../utils/upstream-block'
+import { isD1EmergencyMinimumWrites } from '../../../utils/d1-emergency'
 import { nowIso } from '../../../utils/time'
 import type { DatasetKind } from '../../../../../../packages/shared/src'
 import { finalizeLenderDatasetIfReady } from '../finalization'
@@ -289,6 +290,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         bankName,
         collectionDate: job.collectionDate,
         productIds: uniqueSavingsIds,
+        skip: isD1EmergencyMinimumWrites(env),
       })
     }
     if (shouldFetchTd && tdIndexFetchSucceeded) {
@@ -306,6 +308,7 @@ export async function handleDailySavingsLenderJob(env: EnvBindings, job: DailySa
         bankName,
         collectionDate: job.collectionDate,
         productIds: uniqueTdIds,
+        skip: isD1EmergencyMinimumWrites(env),
       })
     }
 

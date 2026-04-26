@@ -136,11 +136,14 @@ export async function handleBackfillDayJob(env: EnvBindings, job: BackfillDayJob
     })
 
     const writeStartedAt = Date.now()
-    const [mortgageWritten, savingsWritten, tdWritten] = await Promise.all([
+    const [mortgageWriteResult, savingsWriteResult, tdWriteResult] = await Promise.all([
       upsertHistoricalRateRows(env.DB, mortgageAccepted),
       upsertSavingsRateRows(env.DB, savingsAccepted),
       upsertTdRateRows(env.DB, tdAccepted),
     ])
+    const mortgageWritten = mortgageWriteResult.written
+    const savingsWritten = savingsWriteResult.written
+    const tdWritten = tdWriteResult.written
     const writeMs = elapsedMs(writeStartedAt)
     const finalSignals = hadSignals || mortgageWritten > 0 || savingsWritten > 0 || tdWritten > 0
 
