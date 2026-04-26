@@ -922,6 +922,17 @@
             return null;
         }
 
+        function visibleRibbonProducts() {
+            var scoped = isBandsMode ? currentScopedProductKeys() : [];
+            var flat = (ribbonCanvasModel && ribbonCanvasModel.flat) || [];
+            if (!scoped.length) return flat.slice();
+            var wanted = {};
+            scoped.forEach(function (key) { wanted[String(key)] = true; });
+            return flat.filter(function (prod) {
+                return !!(prod && prod.key && wanted[String(prod.key)]);
+            });
+        }
+
         function showReportHoverBox(input) {
             if (!reportHoverBox || !input) return;
             var rows = input.rows || [];
@@ -947,9 +958,9 @@
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }
-            var scoped = isBandsMode ? currentScopedProductKeys() : [];
-            if (scoped.length === 1) {
-                var prod = findRibbonProductByKey(scoped[0]);
+            var visibleProducts = visibleRibbonProducts();
+            if (visibleProducts.length === 1) {
+                var prod = visibleProducts[0];
                 var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
                 showReportHoverBox({
                     heading: reportProductLabel(prod),
@@ -958,23 +969,30 @@
                 });
                 return;
             }
-            var bank = canonicalBandsBankFromUi(String(bankName || ribbonChartHighlightBank() || '').trim());
-            var point = bank ? (bandByDateByBank[bank] && bandByDateByBank[bank][anchor]) : null;
-            if (!point && plotPayload && plotPayload.series && plotPayload.series.length) {
-                bank = String(plotPayload.series[0].bank_name || '');
-                point = bandByDateByBank[bank] && bandByDateByBank[bank][anchor];
-            }
-            if (!point) {
+            var values = [];
+            visibleProducts.forEach(function (prod) {
+                var v = prod && prod.byDate ? Number(prod.byDate[anchor]) : NaN;
+                if (Number.isFinite(v) && v > 0) values.push(v);
+            });
+            if (!values.length) {
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }
+            var min = values[0];
+            var max = values[0];
+            var sum = 0;
+            values.forEach(function (v) {
+                if (v < min) min = v;
+                if (v > max) max = v;
+                sum += v;
+            });
             showReportHoverBox({
-                heading: bank || 'Market band',
+                heading: 'Visible ribbon',
                 date: fmtReportDateYmd(anchor),
                 rows: [
-                    { label: 'Max', value: fmtHoverRate(point.max_rate) },
-                    { label: 'Mean', value: fmtHoverRate(point.mean_rate) },
-                    { label: 'Min', value: fmtHoverRate(point.min_rate) },
+                    { label: 'Min', value: fmtHoverRate(min) },
+                    { label: 'Mean', value: fmtHoverRate(sum / values.length) },
+                    { label: 'Max', value: fmtHoverRate(max) },
                 ],
             });
         }
@@ -1963,12 +1981,9 @@
                     var dataCoord = chart.convertFromPixel(ribbonAxisFinder, pt);
                     if (!dataCoord || dataCoord.length < 2) return;
                     var anchor = resolveDateFromAxisValue(dataCoord[0]);
-                    var yVal = Number(dataCoord[1]);
-                    if (!anchor || !Number.isFinite(yVal)) return;
+                    if (!anchor) return;
                     setRibbonAnchorDate(anchor);
-                    var bn = pickBankFromRibbonBand(anchor, yVal);
-                    if (bn) hoveredBank = bn;
-                    syncReportHoverBox(anchor, bn || ribbonChartHighlightBank());
+                    syncReportHoverBox(anchor);
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
                     syncRibbonTrayUi();
                     if (useRibbonCanvas) scheduleRibbonRedraw();
