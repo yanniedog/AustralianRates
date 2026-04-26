@@ -3,8 +3,10 @@ import type { AppContext, EnvBindings } from '../types'
 import {
   D1_INCLUDED_MONTHLY_READS,
   D1_INCLUDED_MONTHLY_WRITES,
+  D1_INCLUDED_STORAGE_BYTES,
   D1_OVERAGE_ALLOWANCE_USD,
   D1_READ_OVERAGE_PER_MILLION_USD,
+  D1_STORAGE_OVERAGE_PER_GB_MONTH_USD,
   D1_WRITE_OVERAGE_PER_MILLION_USD,
   computeD1OverageCostUsd,
   readLocalD1BudgetState,
@@ -19,7 +21,7 @@ import { jsonError } from '../utils/http'
 
 const DEFAULT_D1_DATABASE_ID = 'de6d4315-686b-4022-b080-956ca3819976'
 const GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql'
-const GRAPHQL_MAX_HISTORY_DAYS = 84
+const GRAPHQL_MAX_HISTORY_DAYS = 31
 const GRAPHQL_MAX_DAYS_PER_QUERY = 28
 
 type D1UsageDay = {
@@ -32,11 +34,26 @@ type D1UsageDay = {
   query_time_ms: number
   storage_bytes: number
   estimated_cost_usd: number
+  period_reads_to_date?: number
+  period_writes_to_date?: number
+  reads_pct_included_to_date?: number
+  writes_pct_included_to_date?: number
+  storage_pct_included?: number
+  read_rows_over_included_to_date?: number
+  write_rows_over_included_to_date?: number
+  storage_bytes_over_included?: number
+  billable_read_rows?: number
+  billable_write_rows?: number
+  billable_storage_bytes?: number
+  read_rows_included_period?: number
+  write_rows_included_period?: number
+  storage_bytes_included?: number
 }
 
 type CloudflareD1UsageResult = {
   days: D1UsageDay[] | null
   error: string | null
+  storage_error?: string | null
 }
 
 function clampDays(value: string | undefined): number {
@@ -63,6 +80,78 @@ function ymd(date: Date): string {
 
 function sortDaysByDate(days: D1UsageDay[]): D1UsageDay[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+}
+
+function emptyUsageDay(date: string): D1UsageDay {
+  return {
+    date,
+    reads: 0,
+    writes: 0,
+    read_queries: 0,
+    write_queries: 0,
+    response_bytes: 0,
+    query_time_ms: 0,
+    storage_bytes: 0,
+    estimated_cost_usd: 0,
+  }
+}
+
+function mergeUsageDays(days: D1UsageDay[]): Map<string, D1UsageDay> {
+  const map = new Map<string, D1UsageDay>()
+  for (const day of days) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date)) continue
+    const prev = map.get(day.date) ?? emptyUsageDay(day.date)
+    map.set(day.date, {
+      ...prev,
+      reads: prev.reads + Math.max(0, day.reads),
+      writes: prev.writes + Math.max(0, day.writes),
+      read_queries: prev.read_queries + Math.max(0, day.read_queries),
+      write_queries: prev.write_queries + Math.max(0, day.write_queries),
+      response_bytes: prev.response_bytes + Math.max(0, day.response_bytes),
+      query_time_ms: prev.query_time_ms + Math.max(0, day.query_time_ms),
+      storage_bytes: Math.max(prev.storage_bytes, Math.max(0, day.storage_bytes)),
+      estimated_cost_usd: prev.estimated_cost_usd + Math.max(0, day.estimated_cost_usd),
+    })
+  }
+  return map
+}
+
+function fillUsageDateRange(days: D1UsageDay[], start: Date, end: Date): D1UsageDay[] {
+  const map = mergeUsageDays(days)
+  const rows: D1UsageDay[] = []
+  for (let cursor = new Date(start); cursor <= end; cursor = addUtcDays(cursor, 1)) {
+    const date = ymd(cursor)
+    rows.push(map.get(date) ?? emptyUsageDay(date))
+  }
+  return rows
+}
+
+function addQuotaFields(days: D1UsageDay[], cycleStartDay: number): D1UsageDay[] {
+  const periodTotals = new Map<string, { reads: number; writes: number }>()
+  return days.map((day) => {
+    const period = resolveBillingPeriod(new Date(`${day.date}T12:00:00.000Z`), cycleStartDay)
+    const totals = periodTotals.get(period.start_date) ?? { reads: 0, writes: 0 }
+    totals.reads += Math.max(0, day.reads)
+    totals.writes += Math.max(0, day.writes)
+    periodTotals.set(period.start_date, totals)
+    return {
+      ...day,
+      period_reads_to_date: totals.reads,
+      period_writes_to_date: totals.writes,
+      reads_pct_included_to_date: totals.reads / D1_INCLUDED_MONTHLY_READS,
+      writes_pct_included_to_date: totals.writes / D1_INCLUDED_MONTHLY_WRITES,
+      storage_pct_included: day.storage_bytes / D1_INCLUDED_STORAGE_BYTES,
+      read_rows_over_included_to_date: Math.max(0, totals.reads - D1_INCLUDED_MONTHLY_READS),
+      write_rows_over_included_to_date: Math.max(0, totals.writes - D1_INCLUDED_MONTHLY_WRITES),
+      storage_bytes_over_included: Math.max(0, day.storage_bytes - D1_INCLUDED_STORAGE_BYTES),
+      billable_read_rows: Math.max(0, day.reads),
+      billable_write_rows: Math.max(0, day.writes),
+      billable_storage_bytes: Math.max(0, day.storage_bytes - D1_INCLUDED_STORAGE_BYTES),
+      read_rows_included_period: D1_INCLUDED_MONTHLY_READS,
+      write_rows_included_period: D1_INCLUDED_MONTHLY_WRITES,
+      storage_bytes_included: D1_INCLUDED_STORAGE_BYTES,
+    }
+  })
 }
 
 function summarizeBillingPeriod(days: D1UsageDay[], now: Date, cycleStartDay: number) {
@@ -140,6 +229,27 @@ function graphqlQuery() {
   `
 }
 
+function storageGraphqlQuery() {
+  return `
+    query D1Storage($accountTag: string!, $databaseId: string!, $since: Date!, $until: Date!) {
+      viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+          d1StorageAdaptiveGroups(
+            limit: 1000
+            filter: { databaseId: $databaseId, date_geq: $since, date_leq: $until }
+            orderBy: [date_ASC]
+          ) {
+            dimensions { date databaseId }
+            max {
+              databaseSizeBytes
+            }
+          }
+        }
+      }
+    }
+  `
+}
+
 async function fetchCloudflareD1UsageChunk(
   token: string,
   accountId: string,
@@ -187,6 +297,43 @@ async function fetchCloudflareD1UsageChunk(
   }).filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
 }
 
+async function fetchCloudflareD1StorageChunk(
+  token: string,
+  accountId: string,
+  databaseId: string,
+  since: string,
+  until: string,
+): Promise<Array<{ date: string; storage_bytes: number }> | null> {
+  const response = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: storageGraphqlQuery(),
+      variables: {
+        accountTag: accountId,
+        databaseId,
+        since,
+        until,
+      },
+    }),
+  })
+  const body = await response.json<Record<string, unknown>>().catch(() => null)
+  if (!response.ok || !body || Array.isArray(body.errors)) return null
+  const accounts = (((body.data as Record<string, unknown> | undefined)?.viewer as Record<string, unknown> | undefined)
+    ?.accounts ?? []) as Array<Record<string, unknown>>
+  const groups = (accounts[0]?.d1StorageAdaptiveGroups ?? []) as Array<{
+    dimensions?: { date?: string }
+    max?: Record<string, number>
+  }>
+  return groups.map((group) => ({
+    date: String(group.dimensions?.date || ''),
+    storage_bytes: Math.max(0, Number(group.max?.databaseSizeBytes || 0)),
+  })).filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
+}
+
 async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<CloudflareD1UsageResult> {
   const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim()
   const token = String(env.CLOUDFLARE_GRAPHQL_API_TOKEN || env.CLOUDFLARE_API_TOKEN || '').trim()
@@ -198,14 +345,27 @@ async function fetchCloudflareD1Usage(env: EnvBindings, days: number): Promise<C
   const end = new Date()
   let cursor = dateDaysAgo(effectiveDays)
   const rows: D1UsageDay[] = []
+  let storageError: string | null = null
   while (cursor <= end) {
     const chunkEnd = new Date(Math.min(addUtcDays(cursor, GRAPHQL_MAX_DAYS_PER_QUERY - 1).getTime(), end.getTime()))
     const chunk = await fetchCloudflareD1UsageChunk(token, accountId, databaseId, ymd(cursor), ymd(chunkEnd))
     if (!chunk) return { days: null, error: `graphql_chunk_failed:${ymd(cursor)}:${ymd(chunkEnd)}` }
     rows.push(...chunk)
+    const storage = await fetchCloudflareD1StorageChunk(token, accountId, databaseId, ymd(cursor), ymd(chunkEnd))
+    if (!storage) {
+      storageError = storageError || `graphql_storage_chunk_failed:${ymd(cursor)}:${ymd(chunkEnd)}`
+    } else {
+      const byDate = new Map(rows.map((day) => [day.date, day]))
+      for (const storageDay of storage) {
+        const row = byDate.get(storageDay.date) ?? emptyUsageDay(storageDay.date)
+        row.storage_bytes = Math.max(row.storage_bytes, storageDay.storage_bytes)
+        if (!byDate.has(storageDay.date)) rows.push(row)
+        byDate.set(storageDay.date, row)
+      }
+    }
     cursor = addUtcDays(chunkEnd, 1)
   }
-  return { days: rows, error: null }
+  return { days: fillUsageDateRange(rows, dateDaysAgo(effectiveDays), end), error: null, storage_error: storageError }
 }
 
 async function fallbackLocalUsage(env: EnvBindings, days: number): Promise<D1UsageDay[]> {
@@ -231,9 +391,9 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
     const cloudflareResult = await fetchCloudflareD1Usage(c.env, days)
     const source = cloudflareResult.days ? 'cloudflare_graphql' : 'local_advisory'
     const usageDays = cloudflareResult.days ?? await fallbackLocalUsage(c.env, days)
-    const sorted = sortDaysByDate(usageDays)
     const now = new Date()
     const cycleStartDay = normalizeBillingCycleStartDay(c.env.CLOUDFLARE_BILLING_CYCLE_START_DAY)
+    const sorted = addQuotaFields(sortDaysByDate(usageDays), cycleStartDay)
     const month = summarizeBillingPeriod(sorted, now, cycleStartDay)
     const dayRows = sorted.map((d) => ({ date: d.date, reads: d.reads, writes: d.writes }))
     const history_billing_periods = aggregateD1UsageByBillingPeriod(dayRows, cycleStartDay)
@@ -244,6 +404,7 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
       auth_mode: c.get('adminAuthState')?.mode ?? null,
       source,
       source_error: cloudflareResult.error,
+      storage_source_error: cloudflareResult.storage_error ?? null,
       generated_at: new Date().toISOString(),
       quotas: {
         allowance_label: 'Cloudflare D1 included monthly (published list pricing)',
@@ -256,8 +417,10 @@ adminCloudflareRoutes.get('/cloudflare/d1-usage', async (c) => {
         billing_period_end_date: month.period_end_date,
         d1_reads_included_monthly: D1_INCLUDED_MONTHLY_READS,
         d1_writes_included_monthly: D1_INCLUDED_MONTHLY_WRITES,
+        d1_storage_included_bytes: D1_INCLUDED_STORAGE_BYTES,
         d1_read_overage_per_million_usd: D1_READ_OVERAGE_PER_MILLION_USD,
         d1_write_overage_per_million_usd: D1_WRITE_OVERAGE_PER_MILLION_USD,
+        d1_storage_overage_per_gb_month_usd: D1_STORAGE_OVERAGE_PER_GB_MONTH_USD,
         accepted_coverage_overage_usd: D1_OVERAGE_ALLOWANCE_USD,
       },
       month,
