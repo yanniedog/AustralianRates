@@ -26,6 +26,7 @@ import { getMelbourneNowParts } from '../utils/time'
 import { collectRbaCashRateForDate } from '../ingest/rba'
 import { runScheduledHistoricalQualitySnapshot } from './historical-quality-scheduler'
 import { isD1NonEssentialWorkDisabled } from '../utils/d1-budget'
+import { isD1EmergencyMinimumWrites } from '../utils/d1-emergency'
 
 type CronEvent = ScheduledController & { cron?: string }
 export type ScheduledTask =
@@ -219,6 +220,18 @@ export async function dispatchScheduledEvent(event: ScheduledController, env: En
   }
 
   if (tasks.length === 1 && tasks[0] === 'public_package_refresh') {
+    if (isD1EmergencyMinimumWrites(env) || (await isD1NonEssentialWorkDisabled(env))) {
+      log.warn('scheduler', 'Skipping public package refresh: D1 write guardrail active', {
+        code: 'd1_public_package_refresh_disabled',
+        context: `scheduled_time=${scheduledIso} cron=${cron}`,
+      })
+      return {
+        ok: true,
+        skipped: true,
+        kind: 'public_package_refresh',
+        reason: 'd1_write_guardrail_active',
+      }
+    }
     log.info('scheduler', `Dispatching public package refresh cron (${cron})`, {
       context: `scheduled_time=${scheduledIso}`,
     })
