@@ -233,11 +233,12 @@
 
 .d1-bar-day {
     display: grid;
-    grid-template-columns: 8px 8px;
+    grid-template-columns: 12px;
     grid-template-rows: 1fr auto;
     gap: 3px;
     align-items: end;
-    min-width: 24px;
+    justify-items: center;
+    min-width: 20px;
     height: 190px;
 }
 
@@ -252,6 +253,7 @@
 
 .d1-bar {
     display: block;
+    width: 12px;
     border-radius: 4px 4px 0 0;
 }
 
