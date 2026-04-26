@@ -486,24 +486,23 @@ body.ar-section-economic-data .chart-block {
 }
 
 body.ar-section-economic-data .chart-block-head { order: 1; }
-body.ar-section-economic-data .economic-toolbar { order: 2; }
-body.ar-section-economic-data #economic-chart { order: 3; }
-body.ar-section-economic-data #economic-empty { order: 4; }
-body.ar-section-economic-data .economic-component-panel { order: 5; }
-body.ar-section-economic-data #scenario { order: 6; }
-body.ar-section-economic-data #chart-meta { order: 7; }
+body.ar-section-economic-data #chart-meta { order: 2; }
+body.ar-section-economic-data #scenario { order: 3; }
+body.ar-section-economic-data .economic-toolbar { order: 4; }
+body.ar-section-economic-data #economic-chart { order: 5; }
+body.ar-section-economic-data #economic-empty { order: 6; }
+body.ar-section-economic-data .economic-component-panel { order: 7; }
 
 body.ar-section-economic-data #scenario {
-    margin-top: 12px;
-    margin-bottom: 0;
-    padding-top: 12px;
-    padding-bottom: 0;
-    border-top: 1px solid var(--ar-line);
-    border-bottom: 0;
+    margin: 8px 0 0;
+    padding: 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, var(--ar-surface));
 }
 
 body.ar-section-economic-data .economic-selection-head {
-    display: none;
+    display: flex;
 }
 
 body.ar-section-economic-data .economic-picker-row {
@@ -520,7 +519,7 @@ body.ar-section-economic-data .economic-toolbar {
     padding: 10px;
     border: 1px solid var(--ar-line);
     border-radius: 10px;
-    margin: 8px 0 10px;
+    margin: 0 0 10px;
 }
 
 body.ar-section-economic-data #economic-range-note,
@@ -530,7 +529,7 @@ body.ar-section-economic-data #chart-meta {
 }
 
 body.ar-section-economic-data #chart-meta {
-    margin-top: 8px;
+    margin: 6px 0 0;
 }
 
 body.ar-section-economic-data .economic-chart {

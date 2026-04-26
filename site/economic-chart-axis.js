@@ -30,11 +30,15 @@
         }
 
         function normalizedExtent(seriesList) {
+            return valueExtent(seriesList, 'normalized_value');
+        }
+
+        function valueExtent(seriesList, fieldName) {
             var min = Infinity;
             var max = -Infinity;
             (seriesList || []).forEach(function (series) {
                 (series.points || []).forEach(function (point) {
-                    var value = Number(point && point.normalized_value);
+                    var value = Number(point && point[fieldName]);
                     if (!Number.isFinite(value)) return;
                     if (value < min) min = value;
                     if (value > max) max = value;
@@ -85,14 +89,18 @@
 
         function syncYScaleButton(opt) {
             if (!refs.yScaleBtn) return;
+            var rawMode = state.chartMode === 'raw';
             var effective = opt && opt.effectiveYAxis;
             var requestedLog = state.yScale === 'log';
-            var actualLog = effective === 'log' || (!effective && requestedLog);
+            var actualLog = !rawMode && (effective === 'log' || (!effective && requestedLog));
             refs.yScaleBtn.textContent = actualLog ? 'log' : 'lin';
             refs.yScaleBtn.setAttribute('aria-pressed', actualLog ? 'true' : 'false');
-            var forcedLinear = requestedLog && effective === 'value';
+            refs.yScaleBtn.disabled = rawMode;
+            var forcedLinear = !rawMode && requestedLog && effective === 'value';
             refs.yScaleBtn.classList.toggle('is-forced-linear', forcedLinear);
-            if (forcedLinear) {
+            if (rawMode) {
+                refs.yScaleBtn.title = 'Raw values always use a linear axis because selected indicators can use different units.';
+            } else if (forcedLinear) {
                 refs.yScaleBtn.title = 'Log scale is selected, but the chart uses linear because some series have zero or negative index values in this range.';
             } else if (actualLog) {
                 refs.yScaleBtn.title = 'Y-axis: logarithmic (base 10). Click for linear scale.';
@@ -101,14 +109,18 @@
             }
             refs.yScaleBtn.setAttribute(
                 'aria-label',
-                forcedLinear
+                rawMode
+                    ? 'Raw values use a linear Y-axis.'
+                    : (forcedLinear
                     ? 'Chart uses a linear Y-axis; log scale is unavailable for the current data. Click to confirm linear preference.'
-                    : (actualLog ? 'Y-axis logarithmic. Click for linear.' : 'Y-axis linear. Click for logarithmic.')
+                    : (actualLog ? 'Y-axis logarithmic. Click for linear.' : 'Y-axis linear. Click for logarithmic.'))
             );
             if (refs.yScaleNote) {
-                refs.yScaleNote.textContent = forcedLinear
+                refs.yScaleNote.textContent = rawMode
+                    ? 'Raw values: linear axis, native units.'
+                    : (forcedLinear
                     ? 'Log unavailable for the current selection because at least one indexed series reaches zero or below in this range.'
-                    : (actualLog ? 'Log scale active.' : 'Linear scale active.');
+                    : (actualLog ? 'Log scale active.' : 'Linear scale active.'));
             }
         }
 
@@ -124,6 +136,7 @@
             minPositiveNormalized: minPositiveNormalized,
             normalizedSeriesHasNonPositive: normalizedSeriesHasNonPositive,
             normalizedExtent: normalizedExtent,
+            valueExtent: valueExtent,
             buildAutoFitYAxis: buildAutoFitYAxis,
             syncYScaleButton: syncYScaleButton,
             toggleYScale: toggleYScale

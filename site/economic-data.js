@@ -276,6 +276,10 @@
         return chartAxis ? chartAxis.normalizedExtent(seriesList) : null;
     }
 
+    function rawExtent(seriesList) {
+        return chartAxis && typeof chartAxis.valueExtent === 'function' ? chartAxis.valueExtent(seriesList, 'raw_value') : null;
+    }
+
     function buildAutoFitYAxis(type, extent, minPositive) {
         return chartAxis ? chartAxis.buildAutoFitYAxis(type, extent, minPositive) : null;
     }
@@ -599,7 +603,7 @@
         var wantLog = !rawMode && state.yScale === 'log';
         var canLog = wantLog && !normalizedSeriesHasNonPositive(state.series);
         var minPos = canLog ? minPositiveNormalized(state.series) : null;
-        var extent = normalizedExtent(state.series);
+        var extent = rawMode ? rawExtent(state.series) : normalizedExtent(state.series);
         if (wantLog && !canLog) {
             logEvent('warn', 'Economic chart: log y-axis disabled (non-positive index values); using linear', {
                 range: state.range,
@@ -614,7 +618,13 @@
             name: rawMode ? 'Raw value' : 'Index (start = 100)',
             nameTextStyle: { color: theme.softText, fontSize: 11 },
             axisLine: styles.axisLine,
-            axisLabel: { color: theme.mutedText, fontSize: narrow ? 10 : 11 },
+            axisLabel: {
+                color: theme.mutedText,
+                fontSize: narrow ? 10 : 11,
+                formatter: function (value) {
+                    return Number(value).toLocaleString('en-AU', { maximumFractionDigits: rawMode ? 1 : 0 });
+                }
+            },
             splitLine: { show: true, lineStyle: styles.splitLine.lineStyle },
         };
         if (yAxisType === 'log') {
@@ -852,6 +862,10 @@
         if (refs.yScaleBtn) {
             syncYScaleButton();
             refs.yScaleBtn.addEventListener('click', function () {
+                if (state.chartMode === 'raw') {
+                    syncYScaleButton({ effectiveYAxis: 'value' });
+                    return;
+                }
                 state.yScale = state.yScale === 'log' ? 'linear' : 'log';
                 persistYScale(state.yScale);
                 logEvent('info', 'Economic chart y-scale toggled', { yScale: state.yScale });
