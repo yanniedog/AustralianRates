@@ -5,7 +5,7 @@ import {
 import { resolveFiltersForScope } from '../db/scope-filters'
 import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
-import { writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
+import { buildSnapshotKvKey, writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
 import {
@@ -16,40 +16,60 @@ import {
 import { log } from '../utils/logger'
 import {
   precomputedSnapshotScopesForSection,
-  publicSnapshotScopesForSection,
+  publicSnapshotPackageScopeItems,
   PUBLIC_PACKAGE_SECTIONS,
 } from './public-package-scopes'
 
 const REPRESENTATIONS = ['day', 'change'] as const
+const PUBLIC_PACKAGE_REFRESH_FRESH_MS = 20 * 60 * 60 * 1000
+
+async function isFreshPublicSnapshotPackage(
+  kv: KVNamespace | undefined,
+  section: (typeof PUBLIC_PACKAGE_SECTIONS)[number],
+  scope: string,
+): Promise<boolean> {
+  if (!kv) return false
+  const raw = await kv.get(buildSnapshotKvKey(section, scope as Parameters<typeof buildSnapshotKvKey>[1]))
+  if (!raw) return false
+  try {
+    const builtAt = new Date(String((JSON.parse(raw) as { builtAt?: string }).builtAt || '')).getTime()
+    return Number.isFinite(builtAt) && Date.now() - builtAt < PUBLIC_PACKAGE_REFRESH_FRESH_MS
+  } catch {
+    return false
+  }
+}
 
 export async function refreshPublicSnapshotPackages(
   env: EnvBindings,
   options?: { allScopes?: boolean },
-): Promise<{ ok: boolean; refreshed: number; errors: string[] }> {
+): Promise<{ ok: boolean; refreshed: number; skipped: number; errors: string[] }> {
   const errors: string[] = []
   let refreshed = 0
+  let skipped = 0
 
-  for (const section of PUBLIC_PACKAGE_SECTIONS) {
-    for (const cacheScope of publicSnapshotScopesForSection(section, { allScopes: options?.allScopes })) {
-      try {
-        const snapshot = await buildSnapshotPayload(env, section, cacheScope)
-        await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
-        refreshed++
-      } catch (e) {
-        const msg = (e as Error)?.message ?? String(e)
-        errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
-        log.warn('public_package_refresh', `Failed to refresh ${section} snapshot ${cacheScope}`, {
-          code: 'public_package_refresh_failed',
-          context: msg,
-        })
+  for (const { section, scope: cacheScope } of publicSnapshotPackageScopeItems({ allScopes: options?.allScopes })) {
+    try {
+      if (!options?.allScopes && (await isFreshPublicSnapshotPackage(env.CHART_CACHE_KV, section, cacheScope))) {
+        skipped++
+        continue
       }
+      const snapshot = await buildSnapshotPayload(env, section, cacheScope)
+      await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
+      refreshed++
+    } catch (e) {
+      const msg = (e as Error)?.message ?? String(e)
+      errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
+      log.warn('public_package_refresh', `Failed to refresh ${section} snapshot ${cacheScope}`, {
+        code: 'public_package_refresh_failed',
+        context: msg,
+      })
     }
   }
 
   log.info('public_package_refresh', 'Public snapshot packages refreshed', {
-    context: `refreshed=${refreshed} errors=${errors.length}`,
+    context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length}`,
   })
-  return { ok: errors.length === 0, refreshed, errors }
+  return { ok: errors.length === 0, refreshed, skipped, errors }
 }
 
 /** Refresh scoped chart request caches for all sections and representations. Manual/admin-only in production. */

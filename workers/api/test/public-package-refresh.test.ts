@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { PRECOMPUTED_CHART_WINDOWS } from '../src/db/chart-cache'
 import { publicPackageRefreshSideEffectPolicy } from '../src/pipeline/public-package-refresh-cron'
-import { publicSnapshotScopesForSection } from '../src/pipeline/public-package-scopes'
+import {
+  publicSnapshotPackageScopeItems,
+  publicSnapshotScopesForSection,
+} from '../src/pipeline/public-package-scopes'
 
 describe('public snapshot package scopes', () => {
   it('covers every selectable public window for home loans and savings', () => {
@@ -27,6 +30,16 @@ describe('public snapshot package scopes', () => {
     }
     expect(scopes.some((scope) => scope.startsWith('preset:'))).toBe(false)
     expect(new Set(scopes).size).toBe(scopes.length)
+  })
+
+  it('prioritizes 30D packages across all datasets before wider windows', () => {
+    expect(publicSnapshotPackageScopeItems().slice(0, 5)).toEqual([
+      { section: 'home_loans', scope: 'preset:consumer-default:window:30D' },
+      { section: 'home_loans', scope: 'window:30D' },
+      { section: 'savings', scope: 'preset:consumer-default:window:30D' },
+      { section: 'savings', scope: 'window:30D' },
+      { section: 'term_deposits', scope: 'window:30D' },
+    ])
   })
 })
 
