@@ -1,7 +1,6 @@
 import { SELF, env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { reportPlotTestState } from '../../src/db/report-plot'
-import { refreshChartPivotCache } from '../../src/pipeline/chart-cache-refresh'
 import savingsWarmupSeedSql from './report-plot-warmup-seed.sql?raw'
 
 describe('report-plot routes', () => {
@@ -280,14 +279,22 @@ describe('report-plot routes', () => {
 })
 
 describe('report-plot cache refresh', () => {
-  it('precomputes report-plot cache rows for default scopes', async () => {
-    const result = await refreshChartPivotCache(env)
-    expect(result.ok).toBe(true)
+  it('writes a D1 report-plot cache row for a default public scope', async () => {
+    await env.DB
+      .prepare('DELETE FROM report_plot_request_cache WHERE section = ? AND mode = ? AND request_scope = ?')
+      .bind('savings', 'bands', 'window:90D')
+      .run()
+
+    const response = await SELF.fetch(
+      'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D',
+    )
+    expect(response.status).toBe(200)
 
     const row = await env.DB
-      .prepare('SELECT COUNT(*) AS n FROM report_plot_request_cache')
+      .prepare('SELECT COUNT(*) AS n FROM report_plot_request_cache WHERE section = ? AND mode = ? AND request_scope = ?')
+      .bind('savings', 'bands', 'window:90D')
       .first<{ n: number }>()
 
-    expect(Number(row?.n || 0)).toBe(60)
+    expect(Number(row?.n || 0)).toBe(1)
   })
 })
