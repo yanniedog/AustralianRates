@@ -1,11 +1,6 @@
 import { getReadDbFromEnv } from '../db/read-db'
 import {
-  buildPrecomputedChartScope,
-  buildPrecomputedChartScopeForPreset,
-  PRECOMPUTED_CHART_WINDOWS,
   writeD1ChartCache,
-  type ChartCacheScope,
-  type ChartCacheSection,
 } from '../db/chart-cache'
 import { resolveFiltersForScope } from '../db/scope-filters'
 import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
@@ -13,39 +8,19 @@ import { writeD1ReportPlotCache } from '../db/report-plot-cache'
 import { writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
-import { defaultPublicChartWindowForSection } from '../utils/chart-window'
 import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
   collectTdAnalyticsRowsResolved,
 } from '../routes/analytics-data'
 import { log } from '../utils/logger'
+import {
+  precomputedSnapshotScopesForSection,
+  publicSnapshotScopesForSection,
+  PUBLIC_PACKAGE_SECTIONS,
+} from './public-package-scopes'
 
-const SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
 const REPRESENTATIONS = ['day', 'change'] as const
-
-function precomputedScopes(section: ChartCacheSection): ChartCacheScope[] {
-  const raw: ChartCacheScope[] = [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) =>
-    buildPrecomputedChartScope(window),
-  )
-  if (section === 'home_loans' || section === 'savings') {
-    return raw.concat(
-      [null, ...PRECOMPUTED_CHART_WINDOWS].map((window) =>
-        buildPrecomputedChartScopeForPreset(window, 'consumer-default'),
-      ),
-    )
-  }
-  return raw
-}
-
-function publicPackageScopes(section: ChartCacheSection, allScopes = false): ChartCacheScope[] {
-  if (allScopes) return precomputedScopes(section)
-  const defaultWindow = defaultPublicChartWindowForSection(section)
-  if (section === 'home_loans' || section === 'savings') {
-    return [`preset:consumer-default:window:${defaultWindow}`, `window:${defaultWindow}`]
-  }
-  return [`window:${defaultWindow}`]
-}
 
 export async function refreshPublicSnapshotPackages(
   env: EnvBindings,
@@ -54,8 +29,8 @@ export async function refreshPublicSnapshotPackages(
   const errors: string[] = []
   let refreshed = 0
 
-  for (const section of SECTIONS) {
-    for (const cacheScope of publicPackageScopes(section, options?.allScopes)) {
+  for (const section of PUBLIC_PACKAGE_SECTIONS) {
+    for (const cacheScope of publicSnapshotScopesForSection(section, { allScopes: options?.allScopes })) {
       try {
         const snapshot = await buildSnapshotPayload(env, section, cacheScope)
         await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
@@ -96,8 +71,8 @@ export async function refreshChartPivotCache(env: EnvBindings): Promise<{ ok: bo
     })
   }
 
-  for (const section of SECTIONS) {
-    for (const cacheScope of precomputedScopes(section)) {
+  for (const section of PUBLIC_PACKAGE_SECTIONS) {
+    for (const cacheScope of precomputedSnapshotScopesForSection(section)) {
       const filters = await resolveFiltersForScope(rd, section, cacheScope)
       for (const rep of REPRESENTATIONS) {
         try {
