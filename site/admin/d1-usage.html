@@ -123,6 +123,14 @@
                 return n ? n + ' B' : 'n/a';
             }
 
+            function shortNum(value) {
+                var n = Number(value || 0);
+                if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+                if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+                if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+                return String(Math.round(n));
+            }
+
             function iso(date) {
                 return date.toISOString().slice(0, 10);
             }
@@ -311,11 +319,42 @@
                 var maxV = Math.max(1, candidates.reduce(function (a, b) { return Math.max(a, b); }, 0));
                 var n = vals.length;
                 function xy(i, v) {
-                    var x = pad + (n <= 1 ? 0 : (i / (n - 1)) * (w - 2 * pad));
-                    var y = h - pad - (v / maxV) * (h - 2 * pad);
+                    var x = pad.left + (n <= 1 ? 0 : (i / (n - 1)) * (w - pad.left - pad.right));
+                    var y = h - pad.bottom - (v / maxV) * (h - pad.top - pad.bottom);
                     return [x, y];
                 }
                 return { maxV: maxV, xy: xy };
+            }
+
+            function axisSvg(ctx, dates, w, h, pad, yLabel) {
+                var parts = [];
+                for (var yTick = 0; yTick <= 4; yTick++) {
+                    var value = (ctx.maxV / 4) * yTick;
+                    var y = ctx.xy(0, value)[1];
+                    parts.push('<line x1="' + pad.left + '" x2="' + (w - pad.right) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="var(--ar-line)" stroke-width="1"/>');
+                    parts.push('<text x="' + (pad.left - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" fill="var(--ar-text-muted)" font-size="11">' + esc(shortNum(value)) + '</text>');
+                }
+                var tickCount = Math.min(6, Math.max(1, dates.length));
+                for (var xTick = 0; xTick < tickCount; xTick++) {
+                    var idx = tickCount === 1 ? 0 : Math.round((xTick / (tickCount - 1)) * (dates.length - 1));
+                    var x = ctx.xy(idx, 0)[0];
+                    var label = (dates[idx] || '').slice(5) + ' UTC';
+                    parts.push('<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + (h - pad.bottom) + '" y2="' + (h - pad.bottom + 5) + '" stroke="var(--ar-line-strong)" stroke-width="1"/>');
+                    parts.push('<text x="' + x.toFixed(1) + '" y="' + (h - 14) + '" text-anchor="middle" fill="var(--ar-text-muted)" font-size="11">' + esc(label) + '</text>');
+                }
+                parts.push('<line x1="' + pad.left + '" x2="' + (w - pad.right) + '" y1="' + (h - pad.bottom) + '" y2="' + (h - pad.bottom) + '" stroke="var(--ar-line-strong)" stroke-width="1"/>');
+                parts.push('<line x1="' + pad.left + '" x2="' + pad.left + '" y1="' + pad.top + '" y2="' + (h - pad.bottom) + '" stroke="var(--ar-line-strong)" stroke-width="1"/>');
+                parts.push('<text x="' + (w / 2).toFixed(1) + '" y="' + (h - 2) + '" text-anchor="middle" fill="var(--ar-text-muted)" font-size="11">UTC date</text>');
+                parts.push('<text transform="translate(14 ' + (h / 2).toFixed(1) + ') rotate(-90)" text-anchor="middle" fill="var(--ar-text-muted)" font-size="11">' + esc(yLabel) + '</text>');
+                return parts.join('');
+            }
+
+            function legendSvg(w) {
+                return '<g aria-label="Legend" transform="translate(' + Math.max(72, w - 310) + ' 16)" fill="var(--ar-text-muted)" font-size="11">' +
+                    '<line x1="0" x2="22" y1="0" y2="0" stroke="var(--ar-accent)" stroke-width="2"/><text x="28" y="4">Daily</text>' +
+                    '<line x1="88" x2="110" y1="0" y2="0" stroke="var(--ar-positive)" stroke-width="2"/><text x="116" y="4">7d MA</text>' +
+                    '<line x1="178" x2="200" y1="0" y2="0" stroke="var(--ar-warning)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="206" y="4">OLS trend</text>' +
+                    '</g>';
             }
 
             function polylineAttr(vals, ctx) {
@@ -356,21 +395,24 @@
                     return;
                 }
                 var w = Math.max(640, n * 10);
-                var h = 220;
-                var pad = 32;
+                var h = 250;
+                var pad = { top: 28, right: 18, bottom: 48, left: 66 };
                 var ctx = chartPoints(vals, trend, w, h, pad);
                 var plRaw = polylineAttr(vals, ctx);
                 var plMa = polylineAttr(ma, ctx);
                 var segAttrs = trendSegments(trend, ctx);
+                var dates = series.dates || [];
                 var lines = '';
                 for (var s = 0; s < segAttrs.length; s++) {
                     if (segAttrs[s]) lines += '<polyline class="d1-trend-line" fill="none" stroke-dasharray="6 4" points="' + esc(segAttrs[s]) + '"/>';
                 }
-                wrap.innerHTML = '<svg class="d1-trend-svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" role="img" aria-label="Trend chart">' +
+                wrap.innerHTML = '<svg class="d1-trend-svg" style="width:' + w + 'px;height:' + h + 'px" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(mode === 'read' ? 'D1 read rows trend chart' : 'D1 written rows trend chart') + '">' +
                     '<rect class="d1-trend-bg" x="0" y="0" width="' + w + '" height="' + h + '"/>' +
+                    axisSvg(ctx, dates, w, h, pad, mode === 'read' ? 'Rows read' : 'Rows written') +
                     '<polyline class="d1-line-raw" fill="none" points="' + esc(plRaw) + '"/>' +
                     '<polyline class="d1-line-ma" fill="none" points="' + esc(plMa) + '"/>' +
                     lines +
+                    legendSvg(w) +
                     '</svg>';
             }
 
@@ -403,10 +445,10 @@
             function renderTable(data) {
                 var rows = data.days || [];
                 tableWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
-                    '<th>UTC date</th><th>Rows read</th><th>Rows written</th><th>Read queries</th><th>Write queries</th><th>Response</th><th>Storage</th>' +
+                    '<th>UTC date</th><th>Rows read</th><th>Rows written</th><th>Storage</th><th>Read quota used</th><th>Write quota used</th><th>Storage quota</th><th>Read queries</th><th>Write queries</th><th>Response</th>' +
                     '</tr></thead><tbody>' +
                     rows.map(function (day) {
-                        return '<tr><td>' + esc(day.date) + '</td><td>' + num(day.reads) + '</td><td>' + num(day.writes) + '</td><td>' + num(day.read_queries) + '</td><td>' + num(day.write_queries) + '</td><td>' + bytes(day.response_bytes) + '</td><td>' + bytes(day.storage_bytes) + '</td></tr>';
+                        return '<tr><td>' + esc(day.date) + '</td><td>' + num(day.billable_read_rows == null ? day.reads : day.billable_read_rows) + '</td><td>' + num(day.billable_write_rows == null ? day.writes : day.billable_write_rows) + '</td><td>' + bytes(day.storage_bytes) + '</td><td>' + pct(day.reads_pct_included_to_date) + '</td><td>' + pct(day.writes_pct_included_to_date) + '</td><td>' + bytes(day.storage_bytes_included) + ' / ' + pct(day.storage_pct_included) + '</td><td>' + num(day.read_queries) + '</td><td>' + num(day.write_queries) + '</td><td>' + bytes(day.response_bytes) + '</td></tr>';
                     }).join('') +
                     '</tbody></table>';
             }
@@ -424,12 +466,12 @@
                 readBars.innerHTML = '';
                 writeBars.innerHTML = '';
                 tableWrap.innerHTML = '';
-                portal.fetchAdmin('/cloudflare/d1-usage?days=84')
+                portal.fetchAdmin('/cloudflare/d1-usage?days=31')
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         if (!data.ok) throw new Error(data.error && data.error.message ? data.error.message : 'Usage failed');
                         data = ensureBillingPeriod(data);
-                        sourceLine.textContent = 'Source: ' + data.source + ' | Generated: ' + data.generated_at;
+                        sourceLine.textContent = 'Source: ' + data.source + (data.storage_source_error ? ' | Storage: unavailable' : '') + ' | Generated: ' + data.generated_at;
                         renderUsageDashboard(data);
                         renderGuardrails(data);
                         renderHistory(data);
