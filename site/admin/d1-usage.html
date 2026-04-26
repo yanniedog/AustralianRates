@@ -25,7 +25,7 @@
         <div class="admin-page-head">
             <p class="eyebrow">Cost</p>
             <h1><abbr title="Cloudflare D1 database">D1</abbr> usage</h1>
-            <p class="admin-subtitle">Included tier, period %, projection, billing history, 7d MA and OLS trend.</p>
+            <p class="admin-subtitle">Included tier, period %, projection, billing history, daily billable usage, 7d MA and OLS trend.</p>
         </div>
         <div class="admin-message" id="msg" role="alert"></div>
         <div class="admin-toolbar">
@@ -64,7 +64,7 @@
             <div class="d1-usage-bars d1-usage-bars-write" id="write-bars" role="img" aria-label="Daily D1 writes"></div>
         </section>
         <section class="admin-card" aria-labelledby="table-heading">
-            <h2 id="table-heading">Daily table</h2>
+            <h2 id="table-heading">Daily billable usage table</h2>
             <div class="admin-table-wrap" id="table-wrap"></div>
         </section>
     </main>
@@ -444,11 +444,30 @@
 
             function renderTable(data) {
                 var rows = data.days || [];
+                var columns = data.billable_columns || [];
+                function cellValue(day, column) {
+                    var usage = (day.billable_usage || {})[column.key];
+                    if (!usage) return '<span class="admin-muted">0</span>';
+                    var quantity = Number(usage.quantity || 0);
+                    var cost = Number(usage.cost_usd || 0);
+                    var unit = usage.unit || column.unit || '';
+                    var costText = cost > 0 ? ' / ' + money(cost) : '';
+                    return esc(shortNum(quantity) + (unit ? ' ' + unit : '') + costText);
+                }
                 tableWrap.innerHTML = '<table class="admin-table"><thead><tr>' +
-                    '<th>UTC date</th><th>Rows read</th><th>Rows written</th><th>Storage</th><th>Read quota used</th><th>Write quota used</th><th>Storage quota</th><th>Read queries</th><th>Write queries</th><th>Response</th>' +
+                    '<th>UTC date</th>' +
+                    columns.map(function (column) {
+                        return '<th title="' + esc((column.quota_label || 'n/a') + ' | ' + (column.rate_label || '')) + '">' +
+                            esc(column.label) +
+                            '<small class="admin-muted"> ' + esc(column.quota_label || '') + '</small></th>';
+                    }).join('') +
                     '</tr></thead><tbody>' +
                     rows.map(function (day) {
-                        return '<tr><td>' + esc(day.date) + '</td><td>' + num(day.billable_read_rows == null ? day.reads : day.billable_read_rows) + '</td><td>' + num(day.billable_write_rows == null ? day.writes : day.billable_write_rows) + '</td><td>' + bytes(day.storage_bytes) + '</td><td>' + pct(day.reads_pct_included_to_date) + '</td><td>' + pct(day.writes_pct_included_to_date) + '</td><td>' + bytes(day.storage_bytes_included) + ' / ' + pct(day.storage_pct_included) + '</td><td>' + num(day.read_queries) + '</td><td>' + num(day.write_queries) + '</td><td>' + bytes(day.response_bytes) + '</td></tr>';
+                        return '<tr><td>' + esc(day.date) + '</td>' +
+                            columns.map(function (column) {
+                                return '<td title="' + esc(column.label + ' | ' + (column.quota_label || 'n/a') + ' | ' + (column.rate_label || '')) + '">' + cellValue(day, column) + '</td>';
+                            }).join('') +
+                            '</tr>';
                     }).join('') +
                     '</tbody></table>';
             }
@@ -471,7 +490,7 @@
                     .then(function (data) {
                         if (!data.ok) throw new Error(data.error && data.error.message ? data.error.message : 'Usage failed');
                         data = ensureBillingPeriod(data);
-                        sourceLine.textContent = 'Source: ' + data.source + (data.storage_source_error ? ' | Storage: unavailable' : '') + ' | Generated: ' + data.generated_at;
+                        sourceLine.textContent = 'Source: ' + data.source + ' | Billable: ' + (data.billable_source || 'unavailable') + (data.billable_source_error ? ' (' + data.billable_source_error + ')' : '') + (data.storage_source_error ? ' | Storage: unavailable' : '') + ' | Generated: ' + data.generated_at;
                         renderUsageDashboard(data);
                         renderGuardrails(data);
                         renderHistory(data);
