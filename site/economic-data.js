@@ -68,7 +68,7 @@
         selectedIds: [],
         series: [],
         signal: null,
-        chartMode: 'signal',
+        chartMode: 'indexed',
         chart: null,
         hoveredDate: null,
         legendHoverYmd: null,
@@ -299,6 +299,13 @@
                 ? 'Multiselect mode: combine indicators with checkboxes.'
                 : 'Single-select mode: one indicator at a time.';
         }
+    }
+
+    function syncChartModeButtons() {
+        if (!refs.chartModeRow) return;
+        Array.from(refs.chartModeRow.querySelectorAll('[data-chart-mode]')).forEach(function (node) {
+            node.classList.toggle('active', node.getAttribute('data-chart-mode') === state.chartMode);
+        });
     }
 
     function catalogSeriesIds() {
@@ -836,8 +843,10 @@
                 }
                 state.selectedPreset = preset.id;
                 state.selectedIds = normalizeSelectedIds(preset.seriesIds.slice());
+                state.chartMode = 'indexed';
                 renderPresets();
                 renderCategories();
+                syncChartModeButtons();
                 syncSelectionModeUi();
                 if (refs.presetPicker) refs.presetPicker.open = false;
                 logEvent('info', 'Economic preset changed', {
@@ -881,8 +890,10 @@
                 state.multiSelect = !!refs.multiSelectToggle.checked;
                 persistMultiSelect(state.multiSelect);
                 state.selectedIds = normalizeSelectedIds(state.selectedIds);
+                state.chartMode = 'indexed';
                 renderCategories();
                 renderPresets();
+                syncChartModeButtons();
                 syncSelectionModeUi();
                 logEvent('info', 'Economic selection mode changed', {
                     multiSelect: state.multiSelect,
@@ -915,8 +926,10 @@
             if (!state.multiSelect) {
                 state.selectedPreset = 'custom';
                 state.selectedIds = [seriesId];
+                state.chartMode = 'indexed';
                 renderPresets();
                 renderCategories();
+                syncChartModeButtons();
                 if (refs.indicatorPicker) refs.indicatorPicker.open = false;
                 logEvent('info', 'Economic selection changed', {
                     selectedIds: state.selectedIds.slice(),
@@ -936,8 +949,10 @@
             }
             state.selectedPreset = 'custom';
             state.selectedIds = normalizeSelectedIds(next);
+            state.chartMode = 'indexed';
             renderPresets();
             renderCategories();
+            syncChartModeButtons();
             logEvent('info', 'Economic selection changed', {
                 selectedIds: state.selectedIds.slice(),
                 count: state.selectedIds.length,
