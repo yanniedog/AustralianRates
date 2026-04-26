@@ -72,7 +72,10 @@
             var styles = options.styles;
             var narrow = options.narrow;
             var legendEl = ensureLegendStackEl();
-            if (legendEl) legendEl.innerHTML = '';
+            if (legendEl) {
+                legendEl.innerHTML = '';
+                legendEl.style.display = 'none';
+            }
             var signalRows = ((state.signal && state.signal.components) || []).filter(function (row) {
                 return row.score != null;
             });
