@@ -128,6 +128,77 @@ describe('report-plot routes', () => {
     }
   })
 
+  it('keeps savings band means stable across a short missing-product gap', async () => {
+    const bank = 'ANZ Gap Fill'
+    const d1 = '2025-02-20'
+    const d2 = '2025-02-21'
+    const d3 = '2025-02-22'
+    const productIds = ['sav-gap-1', 'sav-gap-2']
+    const seriesKeys = [
+      `${bank}|sav-gap-1|savings|base|all`,
+      `${bank}|sav-gap-2|savings|base|all`,
+    ]
+
+    await env.DB
+      .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id IN (?, ?) AND collection_date IN (?, ?, ?)')
+      .bind(bank, productIds[0], productIds[1], d1, d2, d3)
+      .run()
+
+    const insertSql = String(savingsWarmupSeedSql).trim()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d1, productIds[0], 'ANZ Online Savings Account', seriesKeys[0], 4.5, 'https://example.com/savings', `${d1}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d2, productIds[0], 'ANZ Online Savings Account', seriesKeys[0], 4.6, 'https://example.com/savings', `${d2}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d3, productIds[0], 'ANZ Online Savings Account', seriesKeys[0], 4.7, 'https://example.com/savings', `${d3}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d1, productIds[1], 'ANZ Progress Saver', seriesKeys[1], 4.4, 'https://example.com/savings', `${d1}T00:00:00.000Z`)
+      .run()
+    await env.DB.prepare(insertSql)
+      .bind(bank, d3, productIds[1], 'ANZ Progress Saver', seriesKeys[1], 4.4, 'https://example.com/savings', `${d3}T00:00:00.000Z`)
+      .run()
+
+    try {
+      await env.DB
+        .prepare('DELETE FROM report_plot_request_cache WHERE section = ?')
+        .bind('savings')
+        .run()
+
+      const response = await SELF.fetch(
+        'https://example.com/api/savings-rates/analytics/report-plot?mode=bands&chart_window=90D&bank=ANZ%20Gap%20Fill',
+      )
+
+      expect(response.status).toBe(200)
+      const json = (await response.json()) as {
+        series?: Array<{
+          bank_name?: string
+          points?: Array<{ date?: string; min_rate?: number; max_rate?: number; mean_rate?: number }>
+        }>
+      }
+      const anz = (json.series || []).find((entry) => entry.bank_name === bank)
+      const gapPoint = (anz?.points || []).find((point) => point.date === d2)
+
+      expect(gapPoint).toMatchObject({
+        date: d2,
+        min_rate: 4.4,
+        max_rate: 4.6,
+        mean_rate: 4.5,
+      })
+    } finally {
+      await env.DB
+        .prepare('DELETE FROM historical_savings_rates WHERE bank_name = ? AND product_id IN (?, ?) AND collection_date IN (?, ?, ?)')
+        .bind(bank, productIds[0], productIds[1], d1, d2, d3)
+        .run()
+      await env.DB
+        .prepare('DELETE FROM report_plot_request_cache WHERE section = ?')
+        .bind('savings')
+        .run()
+    }
+  })
+
   it('serializes first-load report-plot warm-up for parallel requests', async () => {
     // Rows shaped from test/fixtures/real-normalized-savings-row.json; two collection dates
     // so savings_report_deltas refresh yields at least one delta (integration DB is migration-only).

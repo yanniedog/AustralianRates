@@ -3,7 +3,7 @@ import {
   writeD1ChartCache,
 } from '../db/chart-cache'
 import { resolveFiltersForScope } from '../db/scope-filters'
-import { queryReportPlotPayload, refreshAllReportDeltaTables } from '../db/report-plot'
+import { queryReportPlotPayload, refreshAllReportDeltaTables, REPORT_BANDS_SOURCE_VERSION } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
 import { buildSnapshotKvKey, writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
@@ -32,7 +32,12 @@ async function isFreshPublicSnapshotPackage(
   const raw = await kv.get(buildSnapshotKvKey(section, scope as Parameters<typeof buildSnapshotKvKey>[1]))
   if (!raw) return false
   try {
-    const builtAt = new Date(String((JSON.parse(raw) as { builtAt?: string }).builtAt || '')).getTime()
+    const parsed = JSON.parse(raw) as {
+      builtAt?: string
+      data?: { reportPlotBands?: { meta?: { band_source_version?: number } } }
+    }
+    if (parsed.data?.reportPlotBands?.meta?.band_source_version !== REPORT_BANDS_SOURCE_VERSION) return false
+    const builtAt = new Date(String(parsed.builtAt || '')).getTime()
     return Number.isFinite(builtAt) && Date.now() - builtAt < PUBLIC_PACKAGE_REFRESH_FRESH_MS
   } catch {
     return false
