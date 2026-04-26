@@ -1934,6 +1934,7 @@
         attachLwcMovesPane: attachLwcMovesPane,
         payloadDateRange: chartReportPlotPayloadUtils.payloadDateRange,
         fallbackSeriesDateBoundsFromModel: chartReportPlotPayloadUtils.fallbackSeriesDateBoundsFromModel,
+        combinedDateRange: chartReportPlotPayloadUtils.combinedDateRange,
         bankTrayEntriesFromBandsPayload: chartReportPlotPayloadUtils.bankTrayEntriesFromBandsPayload,
         render: render,
     };

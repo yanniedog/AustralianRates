@@ -42,6 +42,29 @@
         return { minDate: minDate, maxDate: maxDate };
     }
 
+    function earlierDate(left, right) {
+        if (!left) return String(right || '');
+        if (!right) return String(left || '');
+        return left < right ? left : right;
+    }
+
+    function laterDate(left, right) {
+        if (!left) return String(right || '');
+        if (!right) return String(left || '');
+        return left > right ? left : right;
+    }
+
+    function combinedDateRange(plotPayload, model) {
+        var plotRange = payloadDateRange(plotPayload);
+        var modelRange = fallbackSeriesDateBoundsFromModel(model);
+        return {
+            minDate: earlierDate(plotRange.minDate, modelRange.minDate),
+            maxDate: laterDate(plotRange.maxDate, modelRange.maxDate),
+            plotMaxDate: plotRange.maxDate,
+            modelMaxDate: modelRange.maxDate,
+        };
+    }
+
     /**
      * Logo tray entries for bands mode: same bank_name strings as plotPayload.series (required for ribbon focus).
      * Returns null if not applicable; caller should fall back to product-derived bank names.
@@ -71,6 +94,7 @@
     window.AR.chartReportPlotPayloadUtils = {
         fallbackSeriesDateBoundsFromModel: fallbackSeriesDateBoundsFromModel,
         payloadDateRange: payloadDateRange,
+        combinedDateRange: combinedDateRange,
         bankTrayEntriesFromBandsPayload: bankTrayEntriesFromBandsPayload,
     };
 })();
