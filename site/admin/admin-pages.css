@@ -141,6 +141,7 @@
 .admin-status #history-wrap,
 .admin-status #cdr-audit-overview,
 .admin-status #cdr-audit-wrap,
+.admin-integrity #findings-wrap,
 .admin-runs #backlog-tables {
     max-width: 100%;
     overflow: auto;
