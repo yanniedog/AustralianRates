@@ -55,6 +55,14 @@ function buildLatestWhere(filters: LatestSavingsFilters): { clause: string; bind
   if (!filters.includeRemoved) {
     where.push('COALESCE(l.is_removed, 0) = 0')
   }
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_savings_rates q
+    WHERE q.series_key = l.series_key
+      AND q.collection_date = l.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
 
   where.push(runSourceWhereClause('l.run_source', filters.sourceMode ?? 'all'))
 
