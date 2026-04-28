@@ -254,6 +254,59 @@ async function runProcessedAnomalyCheck(env: EnvBindings): Promise<AuditCheckRes
   )
 }
 
+async function runProcessedValidationRejectionCheck(env: EnvBindings): Promise<AuditCheckResult> {
+  return runMetricSampleCheck(
+    env,
+    {
+      id: 'processed_validation_rejections_7d',
+      stage: 'processed',
+      title: 'Validation rejection diagnostics (7d)',
+      metricSql: `SELECT
+    SUM(CASE WHEN reason = 'invalid_product_name_semantics' THEN 1 ELSE 0 END) AS invalid_product_name_semantics_7d,
+    SUM(CASE WHEN reason LIKE 'cdr_category_mismatch%' THEN 1 ELSE 0 END) AS cdr_category_mismatch_7d,
+    SUM(CASE WHEN reason = 'confidence_below_required_threshold' THEN 1 ELSE 0 END) AS confidence_below_threshold_7d,
+    SUM(CASE WHEN reason = 'missing_product_name' THEN 1 ELSE 0 END) AS missing_product_name_7d
+    FROM ingest_anomalies
+    WHERE created_at >= datetime('now', '-7 day')`,
+      sampleSql: `SELECT
+    created_at, run_id, lender_code, dataset_kind, product_id, reason, collection_date
+    FROM ingest_anomalies
+    WHERE created_at >= datetime('now', '-7 day')
+      AND (
+        reason = 'invalid_product_name_semantics'
+        OR reason LIKE 'cdr_category_mismatch%'
+        OR reason = 'confidence_below_required_threshold'
+        OR reason = 'missing_product_name'
+      )
+    ORDER BY created_at DESC
+    LIMIT 12`,
+      failureMessage: 'Failed to query validation rejection diagnostics.',
+    },
+    (row) => {
+      const invalidName = toNumber(row?.invalid_product_name_semantics_7d)
+      const categoryMismatch = toNumber(row?.cdr_category_mismatch_7d)
+      const confidenceBelow = toNumber(row?.confidence_below_threshold_7d)
+      const missingName = toNumber(row?.missing_product_name_7d)
+      const total = invalidName + categoryMismatch + confidenceBelow + missingName
+      const passed = categoryMismatch === 0
+      return {
+        passed,
+        severity: passed ? 'info' : 'warn',
+        summary: passed
+          ? 'No CDR category mismatch rejections were detected in the last 7 days.'
+          : 'CDR category mismatch rejections were detected; parser/validation alignment should be reviewed.',
+        metrics: {
+          invalid_product_name_semantics_7d: invalidName,
+          cdr_category_mismatch_7d: categoryMismatch,
+          confidence_below_required_threshold_7d: confidenceBelow,
+          missing_product_name_7d: missingName,
+          total_validation_rejections_7d: total,
+        },
+      }
+    },
+  )
+}
+
 async function runProcessedFinalizeGapCheck(env: EnvBindings): Promise<AuditCheckResult> {
   return runMetricSampleCheck(
     env,
@@ -701,6 +754,7 @@ export async function runCdrPipelineAudit(env: EnvBindings): Promise<CdrAuditRep
     runRetrievedActivityCheck(env),
     runRetrievedLinkageCheck(env),
     runProcessedAnomalyCheck(env),
+    runProcessedValidationRejectionCheck(env),
     runProcessedFinalizeGapCheck(env),
     runStoredFetchEventGapCheck(env),
     runStoredSeriesKeyGapCheck(env),

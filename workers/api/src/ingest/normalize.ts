@@ -16,6 +16,7 @@ import {
   reasonableStringLength,
   VALIDATE_COMMON,
 } from './validate-common.js'
+import { cdrCategoryMatchesDataset, parseCdrProductCategoryFromJson } from './cdr/product-classification.js'
 
 export type NormalizedRateRow = {
   bankName: string
@@ -287,6 +288,38 @@ export function isProductNameLikelyRateProduct(name: string): boolean {
   return knownMortgagePatterns.some((x) => normalized.includes(x))
 }
 
+function hasBlockedProductText(name: string): boolean {
+  const normalized = lower(name)
+  const blocked = [
+    'disclaimer',
+    'warning',
+    'example',
+    'cashback',
+    'copyright',
+    'privacy',
+    'terms and conditions',
+    'loan to value ratio',
+    'lvr ',
+    'tooltip',
+  ]
+  return blocked.some((x) => normalized.includes(x))
+}
+
+function shouldRequireNameSemanticCheck(row: NormalizedRateRow): boolean {
+  if (!lower(row.dataQualityFlag).startsWith('cdr_')) return true
+  const category = parseCdrProductCategoryFromJson(row.cdrProductDetailJson)
+  if (!category) return true
+  return !cdrCategoryMatchesDataset(category, 'home_loans')
+}
+
+function cdrCategoryMismatchReason(row: NormalizedRateRow): string | null {
+  if (!lower(row.dataQualityFlag).startsWith('cdr_')) return null
+  const category = parseCdrProductCategoryFromJson(row.cdrProductDetailJson)
+  if (!category) return null
+  if (cdrCategoryMatchesDataset(category, 'home_loans')) return null
+  return 'cdr_category_mismatch_home_loans'
+}
+
 const COMPARISON_RATE_MAX_ABOVE_INTEREST = 10
 
 export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { ok: false; reason: string } {
@@ -303,7 +336,14 @@ export function validateNormalizedRow(row: NormalizedRateRow): { ok: true } | { 
   if (!productName || productName.length > VALIDATE_COMMON.MAX_PRODUCT_NAME_LENGTH) {
     return { ok: false, reason: 'missing_product_name' }
   }
-  if (!isProductNameLikelyRateProduct(productName)) {
+  if (hasBlockedProductText(productName)) {
+    return { ok: false, reason: 'invalid_product_name_semantics' }
+  }
+  const categoryMismatch = cdrCategoryMismatchReason(row)
+  if (categoryMismatch) {
+    return { ok: false, reason: categoryMismatch }
+  }
+  if (shouldRequireNameSemanticCheck(row) && !isProductNameLikelyRateProduct(productName)) {
     return { ok: false, reason: 'invalid_product_name_semantics' }
   }
   if (!isValidUrl(row.sourceUrl)) {
