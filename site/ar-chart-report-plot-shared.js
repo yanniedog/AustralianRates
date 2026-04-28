@@ -2097,6 +2097,7 @@
         payloadDateRange: chartReportPlotPayloadUtils.payloadDateRange,
         fallbackSeriesDateBoundsFromModel: chartReportPlotPayloadUtils.fallbackSeriesDateBoundsFromModel,
         combinedDateRange: chartReportPlotPayloadUtils.combinedDateRange,
+        snapshotFiltersResolvedEndYmd: chartReportPlotPayloadUtils.snapshotFiltersResolvedEndYmd,
         bankTrayEntriesFromBandsPayload: chartReportPlotPayloadUtils.bankTrayEntriesFromBandsPayload,
         render: render,
     };
