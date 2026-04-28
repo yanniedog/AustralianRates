@@ -654,7 +654,7 @@
 
     SNAPSHOT.start = start;
     SNAPSHOT.ensureFullScope = function (scope) {
-        return fetchScopeBundle(scope || scopeFromState(), { activate: false, lite: false });
+        return fetchScopeBundle(scope || scopeFromState(), { activate: true, lite: false });
     };
     SNAPSHOT.getBundle = function (chartWindow, preset) {
         return bundleForScope(chartWindow || null, preset || null);
@@ -667,7 +667,10 @@
     SNAPSHOT.awaitReady = awaitReady;
     SNAPSHOT.awaitUrl = awaitUrl;
 
-    if (activeSection() !== 'term-deposits') {
+    if (shouldDeferTermDepositSnapshot()) {
+        var tdInline = window.AR && window.AR.snapshotInline;
+        if (tdInline && tdInline.data && !SNAPSHOT.inlined) adoptInlineSnapshot(tdInline);
+    } else {
         start();
     }
 })();
