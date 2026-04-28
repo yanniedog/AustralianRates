@@ -47,6 +47,8 @@
     "diagnose:pages": "node diagnose-pages.js",
     "fetch-status-debug-bundle": "node fetch-status-debug-bundle.js",
     "refresh:chart-cache": "node refresh-chart-cache.js",
+    "flush:prod-caches": "node flush-production-caches.mjs",
+    "flush:prod-caches-full": "node flush-production-caches.mjs --chart-pivot",
     "doctor": "node doctor.js",
     "doctor:holistic": "node doctor.js --with-hosting",
     "doctor:verify": "npm run doctor && node scripts/run-parallel.mjs test:api test:archive && npm run test:homepage:full",
