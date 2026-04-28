@@ -21,7 +21,7 @@ This repo is actively worked on by **multiple concurrent agents** (Cursor, Codex
 3. **Respond to CI and PR review feedback, always.** After push and PR creation:
    - Watch PR checks (`gh pr checks <num> --watch`) and the Cloudflare deploy, not just local tests.
    - For every failure, read the log, fix on the same branch, push again. Loop until CI is green.
-   - **PR review bots** are **peer reviewers**: address every automated review thread completely (fix, justify, or explicitly resolve) **before** squash-merge to **`main`**. Do not merge past unresolved bot feedback; see `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”).
+   - **PR review bots** are **peer reviewers** (policy gate); **`ci_result`** is the mechanical gate—resolve bots **before** enabling squash auto-merge; see `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”) and `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**).
    - For human review comments, same standard: address each thread; do not ignore.
 4. **Complete the production closeout** from `.cursor/rules/every-chat-commit-deploy-verify-production.mdc` **after** merge and Cloudflare deploy — never treat a green PR alone as shipped.
 5. **Keep the Git graph readable:** after your PR merges, run **`npm run git:graph-hygiene`** (and delete the finished topic branch locally when safe). Prefer **Automatically delete head branches** on GitHub and avoid extra local branch names pointing at the same commit as **`main`** unless a **worktree** forces it. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“Keeping the Git graph readable”).
