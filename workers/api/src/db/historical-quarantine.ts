@@ -57,22 +57,32 @@ function normalizedIso(iso?: string): string {
   return String(iso || new Date().toISOString()).slice(0, 19) + 'Z'
 }
 
+async function tableHasColumn(db: D1Database, table: string, column: string): Promise<boolean> {
+  const info = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>()
+  return (info.results ?? []).some((row) => row.name === column)
+}
+
 export async function quarantineDatasetLenderDay(db: D1Database, input: QuarantineLenderDayScope): Promise<number> {
   const table = tableForDataset(input.dataset)
   const reason = input.reason.trim()
   if (!reason) return 0
   const at = normalizedIso(input.quarantinedAt)
+  const hasIsRemoved = await tableHasColumn(db, table, 'is_removed')
+  const hasRemovedAt = await tableHasColumn(db, table, 'removed_at')
+  const setClauses = ['quarantine_reason = ?1', 'quarantined_at = ?2']
+  if (hasIsRemoved) {
+    setClauses.push('is_removed = 1')
+  }
+  if (hasRemovedAt) {
+    setClauses.push('removed_at = COALESCE(removed_at, ?2)')
+  }
+  const activeFilter = hasIsRemoved ? 'AND COALESCE(is_removed, 0) = 0' : ''
   const result = await db
     .prepare(
       `UPDATE ${table}
-       SET
-         quarantine_reason = ?1,
-         quarantined_at = ?2,
-         is_removed = 1,
-         removed_at = COALESCE(removed_at, ?2)
+       SET ${setClauses.join(', ')}
        WHERE collection_date = ?3
-         AND bank_name = ?4
-         AND COALESCE(is_removed, 0) = 0`,
+         AND bank_name = ?4 ${activeFilter}`,
     )
     .bind(reason, at, input.collectionDate, input.bankName)
     .run()
@@ -84,17 +94,22 @@ export async function quarantineDatasetSeriesDate(db: D1Database, input: Quarant
   const reason = input.reason.trim()
   if (!reason) return 0
   const at = normalizedIso(input.quarantinedAt)
+  const hasIsRemoved = await tableHasColumn(db, table, 'is_removed')
+  const hasRemovedAt = await tableHasColumn(db, table, 'removed_at')
+  const setClauses = ['quarantine_reason = ?1', 'quarantined_at = ?2']
+  if (hasIsRemoved) {
+    setClauses.push('is_removed = 1')
+  }
+  if (hasRemovedAt) {
+    setClauses.push('removed_at = COALESCE(removed_at, ?2)')
+  }
+  const activeFilter = hasIsRemoved ? 'AND COALESCE(is_removed, 0) = 0' : ''
   const result = await db
     .prepare(
       `UPDATE ${table}
-       SET
-         quarantine_reason = ?1,
-         quarantined_at = ?2,
-         is_removed = 1,
-         removed_at = COALESCE(removed_at, ?2)
+       SET ${setClauses.join(', ')}
        WHERE collection_date = ?3
-         AND series_key = ?4
-         AND COALESCE(is_removed, 0) = 0`,
+         AND series_key = ?4 ${activeFilter}`,
     )
     .bind(reason, at, input.collectionDate, input.seriesKey)
     .run()
@@ -105,6 +120,8 @@ export async function clearHistoricalQuarantine(db: D1Database, input: ClearQuar
   const targets = input.dataset ? DATASET_TABLES.filter((item) => item.dataset === input.dataset) : DATASET_TABLES
   let total = 0
   for (const target of targets) {
+    const hasIsRemoved = await tableHasColumn(db, target.table, 'is_removed')
+    const hasRemovedAt = await tableHasColumn(db, target.table, 'removed_at')
     const where: string[] = ['quarantine_reason IS NOT NULL', "TRIM(quarantine_reason) != ''"]
     const binds: Array<string | number> = []
     if (input.collectionDate) {
@@ -115,14 +132,17 @@ export async function clearHistoricalQuarantine(db: D1Database, input: ClearQuar
       where.push('quarantine_reason LIKE ?')
       binds.push(`${input.reasonPrefix}%`)
     }
+    const setClauses = ['quarantine_reason = NULL', 'quarantined_at = NULL']
+    if (hasIsRemoved) {
+      setClauses.push('is_removed = 0')
+    }
+    if (hasRemovedAt) {
+      setClauses.push('removed_at = NULL')
+    }
     const result = await db
       .prepare(
         `UPDATE ${target.table}
-         SET
-           quarantine_reason = NULL,
-           quarantined_at = NULL,
-           is_removed = 0,
-           removed_at = NULL
+         SET ${setClauses.join(', ')}
          WHERE ${where.join(' AND ')}`,
       )
       .bind(...binds)
