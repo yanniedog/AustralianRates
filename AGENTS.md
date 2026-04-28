@@ -17,6 +17,7 @@ This repo has multiple concurrent agents working in parallel. Every agent MUST:
 - **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
 - **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
 - **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green.
+- **Google Gemini Code Assist** (and similar automated code-review bots): post **threaded replies** on substantive PR feedback—implemented, deferred, or declined with reason—before merge when practical. Cursor rule: `.cursor/rules/gemini-pr-review-replies.mdc`.
 - **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
 
 Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.

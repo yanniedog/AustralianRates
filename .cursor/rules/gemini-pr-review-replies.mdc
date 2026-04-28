@@ -1,0 +1,30 @@
+---
+description: "Threaded PR replies to Google Gemini Code Assist and similar automated code reviews"
+alwaysApply: true
+---
+
+# Respond to Gemini Code Assist (and similar) on pull requests
+
+Google **Gemini Code Assist** (`gemini-code-assist`) and similar repo-integrated **automated code-review bots** often produce high-signal summaries, file comments, or actionable suggestions. Treat that output as **required follow-up for communication**, not optional noise.
+
+## Required
+
+- When Gemini (or an analogous bot) leaves **substantive** feedback on an open PR **your workstream owns**:
+  - Post a **reply in the relevant thread** (or on the bot’s review summary) **before merge when practical**, unless the user explicitly waives replies for that PR.
+  - For each substantive point, state one of: **implemented** (what changed, optional commit ref), **deferred** (reason; optional `docs/REFACTOR_BACKLOG.md` or issue link), or **declined / won’t do** (short reason).
+- Prefer a **small follow-up commit** on the same branch when adopting a suggestion is straightforward; otherwise document deferral in the reply.
+- **Do not** merge with substantive Gemini feedback left **unanswered**—silence reads as ignored review.
+
+## Exceptions
+
+- Bot runs that are **SKIPPED**, **rate-limited with no review body**, or purely informational with **no actionable claims**: no reply needed (optional one-line “skipped” if useful).
+- Points **already** covered by an earlier reply or commit: one bundled reply is enough (“Covered in commits above; …”).
+- The **human maintainer** explicitly merges without bot closeout: assistants still default to replying when they control the PR.
+
+## Relationship to CI
+
+- Green **`ci_result`** does **not** substitute for this rule; it governs **review conversation**, not build status.
+
+## Rationale
+
+Keeps GitHub review history auditable, respects high-signal automation, and separates “no code change” from “no response.”
