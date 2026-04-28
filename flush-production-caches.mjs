@@ -9,8 +9,11 @@
  *
  * Usage:
  *   CACHE_FLUSH_ORIGIN=https://www.australianrates.com node flush-production-caches.mjs
- *   … same … --chart-pivot
- * Or pass `--origin=https://…` (overrides env when both set — env wins if you omit CLI).
+ *   Same with `--chart-pivot` for chart-cache refresh.
+ *   Or pass `--origin=https://…` when `CACHE_FLUSH_ORIGIN` is unset.
+ *
+ * Optional: `CACHE_FLUSH_FETCH_TIMEOUT_MS` (milliseconds, minimum 60000). Defaults to 30 minutes
+ * because `public-packages/refresh` can take longer than 15 minutes to return headers on large datasets.
  */
 import fs from 'fs'
 import path from 'path'
@@ -26,7 +29,12 @@ function parseOriginCli(args) {
   return raw ? raw.slice('--origin='.length).trim() : ''
 }
 
-const LONG_MS = 900_000
+const LONG_MS = (function longTimeoutMs() {
+  const raw = String(process.env.CACHE_FLUSH_FETCH_TIMEOUT_MS || '').trim()
+  const n = Number(raw)
+  if (Number.isFinite(n) && n >= 60_000) return Math.floor(n)
+  return 1_800_000 // 30m (15m insufficient for large public-packages refresh runs)
+})()
 const dispatcher = new Agent({
   headersTimeout: LONG_MS,
   bodyTimeout: LONG_MS,
