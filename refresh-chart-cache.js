@@ -50,7 +50,13 @@ async function main() {
     console.error('Missing ADMIN_API_TOKEN (set in environment or .env).');
     process.exit(1);
   }
-  const base = process.env.CHART_CACHE_REFRESH_URL || 'https://www.australianrates.com/api/home-loan-rates/admin/chart-cache/refresh';
+  const base = String(process.env.CHART_CACHE_REFRESH_URL || '').trim();
+  if (!base) {
+    console.error(
+      'Set CHART_CACHE_REFRESH_URL to the full POST URL (no default — avoids accidental prod). Example: https://www.australianrates.com/api/home-loan-rates/admin/chart-cache/refresh',
+    );
+    process.exit(1);
+  }
   const res = await undiciFetch(base, {
     method: 'POST',
     headers: {

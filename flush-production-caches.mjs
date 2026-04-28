@@ -8,8 +8,9 @@
  * Loads repo root .env for ADMIN_API_TOKEN.
  *
  * Usage:
- *   node flush-production-caches.mjs
- *   node flush-production-caches.mjs --chart-pivot
+ *   CACHE_FLUSH_ORIGIN=https://www.australianrates.com node flush-production-caches.mjs
+ *   … same … --chart-pivot
+ * Or pass `--origin=https://…` (overrides env when both set — env wins if you omit CLI).
  */
 import fs from 'fs'
 import path from 'path'
@@ -17,7 +18,13 @@ import { fileURLToPath } from 'url'
 import { Agent, fetch as undiciFetch } from 'undici'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const wantChartPivot = process.argv.includes('--chart-pivot')
+const argv = process.argv
+const wantChartPivot = argv.includes('--chart-pivot')
+
+function parseOriginCli(args) {
+  const raw = args.find((a) => typeof a === 'string' && a.startsWith('--origin='))
+  return raw ? raw.slice('--origin='.length).trim() : ''
+}
 
 const LONG_MS = 900_000
 const dispatcher = new Agent({
@@ -74,18 +81,26 @@ async function main() {
     console.error('Missing ADMIN_API_TOKEN in environment or .env')
     process.exit(1)
   }
-  const origin = process.env.CACHE_FLUSH_ORIGIN || 'https://www.australianrates.com'
-  const baseHl = `${origin}/api/home-loan-rates/admin`
+  const origin = String(process.env.CACHE_FLUSH_ORIGIN || '').trim() || parseOriginCli(argv)
+  if (!origin) {
+    console.error(
+      'Set CACHE_FLUSH_ORIGIN or pass --origin=https://… (no implicit production default). Example: CACHE_FLUSH_ORIGIN=https://www.australianrates.com',
+    )
+    process.exit(1)
+  }
+  const baseHl = `${origin.replace(/\/$/, '')}/api/home-loan-rates/admin`
 
   if (wantChartPivot) {
     console.log('POST chart-cache/refresh (heavy — may 1102 on large DBs)...')
     const chart = await postJson(`${baseHl}/chart-cache/refresh`, token)
     console.log('chart-cache/refresh', chart.status, JSON.stringify(chart.body, null, 2))
-    if (chart.status >= 400) process.exit(1)
-    if (chart.body && typeof chart.body === 'object' && chart.body.title && chart.status === 503) {
-      console.error('chart-cache/refresh failed (likely Worker CPU limit). Use default flush without --chart-pivot, or run during maintenance.')
+    if (chart.status === 503) {
+      console.error(
+        'chart-cache/refresh returned 503 (often Worker CPU limit). Omit --chart-pivot or retry off-peak.',
+      )
       process.exit(1)
     }
+    if (chart.status >= 400) process.exit(1)
   }
 
   console.log('POST public-packages/refresh?full=1&force=1 ...')
