@@ -476,11 +476,47 @@
         return out;
     }
 
+    /**
+     * Carry each product's last quoted rate forward across calendar gaps ≤3 days (aligned with buildBandSeries
+     * on band payloads) so aggregated ribbon geometry matches the declared chart window after sparse ingest points.
+     */
+    function forwardFillRibbonScalarByDate(dates, byDate, sectionStr) {
+        var sec = String(sectionStr || '');
+        var GAP_FILL_MAX_MS = 3 * 86400000;
+        var out = {};
+        Object.keys(byDate || {}).forEach(function (k) {
+            var raw = byDate[k];
+            if (raw != null && Number.isFinite(raw)) out[k] = raw;
+        });
+        var lastOrganic = null;
+        var lastVal = null;
+        (dates || []).forEach(function (date) {
+            var v = out[date];
+            var organicOk =
+                v != null &&
+                Number.isFinite(v) &&
+                v > 0 &&
+                (sec !== 'savings' || v >= 1.0);
+            if (organicOk) {
+                lastOrganic = date;
+                lastVal = v;
+                return;
+            }
+            if (lastOrganic != null && lastVal != null && (v == null || !Number.isFinite(v))) {
+                var gapMs = new Date(date).getTime() - new Date(lastOrganic).getTime();
+                if (gapMs > 0 && gapMs <= GAP_FILL_MAX_MS) out[date] = lastVal;
+            }
+        });
+        return out;
+    }
+
     /** Flat list + per-bank groups for ribbon canvas overlay and hit-testing. */
-    function buildRibbonCanvasProductModel(dates, allSeries, bankColor) {
+    /** @param {object} [canvasOpts] e.g. { section: 'home-loans' } for savings rate rules during forward-fill */
+    function buildRibbonCanvasProductModel(dates, allSeries, bankColor, canvasOpts) {
         var flat = [];
         var byBank = {};
         if (!allSeries || !allSeries.length) return { flat: flat, byBank: byBank, count: 0 };
+        var section = canvasOpts && canvasOpts.section != null ? String(canvasOpts.section) : '';
         var bankIndexMap = {};
         var bankCount = 0;
         allSeries.forEach(function (s) {
@@ -501,6 +537,7 @@
                 if (byDate[dates[di]] != null) { hasData = true; break; }
             }
             if (!hasData) return;
+            byDate = forwardFillRibbonScalarByDate(dates, byDate, section);
             var row = (s.latestRow && typeof s.latestRow === 'object') ? s.latestRow : {};
             if (!row || Object.keys(row).length === 0) {
                 var lp = (s.points && s.points.length) ? s.points[s.points.length - 1] : null;
