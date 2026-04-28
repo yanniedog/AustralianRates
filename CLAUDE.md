@@ -9,6 +9,7 @@ Always:
 
 Git/GitHub:
 - **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → merge when **PR CI** is green. See `docs/CONCURRENT_AGENT_WORKFLOW.md`, repo `AGENTS.md` (“Default git workflow”), and Cursor `.cursor/rules/git-pr-workflow-default.mdc`. Use `gh pr create`, `gh pr checks watch`, `gh pr merge` (e.g. `--auto --squash`) when available.
+- **Automated PR reviews:** After each push to a PR, **wait for bot reviewers** (often several minutes; they may land one after another), **re-check** inline threads and the PR timeline, **then** finalize what you tell the user about bot feedback—or implement fixes. You may keep working on other things and reply afterward. Do not conclude “no feedback” until that pass. Same requirement as Cursor: `AGENTS.md` (multiagent / watch CI bullet) and `.cursor/rules/multiagent-modularity.mdc`.
 - **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
 
 Deployed app:
