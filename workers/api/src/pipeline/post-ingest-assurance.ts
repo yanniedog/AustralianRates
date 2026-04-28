@@ -278,13 +278,15 @@ async function listAbruptMovementSeries(
       : dataset === 'savings'
         ? 'historical_savings_rates'
         : 'historical_term_deposit_rates'
+  const hasIsRemoved = await tableHasColumn(db, table, 'is_removed')
+  const activeFilter = hasIsRemoved ? 'COALESCE(is_removed, 0) = 0' : '1 = 1'
   const rows = await db
     .prepare(
       `WITH current_series AS (
          SELECT DISTINCT series_key
          FROM ${table}
          WHERE collection_date = ?1
-           AND COALESCE(is_removed, 0) = 0
+           AND ${activeFilter}
        ),
        ordered AS (
          SELECT
@@ -296,7 +298,7 @@ async function listAbruptMovementSeries(
          JOIN current_series cs
            ON cs.series_key = h.series_key
          WHERE h.collection_date <= ?1
-           AND COALESCE(h.is_removed, 0) = 0
+           AND ${hasIsRemoved ? 'COALESCE(h.is_removed, 0) = 0' : '1 = 1'}
        )
        SELECT DISTINCT series_key
        FROM ordered
