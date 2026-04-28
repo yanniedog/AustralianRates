@@ -46,6 +46,7 @@ import {
   runProductClassificationAudit,
   shouldFilterProductClassificationLogForActionable,
 } from './product-classification-audit'
+import { loadPostIngestAssuranceReport } from './post-ingest-assurance'
 import type { EnvBindings } from '../types'
 import { extractTraceback, parseLogContext, queryProblemLogs } from '../utils/logger'
 import { toActionableIssueSummaries } from '../utils/log-actionable'
@@ -61,9 +62,11 @@ import {
 } from './status-debug-remediation'
 import type { CoverageGapAuditReport } from './coverage-gap-audit'
 import { shouldIgnoreStatusActionableLog } from '../utils/status-actionable-filter'
+import { readLocalD1BudgetState } from '../utils/d1-budget'
 
 const DEFAULT_SECTIONS = [
   'health',
+  'integrity_pulse',
   'integrity_audit',
   'logs',
   'cdr',
@@ -86,6 +89,58 @@ export function parseStatusDebugSections(raw: string | undefined): Set<string> {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
   return new Set(parts)
+}
+
+async function buildCachedIntegrityPulse(env: EnvBindings): Promise<Record<string, unknown>> {
+  const [integrityRow, postIngest, coverageReport, remediationReport, budgetState] = await Promise.all([
+    getLatestIntegrityAuditRun(env.DB),
+    loadPostIngestAssuranceReport(env.DB).catch(() => null),
+    loadCoverageGapAuditReport(env.DB).catch(() => null),
+    loadCoverageGapRemediationReport(env.DB).catch(() => null),
+    readLocalD1BudgetState(env, 7).catch(() => null),
+  ])
+  const integrity = parseIntegrityAuditRunRow(integrityRow)
+  return {
+    integrity_audit: integrity
+      ? {
+          checked_at: integrity.checked_at,
+          status: integrity.status,
+          overall_ok: integrity.overall_ok,
+          run_id: integrity.run_id,
+        }
+      : null,
+    post_ingest_assurance: postIngest
+      ? {
+          generated_at: postIngest.generated_at,
+          collection_date: postIngest.collection_date,
+          ok: postIngest.ok,
+          totals: postIngest.totals,
+          policy: postIngest.policy,
+        }
+      : null,
+    coverage_gap_audit: coverageReport
+      ? {
+          generated_at: coverageReport.generated_at,
+          collection_date: coverageReport.collection_date,
+          ok: coverageReport.ok,
+          totals: coverageReport.totals,
+        }
+      : null,
+    coverage_gap_remediation: remediationReport
+      ? {
+          generated_at: remediationReport.generated_at,
+          source_collection_date: remediationReport.source_collection_date,
+          totals: remediationReport.totals,
+        }
+      : null,
+    d1_budget: budgetState
+      ? {
+          generated_at: budgetState.generated_at,
+          month: budgetState.month,
+          guardrails: budgetState.guardrails,
+        }
+      : null,
+  }
 }
 
 function truthyQuery(v: string | undefined): boolean {
@@ -304,6 +359,8 @@ function diagnosticsFromLatestHealth(h: ParsedHealthRun): Record<string, unknown
 export type BuildStatusDebugBundleQuery = {
   sections?: string
   healthHistoryLimit?: string
+  refreshIntegrityAudit?: string
+  refreshCdr?: string
   refreshCoverage?: string
   refreshLenderUniverse?: string
   refreshProductClassification?: string
@@ -328,6 +385,8 @@ export async function buildStatusDebugBundle(
 ): Promise<Record<string, unknown>> {
   const sections = parseStatusDebugSections(query.sections)
   const healthHistoryLimit = clamp(Math.floor(Number(query.healthHistoryLimit) || 12), 1, 48)
+  const refreshIntegrityAudit = truthyQuery(query.refreshIntegrityAudit)
+  const refreshCdr = truthyQuery(query.refreshCdr)
   const refreshCoverage = truthyQuery(query.refreshCoverage)
   const refreshLenderUniverse = truthyQuery(query.refreshLenderUniverse)
   const refreshProductClassification = truthyQuery(query.refreshProductClassification)
@@ -380,6 +439,10 @@ export async function buildStatusDebugBundle(
     }
   }
 
+  if (sections.has('integrity_pulse')) {
+    out.integrity_pulse = await buildCachedIntegrityPulse(env)
+  }
+
   const actionableHealthContext = latestHealth
     ? {
         checked_at: latestHealth.checked_at,
@@ -401,19 +464,12 @@ export async function buildStatusDebugBundle(
   if (sections.has('integrity_audit')) {
     parallel.push(
       (async () => {
-        let [latestRow, historyRows] = await Promise.all([
+        const [latestRow, historyRows] = await Promise.all([
           getLatestIntegrityAuditRun(env.DB),
           listIntegrityAuditRuns(env.DB, integrityHistoryLimit),
         ])
         let latestParsed = parseIntegrityAuditRunRow(latestRow)
-        const shouldRefreshIntegrity =
-          !latestParsed ||
-          (latestHealth?.overall_ok === true &&
-            parseIsoDateMs(String(latestParsed?.checked_at ?? '')) != null &&
-            parseIsoDateMs(latestHealth.checked_at) != null &&
-            parseIsoDateMs(String(latestParsed?.checked_at ?? ''))! < parseIsoDateMs(latestHealth.checked_at)!)
-
-        if (shouldRefreshIntegrity) {
+        if (refreshIntegrityAudit) {
           const refreshed = await runDataIntegrityAudit(env.DB, env.MELBOURNE_TIMEZONE || 'Australia/Melbourne')
           latestParsed = {
             run_id: `integrity:status-bundle:${refreshed.checked_at}:${crypto.randomUUID()}`,
@@ -436,11 +492,8 @@ export async function buildStatusDebugBundle(
               summaryJson: JSON.stringify(refreshed.summary),
               findingsJson: JSON.stringify(refreshed.findings),
             })
-            ;[latestRow, historyRows] = await Promise.all([
-              getLatestIntegrityAuditRun(env.DB),
-              listIntegrityAuditRuns(env.DB, integrityHistoryLimit),
-            ])
-            latestParsed = parseIntegrityAuditRunRow(latestRow)
+            const latestAfter = await getLatestIntegrityAuditRun(env.DB)
+            latestParsed = parseIntegrityAuditRunRow(latestAfter)
           } catch {
             // If persistence fails, still surface the refreshed snapshot honestly in the bundle response.
           }
@@ -513,12 +566,7 @@ export async function buildStatusDebugBundle(
     parallel.push(
       (async () => {
         let report = getCachedCdrAuditReport()
-        const shouldRefreshCdr =
-          !report ||
-          (latestHealth?.overall_ok === true && report.ok === false && parseIsoDateMs(report.generated_at) != null &&
-            parseIsoDateMs(latestHealth.checked_at) != null &&
-            parseIsoDateMs(report.generated_at)! < parseIsoDateMs(latestHealth.checked_at)!)
-        if (shouldRefreshCdr) {
+        if (refreshCdr) {
           report = await runCdrPipelineAudit(env)
         }
         out.cdr_audit = { report }
@@ -531,14 +579,7 @@ export async function buildStatusDebugBundle(
       (async () => {
         let report =
           getCachedCoverageGapAuditReport() || (await loadCoverageGapAuditReport(env.DB))
-        const shouldRefreshCachedCoverage =
-          !report ||
-          refreshCoverage ||
-          (latestHealth?.overall_ok === true &&
-            parseIsoDateMs(report.generated_at) != null &&
-            parseIsoDateMs(latestHealth.checked_at) != null &&
-            parseIsoDateMs(report.generated_at)! < parseIsoDateMs(latestHealth.checked_at)!)
-        if (shouldRefreshCachedCoverage) {
+        if (refreshCoverage) {
           report = await runCoverageGapAudit(env, {
             runSource: 'scheduled',
             idleMinutes: 120,
@@ -573,14 +614,7 @@ export async function buildStatusDebugBundle(
         let report =
           getCachedProductClassificationAuditReport() ||
           (await loadProductClassificationAuditReport(env.DB))
-        const shouldRefresh =
-          !report ||
-          refreshProductClassification ||
-          (latestHealth?.overall_ok === true &&
-            parseIsoDateMs(report.generated_at) != null &&
-            parseIsoDateMs(latestHealth.checked_at) != null &&
-            parseIsoDateMs(report.generated_at)! < parseIsoDateMs(latestHealth.checked_at)!)
-        if (shouldRefresh) {
+        if (refreshProductClassification) {
           try {
             report = await runProductClassificationAudit(env, { persist: true })
           } catch {

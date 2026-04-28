@@ -13,6 +13,7 @@ export type DailyLenderDatasetStatusRow = {
   index_fetch_succeeded: number
   accepted_row_count: number
   written_row_count: number
+  unchanged_row_count?: number
   detail_fetch_event_count: number
   lineage_error_count: number
   completed_detail_count: number
@@ -94,7 +95,7 @@ export function isHealthyDailyLenderDatasetStatusRow(row: DailyLenderDatasetStat
   return (
     isLenderDatasetCollectionComplete(row) &&
     Number(row.lineage_error_count ?? 0) === 0 &&
-    Number(row.accepted_row_count ?? 0) <= Number(row.written_row_count ?? 0)
+    Number(row.accepted_row_count ?? 0) <= Number(row.written_row_count ?? 0) + Number(row.unchanged_row_count ?? 0)
   )
 }
 
@@ -144,6 +145,7 @@ export async function listDailyLenderDatasetStatusRows(
          ldr.index_fetch_succeeded,
          ldr.accepted_row_count,
          ldr.written_row_count,
+         ldr.unchanged_row_count,
          ldr.detail_fetch_event_count,
          ldr.lineage_error_count,
          ldr.completed_detail_count,
@@ -209,6 +211,7 @@ export async function listLatestDailyLenderDatasetStatusRows(
          ldr.index_fetch_succeeded AS index_fetch_succeeded,
          ldr.accepted_row_count AS accepted_row_count,
          ldr.written_row_count AS written_row_count,
+         ldr.unchanged_row_count AS unchanged_row_count,
          ldr.detail_fetch_event_count AS detail_fetch_event_count,
          ldr.lineage_error_count AS lineage_error_count,
          ldr.completed_detail_count AS completed_detail_count,

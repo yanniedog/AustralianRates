@@ -3,6 +3,7 @@ export type LenderDatasetInvariantSnapshot = {
   index_fetch_succeeded: number
   accepted_row_count: number
   written_row_count: number
+  unchanged_row_count?: number
   detail_fetch_event_count: number
   lineage_error_count: number
   completed_detail_count: number
@@ -66,6 +67,7 @@ export function assessLenderDatasetCoverage(
     | 'index_fetch_succeeded'
     | 'accepted_row_count'
     | 'written_row_count'
+    | 'unchanged_row_count'
     | 'detail_fetch_event_count'
     | 'lineage_error_count'
     | 'completed_detail_count'
@@ -78,6 +80,7 @@ export function assessLenderDatasetCoverage(
   const failedDetails = asCount(snapshot.failed_detail_count)
   const processedDetails = completedDetails + failedDetails
   const writtenRows = asCount(snapshot.written_row_count)
+  const unchangedRows = asCount(snapshot.unchanged_row_count)
   const acceptedRows = asCount(snapshot.accepted_row_count)
   const detailFetchEvents = asCount(snapshot.detail_fetch_event_count)
   const reasons: string[] = []
@@ -88,7 +91,7 @@ export function assessLenderDatasetCoverage(
   if (asCount(snapshot.lineage_error_count) > 0) {
     reasons.push('lineage_errors_present')
   }
-  if (acceptedRows > writtenRows) {
+  if (acceptedRows > writtenRows + unchangedRows) {
     reasons.push('accepted_written_mismatch')
   }
   if (failedDetails > 0 && !allowsPartialFailureFinalization(snapshot)) {
@@ -98,7 +101,7 @@ export function assessLenderDatasetCoverage(
     reasons.push('detail_processing_incomplete')
   }
   const terminalNoAcceptedRows = isCompletedWithNoAcceptedRows(snapshot)
-  if (expectedDetails > 0 && writtenRows <= 0 && !terminalNoAcceptedRows) {
+  if (expectedDetails > 0 && writtenRows <= 0 && unchangedRows <= 0 && !terminalNoAcceptedRows) {
     reasons.push('zero_written_rows_for_nonzero_expected_details')
   }
   if (expectedDetails > 0 && acceptedRows <= 0 && !terminalNoAcceptedRows) {
@@ -167,6 +170,7 @@ export function isLenderDatasetReadyForFinalization(
     | 'index_fetch_succeeded'
     | 'accepted_row_count'
     | 'written_row_count'
+    | 'unchanged_row_count'
     | 'detail_fetch_event_count'
     | 'lineage_error_count'
     | 'completed_detail_count'
@@ -199,13 +203,13 @@ export function isLenderDatasetReadyForFinalization(
   if (isCompletedWithNoAcceptedRows(snapshot)) {
     return { ready: true, reason: null }
   }
-  if (asCount(snapshot.accepted_row_count) > asCount(snapshot.written_row_count)) {
+  if (asCount(snapshot.accepted_row_count) > asCount(snapshot.written_row_count) + asCount(snapshot.unchanged_row_count)) {
     return { ready: false, reason: 'accepted_written_mismatch' }
   }
   if (asCount(snapshot.accepted_row_count) <= 0) {
     return { ready: false, reason: 'zero_accepted_rows_for_nonzero_expected_details' }
   }
-  if (asCount(snapshot.written_row_count) <= 0) {
+  if (asCount(snapshot.written_row_count) <= 0 && asCount(snapshot.unchanged_row_count) <= 0) {
     return { ready: false, reason: 'zero_written_rows_for_nonzero_expected_details' }
   }
   if (asCount(snapshot.detail_fetch_event_count) <= 0) {
@@ -227,6 +231,7 @@ export function isLenderDatasetCollectionComplete(
   if (
     asCount(snapshot.expected_detail_count) > 0 &&
     asCount(snapshot.written_row_count) <= 0 &&
+    asCount(snapshot.unchanged_row_count) <= 0 &&
     !isCompletedWithNoAcceptedRows(snapshot)
   ) {
     return false
