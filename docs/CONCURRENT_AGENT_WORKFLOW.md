@@ -67,8 +67,9 @@ So multiple agents “do not clash” in Git until the same **lines in the same 
    - `git push -u origin agent/chart-tooltips`
 4. **Open a PR** targeting `main` (GitHub website: “Compare & pull request”, or CLI):
    - `gh pr create --base main --title "..." --body "..."`
-5. **`ci_result`** green, then **PR review bot threads** each have a **reply on GitHub** and are concluded (`docs/CONCURRENT_AGENT_WORKFLOW.md`, **CI vs PR review bots**). Only **then** enable **squash auto-merge** on **`agent/`** / **`feat/`** / **`fix/`** PRs if you use it (`pr-auto-merge.yml` merges on CI, not on bots).
-6. Optionally **`gh pr merge --auto --squash`** after create if you need auto-merge before the workflow runs; otherwise rely on **`pr-auto-merge.yml`**. Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
+5. **`ci_result`** green on the PR (`.github/workflows/ci.yml`). Each **PR review bot** thread must have an **in-thread GitHub reply** and be concluded (`docs/CONCURRENT_AGENT_WORKFLOW.md`, **CI vs PR review bots**).
+6. For **`agent/`** / **`feat/`** / **`fix/`**, **`pr-auto-merge.yml`** may enable **squash auto-merge** when the PR is not a draft; GitHub merges when **`ci_result`** passes, not when bots finish. Enable auto-merge **only after** step 5 is satisfied. If auto-merge was already on while bot feedback was pending, disable it until replies are done (push fixes first if needed).
+7. Optionally **`gh pr merge --auto --squash`** after create if you need auto-merge before the workflow runs; otherwise rely on **`pr-auto-merge.yml`**. Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
 
 ## Reducing clashes between agents
 
