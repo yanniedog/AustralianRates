@@ -11,7 +11,7 @@ import {
   type NormalizedSavingsRow,
   type NormalizedTdRow,
 } from '../ingest/normalize-savings.js'
-import type { RetrievalType, RunSource } from '../types.js'
+import type { RunSource } from '../types.js'
 import { recordIngestAnomaly } from './ingest-anomalies.js'
 
 type HistoricalWritableRow = NormalizedRateRow | NormalizedSavingsRow | NormalizedTdRow
@@ -137,10 +137,6 @@ function parseCdrDetailContract(
   }
 }
 
-function resolveRetrievalType(row: HistoricalWritableRow): RetrievalType {
-  return row.retrievalType ?? 'present_scrape_same_date'
-}
-
 function resolveRunSource(row: HistoricalWritableRow): RunSource {
   return row.runSource ?? 'scheduled'
 }
@@ -153,16 +149,10 @@ function requiresFetchEventLineage(row: HistoricalWritableRow): boolean {
 function minimumDatasetConfidence(
   dataset: DatasetKind,
   row: HistoricalWritableRow,
-  lenderCode: string,
 ): number {
   if (dataset === 'home_loans') {
     const typedRow = row as NormalizedRateRow
-    const playbook = getLenderPlaybook({ code: lenderCode })
-    const playbookThreshold =
-      resolveRetrievalType(typedRow) === 'historical_scrape'
-        ? playbook.historicalMinConfidence
-        : playbook.dailyMinConfidence
-    return Math.max(playbookThreshold, minHomeLoanConfidenceForFlag(typedRow.dataQualityFlag))
+    return minHomeLoanConfidenceForFlag(typedRow.dataQualityFlag)
   }
   return minDepositConfidenceForFlag(row.dataQualityFlag)
 }
@@ -232,7 +222,7 @@ export function assertHistoricalWriteAllowed(
     throw new HistoricalWriteContractError(dataset, 'product_url_host_mismatch', lenderCode)
   }
 
-  const requiredConfidence = minimumDatasetConfidence(dataset, row, lenderCode)
+  const requiredConfidence = minimumDatasetConfidence(dataset, row)
   if (row.confidenceScore < requiredConfidence) {
     throw new HistoricalWriteContractError(dataset, 'confidence_below_write_contract', lenderCode)
   }

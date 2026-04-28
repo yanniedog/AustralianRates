@@ -105,6 +105,13 @@ const ACTIONABLE_MAP: Record<string, ActionableIssue> = {
       'Check upstream CDR 4xx/5xx (400/406/500). Verify lender endpoint and x-v; for 400/406 confirm product ID is valid and still offered. Use admin logs and coverage-gap report.',
     links: ['/admin/logs.html', '/admin/status.html', '/admin/runs.html'],
   },
+  cdr_category_mismatch: {
+    code: 'cdr_category_mismatch',
+    title: 'CDR category mismatch rejected a normalized row',
+    action:
+      'Inspect cdrProductDetailJson category/type against the target dataset and verify classifier/validator alignment for this lender/product before retrying reconciliation.',
+    links: ['/admin/logs.html', '/admin/status.html', '/admin/runs.html'],
+  },
   lender_finalize_not_ready: {
     code: 'lender_finalize_not_ready',
     title: 'Lender finalize not ready (detail processing incomplete or failed)',
@@ -195,6 +202,7 @@ function inferCodeFromMessage(message: string): string {
   if (normalized.includes('analytics_change_query_failed')) return 'analytics_change_query_failed'
   if (normalized.includes('analytics_change_query_schema_mismatch')) return 'analytics_change_query_schema_mismatch'
   if (normalized.includes('cdr_audit_detected_gaps')) return 'cdr_audit_detected_gaps'
+  if (normalized.includes('cdr_category_mismatch')) return 'cdr_category_mismatch'
   if (normalized === 'site_health_attention' || normalized.includes('site_health_attention')) return 'site_health_diagnostics'
   if (
     normalized.includes('product_classification_gaps') ||

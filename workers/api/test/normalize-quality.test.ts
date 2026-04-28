@@ -144,4 +144,39 @@ describe('row validation', () => {
     expect(validateNormalizedRow({ ...row, productName: 'Bridging Home Loan' }).ok).toBe(true)
     expect(validateNormalizedRow({ ...row, productName: 'Premium Options Home Loan' }).ok).toBe(true)
   })
+
+  it('accepts cdr home-loan rows with brand-only names when detail category is residential mortgages', () => {
+    const row = loadRealHomeLoanFixture()
+    const verdict = validateNormalizedRow({
+      ...row,
+      productName: 'ANZ Simplicity PLUS',
+      cdrProductDetailJson: JSON.stringify({
+        data: {
+          productId: row.productId,
+          name: 'ANZ Simplicity PLUS',
+          productCategory: 'RESIDENTIAL_MORTGAGES',
+        },
+      }),
+      dataQualityFlag: 'cdr_live',
+    })
+    expect(verdict.ok).toBe(true)
+  })
+
+  it('rejects cdr home-loan rows when cdr detail category is not a mortgage category', () => {
+    const row = loadRealHomeLoanFixture()
+    const verdict = validateNormalizedRow({
+      ...row,
+      productName: 'ANZ Simplicity PLUS',
+      cdrProductDetailJson: JSON.stringify({
+        data: {
+          productId: row.productId,
+          name: 'ANZ Simplicity PLUS',
+          productCategory: 'TERM_DEPOSITS',
+        },
+      }),
+      dataQualityFlag: 'cdr_live',
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toBe('cdr_category_mismatch_home_loans')
+  })
 })

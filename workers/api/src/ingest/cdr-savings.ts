@@ -21,6 +21,7 @@ import {
   publishedAtFromDetail,
   type JsonRecord,
 } from './cdr.js'
+import { isCdrSavingsProduct, isCdrTermDepositProduct } from './cdr/product-classification.js'
 import type { FetchJsonResult } from './cdr/http.js'
 import type { EnvBindings, LenderConfig } from '../types.js'
 
@@ -30,19 +31,11 @@ type FetchEnvBindings = Pick<
 >
 
 export function isSavingsAccount(product: JsonRecord): boolean {
-  const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()
-  const name = pickText(product, ['name', 'productName']).toUpperCase()
-  if (category.includes('TRANS_AND_SAVINGS') || category.includes('SAVINGS')) return true
-  if (name.includes('SAVINGS') || name.includes('SAVER') || name.includes('AT CALL')) return true
-  return false
+  return isCdrSavingsProduct(product, { allowNameFallback: true })
 }
 
 export function isTermDeposit(product: JsonRecord): boolean {
-  const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()
-  const name = pickText(product, ['name', 'productName']).toUpperCase()
-  if (category.includes('TERM_DEPOSIT')) return true
-  if (name.includes('TERM DEPOSIT') || name.includes('FIXED DEPOSIT')) return true
-  return false
+  return isCdrTermDepositProduct(product, { allowNameFallback: true })
 }
 
 /**
@@ -141,7 +134,7 @@ export function parseSavingsRatesFromDetail(input: {
   const { detail, lender, sourceUrl, collectionDate } = input
   const productId = pickText(detail, ['productId', 'id'])
   const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
-  if (!productId || !productName) return []
+  if (!productId || !productName || !isCdrSavingsProduct(detail, { allowNameFallback: true })) return []
 
   const rates = extractDepositRatesArray(detail)
   if (rates.length === 0) return []
@@ -199,7 +192,7 @@ export function parseTermDepositRatesFromDetail(input: {
   const { detail, lender, sourceUrl, collectionDate } = input
   const productId = pickText(detail, ['productId', 'id'])
   const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
-  if (!productId || !productName) return []
+  if (!productId || !productName || !isCdrTermDepositProduct(detail, { allowNameFallback: true })) return []
 
   const rates = extractDepositRatesArray(detail)
   if (rates.length === 0) return []
