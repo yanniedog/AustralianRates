@@ -36,6 +36,11 @@ import { getRbaHistory } from '../db/rba-cash-rate'
 import { getCpiHistory } from '../db/cpi-data'
 import { queryReportPlotPayload } from '../db/report-plot'
 import {
+  queryHomeLoanSlicePairStats,
+  querySavingsSlicePairStats,
+  queryTdSlicePairStats,
+} from '../db/slice-pair-stats'
+import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
   collectTdAnalyticsRowsResolved,
@@ -156,6 +161,37 @@ async function buildLatestAllEntry(
   return { ok: true, count: rows.length, rows }
 }
 
+async function computeSlicePairStatsPayload(
+  db: D1Database,
+  section: DatasetKind,
+  filters: ScopedFilters,
+): Promise<Record<string, unknown>> {
+  const dYmd = filters.endDate
+  const pYmd = previousCalendarUtcDay(dYmd)
+  const lf = buildLatestAllFilters(filters)
+  const { limit: _omit, ...latestFilters } = lf as ScopedFilters & { limit?: number }
+
+  const sectionKey = section === 'home_loans' ? 'home_loans' : section === 'savings' ? 'savings' : 'term_deposits'
+
+  if (section === 'home_loans') {
+    const counts = await queryHomeLoanSlicePairStats(db, latestFilters as import('../db/home-loans/shared').LatestFilters, pYmd, dYmd)
+    return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
+  }
+  if (section === 'savings') {
+    const counts = await querySavingsSlicePairStats(db, latestFilters as import('../db/savings/shared').LatestSavingsFilters, pYmd, dYmd)
+    return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
+  }
+  const counts = await queryTdSlicePairStats(db, latestFilters as import('../db/term-deposits/shared').LatestTdFilters, pYmd, dYmd)
+  return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
+}
+
+function previousCalendarUtcDay(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return ymd
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 async function collectAnalyticsRows(
   db: D1Database,
   section: DatasetKind,
@@ -231,6 +267,7 @@ export async function buildSnapshotPayload(
     safeEntry('reportPlotBands', () =>
       queryReportPlotPayload(db, section, 'bands', filters as Parameters<typeof queryReportPlotPayload>[3]),
     ),
+    safeEntry('slicePairStats', () => computeSlicePairStatsPayload(db, section, filters)),
   ]
 
   const results = await Promise.all(fetchers)

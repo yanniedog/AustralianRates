@@ -157,17 +157,78 @@
         return numericSnapshotValue(model && model.meta && model.meta.totalRows);
     }
 
-    function snapshotTotalRows(data) {
-        var analytics = data && data.analyticsSeries;
-        var total = numericSnapshotValue(analytics && analytics.total);
-        if (Number.isFinite(total)) return total;
-
-        var latestAll = data && data.latestAll;
-        total = numericSnapshotValue(latestAll && (latestAll.count || latestAll.total));
-        if (Number.isFinite(total)) return total;
-
-        return snapshotChartModelTotal(data);
+    function snapshotSlicePairStatsPayload(data) {
+        var ss = data && data.slicePairStats;
+        if (!ss || typeof ss !== 'object') return null;
+        var gn = function (key) {
+            var n = Number(ss[key]);
+            return Number.isFinite(n) ? n : NaN;
+        };
+        if (!Number.isFinite(gn('universe_total'))) return null;
+        return ss;
     }
+
+    /** Compact slice-pair glyphs: ↑→↓ ? * ! (calendar P vs D, proper ingests only). */
+
+    function glyphNum(x) {
+        var n = Number(x);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    function formatSlicePairText(stats) {
+        if (!stats) return '';
+        return '\u2191' + String(glyphNum(stats.up_count))
+            + ' \u2192' + String(glyphNum(stats.flat_count))
+            + ' \u2193' + String(glyphNum(stats.down_count))
+            + ' ?' + String(glyphNum(stats.prev_missing_count))
+            + ' *' + String(glyphNum(stats.curr_missing_count))
+            + ' !' + String(glyphNum(stats.both_missing_count));
+    }
+
+    function slicePairAriaLabel(stats) {
+        var p = stats && stats.p ? String(stats.p).slice(0, 10) : '';
+        var dr = stats && stats.d ? String(stats.d).slice(0, 10) : '';
+        var chk = stats && stats.checksum_ok === false ? ' checksum mismatch.' : '';
+        return 'Slice pair on ' + dr + ' vs ' + p
+            + ': proper ingests only; compares calendar neighbours (Lag-free).'
+            + ' Up ' + glyphNum(stats.up_count)
+            + ', flat ' + glyphNum(stats.flat_count)
+            + ', down ' + glyphNum(stats.down_count)
+            + ', previous day missing ' + glyphNum(stats.prev_missing_count)
+            + ', current day missing ' + glyphNum(stats.curr_missing_count)
+            + ', both missing ' + glyphNum(stats.both_missing_count)
+            + '.' + chk;
+    }
+
+    function slicePairDataHelp(stats) {
+        var p = stats && stats.p ? String(stats.p).slice(0, 10) : '';
+        var dr = stats && stats.d ? String(stats.d).slice(0, 10) : '';
+        return 'Proper ingests only. Calendar P=' + p + ', D=' + dr + ' (Lag-free). Movement strip elsewhere uses ingest lag.'
+            + (stats && stats.checksum_ok === false ? ' Checksum mismatch detected.' : '');
+    }
+
+    function renderSlicePairStat(stats) {
+        if (!els.statSlicePairs) return false;
+        if (!stats || typeof stats !== 'object') return false;
+        var ut = glyphNum(stats.universe_total);
+        if (!Number.isFinite(ut)) return false;
+        var txt = formatSlicePairText(stats);
+        var label = slicePairAriaLabel(stats);
+        var dh = slicePairDataHelp(stats);
+        els.statSlicePairs.setAttribute('aria-label', label);
+        els.statSlicePairs.setAttribute('title', dh);
+        els.statSlicePairs.setAttribute('data-help', dh);
+        els.statSlicePairs.innerHTML =
+            '<span class="metric-code">' + iconText('compare', 'Slice pair') + '</span><strong>' + esc(txt) + '</strong>';
+        return true;
+    }
+
+    function clearSlicePairStatSilently() {
+        if (!els.statSlicePairs) return;
+        setStatUnavailable(els.statSlicePairs);
+        els.statSlicePairs.removeAttribute('aria-label');
+    }
+
 
     function setIntroMetric(id, value, note) {
         var intro = syncPublicIntro();
@@ -203,6 +264,7 @@
         setInlineError(els.heroError, 'Overview metrics are temporarily unavailable. Refresh to try again.');
         [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
         if (els.statFeeds) setStatUnavailable(els.statFeeds);
+        if (els.statSlicePairs) setStatUnavailable(els.statSlicePairs);
     }
 
     function formatOverviewDatetime(isoOrSqlite) {
@@ -303,6 +365,8 @@
     function syncHeroStatsFromSnapshot() {
         var data = snapshotData();
         if (!data) return false;
+        var spp = snapshotSlicePairStatsPayload(data);
+        if (spp) renderSlicePairStat(spp);
         if (data.overview && data.overview.ok) {
             landingOverview = {
                 rba: data.overview.rba || null,
@@ -742,5 +806,13 @@
     window.AR.hero = {
         loadHeroStats: loadHeroStats,
         loadQuickCompare: loadQuickCompare,
+        setSlicePairStats: function (stats) {
+            if (!stats || typeof stats !== 'object') {
+                clearSlicePairStatSilently();
+                return;
+            }
+            renderSlicePairStat(stats);
+        },
+        clearSlicePairStats: clearSlicePairStatSilently,
     };
 })();

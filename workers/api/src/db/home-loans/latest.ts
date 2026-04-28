@@ -20,7 +20,8 @@ const LATEST_ORDER_BY: Record<NonNullable<LatestFilters['orderBy']>, string> = {
   rate_desc: 'l.interest_rate DESC, l.bank_name ASC, l.product_name ASC',
 }
 
-function buildLatestWhere(filters: LatestFilters): { clause: string; binds: Array<string | number> } {
+/** Exported for slice-pair stats (universe must match `queryLatestRatesCount`). */
+export function buildLatestWhere(filters: LatestFilters): { clause: string; binds: Array<string | number> } {
   const where: string[] = []
   const binds: Array<string | number> = []
 
