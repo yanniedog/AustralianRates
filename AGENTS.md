@@ -16,10 +16,10 @@ This repo has multiple concurrent agents working in parallel. Every agent MUST:
 
 - **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
 - **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
-- **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green.
+- **Watch CI feedback** (`gh pr checks <num> --watch`), **enumerate and close every review thread** (humans and bots such as Sourcery, Gemini Code Assist): implement, or reply with merit-based decline—see `.cursor/rules/respond-to-each-review-comment.mdc`—on the same branch until failures are fixed and substantive feedback is explicitly addressed.
 - **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
 
-Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
+Cursor rules: `.cursor/rules/multiagent-modularity.mdc`, `.cursor/rules/respond-to-each-review-comment.mdc`.
 
 ### Default git workflow (Cursor, Codex, Claude)
 

@@ -8,7 +8,7 @@ Always:
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
-- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → merge when **PR CI** is green. See `docs/CONCURRENT_AGENT_WORKFLOW.md`, repo `AGENTS.md` (“Default git workflow”), and Cursor `.cursor/rules/git-pr-workflow-default.mdc`. Use `gh pr create`, `gh pr checks watch`, `gh pr merge` (e.g. `--auto --squash`) when available.
+- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → merge when **PR CI** is green. See `docs/CONCURRENT_AGENT_WORKFLOW.md`, repo `AGENTS.md` (“Default git workflow”), and Cursor `.cursor/rules/git-pr-workflow-default.mdc`. Use `gh pr create`, `gh pr checks watch`, `gh pr merge` (e.g. `--auto --squash`) when available. **On each PR**, close every review thread (humans and bots such as Sourcery, Gemini): implement or reply with a substantive reason—Cursor `.cursor/rules/respond-to-each-review-comment.mdc`.
 - **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
 
 Deployed app:
