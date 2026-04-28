@@ -676,6 +676,7 @@
                                         '<div class="terminal-stat" id="stat-cash-rate" data-help="' + esc(statSecondaryHelp) + '" data-help-label="' + esc(statSecondaryLabel) + '"><span class="metric-code">' + iconText(statSecondaryIcon, statSecondaryLabel) + '</span><strong>' + esc(statSecondaryValue) + '</strong></div>',
                                         '<div class="terminal-stat" id="stat-records" data-help="Total rows available in the active slice." data-help-label="Rows"><span class="metric-code">' + iconText('rows', 'Rows') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
                                         '<div class="terminal-stat terminal-stat-small" id="stat-feeds" data-help="Last time bank feeds were collected and stored." data-help-label="Bank feeds"><span class="metric-code">' + iconText('calendar', 'Bank feeds') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
+                                        '<div class="terminal-stat terminal-stat-small" id="stat-slice-pairs" data-help="Counts for calendar day D vs prior day P among proper ingests in the active slice." data-help-label="Slice pair" aria-live="polite"><span class="metric-code">' + iconText('compare', 'Slice pair') + '</span><strong>' + LOADING_TEXT + '</strong></div>',
                                     '</div>',
                                 '</footer>',
                                 '<div class="chart-hidden-aux" hidden aria-hidden="true">',
