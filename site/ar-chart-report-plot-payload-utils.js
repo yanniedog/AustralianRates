@@ -54,12 +54,29 @@
         return left > right ? left : right;
     }
 
-    function combinedDateRange(plotPayload, model) {
+    /** YYYY-MM-DD from snapshot inline filtersResolved (canonical window end matches hero/header). */
+    function snapshotFiltersResolvedEndYmd() {
+        var data = window.AR && window.AR.snapshot && window.AR.snapshot.data;
+        var fr = data && data.filtersResolved;
+        var raw = fr && (fr.endDate !== undefined && fr.endDate !== null ? fr.endDate : fr.end_date);
+        var d = String(raw || '').trim().slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+    }
+
+    /** Third arg unions max date with snapshot window end when bands/report plot is missing or lags overlays. */
+    function combinedDateRange(plotPayload, model, snapshotResolvedEndYmd) {
         var plotRange = payloadDateRange(plotPayload);
         var modelRange = fallbackSeriesDateBoundsFromModel(model);
+        var maxDate = laterDate(plotRange.maxDate, modelRange.maxDate);
+        var snap = snapshotResolvedEndYmd != null && snapshotResolvedEndYmd !== ''
+            ? String(snapshotResolvedEndYmd).trim().slice(0, 10)
+            : snapshotFiltersResolvedEndYmd();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(snap)) {
+            maxDate = laterDate(maxDate, snap);
+        }
         return {
             minDate: earlierDate(plotRange.minDate, modelRange.minDate),
-            maxDate: laterDate(plotRange.maxDate, modelRange.maxDate),
+            maxDate: maxDate,
             plotMaxDate: plotRange.maxDate,
             modelMaxDate: modelRange.maxDate,
         };
@@ -95,6 +112,7 @@
         fallbackSeriesDateBoundsFromModel: fallbackSeriesDateBoundsFromModel,
         payloadDateRange: payloadDateRange,
         combinedDateRange: combinedDateRange,
+        snapshotFiltersResolvedEndYmd: snapshotFiltersResolvedEndYmd,
         bankTrayEntriesFromBandsPayload: bankTrayEntriesFromBandsPayload,
     };
 })();
