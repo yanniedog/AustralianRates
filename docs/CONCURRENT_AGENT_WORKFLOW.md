@@ -120,4 +120,4 @@ Each worktree is an independent checkout; pushes still go to the same remote.
 - **Preview the static site** via Cloudflare Pages branch previews when enabled; **production** remains `https://www.australianrates.com` after `main` deploys.
 - **Merge + update other branches from `main`** to roll work together safely.
 - **Post-merge:** agents still run production verification from the repo root (`AGENTS.md`); CI green is not a substitute for live-site checks where Playwright cannot pass in the cloud.
-- **Gemini Code Assist / similar bots:** threaded replies on substantive automated review before merge when practical (see `.cursor/rules/gemini-pr-review-replies.mdc`).
+- **Gemini Code Assist, Codex PR review, similar bots:** threaded replies on substantive automated review before merge when practical (see `.cursor/rules/pr-review-bot-replies.mdc`).

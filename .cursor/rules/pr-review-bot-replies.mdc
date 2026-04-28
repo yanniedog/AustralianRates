@@ -1,19 +1,24 @@
 ---
-description: "Threaded PR replies to Google Gemini Code Assist and similar automated code reviews"
+description: "Threaded PR replies to Gemini Code Assist, Codex, and similar automated code reviews"
 alwaysApply: true
 ---
 
-# Respond to Gemini Code Assist (and similar) on pull requests
+# Respond to automated PR reviewers (Gemini Code Assist, Codex, similar)
 
-Google **Gemini Code Assist** (`gemini-code-assist`) and similar repo-integrated **automated code-review bots** often produce high-signal summaries, file comments, or actionable suggestions. Treat that output as **required follow-up for communication**, not optional noise.
+Treat output from repo-integrated **automated code-review bots** as **required follow-up for communication**, not optional noise—especially:
+
+- **Google Gemini Code Assist** (`gemini-code-assist`)
+- **Codex** PR review when it appears as an automated reviewer on the PR (same expectations as Gemini)
+
+Analogous bots (similar summaries, inline file comments, or suggestion blocks) fall under this rule unless listed in **Exceptions**.
 
 ## Required
 
-- When Gemini (or an analogous bot) leaves **substantive** feedback on an open PR **your workstream owns**:
+- When **Gemini**, **Codex**, or another covered bot leaves **substantive** feedback on an open PR **your workstream owns**:
   - Post a **reply in the relevant thread** (or on the bot’s review summary) **before merge when practical**, unless the user explicitly waives replies for that PR.
   - For each substantive point, state one of: **implemented** (what changed, optional commit ref), **deferred** (reason; optional `docs/REFACTOR_BACKLOG.md` or issue link), or **declined / won’t do** (short reason).
 - Prefer a **small follow-up commit** on the same branch when adopting a suggestion is straightforward; otherwise document deferral in the reply.
-- **Do not** merge with substantive Gemini feedback left **unanswered**—silence reads as ignored review.
+- **Do not** merge with substantive Gemini **or Codex** feedback left **unanswered**—silence reads as ignored review.
 
 ## Exceptions
 
@@ -27,4 +32,4 @@ Google **Gemini Code Assist** (`gemini-code-assist`) and similar repo-integrated
 
 ## Rationale
 
-Keeps GitHub review history auditable, respects high-signal automation, and separates “no code change” from “no response.”
+Keeps GitHub review history auditable, respects high-signal automation from multiple vendors (Gemini and Codex), and separates “no code change” from “no response.”

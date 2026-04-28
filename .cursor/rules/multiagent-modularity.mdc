@@ -22,7 +22,7 @@ This repo is actively worked on by **multiple concurrent agents** (Cursor, Codex
    - Watch PR checks (`gh pr checks <num> --watch`) and the Cloudflare deploy, not just local tests.
    - For every failure, read the log, fix on the same branch, push again. Loop until CI is green.
    - For review comments (human or bot), address each one in follow-up commits; do not ignore.
-   - For **Google Gemini Code Assist** (`gemini-code-assist`) substantive PR output: also post **threaded replies** (implement / defer / decline per point). Full rule: `.cursor/rules/gemini-pr-review-replies.mdc`.
+   - For **Google Gemini Code Assist** (`gemini-code-assist`) and **Codex** substantive PR reviews: post **threaded replies** (implement / defer / decline per point). Full rule: `.cursor/rules/pr-review-bot-replies.mdc`.
 4. **Complete the production closeout** from `.cursor/rules/every-chat-commit-deploy-verify-production.mdc` **after** merge and Cloudflare deploy — never treat a green PR alone as shipped.
 5. **Keep the Git graph readable:** after your PR merges, run **`npm run git:graph-hygiene`** (and delete the finished topic branch locally when safe). Prefer **Automatically delete head branches** on GitHub and avoid extra local branch names pointing at the same commit as **`main`** unless a **worktree** forces it. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“Keeping the Git graph readable”).
 
