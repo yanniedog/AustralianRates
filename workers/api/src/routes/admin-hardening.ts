@@ -89,7 +89,7 @@ adminHardeningRoutes.get('/diagnostics/coverage-gaps', async (c) => {
   let report =
     getCachedCoverageGapAuditReport() ||
     await loadCoverageGapAuditReport(c.env.DB)
-  if (!report || refresh) {
+  if (refresh) {
     report = await runCoverageGapAudit(c.env, {
       runSource: 'scheduled',
       idleMinutes: 120,
@@ -270,8 +270,11 @@ adminHardeningRoutes.get('/diagnostics/status-debug-bundle', async (c) => {
     {
       sections: q.sections,
       healthHistoryLimit: q.health_history_limit,
+      refreshIntegrityAudit: q.refresh_integrity_audit,
+      refreshCdr: q.refresh_cdr,
       refreshCoverage: q.refresh_coverage,
       refreshLenderUniverse: q.refresh_lender_universe,
+      refreshProductClassification: q.refresh_product_classification,
       logLimit: q.log_limit,
       since: q.since,
       logHoursBeforeHealth: q.log_hours_before_health,
@@ -283,6 +286,7 @@ adminHardeningRoutes.get('/diagnostics/status-debug-bundle', async (c) => {
       replayLimit: q.replay_limit,
       probeEventLimit: q.probe_event_limit,
       integrityHistoryLimit: q.integrity_history_limit,
+      provenanceLimit: q.provenance_limit,
     },
     c.get('adminAuthState')?.mode ?? null,
   )

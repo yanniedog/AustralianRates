@@ -28,6 +28,7 @@ export type CoverageGapAuditReport = {
     completed_detail_count: number
     failed_detail_count: number
     written_row_count: number
+    unchanged_row_count?: number
     finalized_at: string | null
     updated_at: string
   }>
@@ -64,6 +65,7 @@ function toRow(row: LenderDatasetGapRow): CoverageGapAuditReport['rows'][number]
     completed_detail_count: Number(row.completed_detail_count || 0),
     failed_detail_count: Number(row.failed_detail_count || 0),
     written_row_count: Number(row.written_row_count || 0),
+    unchanged_row_count: Number(row.unchanged_row_count || 0),
     finalized_at: row.finalized_at,
     updated_at: row.updated_at,
   }
