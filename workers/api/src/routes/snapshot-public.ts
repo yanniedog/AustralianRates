@@ -340,12 +340,10 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const wantsLite = parseBooleanQuery(query.lite)
   let payload: Awaited<ReturnType<typeof getCachedOrComputeSnapshot>>
   try {
-    payload = await getCachedOrComputeSnapshot(
-      c.env,
-      section,
-      scope,
-      () => buildSnapshotPayload(c.env, section, scope),
-      { allowD1Fallback: false, allowLiveCompute: false },
+    // KV-only would 503 after SNAPSHOT_PAYLOAD_VERSION bumps until cron repopulates.
+    // D1 then live compute backfill cache; responses still use public Cache-Control.
+    payload = await getCachedOrComputeSnapshot(c.env, section, scope, () =>
+      buildSnapshotPayload(c.env, section, scope),
     )
   } catch {
     c.header('Cache-Control', 'no-store')
