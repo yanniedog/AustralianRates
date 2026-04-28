@@ -459,6 +459,66 @@ async function verifyHeroStats(page, results, label) {
     }
 }
 
+/** Production: hero Updated must reflect snapshot filtersResolved.endDate (aligned with charts). */
+async function verifyHeroUpdatedAlignsWithSnapshot(page, results, label, apiBasePath) {
+    const base = apiBasePath.replace(/\/?$/, '');
+    const snapshotUrl = `${baseOrigin}${base}/snapshot`;
+    let endYmd = '';
+    try {
+        const res = await fetch(snapshotUrl, { headers: { Accept: 'application/json' } });
+        const body = await res.json();
+        const fr = body && body.ok && body.data && body.data.filtersResolved;
+        endYmd = fr ? String(fr.endDate || fr.end_date || '').trim().slice(0, 10) : '';
+    } catch (_) {
+        endYmd = '';
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endYmd)) {
+        fail(results, `${label}: snapshot filtersResolved.endDate missing (${endYmd || 'empty'})`);
+        return;
+    }
+
+    await page
+        .waitForFunction(
+            (ymd) => {
+                const d =
+                    window.AR && window.AR.snapshot && window.AR.snapshot.data && window.AR.snapshot.data.filtersResolved;
+                const shown = document.querySelector('#stat-updated strong');
+                const t = shown ? String(shown.textContent || '').trim() : '';
+                return (
+                    d &&
+                    String(d.endDate || d.end_date || '')
+                        .trim()
+                        .slice(0, 10) === ymd &&
+                    t &&
+                    t !== 'Unavailable'
+                );
+            },
+            endYmd,
+            { timeout: SEL_TIMEOUT_MS },
+        )
+        .catch(() => null);
+
+    const state = await page.evaluate(() => {
+        const d =
+            window.AR && window.AR.snapshot && window.AR.snapshot.data && window.AR.snapshot.data.filtersResolved;
+        const dom = document.querySelector('#stat-updated strong');
+        return {
+            fr: d ? String(d.endDate || d.end_date || '').trim().slice(0, 10) : '',
+            text: dom ? String(dom.textContent || '').trim() : '',
+        };
+    });
+
+    if (state.fr !== endYmd) {
+        fail(results, `${label}: page filtersResolved.endDate (${state.fr || 'none'}) !== API (${endYmd})`);
+        return;
+    }
+    if (!state.text || state.text === 'Unavailable') {
+        fail(results, `${label}: hero Updated text missing or unavailable`);
+        return;
+    }
+    pass(results, `${label}: hero Updated aligns with snapshot filtersResolved.endDate`);
+}
+
 async function verifyNoPrimaryMobileHostArtifacts(page, results, label) {
     const state = await page.evaluate(() => {
         const switchLinks = Array.from(document.querySelectorAll('a[href]')).map((el) => ({
@@ -1556,6 +1616,7 @@ async function verifySectionSmoke(page, results, section, noscriptBatchPromise) 
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
     await verifyHeroStats(page, results, section.name);
     await verifyStartupSettled(page, results, section.name);
+    await verifyHeroUpdatedAlignsWithSnapshot(page, results, section.name, section.apiBasePath);
     await verifyPublicFooter(page, results, section.name);
     await verifyClientLog(page, results, section.name);
     await verifyNoPublicAdminSurface(page, results, section.name);
@@ -1697,6 +1758,7 @@ async function runTests() {
         await verifyExplorerHeading(page, results, 'Homepage');
         await verifyExplorerTable(page, results, 'Homepage', true);
         await verifyStartupSettled(page, results, 'Homepage');
+        await verifyHeroUpdatedAlignsWithSnapshot(page, results, 'Homepage', '/api/home-loan-rates');
         await verifyPublicFooter(page, results, 'Homepage');
         await verifyNoPublicAdminSurface(page, results, 'Homepage');
         await phase('homepage: noscript check (parallel fetch)');
