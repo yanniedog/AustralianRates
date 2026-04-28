@@ -114,6 +114,20 @@ function economicSeriesQuarantineStatus(
   return { quarantined: false, reason: null }
 }
 
+function shouldExcludeEconomicSeriesFromPublic(
+  status:
+    | {
+        last_observation_date: string | null
+        status: string
+      }
+    | undefined,
+  frequency: string,
+  endDate: string,
+): boolean {
+  if (!status) return false
+  return economicSeriesQuarantineStatus(status, frequency, endDate).quarantined
+}
+
 export const economicPublicRoutes = new Hono<AppContext>()
 
 registerDebugLogRoutes(economicPublicRoutes)
@@ -189,7 +203,7 @@ economicPublicRoutes.get('/series', async (c) => {
       const definition = getEconomicSeriesDefinition(id)
       if (!definition) return null
       const quarantine = economicSeriesQuarantineStatus(statusMap.get(id), definition.frequency, endDate)
-      if (quarantine.quarantined) return null
+      if (shouldExcludeEconomicSeriesFromPublic(statusMap.get(id), definition.frequency, endDate)) return null
       const expanded = isDerivedEconomicSeries(definition)
         ? await buildDerivedEconomicSeries(getReadDb(c), definition, startDate, endDate)
         : expandEconomicObservationsDaily(
