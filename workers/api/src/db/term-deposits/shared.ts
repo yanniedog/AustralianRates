@@ -141,7 +141,10 @@ export function buildWhere(filters: TdPaginatedFilters): { clause: string; binds
   if (filters.interestPayment) { where.push('h.interest_payment = ?'); binds.push(filters.interestPayment) }
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }
-  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+    where.push("(h.quarantine_reason IS NULL OR TRIM(h.quarantine_reason) = '')")
+  }
 
   applyTdCompareEdgeExclusions(where, 'h.product_name', 'h.min_deposit', filters.excludeCompareEdgeCases)
 

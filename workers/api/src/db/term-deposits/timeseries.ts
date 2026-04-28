@@ -49,7 +49,10 @@ export async function queryTdTimeseries(db: D1Database, input: TdTimeseriesFilte
   addBalanceBandOverlapWhere(where, binds, 'h.min_deposit', 'h.max_deposit', input.balanceMin, input.balanceMax)
   if (input.interestPayment) { where.push('h.interest_payment = ?'); binds.push(input.interestPayment) }
   applyTdCompareEdgeExclusions(where, 'h.product_name', 'h.min_deposit', input.excludeCompareEdgeCases)
-  if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  if (!input.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+    where.push("(h.quarantine_reason IS NULL OR TRIM(h.quarantine_reason) = '')")
+  }
   where.push(runSourceWhereClause('h.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('h.collection_date >= ?'); binds.push(input.startDate) }
   if (input.endDate) { where.push('h.collection_date <= ?'); binds.push(input.endDate) }
