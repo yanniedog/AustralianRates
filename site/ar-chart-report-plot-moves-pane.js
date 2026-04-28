@@ -48,6 +48,11 @@
             '<span>' + String(maxCount) + '</span>';
         wrap.appendChild(labelRow);
 
+        var sliceHint = document.createElement('p');
+        sliceHint.className = 'hint lwc-report-moves-strip-hint';
+        sliceHint.textContent = 'Movement uses lag between consecutive ingests. Slice pair in the footer uses calendar P vs D with proper ingests only.';
+        wrap.appendChild(sliceHint);
+
         var plot = document.createElement('div');
         plot.className = 'lwc-report-moves-strip-plot';
         wrap.appendChild(plot);

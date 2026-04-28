@@ -1001,6 +1001,27 @@
         });
     }
 
+    function fetchSlicePairStats(params) {
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            queryParams[key] = params[key];
+        });
+        delete queryParams.representation;
+        delete queryParams.sort;
+        delete queryParams.dir;
+        var policy = buildRequestPolicy('/analytics/slice-pair-stats', queryParams, 'report-plot');
+        return fetchJsonWithPolicy(policy, 'slice-pair-stats', {
+            requestLabel: 'Slice pair stats',
+            timeoutMs: CHART_REPORT_TIMEOUT_MS,
+            retryCount: 0,
+            cache: policy.fetchCache,
+            skipCacheBust: policy.skipCacheBust,
+            sortQuery: policy.sortQuery,
+        }, function (result) {
+            return result && result.data ? result.data : result;
+        });
+    }
+
     function fetchReportPlot(mode, params) {
         var queryParams = {};
         Object.keys(params || {}).forEach(function (key) {
@@ -1263,6 +1284,7 @@
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
         fetchReportPlot: fetchReportPlot,
+        fetchSlicePairStats: fetchSlicePairStats,
         fetchReportProductHistory: fetchReportProductHistory,
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,

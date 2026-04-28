@@ -119,6 +119,17 @@
         return null;
     }
 
+    function refreshHeroSlicePair(baseParams) {
+        if (!chartData || typeof chartData.fetchSlicePairStats !== 'function') return;
+        var heroApi = window.AR && window.AR.hero ? window.AR.hero : null;
+        if (!heroApi || typeof heroApi.setSlicePairStats !== 'function') return;
+        chartData.fetchSlicePairStats(baseParams).then(function (payload) {
+            heroApi.setSlicePairStats(payload || null);
+        }).catch(function () {
+            if (typeof heroApi.clearSlicePairStats === 'function') heroApi.clearSlicePairStats();
+        });
+    }
+
     function disposeCharts() {
         chartState.mainChart = disposeChart(chartState.mainChart);
         chartState.detailChart = disposeChart(chartState.detailChart);
@@ -764,6 +775,8 @@
         var baseParams = buildBaseParams();
         await awaitSnapshotBootstrap(baseParams, 2500);
 
+        refreshHeroSlicePair(baseParams);
+
         chartState.loadedChartWindow = String(baseParams.chart_window || '');
         chartState.fallbackReason = '';
         chartState.stale = false;
@@ -858,6 +871,7 @@
             } else {
                 await awaitSnapshotBootstrap(baseParams, 2500);
             }
+            refreshHeroSlicePair(baseParams);
             var wantsReportPlots = isReportView(currentView);
             var reportPreviewRendered = false;
             var reportPlotPromise = wantsReportPlots && chartData.fetchReportPlot

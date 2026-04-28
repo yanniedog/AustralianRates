@@ -21,7 +21,8 @@ import {
   MIN_PUBLIC_RATE,
 } from './shared'
 
-function buildLatestWhere(filters: LatestSavingsFilters): { clause: string; binds: Array<string | number> } {
+/** Exported for slice-pair stats (universe must match `queryLatestSavingsRatesCount`). */
+export function buildLatestWhere(filters: LatestSavingsFilters): { clause: string; binds: Array<string | number> } {
   const where: string[] = []
   const binds: Array<string | number> = []
 

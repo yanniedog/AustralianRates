@@ -74,6 +74,11 @@
             allowedKeys: REPORT_PLOT_ALLOWED_KEYS,
             requiredParams: { mode: 'bands' },
         },
+        {
+            suffix: '/analytics/slice-pair-stats',
+            dataKey: 'slicePairStats',
+            allowedKeys: REPORT_PLOT_ALLOWED_KEYS,
+        },
     ];
 
     function activeSection() {
@@ -298,7 +303,8 @@
 
     function isAnalyticsChartRequestPath(relative) {
         return relative === '/analytics/series' || relative === '/analytics/series/'
-            || relative === '/analytics/report-plot' || relative === '/analytics/report-plot/';
+            || relative === '/analytics/report-plot' || relative === '/analytics/report-plot/'
+            || relative === '/analytics/slice-pair-stats' || relative === '/analytics/slice-pair-stats/';
     }
 
     function bundleKey(chartWindow, preset) {
@@ -412,7 +418,7 @@
             var analyticsMode = String(parsedUrl.searchParams.get('mode') || '').trim().toLowerCase();
             if (analyticsMode && analyticsMode !== 'all') return false;
         }
-        if (matcher.dataKey === 'reportPlotMoves' || matcher.dataKey === 'reportPlotBands') {
+        if (matcher.dataKey === 'reportPlotMoves' || matcher.dataKey === 'reportPlotBands' || matcher.dataKey === 'slicePairStats') {
             var datasetMode = String(parsedUrl.searchParams.get('dataset_mode') || '').trim().toLowerCase();
             if (datasetMode && datasetMode !== 'all') return false;
         }
@@ -427,7 +433,7 @@
             ? inferSnapshotScopeForChartRequest(
                 section,
                 parsedUrl.searchParams,
-                rel.indexOf('report-plot') >= 0 ? 'report-plot' : 'series',
+                rel.indexOf('report-plot') >= 0 || rel.indexOf('slice-pair-stats') >= 0 ? 'report-plot' : 'series',
             )
             : inferSnapshotScopeForPage(section, new URLSearchParams(window.location.search || ''));
         return bundleForScope(scopeParts.chartWindow, scopeParts.preset);
@@ -630,7 +636,7 @@
             ? inferSnapshotScopeForChartRequest(
                 section,
                 parsed.searchParams,
-                rel.indexOf('report-plot') >= 0 ? 'report-plot' : 'series',
+                rel.indexOf('report-plot') >= 0 || rel.indexOf('slice-pair-stats') >= 0 ? 'report-plot' : 'series',
             )
             : inferSnapshotScopeForPage(section, new URLSearchParams(window.location.search || ''));
         var wantsFull = isAnalyticsChartRequestPath(rel);

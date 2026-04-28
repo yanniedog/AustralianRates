@@ -4,6 +4,8 @@ import { parseSourceMode } from '../utils/source-mode'
 import { collectTdAnalyticsRowsResolved } from './analytics-data'
 import { registerAnalyticsRoutes } from './analytics-route-registration'
 import { registerReportPlotRoutes } from './report-plot-route-registration'
+import { registerSlicePairStatsRoutes } from './slice-pair-route-registration'
+import { tdLatestFiltersFromChartQuery } from './slice-pair-latest-filters-from-query'
 import {
   parseExcludeCompareEdgeCases,
   parseCsvList,
@@ -46,5 +48,10 @@ export function registerTdAnalyticsRoutes(publicRoutes: Hono<AppContext>): void 
   registerReportPlotRoutes(publicRoutes, {
     section: 'term_deposits',
     buildFilters,
+  })
+  registerSlicePairStatsRoutes(publicRoutes, {
+    section: 'term_deposits',
+    buildChartFilters: buildFilters,
+    buildLatestFilters: tdLatestFiltersFromChartQuery,
   })
 }

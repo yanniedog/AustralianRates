@@ -34,11 +34,11 @@ function toQueryParams(input: QueryRecord): QueryRecord {
   return params
 }
 
-function todayYmd(): string {
+export function todayYmd(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function clampFiltersToToday<TFilters extends ReportFilters>(filters: TFilters): TFilters {
+export function clampFiltersToToday<TFilters extends ReportFilters>(filters: TFilters): TFilters {
   const today = todayYmd()
   const startDate = typeof filters.startDate === 'string' ? filters.startDate.trim() : ''
   const rawEndDate = typeof filters.endDate === 'string' ? filters.endDate.trim() : ''
