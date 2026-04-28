@@ -1,4 +1,5 @@
 import type { DatasetKind } from '../../../../packages/shared/src'
+import { VALIDATE_COMMON } from '../ingest/validate-common'
 
 function normalizeKeyPart(value: string): string {
   return value
@@ -19,6 +20,18 @@ export function buildScheduledRunId(collectionDate: string, scheduledTime?: numb
     ? new Date(Number(scheduledTime)).toISOString()
     : new Date().toISOString()
   return `daily:${collectionDate}:${scheduledIso}`
+}
+
+/**
+ * Short unique run id for coverage-gap forced daily reconciles.
+ * (Legacy pattern `daily:…:coverage-gap-remediate:<uuid>` exceeded MAX_RUN_ID_LENGTH and caused every CDR row to fail validation.)
+ */
+export function buildCoverageGapRemediationRunId(collectionDate: string): string {
+  const hex = crypto.randomUUID().replace(/-/g, '')
+  const prefix = `daily:${collectionDate}:cgr:`
+  const maxLen = VALIDATE_COMMON.MAX_RUN_ID_LENGTH
+  const suffixLen = Math.max(0, maxLen - prefix.length)
+  return `${prefix}${hex.slice(0, suffixLen)}`
 }
 
 export function buildBackfillRunId(monthCursor: string): string {
