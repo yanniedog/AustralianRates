@@ -32,6 +32,7 @@ Append **`## Feedback responses`** to the PR body—or the closing push summary�
 
 ## Do not
 
+- Claim there is **no actionable bot feedback** from a **single top-level review comment** without checking **all** inline threads for that bot (**`chatgpt-codex-connector`**, **`gemini-code-assist`**, etc.). Top-level text can be generic while file comments carry P1/P2 items.
 - Dismiss **`sourcery`**, **`gemini-code-assist`**, or similar as “non-blocking third-party noise” **without** per-item resolution (code + thread **or** written decline reason).
 - Merge or finalize a PR the assistant owns when **identified** automated or human review comments remain unaddressed and unstated why.
 

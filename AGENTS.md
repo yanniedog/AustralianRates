@@ -71,6 +71,7 @@ The **production verification** steps below apply **after** the change is on **`
 | Test API worker | `npm run test:api` | From repo root. |
 | Test archive worker | `npm run test:archive` | From repo root. |
 | Typecheck API | `npm run typecheck:api` | From repo root. |
+| Snapshot KV / API version parity | `npm run check:snapshot-kv-sync` | From repo root. `SNAPSHOT_PAYLOAD_VERSION` (workers/api) must match `SNAPSHOT_KV_VERSION` in both `functions/_middleware.js` and `site/functions/_middleware.js`. Runs at the start of `npm run verify` and CI. |
 | Diagnose API smoke (production) | `npm run diagnose:api:smoke` | From repo root. Fast deploy-signoff API checks. |
 | Diagnose API deep (production) | `node diagnose-api.js` | From repo root. Deeper triage and benchmark command. |
 | Deploy API | `npm run deploy:api` | Wrangler deploy for workers/api. |

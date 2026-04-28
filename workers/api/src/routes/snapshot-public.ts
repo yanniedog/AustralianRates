@@ -66,6 +66,7 @@ import type { AppContext } from '../types'
 import { withPublicCache } from '../utils/http'
 import { buildSnapshotCurrentLeaders } from './snapshot-current-leaders'
 import { trimSnapshotDataForHtmlInline } from '../utils/snapshot-inline-trim'
+import { previousCalendarUtcDay } from '../utils/previous-calendar-utc-day'
 
 const SNAPSHOT_CACHE_MAX_AGE = 300
 
@@ -183,13 +184,6 @@ async function computeSlicePairStatsPayload(
   }
   const counts = await queryTdSlicePairStats(db, latestFilters as import('../db/term-deposits/shared').LatestTdFilters, pYmd, dYmd)
   return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
-}
-
-function previousCalendarUtcDay(ymd: string): string {
-  const d = new Date(`${ymd}T12:00:00.000Z`)
-  if (Number.isNaN(d.getTime())) return ymd
-  d.setUTCDate(d.getUTCDate() - 1)
-  return d.toISOString().slice(0, 10)
 }
 
 async function collectAnalyticsRows(

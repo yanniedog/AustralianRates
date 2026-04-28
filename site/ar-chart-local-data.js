@@ -470,6 +470,17 @@
         });
     }
 
+    /** Snapshot bundle `slicePairStats`; same scope rules as getReportPlot (exact bundle + no selective filters). */
+    function getSlicePairStats(params) {
+        var chartWindow = normalizeChartWindow(params && params.chart_window);
+        var preset = normalizePreset(params && params.preset);
+        var exact = exactBundle(chartWindow, preset, 'slicePairStats');
+        if (exact && canUseExactReportPayload(params)) {
+            return Promise.resolve(exact.data.slicePairStats || null);
+        }
+        return Promise.resolve(null);
+    }
+
     function getReportProductHistory(params) {
         var chartWindow = normalizeChartWindow(params && params.chart_window);
         var preset = normalizePreset(params && params.preset);
@@ -485,6 +496,7 @@
         getAnalyticsRows: getAnalyticsRows,
         getLatestPreviewRows: getLatestPreviewRows,
         getReportPlot: getReportPlot,
+        getSlicePairStats: getSlicePairStats,
         getReportProductHistory: getReportProductHistory,
     };
 })();
