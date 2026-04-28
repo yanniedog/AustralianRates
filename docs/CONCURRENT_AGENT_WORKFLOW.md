@@ -27,6 +27,17 @@ For **non-draft** pull requests **into `main`** whose head branch starts with **
 - **Merge conflicts:** resolve by merging or rebasing **`origin/main`** into the PR branch, then push.
 - **Draft PRs:** not opted into auto-merge until marked ready for review.
 
+## PR review bots (mandatory before squash merge)
+
+**Automated reviewers** on GitHub (Copilot, CodeRabbit, Greptile, dependency or security scanners, Actions that comment on lines, etc.) are **peer reviewers**. Their suggestions participate in the same review conversation as humans and should not be dismissed as cosmetic.
+
+Before **squash-merge to `main`** (including via auto-merge):
+
+1. **Address every bot thread**: push fixes, or reply with a short, substantive justification when not acting on a suggestion—and leave conversations resolved or clearly concluded, not ignored.
+2. **Do not treat CI green alone as merge-ready** if substantive bot feedback is still open. Agents and humans should not merge or mark a PR complete until bot feedback is handled.
+
+Canonical rule for assistants: `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”).
+
 **Stale remote heads (squash merge):** `.github/workflows/stale-branch-cleanup.yml` runs on **every push to `main`**, **weekly** on a schedule, and via **Actions → Stale branch cleanup → Run workflow**. It deletes remote branches named **`agent/*`**, **`feat/*`**, or **`fix/*`** only when there is **no open PR** on that head and **at least one merged PR** used that head—so it clears leftover tips after squash merge without removing branches that never had a merge. It does **not** delete other branch names (for example ad-hoc `chore/` work without a merged PR is untouched unless you rename to match those prefixes).
 
 ## Keeping the Git graph readable (local clones)
@@ -59,7 +70,7 @@ So multiple agents “do not clash” in Git until the same **lines in the same 
    - `git push -u origin agent/chart-tooltips`
 4. **Open a PR** targeting `main` (GitHub website: “Compare & pull request”, or CLI):
    - `gh pr create --base main --title "..." --body "..."`
-5. **Wait for CI green** on the PR (required jobs in `.github/workflows/ci.yml`). For **`agent/`**, **`feat/`**, and **`fix/`** branches, **auto-merge (squash)** is enabled by GitHub Actions when the PR is not a draft; no manual merge step is required once **`ci_result`** passes and repo settings above are in place.
+5. **Wait for CI green** on the PR (required jobs in `.github/workflows/ci.yml`) **and resolve all PR review bot threads** (see **PR review bots** above). For **`agent/`**, **`feat/`**, and **`fix/`** branches, **auto-merge (squash)** is enabled by GitHub Actions when the PR is not a draft; treat **auto-merge as safe to complete only after** bot feedback is handled—if necessary, push fixes first, or temporarily disable auto-merge until resolved.
 6. Optionally **`gh pr merge --auto --squash`** after create if you need auto-merge before the workflow runs; otherwise rely on **`pr-auto-merge.yml`**. Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
 
 ## Reducing clashes between agents
@@ -113,7 +124,7 @@ Each worktree is an independent checkout; pushes still go to the same remote.
 ## Summary
 
 - **One branch per agent/task, one PR each into `main`.**
-- **CI already guards PRs** in this repo; **`ci_result`** should be a required check on **`main`** for auto-merge to finish.
+- **CI guards PRs** in this repo; **`ci_result`** should be a required check on **`main`** for auto-merge to finish. **PR review bots** must also be satisfied before squash-merge (see **PR review bots** above).
 - **Auto-merge (squash) + delete head branch** (when configured on GitHub) reduce leftover open PRs and remote branches for **`agent/`**, **`feat/`**, **`fix/`** PRs.
 - **`stale-branch-cleanup.yml`** runs on **pushes to `main`**, **weekly**, and manually; it catches remote **`agent/`** / **`feat/`** / **`fix/`** heads left behind after merged PRs if automatic deletion was off.
 - **`npm run git:graph-hygiene`** (after merges) trims **local** stale refs so Git Graph stays accurate.

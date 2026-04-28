@@ -53,7 +53,7 @@ Hand off with clear deliverables: “root cause for entry X”, “fix and add l
 
 - Per .cursor/rules/fix-commit-verify-loop.mdc: after any production-affecting fix, run the loop until the problem is **definitely** fixed. Do not ask the user to reproduce; verify yourself.
   1. **Repairs** — already done above.
-  2. **Commit and push** — Default: **feature branch + PR to `main`** per `.cursor/rules/git-pr-workflow-default.mdc` (merge when PR CI green). **Only** if the user explicitly ordered a **`main` hotfix:** `git checkout main`, `git add`, `git commit`, `git push origin main`.
+  2. **Commit and push** — Default: **feature branch + PR to `main`** per `.cursor/rules/git-pr-workflow-default.mdc` (merge when PR CI green **and PR review bot feedback resolved**). **Only** if the user explicitly ordered a **`main` hotfix:** `git checkout main`, `git add`, `git commit`, `git push origin main`.
   3. **Wait for deploy** — After the fix is **on `main`** (merged or hotfix push), wait for Cloudflare Pages/Workers.
   4. **Verify on production** — From repo root: `npm run test:homepage`, `npm run test:api`, `npm run test:archive`; optionally `node diagnose-api.js` for API health. Fetch key URLs if needed.
   5. **Loop** — If any check fails, fix again, commit, push, wait, re-verify. Do not stop until all pass.

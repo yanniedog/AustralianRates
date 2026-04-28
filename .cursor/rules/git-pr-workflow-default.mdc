@@ -18,6 +18,15 @@ For **any** change that touches the repository, assistants (**Cursor**, **Codex*
 7. **After the PR is merged:** run **`npm run git:graph-hygiene`** (or at least `git fetch origin --prune`) and delete the finished topic branch locally (`git branch -d agent/...` or `-D` if squash left it non-fast-forward). That keeps Git Graph and remote-tracking refs from stacking stale labels on **`main`**. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“Keeping the Git graph readable”).
 8. **Production closeout** (`AGENTS.md`, `every-chat-commit-deploy-verify-production.mdc`) runs **after** the change is on `main` and Cloudflare deploys have finished—not after the feature-branch push alone. **Do not** treat CI alone as live-site sign-off: `npm run test:homepage` against production may not be runnable in GitHub-hosted runners (bot challenge); run production checks from a capable environment after deploy.
 
+## PR review bots (mandatory before squash merge to `main`)
+
+**Automated PR reviewers** (for example Copilot, CodeRabbit, Greptile, dependency or security bots, or Actions that open review comments) are **part of peer review**, not noise. Treat their feedback with the same seriousness as a human reviewer: their opinion matters for code quality and consistency.
+
+- **Every bot thread must be dealt with completely** before the PR is considered ready to squash-merge: implement the change and push follow-up commits, or reply briefly with a justified reason when the suggestion is declined or out of scope—and leave each thread in a resolved, non-ignored state.
+- **Do not squash-merge to `main`** (and do not tell a human the PR is “ready”) while substantive bot feedback is still open or unanswered. Green **PR CI** (`ci_result`) is **necessary but not sufficient** on its own when bots have requested changes or raised issues.
+
+See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“PR review bots”).
+
 ## Exceptions (narrow)
 
 - The user **explicitly** asks to push **directly to `main`** (e.g. emergency hotfix): do that and still complete production closeout after deploy.
