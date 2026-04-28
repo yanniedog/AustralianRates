@@ -52,11 +52,11 @@ BEGIN
   SELECT RAISE(ABORT, 'interest_rate out of bounds')
   WHERE NEW.interest_rate < 0 OR NEW.interest_rate > 15;
   SELECT RAISE(ABORT, 'monthly_fee out of bounds')
-  WHERE NEW.monthly_fee IS NOT NULL AND (NEW.monthly_fee < 0 OR NEW.monthly_fee > 50);
+  WHERE NEW.monthly_fee IS NOT NULL AND NEW.monthly_fee < 0;
   SELECT RAISE(ABORT, 'min_balance out of bounds')
-  WHERE NEW.min_balance IS NOT NULL AND (NEW.min_balance < 0 OR NEW.min_balance > 100000000);
+  WHERE NEW.min_balance IS NOT NULL AND NEW.min_balance < 0;
   SELECT RAISE(ABORT, 'max_balance out of bounds')
-  WHERE NEW.max_balance IS NOT NULL AND (NEW.max_balance < 0 OR NEW.max_balance > 100000000);
+  WHERE NEW.max_balance IS NOT NULL AND NEW.max_balance < 0;
   SELECT RAISE(ABORT, 'collection_date invalid')
   WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
 END;
@@ -67,11 +67,11 @@ BEGIN
   SELECT RAISE(ABORT, 'interest_rate out of bounds')
   WHERE NEW.interest_rate < 0 OR NEW.interest_rate > 15;
   SELECT RAISE(ABORT, 'monthly_fee out of bounds')
-  WHERE NEW.monthly_fee IS NOT NULL AND (NEW.monthly_fee < 0 OR NEW.monthly_fee > 50);
+  WHERE NEW.monthly_fee IS NOT NULL AND NEW.monthly_fee < 0;
   SELECT RAISE(ABORT, 'min_balance out of bounds')
-  WHERE NEW.min_balance IS NOT NULL AND (NEW.min_balance < 0 OR NEW.min_balance > 100000000);
+  WHERE NEW.min_balance IS NOT NULL AND NEW.min_balance < 0;
   SELECT RAISE(ABORT, 'max_balance out of bounds')
-  WHERE NEW.max_balance IS NOT NULL AND (NEW.max_balance < 0 OR NEW.max_balance > 100000000);
+  WHERE NEW.max_balance IS NOT NULL AND NEW.max_balance < 0;
   SELECT RAISE(ABORT, 'collection_date invalid')
   WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
 END;
@@ -85,9 +85,9 @@ BEGIN
   SELECT RAISE(ABORT, 'term_months out of bounds')
   WHERE NEW.term_months < 1 OR NEW.term_months > 120;
   SELECT RAISE(ABORT, 'min_deposit out of bounds')
-  WHERE NEW.min_deposit IS NOT NULL AND (NEW.min_deposit < 0 OR NEW.min_deposit > 100000000);
+  WHERE NEW.min_deposit IS NOT NULL AND NEW.min_deposit < 0;
   SELECT RAISE(ABORT, 'max_deposit out of bounds')
-  WHERE NEW.max_deposit IS NOT NULL AND (NEW.max_deposit < 0 OR NEW.max_deposit > 100000000);
+  WHERE NEW.max_deposit IS NOT NULL AND NEW.max_deposit < 0;
   SELECT RAISE(ABORT, 'collection_date invalid')
   WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
 END;
@@ -100,9 +100,9 @@ BEGIN
   SELECT RAISE(ABORT, 'term_months out of bounds')
   WHERE NEW.term_months < 1 OR NEW.term_months > 120;
   SELECT RAISE(ABORT, 'min_deposit out of bounds')
-  WHERE NEW.min_deposit IS NOT NULL AND (NEW.min_deposit < 0 OR NEW.min_deposit > 100000000);
+  WHERE NEW.min_deposit IS NOT NULL AND NEW.min_deposit < 0;
   SELECT RAISE(ABORT, 'max_deposit out of bounds')
-  WHERE NEW.max_deposit IS NOT NULL AND (NEW.max_deposit < 0 OR NEW.max_deposit > 100000000);
+  WHERE NEW.max_deposit IS NOT NULL AND NEW.max_deposit < 0;
   SELECT RAISE(ABORT, 'collection_date invalid')
   WHERE NEW.collection_date NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
 END;
