@@ -58,7 +58,7 @@
     function snapshotFiltersResolvedEndYmd() {
         var data = window.AR && window.AR.snapshot && window.AR.snapshot.data;
         var fr = data && data.filtersResolved;
-        var raw = fr && (fr.endDate !== undefined && fr.endDate !== null ? fr.endDate : fr.end_date);
+        var raw = fr && (fr.endDate != null ? fr.endDate : fr.end_date);
         var d = String(raw || '').trim().slice(0, 10);
         return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
     }
