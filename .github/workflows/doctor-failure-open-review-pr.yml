@@ -43,7 +43,7 @@ jobs:
             > "reports/automation/doctor-failure-${{ github.event.workflow_run.id }}.json"
 
       - name: Create draft pull request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: 'chore(automation): doctor failure pointer for workflow run ${{ github.event.workflow_run.id }}'
           branch: automated/doctor-failure-${{ github.event.workflow_run.id }}
