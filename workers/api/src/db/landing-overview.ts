@@ -27,7 +27,6 @@ const FEEDS_SQL = `
     product_name AS latest_product
   FROM historical_loan_rates
   WHERE (quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')
-    AND COALESCE(is_removed, 0) = 0
   ORDER BY collection_date DESC, parsed_at DESC
   LIMIT 1
 ` as const
@@ -40,7 +39,6 @@ const SAVINGS_FEEDS_SQL = `
     product_name AS latest_product
   FROM historical_savings_rates
   WHERE (quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')
-    AND COALESCE(is_removed, 0) = 0
   ORDER BY collection_date DESC, parsed_at DESC
   LIMIT 1
 ` as const
@@ -53,7 +51,6 @@ const TD_FEEDS_SQL = `
     product_name AS latest_product
   FROM historical_term_deposit_rates
   WHERE (quarantine_reason IS NULL OR TRIM(quarantine_reason) = '')
-    AND COALESCE(is_removed, 0) = 0
   ORDER BY collection_date DESC, parsed_at DESC
   LIMIT 1
 ` as const
