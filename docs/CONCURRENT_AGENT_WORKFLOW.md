@@ -33,7 +33,7 @@ For **non-draft** pull requests **into `main`** whose head branch starts with **
 
 Branch protection + **`ci_result`** control **whether GitHub allows a merge**. **`pr-auto-merge.yml`** triggers squash merge when that gate passes. Third-party review bots are usually **not** registered as required checks—so **CI can go green while bot threads are still open.**
 
-**Peer-review policy (assistants and humans):** treat bots as reviewers. **Order:** (1) **`ci_result`** green, (2) **every bot thread** addressed or concluded, (3) **then** enable auto-merge or squash-merge manually. Skipping (2) before enabling auto-merge risks merging before bot feedback is handled.
+**Peer-review policy (assistants and humans):** treat bots as reviewers. **Order:** (1) **`ci_result`** green, (2) **every bot thread** answered with an **in-thread reply** on GitHub (fix + reply, or reply-only with rationale if not changing code), then conclude or resolve, (3) **then** enable auto-merge or squash-merge manually. Code-only fixes without replies are **not** sufficient. Skipping (2) before enabling auto-merge risks merging before bot feedback is handled visibly.
 
 Canonical wording: `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”).
 
@@ -67,7 +67,7 @@ So multiple agents “do not clash” in Git until the same **lines in the same 
    - `git push -u origin agent/chart-tooltips`
 4. **Open a PR** targeting `main` (GitHub website: “Compare & pull request”, or CLI):
    - `gh pr create --base main --title "..." --body "..."`
-5. **`ci_result`** green, then **PR review bot threads** complete (`docs/CONCURRENT_AGENT_WORKFLOW.md`, **CI vs PR review bots**). Only **then** enable **squash auto-merge** on **`agent/`** / **`feat/`** / **`fix/`** PRs if you use it (`pr-auto-merge.yml` merges on CI, not on bots).
+5. **`ci_result`** green, then **PR review bot threads** each have a **reply on GitHub** and are concluded (`docs/CONCURRENT_AGENT_WORKFLOW.md`, **CI vs PR review bots**). Only **then** enable **squash auto-merge** on **`agent/`** / **`feat/`** / **`fix/`** PRs if you use it (`pr-auto-merge.yml` merges on CI, not on bots).
 6. Optionally **`gh pr merge --auto --squash`** after create if you need auto-merge before the workflow runs; otherwise rely on **`pr-auto-merge.yml`**. Prefer merging one PR before starting heavy overlap on the same files in another branch, or rebase/merge `main` into the other branch before merge.
 
 ## Reducing clashes between agents
@@ -121,7 +121,7 @@ Each worktree is an independent checkout; pushes still go to the same remote.
 ## Summary
 
 - **One branch per agent/task, one PR each into `main`.**
-- **`ci_result`** guards merges mechanically; **PR review bots** are satisfied per policy **before** enabling auto-merge (see **CI vs PR review bots**).
+- **`ci_result`** guards merges mechanically; **PR review bots** need **replies on the PR** per policy **before** enabling auto-merge (see **CI vs PR review bots**).
 - **Auto-merge (squash) + delete head branch** (when configured on GitHub) reduce leftover open PRs and remote branches for **`agent/`**, **`feat/`**, **`fix/`** PRs.
 - **`stale-branch-cleanup.yml`** runs on **pushes to `main`**, **weekly**, and manually; it catches remote **`agent/`** / **`feat/`** / **`fix/`** heads left behind after merged PRs if automatic deletion was off.
 - **`npm run git:graph-hygiene`** (after merges) trims **local** stale refs so Git Graph stays accurate.
