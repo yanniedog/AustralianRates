@@ -1,0 +1,41 @@
+---
+description: "Consider merits of every CI/review suggestion; reply on each thread before merge—bots and humans."
+alwaysApply: true
+---
+
+# Respond to each piece of feedback (CI and reviews)
+
+Assistants (**Cursor**, **Codex**, **Claude / Claude Code**) must treat automated and human review signals as requiring **explicit closure**, not silent dismissal.
+
+Works with **`git-pr-workflow-default.mdc`** and **`multiagent-modularity.mdc`** (watch checks; merge only when intended).
+
+**Canonical phrase for merge readiness:** **enumerate threads → judge merits → reply in-thread** (implemented / deferred / declined), **then** squash-merge or enable auto-merge—see `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”) so wording stays consistent across docs.
+
+## What counts as feedback
+
+- **Failures** from required workflows (tests, lint, **`ci_result`**, etc.).
+- **Inline comments** and **reviews** from humans.
+- **Bot / integration comments** such as **`sourcery-ai`** / **`gemini-code-assist`** / **`coderabbit`** / **`copilot`**, **`chatgpt-codex-connector`**, or similar on the opened PR—or **email / notification summaries** that map to findings on **the same branch the assistant owns**.
+
+## Mandatory behaviour (each distinct finding)
+
+1. **Enumerate** — distinct failing jobs, logs, review threads (merge truly duplicate verbatim threads into **one** reply that references both locations).
+2. **Judge merits** against project rules and scope (**real-data-only tests**, **data-first UI**, modular files, scope of task). Prefer implementing good fixes; politely decline incorrect or out-of-scope items with a substantive reason—not silence.
+3. **Respond directly** on GitHub (**preferred**):
+   - **Accepted:** follow-up commits on the same branch **and/or** reply that the suggestion is addressed in commit `<sha>`.
+   - **Declined or deferred:** reply on the thread with a concrete reason (out of scope, conflicts with **`AGENTS.md`**, backlog link, behavioural requirement, etc.).
+4. Treat the branch as merge-ready **only after** substantive feedback threads are closed—not left hanging because a check stayed green while a bot commented.
+
+## When GitHub inline replies are unavailable
+
+Append **`## Feedback responses`** to the PR body—or the closing push summary—listing each item: source/tool (optional), file/topic, **done / skipped + why**, SHA if applicable.
+
+## Do not
+
+- Dismiss **`sourcery`**, **`gemini-code-assist`**, or similar as “non-blocking third-party noise” **without** per-item resolution (code + thread **or** written decline reason).
+- Merge or finalize a PR the assistant owns when **identified** automated or human review comments remain unaddressed and unstated why.
+
+## Relation to failing CI
+
+- **Required failing checks**: fix-forward until green (existing **`git-pr-workflow-default.mdc`**).
+- **Bots that comment while checks succeed**: apply this document’s enumerate / judge / respond loop; passing CI **does not** waive thread closure.

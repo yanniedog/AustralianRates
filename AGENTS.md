@@ -16,14 +16,18 @@ This repo has multiple concurrent agents working in parallel. Every agent MUST:
 
 - **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
 - **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
-- **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green.
+- **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green. **PR review bots** count as peer review: **reply on the PR** to each bot comment (and fix code when applicable) before squash-merge to **`main`**—even if **CI** is already green. See `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”) and `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**).
 - **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
 
 Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
 
 ### Default git workflow (Cursor, Codex, Claude)
 
-**Default:** land work via a **feature branch** and a **pull request into `main`** (not by pushing commits straight to `main`). Sync `main`, `git checkout -b agent/<slug>` (or `feat/…` / `fix/…`), commit, `git push -u origin HEAD`, open PR (`gh pr create --base main` or GitHub UI), fix until **PR CI** is green. For branches named **`agent/*`**, **`feat/*`**, or **`fix/*`**, GitHub Actions (`.github/workflows/pr-auto-merge.yml`) enables **squash auto-merge** when the PR is not a draft; after **`ci_result`** passes and the repo has **Allow auto-merge** plus required **`ci_result`** on **`main`** (see `docs/CONCURRENT_AGENT_WORKFLOW.md`), GitHub merges without a separate merge click, and **delete head branch** (if enabled on the repo) clears the remote branch. **`.github/workflows/stale-branch-cleanup.yml`** runs on **pushes to `main`**, weekly, and on manual dispatch; it deletes lingering remote heads under those prefixes when the branch had a **merged** PR and has **no open PR**. **After a merge**, run **`npm run git:graph-hygiene`** (prunes stale remote-tracking refs and removes local branches whose upstream is gone) so Git Graph stays readable. Full steps: `docs/CONCURRENT_AGENT_WORKFLOW.md` and `.cursor/rules/git-pr-workflow-default.mdc`.
+**Default:** land work via a **feature branch** and **PR into `main`** (not by pushing straight to `main`). Sync `main`, branch (`agent/` …), commit, push, open PR (`gh pr create --base main`).
+
+**Merge readiness:** **`ci_result`** green **and** every **PR review bot** thread answered **with an in-thread GitHub reply** (plus code fixes where applicable) **before** squash-merge—see **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (**CI vs PR review bots**) and **`.cursor/rules/git-pr-workflow-default.mdc`**.
+
+For **`agent/*`** / **`feat/*`** / **`fix/*`**, **`pr-auto-merge.yml`** can squash-merge when **`ci_result`** passes; **enable auto-merge only after** bot threads (including replies) are complete so CI does not merge early. **`stale-branch-cleanup.yml`** plus **`npm run git:graph-hygiene`** after merges keep refs tidy (`docs/CONCURRENT_AGENT_WORKFLOW.md`).
 
 The **production verification** steps below apply **after** the change is on **`main`** and hosting deploys have finished (merged PR or rare explicit `main` hotfix). A green PR alone is not the same as an updated **www.australianrates.com** until merge + deploy.
 

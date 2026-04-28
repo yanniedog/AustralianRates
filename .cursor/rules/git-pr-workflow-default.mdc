@@ -14,9 +14,23 @@ For **any** change that touches the repository, assistants (**Cursor**, **Codex*
 3. Commit **only** on that branch.
 4. Push: `git push -u origin HEAD`.
 5. Open a **pull request into `main`** (`gh pr create --base main` with title/body, or GitHub UI).
-6. Keep pushing commits to the same branch until **PR CI** (`.github/workflows/ci.yml`) is **green**. For **`agent/*`**, **`feat/*`**, and **`fix/*`**, **`.github/workflows/pr-auto-merge.yml`** enables **squash auto-merge** on the PR (when not a draft); once **`ci_result`** is required on **`main`** and **Allow auto-merge** is on in GitHub repo settings, the PR merges without a manual merge step. If auto-merge cannot be enabled (conflicts, missing settings), fix forward or use `gh pr merge --squash` / leave the **PR URL** for the human. **`.github/workflows/stale-branch-cleanup.yml`** runs on **pushes to `main`**, weekly, and on manual dispatch; it deletes lingering remote heads under those prefixes when the branch had a **merged** PR and has **no open PR**—prefer **Automatically delete head branches** in GitHub settings so cleanup is usually unnecessary.
+6. **Green CI:** keep pushing until **`ci_result`** passes (`.github/workflows/ci.yml`). **Squash auto-merge:** for **`agent/*`**, **`feat/*`**, **`fix/*`**, **`.github/workflows/pr-auto-merge.yml`** can enable auto-merge; GitHub completes it when **`ci_result`** is green (and the PR is mergeable)—**review-bot apps are not part of that gate.** Finish **PR review bots** (next section) **before** enabling auto-merge so a green CI run cannot merge ahead of unresolved bot threads. If auto-merge is unavailable (conflicts, settings), fix forward or use `gh pr merge --squash` / leave the **PR URL** for the human. **`.github/workflows/stale-branch-cleanup.yml`** trims stale **`agent/*`** / **`feat/*`** / **`fix/*`** remote heads after merges (see `docs/CONCURRENT_AGENT_WORKFLOW.md`); prefer **Automatically delete head branches** in repo settings.
 7. **After the PR is merged:** run **`npm run git:graph-hygiene`** (or at least `git fetch origin --prune`) and delete the finished topic branch locally (`git branch -d agent/...` or `-D` if squash left it non-fast-forward). That keeps Git Graph and remote-tracking refs from stacking stale labels on **`main`**. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“Keeping the Git graph readable”).
 8. **Production closeout** (`AGENTS.md`, `every-chat-commit-deploy-verify-production.mdc`) runs **after** the change is on `main` and Cloudflare deploys have finished—not after the feature-branch push alone. **Do not** treat CI alone as live-site sign-off: `npm run test:homepage` against production may not be runnable in GitHub-hosted runners (bot challenge); run production checks from a capable environment after deploy.
+
+## PR review bots (mandatory before squash merge to `main`)
+
+**Automated PR reviewers** (Copilot, CodeRabbit, Greptile, dependency/security scanners, Actions that comment on lines, etc.) are **peer reviewers**. Same bar as human review.
+
+**Substantive feedback:** behaviour, correctness, security, architecture, or repo-policy suggestions—or hygiene issues that affect enforced rules—not standalone spelling-only nits unless they change meaning.
+
+**Replies are mandatory:** For **each** bot comment or thread, add a **reply on the PR**—not only a code change. After you fix something in code, **reply** briefly (what changed or where). If you reject or defer a suggestion, **reply** with the reason. Do not rely on pushes alone or “resolve conversation” without a visible response; reviewers (including bots) must see acknowledgement in-thread.
+
+**How this fits CI:** **`ci_result`** and **`pr-auto-merge.yml`** decide when GitHub *may* merge; most bot apps are **not** required checks. Policy still requires **every bot thread closed deliberately** (reply + implement or reply + justify) **before** you enable squash auto-merge or call the PR merge-ready—otherwise CI-only automation can merge too early.
+
+**Do not** squash-merge or mark “ready” with substantive bot feedback still open or unanswered.
+
+See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“CI vs PR review bots”).
 
 ## Exceptions (narrow)
 
