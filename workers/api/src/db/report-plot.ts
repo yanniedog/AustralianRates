@@ -350,6 +350,14 @@ function buildHomeLoanWhere(filters: HomeLoanReportFilters): WhereClause {
   if (filters.startDate) { where.push('d.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('d.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(d.is_removed, 0) = 0')
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_loan_rates q
+    WHERE q.series_key = d.series_key
+      AND q.collection_date = d.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   applyHomeLoanCompareEdgeExclusions(where, 'd.product_name', filters.excludeCompareEdgeCases)
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -378,6 +386,14 @@ function buildSavingsWhere(filters: SavingsReportFilters): WhereClause {
   if (filters.startDate) { where.push('d.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('d.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(d.is_removed, 0) = 0')
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_savings_rates q
+    WHERE q.series_key = d.series_key
+      AND q.collection_date = d.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   applySavingsCompareEdgeExclusions(where, 'd.product_name', filters.excludeCompareEdgeCases)
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }
@@ -410,6 +426,14 @@ function buildTdWhere(
   if (filters.startDate) { where.push('d.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('d.collection_date <= ?'); binds.push(filters.endDate) }
   if (!filters.includeRemoved) where.push('COALESCE(d.is_removed, 0) = 0')
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_term_deposit_rates q
+    WHERE q.series_key = d.series_key
+      AND q.collection_date = d.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   applyTdCompareEdgeExclusions(where, 'd.product_name', 'd.min_deposit', filters.excludeCompareEdgeCases)
   return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', binds }
 }

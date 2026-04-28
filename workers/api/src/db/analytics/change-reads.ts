@@ -78,6 +78,7 @@ function addCommonEventWhere(
   where: string[],
   binds: Array<string | number>,
   alias: string,
+  dataset: DatasetKind,
   input: CommonInput,
 ): void {
   addBankWhere(where, binds, `${alias}.bank_name`, input.bank, input.banks)
@@ -91,6 +92,20 @@ function addCommonEventWhere(
   if (!input.includeRemoved) {
     where.push(`COALESCE(${alias}.is_removed, 0) = 0`)
   }
+  const quarantineTable =
+    dataset === 'home_loans'
+      ? 'historical_loan_rates'
+      : dataset === 'savings'
+        ? 'historical_savings_rates'
+        : 'historical_term_deposit_rates'
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM ${quarantineTable} q
+    WHERE q.series_key = ${alias}.series_key
+      AND q.collection_date = ${alias}.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
   where.push(runSourceWhereClause(`${alias}.run_source`, input.sourceMode ?? 'all'))
   if (input.startDate) {
     where.push(`${alias}.collection_date >= ?`)
@@ -135,7 +150,7 @@ export async function queryHomeLoanAnalyticsRows(db: D1Database, input: HomeLoan
     MIN_CONFIDENCE_ALL,
     MIN_CONFIDENCE_HISTORICAL,
   )
-  addCommonEventWhere(where, binds, 'e', input)
+  addCommonEventWhere(where, binds, 'e', 'home_loans', input)
   if (input.securityPurpose) { where.push('e.security_purpose = ?'); binds.push(input.securityPurpose) }
   if (input.repaymentType) { where.push('e.repayment_type = ?'); binds.push(input.repaymentType) }
   if (input.rateStructure) { where.push('e.rate_structure = ?'); binds.push(input.rateStructure) }
@@ -168,7 +183,7 @@ export async function querySavingsAnalyticsRows(db: D1Database, input: SavingsAn
     SAVINGS_MIN_CONFIDENCE,
     SAVINGS_MIN_CONFIDENCE_HISTORICAL,
   )
-  addCommonEventWhere(where, binds, 'e', input)
+  addCommonEventWhere(where, binds, 'e', 'savings', input)
   if (input.accountType) { where.push('e.account_type = ?'); binds.push(input.accountType) }
   if (input.rateType) { where.push('e.rate_type = ?'); binds.push(input.rateType) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
@@ -200,7 +215,7 @@ export async function queryTdAnalyticsRows(db: D1Database, input: TdAnalyticsInp
     TD_MIN_CONFIDENCE,
     TD_MIN_CONFIDENCE_HISTORICAL,
   )
-  addCommonEventWhere(where, binds, 'e', input)
+  addCommonEventWhere(where, binds, 'e', 'term_deposits', input)
   if (input.termMonths) { where.push('CAST(e.term_months AS TEXT) = ?'); binds.push(input.termMonths) }
   if (input.depositTier) { where.push('e.deposit_tier = ?'); binds.push(input.depositTier) }
   addBalanceBandOverlapWhere(where, binds, 'e.min_deposit', 'e.max_deposit', input.balanceMin, input.balanceMax)

@@ -23,6 +23,7 @@ import {
 } from '../pipeline/product-classification-audit'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { buildStatusDebugBundle } from '../pipeline/status-debug-bundle'
+import { listHistoricalQuarantineCounts } from '../db/historical-quarantine'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import type { DatasetKind } from '../../../../packages/shared/src'
@@ -166,6 +167,19 @@ adminHardeningRoutes.get('/diagnostics/replay-queue', async (c) => {
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
     count: rows.length,
+    rows,
+  })
+})
+
+adminHardeningRoutes.get('/diagnostics/quarantine', async (c) => {
+  const rows = await listHistoricalQuarantineCounts(c.env.DB)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    totals: {
+      rows: rows.reduce((sum, row) => sum + row.total, 0),
+      datasets: rows.length,
+    },
     rows,
   })
 })
