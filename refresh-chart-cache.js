@@ -1,12 +1,25 @@
 'use strict';
 
 /**
- * POST to production admin chart-cache refresh (recomputes D1 + KV snapshot bundles).
+ * POST to production admin chart-cache refresh (rebuilds D1 chart + report_plot + snapshot pipelines).
  * Requires ADMIN_API_TOKEN in the environment or repo root .env (KEY=value lines).
+ *
+ * Default `fetch` headers timeout is short; for long runs prefer:
+ *   npm run flush:prod-caches-full
+ * or `node flush-production-caches.mjs --chart-pivot` (15m undici timeouts).
+ * Note: full chart refresh can exceed Worker CPU on very large DBs (Cloudflare 1102).
  */
 
 const fs = require('fs');
 const path = require('path');
+const { fetch: undiciFetch, Agent } = require('undici');
+
+const LONG_MS = 900_000;
+const dispatcher = new Agent({
+  headersTimeout: LONG_MS,
+  bodyTimeout: LONG_MS,
+  connectTimeout: 120_000,
+});
 
 function loadDotEnv() {
   const envPath = path.join(__dirname, '.env');
@@ -38,12 +51,13 @@ async function main() {
     process.exit(1);
   }
   const base = process.env.CHART_CACHE_REFRESH_URL || 'https://www.australianrates.com/api/home-loan-rates/admin/chart-cache/refresh';
-  const res = await fetch(base, {
+  const res = await undiciFetch(base, {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + String(token).trim(),
       Accept: 'application/json',
     },
+    dispatcher,
   });
   const text = await res.text();
   let body;
