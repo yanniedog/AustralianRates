@@ -22,6 +22,8 @@ For **any** change that touches the repository, assistants (**Cursor**, **Codex*
 
 **Automated PR reviewers** (Copilot, CodeRabbit, Greptile, dependency/security scanners, Actions that comment on lines, etc.) are **peer reviewers**. Same bar as human review.
 
+**Substantive feedback:** behaviour, correctness, security, architecture, or repo-policy suggestions—or hygiene issues that affect enforced rules—not standalone spelling-only nits unless they change meaning.
+
 **Replies are mandatory:** For **each** bot comment or thread, add a **reply on the PR**—not only a code change. After you fix something in code, **reply** briefly (what changed or where). If you reject or defer a suggestion, **reply** with the reason. Do not rely on pushes alone or “resolve conversation” without a visible response; reviewers (including bots) must see acknowledgement in-thread.
 
 **How this fits CI:** **`ci_result`** and **`pr-auto-merge.yml`** decide when GitHub *may* merge; most bot apps are **not** required checks. Policy still requires **every bot thread closed deliberately** (reply + implement or reply + justify) **before** you enable squash auto-merge or call the PR merge-ready—otherwise CI-only automation can merge too early.
