@@ -73,7 +73,7 @@ type SectionConfig = {
 }
 
 const BAND_PRODUCT_GAP_FILL_MAX_DAYS = 3
-export const REPORT_BANDS_SOURCE_VERSION = 2
+export const REPORT_BANDS_SOURCE_VERSION = 3
 
 function rateBoundsForReportSection(section: ReportPlotSection): { min: number; max: number } {
   switch (section) {
@@ -98,6 +98,47 @@ function isValidBandPoint(
   if (lo > hi + 1e-9) return false
   if (lo < bounds.min - 1e-9 || hi > bounds.max + 1e-9) return false
   return true
+}
+
+/** ISO date only; used for window end and band point keys. */
+const YMD_ISO = /^\d{4}-\d{2}-\d{2}$/
+
+function addCalendarDaysUtcYmd(ymd: string, deltaDays: number): string {
+  const t = Date.parse(`${ymd}T00:00:00Z`) + deltaDays * 86400000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+/**
+ * When newer calendar days fall inside the resolved query window but a bank has no new qualifying rows
+ * (sparse ingest timing), replicate the last computed band forward so ribbons align with meta.end_date
+ * and neighbouring banks rather than disappearing at the trailing edge.
+ */
+export function forwardFillReportBandSeriesToWindowEnd(
+  seriesList: ReportBandSeries[],
+  windowEndYmd: string | undefined,
+): ReportBandSeries[] {
+  if (!windowEndYmd?.trim()) return seriesList
+  const end = windowEndYmd.trim().slice(0, 10)
+  if (!YMD_ISO.test(end)) return seriesList
+  return seriesList.map((s) => {
+    const pts = s.points
+    if (!pts.length) return s
+    const last = pts[pts.length - 1]
+    const lastD = String(last.date || '').slice(0, 10)
+    if (!YMD_ISO.test(lastD) || lastD >= end) return s
+    const out: ReportBandPoint[] = [...pts]
+    let d = addCalendarDaysUtcYmd(lastD, 1)
+    while (d <= end) {
+      out.push({
+        date: d,
+        min_rate: last.min_rate,
+        max_rate: last.max_rate,
+        mean_rate: last.mean_rate,
+      })
+      d = addCalendarDaysUtcYmd(d, 1)
+    }
+    return { ...s, points: out }
+  })
 }
 
 const TD_TERM_PREFERENCE = [12, 6, 24, 3, 18, 36, 9, 2, 1]
@@ -554,6 +595,7 @@ async function queryBandSeries(
   table: string,
   where: WhereClause,
   section: ReportPlotSection,
+  windowEndYmd: string | undefined,
 ): Promise<ReportBandSeries[]> {
   const result = await db
     .prepare(
@@ -631,7 +673,7 @@ async function queryBandSeries(
     }
     if (points.length) out.push({ bank_name: bankName, color_key: bankName.toLowerCase(), points })
   }
-  return out
+  return forwardFillReportBandSeriesToWindowEnd(out, windowEndYmd)
 }
 
 export async function queryReportPlotPayload(
@@ -666,7 +708,11 @@ export async function queryReportPlotPayload(
       ? await resolveTdTermMonths(db, historyFilters as TdReportFilters, config.historyTable)
       : null
   const where = buildWhere(section, historyFilters, { termMonths: resolvedTermMonths })
-  const series = await queryBandSeries(db, config.historyTable, where, section)
+  const windowEndYmd =
+    typeof historyFilters.endDate === 'string' && historyFilters.endDate.trim()
+      ? historyFilters.endDate.trim().slice(0, 10)
+      : undefined
+  const series = await queryBandSeries(db, config.historyTable, where, section, windowEndYmd)
   const payload: ReportBandsPayload = {
     mode,
     meta: meta(section, mode, filters, resolvedTermMonths),
