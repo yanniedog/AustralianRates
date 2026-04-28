@@ -26,7 +26,7 @@ When advising **Cursor / Codex / Claude / CI** flows: every loop of `wrangler d1
 - **Classify traffic** by cost impact: hot paths should hit **KV or precomputed rows** (this repo: `chart_pivot_cache`, snapshot cache, `CHART_CACHE_KV`) before scanning large tables.
 - **Batch writes**; avoid per-request write amplification. Prefer idempotent upserts and bounded background work (queues/cron) over synchronous write storms.
 - **Narrow SQL**: fewer columns, tighter `WHERE`, sane `LIMIT`, indexes aligned to real query shapes. Full-table habits are a cost risk.
-- Respect **operational guardrails** in code: this API worker uses **`d1-budget` / workload classes** and flags like **`PUBLIC_LIVE_D1_FALLBACK_DISABLED`** to protect spend when live D1 fallback would spike reads; do not bypass these without an explicit product reason.
+- Respect **operational guardrails** in code: this API worker classifies work as **`critical_coverage`**, **`essential_serving`**, **`deferable`**, or **`nonessential`** (see `workers/api/src/utils/d1-budget.ts`). **`critical_coverage`** (daily CDR coverage) must not be blocked or “optimised away” for cost; shutoffs target deferable/nonessential and public live D1 fallback first. Flags like **`PUBLIC_LIVE_D1_FALLBACK_DISABLED`** protect spend when live fallback would spike reads; do not bypass without an explicit product reason. Canonical repo posture: **`docs/cloudflare-cost-sustainability.md`**.
 - **Pricing math** (track over time; confirm in Cloudflare dashboard): see `workers/api/src/utils/d1-budget.ts` for published **included monthly reads/writes** and **overage constants** used in-repo. Update that module if Cloudflare changes published numbers.
 
 **Development and testing**
@@ -48,7 +48,7 @@ When advising **Cursor / Codex / Claude / CI** flows: every loop of `wrangler d1
 
 ## Tier and allowance mapping
 
-- **Know the account plan** (Free vs Paid Workers, D1 GA limits, etc.). **Do not hardcode** limits in skills as law; **pointer**: Cloudflare dashboard **Account / Billing / Workers & Pages** and **D1** product docs for current included monthly reads/writes and storage.
+- **Know the account plan** (Free vs Paid Workers, D1 GA limits, etc.). **Do not hardcode** limits in skills as law; **pointer**: Cloudflare dashboard **Account / Billing / Workers & Pages** and **D1** product docs for current included monthly reads/writes and storage. In production this repo also surfaces advisory usage via **`GET /api/home-loan-rates/admin/cloudflare/d1-usage`** (see sustainability doc for billing-grade vs advisory sources).
 - Steer new work toward **using existing included capacity** before new paid features: e.g. consolidate queries, reuse cache rows, defer nonessential workloads.
 
 ---
@@ -65,7 +65,8 @@ When advising **Cursor / Codex / Claude / CI** flows: every loop of `wrangler d1
 
 ## Australian Rates alignment
 
+- Read **`docs/cloudflare-cost-sustainability.md`** for implemented guardrails, cron cost posture, KV-first public packages, and explicit **do not** rules (e.g. never skip daily CDR ingest for cost; never skip the daily public package refresh solely because emergency minimum-write mode is on).
 - Production verification is **production-host only** per project rules; balance **necessary** smoke checks against **avoiding** repeated expensive anonymous API patterns. Prefer documented commands (`verify:prod`, `diagnose-api` smoke) over ad-hoc brute force.
 - **`AGENTS.md`** and **no-mock-test-data** constrain tests: cost optimisation must **not** “fix” quota by introducing fake D1; instead use **local real D1**, **fixtures from real captures**, and **smaller** integration surfaces.
 
-When tradeoffs are unclear, **prefer designs that reduce D1 read/write multiplicity** and document the expected **workload class** (critical vs deferable) consistent with `d1-budget` patterns.
+When tradeoffs are unclear, **prefer designs that reduce D1 read/write multiplicity** and assign the correct **`D1WorkloadClass`** in code paths consistent with `d1-budget` and the sustainability doc.
