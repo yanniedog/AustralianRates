@@ -324,7 +324,9 @@
         var leaderFocusListener = null;
 
         if (isBandsMode) {
-            ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor);
+            ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor, {
+                section: section,
+            });
             useRibbonCanvas = false;
             productOverlay = [];
             series.push({
@@ -386,7 +388,12 @@
         var ribbonAutoSpotlightBank = ribbonSummaryData.spotlightBank || '';
         var ribbonProductBank = '';
         var ribbonTrayHoverBank = '';
-        var lastPointerDate = ribbonSummaryData.spotlightDate || '';
+        /** Default scrub anchor: window end (snapshot/filters); spotlight from band payload can lag last ingest day. */
+        var windowEndYmd = dates.length ? String(dates[dates.length - 1] || '').slice(0, 10) : '';
+        var spotlightYmd = String(ribbonSummaryData.spotlightDate || '').slice(0, 10);
+        var lastPointerDate = '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(windowEndYmd)) lastPointerDate = windowEndYmd;
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(spotlightYmd)) lastPointerDate = spotlightYmd;
         var ribbonListHoverKeys = null;
         var ribbonHoverScopeMap = {};
         var ribbonHoverScopeSeq = 0;
@@ -1645,6 +1652,7 @@
             if (!anchor) return;
             setRibbonAnchorDate(anchor);
             syncReportHoverBox(anchor, ribbonChartHighlightBank());
+            if (isBandsMode) refreshRibbonUnderChartPanel();
         });
 
         if (isBandsMode) {
@@ -1985,6 +1993,7 @@
                     setRibbonAnchorDate(anchor);
                     syncReportHoverBox(anchor);
                     applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    if (isBandsMode) refreshRibbonUnderChartPanel();
                     syncRibbonTrayUi();
                     if (useRibbonCanvas) scheduleRibbonRedraw();
                 };
