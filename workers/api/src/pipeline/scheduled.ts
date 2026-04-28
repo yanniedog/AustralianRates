@@ -10,6 +10,7 @@ import { runCoverageGapRemediation } from './coverage-gap-remediation'
 import { runLenderUniverseAudit } from './lender-universe-audit'
 import { runProductClassificationAudit } from './product-classification-audit'
 import { runLifecycleReconciliation } from './run-reconciliation'
+import { runPostIngestAssurance } from './post-ingest-assurance'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
 import { getMelbourneNowParts, parseIntegerEnv } from '../utils/time'
@@ -169,6 +170,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
       }
   let coverageAudit = prelude.coverageAudit
   let coverageRemediation: Awaited<ReturnType<typeof runCoverageGapRemediation>> | null = null
+  let postIngestAssurance: Awaited<ReturnType<typeof runPostIngestAssurance>> | null = null
 
   const pause = await getIngestPauseConfig(env.DB)
   if (pause.mode === 'repair_pause') {
@@ -202,6 +204,58 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
   })
   log.info('scheduler', `Rate check run result`, { context: JSON.stringify(result) })
 
+  const skipped = (result as { skipped?: unknown }).skipped === true
+  if (!runCostlyPrelude && result.ok && !skipped) {
+    try {
+      postIngestAssurance = await runPostIngestAssurance(env, {
+        collectionDate,
+        persist: true,
+        coverageGapLimit: 120,
+        // Keep ingestion integrity red for data issues while avoiding false-red on delayed package refresh.
+        requirePackageFreshness: false,
+      })
+    } catch (error) {
+      log.error('scheduler', 'Post-ingest assurance pulse failed', {
+        code: 'post_ingest_assurance_failed',
+        error,
+        context: (error as Error)?.message || String(error),
+      })
+    }
+
+    try {
+      coverageAudit = await runCoverageGapAudit(env, {
+        collectionDate,
+        runSource: 'scheduled',
+        idleMinutes: 120,
+        limit: 80,
+        persist: true,
+      })
+      if (!coverageAudit.ok) {
+        coverageRemediation = await runCoverageGapRemediation(env, {
+          auditReport: coverageAudit,
+          dailyRunResult: result,
+          scopeLimit: 6,
+          replayLimit: 10,
+          persist: true,
+        })
+        coverageAudit = await runCoverageGapAudit(env, {
+          collectionDate,
+          runSource: 'scheduled',
+          idleMinutes: 120,
+          limit: 80,
+          persist: true,
+          emitDetectedGapsLog: false,
+        })
+      }
+    } catch (error) {
+      log.error('scheduler', 'Coverage pulse after daily ingest failed', {
+        code: 'coverage_slo_breach',
+        error,
+        context: (error as Error)?.message || String(error),
+      })
+    }
+  }
+
   if (runCostlyPrelude && coverageAudit && !coverageAudit.ok) {
     try {
       coverageRemediation = await runCoverageGapRemediation(env, {
@@ -228,7 +282,6 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     }
   }
 
-  const skipped = (result as { skipped?: unknown }).skipped === true
   if (result.ok && !skipped) {
     await setAppConfig(env.DB, RATE_CHECK_LAST_RUN_ISO_KEY, cronIso)
   }
@@ -250,6 +303,7 @@ export async function handleScheduledDaily(event: ScheduledController, env: EnvB
     reconciliation: prelude.reconciliation,
     coverageAudit,
     coverageRemediation,
+    postIngestAssurance,
     economic: prelude.economic,
     lenderUniverseAudit: prelude.lenderUniverseAudit,
     melbourne: melbourneParts,

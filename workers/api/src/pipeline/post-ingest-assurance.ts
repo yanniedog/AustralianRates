@@ -69,6 +69,10 @@ export type PostIngestAssuranceReport = {
     raw_linkage_gaps: number
   }
   packages: PackageFreshness[]
+  policy: {
+    require_package_freshness: boolean
+    coverage_gap_limit: number
+  }
 }
 
 function parseReport(raw: string | null): PostIngestAssuranceReport | null {
@@ -262,17 +266,25 @@ export async function loadPostIngestAssuranceReport(db: D1Database): Promise<Pos
 
 export async function runPostIngestAssurance(
   env: EnvBindings,
-  input: { collectionDate?: string; persist?: boolean; emitHardFailureLog?: boolean } = {},
+  input: {
+    collectionDate?: string
+    persist?: boolean
+    emitHardFailureLog?: boolean
+    coverageGapLimit?: number
+    requirePackageFreshness?: boolean
+  } = {},
 ): Promise<PostIngestAssuranceReport> {
   const generatedAt = new Date().toISOString()
   const collectionDate = input.collectionDate ?? (await latestCollectionDate(env.DB))
+  const coverageGapLimit = Math.max(1, Math.min(500, Math.floor(Number(input.coverageGapLimit) || 500)))
+  const requirePackageFreshness = input.requirePackageFreshness !== false
   const [datasets, gaps, productKeyMismatches, rawLinkageGaps, packages] = await Promise.all([
     Promise.all([
       countLatestRows(env.DB, 'home_loans', 'historical_loan_rates', collectionDate),
       countLatestRows(env.DB, 'savings', 'historical_savings_rates', collectionDate),
       countLatestRows(env.DB, 'term_deposits', 'historical_term_deposit_rates', collectionDate),
     ]),
-    collectionDate ? listCoverageGapRows(env.DB, { collectionDate, limit: 500 }) : Promise.resolve([]),
+    collectionDate ? listCoverageGapRows(env.DB, { collectionDate, limit: coverageGapLimit }) : Promise.resolve([]),
     productKeyMismatchCount(env.DB, collectionDate),
     rawLinkageGapCount(env.DB, collectionDate),
     packageFreshness(env),
@@ -290,7 +302,7 @@ export async function runPostIngestAssurance(
       hard.length === 0 &&
       productKeyMismatches === 0 &&
       rawLinkageGaps === 0 &&
-      packageFailures === 0,
+      (!requirePackageFreshness || packageFailures === 0),
     totals: {
       dataset_row_count_total: datasets.reduce((sum, item) => sum + item.latest_row_count, 0),
       failed_lender_scopes: failedScopes.length,
@@ -307,6 +319,10 @@ export async function runPostIngestAssurance(
       raw_linkage_gaps: rawLinkageGaps,
     },
     packages,
+    policy: {
+      require_package_freshness: requirePackageFreshness,
+      coverage_gap_limit: coverageGapLimit,
+    },
   }
 
   if (input.persist !== false) {
