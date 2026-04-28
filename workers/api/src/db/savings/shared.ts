@@ -142,7 +142,10 @@ export function buildWhere(filters: SavingsPaginatedFilters): { clause: string; 
   addBalanceBandOverlapWhere(where, binds, 'h.min_balance', 'h.max_balance', filters.balanceMin, filters.balanceMax)
   if (filters.startDate) { where.push('h.collection_date >= ?'); binds.push(filters.startDate) }
   if (filters.endDate) { where.push('h.collection_date <= ?'); binds.push(filters.endDate) }
-  if (!filters.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  if (!filters.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+    where.push("(h.quarantine_reason IS NULL OR TRIM(h.quarantine_reason) = '')")
+  }
 
   applySavingsCompareEdgeExclusions(where, 'h.product_name', filters.excludeCompareEdgeCases)
 

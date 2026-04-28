@@ -70,6 +70,7 @@ export async function queryRatesPaginated(db: D1Database, filters: RatesPaginate
   }
   if (!filters.includeRemoved) {
     where.push('COALESCE(pps.is_removed, 0) = 0')
+    where.push("(h.quarantine_reason IS NULL OR TRIM(h.quarantine_reason) = '')")
   }
 
   applyHomeLoanCompareEdgeExclusions(where, 'h.product_name', filters.excludeCompareEdgeCases)
