@@ -15,6 +15,8 @@ const CLARITY_SRC = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
 /** Tight defaults; override via env if production is slow or flaky. */
 const GOTO_TIMEOUT_MS = Number(process.env.TEST_GOTO_TIMEOUT_MS || 20000);
 const SEL_TIMEOUT_MS = Number(process.env.TEST_SELECTOR_TIMEOUT_MS || 10000);
+/** Longer wait only for hero vs /snapshot alignment (inline + deferred bundles). */
+const HERO_SNAPSHOT_WAIT_MS = Number(process.env.TEST_HERO_SNAPSHOT_WAIT_MS || 45000);
 const POST_NAV_SETTLE_MS = Number(process.env.TEST_POST_NAV_SETTLE_MS || 350);
 const ACTION_TIMEOUT_MS = Number(process.env.TEST_ACTION_TIMEOUT_MS || 45000);
 const EXPLORER_TABLE_TIMEOUT_MS = Number(process.env.TEST_EXPLORER_TABLE_TIMEOUT_MS || 16000);
@@ -462,10 +464,11 @@ async function verifyHeroStats(page, results, label) {
 /** Production: hero Updated must reflect snapshot filtersResolved.endDate (aligned with charts). */
 async function verifyHeroUpdatedAlignsWithSnapshot(page, results, label, apiBasePath) {
     const base = apiBasePath.replace(/\/?$/, '');
-    const snapshotUrl = `${baseOrigin}${base}/snapshot`;
+    const bust = `_=${Date.now()}`;
+    const snapshotUrl = `${baseOrigin}${base}/snapshot?${bust}`;
     let endYmd = '';
     try {
-        const res = await fetch(snapshotUrl, { headers: { Accept: 'application/json' } });
+        const res = await fetch(snapshotUrl, { headers: { Accept: 'application/json', 'Cache-Control': 'no-store' } });
         const body = await res.json();
         const fr = body && body.ok && body.data && body.data.filtersResolved;
         endYmd = fr ? String(fr.endDate || fr.end_date || '').trim().slice(0, 10) : '';
@@ -494,7 +497,7 @@ async function verifyHeroUpdatedAlignsWithSnapshot(page, results, label, apiBase
                 );
             },
             endYmd,
-            { timeout: SEL_TIMEOUT_MS },
+            { timeout: HERO_SNAPSHOT_WAIT_MS },
         )
         .catch(() => null);
 
@@ -1616,13 +1619,13 @@ async function verifySectionSmoke(page, results, section, noscriptBatchPromise) 
     await verifyExplorerTable(page, results, section.name, section.expectComparisonRate);
     await verifyHeroStats(page, results, section.name);
     await verifyStartupSettled(page, results, section.name);
-    await verifyHeroUpdatedAlignsWithSnapshot(page, results, section.name, section.apiBasePath);
     await verifyPublicFooter(page, results, section.name);
     await verifyClientLog(page, results, section.name);
     await verifyNoPublicAdminSurface(page, results, section.name);
     await verifyNoscriptFromBatch(noscriptBatchPromise, section.name, results);
     await verifyPublicTriggerRemoval(page, results, section.name);
     await verifyChartSmoke(page, results, section.name);
+    await verifyHeroUpdatedAlignsWithSnapshot(page, results, section.name, section.apiBasePath);
     await page.setViewportSize({ width: 1440, height: 1200 });
 }
 
