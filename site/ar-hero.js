@@ -157,6 +157,20 @@
         return numericSnapshotValue(model && model.meta && model.meta.totalRows);
     }
 
+    /** Row count for hero "Rows" stat: series total when bundled, else chart model, else latest-all length. */
+    function snapshotTotalRows(data) {
+        if (!data) return NaN;
+        var series = data.analyticsSeries;
+        if (series && typeof series === 'object') {
+            var rawTotal = series.total != null ? series.total : series.count;
+            var ns = numericSnapshotValue(rawTotal);
+            if (Number.isFinite(ns)) return ns;
+        }
+        var cms = snapshotChartModelTotal(data);
+        if (Number.isFinite(cms)) return cms;
+        return numericSnapshotValue(snapshotLatestAllRows().length);
+    }
+
     function snapshotSlicePairStatsPayload(data) {
         var ss = data && data.slicePairStats;
         if (!ss || typeof ss !== 'object') return null;
