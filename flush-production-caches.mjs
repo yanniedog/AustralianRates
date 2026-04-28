@@ -10,6 +10,9 @@
  * Usage:
  *   node flush-production-caches.mjs
  *   node flush-production-caches.mjs --chart-pivot
+ *
+ * Optional env: CACHE_FLUSH_FETCH_TIMEOUT_MS (milliseconds, min 60000).
+ * Default 30 minutes — public-packages/refresh often takes longer than 15m.
  */
 import fs from 'fs'
 import path from 'path'
@@ -19,7 +22,12 @@ import { Agent, fetch as undiciFetch } from 'undici'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const wantChartPivot = process.argv.includes('--chart-pivot')
 
-const LONG_MS = 900_000
+const LONG_MS = (function longTimeoutMs() {
+  const raw = String(process.env.CACHE_FLUSH_FETCH_TIMEOUT_MS || '').trim()
+  const n = Number(raw)
+  if (Number.isFinite(n) && n >= 60_000) return Math.floor(n)
+  return 1_800_000 // 30m (15m insufficient for large public-packages refresh runs)
+})()
 const dispatcher = new Agent({
   headersTimeout: LONG_MS,
   bodyTimeout: LONG_MS,
