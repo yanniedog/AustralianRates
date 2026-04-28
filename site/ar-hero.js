@@ -125,6 +125,27 @@
         return best;
     }
 
+    /** YYYY-MM-DD from snapshot bundle; aligns hero with report-plot / chart window end. */
+    function snapshotFiltersResolvedWindowEnd(data) {
+        var fr = data && data.filtersResolved;
+        if (!fr) return '';
+        var raw = fr.endDate != null ? fr.endDate : fr.end_date;
+        var d = String(raw || '').trim().slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+    }
+
+    /** Prefer resolved window end for display; reuse row parsed_at only when that row is for the same calendar day. */
+    function heroUpdatedDisplaySource(latestRow, windowEndYmd) {
+        var fromRow = latestRow ? String(latestRow.collection_date || '').slice(0, 10) : '';
+        var ymd = windowEndYmd && /^\d{4}-\d{2}-\d{2}$/.test(windowEndYmd) ? windowEndYmd : fromRow;
+        if (!ymd) return null;
+        var sameDay = fromRow && ymd === fromRow;
+        return {
+            collection_date: ymd,
+            parsed_at: sameDay && latestRow ? latestRow.parsed_at : null,
+        };
+    }
+
     function numericSnapshotValue(value) {
         var n = Number(value);
         return Number.isFinite(n) && n >= 0 ? n : NaN;
@@ -223,26 +244,31 @@
         }
     }
 
-    function applyHeroSnapshot(total, latest) {
+    function applyHeroSnapshot(total, latestRow, windowEndYmd) {
         if (!Number.isFinite(Number(total))) return false;
         clearHeroError();
         renderStat(els.statRecords, 'rows', 'Rows', Number(total).toLocaleString(), 'Total rows in the active slice.');
         setIntroMetric('rows', Number(total).toLocaleString(), 'Rows in the current filtered slice.');
 
+        var updatedSrc = heroUpdatedDisplaySource(latestRow || null, windowEndYmd);
         if (els.statUpdated) {
-            if (latest && latest.collection_date) {
+            if (updatedSrc && updatedSrc.collection_date) {
                 var renderedDate = timeUtils.formatSourceDateWithLocal
-                    ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
-                    : { text: String(latest.collection_date) };
-                renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
-                setIntroMetric('updated', renderedDate.text, 'Latest collection in the current filtered slice.');
+                    ? timeUtils.formatSourceDateWithLocal(updatedSrc.collection_date, updatedSrc.parsed_at)
+                    : { text: String(updatedSrc.collection_date) };
+                var updatedHelp = windowEndYmd
+                    ? 'Chart/report window through date (snapshot end_date).'
+                    : 'Last collection date in the active slice.';
+                var updatedIntroNote = windowEndYmd ? 'Resolved chart window end.' : 'Latest collection in the current filtered slice.';
+                renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || updatedHelp);
+                setIntroMetric('updated', renderedDate.text, updatedIntroNote);
             } else {
                 renderStat(els.statUpdated, 'calendar', 'Updated', 'Unavailable', 'Last collection date in the active slice.');
             }
         }
 
         if (els.statCashRate) {
-            var cashFromRow = latest && latest.rba_cash_rate != null ? Number(latest.rba_cash_rate) : NaN;
+            var cashFromRow = latestRow && latestRow.rba_cash_rate != null ? Number(latestRow.rba_cash_rate) : NaN;
             var cashFromOverview = landingOverview && landingOverview.rba && landingOverview.rba.cash_rate != null
                 ? Number(landingOverview.rba.cash_rate)
                 : NaN;
@@ -286,8 +312,10 @@
         }
         var total = snapshotTotalRows(data);
         var latest = pickLatestSnapshotRow(snapshotLatestAllRows());
-        if (!Number.isFinite(total) || !latest) return !!landingOverview;
-        return applyHeroSnapshot(total, latest);
+        var windowEndYmd = snapshotFiltersResolvedWindowEnd(data);
+        if (!Number.isFinite(total)) return !!landingOverview;
+        if (!latest && !windowEndYmd) return !!landingOverview;
+        return applyHeroSnapshot(total, latest, windowEndYmd);
     }
 
     function syncHeroStatsFromExplorer(snapshot) {
