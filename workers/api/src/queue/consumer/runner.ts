@@ -1,11 +1,12 @@
 import { DEFAULT_MAX_QUEUE_ATTEMPTS } from '../../constants'
 import { recordRunQueueOutcome } from '../../db/run-reports'
-import type { EnvBindings, IngestMessage } from '../../types'
+import type { EnvBindings, IngestMessage, RunReportRow } from '../../types'
 import {
   handleReplayAttemptFailure,
   handleReplayAttemptSuccess,
   scheduleReplayForExhaustedMessage,
 } from '../../pipeline/replay-queue'
+import { triggerPostRunPackageRefresh } from '../../pipeline/post-run-refresh'
 import { log } from '../../utils/logger'
 import { parseIntegerEnv } from '../../utils/time'
 import { processMessage } from './dispatch'
@@ -18,6 +19,33 @@ import {
 import { elapsedMs, serializeForLog } from './log-helpers'
 import { extractRunContext, isIngestMessage, isObject } from './message-shape'
 import { calculateRetryDelaySeconds, isNonRetryableErrorMessage } from './retry-config'
+
+/**
+ * Returns the runId whose terminal status (ok/partial) was just observed, or
+ * null if the row is missing, still running, or not a daily run. The queue
+ * consumer collects these per-batch and schedules a single post-run refresh.
+ */
+function runIdIfFinalisedDaily(row: RunReportRow | null): string | null {
+  if (!row || row.run_type !== 'daily') return null
+  if (row.status !== 'ok' && row.status !== 'partial') return null
+  return row.run_id || null
+}
+
+/**
+ * Record a queue outcome and remember the runId if the update transitioned the
+ * daily run into a terminal state. Wraps `recordRunQueueOutcome` so each call
+ * site stays a single line and the post-run refresh hook fires exactly once
+ * per finalised run regardless of how many lenders are still in flight.
+ */
+async function recordOutcomeAndCapture(
+  env: EnvBindings,
+  finalisedRunIds: Set<string>,
+  input: { runId: string; lenderCode: string; success: boolean; errorMessage?: string },
+): Promise<void> {
+  const row = await recordRunQueueOutcome(env.DB, input)
+  const finalised = runIdIfFinalisedDaily(row)
+  if (finalised) finalisedRunIds.add(finalised)
+}
 
 async function tryCompleteIdempotency(
   env: EnvBindings,
@@ -57,9 +85,14 @@ async function tryReleaseIdempotency(
   }
 }
 
-export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env: EnvBindings): Promise<void> {
+export async function consumeIngestQueue(
+  batch: MessageBatch<IngestMessage>,
+  env: EnvBindings,
+  ctx?: ExecutionContext,
+): Promise<void> {
   const startedAt = Date.now()
   const maxAttempts = parseIntegerEnv(env.MAX_QUEUE_ATTEMPTS, DEFAULT_MAX_QUEUE_ATTEMPTS)
+  const finalisedRunIds = new Set<string>()
   const metrics = {
     processed: 0,
     acked: 0,
@@ -207,7 +240,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       }
 
       if (context.runId && context.lenderCode) {
-        await recordRunQueueOutcome(env.DB, {
+        await recordOutcomeAndCapture(env, finalisedRunIds, {
           runId: context.runId,
           lenderCode: context.lenderCode,
           success: true,
@@ -253,7 +286,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
             errorMessage,
           })
           if (replayRow && replayRow.status === 'failed' && context.runId && context.lenderCode) {
-            await recordRunQueueOutcome(env.DB, {
+            await recordOutcomeAndCapture(env, finalisedRunIds, {
               runId: context.runId,
               lenderCode: context.lenderCode,
               success: false,
@@ -261,7 +294,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
             })
           }
         } else if (context.runId && context.lenderCode) {
-          await recordRunQueueOutcome(env.DB, {
+          await recordOutcomeAndCapture(env, finalisedRunIds, {
             runId: context.runId,
             lenderCode: context.lenderCode,
             success: false,
@@ -306,7 +339,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
                   ` error=${errorMessage}`,
               })
               if (context.runId && context.lenderCode) {
-                await recordRunQueueOutcome(env.DB, {
+                await recordOutcomeAndCapture(env, finalisedRunIds, {
                   runId: context.runId,
                   lenderCode: context.lenderCode,
                   success: false,
@@ -330,7 +363,7 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
                 ` error=${errorMessage}`,
             })
             if (replayRow.status === 'failed' && context.runId && context.lenderCode) {
-              await recordRunQueueOutcome(env.DB, {
+              await recordOutcomeAndCapture(env, finalisedRunIds, {
                 runId: context.runId,
                 lenderCode: context.lenderCode,
                 success: false,
@@ -375,6 +408,19 @@ export async function consumeIngestQueue(batch: MessageBatch<IngestMessage>, env
       ` success=${metrics.success} failed=${metrics.failed}` +
       ` non_retryable=${metrics.nonRetryable} exhausted=${metrics.exhausted}` +
       ` invalid_shape=${metrics.invalidShape} duplicates=${metrics.duplicates}` +
-      ` total_ms=${elapsedMs(startedAt)}`,
+      ` total_ms=${elapsedMs(startedAt)} finalised_runs=${finalisedRunIds.size}`,
   })
+
+  // Schedule snapshot refresh outside the queue ack window so the public
+  // ribbon and slice-pair indicators rebuild as soon as ingest finalises,
+  // not at the next hourly cron. Without ctx we still kick it off but the
+  // worker may exit before it completes — the hourly cron is the safety net.
+  if (finalisedRunIds.size > 0) {
+    const refreshPromise = triggerPostRunPackageRefresh(env, finalisedRunIds)
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(refreshPromise)
+    } else {
+      await refreshPromise.catch(() => {})
+    }
+  }
 }

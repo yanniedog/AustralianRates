@@ -161,28 +161,61 @@ async function buildLatestAllEntry(
   return { ok: true, count: rows.length, rows }
 }
 
+/**
+ * Maximum number of calendar-day pairs to walk back when the most recent pair
+ * has no comparable products (every series in `prev_missing`/`curr_missing`/
+ * `both_missing`). This prevents an in-progress or stalled ingest from
+ * publishing a zeroed `↑→↓ ?*!` indicator on the public ribbon.
+ */
+const SLICE_PAIR_FALLBACK_DAYS = 5
+
+function pairHasComparableSeries(counts: { up_count: number; flat_count: number; down_count: number }): boolean {
+  return (counts.up_count + counts.flat_count + counts.down_count) > 0
+}
+
+async function querySlicePairCounts(
+  db: D1Database,
+  section: DatasetKind,
+  latestFilters: ScopedFilters,
+  pYmd: string,
+  dYmd: string,
+): Promise<Awaited<ReturnType<typeof queryHomeLoanSlicePairStats>>> {
+  if (section === 'home_loans') {
+    return queryHomeLoanSlicePairStats(db, latestFilters as import('../db/home-loans/shared').LatestFilters, pYmd, dYmd)
+  }
+  if (section === 'savings') {
+    return querySavingsSlicePairStats(db, latestFilters as import('../db/savings/shared').LatestSavingsFilters, pYmd, dYmd)
+  }
+  return queryTdSlicePairStats(db, latestFilters as import('../db/term-deposits/shared').LatestTdFilters, pYmd, dYmd)
+}
+
 async function computeSlicePairStatsPayload(
   db: D1Database,
   section: DatasetKind,
   filters: ScopedFilters,
 ): Promise<Record<string, unknown>> {
-  const dYmd = filters.endDate
-  const pYmd = previousCalendarUtcDay(dYmd)
   const lf = buildLatestAllFilters(filters)
   const { limit: _omit, ...latestFilters } = lf as ScopedFilters & { limit?: number }
-
   const sectionKey = section === 'home_loans' ? 'home_loans' : section === 'savings' ? 'savings' : 'term_deposits'
 
-  if (section === 'home_loans') {
-    const counts = await queryHomeLoanSlicePairStats(db, latestFilters as import('../db/home-loans/shared').LatestFilters, pYmd, dYmd)
-    return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
+  let dYmd = filters.endDate
+  let pYmd = previousCalendarUtcDay(dYmd)
+  let counts = await querySlicePairCounts(db, section, latestFilters, pYmd, dYmd)
+  let fallbackDays = 0
+  while (!pairHasComparableSeries(counts) && fallbackDays < SLICE_PAIR_FALLBACK_DAYS) {
+    fallbackDays += 1
+    dYmd = pYmd
+    pYmd = previousCalendarUtcDay(dYmd)
+    counts = await querySlicePairCounts(db, section, latestFilters, pYmd, dYmd)
   }
-  if (section === 'savings') {
-    const counts = await querySavingsSlicePairStats(db, latestFilters as import('../db/savings/shared').LatestSavingsFilters, pYmd, dYmd)
-    return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
+  return {
+    section: sectionKey,
+    d: dYmd,
+    p: pYmd,
+    requested_d: filters.endDate,
+    fallback_days: fallbackDays,
+    ...counts,
   }
-  const counts = await queryTdSlicePairStats(db, latestFilters as import('../db/term-deposits/shared').LatestTdFilters, pYmd, dYmd)
-  return { section: sectionKey, d: dYmd, p: pYmd, ...counts }
 }
 
 function previousCalendarUtcDay(ymd: string): string {
