@@ -55,6 +55,8 @@ test-screenshots/
 # JetBrains IDEs / Visual Studio
 .idea/
 .vs/
+# Claude Code / agent local state (not repo source)
+.claude/
 # Vim / Emacs swap and backup
 *.swp
 *.swo
