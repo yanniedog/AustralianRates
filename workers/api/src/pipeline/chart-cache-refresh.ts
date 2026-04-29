@@ -85,7 +85,10 @@ export async function refreshPublicSnapshotPackages(
   // regardless of how many (section, scope) pairs we iterate.
   const skipFreshnessCheck = options?.allScopes || options?.force
   const latestRunFinishedMs = skipFreshnessCheck ? null : await resolveLatestRunFinishedMs(env)
+  const overallStartedAt = Date.now()
+  let lastFlushedRefreshed = 0
   for (const { section, scope: cacheScope } of items) {
+    const itemStartedAt = Date.now()
     try {
       if (!skipFreshnessCheck && (await isFreshPublicSnapshotPackage(env, section, cacheScope, latestRunFinishedMs))) {
         skipped++
@@ -94,18 +97,30 @@ export async function refreshPublicSnapshotPackages(
       const snapshot = await buildSnapshotPayload(env, section, cacheScope)
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
       refreshed++
+      // Persist a warn breadcrumb every 4 successful builds so an admin
+      // operator can see how far the cron got even when the worker is killed
+      // mid-iteration by a CPU-time limit. Warn-level persists immediately
+      // (info logs flush at handler exit, which the kill bypasses).
+      if (refreshed - lastFlushedRefreshed >= 4) {
+        lastFlushedRefreshed = refreshed
+        log.warn('public_package_refresh', 'progress checkpoint', {
+          code: 'public_package_refresh_progress',
+          context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length} elapsed_ms=${Date.now() - overallStartedAt} last_section=${section} last_scope=${cacheScope} last_item_ms=${Date.now() - itemStartedAt}`,
+        })
+      }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e)
       errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
       log.warn('public_package_refresh', `Failed to refresh ${section} snapshot ${cacheScope}`, {
         code: 'public_package_refresh_failed',
-        context: msg,
+        context: `${msg} elapsed_ms=${Date.now() - itemStartedAt}`,
       })
     }
   }
 
-  log.info('public_package_refresh', 'Public snapshot packages refreshed', {
-    context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length}`,
+  log.warn('public_package_refresh', 'Public snapshot packages refreshed', {
+    code: 'public_package_refresh_completed',
+    context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length} elapsed_ms=${Date.now() - overallStartedAt}`,
   })
   return { ok: errors.length === 0, refreshed, skipped, errors }
 }
