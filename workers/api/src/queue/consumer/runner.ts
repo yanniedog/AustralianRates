@@ -7,6 +7,7 @@ import {
   scheduleReplayForExhaustedMessage,
 } from '../../pipeline/replay-queue'
 import { triggerPostRunPackageRefresh } from '../../pipeline/post-run-refresh'
+import { withD1BudgetTracking } from '../../utils/d1-budget'
 import { log } from '../../utils/logger'
 import { parseIntegerEnv } from '../../utils/time'
 import { processMessage } from './dispatch'
@@ -413,14 +414,32 @@ export async function consumeIngestQueue(
 
   // Schedule snapshot refresh outside the queue ack window so the public
   // ribbon and slice-pair indicators rebuild as soon as ingest finalises,
-  // not at the next hourly cron. Without ctx we still kick it off but the
-  // worker may exit before it completes — the hourly cron is the safety net.
+  // not at the next hourly cron. Wrap the deferred work in its own
+  // `withD1BudgetTracking` because the queue handler's tracker has already
+  // flushed by the time `waitUntil` runs — without this, post-run D1 reads
+  // would not be counted against the daily guardrail. Without ctx we run
+  // it inline so the budget tracker active in the queue handler still
+  // captures the work; the hourly cron is the safety net.
   if (finalisedRunIds.size > 0) {
-    const refreshPromise = triggerPostRunPackageRefresh(env, finalisedRunIds)
+    const runRefresh = async () => {
+      try {
+        await withD1BudgetTracking(
+          env,
+          (trackedEnv) => triggerPostRunPackageRefresh(trackedEnv, finalisedRunIds),
+          { workload: 'essential_serving' },
+        )
+      } catch (error) {
+        log.warn('consumer', 'post_run_refresh dispatch failed', {
+          code: 'post_run_refresh_dispatch_failed',
+          error,
+          context: `finalised_runs=${finalisedRunIds.size}`,
+        })
+      }
+    }
     if (ctx && typeof ctx.waitUntil === 'function') {
-      ctx.waitUntil(refreshPromise)
+      ctx.waitUntil(runRefresh())
     } else {
-      await refreshPromise.catch(() => {})
+      await runRefresh()
     }
   }
 }
