@@ -75,7 +75,10 @@ async function runSiteHealthCron(env: EnvBindings) {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
       idleMinutes: 5,
-      staleRunMinutes: 90,
+      // Normal daily ingest completes in ~10 minutes; a run stuck >30 min
+      // almost never recovers on its own, so close earlier so the public
+      // snapshot (which only refreshes after ingest finalises) can rebuild.
+      staleRunMinutes: 30,
       timeZone: env.MELBOURNE_TIMEZONE,
     })
     log.info('scheduler', 'Site health preflight reconciliation completed', {
