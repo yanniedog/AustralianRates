@@ -19,18 +19,21 @@ import { refreshPublicSnapshotPackages } from './chart-cache-refresh'
  * as failed.
  */
 export async function triggerPostRunPackageRefresh(env: EnvBindings, runIds: Iterable<string>): Promise<void> {
-  const ids = Array.from(new Set(Array.from(runIds).filter((id) => typeof id === 'string' && id.length > 0)))
-  if (ids.length === 0) return
+  let triggeredRuns = 0
+  for (const id of runIds) {
+    if (typeof id === 'string' && id.length > 0) triggeredRuns++
+  }
+  if (triggeredRuns === 0) return
   try {
     const result = await refreshPublicSnapshotPackages(env)
     log.info('post_run_refresh', 'public packages refreshed after run finalisation', {
-      context: `triggered_runs=${ids.length} refreshed=${result.refreshed} skipped=${result.skipped} errors=${result.errors.length}`,
+      context: `triggered_runs=${triggeredRuns} refreshed=${result.refreshed} skipped=${result.skipped} errors=${result.errors.length}`,
     })
   } catch (error) {
     log.warn('post_run_refresh', 'public package refresh after run finalisation failed', {
       code: 'post_run_refresh_failed',
       error,
-      context: `triggered_runs=${ids.length}`,
+      context: `triggered_runs=${triggeredRuns}`,
     })
   }
 }

@@ -32,11 +32,15 @@ const PUBLIC_PACKAGE_REFRESH_FRESH_MS = 20 * 60 * 60 * 1000
  *  3. no daily run has finished after the snapshot was built (otherwise the
  *     snapshot reflects pre-ingest state and must be rebuilt to surface the
  *     new data on the public ribbon / slice-pair indicators).
+ *
+ * `latestRunFinishedMs` is hoisted by the caller so a single D1 read covers
+ * every (section, scope) pair in the refresh sweep.
  */
 async function isFreshPublicSnapshotPackage(
   env: EnvBindings,
   section: (typeof PUBLIC_PACKAGE_SECTIONS)[number],
   scope: string,
+  latestRunFinishedMs: number | null,
 ): Promise<boolean> {
   const kv = env.CHART_CACHE_KV
   if (!kv) return false
@@ -50,14 +54,21 @@ async function isFreshPublicSnapshotPackage(
     if (parsed.data?.reportPlotBands?.meta?.band_source_version !== REPORT_BANDS_SOURCE_VERSION) return false
     const builtAt = new Date(String(parsed.builtAt || '')).getTime()
     if (!Number.isFinite(builtAt) || Date.now() - builtAt >= PUBLIC_PACKAGE_REFRESH_FRESH_MS) return false
-    const latestRunFinishedAt = await getLatestCompletedDailyRunFinishedAt(env.DB)
-    if (latestRunFinishedAt) {
-      const finishedMs = new Date(latestRunFinishedAt).getTime()
-      if (Number.isFinite(finishedMs) && finishedMs > builtAt) return false
-    }
+    if (latestRunFinishedMs != null && latestRunFinishedMs > builtAt) return false
     return true
   } catch {
     return false
+  }
+}
+
+async function resolveLatestRunFinishedMs(env: EnvBindings): Promise<number | null> {
+  try {
+    const finishedAt = await getLatestCompletedDailyRunFinishedAt(env.DB)
+    if (!finishedAt) return null
+    const ms = new Date(finishedAt).getTime()
+    return Number.isFinite(ms) ? ms : null
+  } catch {
+    return null
   }
 }
 
@@ -70,9 +81,13 @@ export async function refreshPublicSnapshotPackages(
   let skipped = 0
 
   const items = options?.items || publicSnapshotPackageScopeItems({ allScopes: options?.allScopes })
+  // Hoist the run-finalisation cutoff so freshness check stays O(1) D1 reads
+  // regardless of how many (section, scope) pairs we iterate.
+  const skipFreshnessCheck = options?.allScopes || options?.force
+  const latestRunFinishedMs = skipFreshnessCheck ? null : await resolveLatestRunFinishedMs(env)
   for (const { section, scope: cacheScope } of items) {
     try {
-      if (!options?.allScopes && !options?.force && (await isFreshPublicSnapshotPackage(env, section, cacheScope))) {
+      if (!skipFreshnessCheck && (await isFreshPublicSnapshotPackage(env, section, cacheScope, latestRunFinishedMs))) {
         skipped++
         continue
       }
