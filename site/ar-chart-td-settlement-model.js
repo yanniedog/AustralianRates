@@ -30,10 +30,17 @@
     function addMonthsYmd(dateText, months) {
         var match = String(dateText || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (!match) return '';
-        var day = Math.min(Number(match[3]), 28);
-        var date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, day));
-        date.setUTCMonth(date.getUTCMonth() + Number(months || 0));
-        return date.toISOString().slice(0, 10);
+        var y = Number(match[1]);
+        var m0 = Number(match[2]) - 1;
+        var d = Number(match[3]);
+        var add = Number(months || 0);
+        var total = m0 + add;
+        var ty = y + Math.floor(total / 12);
+        var tm = ((total % 12) + 12) % 12;
+        var lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+        var dd = Math.min(d, lastDay);
+        var mm = tm + 1;
+        return ty + '-' + (mm < 10 ? '0' : '') + mm + '-' + (dd < 10 ? '0' : '') + dd;
     }
 
     function addMonthsLabel(dateText, months) {
