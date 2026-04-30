@@ -20,7 +20,7 @@ For **any** change that touches the repository, assistants (**Cursor**, **Codex*
 
 **Fix forward on the open PR branch.** If review bots request changes, **`ci_result`/checks fail**, **E2E or integration gates fail**, or **deploy/preview/production verification** finds issues, add commits on **that PR’s branch** and push—**do not** open a **second** PR for the same deliverable unless the maintainer **explicitly** directs otherwise.
 
-After each fix push, **ask bots and humans to take another pass:** post on the PR (or reply **in-thread** on existing bot threads) and **@mention** whoever should re-review—use the **same `@username` handles** that already commented on the PR (automated apps vary by installation; typical examples include Gemini Code Assist, GitHub Copilot, Codex, CodeRabbit, Greptile, Sourcery). Include a short summary of what changed and optionally the commit SHA.
+After each fix push, **ask bots and humans to take another pass:** post on the PR (or reply **in-thread** on existing bot threads) and **@mention** whoever should re-review—use the **same `@username` handles** that already commented **on this repo’s PR** (below are common **app/display names**, not literal handle strings unless the timeline shows them: Gemini Code Assist, GitHub Copilot, Codex, CodeRabbit, Greptile, Sourcery—installations vary). Use **`gh pr view --comments`** (alias `-c`) to read the timeline and discover handles. Include a short summary of what changed and optionally the commit SHA.
 
 ### Bot feedback wait gate (hard — do not merge early)
 
