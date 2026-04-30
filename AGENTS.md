@@ -12,7 +12,7 @@ When this repository changes and the goal is to land work on production, complet
 2. **Commit and push** — Changes stay on that branch; push to `origin`.
 3. **Pull request** — Open (or update) a PR into `main`.
 4. **CI** — Required checks green (`ci_result`); fix forward on **this** branch and PR until green (do **not** open a parallel PR for the same task unless directed). After fix pushes, **@mention** commenting bots/reviewers so they re-review.
-5. **Wait gate** — After CI is green: late-review sweep **and** ~10–15 minute wait/re-poll (unless waived); automated reviewers often arrive **after** Actions finish.
+5. **Wait gate** — After CI is green: late-review sweep **and** ~10–15 minute wait/re-poll (unless waived); automated reviewers often arrive **after** Actions finish. **On the GitHub PR page**, do not clear this step while UI cues show bots **still preparing** (e.g. reaction/emoji rows or in-progress review indicators); wait until activity **settles**, then sweep again.
 6. **Threaded closure** — Reply **in-thread** on GitHub for every substantive bot and human review thread (implemented / deferred / declined with reason).
 7. **Merge** — Squash-merge (or merge per repo policy) **only after** steps 5–6; **do not** enable squash auto-merge until the wait gate and threaded replies are complete so CI cannot merge early.
 8. **Deploy confirmation** — Confirm Cloudflare Pages and/or Workers deploys **finished** for whatever changed; a successful `git push` or landing on `main` is **not** proof.

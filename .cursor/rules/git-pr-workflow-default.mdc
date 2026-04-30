@@ -30,8 +30,9 @@ Assistants MUST treat **manual merge** (`gh pr merge …`) or **enabling squash 
 2. **Stop.** Do **not** merge in the same breath as CI success.
 3. **Late-review sweep** — bots often submit **after** CI finishes:
    - Run **`gh pr view <n> --comments`** (and inline review tabs in the GitHub UI if needed); optionally **`gh api repos/<owner>/<repo>/pulls/<n>/reviews`** and **`…/pulls/<n>/comments`**.
+   - **GitHub PR UI (mandatory when possible):** Open the PR in the browser and scan **Conversation** and **Files changed** for **in-flight automated reviews**—including reaction rows / emoji activity or other cues that show a bot is **still preparing** feedback. Treat that as **not done yet** even if Actions are green; **wait** until those indicators **settle**, then continue the sweep (CLI output alone can miss this).
    - Look for **Gemini Code Assist**, **GitHub Copilot**, **Codex**, **CodeRabbit**, **Greptile**, **Sourcery**, dependency/security scanners, or any actionable inline review **timestamped after** your last push.
-4. **If no bot threads yet:** wait **at least 10–15 minutes** from first green `ci_result`, then **re-run** the sweep once (or poll every few minutes until stable). Concluding “no bot feedback” **immediately** when CI turns green is a **policy violation**.
+4. **If no bot threads yet:** wait **at least 10–15 minutes** from first green `ci_result`, then **re-run** the sweep once (or poll every few minutes until stable)—and **re-check the PR UI** for pending bot activity above. Concluding “no bot feedback” **immediately** when CI turns green is a **policy violation**.
 5. **Enumerate → judge → reply in-thread** to every substantive bot thread (**implemented / deferred / declined**).
 6. **Only then** call the PR merge-ready: squash-merge, **`gh pr merge --squash`**, or enable auto-merge **for the first time** (never enable auto-merge while bot threads may still land).
 7. **Session ending:** if you cannot complete steps 3–6, **leave the PR open** with the **PR URL** and explicit remaining steps — **do not merge** to “save time.”

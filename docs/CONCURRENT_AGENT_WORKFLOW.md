@@ -38,7 +38,7 @@ Branch protection + **`ci_result`** control **whether GitHub allows a merge**. *
 **Peer-review policy (assistants and humans):** treat bots as reviewers. **Order:**
 
 1. **`ci_result`** green.
-2. **Bot feedback wait gate** (full checklist: `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate**): **late-review sweep** (`gh pr view`, UI, or API) for Gemini Code Assist, Copilot, Codex, CodeRabbit, Greptile, Sourcery, etc.; if no substantive threads yet, **wait ~10–15 minutes** after first green CI and **re-check** (late bot reviews are normal).
+2. **Bot feedback wait gate** (full checklist: `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate**): **late-review sweep** (`gh pr view`, UI, or API) for Gemini Code Assist, Copilot, Codex, CodeRabbit, Greptile, Sourcery, etc.; **on github.com**, watch for PR UI cues (reactions/emojis or similar showing a bot review **still in progress**) and wait until those **settle** before calling the gate clear; if no substantive threads yet, **wait ~10–15 minutes** after first green CI and **re-check** (late bot reviews are normal).
 3. **Every substantive bot thread:** **in-thread reply** (fix + reply, or reply-only with rationale).
 4. **Only then** enable auto-merge or **`gh pr merge --squash`**.
 
