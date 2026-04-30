@@ -1,43 +1,36 @@
 ---
-description: "Threaded PR replies to Gemini Code Assist, Codex, and similar automated code reviews"
+description: "Threaded PR replies to Gemini Code Assist, Codex, and similar automated reviews"
 alwaysApply: true
 ---
 
 # Respond to automated PR reviewers (Gemini Code Assist, Codex, similar)
 
-Canonical merge bar and **substantive feedback** definition: `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”).
+**Substantive feedback** definition and merge timing: **`git-pr-workflow-default.mdc`** (“PR review bots”, **Bot feedback wait gate**). **Never** merge or enable auto-merge the instant CI turns green—complete that gate first (or explicit waiver).
 
-Treat output from repo-integrated **automated code-review bots** as **required follow-up for communication**, not optional noise—especially:
+Treat repo **automated code-review** output as mandatory communication follow-up—not optional—especially:
 
 - **Google Gemini Code Assist** (`gemini-code-assist`)
-- **Codex** PR review when it appears as an automated reviewer on the PR (same expectations as Gemini)
+- **Codex** when it appears as an automated reviewer
 
-Analogous bots (similar summaries, inline file comments, or suggestion blocks) fall under this rule unless listed in **Exceptions**.
+Similar bots (summaries, inline comments, suggestion blocks) are included unless listed in **Exceptions**.
 
-## Wait before merge (hard)
+## Required (each substantive point you own)
 
-**Never** squash-merge or enable **auto-merge** in the instant **`ci_result` turns green.** Complete the **Bot feedback wait gate** in `.cursor/rules/git-pr-workflow-default.mdc` first: late-review sweep via `gh pr view` / GitHub UI / API; **on github.com**, watch for PR UI cues (e.g. reactions/emojis or other signals that a bot review is **still being prepared**) and wait until those **settle**; if no substantive bot comments yet, **wait ~10–15 minutes** after green CI then **re-check** (Gemini, Copilot, Codex, and others often arrive **after** Actions finish). Merge only after that pause **and** threaded replies—or after an explicit human **waiver**.
+1. **Reply in-thread** on the comment or review summary—not only pushes.
+2. Label **implemented** (what/SHA), **deferred** (why; optional `docs/REFACTOR_BACKLOG.md`), or **declined** (merit-based).
+3. Prefer a small follow-up commit when straightforward; explicit **defer** / **decline** must appear in-thread.
 
-## Required (mechanical checklist)
-
-For each **substantive** bot point on a PR **you own**:
-
-1. **Reply in-thread** on the comment or on the bot’s review summary (not only new commits).
-2. Label the outcome in the reply: **implemented** (what changed; optional SHA), **deferred** (reason; link `docs/REFACTOR_BACKLOG.md` or issue if useful), or **declined / won’t do** (short merit-based reason).
-3. Prefer a **small follow-up commit** when the change is straightforward; if you **defer** or **decline**, say so explicitly in that reply—do not rely on silence.
-
-Do **not** merge with substantive Gemini **or Codex** feedback left **unanswered**.
+Do **not** merge with substantive Gemini or Codex feedback **unanswered**.
 
 ## Exceptions
 
-- Bot runs that are **SKIPPED**, **rate-limited with no review body**, or purely informational with **no actionable claims**: no reply needed (optional one-line “skipped” if useful).
-- Points **already** covered by an earlier reply or commit: one bundled reply is enough (“Covered in commits above; …”).
-- The **human maintainer** explicitly merges without bot closeout: assistants still default to replying when they control the PR.
+- **SKIPPED** / rate-limited empty / purely informational with no actionable claim: reply optional (“skipped”).
+- Already covered upstream: one bundled reply is fine.
 
-## Relationship to CI
+## Vs CI
 
-Green **`ci_result`** does **not** substitute for this rule; it governs **review conversation**, not build status.
+Green **`ci_result`** does **not** replace threaded closure.
 
 ## Rationale
 
-Keeps GitHub review history auditable, respects high-signal automation from multiple vendors (Gemini and Codex), and separates “no code change” from “no response.”
+Auditable reviews; separates acknowledgement from silent dismissal.

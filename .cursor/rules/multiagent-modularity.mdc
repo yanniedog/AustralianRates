@@ -18,16 +18,9 @@ This repo is actively worked on by **multiple concurrent agents** (Cursor, Codex
    - Inspect overlapping files against other active `agent/*` / `feat/*` / `fix/*` branches (e.g. `git log origin/agent/* --oneline --name-only`) and call out clashes in the PR body.
    - If another agent has pushed to the branch name you picked, assume collision: move your work to a new branch (`git checkout -b agent/<slug>-v2 origin/main`) and reapply.
    - Resolve conflicts deliberately — do not blindly accept either side. Preserve both agents' intent where possible.
-3. **Respond to CI and PR review feedback, always.** After push and PR creation:
-   - Watch PR checks (`gh pr checks <num> --watch`) and the Cloudflare deploy, not just local tests.
-   - For every failure, read the log, fix on the **same PR branch**, push again—**do not** open a new PR for the same task unless explicitly directed. After fix pushes, **@mention** relevant bots/reviewers on the PR (using the same **`@username` handles** from their comments) so they re-review.
-   - Loop until CI is green.
-   - **`ci_result` green alone does NOT authorize merge.** Complete the **Bot feedback wait gate** in `.cursor/rules/git-pr-workflow-default.mdc` (**late-review sweep + ~10–15 minute wait/re-poll**, then threaded replies) before **`gh pr merge`** or **enabling squash auto-merge**—unless the human **explicitly waived** bot closeout for that PR.
-   - **PR review bots** are **peer reviewers** (policy gate); **`ci_result`** is the mechanical gate—**reply** to each bot thread (and implement fixes where agreed) **before** merging; see `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”, **Bot feedback wait gate**) and `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**).
-   - Do **not** tell the user the task or PR is finished **before** substantive bot threads have **in-thread replies** (and late bots had time to arrive)—unless they explicitly waived bot closeout for that PR.
-   - For human review comments, same standard: **reply** on the PR and address each thread; do not ignore.
+3. **CI + reviews.** `gh pr checks <num> --watch`; fix failures on the **same** PR (**@mention** re-review after pushes). **`ci_result` ≠ merge**: then **`.cursor/rules/git-pr-workflow-default.mdc`** (**wait gate** + **in-thread** replies to bots/humans)—unless bot closeout **waived in writing**. Do **not** claim shipped before that (waived excepted).
 4. **Complete the production closeout** from `.cursor/rules/every-chat-commit-deploy-verify-production.mdc` **after** merge and Cloudflare deploy — never treat a green PR alone as shipped.
-5. **Keep the Git graph readable:** after your PR merges, run **`npm run git:graph-hygiene`** (and delete the finished topic branch locally when safe). Prefer **Automatically delete head branches** on GitHub and avoid extra local branch names pointing at the same commit as **`main`** unless a **worktree** forces it. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“Keeping the Git graph readable”).
+5. **Graph hygiene after merge:** **`npm run git:graph-hygiene`** + delete local topic branch when safe—**`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
 
 ## Modular Code (mandatory)
 

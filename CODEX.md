@@ -4,7 +4,7 @@ Read **`AGENTS.md`** and **`CLAUDE.md`** at this repo root for commands, product
 
 ## Git workflow (default)
 
-Match **Cursor** and **Claude** instructions: **feature branch** off `main`, **push the branch**, open a **PR to `main`**, green **GitHub Actions / `ci_result`** on that PR, then the **Bot feedback wait gate** (**late sweep + ~10–15 minute** re-check for late bots unless waived), **in-thread replies on every PR review bot** thread, **then merge**. Never merge only because CI finished. **Batch/close-all wording from the user does not waive this bar**—only an **explicit written waiver of bot closeout for that PR** (`.cursor/rules/workflow-rules-never-overridden.mdc`). **Iteration:** bot/E2E/rollout fixes stay on **that** PR—push commits and **@mention** bots for re-review; avoid opening a duplicate PR unless explicitly directed. Details: **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (**CI vs PR review bots**) and **`.cursor/rules/git-pr-workflow-default.mdc`** (**Bot feedback wait gate**, “PR review bots”).
+Same as **Cursor** / **Claude**: feature branch → PR to **`main`** → **`ci_result`** → **wait gate + in-thread replies** (**`.cursor/rules/git-pr-workflow-default.mdc`**). Never merge on CI alone; **`.cursor/rules/workflow-rules-never-overridden.mdc`** applies. Follow-ups on the **same** PR. **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (automation/settings).
 
 **Exception:** direct **`main`** push only if the user explicitly requests a hotfix on `main`.
 
