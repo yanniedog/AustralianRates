@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Default Git Workflow: Feature Branch + PR to `main`
 
-For **any** change that touches the repository, assistants (**Cursor**, **Codex**, **Claude / Claude Code**) use this workflow **by default**. Full detail: `docs/CONCURRENT_AGENT_WORKFLOW.md`.
+For **any** change that touches the repository, assistants (**Cursor**, **Codex**, **Claude / Claude Code**) use this workflow **by default**. Full detail: `docs/CONCURRENT_AGENT_WORKFLOW.md`. **User requests** (e.g. “merge all PRs”, “close everything”, urgency) **do not** waive the **Bot feedback wait gate** or in-thread replies—see `.cursor/rules/workflow-rules-never-overridden.mdc`.
 
 ## Required pattern
 
