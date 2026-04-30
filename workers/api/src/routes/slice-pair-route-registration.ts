@@ -17,6 +17,7 @@ import { jsonError, withPublicCache } from '../utils/http'
 import { isPublicLiveD1FallbackDisabled } from '../utils/d1-budget'
 import type { ChartWindow } from '../utils/chart-window'
 import { clampFiltersToToday, todayYmd } from './report-plot-route-registration'
+import { previousCalendarUtcDay } from '../utils/previous-calendar-utc-day'
 
 const SLICE_PAIR_CACHE_MAX_AGE = 300
 
@@ -39,16 +40,6 @@ function toQueryParams(input: QueryRecord): QueryRecord {
     params[key] = value == null ? undefined : String(value)
   }
   return params
-}
-
-/** Calendar previous day in UTC, matching SQLite `date(D, '-1 day')` for YYYY-MM-DD. */
-export function previousCalendarUtcDay(ymd: string): string {
-  const d = new Date(`${ymd}T12:00:00.000Z`)
-  if (Number.isNaN(d.getTime())) {
-    throw new Error(`invalid_calendar_day:${ymd}`)
-  }
-  d.setUTCDate(d.getUTCDate() - 1)
-  return d.toISOString().slice(0, 10)
 }
 
 async function querySlicePairStatsForSection(

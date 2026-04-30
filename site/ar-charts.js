@@ -79,6 +79,7 @@
     var resizeObserver = null;
     var chartLoadPromise = null;
     var reportPlotWarmTimer = 0;
+    var slicePairHeroSeq = 0;
     var CHART_WINDOWS = ['30D', '90D', '180D', '1Y', 'ALL'];
     var REPORT_PLOT_WARM_DELAY_MS = 1200;
     function fields() {
@@ -123,9 +124,12 @@
         if (!chartData || typeof chartData.fetchSlicePairStats !== 'function') return;
         var heroApi = window.AR && window.AR.hero ? window.AR.hero : null;
         if (!heroApi || typeof heroApi.setSlicePairStats !== 'function') return;
+        var mySeq = ++slicePairHeroSeq;
         chartData.fetchSlicePairStats(baseParams).then(function (payload) {
+            if (mySeq !== slicePairHeroSeq) return;
             heroApi.setSlicePairStats(payload || null);
         }).catch(function () {
+            if (mySeq !== slicePairHeroSeq) return;
             if (typeof heroApi.clearSlicePairStats === 'function') heroApi.clearSlicePairStats();
         });
     }

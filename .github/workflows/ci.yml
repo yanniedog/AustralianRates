@@ -105,7 +105,7 @@ jobs:
               else
                 for file in "${files[@]}"; do
                   case "$file" in
-                    site/*|prototypes/lightweight-charts/*|scripts/build-lightweight-vendor.mjs|write-deploy-version.js|tools/node-scripts/src/write-deploy-version.ts|scripts/check-public-assets.js|tools/node-scripts/src/scripts/check-public-assets.ts|scripts/check-clarity-installation.js|tools/node-scripts/src/scripts/check-clarity-installation.ts)
+                    site/*|functions/*|prototypes/lightweight-charts/*|scripts/build-lightweight-vendor.mjs|write-deploy-version.js|tools/node-scripts/src/write-deploy-version.ts|scripts/check-public-assets.js|tools/node-scripts/src/scripts/check-public-assets.ts|scripts/check-clarity-installation.js|tools/node-scripts/src/scripts/check-clarity-installation.ts)
                       site=true
                       ;;
                   esac
@@ -177,6 +177,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline
 
+      - name: Snapshot KV mirrors API payload version
+        run: npm run check:snapshot-kv-sync
+
       - name: Build site assets
         run: npm run build
 
@@ -242,6 +245,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline
+
+      - name: Snapshot KV mirrors API payload version
+        run: npm run check:snapshot-kv-sync
 
       - name: Test selected workers
         run: |

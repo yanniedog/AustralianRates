@@ -1008,17 +1008,26 @@
         delete queryParams.representation;
         delete queryParams.sort;
         delete queryParams.dir;
-        var policy = buildRequestPolicy('/analytics/slice-pair-stats', queryParams, 'report-plot');
-        return fetchJsonWithPolicy(policy, 'slice-pair-stats', {
-            requestLabel: 'Slice pair stats',
-            timeoutMs: CHART_REPORT_TIMEOUT_MS,
-            retryCount: 0,
-            cache: policy.fetchCache,
-            skipCacheBust: policy.skipCacheBust,
-            sortQuery: policy.sortQuery,
-        }, function (result) {
-            return result && result.data ? result.data : result;
-        });
+        var fetcher = function () {
+            var policy = buildRequestPolicy('/analytics/slice-pair-stats', queryParams, 'report-plot');
+            return fetchJsonWithPolicy(policy, 'slice-pair-stats', {
+                requestLabel: 'Slice pair stats',
+                timeoutMs: CHART_REPORT_TIMEOUT_MS,
+                retryCount: 0,
+                cache: policy.fetchCache,
+                skipCacheBust: policy.skipCacheBust,
+                sortQuery: policy.sortQuery,
+            }, function (result) {
+                return result && result.data ? result.data : result;
+            });
+        };
+        if (chartLocalData && typeof chartLocalData.getSlicePairStats === 'function') {
+            return chartLocalData.getSlicePairStats(queryParams).then(function (localResult) {
+                if (localResult) return localResult;
+                return fetcher();
+            });
+        }
+        return fetcher();
     }
 
     function fetchReportPlot(mode, params) {
