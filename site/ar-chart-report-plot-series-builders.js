@@ -311,7 +311,20 @@
             var color = bankColor(series.bank_name, index);
             var byDate = {};
             (series.points || []).forEach(function (point) {
-                byDate[String(point.date || '').slice(0, 10)] = point;
+                var d = String(point.date || '').slice(0, 10);
+                if (!d) return;
+                var lo = positiveRibbonRateOrNull(point.min_rate);
+                var hi = positiveRibbonRateOrNull(point.max_rate);
+                var mn = positiveRibbonRateOrNull(point.mean_rate);
+                if (lo == null && mn != null) lo = mn;
+                if (hi == null && mn != null) hi = mn;
+                if (lo == null || hi == null || hi < lo) return;
+                byDate[d] = {
+                    date: d,
+                    min_rate: lo,
+                    max_rate: hi,
+                    mean_rate: mn != null ? mn : (lo + hi) / 2,
+                };
             });
             var gapFillEnabled = rs.gap_fill_enabled !== false;
             var GAP_FILL_MAX_MS = 3 * 86400000;

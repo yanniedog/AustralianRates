@@ -472,13 +472,26 @@
         });
     }
 
+    function reportPlotPayloadRenderable(mode, payload) {
+        var PU = window.AR.chartReportPlotPayloadUtils || {};
+        if (mode === 'bands') {
+            if (typeof PU.reportBandsPayloadHasRenderableSeries === 'function')
+                return PU.reportBandsPayloadHasRenderableSeries(payload);
+            return !!(payload && payload.mode === 'bands' && Array.isArray(payload.series) && payload.series.length > 0);
+        }
+        if (typeof PU.reportMovesPayloadHasRenderablePoints === 'function')
+            return PU.reportMovesPayloadHasRenderablePoints(payload);
+        return !!(payload && payload.mode === 'moves' && Array.isArray(payload.points) && payload.points.length > 0);
+    }
+
     function getReportPlot(mode, params) {
         var chartWindow = normalizeChartWindow(params && params.chart_window);
         var preset = normalizePreset(params && params.preset);
         var exactKey = mode === 'bands' ? 'reportPlotBands' : 'reportPlotMoves';
         var exact = exactBundle(chartWindow, preset, exactKey);
         if (exact && canUseExactReportPayload(params)) {
-            return Promise.resolve(exact.data[exactKey]);
+            var snapPayload = exact.data[exactKey];
+            if (reportPlotPayloadRenderable(mode, snapPayload)) return Promise.resolve(snapPayload);
         }
         return getAnalyticsRows(params || {}).then(function (analytics) {
             if (!analytics || !Array.isArray(analytics.rows)) return null;
@@ -489,7 +502,8 @@
                     ? buildBands(analytics.rows, params || {})
                     : buildMoves(analytics.rows, params || {});
             }
-            return cache.report[key];
+            var built = cache.report[key];
+            return reportPlotPayloadRenderable(mode, built) ? built : null;
         });
     }
 

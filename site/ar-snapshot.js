@@ -570,6 +570,23 @@
         if (!bundle || !bundle.data) return null;
         activateBundle(bundle);
         var value = bundle.data[matcher.dataKey];
+        var PU = window.AR.chartReportPlotPayloadUtils || {};
+        if (value != null && matcher.dataKey === 'reportPlotBands') {
+            if (
+                typeof PU.reportBandsPayloadHasRenderableSeries === 'function'
+                && !PU.reportBandsPayloadHasRenderableSeries(value)
+            ) {
+                return null;
+            }
+        }
+        if (value != null && matcher.dataKey === 'reportPlotMoves') {
+            if (
+                typeof PU.reportMovesPayloadHasRenderablePoints === 'function'
+                && !PU.reportMovesPayloadHasRenderablePoints(value)
+            ) {
+                return null;
+            }
+        }
         return value == null ? null : value;
     }
 
