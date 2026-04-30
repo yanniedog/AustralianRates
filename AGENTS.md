@@ -2,6 +2,26 @@
 
 Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two Workers (API, archive).
 
+## Ship bar (do not say “done” until every step)
+
+**Green `ci_result` / green CI alone must never be described as merge-ready, shipped, safe for users, or “production updated.”** Passing required checks does not authorize merge, auto-merge enablement, or task completion language.
+
+When this repository changes and the goal is to land work on production, complete **all** of the following **in order** unless the user **explicitly waives** a step in writing:
+
+1. **Branch** — Fresh branch from `origin/main` (see below); no direct pushes to `main` unless the user explicitly requests a `main` hotfix.
+2. **Commit and push** — Changes stay on that branch; push to `origin`.
+3. **Pull request** — Open (or update) a PR into `main`.
+4. **CI** — Required checks green (`ci_result`); fix forward on the branch until green.
+5. **Wait gate** — After CI is green: late-review sweep **and** ~10–15 minute wait/re-poll (unless waived); automated reviewers often arrive **after** Actions finish.
+6. **Threaded closure** — Reply **in-thread** on GitHub for every substantive bot and human review thread (implemented / deferred / declined with reason).
+7. **Merge** — Squash-merge (or merge per repo policy) **only after** steps 5–6; **do not** enable squash auto-merge until the wait gate and threaded replies are complete so CI cannot merge early.
+8. **Deploy confirmation** — Confirm Cloudflare Pages and/or Workers deploys **finished** for whatever changed; a successful `git push` or merge is **not** proof.
+9. **Production verify** — Run the repo verification commands (default: `npm run verify:prod -- --scope=auto --depth=smoke`; broader scope when required) against **https://www.australianrates.com**; the final assistant message must state **exact commands, exit codes, and pass/fail**—or that verification was waived or blocked.
+
+If the current environment cannot run a step (auth, permissions, time, blocked runners), **say so plainly** and list **remaining** steps—do **not** imply the ship bar is cleared.
+
+Detail and pointers: **Hard Enforcement Rules** below; **`.cursor/rules/git-pr-workflow-default.mdc`** (Bot feedback wait gate); **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (CI vs PR review bots).
+
 ## Hard Enforcement Rules (Must Always Be Followed)
 
 These rules are mandatory and override any conflicting preference.
