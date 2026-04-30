@@ -221,10 +221,14 @@ describe('snapshot-inline-trim', () => {
     )
   })
 
-  it('returns null when immovable fields alone exceed the cap', () => {
+  it('drops oversized siteUi and still returns a payload under the cap', () => {
     const data: Record<string, unknown> = {
       siteUi: { blob: 'x'.repeat(500_000) },
     }
-    expect(trimSnapshotDataForHtmlInline(section, scope, builtAt, data)).toBeNull()
+    const out = trimSnapshotDataForHtmlInline(section, scope, builtAt, data)
+    expect(out).not.toHaveProperty('siteUi')
+    expect(wrappedSnapshotApiByteLength(section, scope, builtAt, out)).toBeLessThanOrEqual(
+      SNAPSHOT_INLINE_RESPONSE_MAX_BYTES,
+    )
   })
 })

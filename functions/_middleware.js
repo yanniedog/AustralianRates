@@ -106,6 +106,57 @@ function capTableRows(source, key, max) {
     return out;
 }
 
+function emergencyTrimSnapshot(payload) {
+    const fits = function (data) {
+        return wrappedSnapshotByteLength({
+            ok: true,
+            section: payload.section,
+            scope: payload.scope,
+            builtAt: payload.builtAt,
+            data,
+        }) <= MAX_INLINE_BYTES;
+    };
+    const data = payload.data;
+    let best = pickKeys(data, ['filters', 'filtersResolved', 'urls']);
+    if (!fits(best)) {
+        best = pickKeys(data, ['urls']);
+    }
+    if (!fits(best)) {
+        best = {};
+    }
+    function tryMerge(chunk) {
+        const merged = Object.assign({}, best, chunk);
+        if (fits(merged)) best = merged;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'overview')) tryMerge({ overview: data.overview });
+    if (Object.prototype.hasOwnProperty.call(data, 'siteUi')) tryMerge({ siteUi: data.siteUi });
+    const la = data.latestAll;
+    if (la && typeof la === 'object' && Array.isArray(la.rows)) {
+        const caps = [100, 50, 25, 10, 5, 1];
+        for (let i = 0; i < caps.length; i++) {
+            const cap = caps[i];
+            const trial = Object.assign({}, best, {
+                latestAll: Object.assign({}, la, { rows: la.rows.slice(0, cap) }),
+            });
+            if (fits(trial)) {
+                best = trial;
+                break;
+            }
+        }
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'reportPlotBands')) tryMerge({ reportPlotBands: data.reportPlotBands });
+    if (Object.prototype.hasOwnProperty.call(data, 'reportProductHistory')) {
+        tryMerge({ reportProductHistory: data.reportProductHistory });
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'chartModels')) tryMerge({ chartModels: data.chartModels });
+    if (!fits(best)) {
+        best = pickKeys(data, ['filters', 'filtersResolved', 'urls']);
+        if (!fits(best)) best = pickKeys(data, ['urls']);
+        if (!fits(best)) best = {};
+    }
+    return best;
+}
+
 function trimSnapshotForInline(payload) {
     if (!payload || !payload.data || typeof payload.data !== 'object') return null;
     const fits = function (data) {
@@ -143,6 +194,9 @@ function trimSnapshotForInline(payload) {
     data = withoutKeys(data, ['reportPlotMoves']);
     if (fits(data)) return data;
 
+    data = withoutKeys(data, ['slicePairStats']);
+    if (fits(data)) return data;
+
     data = withoutKeys(data, ['executiveSummary']);
     if (fits(data)) return data;
 
@@ -153,8 +207,8 @@ function trimSnapshotForInline(payload) {
     if (fits(data)) return data;
 
     const minimalSets = [
-        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
-        ['siteUi', 'filters', 'overview', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
+        ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotBands', 'slicePairStats', 'reportProductHistory', 'filtersResolved', 'urls'],
+        ['siteUi', 'filters', 'overview', 'reportPlotBands', 'slicePairStats', 'reportProductHistory', 'filtersResolved', 'urls'],
         ['siteUi', 'filters', 'overview', 'filtersResolved', 'urls'],
     ];
     for (const keys of minimalSets) {
@@ -162,7 +216,7 @@ function trimSnapshotForInline(payload) {
         if (fits(minimal)) return minimal;
     }
 
-    return null;
+    return emergencyTrimSnapshot(payload);
 }
 
 /** Read snapshot directly from KV when the binding is available. Returns {ok, body} like the HTTP fallback. */
