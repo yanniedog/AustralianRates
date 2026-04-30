@@ -166,6 +166,17 @@ export async function queryLatestSavingsRatesCount(db: D1Database, filters: Late
   return Number(result?.n ?? 0)
 }
 
+export async function queryLatestSavingsMaxCollectionDate(db: D1Database, filters: LatestSavingsFilters): Promise<string | null> {
+  const { clause, binds } = buildLatestWhere(filters)
+  const row = await withD1TransientRetry(() =>
+    db
+      .prepare(`SELECT MAX(l.collection_date) AS max_date FROM latest_savings_series l ${clause}`)
+      .bind(...binds)
+      .first<{ max_date: string | null }>(),
+  )
+  return row?.max_date && /^\d{4}-\d{2}-\d{2}$/.test(row.max_date) ? row.max_date : null
+}
+
 export async function queryLatestAllSavingsRates(db: D1Database, filters: LatestSavingsFilters, timing?: LatestQueryTiming) {
   return queryLatestSavingsRates(db, filters, timing)
 }

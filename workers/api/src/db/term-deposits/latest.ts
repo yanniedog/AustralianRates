@@ -157,6 +157,17 @@ export async function queryLatestTdRatesCount(db: D1Database, filters: LatestTdF
   return Number(result?.n ?? 0)
 }
 
+export async function queryLatestTdMaxCollectionDate(db: D1Database, filters: LatestTdFilters): Promise<string | null> {
+  const { clause, binds } = buildLatestWhere(filters)
+  const row = await withD1TransientRetry(() =>
+    db
+      .prepare(`SELECT MAX(l.collection_date) AS max_date FROM latest_td_series l ${clause}`)
+      .bind(...binds)
+      .first<{ max_date: string | null }>(),
+  )
+  return row?.max_date && /^\d{4}-\d{2}-\d{2}$/.test(row.max_date) ? row.max_date : null
+}
+
 export async function queryLatestAllTdRates(db: D1Database, filters: LatestTdFilters, timing?: LatestQueryTiming) {
   return queryLatestTdRates(db, filters, timing)
 }

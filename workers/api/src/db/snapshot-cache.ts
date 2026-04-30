@@ -17,8 +17,8 @@ import {
 } from './chart-cache'
 
 const SNAPSHOT_CACHE_TABLE = 'snapshot_cache'
-/** Bump when snapshot payload shape changes so stale rows are ignored. v10 adds slicePairStats; v9 raised the inline snapshot budget for raw home-loan report bundles. */
-const SNAPSHOT_PAYLOAD_VERSION = 10
+/** Bump when snapshot payload shape changes so stale rows are ignored. v11 aligns chart window end with latest_* max collection_date; v10 adds slicePairStats; v9 raised the inline snapshot budget for raw home-loan report bundles. */
+const SNAPSHOT_PAYLOAD_VERSION = 11
 /** Snapshot considered fresh if built within this many minutes. */
 const D1_CACHE_FRESH_MINUTES = 90
 
@@ -37,7 +37,7 @@ export function buildSnapshotKvKey(section: ChartCacheSection, scope: SnapshotSc
 }
 
 /** Slim KV entry for Pages HTML inlining (same payload version as full `snapshot:v*` keys). */
-function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
+export function buildSnapshotInlineKvKey(section: ChartCacheSection, scope: SnapshotScope): string {
   return `snapshot-inline:v${SNAPSHOT_PAYLOAD_VERSION}:${section}:${scope}`
 }
 

@@ -15,7 +15,7 @@ const MAX_INLINE_BYTES = 500000;
 // free and do not need a timeout).
 const SNAPSHOT_FETCH_TIMEOUT_MS = 1500;
 /** Matches `SNAPSHOT_PAYLOAD_VERSION` in workers/api/src/db/snapshot-cache.ts. Bump together. */
-const SNAPSHOT_KV_VERSION = 10;
+const SNAPSHOT_KV_VERSION = 11;
 const SECTION_KV_KEY = {
     'home-loan-rates': 'home_loans',
     'savings-rates': 'savings',

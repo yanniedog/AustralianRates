@@ -6,8 +6,14 @@
 import type { EnvBindings } from '../types'
 import { parseOptionalPublicMinRate } from '../routes/public-query'
 import { queryHomeLoanCollectionDateRange } from './home-loans/paginated'
+import type { LatestFilters } from './home-loans/shared'
+import { queryLatestHomeLoanMaxCollectionDate } from './home-loans/latest'
 import { querySavingsCollectionDateRange } from './savings/paginated'
+import type { LatestSavingsFilters } from './savings/shared'
+import { queryLatestSavingsMaxCollectionDate } from './savings/latest'
 import { queryTdCollectionDateRange } from './term-deposits/paginated'
+import type { LatestTdFilters } from './term-deposits/shared'
+import { queryLatestTdMaxCollectionDate } from './term-deposits/latest'
 import {
   buildChartWindowScope,
   parseChartWindow,
@@ -52,6 +58,91 @@ function clampChartDateRange(startDate: string, endDate: string): { startDate: s
   const cappedEndDate = endDate && endDate > today ? today : endDate || today
   const cappedStartDate = startDate && startDate <= cappedEndDate ? startDate : cappedEndDate
   return { startDate: cappedStartDate, endDate: cappedEndDate }
+}
+
+function pickLatestHlFilters(filters: Record<string, unknown>): LatestFilters {
+  return {
+    bank: filters.bank as string | undefined,
+    banks: filters.banks as string[] | undefined,
+    securityPurpose: filters.securityPurpose as string | undefined,
+    repaymentType: filters.repaymentType as string | undefined,
+    rateStructure: filters.rateStructure as string | undefined,
+    lvrTier: filters.lvrTier as string | undefined,
+    featureSet: filters.featureSet as string | undefined,
+    minRate: filters.minRate as number | undefined,
+    maxRate: filters.maxRate as number | undefined,
+    minComparisonRate: filters.minComparisonRate as number | undefined,
+    maxComparisonRate: filters.maxComparisonRate as number | undefined,
+    includeRemoved: filters.includeRemoved as boolean | undefined,
+    excludeCompareEdgeCases: filters.excludeCompareEdgeCases as boolean | undefined,
+    mode: filters.mode as LatestFilters['mode'],
+    sourceMode: filters.sourceMode as LatestFilters['sourceMode'],
+  }
+}
+
+function pickLatestSvFilters(filters: Record<string, unknown>): LatestSavingsFilters {
+  return {
+    bank: filters.bank as string | undefined,
+    banks: filters.banks as string[] | undefined,
+    accountType: filters.accountType as string | undefined,
+    rateType: filters.rateType as string | undefined,
+    depositTier: filters.depositTier as string | undefined,
+    balanceMin: filters.balanceMin as number | undefined,
+    balanceMax: filters.balanceMax as number | undefined,
+    minRate: filters.minRate as number | undefined,
+    maxRate: filters.maxRate as number | undefined,
+    includeRemoved: filters.includeRemoved as boolean | undefined,
+    excludeCompareEdgeCases: filters.excludeCompareEdgeCases as boolean | undefined,
+    mode: filters.mode as LatestSavingsFilters['mode'],
+    sourceMode: filters.sourceMode as LatestSavingsFilters['sourceMode'],
+  }
+}
+
+function pickLatestTdFilters(filters: Record<string, unknown>): LatestTdFilters {
+  return {
+    bank: filters.bank as string | undefined,
+    banks: filters.banks as string[] | undefined,
+    termMonths: filters.termMonths as string | undefined,
+    depositTier: filters.depositTier as string | undefined,
+    balanceMin: filters.balanceMin as number | undefined,
+    balanceMax: filters.balanceMax as number | undefined,
+    interestPayment: filters.interestPayment as string | undefined,
+    minRate: filters.minRate as number | undefined,
+    maxRate: filters.maxRate as number | undefined,
+    includeRemoved: filters.includeRemoved as boolean | undefined,
+    excludeCompareEdgeCases: filters.excludeCompareEdgeCases as boolean | undefined,
+    mode: filters.mode as LatestTdFilters['mode'],
+    sourceMode: filters.sourceMode as LatestTdFilters['sourceMode'],
+  }
+}
+
+/**
+ * Historical MIN/MAX uses product_presence joins that can lag `latest_*` during ingest;
+ * bump endDate so chart/snapshot windows match `/latest-all` for the same filters.
+ */
+async function bumpHistoricalRangeEndWithLatestTable(
+  db: D1Database,
+  section: ChartCacheSection,
+  filters: Record<string, unknown>,
+  range: { startDate: string; endDate: string } | null,
+): Promise<{ startDate: string; endDate: string } | null> {
+  if (!range?.startDate || !range?.endDate) return range
+  try {
+    let latestMax: string | null = null
+    if (section === 'home_loans') {
+      latestMax = await queryLatestHomeLoanMaxCollectionDate(db, pickLatestHlFilters(filters))
+    } else if (section === 'savings') {
+      latestMax = await queryLatestSavingsMaxCollectionDate(db, pickLatestSvFilters(filters))
+    } else {
+      latestMax = await queryLatestTdMaxCollectionDate(db, pickLatestTdFilters(filters))
+    }
+    if (latestMax && latestMax > range.endDate) {
+      return { startDate: range.startDate, endDate: latestMax }
+    }
+  } catch {
+    /* historical range stays authoritative */
+  }
+  return range
 }
 
 async function streamToUint8Array(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
@@ -133,6 +224,7 @@ export async function resolveChartDateRangeFromDb(
   } else if (section === 'term_deposits') {
     range = await queryTdCollectionDateRange(db, filters as Parameters<typeof queryTdCollectionDateRange>[1])
   }
+  range = await bumpHistoricalRangeEndWithLatestTable(db, section, filters, range)
   const fallback = toYmd(new Date())
   const baseRange = clampChartDateRange(range?.startDate || fallback, range?.endDate || fallback)
   const rangeStart = baseRange.startDate
