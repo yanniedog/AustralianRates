@@ -401,8 +401,6 @@
         var ribbonTreeAnchorYmd = '';
         var ribbonListHoverPath = '';
         var ribbonCurrentTree = null;
-        var ribbonAnchorProductsCache = {};
-        var ribbonTreeCache = {};
 
         function deepestExpandedRibbonPath() {
             var best = '';
@@ -452,41 +450,47 @@
             ribbonExpandedPaths = next;
         }
 
-        function ribbonAnchorCacheKey(bankName, anchorYmd) {
-            return String(bankName || '') + '::' + String(anchorYmd || '');
+        /** Rate passes ribbon filters for a section (matches per-day ribbon ingest checks). */
+        function ribbonRateAllowedAtChartDay(value, secStr) {
+            if (value == null || !Number.isFinite(value) || value <= 0) return false;
+            if (String(secStr || '') === 'savings' && value < 1.0) return false;
+            return true;
         }
 
-        function productsAtRibbonAnchor(bankName, anchorYmd, sec) {
-            var key = ribbonAnchorCacheKey(bankName, anchorYmd);
-            if (ribbonAnchorProductsCache[key]) return ribbonAnchorProductsCache[key];
-            var plist = ribbonCanvasModel.byBank[bankName] || [];
+        /**
+         * Products for ribbon hierarchy + scoped chart geometry: any rate on any chart day.
+         * Sorted by product key so tier topology stays stable while scrubbing the crosshair date.
+         */
+        function productsPresentInRibbonChartWindow(bankName, secStr) {
+            var sec = String(secStr || '');
+            var bn = String(bankName || '').trim();
+            var canon = bn ? canonicalBandsBankFromUi(bn) : '';
+            var pool = canon ? (ribbonCanvasModel.byBank[canon] || []) : (ribbonCanvasModel.flat || []).slice();
             var out = [];
-            plist.forEach(function (prod) {
-                var value = prod.byDate[anchorYmd];
-                if (value == null || !Number.isFinite(value) || value <= 0) return;
-                if (sec === 'savings' && value < 1.0) return;
-                out.push(prod);
-            });
+            for (var pi = 0; pi < pool.length; pi++) {
+                var prod = pool[pi];
+                if (!prod) continue;
+                for (var di = 0; di < dates.length; di++) {
+                    var v = prod.byDate[dates[di]];
+                    if (ribbonRateAllowedAtChartDay(v, sec)) {
+                        out.push(prod);
+                        break;
+                    }
+                }
+            }
             out.sort(function (a, b) {
-                var va = a.byDate[anchorYmd];
-                var vb = b.byDate[anchorYmd];
-                return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
+                return String((a && a.key) || '').localeCompare(String((b && b.key) || ''));
             });
-            ribbonAnchorProductsCache[key] = out;
             return out;
         }
 
-        function ribbonTreeForAnchor(bankName, anchorYmd, tierFields) {
-            var key = ribbonAnchorCacheKey(bankName, anchorYmd);
-            if (ribbonTreeCache[key]) return ribbonTreeCache[key];
+        /** Hierarchy + scoped band for a lender; membership stable across crosshair scrubbing. */
+        function ribbonTreeStableForBankWindow(bankName, tierFields) {
             var sec = String(section || '');
-            var prodsAtAnchor = productsAtRibbonAnchor(bankName, anchorYmd, sec);
-            var tree = prodsAtAnchor.length ? buildRibbonTierTree(prodsAtAnchor, tierFields, 0) : null;
-            ribbonTreeCache[key] = {
-                prodsAtAnchor: prodsAtAnchor,
-                tree: tree,
-            };
-            return ribbonTreeCache[key];
+            var canon = canonicalBandsBankFromUi(String(bankName || '').trim());
+            var prods = productsPresentInRibbonChartWindow(canon, sec);
+            var tree = prods.length ? buildRibbonTierTree(prods, tierFields, 0) : null;
+            return { prodsAtAnchor: prods, tree: tree };
         }
 
         function buildRibbonBreadcrumbItems(tree) {
@@ -1172,25 +1176,14 @@
             }
             ribbonTreeAnchorYmd = anchor;
 
-            var prodsAtAnchor = [];
-            (ribbonCanvasModel.flat || []).forEach(function (prod) {
-                var v = prod.byDate[anchor];
-                if (v == null || !Number.isFinite(v) || v <= 0) return;
-                if (sec === 'savings' && v < 1.0) return;
-                prodsAtAnchor.push(prod);
-            });
-            prodsAtAnchor.sort(function (a, b) {
-                var va = a.byDate[anchor];
-                var vb = b.byDate[anchor];
-                return (Number.isFinite(vb) ? vb : 0) - (Number.isFinite(va) ? va : 0);
-            });
-            if (!prodsAtAnchor.length) {
+            var prodsForTree = productsPresentInRibbonChartWindow('', sec);
+            if (!prodsForTree.length) {
                 showRibbonEmptyPanel('Current slice', fmtReportDateYmd(anchor), 'No products available for this slice.');
                 return;
             }
 
             clearRibbonHoverScopes();
-            var tree = buildRibbonTierTree(prodsAtAnchor, ribbonInitialTierFieldsForSection(sec), 0);
+            var tree = buildRibbonTierTree(prodsForTree, ribbonInitialTierFieldsForSection(sec), 0);
             if (!tree || tree.kind === 'empty') {
                 showRibbonEmptyPanel('Current slice', fmtReportDateYmd(anchor), 'No hierarchy available for this slice.');
                 return;
@@ -1199,10 +1192,14 @@
             ribbonTreeHadBranches = tree.kind !== 'leaves';
             var mm = minMaxRibbonNodeRates(tree, anchor, sec);
             var bestRate = ribbonScopedBestRate(tree, anchor, sec);
+            var countAnchorDay = 0;
+            for (var ci = 0; ci < prodsForTree.length; ci++) {
+                if (ribbonRateAllowedAtChartDay(prodsForTree[ci].byDate[anchor], sec)) countAnchorDay += 1;
+            }
             setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
                 heading: 'Current slice',
-                meta: fmtReportDateYmd(anchor) + ' \u00b7 ' + ribbonRangeText(mm.min, mm.max) + ' \u00b7 ' + prodsAtAnchor.length + ' product' + (prodsAtAnchor.length !== 1 ? 's' : ''),
+                meta: fmtReportDateYmd(anchor) + ' \u00b7 ' + ribbonRangeText(mm.min, mm.max) + ' \u00b7 ' + countAnchorDay + ' product' + (countAnchorDay !== 1 ? 's' : ''),
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonBreadcrumbs(wrap, tree);
@@ -1639,7 +1636,7 @@
             ribbonTreeAnchorYmd = anchor;
             var sec = String(section || '');
             var tierFields = ribbonTierFieldsForSection(sec);
-            var cachedTree = ribbonTreeForAnchor(pbPanel, anchor, tierFields);
+            var cachedTree = ribbonTreeStableForBankWindow(pbPanel, tierFields);
             var prodsAtAnchor = cachedTree && Array.isArray(cachedTree.prodsAtAnchor)
                 ? cachedTree.prodsAtAnchor
                 : [];
@@ -1655,7 +1652,10 @@
             }
             ribbonCurrentTree = tree;
             ribbonTreeHadBranches = tree.kind !== 'leaves';
-            var n = prodsAtAnchor.length;
+            var countAnchorDay = 0;
+            for (var lj = 0; lj < prodsAtAnchor.length; lj++) {
+                if (ribbonRateAllowedAtChartDay(prodsAtAnchor[lj].byDate[anchor], sec)) countAnchorDay += 1;
+            }
             var ibBandPt = bandByDateByBank[pbPanel] && bandByDateByBank[pbPanel][anchor];
             var ibRateStr = '';
             if (ibBandPt) {
@@ -1672,7 +1672,7 @@
             setRibbonHierarchyLayoutActive(true);
             ribbonHierarchyPanel.show({
                 heading: pbPanel,
-                meta: fmtReportDateYmd(anchor) + (ibRateStr ? ' \u00b7 ' + ibRateStr : '') + ' \u00b7 ' + n + ' product' + (n !== 1 ? 's' : ''),
+                meta: fmtReportDateYmd(anchor) + (ibRateStr ? ' \u00b7 ' + ibRateStr : '') + ' \u00b7 ' + countAnchorDay + ' product' + (countAnchorDay !== 1 ? 's' : ''),
                 compact: true,
                 renderBody: function (wrap) {
                     renderRibbonBreadcrumbs(wrap, tree);
