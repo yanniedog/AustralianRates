@@ -100,6 +100,7 @@ export const LVR_TIERS: LvrTier[] = [
   'lvr_80-85%',
   'lvr_85-90%',
   'lvr_90-95%',
+  'lvr_standard_reference',
   'lvr_unspecified',
 ]
 export const FEATURE_SETS: FeatureSet[] = ['basic', 'premium']

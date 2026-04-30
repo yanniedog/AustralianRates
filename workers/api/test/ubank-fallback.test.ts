@@ -31,6 +31,31 @@ describe('UBank and Great Southern fallback parsers', () => {
     expect(parsed.rows[2]?.repaymentType).toBe('interest_only')
   })
 
+  it('classifies UBank standard variable contract footnote rows as lvr_standard_reference', () => {
+    if (!ubank) throw new Error('missing ubank lender')
+    const html = [
+      '"tableCaption":"Neat Owner occupier variable P&I home loan rates","table":{"__typename":"Table","body":',
+      '[["\\u003Cstrong>Up to 60%\\u003C/strong>","5.84%","5.86%"],["\\u003Cstrong>Neat standard variable rate\\u003C/strong>\\u003Cbr>\\u003Cspan class=\\"font-disclaimer\\">Standard base rate referenced in our loan contracts\\u003C/span>","7.75%","7.77%"]]}',
+      '"tableCaption":"Flex Owner occupied variable P&I home loan rates","table":{"__typename":"Table","body":',
+      '[["\\u003Cstrong>Up to 60%\\u003C/strong>","5.84%","6.08%"],["\\u003Cstrong>Flex standard variable rate\\u003C/strong>\\u003Cbr>\\u003Cspan class=\\"font-disclaimer\\">Standard base rate referenced in our loan contracts\\u003C/span>","7.90%","8.12%"]]}',
+    ].join('')
+
+    const parsed = parseUbankHomeLoanRatesFromHtml({
+      lender: ubank,
+      html,
+      sourceUrl: 'https://www.ubank.com.au/home-loans/neat-variable-rate-home-loans',
+      collectionDate: '2026-04-20',
+      qualityFlag: 'scraped_fallback_strict',
+    })
+
+    const ref = parsed.rows.filter((row) => row.lvrTier === 'lvr_standard_reference')
+    expect(ref).toHaveLength(2)
+    expect(ref.find((row) => row.productId === '11')?.interestRate).toBe(7.75)
+    expect(ref.find((row) => row.productId === '3')?.interestRate).toBe(7.9)
+    expect(new Set(ref.map((row) => row.featureSet))).toEqual(new Set(['basic', 'premium']))
+    expect(parsed.rows.filter((row) => row.lvrTier === 'lvr_=60%')).toHaveLength(2)
+  })
+
   it('parses UBank savings fallback rows from official help-page snippets', () => {
     if (!ubank) throw new Error('missing ubank lender')
     const parsed = parseUbankSavingsRows({

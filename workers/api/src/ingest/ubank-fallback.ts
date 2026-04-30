@@ -14,7 +14,7 @@ import {
   normalizeDepositTier,
   type NormalizedSavingsRow,
 } from './normalize-savings.js'
-import type { LenderConfig } from '../types.js'
+import type { LenderConfig, LvrTier } from '../types.js'
 
 export const UBANK_HOME_LOAN_FALLBACK_URLS = [
   'https://www.ubank.com.au/home-loans/neat-variable-rate-home-loans',
@@ -241,6 +241,19 @@ function ubankRepaymentType(caption: string): 'principal_and_interest' | 'intere
     : 'principal_and_interest'
 }
 
+/** UBank publishes a non-LVR "standard variable rate" footnote row; map it off `lvr_unspecified`. */
+function ubankHtmlTierSourceToLvrTier(sourceHtml: string): LvrTier {
+  const t = stripHtml(sourceHtml).toLowerCase()
+  if (
+    t.includes('standard variable rate') ||
+    t.includes('standard variable interest only rate') ||
+    (t.includes('standard base rate') && t.includes('loan contracts'))
+  ) {
+    return 'lvr_standard_reference'
+  }
+  return normalizeLvrTier(stripHtml(sourceHtml)).tier
+}
+
 export function parseUbankHomeLoanRatesFromHtml(input: {
   lender: LenderConfig
   html: string
@@ -289,7 +302,7 @@ export function parseUbankHomeLoanRatesFromHtml(input: {
       const lvrTierText = rateStructure === 'variable' ? label : caption
       const securityPurpose = normalizeSecurityPurpose(caption)
       const repaymentType = ubankRepaymentType(caption)
-      const lvrTier = normalizeLvrTier(lvrTierText).tier
+      const lvrTier = ubankHtmlTierSourceToLvrTier(lvrTierText)
       const comparisonRate = parseComparisonRate(cells[2] || '')
       const rowKey = [meta.productId, securityPurpose, repaymentType, lvrTier, rateStructure].join('|')
       if (seen.has(rowKey)) continue
