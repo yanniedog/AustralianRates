@@ -109,6 +109,16 @@ async function switchViewWithoutRatesFetch(page, view) {
     return requestCount;
 }
 
+/** Rate reports are ribbon-only when Best/Products tabs were removed (see ar-chart-macro-lwc-shared getViewMode). */
+async function hasLegacyReportModeSwitcher(page) {
+    return await page.evaluate(() => {
+        return (
+            document.querySelectorAll('.lwc-report-viewmode-tab').length > 0 ||
+            !!document.querySelector('.lwc-report-viewmode-select')
+        );
+    });
+}
+
 async function switchReportModeWithoutAnalyticsFetch(page, mode) {
     let seriesRequests = 0;
     let plotRequests = 0;
@@ -226,7 +236,19 @@ function verifyChartState(metrics, failures, label, expectedView) {
 }
 
 async function verifyReportModes(page, section, failures, labelPrefix) {
-    for (const mode of ['bands']) {
+    if (!(await hasLegacyReportModeSwitcher(page))) {
+        const metrics = await collectChartMetrics(page);
+        verifyChartState(metrics, failures, `${labelPrefix} ribbon-only`, section.defaultView);
+        if (metrics.reportMode !== 'bands') {
+            failures.push(
+                `${labelPrefix} ribbon-only: expected data-report-view-mode=bands, got ${metrics.reportMode || 'none'}`,
+            );
+        }
+        if (!metrics.pageFits) failures.push(`${labelPrefix} ribbon-only: page has horizontal overflow`);
+        return;
+    }
+
+    for (const mode of ['bands', 'bank', 'products']) {
         const requestCounts = await switchReportModeWithoutAnalyticsFetch(page, mode);
         if (requestCounts.seriesRequests !== 0) failures.push(`${labelPrefix} ${mode}: switching modes triggered ${requestCounts.seriesRequests} unexpected /analytics/series requests`);
         if (requestCounts.plotRequests !== 0) failures.push(`${labelPrefix} ${mode}: switching modes triggered ${requestCounts.plotRequests} unexpected /analytics/report-plot requests`);
@@ -237,7 +259,11 @@ async function verifyReportModes(page, section, failures, labelPrefix) {
     }
 }
 
-/** Ribbon mode: inactive lender chips get is-ribbon-dim; active bank stays full opacity (see ar-chart-report-plot-shared.js). */
+/**
+ * Ribbon lender tray hover/selection (see ar-chart-report-plot-shared syncRibbonTrayUi).
+ * Skips when spotlight/subset keeps chips dimmed at rest or when chrome hover does not
+ * restore baseline — production data and pointer routing vary too much for strict dim counts.
+ */
 async function verifyRibbonTrayHighlight(page, failures, labelPrefix) {
     await switchReportModeWithoutAnalyticsFetch(page, 'bands');
     await page.waitForTimeout(400);
