@@ -27,7 +27,7 @@ Finished only when **all** apply **or** the user **waived that step in writing**
 
 ## Habit
 
-Before the **final** message on a shipping task: **`npm run ship:closeout`** (repo root).
+Before the **final** message on a shipping task: **`npm run ship:closeout`** (repo root). On an **`agent/`**, **`feat/`**, or **`fix/`** branch, run **`npm run ship:closeout:strict`** instead: **exit code 2** means an **open PR** is still on this head (or `gh` is missing in strict mode)—continue **AGENTS.md** steps 5–9; do not claim production is updated.
 
 ## Pointers
 

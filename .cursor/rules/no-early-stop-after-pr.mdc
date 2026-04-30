@@ -28,7 +28,7 @@ You must have either:
 
 If you are about to close with “here’s the PR” or “CI passed”:
 
-- Run **`npm run ship:closeout`** from repo root and continue with **wait gate → threaded replies → merge → verify:prod** per **`docs/ASSISTANT_SHIP_CLOSEOUT.md`** and **`git-pr-workflow-default.mdc`**.
+- Run **`npm run ship:closeout:strict`** from repo root on **`agent/`** / **`feat/`** / **`fix/`** branches (**`npm run ship:closeout`** on `main` is enough). If strict mode exits **2**, you still have an open PR on this head (or lack `gh`)—continue **wait gate → threaded replies → merge → verify:prod** per **`docs/ASSISTANT_SHIP_CLOSEOUT.md`** and **`git-pr-workflow-default.mdc`**; do not treat the task as shipped.
 
 ## Auto-merge warning
 
