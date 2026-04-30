@@ -55,15 +55,83 @@ function capTableRows(source: Record<string, unknown>, key: string, max: number)
 }
 
 /**
+ * Last-resort lite payload when progressive stripping still cannot fit. Never returns
+ * `null`: an empty object is valid; callers must not coerce misses to `{}` and wipe
+ * all navigation/table keys.
+ */
+export function emergencyLiteSnapshotData(
+  section: string,
+  scope: string,
+  builtAt: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  const fits = (trial: Record<string, unknown>) =>
+    wrappedSnapshotApiByteLength(section, scope, builtAt, trial) <= SNAPSHOT_INLINE_RESPONSE_MAX_BYTES
+
+  let best = pickKeys(data, ['filters', 'filtersResolved', 'urls'])
+  if (!fits(best)) {
+    best = pickKeys(data, ['urls'])
+  }
+  if (!fits(best)) {
+    best = {}
+  }
+
+  const tryMerge = (chunk: Record<string, unknown>) => {
+    const merged = { ...best, ...chunk }
+    if (fits(merged)) best = merged
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'overview')) tryMerge({ overview: data.overview })
+  if (Object.prototype.hasOwnProperty.call(data, 'siteUi')) tryMerge({ siteUi: data.siteUi })
+
+  const la = data.latestAll
+  if (la && typeof la === 'object' && Array.isArray((la as { rows?: unknown[] }).rows)) {
+    const block = la as { rows: unknown[]; [k: string]: unknown }
+    const rows = block.rows
+    for (const cap of [100, 50, 25, 10, 5, 1]) {
+      const trial = { ...best, latestAll: { ...block, rows: rows.slice(0, cap) } }
+      if (fits(trial)) {
+        best = trial
+        break
+      }
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'reportPlotBands')) tryMerge({ reportPlotBands: data.reportPlotBands })
+  if (Object.prototype.hasOwnProperty.call(data, 'reportProductHistory')) {
+    tryMerge({ reportProductHistory: data.reportProductHistory })
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'chartModels')) tryMerge({ chartModels: data.chartModels })
+
+  if (!fits(best)) {
+    const stripped = { ...best } as Record<string, unknown>
+    delete stripped.reportProductHistory
+    delete stripped.reportPlotBands
+    delete stripped.chartModels
+    delete stripped.siteUi
+    if (fits(stripped)) best = stripped
+  }
+
+  if (!fits(best)) {
+    best = pickKeys(data, ['filters', 'filtersResolved', 'urls'])
+    if (!fits(best)) best = pickKeys(data, ['urls'])
+    if (!fits(best)) best = {}
+  }
+
+  return best
+}
+
+/**
  * Returns a shallow-cloned `data` object trimmed until the wrapped API JSON fits the
- * inline byte ceiling, or null if it cannot be brought under budget.
+ * inline byte ceiling. Falls back to {@link emergencyLiteSnapshotData} so lite
+ * snapshots never return an empty root by accident.
  */
 export function trimSnapshotDataForHtmlInline(
   section: string,
   scope: string,
   builtAt: string,
   data: Record<string, unknown>,
-): Record<string, unknown> | null {
+): Record<string, unknown> {
   const fits = (d: Record<string, unknown>) =>
     wrappedSnapshotApiByteLength(section, scope, builtAt, d) <= SNAPSHOT_INLINE_RESPONSE_MAX_BYTES
 
@@ -113,5 +181,5 @@ export function trimSnapshotDataForHtmlInline(
     if (fits(minimal)) return minimal
   }
 
-  return null
+  return emergencyLiteSnapshotData(section, scope, builtAt, data)
 }

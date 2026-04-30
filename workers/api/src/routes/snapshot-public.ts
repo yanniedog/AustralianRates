@@ -387,7 +387,7 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
     )
   }
   const data = wantsLite
-    ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data) || {}
+    ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data)
     : payload.data
   withPublicCache(c, SNAPSHOT_CACHE_MAX_AGE)
   c.header('X-AR-Cache', payload.fromCache)
