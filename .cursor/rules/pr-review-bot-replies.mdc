@@ -22,15 +22,9 @@ Similar bots (summaries, inline comments, suggestion blocks) are included unless
 
 Do **not** merge with substantive Gemini or Codex feedback **unanswered**.
 
+Green **`ci_result`** does not replace threaded closure.
+
 ## Exceptions
 
 - **SKIPPED** / rate-limited empty / purely informational with no actionable claim: reply optional (“skipped”).
 - Already covered upstream: one bundled reply is fine.
-
-## Vs CI
-
-Green **`ci_result`** does **not** replace threaded closure.
-
-## Rationale
-
-Auditable reviews; separates acknowledgement from silent dismissal.

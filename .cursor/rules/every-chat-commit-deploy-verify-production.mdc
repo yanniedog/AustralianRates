@@ -11,7 +11,7 @@ For **every** conversation about this project that changes the repository (code,
 
 ## 1. Commit, push, and PR (default)
 
-- **Default:** **`git-pr-workflow-default.mdc`**: branch → PR → **`ci_result`** → **wait gate** + **threaded replies** → merge (**`main`** drives production deploy).
+- **Default:** **`.cursor/rules/git-pr-workflow-default.mdc`** (branch through merge). **`main`** drives production deploy.
 - **Exception:** direct `git push origin main` only if the user explicitly asked for a **`main` hotfix**.
 - Do not leave uncommitted or unpushed work when the task implied shipping unless waived. If a PR cannot be merged from this environment, leave it open with the **PR URL** and state what remains after the user merges.
 
@@ -34,5 +34,3 @@ A successful `git push` is **not** sufficient proof.
 For deploy- or production-impacting work, the final message must include what was run (commands), outcomes, and that production verification was performed—or an explicit note that it was waived or could not be run.
 
 - **Shipping tasks** while checked out on **`agent/`** / **`feat/`** / **`fix/`**: run **`npm run ship:closeout:strict`** immediately before claiming completion; it must exit **0**. **Exit 2** means continue **`AGENTS.md`** steps 5–9 (merge, deploy, **`verify:prod`**) or document a **blocker** with every remaining step.
-
-This rule overrides treating “pushed to the remote” as task completion without confirmed deploy and production verification.

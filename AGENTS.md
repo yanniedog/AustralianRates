@@ -14,7 +14,7 @@ When landing on production, finish **in order** (unless that step is **waived in
 2. **Commit + push** — On the topic branch only.
 3. **PR** — Into `main`.
 4. **CI** — `ci_result` green; fix forward on **this** PR (**@mention** re-review after pushes).
-5. **Wait gate** — After green CI: **`.cursor/rules/git-pr-workflow-default.mdc`** (late sweep, UI settles, ~10–15 min re-poll unless waived).
+5. **Wait gate** — **`.cursor/rules/git-pr-workflow-default.mdc`** (full checklist).
 6. **Threaded closure** — In-thread replies on substantive bot/human threads (**implemented / deferred / declined**).
 7. **Merge** — Only after 5–6; do **not** enable auto-merge before then (**`pr-auto-merge.yml`** merges on CI only).
 8. **Deploy confirmed** — Pages/Workers finished (push ≠ deployed).
@@ -45,15 +45,11 @@ Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
 
 ### Default git workflow (Cursor, Codex, Claude)
 
-**Default:** land work via a **feature branch** and **PR into `main`** (not by pushing straight to `main`). Sync `main`, branch (`agent/` …), commit, push, open PR (`gh pr create --base main`).
+Procedure, wait gate, and merge timing: **`.cursor/rules/git-pr-workflow-default.mdc`**. **`docs/CONCURRENT_AGENT_WORKFLOW.md`** — Actions, auto-merge, stale-branch cleanup.
 
-**Follow-ups stay on one PR:** For bot feedback, failing CI/E2E, or failed rollout/production verification on an **already-open** PR, commit on **that** branch and push—do **not** open a duplicate PR for the same task unless explicitly instructed. After each fix push, **@mention** the relevant bots or reviewers on the PR (use the **same `@handles`** they used when commenting—see **`gh pr view -c`** for the timeline) and include a short summary of what changed (optionally the commit SHA) so they know to re-review.
+**Follow-ups stay on one PR:** commit on **that** branch; do **not** open a duplicate PR unless instructed. After fix pushes, **`@mention`** using handles from **`gh pr view -c`**.
 
-**Merge / auto-merge:** **`ci_result`** is necessary, not sufficient—**`.cursor/rules/git-pr-workflow-default.mdc`** (**wait gate** + **in-thread** bot/human replies) before **`gh pr merge`** or **first-time** squash auto-merge. **`pr-auto-merge.yml`** merges on CI only (**`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
-
-The **production verification** steps below apply **after** the change is on **`main`** and hosting deploys have finished (merged PR or rare explicit `main` hotfix). A green PR alone is not the same as an updated **www.australianrates.com** until merge + deploy.
-
-**Exception:** the user **explicitly** requests a **direct `main` hotfix**—then push to `main` and still complete deployment confirmation and the checks below.
+**Exception:** user orders **`main` hotfix** — push **`main`**, then deployment confirmation and verification below.
 
 1. Before claiming any deploy-related task is complete, run from repo root:
    - `npm run verify:prod -- --scope=auto --depth=smoke`

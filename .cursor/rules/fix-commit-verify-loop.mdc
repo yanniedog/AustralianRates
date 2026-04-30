@@ -8,7 +8,7 @@ alwaysApply: true
 When fixing issues that affect production (www.australianrates.com), follow this loop until the problem is **definitely** fixed. **You must never ask the user to do reproduction steps** — perform all verification yourself.
 
 1. **Make repairs** – Apply the necessary code or config changes in the repo.
-2. **Commit and push** — **`git-pr-workflow-default.mdc`** covers branch/PR, **`ci_result`**, wait gate, replies, merge (not CI-only merge). **`main` hotfix** only if user ordered it: commit and **`git push origin main`** from **`main`**.
+2. **Commit and push** — PR path through merge: **`.cursor/rules/git-pr-workflow-default.mdc`**. **`main` hotfix** only if user ordered it: commit and **`git push origin main`** from **`main`**.
 3. **Wait for deploy** – After the change is **on `main`** (merged PR or direct push), wait for Cloudflare Pages and/or Workers to finish deploying. Do not skip this step.
 4. **Verify on production** – Check that your changes work on the live site. Do this **autonomously** (never ask the user to reproduce):
    - From repo root run: `npm run verify:prod -- --scope=auto --depth=smoke`.

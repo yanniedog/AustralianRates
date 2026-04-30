@@ -14,7 +14,8 @@ Assistants use this for **any** repo change **by default**. **Throughput / urgen
 3. Commit **only** on that branch; `git push -u origin HEAD`.
 4. Open PR to **`main`** (`gh pr create --base main` or UI).
 5. Keep pushing until **`ci_result`** passes. **Green CI is necessary, not sufficient** for merge.
-6. **`pr-auto-merge.yml`** may enable squash auto-merge for heads whose names start with **`agent/`**, **`feat/`**, or **`fix/`** (i.e. glob **`agent/*`**, **`feat/*`**, **`fix/*`**), when **`ci_result`** is green—**bot apps are not in that gate**. Complete **PR review bots** (below) **before** first-time auto-merge so CI cannot merge unanswered threads. If auto-merge is unavailable: fix forward or `gh pr merge --squash`—**still only after the wait gate**. **`stale-branch-cleanup.yml`** trims stale topic remote heads (see **`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
+6. **Automation:** **`pr-auto-merge.yml`** may enable squash auto-merge for **`agent/*`**, **`feat/*`**, **`fix/*`** when **`ci_result`** is green—**bots are not in that gate**. Finish **PR review bots** (below) **before** first-time auto-merge so CI cannot merge unanswered threads.
+7. If auto-merge is unavailable: fix forward or **`gh pr merge --squash`**—**still only after the wait gate**. **`stale-branch-cleanup.yml`** trims stale topic heads (**`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
 
 ### Same PR for follow-up (bots, CI, E2E, rollout)
 
@@ -26,7 +27,10 @@ Manual **`gh pr merge`** or **enabling** squash auto-merge is **forbidden** unti
 
 1. **`gh pr checks <n> --watch`** green (`ci_result` + required checks).
 2. **Stop**—do not merge in the same breath as CI success.
-3. **Late-review sweep:** `gh pr view <n> --comments`; optionally `gh api repos/<owner>/<repo>/pulls/<n>/reviews` and `gh api repos/<owner>/<repo>/pulls/<n>/comments`. On **github.com**, scan Conversation + Files for **in-flight** bot activity (reactions, pending review); wait until **settled**. Note bots **after** your last push (Gemini, Copilot, Codex, CodeRabbit, Greptile, Sourcery, scanners, etc.).
+3. **Late-review sweep:**
+   - CLI: `gh pr view <n> --comments`; optionally `gh api repos/<owner>/<repo>/pulls/<n>/reviews` and `gh api .../pulls/<n>/comments`.
+   - Web: on **github.com**, scan Conversation + Files until **in-flight** bot activity (**reactions**, pending review) **settles**.
+   - Note bots **after** your last push (Gemini, Copilot, Codex, CodeRabbit, Greptile, Sourcery, scanners, etc.).
 4. If **no** substantive threads yet: wait **~10–15 minutes** from first green CI, re-sweep (and re-check UI). Calling “no feedback” immediately at green CI is a **policy violation**.
 5. **Enumerate → judge → reply in-thread** on every substantive thread: **implemented** / **deferred** / **declined** (with reason).
 6. **Only then** merge or enable auto-merge **for the first time**.

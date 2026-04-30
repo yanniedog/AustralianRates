@@ -9,7 +9,7 @@ Assistants (**Cursor**, **Codex**, **Claude / Claude Code**) must treat automate
 
 Works with **`git-pr-workflow-default.mdc`** and **`multiagent-modularity.mdc`** (watch checks; merge only when intended).
 
-**Merge-ready:** implement **`git-pr-workflow-default.mdc`** (**wait gate** → enumerate → judge → **in-thread** reply: implemented/deferred/declined → merge / first-time auto-merge).
+**Merge-ready:** **`git-pr-workflow-default.mdc`** wait gate complete (enumerate → judge → **in-thread** replies → merge or first-time auto-merge).
 
 ## What counts as feedback
 
