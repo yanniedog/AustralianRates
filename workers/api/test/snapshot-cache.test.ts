@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getCachedOrComputeSnapshot } from '../src/db/snapshot-cache'
+import { buildSnapshotInlineKvKey, buildSnapshotKvKey, getCachedOrComputeSnapshot } from '../src/db/snapshot-cache'
 
 class MemoryKv {
   readonly values = new Map<string, string>()
@@ -24,8 +24,8 @@ describe('snapshot cache KV healing', () => {
     const kv = new MemoryKv()
     const section = 'home_loans'
     const scope = 'window:90D'
-    const mainKey = 'snapshot:v10:home_loans:window:90D'
-    const inlineKey = 'snapshot-inline:v10:home_loans:window:90D'
+    const mainKey = buildSnapshotKvKey(section, scope)
+    const inlineKey = buildSnapshotInlineKvKey(section, scope)
     const payload = {
       builtAt: '2026-04-19T00:00:00.000Z',
       scope,

@@ -175,6 +175,18 @@ export async function queryLatestRatesCount(db: D1Database, filters: LatestFilte
   return Number(result?.n ?? 0)
 }
 
+/** Latest-as-of max collection_date for filters; aligns chart window end with `/latest-all` semantics. */
+export async function queryLatestHomeLoanMaxCollectionDate(db: D1Database, filters: LatestFilters): Promise<string | null> {
+  const { clause, binds } = buildLatestWhere(filters)
+  const row = await withD1TransientRetry(() =>
+    db
+      .prepare(`SELECT MAX(l.collection_date) AS max_date FROM latest_home_loan_series l ${clause}`)
+      .bind(...binds)
+      .first<{ max_date: string | null }>(),
+  )
+  return row?.max_date && /^\d{4}-\d{2}-\d{2}$/.test(row.max_date) ? row.max_date : null
+}
+
 export async function queryLatestAllRates(db: D1Database, filters: LatestFilters, timing?: LatestQueryTiming) {
   return queryLatestRates(db, filters, timing)
 }
