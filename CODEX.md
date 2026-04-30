@@ -1,6 +1,6 @@
 # Codex (OpenAI) — Australian Rates
 
-Read **`AGENTS.md`** and **`CLAUDE.md`** at this repo root for commands, production verification, and presentation rules. **Antidote to early stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`** and **`npm run ship:closeout`** before you claim a shipping task is done.
+Read **`AGENTS.md`** and **`CLAUDE.md`** at this repo root for commands, production verification, and presentation rules. **Antidote to early stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`npm run ship:closeout`**, and on **`agent/`** / **`feat/`** / **`fix/`** heads **`npm run ship:closeout:strict`** (must exit **0** before claiming a shipping task is done).
 
 ## Git workflow (default)
 

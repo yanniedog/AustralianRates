@@ -6,7 +6,7 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 
 **CI green ≠ merge-ready, shipped, or production updated.** Steps 5–7 below are **policy** (wait gate + threaded replies + merge); user tone and “merge everything” wording **never** waive them unless **explicit written waiver of bot closeout for that PR**—**`.cursor/rules/workflow-rules-never-overridden.mdc`**.
 
-**Anti–early-stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`npm run ship:closeout`**, **`.cursor/rules/no-early-stop-after-pr.mdc`**. Full procedure (**wait gate** checklist): **`.cursor/rules/git-pr-workflow-default.mdc`**.
+**Anti–early-stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`npm run ship:closeout`** (on topic branches use **`npm run ship:closeout:strict`** before claiming ship-complete), **`.cursor/rules/no-early-stop-after-pr.mdc`**. Full procedure (**wait gate** checklist): **`.cursor/rules/git-pr-workflow-default.mdc`**.
 
 When landing on production, finish **in order** (unless that step is **waived in writing**):
 

@@ -33,4 +33,6 @@ A successful `git push` is **not** sufficient proof.
 
 For deploy- or production-impacting work, the final message must include what was run (commands), outcomes, and that production verification was performed—or an explicit note that it was waived or could not be run.
 
+- **Shipping tasks** while checked out on **`agent/`** / **`feat/`** / **`fix/`**: run **`npm run ship:closeout:strict`** immediately before claiming completion; it must exit **0**. **Exit 2** means continue **`AGENTS.md`** steps 5–9 (merge, deploy, **`verify:prod`**) or document a **blocker** with every remaining step.
+
 This rule overrides treating “pushed to the remote” as task completion without confirmed deploy and production verification.

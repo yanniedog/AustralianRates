@@ -2,9 +2,18 @@
 /**
  * Prints the shipping closeout checklist and optional gh warning if the current
  * branch still has an open PR (common sign the assistant stopped before merge).
+ * Flags: --strict (or SHIP_CLOSEOUT_STRICT=1) exits 2 on agent/feat/fix when gh
+ * reports an open PR for this head, or when gh is missing in strict mode.
  * See docs/ASSISTANT_SHIP_CLOSEOUT.md
  */
 import { execSync, spawnSync } from 'node:child_process';
+
+function strictEnabled() {
+  return (
+    process.argv.includes('--strict') ||
+    String(process.env.SHIP_CLOSEOUT_STRICT ?? '') === '1'
+  )
+}
 
 function sh(cmd) {
   try {
@@ -74,13 +83,9 @@ const lines = [
 
 console.log(lines.join('\n'));
 
+const strict = strictEnabled();
 const branch = currentBranch();
 if (!branch) {
-  process.exit(0);
-}
-
-if (!hasGh()) {
-  console.log('(Install gh CLI for an open-PR warning on topic branches.)\n');
   process.exit(0);
 }
 
@@ -89,12 +94,25 @@ if (branch === 'main' || branch === 'master') {
   process.exit(0);
 }
 
+if (isTopicBranch(branch) && strict && !hasGh()) {
+  console.error(
+    '>>> ship:closeout strict mode requires gh to detect an open PR; install gh or drop --strict.',
+  );
+  console.error('');
+  process.exit(2);
+}
+
+if (!hasGh()) {
+  console.log('(Install gh CLI for an open-PR warning on topic branches.)\n');
+  process.exit(0);
+}
+
 if (isTopicBranch(branch)) {
   const pr = openPrForHead(branch);
   if (pr && pr.url) {
     console.log('>>> WARNING: Open PR on this branch - work may not be merged or verified yet.');
     console.log(`>>> ${pr.url}\n`);
-    if (process.env.SHIP_CLOSEOUT_STRICT === '1') {
+    if (strict) {
       process.exit(2);
     }
   }
