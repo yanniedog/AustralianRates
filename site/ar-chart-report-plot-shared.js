@@ -377,8 +377,16 @@
                     if (!d) return;
                     var lo = positiveRibbonRateOrNull(p.min_rate);
                     var hi = positiveRibbonRateOrNull(p.max_rate);
+                    var mn = positiveRibbonRateOrNull(p.mean_rate);
+                    if (lo == null && mn != null) lo = mn;
+                    if (hi == null && mn != null) hi = mn;
                     if (lo == null || hi == null || hi < lo) return;
-                    byDate[d] = p;
+                    byDate[d] = {
+                        date: d,
+                        min_rate: lo,
+                        max_rate: hi,
+                        mean_rate: mn != null ? mn : (lo + hi) / 2,
+                    };
                 });
                 bandByDateByBank[bank.bank_name] = byDate;
             });

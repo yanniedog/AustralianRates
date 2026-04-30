@@ -42,6 +42,22 @@
         return { minDate: minDate, maxDate: maxDate };
     }
 
+    /** True when bands payload has at least one series with usable points (avoids stale empty snapshots blocking live fetch). */
+    function reportBandsPayloadHasRenderableSeries(payload) {
+        if (!payload || payload.mode !== 'bands' || !Array.isArray(payload.series)) return false;
+        for (var i = 0; i < payload.series.length; i += 1) {
+            var pts = payload.series[i] && payload.series[i].points;
+            if (Array.isArray(pts) && pts.length > 0) return true;
+        }
+        return false;
+    }
+
+    /** Moves payload usable for charts (histogram / dual axis). Empty arrays are treated as non-cache-hit. */
+    function reportMovesPayloadHasRenderablePoints(payload) {
+        if (!payload || payload.mode !== 'moves' || !Array.isArray(payload.points)) return false;
+        return payload.points.length > 0;
+    }
+
     function earlierDate(left, right) {
         if (!left) return String(right || '');
         if (!right) return String(left || '');
@@ -114,5 +130,7 @@
         combinedDateRange: combinedDateRange,
         snapshotFiltersResolvedEndYmd: snapshotFiltersResolvedEndYmd,
         bankTrayEntriesFromBandsPayload: bankTrayEntriesFromBandsPayload,
+        reportBandsPayloadHasRenderableSeries: reportBandsPayloadHasRenderableSeries,
+        reportMovesPayloadHasRenderablePoints: reportMovesPayloadHasRenderablePoints,
     };
 })();

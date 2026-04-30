@@ -15,6 +15,9 @@
             var lo = positiveRibbonRateOrNull(point.min_rate);
             var hi = positiveRibbonRateOrNull(point.max_rate);
             var mean = positiveRibbonRateOrNull(point.mean_rate);
+            if (lo == null && mean != null) lo = mean;
+            if (hi == null && mean != null) hi = mean;
+            if (mean == null && lo != null && hi != null) mean = (lo + hi) / 2;
             var score = mean != null ? mean : (lo != null && hi != null ? (lo + hi) / 2 : (lo != null ? lo : hi));
             if (score == null) return;
             if (!latest || date > latest.date) {
@@ -39,6 +42,9 @@
                 var a = positiveRibbonRateOrNull(p.min_rate);
                 var b = positiveRibbonRateOrNull(p.max_rate);
                 var m = positiveRibbonRateOrNull(p.mean_rate);
+                if (a == null && m != null) a = m;
+                if (b == null && m != null) b = m;
+                if (m == null && a != null && b != null) m = (a + b) / 2;
                 if (a != null) {
                     lo = Math.min(lo, a);
                     hi = Math.max(hi, a);
