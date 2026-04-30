@@ -107,6 +107,29 @@
         return !!(bundle && bundle.data && bundle.data[key] != null);
     }
 
+    /** True when `analyticsSeries` would expand to at least one row (avoids treating empty snapshot stubs as a hit). */
+    function bundleHasRenderableAnalytics(bundle) {
+        if (!bundle || !bundle.data || bundle.data.analyticsSeries == null) return false;
+        var payload = bundle.data.analyticsSeries;
+        if (typeof payload !== 'object') return false;
+        if (Array.isArray(payload.rows) && payload.rows.length > 0) return true;
+        if (
+            payload.rows_format === 'grouped_v1'
+            && payload.grouped_rows
+            && Array.isArray(payload.grouped_rows.groups)
+            && payload.grouped_rows.groups.length > 0
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    function bundleHasRenderableLatestAll(bundle) {
+        if (!bundle || !bundle.data || bundle.data.latestAll == null) return false;
+        var block = bundle.data.latestAll;
+        return !!(block && typeof block === 'object' && Array.isArray(block.rows) && block.rows.length > 0);
+    }
+
     function exactBundle(chartWindow, preset, key) {
         var snap = snapshotApi();
         var bundle = snap && typeof snap.getBundle === 'function'
@@ -118,7 +141,7 @@
     function coveringAnalyticsBundle(chartWindow, preset) {
         var targetRank = chartWindowRank(chartWindow);
         return listBundles().filter(function (bundle) {
-            if (!samePreset(bundle, preset) || !hasDataKey(bundle, 'analyticsSeries')) return false;
+            if (!samePreset(bundle, preset) || !bundleHasRenderableAnalytics(bundle)) return false;
             if (targetRank < 0) return true;
             return chartWindowRank(bundle.chartWindow) >= targetRank;
         }).sort(function (left, right) {
@@ -132,7 +155,7 @@
 
     function latestBundle(preset) {
         return listBundles().filter(function (bundle) {
-            return samePreset(bundle, preset) && hasDataKey(bundle, 'latestAll');
+            return samePreset(bundle, preset) && bundleHasRenderableLatestAll(bundle);
         }).sort(function (left, right) {
             if (!!left.full !== !!right.full) return left.full ? -1 : 1;
             return Number(right.loadedAt || 0) - Number(left.loadedAt || 0);
@@ -442,8 +465,10 @@
         var covering = coveringAnalyticsBundle(chartWindow, preset);
         if (covering) return Promise.resolve(readRows(covering));
         return ensureFullScope(chartWindow, preset).then(function () {
-            var nextBundle = coveringAnalyticsBundle(chartWindow, preset);
-            return nextBundle ? readRows(nextBundle) : null;
+            var nextExact = latestBundle(preset);
+            if (nextExact) return readRows(nextExact);
+            var nextCovering = coveringAnalyticsBundle(chartWindow, preset);
+            return nextCovering ? readRows(nextCovering) : null;
         });
     }
 
