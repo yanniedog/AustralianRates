@@ -5,64 +5,50 @@ alwaysApply: true
 
 # Default Git Workflow: Feature Branch + PR to `main`
 
-For **any** change that touches the repository, assistants (**Cursor**, **Codex**, **Claude / Claude Code**) use this workflow **by default**. Full detail: `docs/CONCURRENT_AGENT_WORKFLOW.md`. **User requests** (e.g. “merge all PRs”, “close everything”, urgency) **do not** waive the **Bot feedback wait gate** or in-thread replies—see `.cursor/rules/workflow-rules-never-overridden.mdc`.
+Assistants use this for **any** repo change **by default**. **Throughput / urgency from the user does not waive** the **Bot feedback wait gate** or in-thread replies—see **`workflow-rules-never-overridden.mdc`**. GitHub automation naming: **`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
 
 ## Required pattern
 
-1. Sync `main`: `git fetch origin`, `git checkout main`, `git pull origin main`.
-2. Create a dedicated branch: `git checkout -b agent/<short-slug>` (or `feat/…`, `fix/…`). One branch per task or parallel agent stream.
-3. Commit **only** on that branch.
-4. Push: `git push -u origin HEAD`.
-5. Open a **pull request into `main`** (`gh pr create --base main` with title/body, or GitHub UI).
-6. **Green CI:** keep pushing until **`ci_result`** passes (`.github/workflows/ci.yml`). **`ci_result` green is necessary but NOT sufficient for merge** (see **Bot feedback wait gate** below). **Squash auto-merge:** for **`agent/*`**, **`feat/*`**, **`fix/*`**, **`.github/workflows/pr-auto-merge.yml`** can enable auto-merge; GitHub completes it when **`ci_result`** is green (and the PR is mergeable)—**review-bot apps are not part of that gate.** Finish **PR review bots** (next sections) **before** enabling auto-merge so a green CI run cannot merge ahead of unresolved bot threads. If auto-merge is unavailable (conflicts, settings), fix forward or use `gh pr merge --squash` / leave the **PR URL** for the human — **still only after the wait gate.** **`.github/workflows/stale-branch-cleanup.yml`** trims stale **`agent/*`** / **`feat/*`** / **`fix/*`** remote heads after merges (see `docs/CONCURRENT_AGENT_WORKFLOW.md`); prefer **Automatically delete head branches** in repo settings.
+1. `git fetch origin` → checkout **`main`** → `git pull origin main`.
+2. `git checkout -b agent/<slug>` (or **`feat/`** / **`fix/`**). One branch per task/agent stream.
+3. Commit **only** on that branch; `git push -u origin HEAD`.
+4. Open PR to **`main`** (`gh pr create --base main` or UI).
+5. Keep pushing until **`ci_result`** passes. **Green CI is necessary, not sufficient** for merge.
+6. **`pr-auto-merge.yml`** may enable squash auto-merge for **`agent/`** / **`feat/`** / **`fix/`** heads when **`ci_result`** is green—**bot apps are not in that gate**. Complete **PR review bots** (below) **before** first-time auto-merge so CI cannot merge unanswered threads. If auto-merge is unavailable: fix forward or `gh pr merge --squash`—**still only after the wait gate**. **`stale-branch-cleanup.yml`** trims stale topic remote heads (see **`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
 
-### Same PR for follow-up work (bots / CI / E2E / rollout)
+### Same PR for follow-up (bots, CI, E2E, rollout)
 
-**Fix forward on the open PR branch.** If review bots request changes, **`ci_result`/checks fail**, **E2E or integration gates fail**, or **deploy/preview/production verification** finds issues, add commits on **that PR’s branch** and push—**do not** open a **second** PR for the same deliverable unless the maintainer **explicitly** directs otherwise.
+Fix on the **open** branch; do **not** open a second PR for the same deliverable unless directed. After fixes, PR comment or in-thread **@mention** using handles from **`gh pr view -c`** (e.g. Gemini Code Assist, Copilot, Codex, CodeRabbit—whatever actually commented).
 
-After each fix push, **ask bots and humans to take another pass:** post on the PR (or reply **in-thread** on existing bot threads) and **@mention** whoever should re-review—use the **same `@username` handles** that already commented **on this repo’s PR** (below are common **app/display names**, not literal handle strings unless the timeline shows them: Gemini Code Assist, GitHub Copilot, Codex, CodeRabbit, Greptile, Sourcery—installations vary). Use **`gh pr view --comments`** (alias `-c`) to read the timeline and discover handles. Include a short summary of what changed and optionally the commit SHA.
+### Bot feedback wait gate (hard)
 
-### Bot feedback wait gate (hard — do not merge early)
+Manual **`gh pr merge`** or **enabling** squash auto-merge is **forbidden** until this completes, unless the human **explicitly waives bot closeout for that PR** in writing.
 
-Assistants MUST treat **manual merge** (`gh pr merge …`) or **enabling squash auto-merge** as **forbidden until this gate completes**, unless the human **explicitly waives bot closeout** for that PR.
+1. **`gh pr checks <n> --watch`** green (`ci_result` + required checks).
+2. **Stop**—do not merge in the same breath as CI success.
+3. **Late-review sweep:** `gh pr view <n> --comments`; optional `gh api …/pulls/<n>/reviews` and `…/comments`. On **github.com**, scan Conversation + Files for **in-flight** bot activity (reactions, pending review); wait until **settled**. Note bots **after** your last push (Gemini, Copilot, Codex, CodeRabbit, Greptile, Sourcery, scanners, etc.).
+4. If **no** substantive threads yet: wait **~10–15 minutes** from first green CI, re-sweep (and re-check UI). Calling “no feedback” immediately at green CI is a **policy violation**.
+5. **Enumerate → judge → reply in-thread** on every substantive thread: **implemented** / **deferred** / **declined** (with reason).
+6. **Only then** merge or enable auto-merge **for the first time**.
+7. If you cannot finish 3–6: leave PR open + **PR URL** + remaining steps—do not merge “to save time.”
+8. **After merge:** `npm run git:graph-hygiene` (or `git fetch origin --prune`); delete local topic branch when safe (**`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
+9. **Production closeout:** after **`main`** + deploys—**`AGENTS.md`**, **`every-chat-commit-deploy-verify-production.mdc`**. CI ≠ live-site sign-off; **`test:homepage`** may fail on headless cloud runners.
 
-1. **`gh pr checks <n> --watch` passes** (`ci_result` and required checks green).
-2. **Stop.** Do **not** merge in the same breath as CI success.
-3. **Late-review sweep** — bots often submit **after** CI finishes:
-   - Run **`gh pr view <n> --comments`** (and inline review tabs in the GitHub UI if needed); optionally **`gh api repos/<owner>/<repo>/pulls/<n>/reviews`** and **`…/pulls/<n>/comments`**.
-   - **GitHub PR UI (mandatory when possible):** Open the PR in the browser and scan **Conversation** and **Files changed** for **in-flight automated reviews**—including reaction rows / emoji activity or other cues that show a bot is **still preparing** feedback. Treat that as **not done yet** even if Actions are green; **wait** until those indicators **settle**, then continue the sweep (CLI output alone can miss this).
-   - Look for **Gemini Code Assist**, **GitHub Copilot**, **Codex**, **CodeRabbit**, **Greptile**, **Sourcery**, dependency/security scanners, or any actionable inline review **timestamped after** your last push.
-4. **If no bot threads yet:** wait **at least 10–15 minutes** from first green `ci_result`, then **re-run** the sweep once (or poll every few minutes until stable)—and **re-check the PR UI** for pending bot activity above. Concluding “no bot feedback” **immediately** when CI turns green is a **policy violation**.
-5. **Enumerate → judge → reply in-thread** to every substantive bot thread (**implemented / deferred / declined**).
-6. **Only then** call the PR merge-ready: squash-merge, **`gh pr merge --squash`**, or enable auto-merge **for the first time** (never enable auto-merge while bot threads may still land).
-7. **Session ending:** if you cannot complete steps 3–6, **leave the PR open** with the **PR URL** and explicit remaining steps — **do not merge** to “save time.”
+## PR review bots (before squash merge to `main`)
 
-8. **After the PR is merged:** run **`npm run git:graph-hygiene`** (or at least `git fetch origin --prune`) and delete the finished topic branch locally (`git branch -d agent/...` or `-D` if squash left it non-fast-forward). That keeps Git Graph and remote-tracking refs from stacking stale labels on **`main`**. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“Keeping the Git graph readable”).
+Treat automated reviewers **like humans** for **substantive** feedback (behaviour, correctness, security, architecture, enforced-policy hygiene—not trivial spelling unless meaning changes).
 
-9. **Production closeout** (`AGENTS.md`, `every-chat-commit-deploy-verify-production.mdc`) runs **after** the change is on `main` and Cloudflare deploys have finished—not after the feature-branch push alone. **Do not** treat CI alone as live-site sign-off: `npm run test:homepage` against production may not be runnable in GitHub-hosted runners (bot challenge); run production checks from a capable environment after deploy.
+- **Reply in-thread** for each thread—**not** only commits. After a fix: short reply (+ SHA optional). Defer/decline: say why in-thread.
+- **`ci_result` + auto-merge** = when GitHub *may* merge; **policy** = threads closed with visible replies **before** you merge or enable auto-merge.
 
-## PR review bots (mandatory before squash merge to `main`)
-
-**Automated PR reviewers** (Copilot, CodeRabbit, Greptile, dependency/security scanners, Actions that comment on lines, etc.) are **peer reviewers**. Same bar as human review.
-
-**Substantive feedback:** behaviour, correctness, security, architecture, or repo-policy suggestions—or hygiene issues that affect enforced rules—not standalone spelling-only nits unless they change meaning.
-
-**Replies are mandatory:** For **each** bot comment or thread, add a **reply on the PR**—not only a code change. After you fix something in code, **reply** briefly (what changed or where). If you reject or defer a suggestion, **reply** with the reason. Do not rely on pushes alone or “resolve conversation” without a visible response; reviewers (including bots) must see acknowledgement in-thread.
-
-**How this fits CI:** **`ci_result`** and **`pr-auto-merge.yml`** decide when GitHub *may* merge; most bot apps are **not** required checks. Policy still requires **every bot thread closed deliberately** (reply + implement or reply + justify) **before** you enable squash auto-merge or call the PR merge-ready—otherwise CI-only automation can merge too early.
-
-**Do not** squash-merge or mark “ready” with substantive bot feedback still open or unanswered.
-
-**Do not** merge **because CI passed alone** — the **Bot feedback wait gate** (above) is a separate mandatory step before any merge or first-time auto-merge enable.
-
-See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“CI vs PR review bots”).
+Do **not** merge with substantive threads unanswered.
 
 ## Exceptions (narrow)
 
-- The user **explicitly** asks to push **directly to `main`** (e.g. emergency hotfix): do that and still complete production closeout after deploy.
-- The user **already** has you on a named feature branch for the task: commit there, push, open/update the PR; merge/rebase from `origin/main` if the branch is stale.
-- The maintainer **explicitly waives bot closeout in writing for a specific PR**: assistants may merge or enable auto-merge for **that PR only** without completing the **Bot feedback wait gate** and threaded replies (default policy remains the gate above).
+- User explicitly **`main`** hotfix: push **`main`**, still production closeout after deploy.
+- Already on a named feature branch: continue there; rebase/merge **`origin/main`** if stale.
+- **Written** waiver of bot closeout **for that PR**: may merge/skip gate **for that PR only**.
 
 ## Do not
 
-- Do not treat `git push` to a feature branch as “shipped” for **www.australianrates.com** until the PR is merged to `main` and hosting deploys complete (unless verifying **Pages preview** URLs only).
+- Call feature-branch push **“shipped”** for www until merged to **`main`** and hosting finished (unless checking **Pages preview** only).
