@@ -8,11 +8,11 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="../foundation.css?v=d30e686e00">
     <link rel="stylesheet" href="../public-shell.css?v=5abed4c037">
-    <link rel="stylesheet" href="admin-layout.css?v=6354239a34">
-    <link rel="stylesheet" href="admin-pages.css?v=5594c2f51b">
+    <link rel="stylesheet" href="admin-layout.css?v=4e575d1466">
+    <link rel="stylesheet" href="admin-pages.css?v=6eb10979ea">
     <link rel="stylesheet" href="admin-exports.css?v=103724c851">
-    <script src="../site-variant.js?v=3fa6bb1046"></script>
-    <script src="../theme.js?v=f42ffd8ec5"></script>
+    <script src="../site-variant.js?v=c71ae0e0a2"></script>
+    <script src="../theme.js?v=76040c583e"></script>
 </head>
 <body class="ar-admin">
     <a href="#main-content" class="skip-link">Skip to content</a>
@@ -26,7 +26,8 @@
         <div class="admin-page-head">
             <p class="eyebrow">Export center</p>
             <h1>Full database dump</h1>
-            <p class="admin-subtitle">Create one single-file SQL dump of the entire D1 database for restore or replacement. A monthly backup (data for that month only) is generated automatically at 23:59 UTC on the last day of each month and appears in the job list below. Daily backups (one day of data each) are generated at 09:00 UTC for the previous Melbourne day and appear in the Daily backups section.</p>
+            <p class="admin-subtitle">Create one single-file SQL dump of the entire D1 database for restore or replacement.</p>
+            <p class="admin-cost-warning">Write-heavy/admin-heavy action. Check <a href="d1-usage.html">D1 usage</a> before full dumps, restores, or manual backup jobs.</p>
         </div>
         <div class="admin-message" id="exports-msg" role="status" aria-live="polite">
             <span class="admin-message-copy" id="exports-msg-copy"></span>
@@ -96,11 +97,11 @@
             </section>
         </div>
     </main>
-    <script src="../ar-time.js?v=1fc60cc8f5"></script>
+    <script src="../ar-time.js?v=a9c8fa03e7"></script>
     <script src="admin-portal.js?v=e6678ffa5b"></script>
-    <script src="admin-sidebar.js?v=6114d7314a"></script>
+    <script src="admin-sidebar.js?v=5cd756e1fc"></script>
     <script src="../ui-icons.js?v=0c1d292f12"></script>
-    <script src="../frame.js?v=c96cee988c"></script>
+    <script src="../frame.js?v=eb81d922ba"></script>
     <script src="../vendor/sheetjs/xlsx.full.min.js?v=15e3c93272"></script>
     <script src="admin-exports-view.js?v=30e8a7028f"></script>
     <script src="admin-exports-runtime.js?v=6b2a97441f"></script>

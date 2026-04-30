@@ -548,11 +548,15 @@
         }
         var timeRibbon = null;
         var tdTermTime = null;
+        var tdSettlementExpectations = null;
         if (fields.view === 'timeRibbon' && marketModule.buildTimeRibbonModel) {
             timeRibbon = marketModule.buildTimeRibbonModel(rows, fields, selectionState);
         }
         if (fields.view === 'tdTermTime' && marketModule.buildTdTermTimeModel) {
             tdTermTime = marketModule.buildTdTermTimeModel(rows, fields);
+        }
+        if (fields.view === 'tdSettlementExpectations' && marketModule.buildTdSettlementExpectationsModel) {
+            tdSettlementExpectations = marketModule.buildTdSettlementExpectationsModel(rows, fields);
         }
         var slope = (fields.view === 'slope') ? buildSlopeModel(rows, fields, density) : null;
         lenderRanking.activeEntry = lenderRanking.entries.find(function (entry) {
@@ -584,6 +588,7 @@
             tdCurveDates: tdCurveDates,
             timeRibbon: timeRibbon,
             tdTermTime: tdTermTime,
+            tdSettlementExpectations: tdSettlementExpectations,
             slope: slope,
             spotlight: spotlight,
         };
@@ -745,6 +750,7 @@
             tdCurveDates: null,
             timeRibbon: null,
             tdTermTime: null,
+            tdSettlementExpectations: null,
             slope: null,
             spotlight: spotlight,
         };
@@ -803,7 +809,6 @@
         if (!params || typeof params !== 'object') return true;
         if (params.bank || params.banks) return false;
         if (params.include_removed === 'true') return false;
-        if (params.include_manual === 'true') return false;
         if (isDisabledCompareEdgeCases(params.exclude_compare_edge_cases)) return false;
         if (params.start_date || params.end_date) return false;
         if (!isKnownChartWindow(params.chart_window)) return false;
@@ -955,10 +960,12 @@
     function fetchAnalyticsRows(params) {
         var queryParams = {};
         Object.keys(params || {}).forEach(function (key) {
+            if (key === '_bypassSnapshot') return;
             queryParams[key] = params[key];
         });
         queryParams.compact = '1';
-        if (chartLocalData && typeof chartLocalData.getAnalyticsRows === 'function') {
+        var bypassSnapshot = !!(params && params._bypassSnapshot);
+        if (!bypassSnapshot && chartLocalData && typeof chartLocalData.getAnalyticsRows === 'function') {
             return Promise.resolve(chartLocalData.getAnalyticsRows(queryParams)).then(function (localResult) {
                 if (localResult && (Array.isArray(localResult.rows) || (localResult.grouped_rows && Array.isArray(localResult.grouped_rows.groups)))) {
                     return localResult;
@@ -972,6 +979,7 @@
                     cache: policy.fetchCache,
                     skipCacheBust: policy.skipCacheBust,
                     sortQuery: policy.sortQuery,
+                    bypassSnapshot: bypassSnapshot,
                 }, function (result) {
                     return result && result.data ? result.data : result;
                 });
@@ -983,6 +991,28 @@
             timeoutMs: CHART_SERIES_TIMEOUT_MS,
             retryCount: 2,
             retryDelayMs: 900,
+            cache: policy.fetchCache,
+            skipCacheBust: policy.skipCacheBust,
+            sortQuery: policy.sortQuery,
+            bypassSnapshot: bypassSnapshot,
+        }, function (result) {
+            return result && result.data ? result.data : result;
+        });
+    }
+
+    function fetchSlicePairStats(params) {
+        var queryParams = {};
+        Object.keys(params || {}).forEach(function (key) {
+            queryParams[key] = params[key];
+        });
+        delete queryParams.representation;
+        delete queryParams.sort;
+        delete queryParams.dir;
+        var policy = buildRequestPolicy('/analytics/slice-pair-stats', queryParams, 'report-plot');
+        return fetchJsonWithPolicy(policy, 'slice-pair-stats', {
+            requestLabel: 'Slice pair stats',
+            timeoutMs: CHART_REPORT_TIMEOUT_MS,
+            retryCount: 0,
             cache: policy.fetchCache,
             skipCacheBust: policy.skipCacheBust,
             sortQuery: policy.sortQuery,
@@ -1253,6 +1283,7 @@
         buildSlopeModel: buildSlopeModel,
         fetchAllRateRows: fetchAllRateRows,
         fetchReportPlot: fetchReportPlot,
+        fetchSlicePairStats: fetchSlicePairStats,
         fetchReportProductHistory: fetchReportProductHistory,
         fetchRbaHistory: fetchRbaHistory,
         fetchCpiHistory: fetchCpiHistory,

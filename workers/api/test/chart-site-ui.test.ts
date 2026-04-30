@@ -132,4 +132,26 @@ describe('chart-site-ui', () => {
       expect(JSON.parse(roundTripped.value).gap_fill_enabled).toBe(false)
     }
   })
+
+  it('mergeChartRibbonStylePartial defaults slice pair table on; explicit false disables', () => {
+    expect(DEFAULT_CHART_RIBBON_STYLE.slice_pair_table_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({}).slice_pair_table_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: true } as Record<string, unknown>).slice_pair_table_enabled).toBe(
+      true,
+    )
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: false } as Record<string, unknown>).slice_pair_table_enabled).toBe(
+      false,
+    )
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: 1 } as Record<string, unknown>).slice_pair_table_enabled).toBe(true)
+    const m = mergeChartRibbonStylePartial({
+      slice_pair_font_px: 99,
+      slice_pair_text_color: '#nothex',
+      slice_pair_table_bg_color: '#aabbcc',
+      slice_pair_grid_width_px: 9,
+    } as Record<string, unknown>)
+    expect(m.slice_pair_font_px).toBe(18)
+    expect(m.slice_pair_text_color).toBe('')
+    expect(m.slice_pair_table_bg_color).toBe('#aabbcc')
+    expect(m.slice_pair_grid_width_px).toBe(4)
+  })
 })

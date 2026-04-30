@@ -5,7 +5,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { API_BASE_PATH, ECONOMIC_API_BASE_PATH, SAVINGS_API_BASE_PATH, TD_API_BASE_PATH } from './constants'
 import { HistoricalQualityAuditDO } from './durable/historical-quality-audit'
 import { RunLockDO } from './durable/run-lock'
-import { dispatchScheduledEvent } from './pipeline/scheduler-dispatch'
+import { dispatchScheduledEvent, scheduledTasksForCron } from './pipeline/scheduler-dispatch'
 import { consumeIngestQueue } from './queue/consumer'
 import { adminRoutes } from './routes/admin'
 import { economicPublicRoutes } from './routes/economic-public'
@@ -14,6 +14,7 @@ import { savingsPublicRoutes } from './routes/savings-public'
 import { tdPublicRoutes } from './routes/td-public'
 import type { AppContext, EnvBindings, IngestMessage } from './types'
 import { flushBufferedLogs, initLogger, log } from './utils/logger'
+import { createD1BudgetTracker, withD1BudgetTracking, type D1WorkloadClass } from './utils/d1-budget'
 
 const app = new Hono<AppContext>()
 
@@ -92,47 +93,74 @@ app.onError((error, c) => {
   return c.json({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } }, 500)
 })
 
+function classifyFetchWorkload(request: Request): D1WorkloadClass {
+  const url = new URL(request.url)
+  const path = url.pathname
+  const method = request.method.toUpperCase()
+  if (path.includes('/admin/')) return 'nonessential'
+  if (method !== 'GET' && method !== 'HEAD') return 'nonessential'
+  if (path.endsWith('/snapshot') || path.includes('/site-ui') || path.includes('/health')) return 'essential_serving'
+  if (path.includes('/analytics/') || path.includes('/latest') || path.includes('/filters')) return 'essential_serving'
+  return 'essential_serving'
+}
+
+function classifyScheduledWorkload(cron: string): D1WorkloadClass {
+  const tasks = scheduledTasksForCron(cron)
+  if (tasks.includes('daily')) return 'critical_coverage'
+  if (tasks.includes('public_package_refresh') || tasks.includes('site_health')) return 'essential_serving'
+  return tasks.length ? 'nonessential' : 'deferable'
+}
+
 const worker: ExportedHandler<EnvBindings, IngestMessage> = {
-  fetch(request, env, ctx) {
-    return app.fetch(request, env, ctx)
+  async fetch(request, env, ctx) {
+    const tracker = await createD1BudgetTracker(env, { workload: classifyFetchWorkload(request) })
+    try {
+      return await app.fetch(request, tracker.env, ctx)
+    } finally {
+      ctx.waitUntil(tracker.flush())
+    }
   },
 
   async scheduled(event, env): Promise<void> {
-    initLogger(env.DB)
     const cron = String((event as ScheduledController & { cron?: string }).cron || '')
-    log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()} (${cron || 'unknown'})`)
-    try {
-      const result = await dispatchScheduledEvent(event, env)
-      log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
-    } catch (error) {
-      log.error('scheduler', 'Scheduled run failed', {
-        error,
-        context: JSON.stringify({
-          scheduled_time: new Date(event.scheduledTime).toISOString(),
-          cron: cron || 'unknown',
-        }),
-      })
-      throw error
-    } finally {
-      await flushBufferedLogs()
-    }
+    await withD1BudgetTracking(env, async (trackedEnv) => {
+      initLogger(trackedEnv.DB)
+      log.info('scheduler', `Cron triggered at ${new Date(event.scheduledTime).toISOString()} (${cron || 'unknown'})`)
+      try {
+        const result = await dispatchScheduledEvent(event, trackedEnv)
+        log.info('scheduler', `Scheduled run completed`, { context: JSON.stringify(result) })
+      } catch (error) {
+        log.error('scheduler', 'Scheduled run failed', {
+          error,
+          context: JSON.stringify({
+            scheduled_time: new Date(event.scheduledTime).toISOString(),
+            cron: cron || 'unknown',
+          }),
+        })
+        throw error
+      } finally {
+        await flushBufferedLogs()
+      }
+    }, { workload: classifyScheduledWorkload(cron) })
   },
 
-  async queue(batch, env): Promise<void> {
-    initLogger(env.DB)
-    try {
-      await consumeIngestQueue(batch, env)
-    } catch (error) {
-      log.error('consumer', 'Queue batch processing failed', {
-        error,
-        context: JSON.stringify({
-          messages: batch.messages.length,
-        }),
-      })
-      throw error
-    } finally {
-      await flushBufferedLogs()
-    }
+  async queue(batch, env, ctx): Promise<void> {
+    await withD1BudgetTracking(env, async (trackedEnv) => {
+      initLogger(trackedEnv.DB)
+      try {
+        await consumeIngestQueue(batch, trackedEnv, ctx)
+      } catch (error) {
+        log.error('consumer', 'Queue batch processing failed', {
+          error,
+          context: JSON.stringify({
+            messages: batch.messages.length,
+          }),
+        })
+        throw error
+      } finally {
+        await flushBufferedLogs()
+      }
+    }, { workload: 'critical_coverage' })
   },
 }
 

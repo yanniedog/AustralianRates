@@ -24,12 +24,6 @@
     var RUN_PROGRESS_POLL_MS = 2500;
     var RUN_PROGRESS_MAX_FAILURES = 4;
 
-    function enableManualRunFilter() {
-        if (els.filterIncludeManual && !els.filterIncludeManual.checked) {
-            els.filterIncludeManual.checked = true;
-        }
-    }
-
     function isTriggerCooldownActive() {
         return triggerCooldownUntil > Date.now();
     }
@@ -243,7 +237,6 @@
 
     function handleAcceptedResponse(res) {
         clearTriggerCooldown();
-        enableManualRunFilter();
         var runId = getRunId(res.body);
         clientLog('info', 'Manual run trigger accepted', {
             runId: runId || null,

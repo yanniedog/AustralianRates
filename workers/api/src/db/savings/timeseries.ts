@@ -43,7 +43,21 @@ export async function querySavingsTimeseries(db: D1Database, input: SavingsTimes
   if (input.depositTier) { where.push('t.deposit_tier = ?'); binds.push(input.depositTier) }
   addBalanceBandOverlapWhere(where, binds, 't.min_balance', 't.max_balance', input.balanceMin, input.balanceMax)
   applySavingsCompareEdgeExclusions(where, 't.product_name', input.excludeCompareEdgeCases)
-  if (!input.includeRemoved) where.push('COALESCE(pps.is_removed, 0) = 0')
+  if (!input.includeRemoved) {
+    where.push('COALESCE(pps.is_removed, 0) = 0')
+    where.push(`NOT EXISTS (
+      SELECT 1
+      FROM historical_savings_rates q
+      WHERE q.collection_date = t.collection_date
+        AND q.bank_name = t.bank_name
+        AND q.product_id = t.product_id
+        AND q.account_type = t.account_type
+        AND q.rate_type = t.rate_type
+        AND q.deposit_tier = t.deposit_tier
+        AND q.quarantine_reason IS NOT NULL
+        AND TRIM(q.quarantine_reason) != ''
+    )`)
+  }
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) { where.push('t.collection_date >= ?'); binds.push(input.startDate) }
   if (input.endDate) { where.push('t.collection_date <= ?'); binds.push(input.endDate) }

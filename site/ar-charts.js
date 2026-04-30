@@ -119,6 +119,17 @@
         return null;
     }
 
+    function refreshHeroSlicePair(baseParams) {
+        if (!chartData || typeof chartData.fetchSlicePairStats !== 'function') return;
+        var heroApi = window.AR && window.AR.hero ? window.AR.hero : null;
+        if (!heroApi || typeof heroApi.setSlicePairStats !== 'function') return;
+        chartData.fetchSlicePairStats(baseParams).then(function (payload) {
+            heroApi.setSlicePairStats(payload || null);
+        }).catch(function () {
+            if (typeof heroApi.clearSlicePairStats === 'function') heroApi.clearSlicePairStats();
+        });
+    }
+
     function disposeCharts() {
         chartState.mainChart = disposeChart(chartState.mainChart);
         chartState.detailChart = disposeChart(chartState.detailChart);
@@ -185,6 +196,11 @@
         }
         if (currentFields.view === 'tdTermTime' && model.tdTermTime) {
             parts.push(model.tdTermTime.terms.length + ' terms');
+            return parts.filter(Boolean).join(' | ');
+        }
+        if (currentFields.view === 'tdSettlementExpectations' && model.tdSettlementExpectations) {
+            parts.push(model.tdSettlementExpectations.categories.length + ' settlement dates');
+            parts.push(model.tdSettlementExpectations.snapshotDateDisplay || '');
             return parts.filter(Boolean).join(' | ');
         }
         if (currentFields.view === 'lenders' || currentFields.view === 'ladder') {
@@ -395,6 +411,12 @@
                 if (chartUi.setStatus) chartUi.setStatus('No term vs time data');
                 return;
             }
+            if (currentFields.view === 'tdSettlementExpectations' && (!model.tdSettlementExpectations || !model.tdSettlementExpectations.categories || !model.tdSettlementExpectations.categories.length)) {
+                if (chartUi.clearErrorState) chartUi.clearErrorState();
+                clearOutput('No settlement curve data');
+                if (chartUi.setStatus) chartUi.setStatus('No settlement curve data');
+                return;
+            }
             if (currentFields.view === 'lenders' && (!model.lenderRanking || !model.lenderRanking.entries.length)) {
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
                 clearOutput('No lender match');
@@ -430,7 +452,7 @@
                     return;
                 }
             }
-            var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime';
+            var timeViews = currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'tdSettlementExpectations';
             var slopeOrLadder = currentFields.view === 'slope' || currentFields.view === 'ladder';
             if (!timeViews && !slopeOrLadder && currentFields.view !== 'market' && currentFields.view !== 'distribution' && (!model.visibleSeries.length || !model.surface.cells.length)) {
                 if (chartUi.clearErrorState) chartUi.clearErrorState();
@@ -594,7 +616,7 @@
         if ((section === 'savings' || section === 'term-deposits') && !String(params.min_rate || '').trim()) {
             params.min_rate = '0.01';
         }
-        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
+        var dayRepViews = currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'tdSettlementExpectations' || currentFields.view === 'slope' || currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport';
         params.representation = dayRepViews ? 'day' : (currentFields.representation || 'change');
         if (currentFields.view === 'economicReport' || currentFields.view === 'homeLoanReport' || currentFields.view === 'termDepositReport') {
             var shared = window.AR.chartMacroLwcShared;
@@ -753,6 +775,8 @@
         var baseParams = buildBaseParams();
         await awaitSnapshotBootstrap(baseParams, 2500);
 
+        refreshHeroSlicePair(baseParams);
+
         chartState.loadedChartWindow = String(baseParams.chart_window || '');
         chartState.fallbackReason = '';
         chartState.stale = false;
@@ -840,9 +864,14 @@
 
         chartLoadPromise = (async function () {
             var baseParams = buildBaseParams();
-            await awaitSnapshotBootstrap(baseParams, 2500);
             var currentFields = fields();
             var currentView = currentFields.view;
+            if (currentView === 'tdSettlementExpectations') {
+                baseParams._bypassSnapshot = true;
+            } else {
+                await awaitSnapshotBootstrap(baseParams, 2500);
+            }
+            refreshHeroSlicePair(baseParams);
             var wantsReportPlots = isReportView(currentView);
             var reportPreviewRendered = false;
             var reportPlotPromise = wantsReportPlots && chartData.fetchReportPlot
@@ -1073,7 +1102,7 @@
             drawChart();
             return;
         }
-        if ((currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'slope') && chartState.loadedRepresentation !== 'day') {
+        if ((currentFields.view === 'market' || currentFields.view === 'timeRibbon' || currentFields.view === 'tdTermTime' || currentFields.view === 'tdSettlementExpectations' || currentFields.view === 'slope') && chartState.loadedRepresentation !== 'day') {
             drawChart();
             return;
         }
@@ -1097,7 +1126,7 @@
 
     function toggleSeries(seriesKey) {
         if (!seriesKey) return;
-        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'slope' || fields().view === 'ladder') {
+        if (fields().view === 'market' || fields().view === 'timeRibbon' || fields().view === 'tdTermTime' || fields().view === 'tdSettlementExpectations' || fields().view === 'slope' || fields().view === 'ladder') {
             if (fields().view === 'market') chartState.marketFocusKey = seriesKey;
             if (!chartState.stale) renderFromCache();
             return;

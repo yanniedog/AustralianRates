@@ -1,0 +1,7 @@
+DATAFLOW,MEASURE,REGION,SERIES_TYPE,TIME_PERIOD,OBS_VALUE,UNIT_MEASURE
+CPI_M,annual_movement,AUS,seasonally_adjusted,2025-07,2.8,Per cent
+CPI_M,annual_movement,AUS,seasonally_adjusted,2025-08,3.0,Per cent
+CPI_M,trimmed_mean_annual_movement,AUS,seasonally_adjusted,2025-07,2.7,Per cent
+CPI_M,trimmed_mean_annual_movement,AUS,seasonally_adjusted,2025-08,2.9,Per cent
+LF_H,underutilisation_rate,AUS,seasonally_adjusted,2026-02,10.2,Per cent
+LF_H,underutilisation_rate,AUS,seasonally_adjusted,2026-03,10.4,Per cent

@@ -171,6 +171,26 @@
         mount.className = 'lwc-chart-mount lwc-chart-mount--report-plot';
         mount.style.cssText = 'width:100%;flex:1;min-height:180px;position:relative;';
         wrapper.appendChild(mount);
+        var reportHoverBox = document.createElement('div');
+        reportHoverBox.className = 'ar-report-hoverbox';
+        reportHoverBox.setAttribute('aria-hidden', 'true');
+        reportHoverBox.style.cssText = [
+            'position:absolute',
+            'top:8px',
+            'left:10px',
+            'z-index:20',
+            'display:none',
+            'max-width:min(520px, calc(100vw - 28px))',
+            'padding:7px 9px',
+            'border:1px solid ' + theme.ttBorder,
+            'border-radius:6px',
+            'background:' + theme.ttBg,
+            'color:' + theme.ttText,
+            'font:11px/1.45 "Space Grotesk",system-ui,sans-serif',
+            'box-shadow:0 14px 28px rgba(0,0,0,0.16)',
+            'pointer-events:none',
+            'font-variant-numeric:tabular-nums'
+        ].join(';');
         var ribbonHierarchyPanel = createRibbonHierarchyPanel(theme, escHtml);
         if (ribbonHierarchyHost && typeof ribbonHierarchyHost.insertBefore === 'function') {
             ribbonHierarchyHost.insertBefore(ribbonHierarchyPanel.el, ribbonHierarchyHost.firstChild || null);
@@ -186,6 +206,7 @@
         }
 
         var chart = echarts.init(mount, null, { renderer: 'canvas' });
+        mount.appendChild(reportHoverBox);
         /** Ribbons + overlays use left % axis (index 0); grid also has yAxis 1 (e.g. moves count). */
         var ribbonAxisFinder = { gridIndex: 0, xAxisIndex: 0, yAxisIndex: 0 };
         var dates = buildDateRange(range.viewStart, range.ctxMax);
@@ -211,7 +232,7 @@
             return d && d >= String(range.viewStart || '').slice(0, 10) && d <= String(range.ctxMax || '').slice(0, 10);
         });
         var rbaChangeMarkPairs = bandsReportEarly
-            ? buildRbaChangeMarkAreaPairs(dates, rbaDecisionsWindow, range.viewStart, range.ctxMax)
+            ? buildRbaChangeMarkAreaPairs(dates, rbaDecisionsWindow, range.viewStart, range.ctxMax, prep.rbaData.decisions)
             : [];
 
         var series = [
@@ -255,7 +276,11 @@
                 }),
                 markArea: {
                     silent: true,
-                    itemStyle: { color: 'rgba(234, 179, 8, 0.14)' },
+                    itemStyle: {
+                        color: 'rgba(234, 179, 8, 0.42)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(202, 138, 4, 0.55)',
+                    },
                     data: rbaChangeMarkPairs,
                 },
             });
@@ -299,7 +324,9 @@
         var leaderFocusListener = null;
 
         if (isBandsMode) {
-            ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor);
+            ribbonCanvasModel = buildRibbonCanvasProductModel(dates, options.allSeries || [], options.bankColor, {
+                section: section,
+            });
             useRibbonCanvas = false;
             productOverlay = [];
             series.push({
@@ -361,7 +388,12 @@
         var ribbonAutoSpotlightBank = ribbonSummaryData.spotlightBank || '';
         var ribbonProductBank = '';
         var ribbonTrayHoverBank = '';
-        var lastPointerDate = ribbonSummaryData.spotlightDate || '';
+        /** Default scrub anchor: window end (snapshot/filters); spotlight from band payload can lag last ingest day. */
+        var windowEndYmd = dates.length ? String(dates[dates.length - 1] || '').slice(0, 10) : '';
+        var spotlightYmd = String(ribbonSummaryData.spotlightDate || '').slice(0, 10);
+        var lastPointerDate = '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(windowEndYmd)) lastPointerDate = windowEndYmd;
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(spotlightYmd)) lastPointerDate = spotlightYmd;
         var ribbonListHoverKeys = null;
         var ribbonHoverScopeMap = {};
         var ribbonHoverScopeSeq = 0;
@@ -875,6 +907,218 @@
         function hideRibbonInfoBox() {
             var ib = options.infoBox;
             if (ib && typeof ib.hide === 'function') ib.hide();
+        }
+
+        function fmtHoverRate(value) {
+            var n = Number(value);
+            return Number.isFinite(n) ? n.toFixed(2) + '%' : 'n/a';
+        }
+
+        function reportProductLabel(prod) {
+            if (!prod) return 'Product';
+            return [prod.bankName || '', prod.productName || 'Product'].filter(Boolean).join(' \u00b7 ');
+        }
+
+        function findRibbonProductByKey(key) {
+            var want = String(key || '');
+            if (!want) return null;
+            var flat = (ribbonCanvasModel && ribbonCanvasModel.flat) || [];
+            for (var i = 0; i < flat.length; i += 1) {
+                if (String(flat[i] && flat[i].key || '') === want) return flat[i];
+            }
+            return null;
+        }
+
+        function visibleRibbonProducts() {
+            var scoped = isBandsMode ? currentScopedProductKeys() : [];
+            var flat = (ribbonCanvasModel && ribbonCanvasModel.flat) || [];
+            if (!scoped.length) return flat.slice();
+            var wanted = {};
+            scoped.forEach(function (key) { wanted[String(key)] = true; });
+            return flat.filter(function (prod) {
+                return !!(prod && prod.key && wanted[String(prod.key)]);
+            });
+        }
+
+        function ribbonVisibleProductRateAt(prod, ymd) {
+            return positiveRibbonRateOrNull(prod && prod.byDate ? prod.byDate[String(ymd || '').slice(0, 10)] : null);
+        }
+
+        /**
+         * Movement counts for visible ribbon product lines: calendar previous chart day vs hovered day.
+         * Mirrors DB slice-pair classification on rounded basis points: ROUND((d-p)*100).
+         */
+        function buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            var prev = String(prevYmd || '').slice(0, 10);
+            var out = {
+                up_count: 0,
+                flat_count: 0,
+                down_count: 0,
+                prev_missing_count: 0,
+                curr_missing_count: 0,
+                both_missing_count: 0,
+                universe_total: 0,
+            };
+            if (!anchor || !prev || !visibleProducts || !visibleProducts.length) return out;
+            visibleProducts.forEach(function (prod) {
+                var rp = ribbonVisibleProductRateAt(prod, prev);
+                var rd = ribbonVisibleProductRateAt(prod, anchor);
+                out.universe_total += 1;
+                if (rp == null && rd == null) {
+                    out.both_missing_count += 1;
+                } else if (rp == null && rd != null) {
+                    out.prev_missing_count += 1;
+                } else if (rd == null && rp != null) {
+                    out.curr_missing_count += 1;
+                } else {
+                    var deltaBp = Math.round((rd - rp) * 100);
+                    if (deltaBp > 0) out.up_count += 1;
+                    else if (deltaBp < 0) out.down_count += 1;
+                    else out.flat_count += 1;
+                }
+            });
+            return out;
+        }
+
+        function buildRibbonSlicePairTableHtml(visibleProducts, anchorYmd, prevYmd, rs) {
+            if (!rs || !rs.slice_pair_table_enabled) return '';
+            var stats = buildRibbonVisibleSlicePairCounts(visibleProducts, anchorYmd, prevYmd);
+            if (!stats.universe_total) return '';
+            var fw = Math.max(7, Math.min(18, Math.round(Number(rs.slice_pair_font_px) || 11)));
+            var tCol = String(rs.slice_pair_text_color || '').trim();
+            var textHex = /^#[0-9a-fA-F]{6}$/.test(tCol) ? tCol : String(theme.ttText || '#94a3b8');
+            var textA = Number(rs.slice_pair_text_alpha);
+            if (!Number.isFinite(textA)) textA = 1;
+            textA = Math.max(0, Math.min(1, textA));
+            var textRgba = hexToRgba(textHex, textA);
+            var bgCol = String(rs.slice_pair_table_bg_color || '').trim();
+            var bgHex = /^#[0-9a-fA-F]{6}$/.test(bgCol) ? bgCol : '#020617';
+            var bgA = Number(rs.slice_pair_table_bg_alpha);
+            if (!Number.isFinite(bgA)) bgA = 0.22;
+            bgA = Math.max(0, Math.min(0.92, bgA));
+            var bgRgba = hexToRgba(bgHex, bgA);
+            var gCol = String(rs.slice_pair_grid_color || '').trim();
+            var gHex = /^#[0-9a-fA-F]{6}$/.test(gCol) ? gCol : '#64748b';
+            var gA = Number(rs.slice_pair_grid_alpha);
+            if (!Number.isFinite(gA)) gA = 0.35;
+            gA = Math.max(0, Math.min(1, gA));
+            var gridRgba = hexToRgba(gHex, gA);
+            var gw = Number(rs.slice_pair_grid_width_px);
+            if (!Number.isFinite(gw)) gw = 1;
+            gw = Math.max(0, Math.min(4, gw));
+            var borderCss = gw > 0 ? (gw + 'px solid ' + gridRgba) : 'none';
+            var prev = String(prevYmd || '').slice(0, 10);
+            var em = '\u2014';
+            function cellVal(n) {
+                if (!prev) return em;
+                return String(Number.isFinite(n) ? n : 0);
+            }
+            var rows = [
+                { h: '\u2191', v: cellVal(stats.up_count) },
+                { h: '\u2192', v: cellVal(stats.flat_count) },
+                { h: '\u2193', v: cellVal(stats.down_count) },
+                { h: '-x', v: cellVal(stats.prev_missing_count) },
+                { h: 'x-', v: cellVal(stats.curr_missing_count) },
+                { h: 'xx', v: cellVal(stats.both_missing_count) },
+            ];
+            var title = prev
+                ? ('Visible products vs prior chart day ' + prev + ' (n=' + String(stats.universe_total) + ').')
+                : 'No prior day in range.';
+            var rowHtml = rows.map(function (r) {
+                return '<tr>' +
+                    '<th scope="row" style="text-align:left;font-weight:600;padding:1px 5px 1px 2px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.h) + '</th>' +
+                    '<td style="text-align:right;font-weight:700;padding:1px 2px 1px 5px;white-space:nowrap;border:' + borderCss + '">' + escHtml(r.v) + '</td>' +
+                    '</tr>';
+            }).join('');
+            return '<div role="region" aria-label="Slice pair counts" title="' + escHtml(title) + '" style="margin-top:5px;padding:3px 4px;border-radius:4px;background:' + bgRgba + ';color:' + textRgba + ';font-size:' + fw + 'px;line-height:1.2;width:max-content;max-width:100%;overflow:visible">' +
+                '<table style="border-collapse:collapse;table-layout:auto;width:auto;white-space:nowrap;color:inherit">' +
+                '<tbody>' + rowHtml + '</tbody></table></div>';
+        }
+
+        function showReportHoverBox(input) {
+            if (!reportHoverBox || !input) return;
+            var rows = input.rows || [];
+            var sliceBlock = input.slicePairTableHtml || '';
+            if (!rows.length && !sliceBlock) {
+                reportHoverBox.style.display = 'none';
+                return;
+            }
+            reportHoverBox.innerHTML =
+                '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">' + escHtml(input.heading || 'Chart') + '</div>' +
+                '<div style="color:' + theme.muted + ';font-size:10px;margin-bottom:5px;white-space:nowrap;">' + escHtml(input.date || '') + '</div>' +
+                rows.map(function (row) {
+                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid rgba(148,163,184,0.14);padding-top:2px;margin-top:2px;white-space:nowrap;">' +
+                        '<span style="color:' + theme.muted + ';">' + escHtml(row.label) + '</span>' +
+                        '<strong style="white-space:nowrap;">' + escHtml(row.value) + '</strong>' +
+                    '</div>';
+                }).join('') +
+                sliceBlock;
+            reportHoverBox.style.display = 'block';
+        }
+
+        function syncReportHoverBox(anchorYmd, bankName) {
+            var anchor = String(anchorYmd || '').slice(0, 10);
+            if (!anchor || dates.indexOf(anchor) < 0) {
+                if (reportHoverBox) reportHoverBox.style.display = 'none';
+                return;
+            }
+            var rs = getRibbonStyleResolved();
+            var idx = dates.indexOf(anchor);
+            var prevYmd = idx > 0 ? dates[idx - 1] : '';
+            var visibleProducts = visibleRibbonProducts();
+            var sliceHtml = buildRibbonSlicePairTableHtml(visibleProducts, anchor, prevYmd, rs);
+            if (visibleProducts.length === 1) {
+                var prod = visibleProducts[0];
+                var rate = prod && prod.byDate ? prod.byDate[anchor] : null;
+                showReportHoverBox({
+                    heading: reportProductLabel(prod),
+                    date: fmtReportDateYmd(anchor),
+                    rows: [{ label: 'Rate', value: fmtHoverRate(rate) }],
+                    slicePairTableHtml: sliceHtml,
+                });
+                return;
+            }
+            var values = [];
+            visibleProducts.forEach(function (prod) {
+                var v = prod && prod.byDate ? Number(prod.byDate[anchor]) : NaN;
+                if (Number.isFinite(v) && v > 0) values.push(v);
+            });
+            if (!values.length) {
+                if (sliceHtml && rs && rs.slice_pair_table_enabled) {
+                    showReportHoverBox({
+                        heading: 'Visible ribbon',
+                        date: fmtReportDateYmd(anchor),
+                        rows: [
+                            { label: 'Min', value: '\u2014' },
+                            { label: 'Mean', value: '\u2014' },
+                            { label: 'Max', value: '\u2014' },
+                        ],
+                        slicePairTableHtml: sliceHtml,
+                    });
+                    return;
+                }
+                if (reportHoverBox) reportHoverBox.style.display = 'none';
+                return;
+            }
+            var min = values[0];
+            var max = values[0];
+            var sum = 0;
+            values.forEach(function (v) {
+                if (v < min) min = v;
+                if (v > max) max = v;
+                sum += v;
+            });
+            showReportHoverBox({
+                heading: 'Visible ribbon',
+                date: fmtReportDateYmd(anchor),
+                rows: [
+                    { label: 'Min', value: fmtHoverRate(min) },
+                    { label: 'Mean', value: fmtHoverRate(sum / values.length) },
+                    { label: 'Max', value: fmtHoverRate(max) },
+                ],
+                slicePairTableHtml: sliceHtml,
+            });
         }
 
         function showRibbonEmptyPanel(heading, meta, message) {
@@ -1445,9 +1689,11 @@
             syncRibbonTrayUi();
         }
 
-        var tooltipConfig = isBandsMode
-            ? { show: false }
-            : { trigger: 'axis', axisPointer: { type: 'line' } };
+        var tooltipConfig = {
+            trigger: 'axis',
+            showContent: false,
+            axisPointer: { type: 'line' },
+        };
 
         if (options.infoBox && options.infoBox.el) {
             wrapper.appendChild(options.infoBox.el);
@@ -1456,6 +1702,18 @@
         chart.setOption({
             animation: false,
             grid: { top: 14, right: reportGridRight, bottom: 36, left: 8, containLabel: true },
+            axisPointer: {
+                link: [{ xAxisIndex: [0] }],
+                label: {
+                    backgroundColor: theme.crosshairLabelBg || theme.ttBg,
+                    borderColor: theme.ttBorder,
+                    borderWidth: 1,
+                    color: theme.ttText,
+                    fontSize: 10,
+                    padding: [3, 6],
+                },
+                lineStyle: { color: theme.crosshairLine || theme.axis, width: 1.4, type: 'dashed' },
+            },
             tooltip: tooltipConfig,
             legend: { show: false },
             xAxis: {
@@ -1502,6 +1760,16 @@
                 },
             ],
             series: series,
+        });
+
+        chart.on('updateAxisPointer', function (ev) {
+            var ax0 = ev && ev.axesInfo && ev.axesInfo[0];
+            if (!ax0) return;
+            var anchor = resolveDateFromAxisValue(ax0.value);
+            if (!anchor) return;
+            setRibbonAnchorDate(anchor);
+            syncReportHoverBox(anchor, ribbonChartHighlightBank());
+            if (isBandsMode) refreshRibbonUnderChartPanel();
         });
 
         if (isBandsMode) {
@@ -1831,6 +2099,30 @@
                 ribbonWorkspace.addEventListener('pointerleave', onRibbonWorkspacePointerLeave);
             }
 
+            try {
+                var zr = chart.getZr();
+                var onRibbonChartMove = function (ev) {
+                    var pt = [ev.offsetX, ev.offsetY];
+                    var dataCoord = chart.convertFromPixel(ribbonAxisFinder, pt);
+                    if (!dataCoord || dataCoord.length < 2) return;
+                    var anchor = resolveDateFromAxisValue(dataCoord[0]);
+                    if (!anchor) return;
+                    setRibbonAnchorDate(anchor);
+                    syncReportHoverBox(anchor);
+                    applyRibbonBankHighlightState(ribbonChartHighlightBank());
+                    if (isBandsMode) refreshRibbonUnderChartPanel();
+                    syncRibbonTrayUi();
+                    if (useRibbonCanvas) scheduleRibbonRedraw();
+                };
+                var onRibbonChartOut = function () {
+                    if (reportHoverBox) reportHoverBox.style.display = 'none';
+                };
+                zr.on('mousemove', onRibbonChartMove);
+                zr.on('globalout', onRibbonChartOut);
+                zrRibbonSubs.push({ type: 'mousemove', fn: onRibbonChartMove });
+                zrRibbonSubs.push({ type: 'globalout', fn: onRibbonChartOut });
+            } catch (_zrErr) {}
+
             chart.on('finished', function () {
                 applyRibbonBankHighlightState();
                 if (!ribbonUnderchartSyncedOnFinish) {
@@ -1930,6 +2222,8 @@
         attachLwcMovesPane: attachLwcMovesPane,
         payloadDateRange: chartReportPlotPayloadUtils.payloadDateRange,
         fallbackSeriesDateBoundsFromModel: chartReportPlotPayloadUtils.fallbackSeriesDateBoundsFromModel,
+        combinedDateRange: chartReportPlotPayloadUtils.combinedDateRange,
+        snapshotFiltersResolvedEndYmd: chartReportPlotPayloadUtils.snapshotFiltersResolvedEndYmd,
         bankTrayEntriesFromBandsPayload: chartReportPlotPayloadUtils.bankTrayEntriesFromBandsPayload,
         render: render,
     };

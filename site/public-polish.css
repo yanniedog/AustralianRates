@@ -144,6 +144,11 @@ body.ar-public :focus-visible {
     outline-offset: 2px;
 }
 
+body.ar-public #main-content:focus,
+body.ar-public #main-content:focus-visible {
+    outline: none;
+}
+
 /* ── Site footer: compact data-first footer (replaces bare disclaimer) ─ */
 
 body.ar-public .site-footer {

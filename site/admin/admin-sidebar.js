@@ -15,18 +15,19 @@
 
     var items = [
         { href: 'dashboard.html', label: 'Dashboard' },
+        { href: 'd1-usage.html', label: 'D1 usage' },
         { href: 'settings.html', label: 'Settings' },
-        { href: 'prototypes.html', label: 'Prototype' },
         { href: 'status.html', label: 'Status' },
+        { href: 'db-stats.html', label: 'Database size' },
+        { href: 'exports.html', label: 'Exports' },
+        { href: 'runs.html', label: 'Runs' },
+        { href: 'logs.html', label: 'Logs' },
         { href: 'integrity.html', label: 'Data integrity' },
         { href: 'historical-quality.html', label: 'Historical quality' },
         { href: 'database.html', label: 'Database' },
-        { href: 'db-stats.html', label: 'Database size' },
-        { href: 'exports.html', label: 'Exports' },
-        { href: 'clear.html', label: 'Clear data' },
         { href: 'config.html', label: 'Configuration' },
-        { href: 'runs.html', label: 'Runs' },
-        { href: 'logs.html', label: 'Logs' }
+        { href: 'clear.html', label: 'Clear data' },
+        { href: 'prototypes.html', label: 'Prototype' }
     ];
 
     function escapeHtml(value) {

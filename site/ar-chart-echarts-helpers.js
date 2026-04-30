@@ -18,28 +18,39 @@
         return document.documentElement.getAttribute('data-theme') === 'light';
     }
 
+    function cssVar(name, fallback) {
+        try {
+            var value = window.getComputedStyle(document.body).getPropertyValue(name).trim();
+            return value || fallback;
+        } catch (_err) {
+            return fallback;
+        }
+    }
+
     var DATA_FONT = '"JetBrains Mono", "SF Mono", "Consolas", "Monaco", "ui-monospace", monospace';
 
     function chartTheme() {
         var light = isLightTheme();
+        var accent = cssVar('--ar-section-accent', light ? '#2563eb' : '#4f8dfd');
+        var accentSoft = cssVar('--ar-section-soft', light ? 'rgba(37, 99, 235, 0.14)' : 'rgba(79, 141, 253, 0.18)');
         return {
             emphasisText: light ? '#0c1220' : '#f0f6ff',
             mutedText: light ? '#4a5c72' : '#94a3b8',
-            shadowAccent: light ? 'rgba(37, 99, 235, 0.2)' : 'rgba(79, 141, 253, 0.28)',
+            shadowAccent: accentSoft,
             softText: light ? '#1e3a52' : '#b8c5d6',
             splitLine: light ? 'rgba(59, 78, 104, 0.08)' : 'rgba(226, 232, 240, 0.06)',
             surfaceScale: light
-                ? ['#eef6ff', '#93c5fd']
-                : ['#1e3a5f', '#2563eb'],
+                ? ['#f8fafc', accent]
+                : ['#111827', accent],
             text: light ? '#0f172a' : '#e2e8f0',
             tooltipBackground: light ? '#ffffff' : '#0f1419',
-            tooltipBorder: light ? 'rgba(37, 99, 235, 0.35)' : 'rgba(79, 141, 253, 0.35)',
+            tooltipBorder: accent,
             tooltipShadow: light
-                ? 'box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06); border-radius: 10px;'
-                : 'box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.08); border-radius: 10px;',
+                ? 'box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12); border-radius: 8px;'
+                : 'box-shadow: 0 20px 40px rgba(0, 0, 0, 0.32); border-radius: 8px;',
             tooltipText: light ? '#0f172a' : '#e2e8f0',
             axisLine: light ? 'rgba(59, 78, 104, 0.35)' : 'rgba(226, 232, 240, 0.18)',
-            crosshairLine: light ? 'rgba(37, 99, 235, 0.55)' : 'rgba(99, 179, 237, 0.6)',
+            crosshairLine: accent,
             crosshairLabelBg: light ? 'rgba(255,255,255,0.98)' : 'rgba(15, 20, 25, 0.96)',
             focusBlurOpacity: 0.2,
             dataFont: DATA_FONT,

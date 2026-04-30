@@ -36,6 +36,11 @@ import { getRbaHistory } from '../db/rba-cash-rate'
 import { getCpiHistory } from '../db/cpi-data'
 import { queryReportPlotPayload } from '../db/report-plot'
 import {
+  queryHomeLoanSlicePairStats,
+  querySavingsSlicePairStats,
+  queryTdSlicePairStats,
+} from '../db/slice-pair-stats'
+import {
   collectHomeLoanAnalyticsRowsResolved,
   collectSavingsAnalyticsRowsResolved,
   collectTdAnalyticsRowsResolved,
@@ -156,6 +161,70 @@ async function buildLatestAllEntry(
   return { ok: true, count: rows.length, rows }
 }
 
+/**
+ * Maximum number of calendar-day pairs to walk back when the most recent pair
+ * has no comparable products (every series in `prev_missing`/`curr_missing`/
+ * `both_missing`). This prevents an in-progress or stalled ingest from
+ * publishing a zeroed `↑→↓ ?*!` indicator on the public ribbon.
+ */
+const SLICE_PAIR_FALLBACK_DAYS = 5
+
+function pairHasComparableSeries(counts: { up_count: number; flat_count: number; down_count: number }): boolean {
+  return (counts.up_count + counts.flat_count + counts.down_count) > 0
+}
+
+async function querySlicePairCounts(
+  db: D1Database,
+  section: DatasetKind,
+  latestFilters: ScopedFilters,
+  pYmd: string,
+  dYmd: string,
+): Promise<Awaited<ReturnType<typeof queryHomeLoanSlicePairStats>>> {
+  if (section === 'home_loans') {
+    return queryHomeLoanSlicePairStats(db, latestFilters as import('../db/home-loans/shared').LatestFilters, pYmd, dYmd)
+  }
+  if (section === 'savings') {
+    return querySavingsSlicePairStats(db, latestFilters as import('../db/savings/shared').LatestSavingsFilters, pYmd, dYmd)
+  }
+  return queryTdSlicePairStats(db, latestFilters as import('../db/term-deposits/shared').LatestTdFilters, pYmd, dYmd)
+}
+
+async function computeSlicePairStatsPayload(
+  db: D1Database,
+  section: DatasetKind,
+  filters: ScopedFilters,
+): Promise<Record<string, unknown>> {
+  const lf = buildLatestAllFilters(filters)
+  const { limit: _omit, ...latestFilters } = lf as ScopedFilters & { limit?: number }
+  const sectionKey = section === 'home_loans' ? 'home_loans' : section === 'savings' ? 'savings' : 'term_deposits'
+
+  let dYmd = filters.endDate
+  let pYmd = previousCalendarUtcDay(dYmd)
+  let counts = await querySlicePairCounts(db, section, latestFilters, pYmd, dYmd)
+  let fallbackDays = 0
+  while (!pairHasComparableSeries(counts) && fallbackDays < SLICE_PAIR_FALLBACK_DAYS) {
+    fallbackDays += 1
+    dYmd = pYmd
+    pYmd = previousCalendarUtcDay(dYmd)
+    counts = await querySlicePairCounts(db, section, latestFilters, pYmd, dYmd)
+  }
+  return {
+    section: sectionKey,
+    d: dYmd,
+    p: pYmd,
+    requested_d: filters.endDate,
+    fallback_days: fallbackDays,
+    ...counts,
+  }
+}
+
+function previousCalendarUtcDay(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return ymd
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 async function collectAnalyticsRows(
   db: D1Database,
   section: DatasetKind,
@@ -231,6 +300,7 @@ export async function buildSnapshotPayload(
     safeEntry('reportPlotBands', () =>
       queryReportPlotPayload(db, section, 'bands', filters as Parameters<typeof queryReportPlotPayload>[3]),
     ),
+    safeEntry('slicePairStats', () => computeSlicePairStatsPayload(db, section, filters)),
   ]
 
   const results = await Promise.all(fetchers)
@@ -301,7 +371,27 @@ async function handleSnapshotRequest(c: Context<AppContext>, section: DatasetKin
   const query = c.req.query()
   const scope = resolveRequestScope(section, query.chart_window, query.preset)
   const wantsLite = parseBooleanQuery(query.lite)
-  const payload = await getCachedOrComputeSnapshot(c.env, section, scope, () => buildSnapshotPayload(c.env, section, scope))
+  let payload: Awaited<ReturnType<typeof getCachedOrComputeSnapshot>>
+  try {
+    // KV-only would 503 after SNAPSHOT_PAYLOAD_VERSION bumps until cron repopulates.
+    // D1 then live compute backfill cache; responses still use public Cache-Control.
+    payload = await getCachedOrComputeSnapshot(c.env, section, scope, () =>
+      buildSnapshotPayload(c.env, section, scope),
+    )
+  } catch {
+    c.header('Cache-Control', 'no-store')
+    c.header('X-AR-Cache', 'miss')
+    c.header('X-AR-Snapshot-Scope', scope)
+    return c.json(
+      {
+        ok: false,
+        error: 'SNAPSHOT_PACKAGE_UNAVAILABLE',
+        section,
+        scope,
+      },
+      503,
+    )
+  }
   const data = wantsLite
     ? trimSnapshotDataForHtmlInline(payload.section, String(payload.scope), payload.builtAt, payload.data) || {}
     : payload.data

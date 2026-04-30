@@ -17,11 +17,10 @@ import type { LenderConfig } from '../../types.js'
 import { detectExplicitOffsetAccountValue } from './mortgage-offset.js'
 import { productUrlFromDetail, publishedAtFromDetail } from './detail-metadata.js'
 import { asArray, getText, isRecord, pickText, type JsonRecord } from './primitives.js'
+import { isCdrHomeLoanProduct } from './product-classification.js'
 
 export function isResidentialMortgage(product: JsonRecord): boolean {
-  const category = pickText(product, ['productCategory', 'category', 'type']).toUpperCase()
-  const name = pickText(product, ['name', 'productName']).toUpperCase()
-  return category.includes('MORTGAGE') || name.includes('MORTGAGE') || name.includes('HOME LOAN')
+  return isCdrHomeLoanProduct(product, { allowNameFallback: true })
 }
 
 function extractRatesArray(detail: JsonRecord): JsonRecord[] {
@@ -235,7 +234,7 @@ export function parseRatesFromDetail(input: {
   const detail = input.detail
   const productId = pickText(detail, ['productId', 'id'])
   const productName = normalizeProductName(pickText(detail, ['name', 'productName']))
-  const isLikelyMortgageProduct = isResidentialMortgage(detail) || isProductNameLikelyRateProduct(productName)
+  const isLikelyMortgageProduct = isCdrHomeLoanProduct(detail, { allowNameFallback: true }) || isProductNameLikelyRateProduct(productName)
   if (!productId || !productName || !isLikelyMortgageProduct) {
     return []
   }

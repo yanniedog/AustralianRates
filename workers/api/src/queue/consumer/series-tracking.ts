@@ -17,8 +17,10 @@ export async function markProductsSeenForRun(
     bankName: string
     collectionDate: string
     productIds: string[]
+    skip?: boolean
   },
 ): Promise<void> {
+  if (input.skip) return
   const rows = Array.from(new Set(input.productIds))
     .filter(Boolean)
     .map((productId) => ({
@@ -40,8 +42,10 @@ export async function markHomeLoanSeriesSeenForRun(
     lenderCode: string
     collectionDate: string
     rows: NormalizedRateRow[]
+    skip?: boolean
   },
 ): Promise<void> {
+  if (input.skip) return
   await markRunSeenSeriesBatch(
     db,
     input.rows.map((row) => ({
@@ -64,8 +68,10 @@ export async function markSavingsSeriesSeenForRun(
     lenderCode: string
     collectionDate: string
     rows: NormalizedSavingsRow[]
+    skip?: boolean
   },
 ): Promise<void> {
+  if (input.skip) return
   await markRunSeenSeriesBatch(
     db,
     input.rows.map((row) => ({
@@ -88,8 +94,10 @@ export async function markTdSeriesSeenForRun(
     lenderCode: string
     collectionDate: string
     rows: NormalizedTdRow[]
+    skip?: boolean
   },
 ): Promise<void> {
+  if (input.skip) return
   await markRunSeenSeriesBatch(
     db,
     input.rows.map((row) => ({

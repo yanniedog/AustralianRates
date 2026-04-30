@@ -28,6 +28,7 @@ export type CoverageGapAuditReport = {
     completed_detail_count: number
     failed_detail_count: number
     written_row_count: number
+    unchanged_row_count?: number
     finalized_at: string | null
     updated_at: string
   }>
@@ -64,6 +65,7 @@ function toRow(row: LenderDatasetGapRow): CoverageGapAuditReport['rows'][number]
     completed_detail_count: Number(row.completed_detail_count || 0),
     failed_detail_count: Number(row.failed_detail_count || 0),
     written_row_count: Number(row.written_row_count || 0),
+    unchanged_row_count: Number(row.unchanged_row_count || 0),
     finalized_at: row.finalized_at,
     updated_at: row.updated_at,
   }
@@ -119,6 +121,8 @@ export async function runCoverageGapAudit(
     idleMinutes?: number
     limit?: number
     persist?: boolean
+    /** When false, still persists the report but does not emit coverage_gap_audit_detected_gaps (e.g. post-remediation re-audit). */
+    emitDetectedGapsLog?: boolean
   } = {},
 ): Promise<CoverageGapAuditReport> {
   const generatedAt = new Date().toISOString()
@@ -153,11 +157,12 @@ export async function runCoverageGapAudit(
     await setAppConfig(env.DB, COVERAGE_GAP_REPORT_KEY, JSON.stringify(report))
   }
 
+  const emitGapLog = input.emitDetectedGapsLog !== false
   if (report.ok) {
     log.info('scheduler', 'coverage_gap_audit_ok', {
       context: `collection_date=${collectionDate || 'none'} idle_minutes=${idleMinutes}`,
     })
-  } else {
+  } else if (emitGapLog) {
     log.error('scheduler', 'coverage_gap_audit_detected_gaps', {
       code: 'coverage_slo_breach',
       context: JSON.stringify({

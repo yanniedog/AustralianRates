@@ -12,7 +12,7 @@ Whenever you make code or config changes in this Cursor chat, you must **commit 
    - Stage: `git add` (relevant paths or `.` as appropriate).
    - Commit: `git commit -m "brief description of change"`.
    - Push: `git push -u origin HEAD` (feature branch) or `git push origin main` **only** for an explicit hotfix on `main`.
-3. **Pull request** – Open or update a **PR to `main`** (`gh pr create --base main` or UI); keep CI green before merge.
+3. **Pull request** – Open or update a **PR to `main`** (`gh pr create --base main` or UI); keep CI green; complete **`git-pr-workflow-default.mdc`** **Bot feedback wait gate** (**not** immediate merge when CI passes); address **every** PR review bot thread **with replies** before merge or before enabling squash auto-merge.
 4. **Scope** – Commit only the changes made in this conversation; use a message that describes what was done.
 5. **No skip** – Do not leave the repo with uncommitted or unpushed changes unless the user explicitly asks you to stop before syncing.
 

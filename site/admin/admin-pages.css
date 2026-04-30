@@ -141,6 +141,7 @@
 .admin-status #history-wrap,
 .admin-status #cdr-audit-overview,
 .admin-status #cdr-audit-wrap,
+.admin-integrity #findings-wrap,
 .admin-runs #backlog-tables {
     max-width: 100%;
     overflow: auto;
@@ -184,6 +185,170 @@
 }
 .admin-status .integrity-empty a {
     color: var(--ar-accent);
+}
+
+.admin-cost-warning {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--ar-warning) 42%, var(--ar-line));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-warning) 8%, var(--ar-surface));
+    color: var(--ar-text-soft);
+    font-size: 0.82rem;
+}
+
+.admin-cost-warning a {
+    color: var(--ar-warning);
+    font-weight: 700;
+}
+
+.d1-guard-grid,
+.d1-usage-bars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.d1-usage-bars {
+    align-items: end;
+    min-height: 210px;
+    padding: 10px 0 0;
+    border-bottom: 1px solid var(--ar-line);
+}
+
+.d1-guard-grid .pill.pass {
+    border-color: color-mix(in srgb, var(--ar-positive) 40%, var(--ar-line));
+    color: var(--ar-positive);
+}
+
+.d1-guard-grid .pill.warn {
+    border-color: color-mix(in srgb, var(--ar-warning) 44%, var(--ar-line));
+    color: var(--ar-warning);
+}
+
+.d1-guard-grid .pill.error {
+    border-color: color-mix(in srgb, var(--ar-danger) 44%, var(--ar-line));
+    color: var(--ar-danger);
+}
+
+.d1-bar-day {
+    display: grid;
+    grid-template-columns: 12px;
+    grid-template-rows: 1fr auto;
+    gap: 3px;
+    align-items: end;
+    justify-items: center;
+    min-width: 20px;
+    height: 190px;
+}
+
+.d1-bar-day small {
+    grid-column: 1 / -1;
+    color: var(--ar-text-muted);
+    font-size: 0.64rem;
+    text-align: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.d1-bar {
+    display: block;
+    width: 12px;
+    border-radius: 4px 4px 0 0;
+}
+
+.d1-bar-read {
+    background: var(--ar-accent);
+}
+
+.d1-bar-write {
+    background: var(--ar-warning);
+}
+
+.d1-billing-note {
+    margin: 0 0 0.75rem;
+    max-width: 72ch;
+}
+
+.d1-meter-block {
+    margin-bottom: 1rem;
+}
+
+.d1-meter-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.35rem 1rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.d1-meter {
+    height: 10px;
+    background: color-mix(in srgb, var(--ar-line) 88%, transparent);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.d1-meter-fill {
+    height: 100%;
+    min-width: 2px;
+    background: var(--ar-accent);
+    border-radius: 5px;
+    transition: width 0.2s ease;
+}
+
+.d1-meter-over .d1-meter-fill {
+    background: var(--ar-danger);
+}
+
+.d1-meter-cap {
+    font-size: 0.72rem;
+    color: var(--ar-text-muted);
+    margin-top: 0.2rem;
+}
+
+.d1-proj-grid {
+    margin-top: 1rem;
+}
+
+.d1-chart-scroll {
+    overflow-x: auto;
+    margin: 0.5rem 0 0;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+    background: var(--ar-surface);
+}
+
+.d1-trend-svg {
+    display: block;
+    min-width: 100%;
+    height: 220px;
+}
+
+.d1-trend-bg {
+    fill: color-mix(in srgb, var(--ar-surface) 96%, var(--ar-line));
+}
+
+.d1-line-raw {
+    stroke: var(--ar-accent);
+    stroke-width: 2;
+}
+
+.d1-line-ma {
+    stroke: var(--ar-positive);
+    stroke-width: 2;
+}
+
+.d1-trend-line {
+    stroke: var(--ar-warning);
+    stroke-width: 1.5;
+}
+
+.d1-trend-meta {
+    margin: 0.35rem 0 0;
+    font-size: 0.78rem;
 }
 
 .admin-status .integrity-audit-traffic {

@@ -48,6 +48,23 @@ function defaultChartWindowForSection(section) {
     return '';
 }
 
+/** Consumer-first public pages: inline the consumer-default snapshot (aligned with site/ar-snapshot.js). */
+function inferInlineSnapshotPreset(section, searchParams) {
+    if (section === 'term-deposit-rates') return '';
+    const view = String(searchParams.get('view') || '').trim().toLowerCase();
+    if (view === 'analyst') return '';
+    if (section === 'home-loan-rates' || section === 'savings-rates') return 'consumer-default';
+    return '';
+}
+
+function resolveSnapshotQueryForInline(section, searchParams) {
+    const chartWindow =
+        normaliseChartWindow(searchParams.get('chart_window')) || defaultChartWindowForSection(section);
+    const explicit = normalisePreset(searchParams.get('preset'));
+    const preset = explicit || inferInlineSnapshotPreset(section, searchParams);
+    return { chartWindow, preset };
+}
+
 function buildScope(chartWindow, preset) {
     if (preset === 'consumer-default' && chartWindow) return 'preset:consumer-default:window:' + chartWindow;
     if (preset === 'consumer-default') return 'preset:consumer-default';
@@ -192,8 +209,9 @@ async function fetchSnapshotFromKv(env, sectionApiName, chartWindow, preset) {
 
 async function fetchSnapshotWithTimeout(origin, section, params) {
     const qs = new URLSearchParams();
-    const chartWindow = normaliseChartWindow(params.get('chart_window')) || defaultChartWindowForSection(section);
-    const preset = normalisePreset(params.get('preset'));
+    const snapQ = resolveSnapshotQueryForInline(section, params);
+    const chartWindow = snapQ.chartWindow;
+    const preset = snapQ.preset;
     if (chartWindow) qs.set('chart_window', chartWindow);
     if (preset) qs.set('preset', preset);
     qs.set('lite', '1');
@@ -255,13 +273,18 @@ export async function onRequest(context) {
     const contentType = (originalResponse.headers.get('content-type') || '').toLowerCase();
     if (!contentType.includes('text/html')) return wrapOriginalResponse(originalResponse, 'bypass-html');
 
-    const chartWindow = normaliseChartWindow(url.searchParams.get('chart_window')) || defaultChartWindowForSection(section);
-    const preset = normalisePreset(url.searchParams.get('preset'));
+    const snapQ = resolveSnapshotQueryForInline(section, url.searchParams);
+    const chartWindow = snapQ.chartWindow;
+    const preset = snapQ.preset;
 
     const kvBound = !!(env && env.CHART_CACHE_KV);
     // Prefer direct KV read when the Pages project has the CHART_CACHE_KV binding
     // attached — avoids the zone routing loop that causes self-fetch 404s.
     let result = await fetchSnapshotFromKv(env, section, chartWindow, preset);
+    if ((!result || !result.ok) && kvBound) {
+        const diag = 'kv+';
+        return wrapOriginalResponse(originalResponse, 'miss:' + diag + ':' + (result ? result.reason : 'kv-unavailable'));
+    }
     if (!result || !result.ok) {
         // Fall back to HTTP subrequest (works when CF doesn't route back to Pages).
         result = await fetchSnapshotWithTimeout(url.origin, section, url.searchParams);

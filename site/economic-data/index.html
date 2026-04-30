@@ -17,7 +17,7 @@
     <meta property="og:description" content="Normalized compare charts for macro indicators that shape the RBA path, collected daily from public official sources.">
     <meta property="og:url" content="https://www.australianrates.com/economic-data/">
     <meta property="og:site_name" content="AustralianRates">
-    <script src="../site-variant.js?v=3fa6bb1046"></script>
+    <script src="../site-variant.js?v=c71ae0e0a2"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap">
@@ -27,9 +27,10 @@
     <link rel="stylesheet" href="../public-showcase-hero.css?v=4faf4aee22">
     <link rel="stylesheet" href="../responsive.css?v=6337843280">
     <link rel="stylesheet" href="../mobile-host.css?v=99a83ff1d3">
-    <link rel="stylesheet" href="../economic-data.css?v=c142b265cd">
-    <link rel="stylesheet" href="../public-polish.css?v=9a75534abd">
-    <script src="../theme.js?v=f42ffd8ec5"></script>
+    <link rel="stylesheet" href="../economic-data.css?v=56f4e4add4">
+    <link rel="stylesheet" href="../public-polish.css?v=d8e5e28191">
+    <link rel="stylesheet" href="../public-modern.css?v=4b13512066">
+    <script src="../theme.js?v=76040c583e"></script>
     <script src="../ar-polish-init.js?v=250bf4eb1e" defer></script>
 </head>
 <body class="ar-public ar-section-economic-data" data-ar-section="economic-data">
@@ -37,7 +38,7 @@
     <header class="site-header">
         <div class="site-header-inner">
             <h1 class="site-brand"><a href="/">AustralianRates</a></h1>
-            <nav class="site-header-segment" aria-label="Rate products">
+            <nav class="site-header-segment" aria-label="Rate products" data-guide-target="product-nav">
                 <a href="/" class="site-header-segment-link">Mortgage</a>
                 <a href="/savings/" class="site-header-segment-link">Savings</a>
                 <a href="/term-deposits/" class="site-header-segment-link">Term Deposits</a>
@@ -63,18 +64,17 @@
                     <span class="market-intro-session-label">session::economic-data</span>
                     <span class="market-intro-session-status">live</span>
                 </div>
-                <p class="eyebrow">Australian Economic Data Dashboard</p>
-                <h1 class="market-intro-title">Track macro indicators that shape the RBA path.</h1>
-                <p class="market-intro-summary">The chart defaults to normalized compare mode, rebasing each selected series to 100 at the start of the visible window. Hover always shows raw values, units, frequency, source, and proxy status.</p>
+                <p class="eyebrow" aria-label="RBA Signal Dashboard"><abbr title="Reserve Bank of Australia">RBA</abbr> Signal Dashboard</p>
+                <h1 class="market-intro-title">Australian policy signals.</h1>
             </div>
             <div class="economic-hero-stats">
                 <article class="terminal-stat">
-                    <span class="metric-code">Preset</span>
-                    <strong id="economic-active-preset">RBA Watchlist</strong>
+                    <span class="metric-code">Bias</span>
+                    <strong id="economic-signal-bias">Loading...</strong>
                 </article>
                 <article class="terminal-stat">
-                    <span class="metric-code">Series</span>
-                    <strong id="economic-selected-count">5 selected</strong>
+                    <span class="metric-code">Market</span>
+                    <strong id="economic-signal-market">...</strong>
                 </article>
                 <article class="terminal-stat">
                     <span class="metric-code">Status</span>
@@ -82,24 +82,36 @@
                 </article>
             </div>
         </section>
+        <section class="economic-signal-strip" aria-label="RBA signal summary">
+            <article><span>Cash rate</span><strong id="economic-signal-cash">...</strong></article>
+            <article><span><abbr title="Consumer Price Index">CPI</abbr> gap</span><strong id="economic-signal-inflation">...</strong></article>
+            <article><span>Labour</span><strong id="economic-signal-labour">...</strong></article>
+            <article><span>Wages</span><strong id="economic-signal-wages">...</strong></article>
+            <article><span>Updated</span><strong id="economic-signal-updated">...</strong></article>
+        </section>
         <section class="market-terminal economic-terminal" aria-label="Economic data workspace">
             <section class="terminal-column terminal-column-center">
-                <section id="chart" class="panel terminal-panel terminal-stage-panel" aria-label="Economic chart">
+                <section id="chart" class="panel terminal-panel terminal-stage-panel" aria-label="Economic chart" data-guide-target="main-chart">
                     <div class="chart-block">
                         <div class="chart-block-head">
                             <div class="terminal-panel-head">
                                 <span class="panel-code">CHT</span>
-                                <h2 class="terminal-panel-title">Normalized Compare</h2>
+                                <h2 class="terminal-panel-title"><abbr title="Reserve Bank of Australia">RBA</abbr> Signal</h2>
                             </div>
-                            <p id="chart-meta" class="hint">Index = 100 at the start of the visible range for each selected series.</p>
+                            <div id="economic-chart-mode-row" class="economic-chip-row" role="group" aria-label="Chart mode" data-guide-target="mode-controls">
+                                <button type="button" class="chip-btn secondary" data-chart-mode="signal">Signal</button>
+                                <button type="button" class="chip-btn secondary" data-chart-mode="raw">Raw values</button>
+                                <button type="button" class="chip-btn secondary active" data-chart-mode="indexed">Indexed</button>
+                            </div>
                         </div>
-                        <section id="scenario" class="economic-selection-panel" aria-label="Indicator controls">
+                        <p id="chart-meta" class="hint">Index = 100 at the start of the visible range for each selected series.</p>
+                        <section id="scenario" class="economic-selection-panel" aria-label="Indicator controls" data-guide-target="filters">
                             <div class="economic-selection-head">
                                 <span class="panel-code">SET</span>
-                                <h2 class="terminal-panel-title">Indicator Set</h2>
+                                <h2 class="terminal-panel-title">Indicators</h2>
                             </div>
                             <div class="economic-picker-row">
-                                <details id="economic-preset-picker" class="economic-picker" open>
+                                <details id="economic-preset-picker" class="economic-picker">
                                     <summary class="economic-picker-summary">
                                         <span class="economic-picker-title">Preset</span>
                                         <span id="economic-preset-summary" class="economic-picker-count">RBA Watchlist</span>
@@ -124,14 +136,14 @@
                                                 <input type="checkbox" id="economic-multiselect">
                                                 <span>Multiselect mode</span>
                                             </label>
-                                            <span class="hint" id="economic-selection-mode-note">Single-select mode.</span>
+                                            <span class="hint" id="economic-selection-mode-note">Single-select.</span>
                                         </div>
                                         <div id="category-groups" class="economic-groups" aria-live="polite"></div>
                                     </div>
                                 </details>
                             </div>
                         </section>
-                        <div class="economic-toolbar">
+                        <div class="economic-toolbar" data-guide-target="range-controls">
                             <div class="economic-toolbar-row">
                                 <div id="range-row" class="economic-chip-row" role="group" aria-label="Date range shortcuts">
                                     <button type="button" class="chip-btn secondary" data-range="1Y">1Y</button>
@@ -143,18 +155,70 @@
                                 <button type="button" id="economic-y-scale" class="economic-y-scale-btn" aria-pressed="true" aria-label="Y-axis scale: logarithmic. Click to use linear.">log</button>
                             </div>
                             <p id="economic-range-note" class="hint">Loading current range...</p>
-                            <p id="economic-y-scale-note" class="hint">Loading scale…</p>
+                            <p id="economic-y-scale-note" class="hint">Loading scale...</p>
                         </div>
                         <div id="economic-chart" class="economic-chart" role="img" aria-label="Economic data chart"></div>
                         <p id="economic-empty" class="terminal-inline-feedback" hidden></p>
+                        <section class="economic-component-panel" aria-label="Signal components" data-guide-target="data-table">
+                            <div class="economic-selection-head">
+                                <span class="panel-code">SIG</span>
+                                <h2 class="terminal-panel-title">Component Scores</h2>
+                            </div>
+                            <div class="economic-component-table-wrap">
+                                <table class="economic-component-table">
+                                    <thead>
+                                        <tr><th>Signal</th><th>Value</th><th>Change</th><th>Score</th><th>Freshness</th></tr>
+                                    </thead>
+                                    <tbody id="economic-component-body"></tbody>
+                                </table>
+                            </div>
+                        </section>
                     </div>
                 </section>
             </section>
+        </section>
+        <section class="panel economic-forward-panel" aria-label="Bank forward pricing proxy">
+            <div class="economic-forward-head">
+                <div class="terminal-panel-head">
+                    <span class="panel-code">FWD</span>
+                    <h2 class="terminal-panel-title">Bank Pricing Path</h2>
+                </div>
+                <div id="forward-pricing-mode-row" class="economic-chip-row" role="group" aria-label="Forward pricing display mode">
+                    <button type="button" class="chip-btn secondary active" data-forward-mode="spread">Spread</button>
+                    <button type="button" class="chip-btn secondary" data-forward-mode="rate">Median rate</button>
+                </div>
+            </div>
+            <div class="economic-forward-stats">
+                <article><span><abbr title="Reserve Bank of Australia">RBA</abbr></span><strong id="forward-pricing-rba">...</strong></article>
+                <article><span><abbr title="Term deposit">TD</abbr> spread</span><strong id="forward-pricing-td-slope">...</strong></article>
+                <article><span>Mortgage spread</span><strong id="forward-pricing-mortgage-slope">...</strong></article>
+                <article><span>Rows</span><strong id="forward-pricing-sample">...</strong></article>
+                <article><span>Status</span><strong id="forward-pricing-status">Loading...</strong></article>
+            </div>
+            <p id="forward-pricing-meta" class="hint">Loading bank forward pricing...</p>
+            <div id="forward-pricing-chart" class="economic-forward-chart" role="img" aria-label="Term deposit and fixed mortgage pricing by maturity date"></div>
+            <div class="economic-forward-table-wrap">
+                <table class="economic-component-table economic-forward-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="is-sortable" data-sort-key="series" aria-sort="none">Series <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable" data-sort-key="maturityDate" aria-sort="none">Maturity date <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable is-num" data-sort-key="median" aria-sort="none">Median <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" id="forward-pricing-spread-col" class="is-sortable is-num" data-sort-key="spreadBp" aria-sort="none">Spread <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable is-num" data-sort-key="bankCount" aria-sort="none">Banks <span class="sort-indicator" aria-hidden="true"></span></th>
+                            <th scope="col" class="is-sortable is-num" data-sort-key="rowCount" aria-sort="none">Rows <span class="sort-indicator" aria-hidden="true"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="forward-pricing-table-body"></tbody>
+                </table>
+            </div>
         </section>
         <div hidden aria-hidden="true">
             <div id="economic-series-list"></div>
             <div id="economic-point-details"></div>
             <div id="economic-source-list"></div>
+            <span id="economic-active-preset"></span>
+            <span id="economic-selected-count"></span>
         </div>
     </main>
     <footer class="site-footer" role="contentinfo">
@@ -165,7 +229,7 @@
                 <span aria-hidden="true">-</span>
                 Public official sources
                 <span aria-hidden="true">-</span>
-                <a class="site-footer-data-link" href="/api/economic-data/catalog">Catalog</a>
+                <a class="site-footer-data-link" href="/api/economic-data/catalog" data-guide-target="export-help">Catalog</a>
                 <a class="site-footer-data-link" href="/api/economic-data/health">API status</a>
             </span>
             <nav class="site-footer-nav" aria-label="Site">
@@ -184,14 +248,20 @@
     <script src="../vendor/echarts/echarts.min.js?v=e84270bd0c"></script>
     <script src="../ar-utils.js?v=d6faaf3a6f"></script>
     <script src="../ui-icons.js?v=0c1d292f12"></script>
-    <script src="../ar-time.js?v=1fc60cc8f5"></script>
+    <script src="../ar-time.js?v=a9c8fa03e7"></script>
     <script src="../ar-section-config.js?v=36c348bcfb"></script>
     <script src="../ar-config.js?v=ab0129871d"></script>
-    <script src="../ar-network.js?v=9025b53bf6"></script>
-    <script src="../ar-chart-site-ui.js?v=8b536c871f"></script>
-    <script src="../ar-chart-echarts-helpers.js?v=7e8d0c75ab"></script>
-    <script src="../economic-data.js?v=10843fdf63"></script>
-    <script src="../frame.js?v=c96cee988c"></script>
+    <script src="../ar-network.js?v=6cdee29af2"></script>
+    <script src="../ar-chart-site-ui.js?v=6cb5e51ba0"></script>
+    <script src="../ar-chart-echarts-helpers.js?v=3430968c14"></script>
+    <script src="../economic-chart-axis.js?v=9792e5130d"></script>
+    <script src="../economic-signals.js?v=a363ba3168"></script>
+    <script src="../economic-legend-stack.js?v=37876617ef"></script>
+    <script src="../economic-forward-pricing.js?v=9bc9adda99"></script>
+    <script src="../economic-data.js?v=0a95a9f55e"></script>
+    <script src="../frame.js?v=eb81d922ba"></script>
+    <script src="../ar-donate.js?v=95e3bb6c00"></script>
+    <script src="../ar-guide.js?v=d81a3108bf"></script>
     <script src="../site-variant-ui.js?v=b4ffd8ea84"></script>
 </body>
 </html>

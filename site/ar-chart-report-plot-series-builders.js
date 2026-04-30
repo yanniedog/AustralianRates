@@ -104,6 +104,16 @@
             others_grey_mix: 0.62,
             active_z: 48,
             inactive_z: 2,
+            gap_fill_enabled: true,
+            slice_pair_table_enabled: true,
+            slice_pair_font_px: 11,
+            slice_pair_text_color: '',
+            slice_pair_text_alpha: 1,
+            slice_pair_table_bg_color: '',
+            slice_pair_table_bg_alpha: 0.22,
+            slice_pair_grid_color: '',
+            slice_pair_grid_alpha: 0.35,
+            slice_pair_grid_width_px: 1,
         };
     }
 
@@ -218,9 +228,15 @@
     }
 
     /** One-category-wide vertical strips at RBA cash-rate change dates (in view). */
-    function buildRbaChangeMarkAreaPairs(dates, decisions, viewStartYmd, ctxMaxYmd) {
+    function buildRbaChangeMarkAreaPairs(dates, decisions, viewStartYmd, ctxMaxYmd, allDecisions) {
         var vs = String(viewStartYmd || '').slice(0, 10);
         var ve = String(ctxMaxYmd || '').slice(0, 10);
+        var full = Array.isArray(allDecisions) && allDecisions.length ? allDecisions : decisions;
+        var dateToFullIndex = {};
+        (full || []).forEach(function (r, i) {
+            var key = String(r && r.date || '').slice(0, 10);
+            if (key) dateToFullIndex[key] = i;
+        });
         var out = [];
         (decisions || []).forEach(function (row) {
             var d = String(row.date || '').slice(0, 10);
@@ -230,23 +246,54 @@
             var d2 = ix + 1 < dates.length ? dates[ix + 1] : d;
             var change = Number(row.change_bp != null
                 ? row.change_bp
-                : (row.change != null ? row.change * 100 : (row.change_amount != null ? row.change_amount * 100 : 0)));
-            var label = '';
-            if (Number.isFinite(change) && change !== 0) {
-                var arrow = change > 0 ? '\u2191' : '\u2193';
-                label = arrow + Math.abs(Math.round(change)) + 'bp';
+                : (row.change != null ? row.change * 100 : (row.change_amount != null ? row.change_amount * 100 : NaN)));
+            if (!Number.isFinite(change) || change === 0) {
+                var fi = dateToFullIndex[d];
+                var rate = Number(row.rate);
+                if (fi != null && fi > 0 && Number.isFinite(rate)) {
+                    var prevR = Number(full[fi - 1].rate);
+                    if (Number.isFinite(prevR)) change = Math.round((rate - prevR) * 100);
+                }
             }
             var start = { xAxis: d };
-            if (label) {
-                start.name = label;
+            if (Number.isFinite(change) && change !== 0) {
+                var bps = Math.abs(Math.round(change));
+                var sign = change > 0 ? '+' : '-';
+                var headText = sign + bps + ' bps';
+                var arrowGlyph = change > 0 ? '\u25b2' : '\u25bc';
+                var arrowLines = [];
+                for (var ai = 0; ai < 5; ai++) arrowLines.push(arrowGlyph);
+                var arrowBlock = arrowLines.join('\n');
+                start.name = headText;
                 start.label = {
                     show: true,
-                    formatter: label,
                     position: 'insideTop',
-                    color: '#eab308',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    distance: 3,
+                    distance: 2,
+                    align: 'center',
+                    verticalAlign: 'top',
+                    formatter: function () {
+                        return '{head|' + headText + '}\n{arr|' + arrowBlock + '}';
+                    },
+                    rich: {
+                        head: {
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#fef9c3',
+                            lineHeight: 16,
+                            align: 'center',
+                            textBorderColor: 'rgba(15,23,42,0.75)',
+                            textBorderWidth: 2,
+                        },
+                        arr: {
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#fde047',
+                            lineHeight: 12,
+                            align: 'center',
+                            textBorderColor: 'rgba(15,23,42,0.65)',
+                            textBorderWidth: 1,
+                        },
+                    },
                 };
             }
             out.push([start, { xAxis: d2 }]);
@@ -439,11 +486,47 @@
         return out;
     }
 
+    /**
+     * Carry each product's last quoted rate forward across calendar gaps ≤3 days (aligned with buildBandSeries
+     * on band payloads) so aggregated ribbon geometry matches the declared chart window after sparse ingest points.
+     */
+    function forwardFillRibbonScalarByDate(dates, byDate, sectionStr) {
+        var sec = String(sectionStr || '');
+        var GAP_FILL_MAX_MS = 3 * 86400000;
+        var out = {};
+        Object.keys(byDate || {}).forEach(function (k) {
+            var raw = byDate[k];
+            if (raw != null && Number.isFinite(raw)) out[k] = raw;
+        });
+        var lastOrganic = null;
+        var lastVal = null;
+        (dates || []).forEach(function (date) {
+            var v = out[date];
+            var organicOk =
+                v != null &&
+                Number.isFinite(v) &&
+                v > 0 &&
+                (sec !== 'savings' || v >= 1.0);
+            if (organicOk) {
+                lastOrganic = date;
+                lastVal = v;
+                return;
+            }
+            if (lastOrganic != null && lastVal != null && (v == null || !Number.isFinite(v))) {
+                var gapMs = new Date(date).getTime() - new Date(lastOrganic).getTime();
+                if (gapMs > 0 && gapMs <= GAP_FILL_MAX_MS) out[date] = lastVal;
+            }
+        });
+        return out;
+    }
+
     /** Flat list + per-bank groups for ribbon canvas overlay and hit-testing. */
-    function buildRibbonCanvasProductModel(dates, allSeries, bankColor) {
+    /** @param {object} [canvasOpts] e.g. { section: 'home-loans' } for savings rate rules during forward-fill */
+    function buildRibbonCanvasProductModel(dates, allSeries, bankColor, canvasOpts) {
         var flat = [];
         var byBank = {};
         if (!allSeries || !allSeries.length) return { flat: flat, byBank: byBank, count: 0 };
+        var section = canvasOpts && canvasOpts.section != null ? String(canvasOpts.section) : '';
         var bankIndexMap = {};
         var bankCount = 0;
         allSeries.forEach(function (s) {
@@ -464,6 +547,7 @@
                 if (byDate[dates[di]] != null) { hasData = true; break; }
             }
             if (!hasData) return;
+            byDate = forwardFillRibbonScalarByDate(dates, byDate, section);
             var row = (s.latestRow && typeof s.latestRow === 'object') ? s.latestRow : {};
             if (!row || Object.keys(row).length === 0) {
                 var lp = (s.points && s.points.length) ? s.points[s.points.length - 1] : null;

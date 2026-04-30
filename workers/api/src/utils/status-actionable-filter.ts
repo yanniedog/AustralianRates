@@ -55,6 +55,10 @@ export function shouldIgnoreStatusActionableLog(
   const lenderCode = normalizeValue(entry.lender_code ?? entry.lenderCode)
   const runId = normalizeValue(entry.run_id ?? entry.runId)
   const code = normalizeValue(entry.code)
+  // Cold-cache / large-window public chart builds can exceed the slow threshold; tracked elsewhere, not an incident queue item.
+  if (code === 'analytics_series_slow' || message === 'analytics_series_slow') {
+    return true
+  }
   if (source === 'admin' && (KNOWN_ADMIN_STATUS_DUPLICATE_MESSAGES.has(message) || KNOWN_ADMIN_STATUS_DUPLICATE_CODES.has(code))) {
     return true
   }

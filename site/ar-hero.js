@@ -125,6 +125,125 @@
         return best;
     }
 
+    /** YYYY-MM-DD from snapshot bundle; aligns hero with report-plot / chart window end. */
+    function snapshotFiltersResolvedWindowEnd(data) {
+        var fr = data && data.filtersResolved;
+        if (!fr) return '';
+        var raw = fr.endDate != null ? fr.endDate : fr.end_date;
+        var d = String(raw || '').trim().slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+    }
+
+    /** Prefer resolved window end for display; reuse row parsed_at only when that row is for the same calendar day. */
+    function heroUpdatedDisplaySource(latestRow, windowEndYmd) {
+        var fromRow = latestRow ? String(latestRow.collection_date || '').slice(0, 10) : '';
+        var ymd = windowEndYmd && /^\d{4}-\d{2}-\d{2}$/.test(windowEndYmd) ? windowEndYmd : fromRow;
+        if (!ymd) return null;
+        var sameDay = fromRow && ymd === fromRow;
+        return {
+            collection_date: ymd,
+            parsed_at: sameDay && latestRow ? latestRow.parsed_at : null,
+        };
+    }
+
+    function numericSnapshotValue(value) {
+        var n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : NaN;
+    }
+
+    function snapshotChartModelTotal(data) {
+        var models = data && data.chartModels;
+        var model = models && (models.default || models.ribbon || models.line || models.scatter);
+        return numericSnapshotValue(model && model.meta && model.meta.totalRows);
+    }
+
+    /** Row count for hero "Rows" stat: series total when bundled, else chart model, else latest-all length. */
+    function snapshotTotalRows(data) {
+        if (!data) return NaN;
+        var series = data.analyticsSeries;
+        if (series && typeof series === 'object') {
+            var rawTotal = series.total != null ? series.total : series.count;
+            var ns = numericSnapshotValue(rawTotal);
+            if (Number.isFinite(ns)) return ns;
+        }
+        var cms = snapshotChartModelTotal(data);
+        if (Number.isFinite(cms)) return cms;
+        return numericSnapshotValue(snapshotLatestAllRows().length);
+    }
+
+    function snapshotSlicePairStatsPayload(data) {
+        var ss = data && data.slicePairStats;
+        if (!ss || typeof ss !== 'object') return null;
+        var gn = function (key) {
+            var n = Number(ss[key]);
+            return Number.isFinite(n) ? n : NaN;
+        };
+        if (!Number.isFinite(gn('universe_total'))) return null;
+        return ss;
+    }
+
+    /** Compact slice-pair glyphs: ↑→↓ -x x- xx (calendar P vs D, proper ingests only). */
+
+    function glyphNum(x) {
+        var n = Number(x);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    function formatSlicePairText(stats) {
+        if (!stats) return '';
+        return '\u2191' + String(glyphNum(stats.up_count))
+            + ' \u2192' + String(glyphNum(stats.flat_count))
+            + ' \u2193' + String(glyphNum(stats.down_count))
+            + ' -x' + String(glyphNum(stats.prev_missing_count))
+            + ' x-' + String(glyphNum(stats.curr_missing_count))
+            + ' xx' + String(glyphNum(stats.both_missing_count));
+    }
+
+    function slicePairAriaLabel(stats) {
+        var p = stats && stats.p ? String(stats.p).slice(0, 10) : '';
+        var dr = stats && stats.d ? String(stats.d).slice(0, 10) : '';
+        var chk = stats && stats.checksum_ok === false ? ' checksum mismatch.' : '';
+        return 'Slice pair on ' + dr + ' vs ' + p
+            + ': proper ingests only; compares calendar neighbours (Lag-free).'
+            + ' Up ' + glyphNum(stats.up_count)
+            + ', flat ' + glyphNum(stats.flat_count)
+            + ', down ' + glyphNum(stats.down_count)
+            + ', previous day missing ' + glyphNum(stats.prev_missing_count)
+            + ', current day missing ' + glyphNum(stats.curr_missing_count)
+            + ', both missing ' + glyphNum(stats.both_missing_count)
+            + '.' + chk;
+    }
+
+    function slicePairDataHelp(stats) {
+        var p = stats && stats.p ? String(stats.p).slice(0, 10) : '';
+        var dr = stats && stats.d ? String(stats.d).slice(0, 10) : '';
+        return 'Proper ingests only. Calendar P=' + p + ', D=' + dr + ' (Lag-free). Movement strip elsewhere uses ingest lag.'
+            + (stats && stats.checksum_ok === false ? ' Checksum mismatch detected.' : '');
+    }
+
+    function renderSlicePairStat(stats) {
+        if (!els.statSlicePairs) return false;
+        if (!stats || typeof stats !== 'object') return false;
+        var ut = glyphNum(stats.universe_total);
+        if (!Number.isFinite(ut)) return false;
+        var txt = formatSlicePairText(stats);
+        var label = slicePairAriaLabel(stats);
+        var dh = slicePairDataHelp(stats);
+        els.statSlicePairs.setAttribute('aria-label', label);
+        els.statSlicePairs.setAttribute('title', dh);
+        els.statSlicePairs.setAttribute('data-help', dh);
+        els.statSlicePairs.innerHTML =
+            '<span class="metric-code">' + iconText('compare', 'Slice pair') + '</span><strong>' + esc(txt) + '</strong>';
+        return true;
+    }
+
+    function clearSlicePairStatSilently() {
+        if (!els.statSlicePairs) return;
+        setStatUnavailable(els.statSlicePairs);
+        els.statSlicePairs.removeAttribute('aria-label');
+    }
+
+
     function setIntroMetric(id, value, note) {
         var intro = syncPublicIntro();
         if (!intro || typeof intro.setLiveMetric !== 'function') return;
@@ -159,6 +278,7 @@
         setInlineError(els.heroError, 'Overview metrics are temporarily unavailable. Refresh to try again.');
         [els.statUpdated, els.statCashRate, els.statRecords].forEach(setStatUnavailable);
         if (els.statFeeds) setStatUnavailable(els.statFeeds);
+        if (els.statSlicePairs) setStatUnavailable(els.statSlicePairs);
     }
 
     function formatOverviewDatetime(isoOrSqlite) {
@@ -176,7 +296,10 @@
 
     function applyLandingOverview() {
         if (!landingOverview) return;
-        if (section === 'home-loans' && els.statCashRate && landingOverview.rba) {
+        if (
+            els.statCashRate && landingOverview.rba &&
+            (section === 'home-loans' || section === 'savings' || section === 'term-deposits')
+        ) {
             var rba = landingOverview.rba;
             var rateChanged = rba.effective_date ? 'Rate changed: ' + rba.effective_date + '.' : '';
             var lastChecked = rba.fetched_at ? 'Last checked: ' + formatOverviewDatetime(rba.fetched_at) + '.' : '';
@@ -197,37 +320,54 @@
         }
     }
 
-    function applyHeroSnapshot(total, latest) {
+    function applyHeroSnapshot(total, latestRow, windowEndYmd) {
         if (!Number.isFinite(Number(total))) return false;
         clearHeroError();
         renderStat(els.statRecords, 'rows', 'Rows', Number(total).toLocaleString(), 'Total rows in the active slice.');
         setIntroMetric('rows', Number(total).toLocaleString(), 'Rows in the current filtered slice.');
 
+        var updatedSrc = heroUpdatedDisplaySource(latestRow || null, windowEndYmd);
         if (els.statUpdated) {
-            if (latest && latest.collection_date) {
+            if (updatedSrc && updatedSrc.collection_date) {
                 var renderedDate = timeUtils.formatSourceDateWithLocal
-                    ? timeUtils.formatSourceDateWithLocal(latest.collection_date, latest.parsed_at)
-                    : { text: String(latest.collection_date) };
-                renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || 'Last collection date in the active slice.');
-                setIntroMetric('updated', renderedDate.text, 'Latest collection in the current filtered slice.');
+                    ? timeUtils.formatSourceDateWithLocal(updatedSrc.collection_date, updatedSrc.parsed_at)
+                    : { text: String(updatedSrc.collection_date) };
+                var updatedHelp = windowEndYmd
+                    ? 'Chart/report window through date (snapshot end_date).'
+                    : 'Last collection date in the active slice.';
+                var updatedIntroNote = windowEndYmd ? 'Resolved chart window end.' : 'Latest collection in the current filtered slice.';
+                renderStat(els.statUpdated, 'calendar', 'Updated', renderedDate.text, renderedDate.title || updatedHelp);
+                setIntroMetric('updated', renderedDate.text, updatedIntroNote);
             } else {
                 renderStat(els.statUpdated, 'calendar', 'Updated', 'Unavailable', 'Last collection date in the active slice.');
             }
         }
 
         if (els.statCashRate) {
-            if (section === 'home-loans' && latest && latest.rba_cash_rate != null) {
-                var cashHelp = 'Current RBA cash rate.';
-                if (landingOverview && landingOverview.rba) {
-                    var r = landingOverview.rba;
-                    cashHelp = ['Current RBA cash rate.', r.effective_date ? 'Rate changed: ' + r.effective_date + '.' : '', r.fetched_at ? 'Last checked: ' + formatOverviewDatetime(r.fetched_at) + '.' : ''].filter(Boolean).join(' ');
+            var cashFromRow = latestRow && latestRow.rba_cash_rate != null ? Number(latestRow.rba_cash_rate) : NaN;
+            var cashFromOverview = landingOverview && landingOverview.rba && landingOverview.rba.cash_rate != null
+                ? Number(landingOverview.rba.cash_rate)
+                : NaN;
+            var cashValue = Number.isFinite(cashFromRow) ? cashFromRow : cashFromOverview;
+            var cashHelp = 'Current RBA cash rate.';
+            if (landingOverview && landingOverview.rba) {
+                var r = landingOverview.rba;
+                cashHelp = ['Current RBA cash rate.', r.effective_date ? 'Rate changed: ' + r.effective_date + '.' : '', r.fetched_at ? 'Last checked: ' + formatOverviewDatetime(r.fetched_at) + '.' : ''].filter(Boolean).join(' ');
+            }
+            if (section === 'home-loans') {
+                if (Number.isFinite(cashValue)) {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', pct(cashValue), cashHelp);
+                    els.statCashRate.setAttribute('title', cashHelp);
+                } else {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
                 }
-                renderStat(els.statCashRate, 'stats', 'Cash rate', pct(latest.rba_cash_rate), cashHelp);
-                els.statCashRate.setAttribute('title', cashHelp);
-            } else if (section === 'home-loans') {
-                renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
-            } else if (section !== 'home-loans') {
-                renderStat(els.statCashRate, 'continuity', 'Series continuity', 'Healthy', 'Series continuity by canonical product_key.');
+            } else if (section === 'savings' || section === 'term-deposits') {
+                if (Number.isFinite(cashValue)) {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', pct(cashValue), cashHelp);
+                    els.statCashRate.setAttribute('title', cashHelp);
+                } else {
+                    renderStat(els.statCashRate, 'stats', 'Cash rate', 'Unavailable', 'Current RBA cash rate.');
+                }
             }
         }
         applyLandingOverview();
@@ -239,6 +379,8 @@
     function syncHeroStatsFromSnapshot() {
         var data = snapshotData();
         if (!data) return false;
+        var spp = snapshotSlicePairStatsPayload(data);
+        if (spp) renderSlicePairStat(spp);
         if (data.overview && data.overview.ok) {
             landingOverview = {
                 rba: data.overview.rba || null,
@@ -246,11 +388,12 @@
             };
             applyLandingOverview();
         }
-        var analytics = data.analyticsSeries || null;
-        var total = analytics && Number.isFinite(Number(analytics.total)) ? Number(analytics.total) : NaN;
+        var total = snapshotTotalRows(data);
         var latest = pickLatestSnapshotRow(snapshotLatestAllRows());
-        if (!Number.isFinite(total) || !latest) return !!landingOverview;
-        return applyHeroSnapshot(total, latest);
+        var windowEndYmd = snapshotFiltersResolvedWindowEnd(data);
+        if (!Number.isFinite(total)) return !!landingOverview;
+        if (!latest && !windowEndYmd) return !!landingOverview;
+        return applyHeroSnapshot(total, latest, windowEndYmd);
     }
 
     function syncHeroStatsFromExplorer(snapshot) {
@@ -281,6 +424,9 @@
                     if (data && data.ok) {
                         landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
                         applyLandingOverview();
+                        if (!syncHeroStatsFromSnapshot()) {
+                            syncHeroStatsFromExplorer();
+                        }
                     }
                 })
                 .catch(function () {})
@@ -290,6 +436,9 @@
                     if (data && data.ok) {
                         landingOverview = { rba: data.rba || null, feeds: data.feeds || null };
                         applyLandingOverview();
+                        if (!syncHeroStatsFromSnapshot()) {
+                            syncHeroStatsFromExplorer();
+                        }
                     }
                 })
                 .catch(function () {});
@@ -671,5 +820,13 @@
     window.AR.hero = {
         loadHeroStats: loadHeroStats,
         loadQuickCompare: loadQuickCompare,
+        setSlicePairStats: function (stats) {
+            if (!stats || typeof stats !== 'object') {
+                clearSlicePairStatSilently();
+                return;
+            }
+            renderSlicePairStat(stats);
+        },
+        clearSlicePairStats: clearSlicePairStatSilently,
     };
 })();

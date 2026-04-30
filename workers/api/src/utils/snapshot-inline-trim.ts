@@ -92,6 +92,9 @@ export function trimSnapshotDataForHtmlInline(
   d = withoutKeys(d, ['reportPlotMoves'])
   if (fits(d)) return d
 
+  d = withoutKeys(d, ['slicePairStats'])
+  if (fits(d)) return d
+
   d = withoutKeys(d, ['executiveSummary'])
   if (fits(d)) return d
 
@@ -102,8 +105,8 @@ export function trimSnapshotDataForHtmlInline(
   if (fits(d)) return d
 
   for (const keys of [
-    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
-    ['siteUi', 'filters', 'overview', 'reportPlotBands', 'reportProductHistory', 'filtersResolved', 'urls'],
+    ['siteUi', 'filters', 'overview', 'rbaHistory', 'cpiHistory', 'reportPlotBands', 'slicePairStats', 'reportProductHistory', 'filtersResolved', 'urls'],
+    ['siteUi', 'filters', 'overview', 'reportPlotBands', 'slicePairStats', 'reportProductHistory', 'filtersResolved', 'urls'],
     ['siteUi', 'filters', 'overview', 'filtersResolved', 'urls'],
   ]) {
     const minimal = pickKeys(data, keys)

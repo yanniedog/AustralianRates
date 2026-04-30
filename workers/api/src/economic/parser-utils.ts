@@ -80,7 +80,12 @@ export function parseFlexibleDate(value: string): string | null {
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
 
-  let match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  let match = raw.match(/^(\d{4})-(\d{2})$/)
+  if (match) {
+    return endOfMonth(Number(match[1]), Number(match[2]) - 1)
+  }
+
+  match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (match) {
     return isoDateFromParts(Number(match[3]), Number(match[2]) - 1, Number(match[1]))
   }

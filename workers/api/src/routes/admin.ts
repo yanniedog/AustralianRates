@@ -14,8 +14,12 @@ import {
   listIntegrityAuditRuns,
 } from '../db/integrity-audit-runs'
 import { getCachedCdrAuditReport, runCdrPipelineAudit } from '../pipeline/cdr-audit'
+import { loadPostIngestAssuranceReport, runPostIngestAssurance } from '../pipeline/post-ingest-assurance'
 import { backfillRbaCashRatesForDateRange } from '../ingest/rba'
 import { triggerBackfillRun, triggerDailyRun } from '../pipeline/bootstrap-jobs'
+import { refreshChartPivotCache, refreshPublicSnapshotPackages } from '../pipeline/chart-cache-refresh'
+import { buildPrecomputedChartScopeForPreset, type ChartCacheSection } from '../db/chart-cache'
+import { parseChartWindow } from '../utils/chart-window'
 import { repairMissingFetchEventLineage } from '../pipeline/lineage-repair'
 import { FETCH_EVENTS_RETENTION_DAYS, runRetentionPrunes } from '../db/retention-prune'
 import { runLifecycleReconciliation, cancelAllRunningRuns } from '../pipeline/run-reconciliation'
@@ -24,6 +28,7 @@ import { getLenderDatasetRun, tryMarkLenderDatasetFinalized } from '../db/lender
 import { finalizePresenceForRun } from '../db/presence-finalize'
 import { adminClearRoutes } from './admin-clear'
 import { adminConfigRoutes } from './admin-config'
+import { adminCloudflareRoutes } from './admin-cloudflare'
 import { adminDbRoutes } from './admin-db'
 import { adminBackupRoutes } from './admin-backups'
 import { adminDownloadRoutes } from './admin-downloads'
@@ -80,6 +85,7 @@ adminRoutes.get('/auth-check', async (c) => {
 })
 
 adminRoutes.route('/', adminConfigRoutes)
+adminRoutes.route('/', adminCloudflareRoutes)
 adminRoutes.route('/', adminDbRoutes)
 adminRoutes.route('/', adminDownloadRoutes)
 adminRoutes.route('/', adminBackupRoutes)
@@ -126,6 +132,75 @@ adminRoutes.post('/retention/run', async (c) => {
   }
 })
 
+/**
+ * Recompute chart_request_cache, report_plot_request_cache, snapshot_cache (D1),
+ * and snapshot KV bundles — same pipeline as the hourly maintenance cron chart leg.
+ */
+adminRoutes.post('/chart-cache/refresh', async (c) => {
+  try {
+    const result = await refreshChartPivotCache(c.env)
+    log.info('admin', 'chart_cache_refresh_manual', {
+      code: 'admin_chart_cache_refresh',
+      context: JSON.stringify({ refreshed: result.refreshed, error_count: result.errors.length }),
+    })
+    return c.json({
+      ok: result.ok,
+      auth_mode: c.get('adminAuthState')?.mode ?? null,
+      refreshed: result.refreshed,
+      errors: result.errors,
+    })
+  } catch (error) {
+    log.error('admin', 'chart_cache_refresh_failed', { error, context: '/admin/chart-cache/refresh' })
+    return jsonError(
+      c,
+      500,
+      'CHART_CACHE_REFRESH_FAILED',
+      error instanceof Error ? error.message : 'Chart cache refresh failed.',
+    )
+  }
+})
+
+/** Recompute only the cache-only public snapshot packages in KV. */
+adminRoutes.post('/public-packages/refresh', async (c) => {
+  try {
+    const full = ['1', 'true', 'yes', 'on'].includes(String(c.req.query('full') || '').trim().toLowerCase())
+    const force = ['1', 'true', 'yes', 'on'].includes(String(c.req.query('force') || '').trim().toLowerCase())
+    const rawSection = String(c.req.query('section') || '').trim()
+    const rawWindow = String(c.req.query('chart_window') || '').trim()
+    const rawPreset = String(c.req.query('preset') || '').trim()
+    const section = rawSection === 'home_loans' || rawSection === 'savings' || rawSection === 'term_deposits'
+      ? rawSection as ChartCacheSection
+      : null
+    const window = rawWindow ? parseChartWindow(rawWindow) : null
+    const preset = rawPreset === 'consumer-default' && section !== 'term_deposits' ? 'consumer-default' : null
+    const items = section && (window || rawPreset || rawWindow)
+      ? [{ section, scope: buildPrecomputedChartScopeForPreset(window, preset) }]
+      : undefined
+    const result = await refreshPublicSnapshotPackages(c.env, { allScopes: full, force, items })
+    log.info('admin', 'public_packages_refresh_manual', {
+      code: 'admin_public_packages_refresh',
+      context: JSON.stringify({ refreshed: result.refreshed, skipped: result.skipped, error_count: result.errors.length, full, force, items }),
+    })
+    return c.json({
+      ok: result.ok,
+      auth_mode: c.get('adminAuthState')?.mode ?? null,
+      full,
+      force,
+      refreshed: result.refreshed,
+      skipped: result.skipped,
+      errors: result.errors,
+    })
+  } catch (error) {
+    log.error('admin', 'public_packages_refresh_failed', { error, context: '/admin/public-packages/refresh' })
+    return jsonError(
+      c,
+      500,
+      'PUBLIC_PACKAGES_REFRESH_FAILED',
+      error instanceof Error ? error.message : 'Public package refresh failed.',
+    )
+  }
+})
+
 adminRoutes.get('/cdr-audit', async (c) => {
   let report = getCachedCdrAuditReport()
   if (!report) {
@@ -154,6 +229,44 @@ adminRoutes.post('/cdr-audit/run', async (c) => {
       }),
     })
     return jsonError(c, 500, 'CDR_AUDIT_FAILED', 'CDR pipeline audit failed to execute.')
+  }
+})
+
+adminRoutes.get('/post-ingest-assurance', async (c) => {
+  const report = await loadPostIngestAssuranceReport(c.env.DB)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    report,
+  })
+})
+
+adminRoutes.post('/post-ingest-assurance/run', async (c) => {
+  try {
+    const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
+    const collectionDate = typeof body.collection_date === 'string'
+      ? body.collection_date
+      : typeof body.collectionDate === 'string'
+        ? body.collectionDate
+        : undefined
+    const report = await runPostIngestAssurance(c.env, {
+      collectionDate,
+      persist: true,
+      emitHardFailureLog: true,
+    })
+    return c.json({
+      ok: true,
+      auth_mode: c.get('adminAuthState')?.mode || null,
+      report,
+    })
+  } catch (error) {
+    log.error('admin', 'post_ingest_assurance_run_failed', {
+      error,
+      context: JSON.stringify({
+        route: '/admin/post-ingest-assurance/run',
+      }),
+    })
+    return jsonError(c, 500, 'POST_INGEST_ASSURANCE_FAILED', 'Post-ingest assurance failed to execute.')
   }
 })
 
@@ -631,10 +744,19 @@ adminRoutes.post('/economic/collect', async (c) => {
 adminRoutes.post('/runs/reconcile', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const dryRun = Boolean(body.dry_run ?? body.dryRun)
+  const idleMinutes = clampInt(String(body.idle_minutes ?? body.idleMinutes ?? 5), 5, 1, 1440)
+  // Default 30 to match scheduler-dispatch / scheduled cron callers — normal
+  // daily ingest finishes in ~10 min, so anything stuck >30 min is almost
+  // never going to recover and should be force-closed so the public snapshot
+  // (which only refreshes after ingest finalises) can rebuild. Upper clamp
+  // matches `getDiagnosticsBacklog` (10080 / 7 days) so a triage operator can
+  // dial in a long lookback without the diagnostics view reporting stale runs
+  // the reconciler refuses to act on.
+  const staleRunMinutes = clampInt(String(body.stale_run_minutes ?? body.staleRunMinutes ?? 30), 30, 1, 10080)
   const result = await runLifecycleReconciliation(c.env.DB, {
     dryRun,
-    idleMinutes: 5,
-    staleRunMinutes: 90,
+    idleMinutes,
+    staleRunMinutes,
     timeZone: c.env.MELBOURNE_TIMEZONE,
   })
   return c.json({

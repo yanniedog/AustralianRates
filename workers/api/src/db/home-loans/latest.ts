@@ -20,7 +20,8 @@ const LATEST_ORDER_BY: Record<NonNullable<LatestFilters['orderBy']>, string> = {
   rate_desc: 'l.interest_rate DESC, l.bank_name ASC, l.product_name ASC',
 }
 
-function buildLatestWhere(filters: LatestFilters): { clause: string; binds: Array<string | number> } {
+/** Exported for slice-pair stats (universe must match `queryLatestRatesCount`). */
+export function buildLatestWhere(filters: LatestFilters): { clause: string; binds: Array<string | number> } {
   const where: string[] = []
   const binds: Array<string | number> = []
 
@@ -52,6 +53,14 @@ function buildLatestWhere(filters: LatestFilters): { clause: string; binds: Arra
   if (!filters.includeRemoved) {
     where.push('COALESCE(l.is_removed, 0) = 0')
   }
+  where.push(`NOT EXISTS (
+    SELECT 1
+    FROM historical_loan_rates q
+    WHERE q.series_key = l.series_key
+      AND q.collection_date = l.collection_date
+      AND q.quarantine_reason IS NOT NULL
+      AND TRIM(q.quarantine_reason) != ''
+  )`)
 
   where.push(runSourceWhereClause('l.run_source', filters.sourceMode ?? 'all'))
   if (filters.mode === 'daily') {

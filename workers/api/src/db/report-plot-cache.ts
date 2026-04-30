@@ -11,7 +11,7 @@ import {
 import type { ReportPlotMode, ReportPlotPayload, ReportPlotSection } from './report-plot-types'
 
 const REPORT_PLOT_CACHE_TABLE = 'report_plot_request_cache'
-const REPORT_PLOT_PAYLOAD_VERSION = 1
+const REPORT_PLOT_PAYLOAD_VERSION = 3
 const D1_CACHE_FRESH_MINUTES = 90
 
 type ReportPlotCacheRow = {
@@ -47,7 +47,7 @@ export function buildReportPlotCacheKey(
   mode: ReportPlotMode,
   params: Record<string, string | undefined>,
 ): string {
-  return buildChartCacheKey(section, `report-plot:${mode}`, params)
+  return buildChartCacheKey(section, `report-plot:v${REPORT_PLOT_PAYLOAD_VERSION}:${mode}`, params)
 }
 
 function payloadItemCount(payload: ReportPlotPayload): number {
@@ -146,6 +146,7 @@ export async function getCachedOrComputeReportPlot(
   mode: ReportPlotMode,
   params: Record<string, string | undefined>,
   compute: () => Promise<ReportPlotPayload>,
+  options?: { allowLiveCompute?: boolean },
 ): Promise<ReportPlotPayload & { fromCache: 'kv' | 'd1' | 'live' }> {
   const key = buildReportPlotCacheKey(section, mode, params)
   if (env.CHART_CACHE_KV) {
@@ -166,6 +167,10 @@ export async function getCachedOrComputeReportPlot(
       await writeReportPlotPayloadToKv(env.CHART_CACHE_KV, key, d1Cached)
       return { ...d1Cached, fromCache: 'd1' }
     }
+  }
+
+  if (options?.allowLiveCompute === false) {
+    throw new Error(`report_plot_live_compute_disabled:${section}:${mode}`)
   }
 
   const payload = await compute()

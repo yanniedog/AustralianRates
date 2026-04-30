@@ -23,6 +23,7 @@ import {
 } from '../pipeline/product-classification-audit'
 import { triggerDailyRun } from '../pipeline/bootstrap-jobs'
 import { buildStatusDebugBundle } from '../pipeline/status-debug-bundle'
+import { listHistoricalQuarantineCounts } from '../db/historical-quarantine'
 import type { AppContext } from '../types'
 import { jsonError, withNoStore } from '../utils/http'
 import type { DatasetKind } from '../../../../packages/shared/src'
@@ -89,7 +90,7 @@ adminHardeningRoutes.get('/diagnostics/coverage-gaps', async (c) => {
   let report =
     getCachedCoverageGapAuditReport() ||
     await loadCoverageGapAuditReport(c.env.DB)
-  if (!report || refresh) {
+  if (refresh) {
     report = await runCoverageGapAudit(c.env, {
       runSource: 'scheduled',
       idleMinutes: 120,
@@ -166,6 +167,19 @@ adminHardeningRoutes.get('/diagnostics/replay-queue', async (c) => {
     ok: true,
     auth_mode: c.get('adminAuthState')?.mode || null,
     count: rows.length,
+    rows,
+  })
+})
+
+adminHardeningRoutes.get('/diagnostics/quarantine', async (c) => {
+  const rows = await listHistoricalQuarantineCounts(c.env.DB)
+  return c.json({
+    ok: true,
+    auth_mode: c.get('adminAuthState')?.mode || null,
+    totals: {
+      rows: rows.reduce((sum, row) => sum + row.total, 0),
+      datasets: rows.length,
+    },
     rows,
   })
 })
@@ -270,8 +284,11 @@ adminHardeningRoutes.get('/diagnostics/status-debug-bundle', async (c) => {
     {
       sections: q.sections,
       healthHistoryLimit: q.health_history_limit,
+      refreshIntegrityAudit: q.refresh_integrity_audit,
+      refreshCdr: q.refresh_cdr,
       refreshCoverage: q.refresh_coverage,
       refreshLenderUniverse: q.refresh_lender_universe,
+      refreshProductClassification: q.refresh_product_classification,
       logLimit: q.log_limit,
       since: q.since,
       logHoursBeforeHealth: q.log_hours_before_health,
@@ -283,6 +300,7 @@ adminHardeningRoutes.get('/diagnostics/status-debug-bundle', async (c) => {
       replayLimit: q.replay_limit,
       probeEventLimit: q.probe_event_limit,
       integrityHistoryLimit: q.integrity_history_limit,
+      provenanceLimit: q.provenance_limit,
     },
     c.get('adminAuthState')?.mode ?? null,
   )

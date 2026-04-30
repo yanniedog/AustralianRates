@@ -15,6 +15,7 @@ import {
   type EconomicSeriesId,
 } from './registry'
 import { addDays } from './parser-utils'
+import { parseAbsIndicatorCsv } from './abs-indicator'
 import { parseFedTargetHistoryHtml, parseFredChinaGdpProxyCsv, parseRbnzOcrText } from './external-parsers'
 import { extractRbaSeriesObservations, parseRbaTableCsv, type EconomicObservationInput, type ParsedRbaTable } from './rba-table'
 
@@ -389,6 +390,40 @@ async function collectFredSeries(env: EnvBindings, definition: EconomicSeriesDef
   })
 }
 
+async function collectAbsIndicatorSeries(env: EnvBindings, definition: EconomicSeriesDefinition) {
+  if (definition.collector.kind !== 'abs_indicator_csv') return []
+  const apiKey = String(env.ABS_INDICATOR_API_KEY || '').trim()
+  if (!apiKey) {
+    throw new Error('abs_indicator_api_key_missing')
+  }
+  const url = `https://indicator.api.abs.gov.au/v1/data/${definition.collector.dataflowId}/csv`
+  const fetched = await fetchWithTimeout(
+    url,
+    {
+      headers: {
+        Accept: 'text/csv',
+        'x-api-key': apiKey,
+      },
+    },
+    { env },
+  )
+  log.info('economic', 'upstream_fetch', {
+    context:
+      `source=economic_abs_indicator host=${hostFromUrl(url)}` +
+      ` elapsed_ms=${fetched.meta.elapsed_ms}` +
+      ` attempts=${fetched.meta.attempts}` +
+      ` status=${fetched.meta.status ?? fetched.response.status}`,
+  })
+  if (!fetched.response.ok) throw new Error(`upstream_not_ok:${fetched.response.status}:${url}`)
+  return parseAbsIndicatorCsv(await fetched.response.text(), {
+    seriesId: definition.id,
+    sourceUrl: definition.sourceUrl,
+    frequency: definition.frequency,
+    proxy: definition.proxy,
+    filters: definition.collector.filters,
+  })
+}
+
 async function collectSeriesRows(
   env: EnvBindings,
   cache: Map<string, ParsedRbaTable>,
@@ -405,6 +440,10 @@ async function collectSeriesRows(
       return collectFedSeries(env, definition)
     case 'fred_csv':
       return collectFredSeries(env, definition)
+    case 'abs_indicator_csv':
+      return collectAbsIndicatorSeries(env, definition)
+    case 'derived':
+      return []
   }
 }
 
@@ -417,6 +456,7 @@ export async function collectEconomicSeries(env: EnvBindings): Promise<Collectio
   const failedSeries: string[] = []
 
   for (const definition of ECONOMIC_SERIES_DEFINITIONS) {
+    if (definition.collector.kind === 'derived') continue
     try {
       const rows = await collectSeriesRows(env, rbaCache, definition)
       if (rows.length === 0) {
@@ -441,5 +481,5 @@ export async function collectEconomicSeries(env: EnvBindings): Promise<Collectio
 }
 
 export function defaultEconomicSeriesIds(): EconomicSeriesId[] {
-  return ['unemployment_rate', 'trimmed_mean_cpi', 'inflation_expectations', 'neutral_rate', 'bank_bill_90d']
+  return ['rba_signal_index', 'market_implied_cash_rate_gap', 'inflation_gap', 'labour_slack', 'wage_growth']
 }

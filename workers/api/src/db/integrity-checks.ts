@@ -89,6 +89,7 @@ type RecentWriteMismatchRow = {
   collection_date: string
   accepted_row_count: number
   written_row_count: number
+  unchanged_row_count: number
   lineage_error_count: number
   detail_fetch_event_count: number
   updated_at: string
@@ -690,6 +691,7 @@ async function runOptionalAnomalyProbes(db: D1Database, checks: IntegrityCheckRe
             collection_date: row.collection_date,
             accepted_row_count: Number(row.accepted_row_count ?? 0),
             written_row_count: Number(row.written_row_count ?? 0),
+            unchanged_row_count: Number(row.unchanged_row_count ?? 0),
             lineage_error_count: Number(row.lineage_error_count ?? 0),
             detail_fetch_event_count: Number(row.detail_fetch_event_count ?? 0),
             updated_at: row.updated_at,

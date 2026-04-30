@@ -41,6 +41,19 @@ export async function queryTimeseries(db: D1Database, input: TimeseriesFilters) 
   applyHomeLoanCompareEdgeExclusions(where, 't.product_name', input.excludeCompareEdgeCases)
   if (!input.includeRemoved) {
     where.push('COALESCE(pps.is_removed, 0) = 0')
+    where.push(`NOT EXISTS (
+      SELECT 1
+      FROM historical_loan_rates q
+      WHERE q.collection_date = t.collection_date
+        AND q.bank_name = t.bank_name
+        AND q.product_id = t.product_id
+        AND q.security_purpose = t.security_purpose
+        AND q.repayment_type = t.repayment_type
+        AND q.rate_structure = t.rate_structure
+        AND q.lvr_tier = t.lvr_tier
+        AND q.quarantine_reason IS NOT NULL
+        AND TRIM(q.quarantine_reason) != ''
+    )`)
   }
   where.push(runSourceWhereClause('t.run_source', input.sourceMode ?? 'all'))
   if (input.startDate) {

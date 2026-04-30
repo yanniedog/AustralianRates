@@ -144,12 +144,25 @@
         var label = String(opts.requestLabel || requestLabel(url, 'request'));
         var lastError = null;
 
+        var snapshotRequired = false;
         if (!opts.bypassSnapshot) {
+            var snap = window.AR && window.AR.snapshot;
+            snapshotRequired = !!(
+                snap
+                && typeof snap.isSnapshottableUrl === 'function'
+                && snap.isSnapshottableUrl(rawUrl)
+            );
             await awaitSnapshotIfApplicable(rawUrl, opts);
             var cached = readSnapshotCache(rawUrl);
             if (cached != null) {
                 var cachedText = JSON.stringify(cached);
                 return { data: cached, response: null, text: cachedText, attempts: 0, fromSnapshot: true };
+            }
+            if (snapshotRequired) {
+                clientLog('warn', 'Snapshot package unavailable; falling back to API request', {
+                    request: label,
+                    url: rawUrl,
+                });
             }
         }
 

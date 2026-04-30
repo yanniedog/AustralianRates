@@ -205,6 +205,11 @@ body.ar-section-economic-data .economic-select:focus-visible {
     color: var(--ar-text, inherit);
 }
 
+.economic-y-scale-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+}
+
 .economic-y-scale-btn.is-forced-linear {
     border-color: color-mix(in srgb, var(--ar-warn-strong, #f59e0b) 55%, var(--ar-line));
     color: var(--ar-warn-strong, #f59e0b);
@@ -217,6 +222,216 @@ body.ar-section-economic-data .economic-y-scale-btn:focus-visible {
 
 .economic-hero-stats {
     align-content: start;
+}
+
+.economic-signal-strip {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+.economic-signal-strip article {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
+}
+
+.economic-signal-strip span {
+    display: block;
+    color: var(--ar-text-soft);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* Keep table-cell display so thead stays a horizontal row (block breaks layout). */
+.economic-component-table th {
+    display: table-cell;
+    color: var(--ar-text-soft);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    vertical-align: bottom;
+}
+
+.economic-signal-strip strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ar-text);
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.economic-component-panel {
+    display: grid;
+    gap: 10px;
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--ar-line);
+}
+
+.economic-component-table-wrap {
+    overflow-x: auto;
+}
+
+.economic-component-table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.economic-component-table th,
+.economic-component-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--ar-line);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.economic-component-table td {
+    color: var(--ar-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.economic-component-table .score-pos {
+    color: var(--ar-danger-strong);
+}
+
+.economic-component-table .score-neg {
+    color: var(--ar-ok-strong);
+}
+
+.economic-forward-panel {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.economic-forward-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.economic-forward-stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(110px, 1fr));
+    gap: 8px;
+}
+
+.economic-forward-stats article {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
+}
+
+.economic-forward-stats span {
+    display: block;
+    color: var(--ar-text-soft);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.economic-forward-stats strong {
+    display: block;
+    overflow: hidden;
+    color: var(--ar-text);
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.economic-forward-chart {
+    width: 100%;
+    min-height: clamp(320px, 46vh, 520px);
+}
+
+.economic-forward-table-wrap {
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--ar-line);
+    border-radius: 8px;
+}
+
+.economic-forward-table-wrap .economic-forward-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: color-mix(in srgb, var(--ar-surface) 92%, transparent);
+    border-bottom: 1px solid var(--ar-line);
+}
+
+.economic-forward-table-wrap .economic-forward-table thead th.is-sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.economic-forward-table-wrap .economic-forward-table thead th.is-sortable:hover {
+    color: var(--ar-text);
+}
+
+.economic-forward-table-wrap .economic-forward-table thead th .sort-indicator {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+    opacity: 0.7;
+    font-size: 0.7em;
+    transform: translateY(-1px);
+}
+
+.economic-forward-table-wrap .economic-forward-table th.is-num,
+.economic-forward-table-wrap .economic-forward-table td.is-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.economic-forward-table-wrap .economic-forward-table td.is-date {
+    font-variant-numeric: tabular-nums;
+}
+
+.economic-forward-table .forward-group-row td {
+    position: sticky;
+    top: 34px;
+    z-index: 1;
+    padding: 6px 8px;
+    background: color-mix(in srgb, var(--ar-surface-2) 88%, transparent);
+    border-bottom: 1px solid var(--ar-line);
+    color: var(--ar-text-soft);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.economic-forward-table {
+    min-width: 680px;
+}
+
+.economic-stale-chip {
+    display: inline-flex;
+    min-height: 18px;
+    align-items: center;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--ar-warn-strong, #f59e0b) 40%, var(--ar-line));
+    border-radius: 999px;
+    color: var(--ar-warn-strong, #f59e0b);
+    font-size: 0.66rem;
+    font-weight: 700;
 }
 
 /* Long right-rail lists scroll in-view instead of stretching the page height. */
@@ -460,6 +675,14 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
         grid-template-columns: 1fr;
     }
 
+    .economic-signal-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .economic-forward-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .economic-chart {
         min-height: 420px;
     }
@@ -474,14 +697,26 @@ body.ar-section-economic-data .economic-source-link:focus-visible {
 
     body.ar-section-economic-data .economic-hero-stats {
         width: 100%;
-        flex-direction: column;
-        align-items: stretch;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     body.ar-section-economic-data .economic-hero-stats .terminal-stat {
         width: 100%;
         min-height: 44px;
         box-sizing: border-box;
+    }
+
+    body.ar-section-economic-data .economic-signal-strip {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-section-economic-data .economic-forward-stats {
+        grid-template-columns: 1fr;
+    }
+
+    body.ar-section-economic-data .economic-forward-chart {
+        min-height: min(52dvh, 380px);
     }
 
     body.ar-section-economic-data .economic-topline {
