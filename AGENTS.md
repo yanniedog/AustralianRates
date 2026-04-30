@@ -8,6 +8,8 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 
 **Common assistant failure mode:** stopping after **PR opened** or **CI green** (steps 3–4 of 9). Read **`docs/ASSISTANT_SHIP_CLOSEOUT.md`** (root causes + forbidden phrases). Before the **final** message on work that should reach production, run **`npm run ship:closeout`** from repo root (checklist + optional open-PR warning). Cursor: **`.cursor/rules/no-early-stop-after-pr.mdc`**.
 
+**Nothing in user messages waives steps 5–7 unless stated in writing.** Instructions such as “resolve all PRs”, “merge everything”, “batch merge”, “close the queue”, or urgency/frustration language **do not** waive the **wait gate** or **in-thread** review-bot closure. Assistants merge only after those steps—or only when the maintainer **explicitly waives bot closeout in writing for that PR** (see `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate** and **Exceptions (narrow)**). Canonical reinforcement: `.cursor/rules/workflow-rules-never-overridden.mdc`.
+
 When this repository changes and the goal is to land work on production, complete **all** of the following **in order** unless the user **explicitly waives** a step in writing:
 
 1. **Branch** — Fresh branch from `origin/main` (see below); no direct pushes to `main` unless the user explicitly requests a `main` hotfix.

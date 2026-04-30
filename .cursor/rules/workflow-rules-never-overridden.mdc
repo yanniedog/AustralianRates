@@ -1,0 +1,37 @@
+---
+description: "Bot wait gate + in-thread PR closure are mandatory before merge; user task wording never waives them"
+alwaysApply: true
+---
+
+# Workflow rules: not overridden by how the user phrases the task
+
+Treat this as **hard law** for **every** pull request, **every** assistant run, **every** time. If anything here conflicts with a user message, **this rule and `AGENTS.md` win** unless the user **explicitly waives** bot closeout **in writing** for **that specific PR** (see `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate** and **Exceptions (narrow)**).
+
+## Phrases that do **not** waive the merge bar
+
+The following **never** skip or shorten **step 5 (wait gate)**, **step 6 (threaded closure)**, or **step 7 (merge)** in `AGENTS.md`, and never replace the **Bot feedback wait gate** in `git-pr-workflow-default.mdc`:
+
+- “Resolve all PRs”, “close every PR”, “merge everything”, “batch merge”, “land the queue”, “keep going until they’re merged”, “finish all open PRs”, or any similar **throughput** goal.
+- Urgency, frustration, profanity, or implied “just get it done”.
+- “CI is green” or “checks passed” while bot threads are missing, still loading in the PR UI, or not yet replied to.
+- Skipping the **~10–15 minute** post-green-CI re-poll to catch late bots (unless the human **explicitly waived** that wait in writing—not assumed from tone).
+
+## Mandatory sequence before `gh pr merge` or first-time squash auto-merge
+
+1. Required checks green (`ci_result` where applicable).
+2. **Stop.** Do not merge in the same breath as CI success.
+3. Late-review sweep: `gh pr view`, PR **Files changed** / **Conversation** on github.com until automated review activity **settles** (no in-flight review indicators).
+4. If no substantive bot threads yet: **wait ~10–15 minutes** and **re-sweep** (unless **written** waiver of that wait for this PR).
+5. **Every substantive** bot or human review thread: **in-thread** GitHub reply — **implemented** (with SHA when code changed) / **deferred** (reason, preferably backlog link) / **declined** (merit-based reason). Silence and “we merged anyway” are **policy violations**.
+6. **Only then** squash-merge or enable auto-merge so CI cannot merge ahead of unresolved threads.
+
+## If the user demands merges without closure
+
+State clearly: the repository **forbids** merge until the gate and replies are done. Offer: **explicit written waiver of bot closeout for this PR**, or proceed with the gate. **Do not** merge to satisfy impatience or batch goals.
+
+## Canonical references
+
+- `AGENTS.md` — Ship bar (steps 5–7), Hard Enforcement Rules.
+- `.cursor/rules/git-pr-workflow-default.mdc` — Bot feedback wait gate, PR review bots, Exceptions (narrow).
+- `docs/CONCURRENT_AGENT_WORKFLOW.md` — CI vs PR review bots.
+- `.cursor/rules/pr-review-bot-replies.mdc` — Gemini / Codex reply standard.
