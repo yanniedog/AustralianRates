@@ -117,7 +117,7 @@ function emergencyTrimSnapshot(payload) {
         }) <= MAX_INLINE_BYTES;
     };
     const data = payload.data;
-    var best = pickKeys(data, ['filters', 'filtersResolved', 'urls']);
+    let best = pickKeys(data, ['filters', 'filtersResolved', 'urls']);
     if (!fits(best)) {
         best = pickKeys(data, ['urls']);
     }
@@ -125,17 +125,17 @@ function emergencyTrimSnapshot(payload) {
         best = {};
     }
     function tryMerge(chunk) {
-        var merged = Object.assign({}, best, chunk);
+        const merged = Object.assign({}, best, chunk);
         if (fits(merged)) best = merged;
     }
     if (Object.prototype.hasOwnProperty.call(data, 'overview')) tryMerge({ overview: data.overview });
     if (Object.prototype.hasOwnProperty.call(data, 'siteUi')) tryMerge({ siteUi: data.siteUi });
-    var la = data.latestAll;
+    const la = data.latestAll;
     if (la && typeof la === 'object' && Array.isArray(la.rows)) {
-        var caps = [100, 50, 25, 10, 5, 1];
-        for (var i = 0; i < caps.length; i++) {
-            var cap = caps[i];
-            var trial = Object.assign({}, best, {
+        const caps = [100, 50, 25, 10, 5, 1];
+        for (let i = 0; i < caps.length; i++) {
+            const cap = caps[i];
+            const trial = Object.assign({}, best, {
                 latestAll: Object.assign({}, la, { rows: la.rows.slice(0, cap) }),
             });
             if (fits(trial)) {
@@ -149,14 +149,6 @@ function emergencyTrimSnapshot(payload) {
         tryMerge({ reportProductHistory: data.reportProductHistory });
     }
     if (Object.prototype.hasOwnProperty.call(data, 'chartModels')) tryMerge({ chartModels: data.chartModels });
-    if (!fits(best)) {
-        var stripped = Object.assign({}, best);
-        delete stripped.reportProductHistory;
-        delete stripped.reportPlotBands;
-        delete stripped.chartModels;
-        delete stripped.siteUi;
-        if (fits(stripped)) best = stripped;
-    }
     if (!fits(best)) {
         best = pickKeys(data, ['filters', 'filtersResolved', 'urls']);
         if (!fits(best)) best = pickKeys(data, ['urls']);

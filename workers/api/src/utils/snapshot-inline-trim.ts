@@ -104,15 +104,6 @@ export function emergencyLiteSnapshotData(
   if (Object.prototype.hasOwnProperty.call(data, 'chartModels')) tryMerge({ chartModels: data.chartModels })
 
   if (!fits(best)) {
-    const stripped = { ...best } as Record<string, unknown>
-    delete stripped.reportProductHistory
-    delete stripped.reportPlotBands
-    delete stripped.chartModels
-    delete stripped.siteUi
-    if (fits(stripped)) best = stripped
-  }
-
-  if (!fits(best)) {
     best = pickKeys(data, ['filters', 'filtersResolved', 'urls'])
     if (!fits(best)) best = pickKeys(data, ['urls'])
     if (!fits(best)) best = {}
