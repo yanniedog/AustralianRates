@@ -61,6 +61,7 @@ See `docs/CONCURRENT_AGENT_WORKFLOW.md` (“CI vs PR review bots”).
 
 - The user **explicitly** asks to push **directly to `main`** (e.g. emergency hotfix): do that and still complete production closeout after deploy.
 - The user **already** has you on a named feature branch for the task: commit there, push, open/update the PR; merge/rebase from `origin/main` if the branch is stale.
+- The maintainer **explicitly waives bot closeout in writing for a specific PR**: assistants may merge or enable auto-merge for **that PR only** without completing the **Bot feedback wait gate** and threaded replies (default policy remains the gate above).
 
 ## Do not
 

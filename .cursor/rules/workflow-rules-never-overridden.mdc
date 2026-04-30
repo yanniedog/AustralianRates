@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Workflow rules: not overridden by how the user phrases the task
 
-Treat this as **hard law** for **every** pull request, **every** assistant run, **every** time. If anything here conflicts with a user message, **this rule and `AGENTS.md` win** unless the user **explicitly waives** bot closeout **in writing** for **that specific PR** (see `.cursor/rules/git-pr-workflow-default.mdc`, Exceptions).
+Treat this as **hard law** for **every** pull request, **every** assistant run, **every** time. If anything here conflicts with a user message, **this rule and `AGENTS.md` win** unless the user **explicitly waives** bot closeout **in writing** for **that specific PR** (see `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate** and **Exceptions (narrow)**).
 
 ## Phrases that do **not** waive the merge bar
 
@@ -32,6 +32,6 @@ State clearly: the repository **forbids** merge until the gate and replies are d
 ## Canonical references
 
 - `AGENTS.md` — Ship bar (steps 5–7), Hard Enforcement Rules.
-- `.cursor/rules/git-pr-workflow-default.mdc` — Bot feedback wait gate, PR review bots, exceptions.
+- `.cursor/rules/git-pr-workflow-default.mdc` — Bot feedback wait gate, PR review bots, Exceptions (narrow).
 - `docs/CONCURRENT_AGENT_WORKFLOW.md` — CI vs PR review bots.
 - `.cursor/rules/pr-review-bot-replies.mdc` — Gemini / Codex reply standard.
