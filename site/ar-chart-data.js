@@ -1022,7 +1022,7 @@
             });
         };
         if (chartLocalData && typeof chartLocalData.getSlicePairStats === 'function') {
-            return Promise.resolve(chartLocalData.getSlicePairStats(queryParams)).then(function (localResult) {
+            return chartLocalData.getSlicePairStats(queryParams).then(function (localResult) {
                 if (localResult) return localResult;
                 return fetcher();
             });
