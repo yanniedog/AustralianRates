@@ -16,6 +16,12 @@ For **any** change that touches the repository, assistants (**Cursor**, **Codex*
 5. Open a **pull request into `main`** (`gh pr create --base main` with title/body, or GitHub UI).
 6. **Green CI:** keep pushing until **`ci_result`** passes (`.github/workflows/ci.yml`). **`ci_result` green is necessary but NOT sufficient for merge** (see **Bot feedback wait gate** below). **Squash auto-merge:** for **`agent/*`**, **`feat/*`**, **`fix/*`**, **`.github/workflows/pr-auto-merge.yml`** can enable auto-merge; GitHub completes it when **`ci_result`** is green (and the PR is mergeable)—**review-bot apps are not part of that gate.** Finish **PR review bots** (next sections) **before** enabling auto-merge so a green CI run cannot merge ahead of unresolved bot threads. If auto-merge is unavailable (conflicts, settings), fix forward or use `gh pr merge --squash` / leave the **PR URL** for the human — **still only after the wait gate.** **`.github/workflows/stale-branch-cleanup.yml`** trims stale **`agent/*`** / **`feat/*`** / **`fix/*`** remote heads after merges (see `docs/CONCURRENT_AGENT_WORKFLOW.md`); prefer **Automatically delete head branches** in repo settings.
 
+### Same PR for follow-up work (bots / CI / E2E / rollout)
+
+**Fix forward on the open PR branch.** If review bots request changes, **`ci_result`/checks fail**, **E2E or integration gates fail**, or **deploy/preview/production verification** finds issues, add commits on **that PR’s branch** and push—**do not** open a **second** PR for the same deliverable unless the maintainer **explicitly** directs otherwise.
+
+After each fix push, **ask bots and humans to take another pass:** post on the PR (or reply **in-thread** on existing bot threads) and **@mention** whoever should re-review—use the **same `@username` handles** that already commented on the PR (automated apps vary by installation; typical examples include Gemini Code Assist, GitHub Copilot, Codex, CodeRabbit, Greptile, Sourcery). Include a short summary of what changed and optionally the commit SHA.
+
 ### Bot feedback wait gate (hard — do not merge early)
 
 Assistants MUST treat **manual merge** (`gh pr merge …`) or **enabling squash auto-merge** as **forbidden until this gate completes**, unless the human **explicitly waives bot closeout** for that PR.

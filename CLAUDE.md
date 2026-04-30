@@ -8,7 +8,7 @@ Always:
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
-- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → after **`ci_result`** is green run the **Bot feedback wait gate** (late bot sweep **and** ~10–15 minute wait/re-poll unless waived), **reply on every PR review bot** thread → **merge**. Do **not** merge when CI alone is green. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**), `AGENTS.md` (“Default git workflow”), `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**). Use `gh pr create`, `gh pr checks watch`; use `gh pr merge` (**only** after gate + replies unless waived).
+- **Default (mandatory unless the user waives or orders a `main` hotfix):** feature branch off `main` → commit → push branch → **PR to `main`** → after **`ci_result`** is green run the **Bot feedback wait gate** (late bot sweep **and** ~10–15 minute wait/re-poll unless waived), **reply on every PR review bot** thread → **merge**. Do **not** merge when CI alone is green. **Follow-up fixes** for bots/E2E/rollout stay on **that** PR—push commits and **@mention** bots for re-review; do **not** split into a second PR unless explicitly directed. See `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**), `AGENTS.md` (“Default git workflow”), `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**). Use `gh pr create`, `gh pr checks watch`; use `gh pr merge` (**only** after gate + replies unless waived).
 - **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
 
 Deployed app:
