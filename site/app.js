@@ -327,6 +327,7 @@
             if (filters && filters.resetFilters) filters.resetFilters();
         });
     }
+    if (els.filterMode) {
         els.filterMode.addEventListener('change', function () {
             if (filters && filters.refreshFilterUiState) filters.refreshFilterUiState();
         });
