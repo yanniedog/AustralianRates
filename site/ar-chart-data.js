@@ -957,6 +957,19 @@
         return inflightChartRequests[key];
     }
 
+    function localAnalyticsHasRenderableRows(localResult) {
+        if (!localResult || typeof localResult !== 'object') return false;
+        if (Array.isArray(localResult.rows) && localResult.rows.length > 0) return true;
+        if (
+            localResult.grouped_rows
+            && Array.isArray(localResult.grouped_rows.groups)
+            && localResult.grouped_rows.groups.length > 0
+        ) {
+            return true;
+        }
+        return false;
+    }
+
     function fetchAnalyticsRows(params) {
         var queryParams = {};
         Object.keys(params || {}).forEach(function (key) {
@@ -967,7 +980,7 @@
         var bypassSnapshot = !!(params && params._bypassSnapshot);
         if (!bypassSnapshot && chartLocalData && typeof chartLocalData.getAnalyticsRows === 'function') {
             return Promise.resolve(chartLocalData.getAnalyticsRows(queryParams)).then(function (localResult) {
-                if (localResult && (Array.isArray(localResult.rows) || (localResult.grouped_rows && Array.isArray(localResult.grouped_rows.groups)))) {
+                if (localAnalyticsHasRenderableRows(localResult)) {
                     return localResult;
                 }
                 var policy = buildRequestPolicy('/analytics/series', queryParams, 'series');
