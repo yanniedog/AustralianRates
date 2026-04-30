@@ -15,7 +15,7 @@ When this repository changes and the goal is to land work on production, complet
 5. **Wait gate** — After CI is green: late-review sweep **and** ~10–15 minute wait/re-poll (unless waived); automated reviewers often arrive **after** Actions finish.
 6. **Threaded closure** — Reply **in-thread** on GitHub for every substantive bot and human review thread (implemented / deferred / declined with reason).
 7. **Merge** — Squash-merge (or merge per repo policy) **only after** steps 5–6; **do not** enable squash auto-merge until the wait gate and threaded replies are complete so CI cannot merge early.
-8. **Deploy confirmation** — Confirm Cloudflare Pages and/or Workers deploys **finished** for whatever changed; a successful `git push` or merge is **not** proof.
+8. **Deploy confirmation** — Confirm Cloudflare Pages and/or Workers deploys **finished** for whatever changed; a successful `git push` or landing on `main` is **not** proof.
 9. **Production verify** — Run the repo verification commands (default: `npm run verify:prod -- --scope=auto --depth=smoke`; broader scope when required) against **https://www.australianrates.com**; the final assistant message must state **exact commands, exit codes, and pass/fail**—or that verification was waived or blocked.
 
 If the current environment cannot run a step (auth, permissions, time, blocked runners), **say so plainly** and list **remaining** steps—do **not** imply the ship bar is cleared.
