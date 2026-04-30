@@ -4,7 +4,7 @@ Read **`AGENTS.md`** and **`CLAUDE.md`** at this repo root for commands, product
 
 ## Git workflow (default)
 
-Same as **Cursor** / **Claude**: feature branch → PR to **`main`** → **`ci_result`** → **wait gate + in-thread replies** (**`git-pr-workflow-default.mdc`**). Never merge on CI alone; **`workflow-rules-never-overridden.mdc`** applies. Follow-ups on the **same** PR. **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (automation/settings).
+Same as **Cursor** / **Claude**: feature branch → PR to **`main`** → **`ci_result`** → **wait gate + in-thread replies** (**`.cursor/rules/git-pr-workflow-default.mdc`**). Never merge on CI alone; **`.cursor/rules/workflow-rules-never-overridden.mdc`** applies. Follow-ups on the **same** PR. **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (automation/settings).
 
 **Exception:** direct **`main`** push only if the user explicitly requests a hotfix on `main`.
 

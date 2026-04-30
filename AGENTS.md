@@ -4,9 +4,9 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 
 ## Ship bar (do not say “done” until every step)
 
-**CI green ≠ merge-ready, shipped, or production updated.** Steps 5–7 below are **policy** (wait gate + threaded replies + merge); user tone and “merge everything” wording **never** waive them unless **explicit written waiver of bot closeout for that PR**—**`workflow-rules-never-overridden.mdc`**.
+**CI green ≠ merge-ready, shipped, or production updated.** Steps 5–7 below are **policy** (wait gate + threaded replies + merge); user tone and “merge everything” wording **never** waive them unless **explicit written waiver of bot closeout for that PR**—**`.cursor/rules/workflow-rules-never-overridden.mdc`**.
 
-**Anti–early-stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`npm run ship:closeout`**, **`.cursor/rules/no-early-stop-after-pr.mdc`**. Full procedure (**wait gate** checklist): **`git-pr-workflow-default.mdc`**.
+**Anti–early-stop:** **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**, **`npm run ship:closeout`**, **`.cursor/rules/no-early-stop-after-pr.mdc`**. Full procedure (**wait gate** checklist): **`.cursor/rules/git-pr-workflow-default.mdc`**.
 
 When landing on production, finish **in order** (unless that step is **waived in writing**):
 
@@ -14,7 +14,7 @@ When landing on production, finish **in order** (unless that step is **waived in
 2. **Commit + push** — On the topic branch only.
 3. **PR** — Into `main`.
 4. **CI** — `ci_result` green; fix forward on **this** PR (**@mention** re-review after pushes).
-5. **Wait gate** — After green CI: **`git-pr-workflow-default.mdc`** (late sweep, UI settles, ~10–15 min re-poll unless waived).
+5. **Wait gate** — After green CI: **`.cursor/rules/git-pr-workflow-default.mdc`** (late sweep, UI settles, ~10–15 min re-poll unless waived).
 6. **Threaded closure** — In-thread replies on substantive bot/human threads (**implemented / deferred / declined**).
 7. **Merge** — Only after 5–6; do **not** enable auto-merge before then (**`pr-auto-merge.yml`** merges on CI only).
 8. **Deploy confirmed** — Pages/Workers finished (push ≠ deployed).
@@ -38,7 +38,7 @@ This repo has multiple concurrent agents working in parallel. Every agent MUST:
 
 - **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
 - **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
-- **Watch CI** (`gh pr checks <num> --watch`); fix on the **same** branch. **`ci_result` alone is not merge OK**—then **`git-pr-workflow-default.mdc`** (wait gate + threaded replies).
+- **Watch CI** (`gh pr checks <num> --watch`); fix on the **same** branch. **`ci_result` alone is not merge OK**—then **`.cursor/rules/git-pr-workflow-default.mdc`** (wait gate + threaded replies).
 - **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
 
 Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
@@ -49,7 +49,7 @@ Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
 
 **Follow-ups stay on one PR:** For bot feedback, failing CI/E2E, or failed rollout/production verification on an **already-open** PR, commit on **that** branch and push—do **not** open a duplicate PR for the same task unless explicitly instructed. After each fix push, **@mention** the relevant bots or reviewers on the PR (use the **same `@handles`** they used when commenting—see **`gh pr view -c`** for the timeline) and include a short summary of what changed (optionally the commit SHA) so they know to re-review.
 
-**Merge / auto-merge:** **`ci_result`** is necessary, not sufficient—**`git-pr-workflow-default.mdc`** (**wait gate** + **in-thread** bot/human replies) before **`gh pr merge`** or **first-time** squash auto-merge. **`pr-auto-merge.yml`** merges on CI only (**`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
+**Merge / auto-merge:** **`ci_result`** is necessary, not sufficient—**`.cursor/rules/git-pr-workflow-default.mdc`** (**wait gate** + **in-thread** bot/human replies) before **`gh pr merge`** or **first-time** squash auto-merge. **`pr-auto-merge.yml`** merges on CI only (**`docs/CONCURRENT_AGENT_WORKFLOW.md`**).
 
 The **production verification** steps below apply **after** the change is on **`main`** and hosting deploys have finished (merged PR or rare explicit `main` hotfix). A green PR alone is not the same as an updated **www.australianrates.com** until merge + deploy.
 

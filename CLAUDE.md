@@ -8,7 +8,7 @@ Always:
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
-- **Default** (unless user waives or orders a **`main` hotfix**): branch off **`main`** → PR to **`main`** → green **`ci_result`** → full **wait gate + threaded replies** in **`.cursor/rules/git-pr-workflow-default.mdc`** → merge. **`workflow-rules-never-overridden.mdc`**: urgency / “merge all” never waives the gate. Same PR for follow-ups; **`gh pr create`**, **`gh pr checks watch`**, **`gh pr merge`** only after gate (or written waiver). Ops detail: **`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
+- **Default** (unless user waives or orders a **`main` hotfix**): branch off **`main`** → PR to **`main`** → green **`ci_result`** → full **wait gate + threaded replies** in **`.cursor/rules/git-pr-workflow-default.mdc`** → merge. **`.cursor/rules/workflow-rules-never-overridden.mdc`**: urgency / “merge all” never waives the gate. Same PR for follow-ups; **`gh pr create`**, **`gh pr checks watch`**, **`gh pr merge`** only after gate (or written waiver). Ops detail: **`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
 - **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
 
 Deployed app:

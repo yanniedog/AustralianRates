@@ -4,7 +4,7 @@ For **Cursor, Codex, Claude**, and similar automation: complements **`AGENTS.md`
 
 ## Why “PR / CI green” feels like done
 
-Investigation → fix → push → green CI matches a natural narrative; **shipping** continues through merge, deploy, and **`verify:prod`**. **`pr-auto-merge.yml`** can merge on CI alone—policy still requires **wait gate + threaded replies** before you enable merge/auto-merge (**`git-pr-workflow-default.mdc`**). Scope phrases like “fix the bug” are often read as code-done, not **users see www**.
+Investigation → fix → push → green CI matches a natural narrative; **shipping** continues through merge, deploy, and **`verify:prod`**. **`pr-auto-merge.yml`** can merge on CI alone—policy still requires **wait gate + threaded replies** before you enable merge/auto-merge (**`.cursor/rules/git-pr-workflow-default.mdc`**). Scope phrases like “fix the bug” are often read as code-done, not **users see www**.
 
 ## Completion (shipping to www.australianrates.com)
 
@@ -14,7 +14,7 @@ Finished only when **all** apply **or** the user **waived that step in writing**
 |------|------|
 | 1–3 | Branch from `origin/main` → commit + push → PR to `main` |
 | 4 | **`ci_result`** green (fix on same PR branch) |
-| 5–6 | **Wait gate + in-thread replies** per **`git-pr-workflow-default.mdc`** |
+| 5–6 | **Wait gate + in-thread replies** per **`.cursor/rules/git-pr-workflow-default.mdc`** |
 | 7 | **Merge** to `main` |
 | 8 | **Deploy finished** (Pages / Workers as applicable) |
 | 9 | **`npm run verify:prod -- --scope=auto --depth=smoke`** exit **0** (or broader per **`AGENTS.md`**) |
