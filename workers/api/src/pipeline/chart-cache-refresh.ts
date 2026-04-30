@@ -5,6 +5,7 @@ import {
 import { resolveFiltersForScope } from '../db/scope-filters'
 import { queryReportPlotPayload, refreshAllReportDeltaTables, REPORT_BANDS_SOURCE_VERSION } from '../db/report-plot'
 import { writeD1ReportPlotCache } from '../db/report-plot-cache'
+import { getLatestCompletedDailyRunFinishedAt } from '../db/run-reports'
 import { buildSnapshotKvKey, writeD1SnapshotCache, writeSnapshotKvBundles } from '../db/snapshot-cache'
 import { buildSnapshotPayload } from '../routes/snapshot-public'
 import type { EnvBindings } from '../types'
@@ -24,11 +25,24 @@ import {
 const REPRESENTATIONS = ['day', 'change'] as const
 const PUBLIC_PACKAGE_REFRESH_FRESH_MS = 20 * 60 * 60 * 1000
 
+/**
+ * Bundle is considered fresh when:
+ *  1. KV has a parseable payload with the current band_source_version, AND
+ *  2. builtAt is within `PUBLIC_PACKAGE_REFRESH_FRESH_MS`, AND
+ *  3. no daily run has finished after the snapshot was built (otherwise the
+ *     snapshot reflects pre-ingest state and must be rebuilt to surface the
+ *     new data on the public ribbon / slice-pair indicators).
+ *
+ * `latestRunFinishedMs` is hoisted by the caller so a single D1 read covers
+ * every (section, scope) pair in the refresh sweep.
+ */
 async function isFreshPublicSnapshotPackage(
-  kv: KVNamespace | undefined,
+  env: EnvBindings,
   section: (typeof PUBLIC_PACKAGE_SECTIONS)[number],
   scope: string,
+  latestRunFinishedMs: number | null,
 ): Promise<boolean> {
+  const kv = env.CHART_CACHE_KV
   if (!kv) return false
   const raw = await kv.get(buildSnapshotKvKey(section, scope as Parameters<typeof buildSnapshotKvKey>[1]))
   if (!raw) return false
@@ -39,9 +53,22 @@ async function isFreshPublicSnapshotPackage(
     }
     if (parsed.data?.reportPlotBands?.meta?.band_source_version !== REPORT_BANDS_SOURCE_VERSION) return false
     const builtAt = new Date(String(parsed.builtAt || '')).getTime()
-    return Number.isFinite(builtAt) && Date.now() - builtAt < PUBLIC_PACKAGE_REFRESH_FRESH_MS
+    if (!Number.isFinite(builtAt) || Date.now() - builtAt >= PUBLIC_PACKAGE_REFRESH_FRESH_MS) return false
+    if (latestRunFinishedMs != null && latestRunFinishedMs > builtAt) return false
+    return true
   } catch {
     return false
+  }
+}
+
+async function resolveLatestRunFinishedMs(env: EnvBindings): Promise<number | null> {
+  try {
+    const finishedAt = await getLatestCompletedDailyRunFinishedAt(env.DB)
+    if (!finishedAt) return null
+    const ms = new Date(finishedAt).getTime()
+    return Number.isFinite(ms) ? ms : null
+  } catch {
+    return null
   }
 }
 
@@ -54,27 +81,46 @@ export async function refreshPublicSnapshotPackages(
   let skipped = 0
 
   const items = options?.items || publicSnapshotPackageScopeItems({ allScopes: options?.allScopes })
+  // Hoist the run-finalisation cutoff so freshness check stays O(1) D1 reads
+  // regardless of how many (section, scope) pairs we iterate.
+  const skipFreshnessCheck = options?.allScopes || options?.force
+  const latestRunFinishedMs = skipFreshnessCheck ? null : await resolveLatestRunFinishedMs(env)
+  const overallStartedAt = Date.now()
+  let lastFlushedRefreshed = 0
   for (const { section, scope: cacheScope } of items) {
+    const itemStartedAt = Date.now()
     try {
-      if (!options?.allScopes && !options?.force && (await isFreshPublicSnapshotPackage(env.CHART_CACHE_KV, section, cacheScope))) {
+      if (!skipFreshnessCheck && (await isFreshPublicSnapshotPackage(env, section, cacheScope, latestRunFinishedMs))) {
         skipped++
         continue
       }
       const snapshot = await buildSnapshotPayload(env, section, cacheScope)
       await writeSnapshotKvBundles(env.CHART_CACHE_KV, section, cacheScope, snapshot)
       refreshed++
+      // Persist a warn breadcrumb every 4 successful builds so an admin
+      // operator can see how far the cron got even when the worker is killed
+      // mid-iteration by a CPU-time limit. Warn-level persists immediately
+      // (info logs flush at handler exit, which the kill bypasses).
+      if (refreshed - lastFlushedRefreshed >= 4) {
+        lastFlushedRefreshed = refreshed
+        log.warn('public_package_refresh', 'progress checkpoint', {
+          code: 'public_package_refresh_progress',
+          context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length} elapsed_ms=${Date.now() - overallStartedAt} last_section=${section} last_scope=${cacheScope} last_item_ms=${Date.now() - itemStartedAt}`,
+        })
+      }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e)
       errors.push(`${section}:snapshot:${cacheScope}: ${msg}`)
       log.warn('public_package_refresh', `Failed to refresh ${section} snapshot ${cacheScope}`, {
         code: 'public_package_refresh_failed',
-        context: msg,
+        context: `${msg} elapsed_ms=${Date.now() - itemStartedAt}`,
       })
     }
   }
 
-  log.info('public_package_refresh', 'Public snapshot packages refreshed', {
-    context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length}`,
+  log.warn('public_package_refresh', 'Public snapshot packages refreshed', {
+    code: 'public_package_refresh_completed',
+    context: `refreshed=${refreshed} skipped=${skipped} errors=${errors.length} elapsed_ms=${Date.now() - overallStartedAt}`,
   })
   return { ok: errors.length === 0, refreshed, skipped, errors }
 }

@@ -91,7 +91,7 @@ async function fetchAndPersistPage(input: {
     dataset: input.dataset,
     jobKind: input.jobKind,
     collectionDate: input.collectionDate,
-    notes: `ubank_fallback lender=${input.lenderCode}` + (upstreamBlock.reasonCode ? ` reason=${upstreamBlock.reasonCode}` : ''),
+    notes: `ubank_fallback lender=${input.lenderCode} reason=${upstreamBlock.reasonCode ?? 'html_fallback'}`,
   })
   return {
     url: input.url,

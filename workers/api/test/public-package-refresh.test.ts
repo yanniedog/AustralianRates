@@ -32,13 +32,18 @@ describe('public snapshot package scopes', () => {
     expect(new Set(scopes).size).toBe(scopes.length)
   })
 
-  it('prioritizes 30D packages across all datasets before wider windows', () => {
+  it('prioritizes the bare default scope across all datasets before any windowed bucket', () => {
+    // The homepage hero, slice-pair indicators and ribbon read `/snapshot`
+    // with no `chart_window` query, which resolves to the bare default
+    // scope (`default` and `preset:consumer-default`). Refreshing those
+    // before 30D / 90D / 1Y buckets means the public ribbon recovers even
+    // when the cron's CPU budget runs out partway through the iteration.
     expect(publicSnapshotPackageScopeItems().slice(0, 5)).toEqual([
-      { section: 'home_loans', scope: 'preset:consumer-default:window:30D' },
-      { section: 'home_loans', scope: 'window:30D' },
-      { section: 'savings', scope: 'preset:consumer-default:window:30D' },
-      { section: 'savings', scope: 'window:30D' },
-      { section: 'term_deposits', scope: 'window:30D' },
+      { section: 'home_loans', scope: 'preset:consumer-default' },
+      { section: 'home_loans', scope: 'default' },
+      { section: 'savings', scope: 'preset:consumer-default' },
+      { section: 'savings', scope: 'default' },
+      { section: 'term_deposits', scope: 'default' },
     ])
   })
 })

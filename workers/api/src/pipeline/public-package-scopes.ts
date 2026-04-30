@@ -13,7 +13,13 @@ export type PublicPackageScope = {
 }
 
 export const PUBLIC_PACKAGE_SECTIONS: ChartCacheSection[] = ['home_loans', 'savings', 'term_deposits']
-const PUBLIC_PACKAGE_WINDOW_PRIORITY: Array<ChartWindow | null> = ['30D', '90D', null, '180D', '1Y', 'ALL']
+// The bare `default` scope (no window, no preset) is what `/snapshot` returns
+// for the homepage hero, ribbon and slice-pair indicators when the page loads
+// with no chart_window query. It MUST be refreshed before the heavier
+// windowed variants because the cron has consistently been running out of
+// budget mid-iteration — leaving savings/term_deposit defaults stale for 24+
+// hours while 30D/90D buckets got refreshed first. See `runPublicPackageRefreshCron`.
+const PUBLIC_PACKAGE_WINDOW_PRIORITY: Array<ChartWindow | null> = [null, '30D', '90D', '180D', '1Y', 'ALL']
 
 function uniqueScopes(scopes: ChartCacheScope[]): ChartCacheScope[] {
   return Array.from(new Set(scopes))

@@ -172,7 +172,6 @@
         if (!params || typeof params !== 'object') return false;
         if (params.bank || params.banks) return false;
         if (params.include_removed === 'true') return false;
-        if (params.include_manual === 'true') return false;
         if (isDisabledCompareEdgeCasesVal(params.exclude_compare_edge_cases)) return false;
         if (params.start_date || params.end_date) return false;
         if (!isKnownChartWindowValue(params.chart_window)) return false;
@@ -654,7 +653,7 @@
 
     SNAPSHOT.start = start;
     SNAPSHOT.ensureFullScope = function (scope) {
-        return fetchScopeBundle(scope || scopeFromState(), { activate: false, lite: false });
+        return fetchScopeBundle(scope || scopeFromState(), { activate: true, lite: false });
     };
     SNAPSHOT.getBundle = function (chartWindow, preset) {
         return bundleForScope(chartWindow || null, preset || null);
@@ -667,7 +666,10 @@
     SNAPSHOT.awaitReady = awaitReady;
     SNAPSHOT.awaitUrl = awaitUrl;
 
-    if (activeSection() !== 'term-deposits') {
+    if (shouldDeferTermDepositSnapshot()) {
+        var tdInline = window.AR && window.AR.snapshotInline;
+        if (tdInline && tdInline.data && !SNAPSHOT.inlined) adoptInlineSnapshot(tdInline);
+    } else {
         start();
     }
 })();

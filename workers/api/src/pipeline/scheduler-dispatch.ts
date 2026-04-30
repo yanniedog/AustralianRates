@@ -13,7 +13,7 @@ import { insertIntegrityAuditRun } from '../db/integrity-audit-runs'
 import { insertHealthCheckRun } from '../db/health-check-runs'
 import type { EnvBindings } from '../types'
 import { log } from '../utils/logger'
-import { refreshChartPivotCache } from './chart-cache-refresh'
+import { refreshChartPivotCache, refreshPublicSnapshotPackages } from './chart-cache-refresh'
 import { handleScheduledHourlyWayback } from './hourly-wayback'
 import { triggerMonthlyExport } from './monthly-export'
 import { runDailyBackup } from './daily-backup'
@@ -75,7 +75,10 @@ async function runSiteHealthCron(env: EnvBindings) {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
       idleMinutes: 5,
-      staleRunMinutes: 90,
+      // Normal daily ingest completes in ~10 minutes; a run stuck >30 min
+      // almost never recovers on its own, so close earlier so the public
+      // snapshot (which only refreshes after ingest finalises) can rebuild.
+      staleRunMinutes: 30,
       timeZone: env.MELBOURNE_TIMEZONE,
     })
     log.info('scheduler', 'Site health preflight reconciliation completed', {
@@ -91,6 +94,26 @@ async function runSiteHealthCron(env: EnvBindings) {
         ready_pass_count: reconciliation.ready_finalizations.pass_count ?? 1,
       }),
     })
+    // Reconciliation force-closes runs by direct UPDATE on run_reports — the
+    // queue-consumer post-run hook never sees this transition, so without
+    // this fan-out the public snapshot would wait for the next hourly
+    // public-package-refresh cron to notice the new finished_at. Trigger
+    // the same refresh path the consumer uses so the ribbon and slice-pair
+    // indicators rebuild within minutes of the stuck run being closed.
+    if (reconciliation.stale_runs.closed_runs > 0 || reconciliation.ready_finalizations.finalized_rows > 0) {
+      try {
+        const result = await refreshPublicSnapshotPackages(env)
+        log.info('scheduler', 'Site health post-reconciliation snapshot refresh', {
+          context: `closed_runs=${reconciliation.stale_runs.closed_runs} ready_finalized=${reconciliation.ready_finalizations.finalized_rows} refreshed=${result.refreshed} skipped=${result.skipped} errors=${result.errors.length}`,
+        })
+      } catch (error) {
+        log.warn('scheduler', 'Site health post-reconciliation snapshot refresh failed', {
+          code: 'post_reconciliation_refresh_failed',
+          error,
+          context: 'site_health_cron',
+        })
+      }
+    }
   } catch (error) {
     log.error('scheduler', 'Site health preflight reconciliation failed', {
       code: 'run_lifecycle_reconciliation_failed',

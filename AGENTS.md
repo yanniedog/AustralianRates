@@ -2,6 +2,26 @@
 
 Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two Workers (API, archive).
 
+## Ship bar (do not say “done” until every step)
+
+**Green `ci_result` / green CI alone must never be described as merge-ready, shipped, safe for users, or “production updated.”** Passing required checks does not authorize merge, auto-merge enablement, or task completion language.
+
+When this repository changes and the goal is to land work on production, complete **all** of the following **in order** unless the user **explicitly waives** a step in writing:
+
+1. **Branch** — Fresh branch from `origin/main` (see below); no direct pushes to `main` unless the user explicitly requests a `main` hotfix.
+2. **Commit and push** — Changes stay on that branch; push to `origin`.
+3. **Pull request** — Open (or update) a PR into `main`.
+4. **CI** — Required checks green (`ci_result`); fix forward on the branch until green.
+5. **Wait gate** — After CI is green: late-review sweep **and** ~10–15 minute wait/re-poll (unless waived); automated reviewers often arrive **after** Actions finish.
+6. **Threaded closure** — Reply **in-thread** on GitHub for every substantive bot and human review thread (implemented / deferred / declined with reason).
+7. **Merge** — Squash-merge (or merge per repo policy) **only after** steps 5–6; **do not** enable squash auto-merge until the wait gate and threaded replies are complete so CI cannot merge early.
+8. **Deploy confirmation** — Confirm Cloudflare Pages and/or Workers deploys **finished** for whatever changed; a successful `git push` or landing on `main` is **not** proof.
+9. **Production verify** — Run the repo verification commands (default: `npm run verify:prod -- --scope=auto --depth=smoke`; broader scope when required) against **https://www.australianrates.com**; the final assistant message must state **exact commands, exit codes, and pass/fail**—or that verification was waived or blocked.
+
+If the current environment cannot run a step (auth, permissions, time, blocked runners), **say so plainly** and list **remaining** steps—do **not** imply the ship bar is cleared.
+
+Detail and pointers: **Hard Enforcement Rules** below; **`.cursor/rules/git-pr-workflow-default.mdc`** (Bot feedback wait gate); **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (CI vs PR review bots).
+
 ## Hard Enforcement Rules (Must Always Be Followed)
 
 These rules are mandatory and override any conflicting preference.
@@ -16,7 +36,7 @@ This repo has multiple concurrent agents working in parallel. Every agent MUST:
 
 - **Always branch off fresh `origin/main`** with a **distinctive slug** (include the session topic plus a short nonce like `-kj1` if the topic is generic) — never reuse another agent's in-flight branch, and if collision is detected, move work to `agent/<slug>-v2` and reapply.
 - **Check for clashes** with other active `agent/*` / `feat/*` / `fix/*` branches before pushing and before merging; rebase/merge `origin/main` and resolve conflicts deliberately.
-- **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green. **PR review bots** count as peer review: **reply on the PR** to each bot comment (and fix code when applicable) before squash-merge to **`main`**—even if **CI** is already green. See `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”) and `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**).
+- **Watch CI feedback** (`gh pr checks <num> --watch`) and respond to every failure and review comment on the same branch until green. **`ci_result` green alone is not merge permission:** run the **Bot feedback wait gate** (late-review sweep **and ~10–15 minute** wait/re-poll for Gemini/Copilot/Codex/etc. unless **explicitly waived**), then **reply on the PR** to each substantive bot comment before squash-merge to **`main`**—see `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**, “PR review bots”) and `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**).
 - **Keep every file under ~800 LOC (hard ceiling 1000 LOC).** When a change would push a file past the soft target, split it along natural seams in the same PR or file a follow-up in `docs/REFACTOR_BACKLOG.md`. Exempt generated files, configs (`wrangler.*`, `tsconfig*`, `vite.config.*`, `vitest.config.*`), migrations, lockfiles, real-data test fixtures, and `node_modules`.
 
 Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
@@ -25,9 +45,9 @@ Cursor rule: `.cursor/rules/multiagent-modularity.mdc`.
 
 **Default:** land work via a **feature branch** and **PR into `main`** (not by pushing straight to `main`). Sync `main`, branch (`agent/` …), commit, push, open PR (`gh pr create --base main`).
 
-**Merge readiness:** **`ci_result`** green **and** every **PR review bot** thread answered **with an in-thread GitHub reply** (plus code fixes where applicable) **before** squash-merge—see **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (**CI vs PR review bots**) and **`.cursor/rules/git-pr-workflow-default.mdc`**.
+**Merge readiness:** **`ci_result`** green is **necessary but not sufficient.** Complete the **Bot feedback wait gate** in **`.cursor/rules/git-pr-workflow-default.mdc`** (late-review sweep after green CI **and** **~10–15 minute** wait/re-poll unless the human waived bot closeout—Gemini/Copilot/Codex often land **after** Actions). Then **`ci_result`** **and** every **PR review bot** thread must have an **in-thread GitHub reply** (plus code fixes where applicable) **before** squash-merge—see **`docs/CONCURRENT_AGENT_WORKFLOW.md`** (**CI vs PR review bots**) and **`.cursor/rules/git-pr-workflow-default.mdc`**.
 
-For **`agent/*`** / **`feat/*`** / **`fix/*`**, **`pr-auto-merge.yml`** can squash-merge when **`ci_result`** passes; **enable auto-merge only after** bot threads (including replies) are complete so CI does not merge early. **`stale-branch-cleanup.yml`** plus **`npm run git:graph-hygiene`** after merges keep refs tidy (`docs/CONCURRENT_AGENT_WORKFLOW.md`).
+For **`agent/*`** / **`feat/*`** / **`fix/*`**, **`pr-auto-merge.yml`** can squash-merge when **`ci_result`** passes; **enable auto-merge only after** the wait gate **and** threaded replies are complete so CI does not merge early. **`stale-branch-cleanup.yml`** plus **`npm run git:graph-hygiene`** after merges keep refs tidy (`docs/CONCURRENT_AGENT_WORKFLOW.md`).
 
 The **production verification** steps below apply **after** the change is on **`main`** and hosting deploys have finished (merged PR or rare explicit `main` hotfix). A green PR alone is not the same as an updated **www.australianrates.com** until merge + deploy.
 

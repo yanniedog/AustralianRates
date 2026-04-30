@@ -744,10 +744,19 @@ adminRoutes.post('/economic/collect', async (c) => {
 adminRoutes.post('/runs/reconcile', async (c) => {
   const body = (await c.req.json<Record<string, unknown>>().catch(() => ({}))) as Record<string, unknown>
   const dryRun = Boolean(body.dry_run ?? body.dryRun)
+  const idleMinutes = clampInt(String(body.idle_minutes ?? body.idleMinutes ?? 5), 5, 1, 1440)
+  // Default 30 to match scheduler-dispatch / scheduled cron callers — normal
+  // daily ingest finishes in ~10 min, so anything stuck >30 min is almost
+  // never going to recover and should be force-closed so the public snapshot
+  // (which only refreshes after ingest finalises) can rebuild. Upper clamp
+  // matches `getDiagnosticsBacklog` (10080 / 7 days) so a triage operator can
+  // dial in a long lookback without the diagnostics view reporting stale runs
+  // the reconciler refuses to act on.
+  const staleRunMinutes = clampInt(String(body.stale_run_minutes ?? body.staleRunMinutes ?? 30), 30, 1, 10080)
   const result = await runLifecycleReconciliation(c.env.DB, {
     dryRun,
-    idleMinutes: 5,
-    staleRunMinutes: 90,
+    idleMinutes,
+    staleRunMinutes,
     timeZone: c.env.MELBOURNE_TIMEZONE,
   })
   return c.json({

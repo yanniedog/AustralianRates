@@ -46,6 +46,15 @@ function isNoSuchTableError(error: unknown, table: string): boolean {
   return /no such table/i.test(message) && message.includes(table)
 }
 
+/**
+ * Cloudflare KV value size hard limit is 25 MiB; serialized snapshots that
+ * exceed this fail on `put` with `400 KV value size of N bytes is over the
+ * 25 MiB limit`. Treat anything above this as a refresh failure rather than
+ * silently retaining the prior bundle, which is how stale ribbons used to
+ * survive ingest cycles for a full day.
+ */
+const KV_VALUE_BYTE_LIMIT = 25 * 1024 * 1024
+
 /** Writes full snapshot KV plus a byte-capped inline variant for Pages `_middleware`. */
 export async function writeSnapshotKvBundles(
   kv: KVNamespace | undefined,
@@ -56,9 +65,24 @@ export async function writeSnapshotKvBundles(
   if (!kv) return
   const mainKey = buildSnapshotKvKey(section, scope)
   const inlineKey = buildSnapshotInlineKvKey(section, scope)
+  const serialized = JSON.stringify(payload)
+  const byteLength =
+    typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(serialized).length : serialized.length
+  if (byteLength > KV_VALUE_BYTE_LIMIT) {
+    log.error('snapshot_cache', 'snapshot KV bundle exceeds 25 MiB limit', {
+      code: 'snapshot_kv_value_too_large',
+      context: `key=${mainKey} bytes=${byteLength} limit=${KV_VALUE_BYTE_LIMIT} chars=${serialized.length}`,
+    })
+    return
+  }
   try {
-    await kv.put(mainKey, JSON.stringify(payload), { expirationTtl: CHART_CACHE_KV_TTL })
-  } catch {
+    await kv.put(mainKey, serialized, { expirationTtl: CHART_CACHE_KV_TTL })
+  } catch (error) {
+    log.error('snapshot_cache', 'snapshot KV put failed', {
+      code: 'snapshot_kv_put_failed',
+      error,
+      context: `key=${mainKey} bytes=${byteLength}`,
+    })
     return
   }
   try {
@@ -74,8 +98,12 @@ export async function writeSnapshotKvBundles(
     } else {
       await kv.delete(inlineKey)
     }
-  } catch {
-    /* ignore inline KV failure */
+  } catch (error) {
+    log.warn('snapshot_cache', 'snapshot inline KV write failed', {
+      code: 'snapshot_inline_kv_write_failed',
+      error,
+      context: `key=${inlineKey}`,
+    })
   }
 }
 

@@ -49,7 +49,9 @@ async function runOptionalScheduledPrelude(env: EnvBindings) {
     reconciliation = await runLifecycleReconciliation(env.DB, {
       dryRun: false,
       idleMinutes: 5,
-      staleRunMinutes: 90,
+      // Match site-health-cron: close runs stuck >30 min so partial-ingest
+      // snapshots are not held open until the legacy 90-min cutoff fires.
+      staleRunMinutes: 30,
       timeZone: env.MELBOURNE_TIMEZONE,
     })
     const ready = reconciliation.ready_finalizations

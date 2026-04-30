@@ -9,7 +9,7 @@ Assistants (**Cursor**, **Codex**, **Claude / Claude Code**) must treat automate
 
 Works with **`git-pr-workflow-default.mdc`** and **`multiagent-modularity.mdc`** (watch checks; merge only when intended).
 
-**Canonical phrase for merge readiness:** **enumerate threads → judge merits → reply in-thread** (implemented / deferred / declined), **then** squash-merge or enable auto-merge—see `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”) so wording stays consistent across docs.
+**Canonical phrase for merge readiness:** **wait gate → enumerate threads → judge merits → reply in-thread** (implemented / deferred / declined), **then** squash-merge or enable auto-merge—see `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate** + “PR review bots”) so wording stays consistent across docs.
 
 ## What counts as feedback
 

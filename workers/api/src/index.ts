@@ -144,11 +144,11 @@ const worker: ExportedHandler<EnvBindings, IngestMessage> = {
     }, { workload: classifyScheduledWorkload(cron) })
   },
 
-  async queue(batch, env): Promise<void> {
+  async queue(batch, env, ctx): Promise<void> {
     await withD1BudgetTracking(env, async (trackedEnv) => {
       initLogger(trackedEnv.DB)
       try {
-        await consumeIngestQueue(batch, trackedEnv)
+        await consumeIngestQueue(batch, trackedEnv, ctx)
       } catch (error) {
         log.error('consumer', 'Queue batch processing failed', {
           error,

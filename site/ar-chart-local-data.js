@@ -236,7 +236,6 @@
         var balanceMin = numeric(params && params.balance_min);
         var balanceMax = numeric(params && params.balance_max);
         var includeRemoved = normalizeLower(params && params.include_removed) === 'true';
-        var includeManual = normalizeLower(params && params.include_manual) === 'true';
 
         return (rows || []).filter(function (row) {
             var rowDate = String(row && row.collection_date || '').slice(0, 10);
@@ -245,7 +244,6 @@
                 if (bounds.endDate && rowDate && rowDate > bounds.endDate) return false;
             }
             if (!includeRemoved && row && row.is_removed) return false;
-            if (!includeManual && normalizeLower(row && row.run_source) === 'manual') return false;
             if (!csvMatch(row && row.bank_name, filters.banks)) return false;
             if (!csvMatch(row && row.security_purpose, filters.security_purpose)) return false;
             if (!csvMatch(row && row.repayment_type, filters.repayment_type)) return false;
