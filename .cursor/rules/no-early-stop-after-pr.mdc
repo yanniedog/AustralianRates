@@ -1,0 +1,35 @@
+---
+description: "Hard guard: do not claim task complete or stop a shipping flow after PR/CI only"
+alwaysApply: true
+---
+
+# No early stop after “PR opened” or “CI green”
+
+This rule is a **hard completion guard** for any task where the user expects work to land on **https://www.australianrates.com**.
+
+## Do not end your turn as “done” when only this much is true
+
+- Branch pushed and **PR opened**
+- **`ci_result` / CI green**
+- Preview deploy succeeded **but PR is not merged to `main`**
+- You “handed off” the PR URL **and you could have** continued with merge + verify (no explicit blocker)
+
+Those are **middle** of the ship bar in **`AGENTS.md`**, not the end.
+
+## Before you say the task is finished (shipping)
+
+You must have either:
+
+1. Completed **merge to `main`**, confirmed deploy, run **`npm run verify:prod -- --scope=auto --depth=smoke`** (or broader per **`AGENTS.md`**) and reported **command + exit code**,  
+2. **Or** the user **explicitly waived** commit / merge / production verify **in writing for that task**,  
+3. **Or** you are **blocked** (no `gh` auth, no merge rights, org policy) — then list **every remaining step** and do **not** say production is updated.
+
+## Policy beats brevity
+
+If you are about to close with “here’s the PR” or “CI passed”:
+
+- Run **`npm run ship:closeout`** from repo root and continue with **wait gate → threaded replies → merge → verify:prod** per **`docs/ASSISTANT_SHIP_CLOSEOUT.md`** and **`git-pr-workflow-default.mdc`**.
+
+## Auto-merge warning
+
+**`pr-auto-merge.yml`** may merge when **`ci_result`** is green. **Do not** enable or rely on auto-merge until **Bot feedback wait gate** and **in-thread bot closure** are done, or CI may merge ahead of unanswered review threads — see **`AGENTS.md`** and **`workflow-rules-never-overridden.mdc`**.

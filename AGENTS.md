@@ -6,6 +6,8 @@ Australian Rates is a monorepo with a static frontend (Cloudflare Pages) and two
 
 **Green `ci_result` / green CI alone must never be described as merge-ready, shipped, safe for users, or “production updated.”** Passing required checks does not authorize merge, auto-merge enablement, or task completion language.
 
+**Common assistant failure mode:** stopping after **PR opened** or **CI green** (steps 3–4 of 9). Read **`docs/ASSISTANT_SHIP_CLOSEOUT.md`** (root causes + forbidden phrases). Before the **final** message on work that should reach production, run **`npm run ship:closeout`** from repo root (checklist + optional open-PR warning). Cursor: **`.cursor/rules/no-early-stop-after-pr.mdc`**.
+
 When this repository changes and the goal is to land work on production, complete **all** of the following **in order** unless the user **explicitly waives** a step in writing:
 
 1. **Branch** — Fresh branch from `origin/main` (see below); no direct pushes to `main` unless the user explicitly requests a `main` hotfix.

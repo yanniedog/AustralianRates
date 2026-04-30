@@ -20,4 +20,4 @@ Presentation:
 - Default to one-line rows and linear parameter layouts for operational or analytical data.
 
 When handing off:
-- Give branch/PR link, CI status if known, and the Verification checklist. Do not say production is safe for schema/migrations/secrets without calling that out clearly.
+- **Shipping tasks:** handing off is **after** merge to `main`, deploy, and **`npm run verify:prod -- --scope=auto --depth=smoke`** (evidence in the message)—not “here is the PR” while you still have merge ability. If you are **blocked** (no auth, no merge rights), give the PR URL, CI status, **and** the exact remaining steps from **`docs/ASSISTANT_SHIP_CLOSEOUT.md`**. Do not say production is safe for schema/migrations/secrets without calling that out clearly.

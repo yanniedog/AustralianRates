@@ -59,6 +59,7 @@
     "test:logs-api": "node test-logs-api.js",
     "verify:prod-hosting": "node scripts/verify-production-hosting.mjs",
     "verify:prod": "node scripts/verify-prod.mjs",
+    "ship:closeout": "node scripts/ship-closeout-remind.mjs",
     "test:verify-prod": "node --test scripts/test/verify-prod.test.mjs",
     "verify:ubank-savings-gap": "node verify-ubank-savings-gap.mjs",
     "fix:cloudflare-dns-tls": "node scripts/fix-cloudflare-dns-tls.js",
