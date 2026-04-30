@@ -133,15 +133,16 @@ describe('chart-site-ui', () => {
     }
   })
 
-  it('mergeChartRibbonStylePartial enables slice pair table only when true', () => {
-    expect(DEFAULT_CHART_RIBBON_STYLE.slice_pair_table_enabled).toBe(false)
+  it('mergeChartRibbonStylePartial defaults slice pair table on; explicit false disables', () => {
+    expect(DEFAULT_CHART_RIBBON_STYLE.slice_pair_table_enabled).toBe(true)
+    expect(mergeChartRibbonStylePartial({}).slice_pair_table_enabled).toBe(true)
     expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: true } as Record<string, unknown>).slice_pair_table_enabled).toBe(
       true,
     )
     expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: false } as Record<string, unknown>).slice_pair_table_enabled).toBe(
       false,
     )
-    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: 1 } as Record<string, unknown>).slice_pair_table_enabled).toBe(false)
+    expect(mergeChartRibbonStylePartial({ slice_pair_table_enabled: 1 } as Record<string, unknown>).slice_pair_table_enabled).toBe(true)
     const m = mergeChartRibbonStylePartial({
       slice_pair_font_px: 99,
       slice_pair_text_color: '#nothex',

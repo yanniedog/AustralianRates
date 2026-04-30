@@ -31,7 +31,7 @@
         active_z: 48,
         inactive_z: 2,
         gap_fill_enabled: true,
-        slice_pair_table_enabled: false,
+        slice_pair_table_enabled: true,
         slice_pair_font_px: 11,
         slice_pair_text_color: '',
         slice_pair_text_alpha: 1,
@@ -218,7 +218,7 @@
             active_z: active_z,
             inactive_z: inactive_z,
             gap_fill_enabled: raw.gap_fill_enabled === false ? false : d.gap_fill_enabled,
-            slice_pair_table_enabled: raw.slice_pair_table_enabled === true,
+            slice_pair_table_enabled: raw.slice_pair_table_enabled === false ? false : d.slice_pair_table_enabled,
             slice_pair_font_px: (function () {
                 var n = pick('slice_pair_font_px', 7, 18, d.slice_pair_font_px);
                 return Math.round(n);

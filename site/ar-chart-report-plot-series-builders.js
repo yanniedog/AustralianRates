@@ -105,7 +105,7 @@
             active_z: 48,
             inactive_z: 2,
             gap_fill_enabled: true,
-            slice_pair_table_enabled: false,
+            slice_pair_table_enabled: true,
             slice_pair_font_px: 11,
             slice_pair_text_color: '',
             slice_pair_text_alpha: 1,

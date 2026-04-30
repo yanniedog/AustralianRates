@@ -178,7 +178,7 @@
             'position:absolute',
             'top:8px',
             'left:10px',
-            'z-index:6',
+            'z-index:20',
             'display:none',
             'max-width:min(520px, calc(100vw - 28px))',
             'padding:7px 9px',
@@ -1039,11 +1039,11 @@
         function showReportHoverBox(input) {
             if (!reportHoverBox || !input) return;
             var rows = input.rows || [];
-            if (!rows.length) {
+            var sliceBlock = input.slicePairTableHtml || '';
+            if (!rows.length && !sliceBlock) {
                 reportHoverBox.style.display = 'none';
                 return;
             }
-            var sliceBlock = input.slicePairTableHtml || '';
             reportHoverBox.innerHTML =
                 '<div style="font-weight:800;margin-bottom:2px;white-space:nowrap;overflow:visible;">' + escHtml(input.heading || 'Chart') + '</div>' +
                 '<div style="color:' + theme.muted + ';font-size:10px;margin-bottom:5px;white-space:nowrap;">' + escHtml(input.date || '') + '</div>' +
@@ -1085,6 +1085,19 @@
                 if (Number.isFinite(v) && v > 0) values.push(v);
             });
             if (!values.length) {
+                if (sliceHtml && rs && rs.slice_pair_table_enabled) {
+                    showReportHoverBox({
+                        heading: 'Visible ribbon',
+                        date: fmtReportDateYmd(anchor),
+                        rows: [
+                            { label: 'Min', value: '\u2014' },
+                            { label: 'Mean', value: '\u2014' },
+                            { label: 'Max', value: '\u2014' },
+                        ],
+                        slicePairTableHtml: sliceHtml,
+                    });
+                    return;
+                }
                 if (reportHoverBox) reportHoverBox.style.display = 'none';
                 return;
             }

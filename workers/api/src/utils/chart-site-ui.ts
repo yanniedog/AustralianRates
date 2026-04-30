@@ -264,7 +264,7 @@ export const DEFAULT_CHART_RIBBON_STYLE: ChartRibbonStyle = {
   active_z: 48,
   inactive_z: 2,
   gap_fill_enabled: true,
-  slice_pair_table_enabled: false,
+  slice_pair_table_enabled: true,
   slice_pair_font_px: 11,
   slice_pair_text_color: '',
   slice_pair_text_alpha: 1,
@@ -345,7 +345,7 @@ export function mergeChartRibbonStylePartial(raw: Record<string, unknown> | null
     active_z,
     inactive_z,
     gap_fill_enabled: raw.gap_fill_enabled === false ? false : d.gap_fill_enabled,
-    slice_pair_table_enabled: raw.slice_pair_table_enabled === true,
+    slice_pair_table_enabled: raw.slice_pair_table_enabled === false ? false : d.slice_pair_table_enabled,
     slice_pair_font_px: (() => {
       const n = numLike(raw.slice_pair_font_px)
       if (n === null) return d.slice_pair_font_px
