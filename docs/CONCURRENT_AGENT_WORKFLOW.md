@@ -38,13 +38,15 @@ Branch protection + **`ci_result`** control **whether GitHub allows a merge**. *
 **Peer-review policy (assistants and humans):** treat bots as reviewers. **Order:**
 
 1. **`ci_result`** green.
-2. **Bot feedback wait gate** (full checklist: `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate**): **late-review sweep** (`gh pr view`, UI, or API) for Gemini Code Assist, Copilot, Codex, CodeRabbit, Greptile, Sourcery, etc.; if no substantive threads yet, **wait ~10–15 minutes** after first green CI and **re-check** (late bot reviews are normal).
+2. **Bot feedback wait gate** (full checklist: `.cursor/rules/git-pr-workflow-default.mdc`, **Bot feedback wait gate**): **late-review sweep** (`gh pr view`, UI, or API) for Gemini Code Assist, Copilot, Codex, CodeRabbit, Greptile, Sourcery, etc.; **on github.com**, watch for PR UI cues (reactions/emojis or similar showing a bot review **still in progress**) and wait until those **settle** before calling the gate clear; if no substantive threads yet, **wait ~10–15 minutes** after first green CI and **re-check** (late bot reviews are normal).
 3. **Every substantive bot thread:** **in-thread reply** (fix + reply, or reply-only with rationale).
 4. **Only then** enable auto-merge or **`gh pr merge --squash`**.
 
 Code-only fixes without replies are **not** sufficient. Skipping (2)–(3) risks merging before bot feedback exists on the PR—or before you have visibly handled it.
 
-Canonical wording: `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**, “PR review bots”).
+**Iterate on the same PR:** When something fails after the PR is open—bot requests, **`ci_result`/checks**, **E2E**, or **deploy/preview/production verification**—commit on the **existing** head branch and push. Avoid opening a **second** PR for the same task unless the maintainer explicitly wants a split. After pushing fixes, leave a PR comment (or in-thread replies) that **@mentions** the bots or reviewers who should run again, using the **same `@username` handles** already visible on that PR (use **`gh pr view --comments`** to see them; below are typical **app names**, not guaranteed handles: Gemini Code Assist, GitHub Copilot, Codex, CodeRabbit, Greptile, Sourcery—only those actually installed on the repo). Include a short summary of what changed and optionally the commit SHA.
+
+Canonical wording: `.cursor/rules/git-pr-workflow-default.mdc` (**Bot feedback wait gate**, “PR review bots”, **Same PR for follow-up work**).
 
 ## Keeping the Git graph readable (local clones)
 

@@ -20,7 +20,8 @@ This repo is actively worked on by **multiple concurrent agents** (Cursor, Codex
    - Resolve conflicts deliberately — do not blindly accept either side. Preserve both agents' intent where possible.
 3. **Respond to CI and PR review feedback, always.** After push and PR creation:
    - Watch PR checks (`gh pr checks <num> --watch`) and the Cloudflare deploy, not just local tests.
-   - For every failure, read the log, fix on the same branch, push again. Loop until CI is green.
+   - For every failure, read the log, fix on the **same PR branch**, push again—**do not** open a new PR for the same task unless explicitly directed. After fix pushes, **@mention** relevant bots/reviewers on the PR (using the same **`@username` handles** from their comments) so they re-review.
+   - Loop until CI is green.
    - **`ci_result` green alone does NOT authorize merge.** Complete the **Bot feedback wait gate** in `.cursor/rules/git-pr-workflow-default.mdc` (**late-review sweep + ~10–15 minute wait/re-poll**, then threaded replies) before **`gh pr merge`** or **enabling squash auto-merge**—unless the human **explicitly waived** bot closeout for that PR.
    - **PR review bots** are **peer reviewers** (policy gate); **`ci_result`** is the mechanical gate—**reply** to each bot thread (and implement fixes where agreed) **before** merging; see `.cursor/rules/git-pr-workflow-default.mdc` (“PR review bots”, **Bot feedback wait gate**) and `docs/CONCURRENT_AGENT_WORKFLOW.md` (**CI vs PR review bots**).
    - Do **not** tell the user the task or PR is finished **before** substantive bot threads have **in-thread replies** (and late bots had time to arrive)—unless they explicitly waived bot closeout for that PR.
