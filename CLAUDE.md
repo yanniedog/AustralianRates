@@ -8,8 +8,9 @@ Always:
 - After npm install, git pre-push may run verify; do not tell me to manually configure editor "user rules" for basic workflow.
 
 Git/GitHub:
-- **Default** (unless user waives or orders a **`main` hotfix**): branch off **`main`** → PR to **`main`** → green **`ci_result`** → full **wait gate + threaded replies** in **`.cursor/rules/git-pr-workflow-default.mdc`** → merge. **`.cursor/rules/workflow-rules-never-overridden.mdc`**: urgency / “merge all” never waives the gate. Same PR for follow-ups; **`gh pr create`**, **`gh pr checks watch`**, **`gh pr merge`** only after gate (or written waiver). Ops detail: **`docs/CONCURRENT_AGENT_WORKFLOW.md`**.
-- **Codex:** also read repo-root `CODEX.md` (same workflow pointer).
+
+- **Default** (unless user waives or orders a **`main` hotfix**): `git checkout -b agent/<slug>` from fresh `origin/main` → commit → `gh pr create --base main` → `gh pr checks <n> --watch` until `ci_result` green → **wait gate** (stop; sweep PR comments/reviews via `gh` + github.com; if no threads wait ~10–15 min then re-sweep; calling “no feedback” at green CI is a violation) → **reply in-thread** on every substantive bot/human thread (implemented/deferred/declined) → `gh pr merge --squash` → confirm Pages/Workers deployed → `npm run verify:prod -- --scope=auto --depth=smoke` (exit 0). Urgency / “merge all” / “just merge” / frustration **never** waive the wait gate or thread closure — only an explicit written waiver for that PR does. Same PR for follow-ups. Ops detail: **`docs/CONCURRENT_AGENT_WORKFLOW.md`**; full step reference: **`.cursor/rules/git-pr-workflow-default.mdc`**.
+- **Codex:** also read repo-root `CODEX.md` (full inline ship bar there).
 
 Deployed app:
 - Do not claim the UI is correct based only on localhost if the app uses Cloudflare D1/KV/Workers or similar. End UI-facing tasks with a Verification block: URL (Preview if available), 3-7 concrete things to check, and what might regress.

@@ -1,30 +1,10 @@
 ---
-description: "Threaded PR replies to Gemini Code Assist, Codex, and similar automated reviews"
+description: "Bot reply requirement for Gemini, Codex, and similar automated reviewers — reply in-thread before merge"
 alwaysApply: true
 ---
 
-# Respond to automated PR reviewers (Gemini Code Assist, Codex, similar)
+# PR review bot replies
 
-**Substantive feedback** definition and merge timing: **`git-pr-workflow-default.mdc`** (“PR review bots”, **Bot feedback wait gate**). **Never** merge or enable auto-merge the instant CI turns green—complete that gate first (or explicit waiver).
+Bot reply standard is defined inline in `git-pr-workflow-default.mdc` (section "Bot/reviewer reply standard").
 
-Treat repo **automated code-review** output as mandatory communication follow-up—not optional—especially:
-
-- **Google Gemini Code Assist** (`gemini-code-assist`)
-- **Codex** when it appears as an automated reviewer
-
-Similar bots (summaries, inline comments, suggestion blocks) are included unless listed in **Exceptions**.
-
-## Required (each substantive point you own)
-
-1. **Reply in-thread** on the comment or review summary—not only pushes.
-2. Label **implemented** (what/SHA), **deferred** (why; optional `docs/REFACTOR_BACKLOG.md`), or **declined** (merit-based).
-3. Prefer a small follow-up commit when straightforward; explicit **defer** / **decline** must appear in-thread.
-
-Do **not** merge with substantive Gemini or Codex feedback **unanswered**.
-
-Green **`ci_result`** does not replace threaded closure.
-
-## Exceptions
-
-- **SKIPPED** / rate-limited empty / purely informational with no actionable claim: reply optional (“skipped”).
-- Already covered upstream: one bundled reply is fine.
+**Summary:** for every substantive thread from `gemini-code-assist`, `chatgpt-codex-connector`, `copilot`, `coderabbit`, `sourcery-ai`, scanners — reply in-thread before merge: implemented (+ SHA) / deferred (reason) / declined (reason). Do not merge with unanswered threads. Green `ci_result` does not replace thread closure.

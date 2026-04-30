@@ -1,30 +1,17 @@
 ---
-description: "Bot wait gate + in-thread closure before merge; user phrasing never waives them"
+description: "Hard law: urgency, frustration, and batch-merge phrasing never waive the wait gate or thread closure"
 alwaysApply: true
 ---
 
-# Workflow: user wording does not shorten the merge bar
+# User wording does not shorten the ship bar
 
-**Hard law:** if a user message conflicts with this, **`AGENTS.md`** and this rule win unless they **explicitly waive bot closeout in writing for that PR** (**`git-pr-workflow-default.mdc`**, Exceptions).
+These phrases do **not** waive the wait gate (step 5) or thread closure (step 6) in `git-pr-workflow-default.mdc`:
 
-## Never waives **`AGENTS.md`** steps 5–7 or the gate below
+- "Merge everything" / "batch merge" / "land the queue"
+- "Just merge" / "urgency" / frustration tone
+- "CI green" / "checks passed" while threads are missing or unsettled
+- Skipping the ~10–15 min post–green-CI re-poll
 
-- Throughput phrases: “merge everything”, “close all PRs”, “batch merge”, “land the queue”, etc.
-- Urgency, frustration, “just merge.”
-- “CI green” / “checks passed” while threads are missing, still loading in the PR UI, or unreplied.
-- Skipping **~10–15 minutes** post–green-CI re-poll (**unless written waiver for that PR**).
+**Only** an explicit written waiver for that specific PR waives bot closeout for that PR.
 
-## Merge / first-time auto-merge
-
-Execute the full **Bot feedback wait gate** + threaded replies in **`git-pr-workflow-default.mdc`**—do not restate those steps here (single source of truth).
-
-## If pressured to merge without closure
-
-Say merge is **forbidden** until gate + replies; offer **written waiver for that PR** or proceed with the gate.
-
-## Pointers
-
-- **`AGENTS.md`** — ship bar
-- **`git-pr-workflow-default.mdc`** — wait gate, bots
-- **`docs/CONCURRENT_AGENT_WORKFLOW.md`** — Actions / settings
-- **`pr-review-bot-replies.mdc`** — reply wording
+Full ship bar with all steps inline: `git-pr-workflow-default.mdc`.

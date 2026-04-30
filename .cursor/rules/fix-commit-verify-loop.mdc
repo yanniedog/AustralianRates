@@ -1,20 +1,16 @@
 ---
-description: "Fix-commit-verify loop: make fixes, commit, push, wait for deploy, verify on production autonomously"
+description: "Fix-commit-verify loop: fix → commit → PR → merge → deploy → verify:prod — loop until green"
 alwaysApply: true
 ---
 
-# Fix-Commit-Verify Loop (Always Follow)
+# Fix-Commit-Verify Loop
 
-When fixing issues that affect production (www.australianrates.com), follow this loop until the problem is **definitely** fixed. **You must never ask the user to do reproduction steps** — perform all verification yourself.
+When fixing production issues, loop until `verify:prod` passes:
 
-1. **Make repairs** – Apply the necessary code or config changes in the repo.
-2. **Commit and push** — PR path through merge: **`.cursor/rules/git-pr-workflow-default.mdc`**. **`main` hotfix** only if user ordered it: commit and **`git push origin main`** from **`main`**.
-3. **Wait for deploy** – After the change is **on `main`** (merged PR or direct push), wait for Cloudflare Pages and/or Workers to finish deploying. Do not skip this step.
-4. **Verify on production** – Check that your changes work on the live site. Do this **autonomously** (never ask the user to reproduce):
-   - From repo root run: `npm run verify:prod -- --scope=auto --depth=smoke`.
-   - For shared/tooling/workflow/verification changes or explicit full sign-off, run: `npm run verify:prod -- --scope=full --depth=full`.
-   - Use `node diagnose-api.js` or `npm run doctor` if deeper production triage is needed.
-   - Optionally fetch key URLs (e.g. homepage, /savings/, /term-deposits/, API health) and assert expected status or content.
-5. **Loop** – If any check fails, fix on the **feature branch**, push, re-run PR CI, merge when green, wait for deploy, then re-run production verification. Do **not** stop until all checks pass.
+1. Fix on the topic branch.
+2. Commit + push; complete the full ship bar (`git-pr-workflow-default.mdc` steps 4–9).
+3. After merge and deploy: `npm run verify:prod -- --scope=auto --depth=smoke`.
+4. If exit non-zero: fix, redeploy, re-run. Repeat until exit 0.
 
-Do not consider the task done until production verification passes. If you cannot run the production tests (e.g. no network or deploy not done), say so explicitly and note that the user should run the test commands after deploy.
+Never ask the user to run reproduction steps — perform all verification autonomously.
+Do not consider the task done until production verification exits 0 or the user explicitly waives it.
